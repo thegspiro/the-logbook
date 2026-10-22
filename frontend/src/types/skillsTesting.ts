@@ -326,8 +326,9 @@ export interface SkillTest {
   template_name: string;
   candidate_id: string;
   candidate_name: string;
-  examiner_id: string;
-  examiner_name: string;
+  /** Null once the examiner's account has been permanently deleted. */
+  examiner_id: string | null;
+  examiner_name: string | null;
   /** Training-pipeline requirement this test satisfies (inherited/overridable) */
   requirement_id?: string;
   status: SkillTestStatus;
@@ -457,8 +458,9 @@ export interface SkillTestListItem {
   template_name: string;
   candidate_id: string;
   candidate_name: string;
-  examiner_id: string;
-  examiner_name: string;
+  /** Null once the examiner's account has been permanently deleted. */
+  examiner_id: string | null;
+  examiner_name: string | null;
   status: SkillTestStatus;
   result: TestResult;
   is_practice: boolean;

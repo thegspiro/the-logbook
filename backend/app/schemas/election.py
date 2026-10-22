@@ -5,7 +5,7 @@ Request and response schemas for election-related endpoints.
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import AbstractSet, Any, Dict, List, Optional, Sequence, TypeVar
 from uuid import UUID
 
@@ -18,7 +18,8 @@ from pydantic import (
     model_validator,
 )
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCResponseBase, as_utc
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
@@ -68,21 +69,6 @@ def _refuse_cleared(model: BaseModel, required: AbstractSet[str]) -> None:
             f"{', '.join(cleared)} cannot be null; "
             "leave the field out to keep its current value"
         )
-
-
-def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
-    """Treat a naive datetime as UTC (the project-wide wire convention).
-
-    Pydantic v2 accepts both naive and timezone-aware ISO datetimes, but
-    comparing the two forms raises TypeError — which model validators do
-    NOT convert to a validation error, so a mixed create/update payload
-    surfaced as a 500 instead of a 422. Normalizing every incoming
-    datetime here keeps all cross-field date comparisons (in this module
-    and in the update endpoint) well-defined.
-    """
-    if value is not None and value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value
 
 
 def _empty_roster_means_everyone(
@@ -376,7 +362,7 @@ class ElectionBase(BaseModel):
     end_date: datetime
     anonymous_voting: bool = Field(default=True)
     allow_write_ins: bool = Field(default=False)
-    max_votes_per_position: int = Field(default=1, ge=1)
+    max_votes_per_position: int = Field(default=1, ge=1, le=INT32_MAX)
     seats_per_position: int = Field(default=1, ge=1, le=MAX_SEATS_PER_POSITION)
     results_visible_immediately: bool = Field(default=False)
     eligible_voters: Optional[List[UUID]] = Field(
@@ -394,7 +380,10 @@ class ElectionBase(BaseModel):
         description="Victory condition: most_votes, majority, supermajority, threshold",
     )
     victory_threshold: Optional[int] = Field(
-        default=None, description="Numerical threshold for victory (e.g., 10 votes)"
+        default=None,
+        description="Numerical threshold for victory (e.g., 10 votes)",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     victory_percentage: Optional[int] = Field(
         default=None,
@@ -424,6 +413,7 @@ class ElectionBase(BaseModel):
         default=None,
         ge=1,
         description="Quorum value (percentage or count depending on quorum_type)",
+        le=INT32_MAX,
     )
 
     # Lifecycle automation
@@ -484,10 +474,10 @@ class ElectionBase(BaseModel):
     @field_validator("meeting_date", "start_date", "end_date", "nomination_deadline")
     @classmethod
     def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
-        # See _as_utc: without this, a payload mixing naive and aware
+        # See as_utc: without this, a payload mixing naive and aware
         # datetimes makes validate_election_configuration raise TypeError
         # (a 500) instead of returning a 422.
-        return _as_utc(v)
+        return as_utc(v)
 
     @field_validator("eligible_voters")
     @classmethod
@@ -591,19 +581,19 @@ class ElectionUpdate(BaseModel):
     end_date: Optional[datetime] = None
     anonymous_voting: Optional[bool] = None
     allow_write_ins: Optional[bool] = None
-    max_votes_per_position: Optional[int] = Field(None, ge=1)
+    max_votes_per_position: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     seats_per_position: Optional[int] = Field(None, ge=1, le=MAX_SEATS_PER_POSITION)
     results_visible_immediately: Optional[bool] = None
     eligible_voters: Optional[List[UUID]] = None
     voting_method: Optional[str] = None
     victory_condition: Optional[str] = None
-    victory_threshold: Optional[int] = None
+    victory_threshold: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     victory_percentage: Optional[int] = Field(None, ge=1, le=100)
     enable_runoffs: Optional[bool] = None
     runoff_type: Optional[str] = None
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
     quorum_type: Optional[str] = None
-    quorum_value: Optional[int] = Field(None, ge=1)
+    quorum_value: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     auto_open: Optional[bool] = None
     reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
     nomination_deadline: Optional[datetime] = None
@@ -637,9 +627,9 @@ class ElectionUpdate(BaseModel):
     @field_validator("meeting_date", "start_date", "end_date", "nomination_deadline")
     @classmethod
     def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
-        # See _as_utc: the update endpoint compares these against each other
+        # See as_utc: the update endpoint compares these against each other
         # and against stored values; a naive/aware mix raised TypeError (500).
-        return _as_utc(v)
+        return as_utc(v)
 
     @field_validator("eligible_voters")
     @classmethod
@@ -729,6 +719,9 @@ class ElectionResponse(UTCResponseBase):
     # Resolved by the endpoint; reason is "ballot_changed" or "reopened".
     ballots_must_be_resent: bool = False
     ballots_resend_reason: Optional[str] = None
+    # The latest nominations-open announcement, for the managers only.
+    # Resolved by the endpoint.
+    nominations_announcement: Optional["BallotSendJobResponse"] = None
     tie_policy: str = "co_winners"
     status: str
     created_by: Optional[UUID] = None
@@ -830,7 +823,10 @@ class CandidateBase(BaseModel):
     )
     photo_url: Optional[str] = Field(None, max_length=500)
     display_order: int = Field(
-        default=0, description="Order to display candidate in list"
+        default=0,
+        description="Order to display candidate in list",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
 
 
@@ -857,7 +853,7 @@ class CandidateUpdate(BaseModel):
     statement: Optional[str] = Field(None, max_length=CANDIDATE_STATEMENT_MAX_LENGTH)
     photo_url: Optional[str] = Field(None, max_length=500)
     accepted: Optional[bool] = None
-    display_order: Optional[int] = None
+    display_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
     @model_validator(mode="after")
     def refuse_cleared_required_fields(self) -> "CandidateUpdate":
@@ -1045,8 +1041,8 @@ class CloneElectionRequest(BaseModel):
     @field_validator("start_date", "end_date", "nomination_deadline")
     @classmethod
     def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
-        # See _as_utc: naive/aware mix in validate_dates was TypeError (500).
-        return _as_utc(v)
+        # See as_utc: naive/aware mix in validate_dates was TypeError (500).
+        return as_utc(v)
 
     @model_validator(mode="after")
     def validate_dates(self) -> "CloneElectionRequest":
@@ -1151,7 +1147,10 @@ class VoteCreate(BaseModel):
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
     vote_rank: Optional[int] = Field(
-        None, ge=1, description="Rank for ranked-choice voting (1 = first choice)"
+        None,
+        ge=1,
+        description="Rank for ranked-choice voting (1 = first choice)",
+        le=INT32_MAX,
     )
 
 
@@ -1272,7 +1271,10 @@ class BulkVoteItem(BaseModel):
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
     vote_rank: Optional[int] = Field(
-        None, ge=1, description="Rank for ranked-choice voting (1 = first choice)"
+        None,
+        ge=1,
+        description="Rank for ranked-choice voting (1 = first choice)",
+        le=INT32_MAX,
     )
 
 
@@ -1327,7 +1329,7 @@ class EmailBallotResponse(BaseModel):
 class BallotSendJobResponse(UTCResponseBase):
     """A background ballot send and, once it has finished, its outcome.
 
-    ``kind`` is ballots or reminder. ``status`` is queued, running, completed
+    ``kind`` is ballots, reminder, package or announcement. ``status`` is queued, running, completed
     or failed. ``result`` is set on completed and carries what the synchronous
     send-ballot / remind-non-voters endpoint returns; ``error`` is set on
     failed.
@@ -1783,7 +1785,7 @@ class ProxyVoteCreate(BaseModel):
     )
     position: Optional[str] = Field(None, max_length=100)
     vote_rank: Optional[int] = Field(
-        None, ge=1, description="Rank for ranked-choice voting"
+        None, ge=1, description="Rank for ranked-choice voting", le=INT32_MAX
     )
 
 
@@ -1880,6 +1882,7 @@ class VoteVoidSummary(BaseModel):
 
 
 VoteIntegrityResponse.model_rebuild()
+ElectionResponse.model_rebuild()
 
 
 class SoftDeleteVoteResponse(BaseModel):

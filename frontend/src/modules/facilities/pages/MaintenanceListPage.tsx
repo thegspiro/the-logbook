@@ -7,7 +7,7 @@
 
 import { useEffect } from 'react';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import {
   Wrench,
   Plus,
@@ -19,7 +19,6 @@ import {
   AlertTriangle,
   Calendar,
   DollarSign,
-  ArrowLeft,
   RotateCcw,
 } from 'lucide-react';
 import { inputCls, labelCls } from '../constants';
@@ -29,12 +28,12 @@ import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 export default function MaintenanceListPage() {
   // Create/edit/complete accept facilities.maintenance or facilities.edit on
   // the backend; delete accepts facilities.delete or facilities.manage.
   const { canDelete, canMaintenance } = useFacilitiesAccess();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tz = useTimezone();
   const { facilities, loadFacilities, loadLookupData } = useFacilitiesStore();
@@ -73,32 +72,19 @@ export default function MaintenanceListPage() {
     facilities.find((f) => f.id === facilityId)?.name || 'Unknown facility';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => void navigate('/facilities')}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
-            aria-label="Back to facilities"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Maintenance Records</h1>
-            <p className="text-theme-text-secondary mt-0.5 text-sm">
-              Track and manage maintenance across all facilities
-            </p>
-          </div>
-        </div>
-        {canMaintenance && (
-          <button
-            onClick={() => openCreate()}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start py-2.5 text-sm sm:self-auto"
-          >
-            <Plus className="h-4 w-4" /> New Record
-          </button>
-        )}
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <OperationsPageHeader
+        icon={Wrench}
+        title="Maintenance Records"
+        subtitle="Track and manage maintenance across all facilities"
+        actions={
+          canMaintenance && (
+            <button onClick={() => openCreate()} className="btn-primary flex shrink-0 items-center gap-2">
+              <Plus className="h-4 w-4" /> New Record
+            </button>
+          )
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-md flex-1">
@@ -212,7 +198,7 @@ export default function MaintenanceListPage() {
                       }}
                       title="Mark completed"
                       aria-label="Mark completed"
-                      className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                      className="rounded-lg p-1.5 text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-600"
                     >
                       <CheckCircle2 className="h-4 w-4" />
                     </button>

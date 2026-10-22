@@ -390,7 +390,7 @@ class TestSupplyExpirationLayout:
         assert html.count("<th style=") == 6
         for gone in (">Apparatus<", ">Compartment<", ">Lot<", ">In<"):
             assert gone not in html
-        assert "Engine 1 &middot; Compartment 1" in html
+        assert "Engine 1 &rsaquo; Compartment 1" in html
         assert "10d left" in html
         assert "Lot LOT-" in html
 
@@ -406,7 +406,22 @@ class TestSupplyExpirationLayout:
         html = captured["html_body"]
         assert "<b>Epi</b>" not in html
         assert "&lt;b&gt;Epi&lt;/b&gt;" in html
-        assert "E&amp;1 &middot;" in html
+        assert "E&amp;1 &rsaquo;" in html
+
+    async def test_a_nested_compartment_is_named_as_the_checklist_names_it(self, sent):
+        captured, overview, lots = sent
+        nested = _deployed("4x4 Gauze", ready_stock=0)
+        nested["compartment_name"] = "Jump Bag"
+        nested["compartment_path"] = ["Main Compartment", "Jump Bag"]
+        overview.return_value = {"items": [nested]}
+        lots.return_value = []
+
+        await run_supply_expiration_alerts(_db())
+
+        assert (
+            "Engine 1 &rsaquo; Main Compartment &rsaquo; Jump Bag"
+            in captured["html_body"]
+        )
 
 
 class TestSupplyAlertWording:

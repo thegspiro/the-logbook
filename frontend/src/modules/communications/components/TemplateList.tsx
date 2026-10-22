@@ -59,7 +59,11 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   password_reset: { icon: KeyRound, label: 'Password Reset', color: 'text-blue-500' },
   event_cancellation: { icon: CalendarX, label: 'Event Cancellation', color: 'text-red-500' },
   event_reminder: { icon: CalendarClock, label: 'Event Reminder', color: 'text-blue-700 dark:text-blue-400' },
-  event_waitlist_promotion: { icon: CalendarCheck, label: 'Off the Waitlist', color: 'text-green-600' },
+  event_waitlist_promotion: {
+    icon: CalendarCheck,
+    label: 'Off the Waitlist',
+    color: 'text-green-700 dark:text-green-600',
+  },
   training_approval: { icon: GraduationCap, label: 'Training Approval', color: 'text-purple-500' },
   ballot_notification: { icon: Vote, label: 'Ballot Notification', color: 'text-indigo-500' },
   member_dropped: { icon: UserMinus, label: 'Member Dropped', color: 'text-red-600' },
@@ -69,22 +73,30 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   post_shift_validation: { icon: Clock, label: 'Post-Shift Validation', color: 'text-violet-500' },
   property_return_reminder: { icon: Undo2, label: 'Property Return Reminder', color: 'text-rose-500' },
   inactivity_warning: { icon: AlertTriangle, label: 'Inactivity Warning', color: 'text-yellow-500' },
-  election_rollback: { icon: RotateCcw, label: 'Election Rollback', color: 'text-orange-600' },
+  election_rollback: { icon: RotateCcw, label: 'Election Rollback', color: 'text-orange-700 dark:text-orange-600' },
   election_deleted: { icon: Trash2, label: 'Election Deleted', color: 'text-red-500' },
   member_archived: { icon: Archive, label: 'Member Archived', color: 'text-theme-text-muted' },
   event_request_status: { icon: CalendarCheck, label: 'Event Request Status', color: 'text-cyan-500' },
   it_password_notification: { icon: Lock, label: 'IT Password Reset', color: 'text-blue-600' },
-  election_report: { icon: BarChart3, label: 'Election Report', color: 'text-emerald-600' },
-  ballot_eligibility_summary: { icon: ListChecks, label: 'Ballot Eligibility Summary', color: 'text-amber-600' },
+  election_report: { icon: BarChart3, label: 'Election Report', color: 'text-emerald-700 dark:text-emerald-600' },
+  ballot_eligibility_summary: {
+    icon: ListChecks,
+    label: 'Ballot Eligibility Summary',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
   duplicate_application: { icon: Copy, label: 'Duplicate Application', color: 'text-slate-500' },
   application_withdrawn: { icon: FileX, label: 'Application Withdrawn', color: 'text-slate-500' },
-  suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-600' },
-  equipment_request_update: { icon: PackageCheck, label: 'Equipment Request Update', color: 'text-amber-600' },
+  suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-700 dark:text-amber-600' },
+  equipment_request_update: {
+    icon: PackageCheck,
+    label: 'Equipment Request Update',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
   external_course_match: { icon: GraduationCap, label: 'New Course Version to Map', color: 'text-purple-500' },
-  training_record_voided: { icon: Ban, label: 'Training Record Voided', color: 'text-amber-600' },
+  training_record_voided: { icon: Ban, label: 'Training Record Voided', color: 'text-amber-700 dark:text-amber-600' },
   training_record_changed: { icon: GraduationCap, label: 'Training Record Updated', color: 'text-purple-500' },
   series_end_reminder: { icon: CalendarRange, label: 'Series End Reminder', color: 'text-purple-400' },
-  shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-600' },
+  shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-700 dark:text-green-600' },
   shift_decline: { icon: UserX, label: 'Shift Decline', color: 'text-red-400' },
   shift_reminder: { icon: Bell, label: 'Shift Reminder', color: 'text-sky-500' },
   storefront_order_confirmation: { icon: ShoppingBag, label: 'Store — Order Confirmation', color: 'text-blue-500' },
@@ -92,9 +104,17 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   storefront_order_update: { icon: Truck, label: 'Store — Order Status Change', color: 'text-teal-500' },
   storefront_order_cancelled: { icon: Ban, label: 'Store — Order Cancelled', color: 'text-red-500' },
   storefront_payment_reminder: { icon: Hourglass, label: 'Store — Payment Reminder', color: 'text-amber-500' },
-  storefront_payment_received: { icon: Receipt, label: 'Store — Payment Receipt', color: 'text-green-600' },
+  storefront_payment_received: {
+    icon: Receipt,
+    label: 'Store — Payment Receipt',
+    color: 'text-green-700 dark:text-green-600',
+  },
   storefront_window_open: { icon: DoorOpen, label: 'Store — Ordering Is Open', color: 'text-green-500' },
-  storefront_window_closing: { icon: Hourglass, label: 'Store — Last Call', color: 'text-amber-600' },
+  storefront_window_closing: {
+    icon: Hourglass,
+    label: 'Store — Last Call',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
   storefront_window_closed: { icon: DoorClosed, label: 'Store — Ordering Has Closed', color: 'text-slate-500' },
   storefront_vendor_order_placed: {
     icon: CircleDollarSign,
@@ -385,7 +405,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                     <div className="min-w-0 flex-1">
                       <p
                         className={`truncate text-sm font-medium ${
-                          isSelected ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'
+                          isSelected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'
                         }`}
                       >
                         {template.name}

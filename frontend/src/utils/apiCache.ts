@@ -160,6 +160,7 @@ const UNCACHEABLE_SUBSTRINGS = [
   // their free-text reasons (PII), and a pending/decided state that a 30s-stale
   // copy would misreport right after the organizer acts on it.
   '/eligible-members', // returns member first/last name + email (PII)
+  '/issue-plan', // kit issue preview: embeds the member's recorded garment sizes (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)
   // The PII sub-resources of an inventory item (five below). Substrings rather

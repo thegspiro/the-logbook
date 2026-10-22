@@ -17,7 +17,7 @@ from uuid import UUID
 from loguru import logger
 from sqlalchemy import delete, func
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -115,6 +115,12 @@ OFFICER_PROGRESS_NOTE_KEYS = (
 # finished with: re-reading it live would reopen a program finished last year
 # the day an annual requirement's window rolled over.
 _LIVE_ENROLLMENT_STATUSES = (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
+
+# Recorded on enrollments still in progress when their program is deactivated
+# in place of a delete (see delete_training_program).
+PROGRAM_DEACTIVATED_WITHDRAWAL_REASON = (
+    "Withdrawn automatically: the pipeline was deactivated."
+)
 
 LINKED_PROGRESS_REFUSAL = (
     "This requirement is the department's own and reads the member's "
@@ -1213,14 +1219,18 @@ class TrainingProgramService:
         organization_id: UUID | str,
         target_position: Optional[str] = None,
         is_template: Optional[bool] = None,
+        include_inactive: bool = False,
     ) -> List[TrainingProgram]:
         """
-        Get training programs with optional filters
+        Get training programs with optional filters. Deactivated programs are
+        left out unless *include_inactive*, which the list screen asks for so
+        an officer can reactivate one.
         """
         query = select(TrainingProgram).where(
             TrainingProgram.organization_id == organization_id,
-            TrainingProgram.active.is_(True),
         )
+        if not include_inactive:
+            query = query.where(TrainingProgram.active.is_(True))
 
         if target_position:
             query = query.where(TrainingProgram.target_position == target_position)
@@ -1310,6 +1320,10 @@ class TrainingProgramService:
             if prereq_error:
                 return None, prereq_error
             data["prerequisite_program_ids"] = list(prerequisite_ids) or None
+        # Null would hide the program from every list (they match
+        # ``active IS TRUE``) without being a deactivation anyone can undo.
+        if "active" in data and data["active"] is None:
+            return None, "Choose whether the program is active"
         if (
             "allows_concurrent_enrollment" in data
             and data["allows_concurrent_enrollment"] is None
@@ -1331,22 +1345,60 @@ class TrainingProgramService:
         self,
         program_id: UUID,
         organization_id: UUID | str,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[Optional[str], Optional[str]]:
         """
-        Permanently delete a program and everything under it — phases,
-        requirement links, milestones, enrollments, and enrolled members'
-        progress. Also removes the program-specific requirements it owns once
-        they're no longer referenced anywhere. Explicit ordered deletes (rather
-        than ORM cascade) keep this deterministic on the async session.
+        Delete a program, or deactivate it when members have graduated from it.
 
-        This is irreversible; the UI guards it behind a typed/confirmed warning.
-        Returns (ok, error_message).
+        A program with any COMPLETED enrollment is deactivated
+        (``active=False``) instead: a delete would erase those graduates'
+        enrollments and progress, which are the department's record that they
+        finished it. Its structure and every enrollment are kept. Enrollments
+        still in progress (ACTIVE / ON_HOLD) are withdrawn the same way
+        ``withdraw_enrollment`` withdraws one — status WITHDRAWN, record kept —
+        because nobody can finish a pipeline that has left every list, and an
+        open enrollment in it would keep raising deadline warnings.
+
+        Otherwise the program is permanently deleted with everything under it —
+        phases, requirement links, milestones, enrollments, and enrolled
+        members' progress — along with the program-specific requirements it
+        owns once they're no longer referenced anywhere. Explicit ordered
+        deletes (rather than ORM cascade) keep this deterministic on the async
+        session.
+
+        Returns ``("deleted" | "deactivated", None)`` on success and
+        ``(None, error_message)`` otherwise.
         """
         program = await self.get_program_by_id(program_id, organization_id)
         if not program:
-            return False, "Training program not found"
+            return None, "Training program not found"
 
         pid = str(program_id)
+
+        graduated = await self.db.execute(
+            select(ProgramEnrollment.id)
+            .where(
+                ProgramEnrollment.program_id == pid,
+                ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+            )
+            .limit(1)
+        )
+        if graduated.scalar_one_or_none() is not None:
+            program.active = False
+            await self.db.execute(
+                update(ProgramEnrollment)
+                .where(
+                    ProgramEnrollment.program_id == pid,
+                    ProgramEnrollment.status.in_(_LIVE_ENROLLMENT_STATUSES),
+                )
+                .values(
+                    status=EnrollmentStatus.WITHDRAWN,
+                    withdrawn_at=datetime.now(timezone.utc),
+                    withdrawal_reason=PROGRAM_DEACTIVATED_WITHDRAWAL_REASON,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            await self.db.commit()
+            return "deactivated", None
 
         enroll_rows = await self.db.execute(
             select(ProgramEnrollment.id).where(ProgramEnrollment.program_id == pid)
@@ -1411,7 +1463,7 @@ class TrainingProgramService:
 
         await self.db.execute(delete(TrainingProgram).where(TrainingProgram.id == pid))
         await self.db.commit()
-        return True, None
+        return "deleted", None
 
     @staticmethod
     def _target_field_changed(field: str, stored: Any, new: Any) -> bool:
@@ -1808,12 +1860,34 @@ class TrainingProgramService:
 
         # Requirement links on this phase, and the enrollments of this program.
         link_result = await self.db.execute(
-            select(ProgramRequirement.id, ProgramRequirement.requirement_id).where(
-                ProgramRequirement.phase_id == str(phase_id)
-            )
+            select(
+                ProgramRequirement.requirement_id, ProgramRequirement.owns_requirement
+            ).where(ProgramRequirement.phase_id == str(phase_id))
         )
         link_rows = link_result.all()
-        requirement_ids = [str(r[1]) for r in link_rows]
+        phase_requirement_ids = {str(r[0]) for r in link_rows}
+        owned_requirement_ids = {str(r[0]) for r in link_rows if r[1]}
+
+        # A requirement another phase of this same program still links stays
+        # tracked by the program, so its progress rows must survive — dropping
+        # them would silently reset work members have already done. Mirrors the
+        # guard in remove_requirement_from_program.
+        still_linked_ids: set[str] = set()
+        if phase_requirement_ids:
+            sibling_result = await self.db.execute(
+                select(ProgramRequirement.requirement_id).where(
+                    ProgramRequirement.program_id == str(program_id),
+                    ProgramRequirement.requirement_id.in_(phase_requirement_ids),
+                    # A phase-less link (phase_id NULL) still counts; a bare
+                    # `!=` would drop it, since NULL != x is not true in SQL.
+                    or_(
+                        ProgramRequirement.phase_id.is_(None),
+                        ProgramRequirement.phase_id != str(phase_id),
+                    ),
+                )
+            )
+            still_linked_ids = {str(r[0]) for r in sibling_result.all()}
+        requirement_ids = sorted(phase_requirement_ids - still_linked_ids)
 
         enroll_result = await self.db.execute(
             select(ProgramEnrollment.id, ProgramEnrollment.current_phase_id).where(
@@ -1864,6 +1938,27 @@ class TrainingProgramService:
 
         # Delete the phase (cascades its ProgramRequirement links + milestones).
         await self.db.delete(phase)
+        await self.db.flush()
+
+        # A requirement one of this phase's links created, and that nothing
+        # links any longer, is an orphan: remove it so it doesn't linger in the
+        # requirements library. One linked in from the library (owns_requirement
+        # False) belongs to the department and is never deleted here.
+        if owned_requirement_ids:
+            remaining_links = await self.db.execute(
+                select(ProgramRequirement.requirement_id).where(
+                    ProgramRequirement.requirement_id.in_(owned_requirement_ids)
+                )
+            )
+            still_referenced = {str(r[0]) for r in remaining_links.all()}
+            orphaned_ids = owned_requirement_ids - still_referenced
+            if orphaned_ids:
+                await self.db.execute(
+                    delete(TrainingRequirement).where(
+                        TrainingRequirement.id.in_(orphaned_ids)
+                    )
+                )
+
         await self.db.commit()
 
         # Recompute the whole program's enrollments (removed requirements change
@@ -4581,6 +4676,10 @@ class TrainingProgramService:
         program = await self._get_program_for_enrollment(enrollment)
         if not program or not getattr(program, "recert_enabled", False):
             return False
+        # A deactivated program is kept for its graduates' history; resetting
+        # their enrollments would erase the very record it was kept for.
+        if getattr(program, "active", True) is False:
+            return False
 
         await self._perform_enrollment_reset(enrollment, program, today=today)
         await self.db.commit()
@@ -4719,6 +4818,8 @@ class TrainingProgramService:
             .where(
                 TrainingProgram.organization_id == str(organization_id),
                 TrainingProgram.recert_enabled.is_(True),
+                # Deactivated programs are kept for their graduates' history.
+                TrainingProgram.active.is_(True),
                 ProgramEnrollment.status.in_(self._RECERTABLE_STATUSES),
                 ProgramEnrollment.next_recert_reset_at.isnot(None),
                 ProgramEnrollment.next_recert_reset_at <= today,

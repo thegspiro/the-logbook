@@ -317,7 +317,7 @@ const ApparatusSetup: React.FC = () => {
                         {row.positions.map((position, seatIndex) => (
                           <span
                             key={`${position}-${seatIndex}`}
-                            className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-600 capitalize dark:text-red-400"
+                            className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 capitalize dark:text-red-400"
                           >
                             {positionLabel(position)}
                             <button

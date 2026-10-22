@@ -68,6 +68,7 @@ const getStatusChange = vi.fn<typeof memberStatusService.getStatusChange>(() =>
 const getMemberLeaves = vi.fn<typeof memberStatusService.getMemberLeaves>(() => Promise.resolve([]));
 const updateContactInfo = vi.fn();
 const updateUserProfile = vi.fn();
+const deletePhoto = vi.fn();
 let nfcIdCardsConnected = false;
 
 vi.mock('../hooks/useConnectedIntegrations', () => ({
@@ -98,6 +99,7 @@ vi.mock('../services/api', () => ({
     setMyProfileVisibility: (...args: unknown[]) => setMyProfileVisibility(...args) as unknown,
     updateContactInfo: (...args: unknown[]) => updateContactInfo(...args) as unknown,
     updateUserProfile: (...args: unknown[]) => updateUserProfile(...args) as unknown,
+    deletePhoto: (...args: unknown[]) => deletePhoto(...args) as unknown,
   },
   organizationService: {
     getEnabledModules: () => getEnabledModules() as unknown,
@@ -202,6 +204,37 @@ describe('MemberProfilePage assigned inventory', () => {
     // sees zero calls. An item cannot appear until the response has landed.
     expect(await screen.findByText('Turnout Coat')).toBeInTheDocument();
     expect(getUserInventory).toHaveBeenCalledWith(VIEWER_ID);
+  });
+});
+
+describe('MemberProfilePage position badges', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getUserWithRoles.mockReset();
+  });
+
+  // The seeded Firefighter position is the rank's twin; the header already
+  // names the rank, so the badge said the same word a second time.
+  it('leaves out the position that mirrors a rank', async () => {
+    getUserWithRoles.mockResolvedValue({
+      ...targetUser,
+      roles: [
+        { id: 'role-member', name: 'Member', slug: 'member', is_system: true, mirrors_rank: false },
+        { id: 'role-firefighter', name: 'Firefighter', slug: 'firefighter', is_system: true, mirrors_rank: true },
+        { id: 'role-secretary', name: 'Secretary', slug: 'secretary', is_system: true, mirrors_rank: false },
+      ],
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'Jane Doe' });
+    expect(screen.getByText('Secretary')).toBeInTheDocument();
+    expect(screen.getByText('Member')).toBeInTheDocument();
+    expect(screen.queryByText('Firefighter')).not.toBeInTheDocument();
   });
 });
 
@@ -478,6 +511,30 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.getByText('Visible to members')).toBeInTheDocument();
     expect(screen.getByText('Only you and leadership')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  // Members review B: the chip read a bare lowercase "active" with only a
+  // tooltip saying it was a control, and the dialog it opened was a styled
+  // div — no dialog role, no name, and Escape did nothing.
+  it('labels the status chip with the status and what pressing it does', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    const chip = await screen.findByRole('button', { name: 'Change status, currently Active' });
+    expect(chip).toHaveTextContent('Status: Active');
+    expect(chip).toHaveTextContent('Change');
+  });
+
+  it('opens the status change as a named dialog that Escape closes', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Change status, currently Active' }));
+    const dialog = screen.getByRole('dialog', { name: 'Change Member Status' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Change Member Status' })).not.toBeInTheDocument();
   });
 
   it('does not offer Archived as an ordinary status change', async () => {
@@ -940,5 +997,47 @@ describe('MemberProfilePage preferred name', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Jane Doe' })).toBeInTheDocument();
     expect(screen.queryByText(/Legal name:/)).not.toBeInTheDocument();
+  });
+});
+
+// Removing a profile photo was a single unconfirmed tap.
+describe('MemberProfilePage removing a profile photo', () => {
+  beforeEach(() => {
+    routeUserId = VIEWER_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue({ ...targetUser, id: VIEWER_ID, photo_url: 'https://example.test/me.jpg' });
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockReset();
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    deletePhoto.mockReset();
+    deletePhoto.mockResolvedValue(undefined);
+  });
+
+  it('asks first, and removes the photo only once confirmed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove photo' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Your photo is removed from your profile and the roster.');
+    expect(deletePhoto).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Remove photo' }));
+
+    await waitFor(() => expect(deletePhoto).toHaveBeenCalledWith(VIEWER_ID));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove photo' })).not.toBeInTheDocument());
+  });
+
+  it('does nothing when the member keeps it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove photo' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+
+    expect(deletePhoto).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Remove photo' })).toBeInTheDocument();
   });
 });

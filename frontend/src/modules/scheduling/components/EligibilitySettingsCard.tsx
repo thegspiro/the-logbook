@@ -168,7 +168,7 @@ export const EligibilitySettingsCard: React.FC = () => {
                 onClick={() => toggleOpenPosition(pos)}
                 className={`mobile-touch-target rounded-lg border px-3 text-sm transition-colors ${
                   isOpen
-                    ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                    ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                     : 'bg-theme-surface-hover/50 border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >

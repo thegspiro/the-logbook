@@ -656,8 +656,8 @@ that area's full set.
 ### Assigning Positions to Members
 
 1. Open **Administration > Members > Member Management**.
-2. On the member's row, select **Manage Roles**.
-3. Tick or untick positions ("Select the roles to assign to this member").
+2. On the member's row, select **Manage Positions**.
+3. Tick or untick positions ("Select the positions to assign to this member").
 4. Select **Save Changes**.
 
 If a change is refused, the message gives the real reason — for example, that
@@ -666,6 +666,12 @@ the position carries more access than you hold.
 > **The Member position stays on.** Every current member holds **Member**. Its
 > box stays ticked and cannot be removed. It can only be removed from
 > an archived member.
+
+> **Ranks are not positions.** The list leaves out Chief, Captain,
+> Firefighter and the other ranks; a rank is set from the member's profile
+> and carries its own access. A member given one of those positions before
+> this version still sees it in the list, marked **Rank**, so it can be
+> unticked.
 
 > **What if a member's menus have not changed after you changed their
 > positions?** The Logbook applies new permissions at once, but the member's

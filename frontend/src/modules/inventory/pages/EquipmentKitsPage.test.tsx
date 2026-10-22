@@ -2,11 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type { EquipmentKit } from '../types';
+import type { EquipmentKit, KitIssuePlan, KitProductOption } from '../types';
 
 const mockGetEquipmentKits = vi.fn();
 const mockGetEquipmentKit = vi.fn();
-const mockGetItems = vi.fn();
+const mockGetKitProductOptions = vi.fn();
+const mockGetKitIssuePlan = vi.fn();
 const mockGetCategories = vi.fn();
 const mockCreateEquipmentKit = vi.fn();
 const mockUpdateEquipmentKit = vi.fn();
@@ -17,7 +18,8 @@ vi.mock('../../../services/api', () => ({
   inventoryService: {
     getEquipmentKits: (...a: unknown[]) => mockGetEquipmentKits(...a) as unknown,
     getEquipmentKit: (...a: unknown[]) => mockGetEquipmentKit(...a) as unknown,
-    getItems: (...a: unknown[]) => mockGetItems(...a) as unknown,
+    getKitProductOptions: (...a: unknown[]) => mockGetKitProductOptions(...a) as unknown,
+    getKitIssuePlan: (...a: unknown[]) => mockGetKitIssuePlan(...a) as unknown,
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
     createEquipmentKit: (...a: unknown[]) => mockCreateEquipmentKit(...a) as unknown,
     updateEquipmentKit: (...a: unknown[]) => mockUpdateEquipmentKit(...a) as unknown,
@@ -74,11 +76,46 @@ const makeKit = (overrides: Partial<EquipmentKit> = {}): EquipmentKit => ({
   ...overrides,
 });
 
+const jacket: KitProductOption = {
+  key: 'vg:jackets',
+  name: 'Blauer Jacket',
+  category_id: 'cat-outer',
+  category_name: 'Outerwear',
+  has_sizes: true,
+  variants: [
+    { item_id: 'j-m', item_ids: ['j-m'], label: 'M — Red', size_label: 'M', available: 4 },
+    { item_id: 'j-l', item_ids: ['j-l'], label: 'L — Red', size_label: 'L', available: 2 },
+  ],
+};
+
+const makePlan = (overrides: Partial<KitIssuePlan['lines'][number]> = {}): KitIssuePlan => ({
+  kit_id: 'k-1',
+  user_id: 'u-9',
+  lines: [
+    {
+      line_id: 'li-1',
+      item_name: 'Blauer Jacket',
+      quantity: 1,
+      optional: false,
+      size_selectable: true,
+      issuable: true,
+      member_size: 'L',
+      selected_item_id: 'j-l',
+      variants: jacket.variants,
+      ...overrides,
+    },
+  ],
+});
+
 describe('EquipmentKitsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetEquipmentKits.mockReset();
+    mockGetKitProductOptions.mockReset();
+    mockGetKitIssuePlan.mockReset();
     mockGetEquipmentKits.mockResolvedValue([]);
-    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetKitProductOptions.mockResolvedValue([]);
+    mockGetKitIssuePlan.mockResolvedValue({ kit_id: 'k-1', user_id: 'u-9', lines: [] });
     mockGetCategories.mockResolvedValue([]);
     mockGetEquipmentKit.mockResolvedValue(makeKit());
     mockCreateEquipmentKit.mockResolvedValue({});
@@ -182,7 +219,7 @@ describe('EquipmentKitsPage', () => {
     await user.click(await screen.findByRole('button', { name: 'pick-member' }));
     await user.click(await screen.findByRole('button', { name: 'Issue to Picked' }));
 
-    await waitFor(() => expect(mockIssueKitToMember).toHaveBeenCalledWith('k-1', 'u-9'));
+    await waitFor(() => expect(mockIssueKitToMember).toHaveBeenCalledWith('k-1', 'u-9', {}));
     expect(mockToastSuccess).toHaveBeenCalledWith('Issued 3 items from "Recruit Kit"');
   });
 
@@ -201,6 +238,20 @@ describe('EquipmentKitsPage', () => {
         item_count: 3,
       },
     ]);
+    mockGetKitIssuePlan.mockResolvedValue({
+      kit_id: 'k-1',
+      user_id: 'u-9',
+      lines: ['Helmet', 'Gloves', 'Hood'].map((name, i) => ({
+        line_id: `li-${i}`,
+        item_name: name,
+        quantity: 1,
+        optional: false,
+        size_selectable: false,
+        issuable: true,
+        selected_item_id: `it-${i}`,
+        variants: [],
+      })),
+    });
     const user = userEvent.setup();
     renderWithRouter(<EquipmentKitsPage />);
     await screen.findByText('Recruit Kit');
@@ -226,6 +277,94 @@ describe('EquipmentKitsPage', () => {
     expect(within(dialog).getByRole('combobox', { name: 'Item' })).toBeInTheDocument();
     expect(within(dialog).getByRole('combobox', { name: 'Category' })).toBeInTheDocument();
     expect(within(dialog).getByRole('spinbutton', { name: 'Qty' })).toHaveValue(1);
+  });
+
+  // A kit is a template issued to many members, so a line names a product and
+  // its size is settled per member, not picked once when the kit is built.
+  it('adds a sized product without picking a size', async () => {
+    mockGetKitProductOptions.mockResolvedValue([jacket]);
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText(/No active kits yet/);
+
+    await user.click(screen.getAllByRole('button', { name: /Add Kit/ })[0] ?? document.body);
+    const dialog = await screen.findByRole('dialog', { name: 'Add Equipment Kit' });
+    await user.type(within(dialog).getByPlaceholderText('e.g. New Recruit Kit'), 'Recruit Kit');
+    const itemSelect = within(dialog).getByRole('combobox', { name: 'Item' });
+    // One option per product, not one per size.
+    expect(
+      within(itemSelect)
+        .getAllByRole('option')
+        .map((o) => o.textContent)
+    ).toEqual(['Select or type custom...', 'Blauer Jacket']);
+    await user.selectOptions(itemSelect, 'vg:jackets');
+    expect(within(dialog).getByRole('combobox', { name: 'Size' })).toHaveValue('__member__');
+    await user.click(screen.getByRole('button', { name: 'Create Kit' }));
+
+    await waitFor(() => expect(mockCreateEquipmentKit).toHaveBeenCalledTimes(1));
+    expect(mockCreateEquipmentKit.mock.calls[0]?.[0]).toMatchObject({
+      line_items: [{ item_id: 'j-m', item_name: 'Blauer Jacket', category_id: 'cat-outer', size_selectable: true }],
+    });
+  });
+
+  it('lets a line be pinned to one size', async () => {
+    mockGetKitProductOptions.mockResolvedValue([jacket]);
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText(/No active kits yet/);
+
+    await user.click(screen.getAllByRole('button', { name: /Add Kit/ })[0] ?? document.body);
+    const dialog = await screen.findByRole('dialog', { name: 'Add Equipment Kit' });
+    await user.type(within(dialog).getByPlaceholderText('e.g. New Recruit Kit'), 'Recruit Kit');
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Item' }), 'vg:jackets');
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Size' }), 'j-l');
+    await user.click(screen.getByRole('button', { name: 'Create Kit' }));
+
+    await waitFor(() => expect(mockCreateEquipmentKit).toHaveBeenCalledTimes(1));
+    expect(mockCreateEquipmentKit.mock.calls[0]?.[0]).toMatchObject({
+      line_items: [{ item_id: 'j-l', item_name: 'Blauer Jacket — L — Red', size_selectable: false }],
+    });
+  });
+
+  it("issues the member's size, or the size the quartermaster changes it to", async () => {
+    mockGetEquipmentKits.mockResolvedValue([makeKit({ active: true })]);
+    mockGetKitIssuePlan.mockResolvedValue(makePlan());
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText('Recruit Kit');
+
+    await user.click(screen.getByRole('button', { name: 'Issue Recruit Kit to a member' }));
+    await user.click(await screen.findByRole('button', { name: 'pick-member' }));
+
+    await waitFor(() => expect(mockGetKitIssuePlan).toHaveBeenCalledWith('k-1', 'u-9'));
+    const dialog = await screen.findByRole('dialog', { name: 'Issue Recruit Kit?' });
+    const size = within(dialog).getByRole('combobox', { name: 'Size for Blauer Jacket' });
+    expect(size).toHaveValue('j-l');
+    expect(dialog).toHaveTextContent("Member's size: L");
+
+    await user.selectOptions(size, 'j-m');
+    await user.click(within(dialog).getByRole('button', { name: 'Issue to Picked' }));
+
+    await waitFor(() => expect(mockIssueKitToMember).toHaveBeenCalledWith('k-1', 'u-9', { 'li-1': 'j-m' }));
+  });
+
+  it('asks for a size when the member has none on file', async () => {
+    mockGetEquipmentKits.mockResolvedValue([makeKit({ active: true })]);
+    mockGetKitIssuePlan.mockResolvedValue(makePlan({ member_size: null, selected_item_id: null }));
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText('Recruit Kit');
+
+    await user.click(screen.getByRole('button', { name: 'Issue Recruit Kit to a member' }));
+    await user.click(await screen.findByRole('button', { name: 'pick-member' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Issue Recruit Kit?' });
+    expect(dialog).toHaveTextContent('No size on file for this member');
+    const issue = within(dialog).getByRole('button', { name: 'Issue to Picked' });
+    expect(issue).toBeDisabled();
+
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Size for Blauer Jacket' }), 'j-m');
+    expect(issue).toBeEnabled();
   });
 
   it('hides management actions without the manage permission', async () => {

@@ -308,13 +308,22 @@ Consequences worth knowing:
   `npm ci`. Never trust a bare `tsc` invocation's version from either
   directory; use `tsc-native.mjs` (or, to deliberately run the `5.9.3` the
   linter uses, `node_modules/typescript/bin/tsc` from the repo root).
-- **Point your editor at the aliased compiler.** In VS Code, set this in your
-  local `.vscode/settings.json` (the directory is gitignored, so this cannot
-  be committed for you):
+- **The editor runs the aliased compiler, and the setting is committed.**
+  `.vscode/` is gitignored, but `.vscode/settings.json` and
+  `.vscode/extensions.json` are tracked, so a fresh clone already carries:
 
   ```json
-  "typescript.tsdk": "node_modules/typescript-native/lib"
+  "js/ts.experimental.useTsgo": true,
+  "js/ts.tsdk.path": "node_modules/typescript-native/lib"
   ```
+
+  Do not swap these back for `typescript.tsdk`. TypeScript 7 ships no
+  `tsserver.js`, so the classic key cannot load it from any path, and VS Code
+  quietly falls back to its own bundled version instead of the compiler the
+  build runs. The keys above are read by the TypeScript 7 extension
+  (`TypeScriptTeam.native-preview`, in the recommended extensions). If the
+  editor does not pick the workspace version up on its own, run
+  **TypeScript: Select TypeScript Version → Use Workspace Version** once.
 
 - Type-aware lint runs against 5.9.3 while the build uses 7.0.2. That gap is
   forced by upstream, not chosen. **When typescript-eslint ships TS 7 support,
@@ -1597,6 +1606,25 @@ why. That test scans the tree for all three shapes (a re-enabled
 `closeOnClickOutside`, a scrim with a click handler, and the
 `target === currentTarget` container check), so a new one fails loudly rather
 than shipping.
+
+### 32. A Gate on Account Status Asks "Is This a Current Member", Never `== ACTIVE` _(2026-10-20)_
+
+**Rule:** `UserStatus.PROBATIONARY` is a current account status. The member
+signs in, is scheduled, trains and holds property; an officer sets it from the
+profile and junior members derive to it. A query that means "the members on the
+roster today" filters `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (from
+`app/models/user.py`), and an instance check is `status in
+ACTIVE_ACCOUNT_STATUSES`. The frontend mirror is `isActiveAccount()` in
+`constants/enums.ts`. Forty-odd gates compared `== UserStatus.ACTIVE` and
+silently dropped probationary members from compliance, alerts, quorum, reports
+and pickers; nobody noticed because almost every probationary member still
+carried `active`, which nothing but the profile dialog ever changed.
+
+The literal comparison is allowed only where a Probationary count sits beside
+it and the two are meant to add up (the admin hub's tiles), and such a site is
+named in `ALLOWED` in `tests/test_account_status_gates.py` with that reason.
+That test sweeps `app/` and fails on any other literal `== ACTIVE` against
+`User.status`.
 
 ## Environment Variables
 

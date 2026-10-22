@@ -37,6 +37,8 @@ import { MEDICAL_VIEW_PERMISSIONS } from './modules/medical-supplies/routes';
 import { APPARATUS_ENTRY_PERMISSIONS } from './modules/apparatus/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from './modules/facilities/routes';
 import { QUICK_ADD_ACTIONS } from './components/layout/quickAddActions';
+import { governanceNavItems } from './components/layout/governanceNavigation';
+import { LEGAL_DOCUMENTS_PERMISSIONS } from './modules/governance/routes';
 import { barePath, routeGate, routeSources } from './test/routeGates';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
@@ -104,6 +106,31 @@ describe('navigation gates match the routes they target', () => {
       );
     }
     expect(read('components/operations/OperationsPageHeader.tsx')).toContain('operationsNavItems(isModuleOn');
+  });
+
+  it('draws the Governance rows on both surfaces from the one shared list', () => {
+    for (const surface of NAV_SURFACES) {
+      expect(read(surface), `${surface}: Governance rows are not the shared list`).toContain(
+        'subItems: governanceNavItems(isModuleOn)'
+      );
+    }
+    expect(read('components/governance/GovernancePageHeader.tsx')).toContain('governanceNavItems(isModuleOn)');
+  });
+
+  it('offers Legal Documents on exactly the grants its route accepts, and the org chart to everyone', () => {
+    // The list is a typed export, so the row is read as data rather than out
+    // of source text; the route gates on the same constant by name.
+    const rows = governanceNavItems(() => true);
+    const legal = rows.find((row) => row.path === '/governance/legal');
+    expect(legal?.anyPermission).toEqual(LEGAL_DOCUMENTS_PERMISSIONS);
+    const routeBlock = read('modules/governance/routes.tsx');
+    expect(routeBlock).toContain('requiredAnyPermission={LEGAL_DOCUMENTS_PERMISSIONS}');
+
+    // The chart's route is authentication-only on purpose: it is the one
+    // governance screen written for the general membership.
+    const chart = rows.find((row) => row.path === '/governance/org-chart');
+    expect(chart?.permission).toBeUndefined();
+    expect(chart?.anyPermission).toBeUndefined();
   });
 
   it('shares the Facilities route gate with every discovery surface', () => {

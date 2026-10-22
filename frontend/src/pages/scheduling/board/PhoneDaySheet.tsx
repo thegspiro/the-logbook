@@ -65,7 +65,7 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
     return (
       <div className="pb-safe px-4 py-6 text-center">
         <span className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full border border-green-200 bg-green-50 dark:border-green-500/40 dark:bg-green-500/10">
-          <Check className="h-8 w-8 text-green-600 dark:text-green-400" aria-hidden="true" />
+          <Check className="h-8 w-8 text-green-700 dark:text-green-400" aria-hidden="true" />
         </span>
         <h3 className="text-theme-text-primary text-[22px] font-bold">You&rsquo;re on the roster</h3>
         <p className="text-theme-text-secondary mx-auto mt-2 max-w-[320px] text-[15px] leading-[22px]">

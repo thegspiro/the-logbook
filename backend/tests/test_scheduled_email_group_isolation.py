@@ -54,6 +54,13 @@ def _query_result(rows):
     return result
 
 
+def _status_result(status):
+    """The sender's locking re-read of one row's status before it sends."""
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = status
+    return result
+
+
 class TestScheduledEmailRefreshesAfterRollback:
     async def test_second_items_organization_is_refetched_not_read_off_the_stale_relationship(
         self,
@@ -64,7 +71,13 @@ class TestScheduledEmailRefreshesAfterRollback:
         item2 = _item("email-2", "org-2", org2)
 
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_query_result([item1, item2])])
+        db.execute = AsyncMock(
+            side_effect=[
+                _query_result([item1, item2]),
+                _status_result(ScheduledEmailStatus.PENDING),
+                _status_result(ScheduledEmailStatus.PENDING),
+            ]
+        )
         # item1: both the normal-path commit and the failure-recording
         # commit inside the except block fail, forcing the rollback path.
         # item2's single commit then succeeds.

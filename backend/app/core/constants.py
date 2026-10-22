@@ -223,6 +223,21 @@ def position_slugs_for_offices(*office_keys: str) -> list[str]:
     return slugs
 
 
+def office_label(key: str) -> str:
+    """The catalog's display label for an office key ("chief" -> "Chief").
+
+    Matching is case-insensitive and ignores surrounding whitespace, because
+    keys reach this from free-text stage configuration. A key with no catalog
+    entry is humanized rather than refused, so a department's own role name
+    ("hose_master") still reads as words.
+    """
+    wanted = key.strip().casefold()
+    for office in OFFICE_CATALOG:
+        if str(office["key"]).casefold() == wanted:
+            return str(office["label"])
+    return key.strip().replace("_", " ").title()
+
+
 # Leadership roles notified on critical events (election rollbacks, deletions).
 LEADERSHIP_ROLE_SLUGS: list[str] = position_slugs_for_offices(
     "chief", "president", "vice_president", "secretary"

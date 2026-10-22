@@ -34,6 +34,14 @@ export interface PresetPatternDef {
   cyclePattern?: CycleEntry[];
   /** Whether this pattern has day/night distinction. */
   hasDayNight: boolean;
+  /**
+   * How long each on-duty shift is, where the preset's name says so ("24-Hour
+   * On", "12-Hour Shifts"). The rotation only places one shift per on-day;
+   * the template decides its length, so a 12-hour template under a 24/48
+   * quietly generates half-days. Left unset where the preset does not commit
+   * to a length.
+   */
+  shiftHours?: number;
   /** Category for grouping. */
   category: 'simple' | 'complex' | 'rotating' | 'weekly';
 }
@@ -49,6 +57,7 @@ export const PRESET_PATTERNS: PresetPatternDef[] = [
     daysOff: 2,
     cycleDays: 3,
     hasDayNight: false,
+    shiftHours: 24,
     category: 'simple',
   },
   {
@@ -61,6 +70,7 @@ export const PRESET_PATTERNS: PresetPatternDef[] = [
     daysOff: 4,
     cycleDays: 6,
     hasDayNight: false,
+    shiftHours: 24,
     category: 'simple',
   },
   {
@@ -73,6 +83,7 @@ export const PRESET_PATTERNS: PresetPatternDef[] = [
     daysOff: 4,
     cycleDays: 8,
     hasDayNight: false,
+    shiftHours: 12,
     category: 'simple',
   },
   {
@@ -84,6 +95,7 @@ export const PRESET_PATTERNS: PresetPatternDef[] = [
     cycleDays: 9,
     cyclePattern: ['on', 'off', 'on', 'off', 'on', 'off', 'off', 'off', 'off'],
     hasDayNight: false,
+    shiftHours: 24,
     category: 'complex',
   },
   {
@@ -95,6 +107,7 @@ export const PRESET_PATTERNS: PresetPatternDef[] = [
     cycleDays: 9,
     cyclePattern: ['on', 'off', 'on', 'off', 'on', 'off', 'off', 'off', 'off'],
     hasDayNight: false,
+    shiftHours: 24,
     category: 'complex',
   },
   {

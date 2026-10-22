@@ -48,7 +48,6 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.services.training_enhancement_service import (
     CompetencyService,
@@ -784,8 +783,6 @@ async def upload_record_attachment(
     current_user=Depends(get_current_user),
 ):
     """Upload and store a document/certificate for a training record."""
-    import asyncio
-
     from sqlalchemy.orm.attributes import flag_modified
 
     record = await _load_record_for_attachment(db, record_id, current_user)
@@ -818,22 +815,13 @@ async def upload_record_attachment(
         await db.commit()
         await db.refresh(record)
     except Exception as e:
-        await asyncio.to_thread(_safe_remove, file_path)
+        await file_storage.delete_quietly(file_path)
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     return {
         "record_id": record_id,
         "attachments": _sanitize_attachments(record.attachments or []),
     }
-
-
-def _safe_remove(path: str) -> None:
-    import os
-
-    try:
-        os.remove(path)
-    except OSError:
-        pass
 
 
 def _sanitize_attachments(attachments: list) -> list:
@@ -872,8 +860,6 @@ async def download_record_attachment(
     current_user=Depends(get_current_user),
 ):
     """Stream a stored training-record attachment by its index."""
-    import os
-
     record = await _load_record_for_attachment(db, record_id, current_user)
     attachments = record.attachments or []
     if index < 0 or index >= len(attachments):
@@ -900,7 +886,7 @@ async def download_record_attachment(
     if not real_path:
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
-    if not os.path.isfile(real_path):
+    if not await file_storage.exists(real_path):
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
     filename = download_names.descriptive_filename(
@@ -913,7 +899,7 @@ async def download_record_attachment(
         fallback=download_names.original_stem(attachment.get("file_name"))
         or "certificate",
     )
-    return stored_file_response(
+    return await file_storage.file_response(
         real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
         filename=filename,

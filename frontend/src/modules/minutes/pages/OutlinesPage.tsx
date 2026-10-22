@@ -10,7 +10,6 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link } from 'react-router';
 import { Copy, ListOrdered, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -18,6 +17,7 @@ import { OutlineEditorModal } from '../components/OutlineEditorModal';
 import { MEETING_TYPE_OPTIONS } from '../utils/meetingTypes';
 import { minutesService } from '../services/api';
 import type { MinutesTemplate, TemplateListItem } from '../types/minutes';
+import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 
 export const OutlinesPage: React.FC = () => {
   const { confirm } = useConfirm();
@@ -93,27 +93,23 @@ export const OutlinesPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <Link to="/minutes" className="text-sm text-blue-600 hover:text-blue-700">
-          &larr; Back to Minutes
-        </Link>
-        <div className="mt-2 mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-cyan-600 p-2">
-              <ListOrdered className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Meeting outlines</h1>
-              <p className="text-theme-text-muted text-sm">
-                Your standard order of business. New minutes start from the default outline for their kind of meeting.
-              </p>
-            </div>
-          </div>
-          <button type="button" onClick={openNew} className="btn-primary touch:min-h-11 inline-flex items-center gap-2">
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            New outline
-          </button>
-        </div>
+      <div className="mx-auto max-w-7xl">
+        <GovernancePageHeader
+          icon={ListOrdered}
+          title="Meeting outlines"
+          breadcrumbLabel="Outlines"
+          subtitle="Your standard order of business. New minutes start from the default outline for their kind of meeting."
+          actions={
+            <button
+              type="button"
+              onClick={openNew}
+              className="btn-primary touch:min-h-11 inline-flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              New outline
+            </button>
+          }
+        />
 
         {error && (
           <p className="alert-danger mb-4 text-sm" role="alert">

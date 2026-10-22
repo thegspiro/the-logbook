@@ -156,3 +156,28 @@ describe('PipelineSettingsPage automatic transfer', () => {
     expect(screen.getByText(/Skipping the final stage never converts anyone/)).toBeInTheDocument();
   });
 });
+
+// The dialog said deleting a pipeline permanently deleted its applicants'
+// application records. The applicants survive, unlinked from any pipeline;
+// what goes is their stage-by-stage progress.
+describe('PipelineSettingsPage delete dialog', () => {
+  beforeEach(() => {
+    mockUpdatePipeline.mockReset();
+    mockSetCurrentPipeline.mockReset();
+    mockCurrentPipeline = pipeline({ applicant_count: 3 });
+  });
+
+  it('states what is actually deleted and what is kept', async () => {
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete pipeline' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('This pipeline has 3 applicants.');
+    expect(dialog).toHaveTextContent('deletes its stages and every applicant’s stage-by-stage progress');
+    expect(dialog).toHaveTextContent(
+      'The applicant records themselves are kept, but no longer belong to any pipeline.'
+    );
+    expect(dialog).not.toHaveTextContent('application records');
+  });
+});

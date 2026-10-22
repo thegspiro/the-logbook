@@ -33,7 +33,7 @@ import { SortableHeader } from '../components/ux/SortableHeader';
 import { sortItems } from '../utils/sortItems';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
-import { UserStatus } from '../constants/enums';
+import { UserStatus, isActiveAccount } from '../constants/enums';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
 
@@ -127,7 +127,7 @@ const Members: React.FC = () => {
       // Calculate stats from real data
       const calculatedStats: MemberStats = {
         total: users.filter((u) => u.status !== UserStatus.ARCHIVED).length,
-        active: users.filter((u) => u.status === UserStatus.ACTIVE).length,
+        active: users.filter((u) => isActiveAccount(u.status)).length,
         inactive: users.filter((u) => u.status === UserStatus.INACTIVE).length,
         onLeave: users.filter((u) => u.status === UserStatus.LEAVE).length,
         retired: users.filter((u) => u.status === UserStatus.RETIRED).length,
@@ -208,9 +208,13 @@ const Members: React.FC = () => {
         (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
         (member.email && member.email.toLowerCase().includes(searchLower));
 
+      // "Active" is the account filter, and a probationary account is a
+      // current one: the backend counts both the same way, and the dashboard
+      // tile links here with ?status=active expecting the same roster.
       const matchesFilter =
         filterStatus === 'all' ||
         (filterStatus === CURRENT_MEMBERS_FILTER && member.status !== UserStatus.ARCHIVED) ||
+        (filterStatus === UserStatus.ACTIVE && isActiveAccount(member.status)) ||
         member.status === filterStatus;
 
       return matchesSearch && matchesFilter;
@@ -322,11 +326,11 @@ const Members: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case UserStatus.ACTIVE:
-        return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
+        return 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30';
       case UserStatus.INACTIVE:
         return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
       case UserStatus.LEAVE:
-        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
+        return 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/30';
       case UserStatus.RETIRED:
         return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30';
       default:
@@ -408,9 +412,9 @@ const Members: React.FC = () => {
 
         {/* Actions Bar */}
         <div className="card mb-6 p-4">
-          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row md:flex-wrap">
             {/* Search */}
-            <div className="relative w-full flex-1 md:max-w-md">
+            <div className="relative w-full flex-1 md:max-w-md md:min-w-[16rem]">
               <Search className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform" />
               <input
                 autoCapitalize="none"
@@ -449,7 +453,7 @@ const Members: React.FC = () => {
               <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
                 <button
                   onClick={() => void navigate('/members/import')}
-                  className="touch:min-h-[44px] flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 sm:px-4 md:flex-none"
+                  className="btn-secondary flex flex-1 items-center justify-center space-x-2 px-3 sm:px-4 md:flex-none"
                 >
                   <Upload className="h-4 w-4" />
                   <span className="hidden sm:inline">Import CSV</span>

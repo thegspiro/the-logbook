@@ -91,7 +91,7 @@ export const ReportContentDisplay: React.FC<ReportContentDisplayProps> = ({ repo
                   <span
                     className={`inline-block rounded-full border px-2 py-0.5 text-xs ${
                       skill.demonstrated
-                        ? 'border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-400'
+                        ? 'border-green-500/20 bg-green-500/10 text-green-800 dark:text-green-400'
                         : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
                     }`}
                   >

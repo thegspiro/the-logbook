@@ -6,7 +6,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Truck, Save, ArrowLeft, Plus, X } from 'lucide-react';
+import { Truck, Save, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useRanks } from '@/hooks/useRanks';
@@ -18,6 +18,7 @@ import { apparatusService, evocLevelService } from '../services/api';
 import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
 import { FUEL_TYPE_LABELS } from '../types';
 import type { ApparatusCreate, ApparatusUpdate, EvocLevel, FuelType } from '../types';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 /** Columns the server stores as NOT NULL; an emptied one is refused by
  * validation or keeps its value, never sent as null. */
@@ -354,7 +355,7 @@ export const ApparatusFormPage: React.FC = () => {
 
   if (storeLoading && isEditing) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
           <div className="border-theme-text-primary mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2"></div>
           <p className="text-theme-text-secondary">Loading apparatus...</p>
@@ -363,39 +364,25 @@ export const ApparatusFormPage: React.FC = () => {
     );
   }
 
-  return (
-    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br">
-      {/* Header */}
-      <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
-        <div className="mx-auto max-w-5xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => void navigate('/apparatus')}
-                aria-label="Back to apparatus"
-                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <div className="flex items-center space-x-3">
-                <div className="rounded-lg bg-red-800 p-2">
-                  <Truck className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-theme-text-primary text-xl font-bold">
-                    {isEditing ? 'Edit Apparatus' : 'Add Apparatus'}
-                  </h1>
-                  <p className="text-theme-text-muted text-sm">
-                    {isEditing ? 'Update apparatus details' : 'Add a new piece of apparatus to the fleet'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+  // The store keeps the last apparatus opened, so a unit name is only this
+  // record's once the ids agree; until then the trail stops at the section.
+  const editingUnit =
+    isEditing && currentApparatus && currentApparatus.id === id ? currentApparatus.unitNumber : undefined;
 
-      <div data-page-main className="mx-auto max-w-5xl px-6 py-8">
+  return (
+    <div>
+      <div data-page-main className="mx-auto max-w-7xl">
+        <OperationsPageHeader
+          icon={Truck}
+          title={isEditing ? (editingUnit ? `Edit ${editingUnit}` : 'Edit Apparatus') : 'Add Apparatus'}
+          subtitle={isEditing ? 'Update apparatus details' : 'Add a new piece of apparatus to the fleet'}
+          {...(isEditing && id
+            ? {
+                breadcrumbLabel: 'Edit',
+                parentCrumbs: editingUnit ? [{ label: editingUnit, path: `/apparatus/${id}` }] : [],
+              }
+            : {})}
+        />
         <form
           onSubmit={(e) => {
             void handleSubmit(e);

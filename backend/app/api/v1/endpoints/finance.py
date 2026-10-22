@@ -170,6 +170,7 @@ from app.services.restricted_funds import (
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.delete_outcome import set_delete_outcome
 from app.utils.finance_settings import load_finance_settings
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.quickbooks_chart import MAX_CHART_FILE_BYTES, parse_chart_of_accounts
@@ -719,12 +720,22 @@ async def update_budget_category(
 @router.delete("/budget-categories/{cat_id}", status_code=204)
 async def delete_budget_category(
     cat_id: str,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
+    """Delete a budget category, or deactivate it while anything uses it.
+
+    A category with budget lines (in any fiscal year), approval chains or
+    budget requests is deactivated instead, so that history keeps it. The
+    response stays 204 either way; ``X-Delete-Outcome`` says which happened.
+    """
     service = FinanceService(db)
     try:
-        await service.delete_budget_category(cat_id, str(current_user.organization_id))
+        deleted = await service.delete_budget_category(
+            cat_id, str(current_user.organization_id)
+        )
+        set_delete_outcome(response, deleted)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:

@@ -13,7 +13,6 @@ from uuid import UUID, uuid4
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Body,
     Depends,
     HTTPException,
@@ -39,10 +38,9 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
-from app.core.utils import generate_uuid, safe_error_detail
+from app.core.utils import safe_error_detail
 from app.models.election import (
-    BallotSendJob,
-    BallotSendJobStatus,
+    BallotSendJobKind,
     Candidate,
     Election,
     ElectionStatus,
@@ -53,6 +51,7 @@ from app.models.election import (
 from app.models.event import Event, EventRSVP, RSVPStatus
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import Organization, User
+from app.schemas.column_bounds import INT32_MAX
 from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
@@ -129,17 +128,19 @@ from app.services.ballot_send_jobs import (
     PACKAGE_IN_PROGRESS_DETAIL,
     SEND_IN_PROGRESS_DETAIL,
     BallotSend,
+    NominationsAnnouncementSend,
     PackageSend,
     QueuedSend,
     ReminderSend,
-    announce_nominations_open,
+    enqueue_send,
     ensure_election_open,
     find_active_job,
     get_job,
     job_response,
+    latest_job,
     perform_ballot_send,
     perform_reminder_send,
-    start_ballot_send_job,
+    queue_automatic_send,
 )
 from app.services.election_service import (
     ElectionService,
@@ -279,6 +280,19 @@ async def _build_election_response(
         response.ballots_must_be_resent,
         response.ballots_resend_reason,
     ) = await ElectionService(db).ballot_resend_state(election)
+    # Nominations run between draft and voting, and closing them returns the
+    # election to draft, so the announcement means nothing once voting opens.
+    if election.status in (ElectionStatus.NOMINATIONS, ElectionStatus.DRAFT):
+        announcement = await latest_job(
+            db,
+            str(election.id),
+            str(election.organization_id),
+            kind=BallotSendJobKind.ANNOUNCEMENT.value,
+        )
+        if announcement is not None and (
+            viewer is None or user_has_permission(viewer, "elections.manage")
+        ):
+            response.nominations_announcement = job_response(announcement)
     if election.meeting:
         response.meeting_title = election.meeting.title
         response.meeting_type = (
@@ -802,7 +816,7 @@ class VoteWithToken(BaseModel):
     token: str = Field(..., min_length=1, max_length=256)
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
-    vote_rank: Optional[int] = Field(None, ge=1)
+    vote_rank: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     model_config = ConfigDict(extra="forbid")
 
 
@@ -1728,7 +1742,6 @@ async def close_election(
 @router.post("/{election_id}/open-nominations", response_model=ElectionResponse)
 async def open_nominations(
     election_id: UUID,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.manage")),
 ):
@@ -1756,12 +1769,15 @@ async def open_nominations(
             status_code=status_code, detail=error or "An unexpected error occurred"
         )
     # One message per member takes about a second each, so the announcement
-    # goes out after the response rather than holding the request open.
-    background_tasks.add_task(
-        announce_nominations_open,
+    # is queued as a background job rather than holding the request open; the
+    # election response carries the job for the page to follow. None means an
+    # announcement from an earlier opening is still going out.
+    await queue_automatic_send(
+        db,
         str(election.id),
         str(current_user.organization_id),
-        str(current_user.id),
+        requested_by=str(current_user.id),
+        send=NominationsAnnouncementSend(acting_user_id=str(current_user.id)),
     )
     return await _build_election_response(db, election)
 
@@ -2638,10 +2654,43 @@ async def delete_candidate(
             status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
 
-    if await _active_vote_count(db, candidate_id) > 0:
+    # The ballot is set once voting opens; removing a name afterwards would
+    # rewrite the ballot members already voted on.
+    if election.status not in (ElectionStatus.DRAFT, ElectionStatus.NOMINATIONS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete candidate with existing votes",
+            detail=(
+                "Candidates can only be removed while the election is a draft "
+                "or taking nominations"
+            ),
+        )
+    # Same freeze the manager's Accept / un-Accept respects: Close
+    # Nominations made the slate final until nominations are reopened.
+    if service.slate_frozen(election):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Nominations have closed, so the slate is final: candidates "
+                "can no longer be removed. Reopen nominations to change it."
+            ),
+        )
+    # Every real vote row, voided ones included: the cascade from Candidate
+    # hard-deletes them, which would erase the record of a voided ballot
+    # along with the candidate. Test ballots are rehearsal data and are
+    # ignored here as they are when editing a candidate, so a rehearsal does
+    # not freeze the list.
+    any_votes = await db.execute(
+        select(func.count(Vote.id))
+        .where(Vote.candidate_id == str(candidate_id))
+        .where(Vote.is_test.is_(False))
+    )
+    if (any_votes.scalar() or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot delete a candidate with recorded votes, including "
+                "voided ballots"
+            ),
         )
 
     candidate_name = candidate.name
@@ -3164,35 +3213,12 @@ async def _queue_send(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
-    active = await find_active_job(
-        db, election.id, organization_id, kinds=send.guard_kinds
-    )
-    if active is not None:
-        # The abandoned jobs find_active_job just failed are kept either way.
-        await db.commit()
+    job = await enqueue_send(db, election, organization_id, str(current_user.id), send)
+    if job is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=send.in_progress_detail,
         )
-
-    job = BallotSendJob(
-        id=generate_uuid(),
-        organization_id=organization_id,
-        election_id=election.id,
-        requested_by=str(current_user.id),
-        kind=send.kind.value,
-        status=BallotSendJobStatus.QUEUED.value,
-        created_at=datetime.now(timezone.utc),
-    )
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-
-    logger.info(
-        f"Ballot send job queued | job={job.id} kind={job.kind} "
-        f"election={election.id} user={current_user.id}"
-    )
-    start_ballot_send_job(job.id, organization_id, send)
     return job_response(job)
 
 
@@ -3230,7 +3256,7 @@ async def send_election_report(
     current_user: User = Depends(require_permission("elections.manage")),
 ):
     """
-    Send an election report email to the secretary.
+    Email the election report to the officer who requested it.
 
     The report includes election results, ballot recipients, and reasons
     why specific members did not receive ballots.
@@ -3243,7 +3269,7 @@ async def send_election_report(
         success, message = await service.generate_and_send_election_report(
             election_id=election_id,
             organization_id=current_user.organization_id,
-            requested=True,
+            requested_by=current_user.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

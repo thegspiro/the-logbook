@@ -13,6 +13,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN, MONEY_MAX, decimal_max
 
 # Shared config for response schemas
 _response_config = ConfigDict(
@@ -390,16 +391,20 @@ class FacilityBase(BaseModel):
     state: Optional[str] = Field(None, max_length=50)
     zip_code: Optional[str] = Field(None, max_length=20)
     county: Optional[str] = Field(None, max_length=100)
-    latitude: Optional[Decimal] = None
-    longitude: Optional[Decimal] = None
+    latitude: Optional[Decimal] = Field(
+        None, ge=-decimal_max(10, 7), le=decimal_max(10, 7)
+    )
+    longitude: Optional[Decimal] = Field(
+        None, ge=-decimal_max(10, 7), le=decimal_max(10, 7)
+    )
 
     # Building info
     year_built: Optional[int] = Field(None, ge=1800, le=2100)
     year_renovated: Optional[int] = Field(None, ge=1800, le=2100)
-    square_footage: Optional[int] = Field(None, ge=0)
-    num_floors: Optional[int] = Field(None, ge=1)
-    num_bays: Optional[int] = Field(None, ge=0)
-    lot_size_acres: Optional[Decimal] = Field(None, ge=0)
+    square_footage: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    num_floors: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    num_bays: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    lot_size_acres: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     # Ownership. lease_expiration and property_tax_id are sensitive lease
     # terms: FacilityResponse nulls them for callers without
@@ -411,8 +416,8 @@ class FacilityBase(BaseModel):
     property_tax_id: Optional[str] = Field(None, max_length=100)
 
     # Capacity
-    max_occupancy: Optional[int] = Field(None, ge=0)
-    sleeping_quarters: Optional[int] = Field(None, ge=0)
+    max_occupancy: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    sleeping_quarters: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     # Contact
     phone: Optional[str] = Field(None, max_length=50)
@@ -440,22 +445,26 @@ class FacilityUpdate(BaseModel):
     state: Optional[str] = Field(None, max_length=50)
     zip_code: Optional[str] = Field(None, max_length=20)
     county: Optional[str] = Field(None, max_length=100)
-    latitude: Optional[Decimal] = None
-    longitude: Optional[Decimal] = None
+    latitude: Optional[Decimal] = Field(
+        None, ge=-decimal_max(10, 7), le=decimal_max(10, 7)
+    )
+    longitude: Optional[Decimal] = Field(
+        None, ge=-decimal_max(10, 7), le=decimal_max(10, 7)
+    )
 
     year_built: Optional[int] = Field(None, ge=1800, le=2100)
     year_renovated: Optional[int] = Field(None, ge=1800, le=2100)
-    square_footage: Optional[int] = Field(None, ge=0)
-    num_floors: Optional[int] = Field(None, ge=1)
-    num_bays: Optional[int] = Field(None, ge=0)
-    lot_size_acres: Optional[Decimal] = Field(None, ge=0)
+    square_footage: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    num_floors: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    num_bays: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    lot_size_acres: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     is_owned: Optional[bool] = None
     lease_expiration: Optional[date] = None
     property_tax_id: Optional[str] = Field(None, max_length=100)
 
-    max_occupancy: Optional[int] = Field(None, ge=0)
-    sleeping_quarters: Optional[int] = Field(None, ge=0)
+    max_occupancy: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    sleeping_quarters: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     phone: Optional[str] = Field(None, max_length=50)
     fax: Optional[str] = Field(None, max_length=50)
@@ -599,7 +608,7 @@ class FacilityMaintenanceTypeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     category: Optional[MaintenanceCategoryEnum] = MaintenanceCategoryEnum.OTHER
-    default_interval_value: Optional[int] = Field(None, ge=1)
+    default_interval_value: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     default_interval_unit: Optional[MaintenanceIntervalUnitEnum] = None
 
 
@@ -611,7 +620,7 @@ class FacilityMaintenanceTypeUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     category: Optional[MaintenanceCategoryEnum] = None
-    default_interval_value: Optional[int] = Field(None, ge=1)
+    default_interval_value: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     default_interval_unit: Optional[MaintenanceIntervalUnitEnum] = None
     is_active: Optional[bool] = None
 
@@ -648,7 +657,7 @@ class FacilityMaintenanceBase(BaseModel):
     work_performed: Optional[str] = None
     findings: Optional[str] = None
 
-    cost: Optional[Decimal] = Field(None, ge=0)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     vendor: Optional[str] = Field(None, max_length=200)
     invoice_number: Optional[str] = Field(None, max_length=100)
     work_order_number: Optional[str] = Field(None, max_length=100)
@@ -686,7 +695,7 @@ class FacilityMaintenanceUpdate(BaseModel):
     work_performed: Optional[str] = None
     findings: Optional[str] = None
 
-    cost: Optional[Decimal] = Field(None, ge=0)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     vendor: Optional[str] = Field(None, max_length=200)
     invoice_number: Optional[str] = Field(None, max_length=100)
     work_order_number: Optional[str] = Field(None, max_length=100)
@@ -736,7 +745,7 @@ class FacilitySystemBase(BaseModel):
 
     install_date: Optional[date] = None
     warranty_expiration: Optional[date] = None
-    expected_life_years: Optional[int] = Field(None, ge=0)
+    expected_life_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     condition: FacilitySystemConditionEnum = FacilitySystemConditionEnum.GOOD
     last_serviced_date: Optional[date] = None
@@ -747,10 +756,10 @@ class FacilitySystemBase(BaseModel):
     test_result: Optional[str] = Field(None, max_length=50)
     certification_number: Optional[str] = Field(None, max_length=100)
     certified_by: Optional[str] = Field(None, max_length=200)
-    test_frequency_days: Optional[int] = Field(None, ge=1)
+    test_frequency_days: Optional[int] = Field(None, ge=1, le=INT32_MAX)
 
     notes: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     is_active: bool = True
 
 
@@ -769,7 +778,7 @@ class FacilitySystemUpdate(BaseModel):
 
     install_date: Optional[date] = None
     warranty_expiration: Optional[date] = None
-    expected_life_years: Optional[int] = Field(None, ge=0)
+    expected_life_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     condition: Optional[FacilitySystemConditionEnum] = None
     last_serviced_date: Optional[date] = None
@@ -780,10 +789,10 @@ class FacilitySystemUpdate(BaseModel):
     test_result: Optional[str] = Field(None, max_length=50)
     certification_number: Optional[str] = Field(None, max_length=100)
     certified_by: Optional[str] = Field(None, max_length=200)
-    test_frequency_days: Optional[int] = Field(None, ge=1)
+    test_frequency_days: Optional[int] = Field(None, ge=1, le=INT32_MAX)
 
     notes: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -923,8 +932,10 @@ class FacilityUtilityReadingCreate(BaseModel):
     reading_date: date
     period_start: Optional[date] = None
     period_end: Optional[date] = None
-    amount: Optional[Decimal] = Field(None, ge=0)
-    usage_quantity: Optional[Decimal] = None
+    amount: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    usage_quantity: Optional[Decimal] = Field(
+        None, ge=-decimal_max(12, 3), le=decimal_max(12, 3)
+    )
     usage_unit: Optional[str] = Field(None, max_length=50)
     notes: Optional[str] = None
 
@@ -933,8 +944,10 @@ class FacilityUtilityReadingUpdate(BaseModel):
     reading_date: Optional[date] = None
     period_start: Optional[date] = None
     period_end: Optional[date] = None
-    amount: Optional[Decimal] = Field(None, ge=0)
-    usage_quantity: Optional[Decimal] = None
+    amount: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    usage_quantity: Optional[Decimal] = Field(
+        None, ge=-decimal_max(12, 3), le=decimal_max(12, 3)
+    )
     usage_unit: Optional[str] = Field(None, max_length=50)
     notes: Optional[str] = None
 
@@ -1011,14 +1024,14 @@ class FacilityRoomBase(BaseModel):
     parent_room_id: Optional[str] = Field(None, min_length=1)
     name: str = Field(..., max_length=200)
     room_number: Optional[str] = Field(None, max_length=50)
-    floor: Optional[int] = None
+    floor: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     room_type: RoomTypeEnum = RoomTypeEnum.OTHER
     zone_classification: ZoneClassificationEnum = ZoneClassificationEnum.UNCLASSIFIED
-    square_footage: Optional[int] = Field(None, ge=0)
-    capacity: Optional[int] = Field(None, ge=0)
+    square_footage: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    capacity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     description: Optional[str] = None
     equipment: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     is_active: bool = True
 
 
@@ -1033,14 +1046,14 @@ class FacilityRoomUpdate(BaseModel):
     parent_room_id: Optional[str] = Field(None, min_length=1)
     name: Optional[str] = Field(None, max_length=200)
     room_number: Optional[str] = Field(None, max_length=50)
-    floor: Optional[int] = None
+    floor: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     room_type: Optional[RoomTypeEnum] = None
     zone_classification: Optional[ZoneClassificationEnum] = None
-    square_footage: Optional[int] = Field(None, ge=0)
-    capacity: Optional[int] = Field(None, ge=0)
+    square_footage: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    capacity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     description: Optional[str] = None
     equipment: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -1086,7 +1099,7 @@ class FacilityEmergencyContactBase(BaseModel):
     alt_phone: Optional[str] = Field(None, max_length=50)
     email: Optional[str] = Field(None, max_length=200)
     service_contract_number: Optional[str] = Field(None, max_length=100)
-    priority: int = Field(default=1, ge=1)
+    priority: int = Field(default=1, ge=1, le=INT32_MAX)
     notes: Optional[str] = None
     is_active: bool = True
 
@@ -1108,7 +1121,7 @@ class FacilityEmergencyContactUpdate(BaseModel):
     alt_phone: Optional[str] = Field(None, max_length=50)
     email: Optional[str] = Field(None, max_length=200)
     service_contract_number: Optional[str] = Field(None, max_length=100)
-    priority: Optional[int] = Field(None, ge=1)
+    priority: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     notes: Optional[str] = None
     is_active: Optional[bool] = None
 
@@ -1130,7 +1143,7 @@ class FacilityShutoffLocationCreate(BaseModel):
     facility_id: str
     shutoff_type: ShutoffTypeEnum
     location_description: str
-    floor: Optional[int] = None
+    floor: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     notes: Optional[str] = None
     photo_path: Optional[str] = Field(None, max_length=500)
 
@@ -1139,7 +1152,7 @@ class FacilityShutoffLocationUpdate(BaseModel):
     facility_id: Optional[str] = None
     shutoff_type: Optional[ShutoffTypeEnum] = None
     location_description: Optional[str] = None
-    floor: Optional[int] = None
+    floor: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     notes: Optional[str] = None
     photo_path: Optional[str] = Field(None, max_length=500)
 
@@ -1170,8 +1183,8 @@ class FacilityCapitalProjectBase(BaseModel):
     description: Optional[str] = None
     project_type: CapitalProjectTypeEnum = CapitalProjectTypeEnum.OTHER
     project_status: CapitalProjectStatusEnum = CapitalProjectStatusEnum.PLANNING
-    estimated_cost: Optional[Decimal] = Field(None, ge=0)
-    actual_cost: Optional[Decimal] = Field(None, ge=0)
+    estimated_cost: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    actual_cost: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     budget_source: Optional[str] = Field(None, max_length=300)
     start_date: Optional[date] = None
     estimated_completion: Optional[date] = None
@@ -1195,8 +1208,8 @@ class FacilityCapitalProjectUpdate(BaseModel):
     description: Optional[str] = None
     project_type: Optional[CapitalProjectTypeEnum] = None
     project_status: Optional[CapitalProjectStatusEnum] = None
-    estimated_cost: Optional[Decimal] = Field(None, ge=0)
-    actual_cost: Optional[Decimal] = Field(None, ge=0)
+    estimated_cost: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    actual_cost: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     budget_source: Optional[str] = Field(None, max_length=300)
     start_date: Optional[date] = None
     estimated_completion: Optional[date] = None
@@ -1232,9 +1245,9 @@ class FacilityInsurancePolicyBase(BaseModel):
     agent_name: Optional[str] = Field(None, max_length=200)
     agent_phone: Optional[str] = Field(None, max_length=50)
     agent_email: Optional[str] = Field(None, max_length=200)
-    coverage_amount: Optional[Decimal] = Field(None, ge=0)
-    deductible: Optional[Decimal] = Field(None, ge=0)
-    annual_premium: Optional[Decimal] = Field(None, ge=0)
+    coverage_amount: Optional[Decimal] = Field(None, ge=0, le=decimal_max(14, 2))
+    deductible: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    annual_premium: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     effective_date: Optional[date] = None
     expiration_date: Optional[date] = None
     notes: Optional[str] = None
@@ -1254,9 +1267,9 @@ class FacilityInsurancePolicyUpdate(BaseModel):
     agent_name: Optional[str] = Field(None, max_length=200)
     agent_phone: Optional[str] = Field(None, max_length=50)
     agent_email: Optional[str] = Field(None, max_length=200)
-    coverage_amount: Optional[Decimal] = Field(None, ge=0)
-    deductible: Optional[Decimal] = Field(None, ge=0)
-    annual_premium: Optional[Decimal] = Field(None, ge=0)
+    coverage_amount: Optional[Decimal] = Field(None, ge=0, le=decimal_max(14, 2))
+    deductible: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    annual_premium: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     effective_date: Optional[date] = None
     expiration_date: Optional[date] = None
     notes: Optional[str] = None
@@ -1372,7 +1385,7 @@ class FacilityComplianceItemCreate(BaseModel):
     # column underneath is still FacilityComplianceItem.item_number
     # (unchanged to avoid a migration) — see create_compliance_item's own
     # translation of this field.
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     description: str
     is_compliant: Optional[bool] = None
     findings: Optional[str] = None
@@ -1389,7 +1402,10 @@ class FacilityComplianceItemUpdate(BaseModel):
     # documented item_number key too, so an existing caller's PATCH payload
     # keeps applying instead of being silently dropped as an unknown field.
     sort_order: Optional[int] = Field(
-        default=None, validation_alias=AliasChoices("sort_order", "item_number")
+        default=None,
+        validation_alias=AliasChoices("sort_order", "item_number"),
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     description: Optional[str] = None
     is_compliant: Optional[bool] = None

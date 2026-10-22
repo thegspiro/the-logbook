@@ -36,7 +36,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const SOURCE_BADGES: Record<DepartmentOfficer['source'], { label: string; className: string; title: string }> = {
   assigned: {
     label: 'Assigned',
-    className: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30',
+    className: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30',
     title: 'Pinned by an administrator on this screen',
   },
   auto: {
@@ -412,7 +412,7 @@ const OfficersPanel: React.FC<OfficersPanelProps> = ({ members, isLoadingMembers
                   void handleCopyVariable(v.name);
                 }}
                 title={v.description}
-                className="inline-flex items-center gap-1.5 rounded-sm border border-red-500/30 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+                className="inline-flex items-center gap-1.5 rounded-sm border border-red-500/30 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-700 transition-colors hover:bg-red-500/20 dark:text-red-400"
               >
                 {copiedVariable === v.name ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 {`{{${v.name}}}`}

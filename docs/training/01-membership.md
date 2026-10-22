@@ -486,7 +486,14 @@ give access. The form explains each one:
 - **Rank** is "Their title in the chain of command, such as Captain or
   Firefighter. A rank carries a few default permissions of its own."
 - **Position** is "The job they hold here, such as Secretary or Training
-  Officer. Positions decide most of what they can see and do in The Logbook."
+  Officer. Positions decide most of what they can see and do in The Logbook.
+  A rank such as Captain or Firefighter is set in the Rank field, not here."
+
+The position list does not offer Chief, Captain, Firefighter or the other
+ranks. Those are set in the Rank field, and a member holding the rank already
+has the access the matching position would give. The same names still appear
+under **Organization Settings > Role Management**, marked **Mirrors a rank**,
+because that is where the access a rank carries is edited.
 
 **Rank** is greyed out for an Administrative member, with the note
 "Administrative members do not hold an operational rank."
@@ -727,21 +734,22 @@ file.
 
 **CSV columns.** The template has all of them. The order does not matter.
 
-| Column                                                                           | Notes                                                                        |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `firstName`, `lastName`                                                          | **Required**                                                                 |
-| `email`                                                                          | **Required.** Must be unique in the department                               |
-| `middleName`                                                                     |                                                                              |
-| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on |
-| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`               |
-| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                  |
-| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                    |
-| `primaryPhone`, `secondaryPhone`                                                 |                                                                              |
-| `rank`, `station`, `platoon`                                                     |                                                                              |
-| `role`                                                                           | Must match a role name set up under **Roles**                                |
-| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                  |
-| `emergencyEmail1`                                                                |                                                                              |
-| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                           |
+| Column                                                                           | Notes                                                                           |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `firstName`, `lastName`                                                          | **Required**                                                                    |
+| `email`                                                                          | **Required.** Must be unique in the department                                  |
+| `middleName`                                                                     |                                                                                 |
+| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on    |
+| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`                  |
+| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                     |
+| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                       |
+| `primaryPhone`, `secondaryPhone`                                                 |                                                                                 |
+| `membershipType`                                                                 | `probationary`, `regular`, `life` or `administrative`. Blank imports as regular |
+| `rank`, `station`, `platoon`                                                     |                                                                                 |
+| `role`                                                                           | Must match a role name set up under **Roles**                                   |
+| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                     |
+| `emergencyEmail1`                                                                |                                                                                 |
+| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                              |
 
 Only `firstName`, `lastName` and `email` are required. A file with just those
 three columns imports. Older templates called the membership number column
@@ -871,8 +879,10 @@ The Admin Edit page has these sections:
 - **Emergency Contacts:** add, change or remove contacts.
 
 You cannot change status here. Use the status button on the member's profile.
-Positions are given with **Manage Roles** on the member's row in Member
-Management.
+Positions are given with **Manage Positions** on the member's row in Member
+Management. That list leaves out the positions named after a rank; a member
+who was given one before this version still sees it there, marked **Rank**,
+so it can be taken off.
 
 ![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)
 
@@ -1026,6 +1036,14 @@ financial trail still makes sense. See
 
 Deletion is also refused if it would remove the department's last
 administrator.
+
+**You cannot act on a member who holds permissions you do not.** Deleting,
+changing the status of, or archiving a member is refused (403) when that member
+holds a permission you lack, so a member manager cannot deactivate or delete the
+System Owner or a more senior officer. The attempt is reported to the security
+log as a privilege-escalation attempt, the same as a password or MFA reset
+refused for the same reason. Administrators with every permission are not
+affected.
 
 ### Anonymizing a Former Member
 
@@ -1769,7 +1787,9 @@ When you drop a member, The Logbook automatically:
 1. **Creates a property return report** listing everything issued to them.
    It is saved in **Documents**, in the leadership-only **Member
    Separations** folder. It is kept out of Reports because it names the
-   member, the reason they left and their home address.
+   member, the reason they left and their home address. The report gives the
+   drop's **Effective date** and a return deadline counted from it, so a drop
+   entered late can show a deadline that has already passed.
 2. **Emails the report** to the member, and to anyone your drop-notification
    settings copy in.
 3. **Opens a departure clearance** to track what is still out.
@@ -1788,9 +1808,13 @@ A member gets at most one reminder per check: the latest one they are due. A
 member first found at day 100 gets only the 90-day reminder, never a late
 30-day one. No reminder is ever sent twice.
 
+The 30 and 90 days count from the drop's **Effective date** — the day the
+member left — not the day you recorded it. A drop entered with an effective
+date 35 days back gets its 30-day reminder at the next daily check.
+
 **Who still has property.** The **Former members still holding property**
 panel lists every dropped member with items still out. It shows when they
-were dropped, how many items, their value and which reminders have gone. You
+were dropped (the effective date), how many items, their value and which reminders have gone. You
 find it on the Inventory **Member Equipment** page and on **Members Admin →
 Member Management**. Select a name to open the member's profile.
 

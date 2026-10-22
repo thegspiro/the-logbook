@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models.user import UserStatus
 from app.services.membership_tier_service import MembershipTierService
 
 TIERS = [
@@ -212,6 +213,11 @@ class TestAdvanceAllStaysOnTheLadder:
             member_class=None,
             membership_type_changed_at=None,
             rank=rank,
+            # The advance writes the account status too; start every mock
+            # on the value a real member carries.
+            status=UserStatus.ACTIVE,
+            status_changed_at=None,
+            status_change_reason=None,
             deleted_at=None,
             hire_date=date.today().replace(year=date.today().year - years),
         )

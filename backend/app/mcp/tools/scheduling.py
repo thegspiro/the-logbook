@@ -28,7 +28,7 @@ from app.mcp.tools._common import (
 )
 from app.models.apparatus import Apparatus
 from app.models.location import Location
-from app.models.training import AssignmentStatus, Shift, ShiftAssignment, ShiftStatus
+from app.models.training import AssignmentStatus, Shift, ShiftAssignment
 from app.services.scheduling_service import SchedulingService
 
 # The most candidate shifts one open-shift call examines, and the widest
@@ -308,15 +308,12 @@ def register(server: Any) -> None:
             raise ValueError(
                 f"The window must not exceed {MAX_OPEN_SHIFT_WINDOW_DAYS} days"
             )
-        # The same candidate query as SchedulingService.get_open_shifts, but
-        # one row past the cap so a truncated window is reported as such.
-        criteria = [
-            Shift.organization_id == principal.organization_id,
-            Shift.shift_date >= start,
-            Shift.shift_date <= end,
-            Shift.is_finalized.is_(False),
-            Shift.status != ShiftStatus.CANCELLED,
-        ]
+        # The same candidates as SchedulingService.get_open_shifts, but one row
+        # past the cap so a truncated window is reported as such.
+        service = SchedulingService(db)
+        criteria = await service.open_shift_candidate_criteria(
+            org_uuid(principal), start, end
+        )
         if not principal.expose_full_schedule:
             criteria.append(Shift.open_to_all_members.is_(True))
         if cursor:
@@ -331,7 +328,7 @@ def register(server: Any) -> None:
         truncated = len(candidates) > MAX_OPEN_SHIFT_CANDIDATES
         candidates = candidates[:MAX_OPEN_SHIFT_CANDIDATES]
         shifts = list(
-            await SchedulingService(db).filter_shifts_with_open_positions(
+            await service.filter_shifts_with_open_positions(
                 org_uuid(principal), candidates
             )
         )

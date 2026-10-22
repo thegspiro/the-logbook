@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
-from app.models.call_tracking import CallTrackingMode
+from app.models.call_tracking import CallTrackingMode, OrgCallResponse
 from app.models.notification import NotificationLog
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.training import (
@@ -39,6 +39,7 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
+    ShiftEquipmentCheck,
     ShiftPattern,
     ShiftPosition,
     ShiftPreWorkSession,
@@ -1708,6 +1709,37 @@ class SchedulingService:
             )
         return result
 
+    async def open_shift_candidate_criteria(
+        self,
+        organization_id: UUID | str,
+        start_date: date,
+        end_date: date,
+        now: Optional[datetime] = None,
+    ) -> list:
+        """The WHERE clauses that make a shift a candidate for an open-shift list.
+
+        The one definition of the population. ``_open_shift_candidates`` and the
+        MCP ``list_open_shifts`` tool both select through it; the tool pages
+        with a keyset cursor and its own cap, so it cannot share the query
+        itself, and when it kept a copy of these clauses the copy missed the
+        has-the-shift-ended filter and kept offering shifts that were over.
+        """
+        now = now or datetime.now(timezone.utc)
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        settings = (org.settings or {}) if org else {}
+        return [
+            Shift.organization_id == str(organization_id),
+            Shift.shift_date >= start_date,
+            Shift.shift_date <= end_date,
+            Shift.is_finalized.is_(False),
+            Shift.status != ShiftStatus.CANCELLED,
+            shift_not_over_criteria(settings, now),
+        ]
+
     async def _open_shift_candidates(
         self,
         organization_id: UUID | str,
@@ -1729,22 +1761,10 @@ class SchedulingService:
         every shift dated today however long ago it ended. A shift that is over
         has no gap left to fill, for a member or for the department.
         """
-        now = now or datetime.now(timezone.utc)
-        org = (
-            await self.db.execute(
-                select(Organization).where(Organization.id == str(organization_id))
-            )
-        ).scalar_one_or_none()
-        settings = (org.settings or {}) if org else {}
-        query = (
-            select(Shift)
-            .where(Shift.organization_id == str(organization_id))
-            .where(Shift.shift_date >= start_date)
-            .where(Shift.shift_date <= end_date)
-            .where(Shift.is_finalized.is_(False))
-            .where(Shift.status != ShiftStatus.CANCELLED)
-            .where(shift_not_over_criteria(settings, now))
+        criteria = await self.open_shift_candidate_criteria(
+            organization_id, start_date, end_date, now=now
         )
+        query = select(Shift).where(*criteria)
         if apparatus_id:
             query = query.where(Shift.apparatus_id == apparatus_id)
         query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc()).limit(
@@ -2454,11 +2474,24 @@ class SchedulingService:
         Blocks deletion of finalized shifts and shifts that have
         completion reports, since those are the source of truth for
         training requirement tracking.
+
+        Also blocks a shift that has started. Deleting cascades to its
+        attendance, calls and swap requests, so a started shift would take
+        check-in hours with it. This is the same instant ShiftDetailPanel's
+        ``hasStarted`` uses to stop offering Delete; cancelling is the way to
+        withdraw a shift that is under way.
         """
         try:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return False, "Shift not found"
+
+            start = _as_utc(shift.start_time)
+            if start is not None and start <= datetime.now(timezone.utc):
+                return False, (
+                    "Cannot delete a shift that has started; its attendance "
+                    "and calls would be lost."
+                )
 
             if shift.is_finalized:
                 return False, (
@@ -3434,11 +3467,23 @@ class SchedulingService:
     async def delete_shift_call(
         self, call_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a shift call record"""
+        """Delete a shift call record.
+
+        Refused once the call's shift is finalized: finalizing snapshots the
+        shift's call count and feeds training tracking, so the record is
+        locked until the shift is reopened, as the update paths are.
+        """
         try:
             call = await self.get_shift_call_by_id(call_id, organization_id)
             if not call:
                 return False, "Shift call not found"
+
+            shift = await self.get_shift_by_id(call.shift_id, organization_id)
+            if shift is not None and shift.is_finalized:
+                return False, (
+                    "Cannot remove a call from a finalized shift. "
+                    "Reopen the shift first."
+                )
 
             await self.db.delete(call)
             await self.db.commit()
@@ -3681,11 +3726,118 @@ class SchedulingService:
     async def delete_template(
         self, template_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a shift template"""
+        """Delete a shift template, or deactivate it while it is in use.
+
+        ``(True, None)`` either way; ``remove_template`` says which happened.
+        """
+        deleted, error = await self.remove_template(template_id, organization_id)
+        return deleted is not None, error
+
+    async def template_in_use(self, template_id: str, organization_id: str) -> bool:
+        """True when a shift (any date) or a pattern names this template.
+
+        Deleting it would null ``shifts.template_id`` — the shift's equipment
+        checklists come from the template's links, which cascade away, so the
+        crew would silently fall back to the apparatus defaults — and would
+        null a pattern's ``template_id`` (or leave a dangling id in its
+        ``schedule_config``), after which the pattern refuses to generate.
+        """
+        shift_ref = await self.db.scalar(
+            select(Shift.id)
+            .where(
+                Shift.template_id == template_id,
+                Shift.organization_id == organization_id,
+            )
+            .limit(1)
+        )
+        if shift_ref is not None:
+            return True
+        patterns = await self.db.execute(
+            select(ShiftPattern.template_id, ShiftPattern.schedule_config).where(
+                ShiftPattern.organization_id == organization_id
+            )
+        )
+        for pattern_template_id, config in patterns.all():
+            if pattern_template_id == template_id:
+                return True
+            # schedule_config is free-form JSON (pitfall #19): read defensively.
+            if isinstance(config, dict) and template_id in (
+                config.get("day_template_id"),
+                config.get("night_template_id"),
+            ):
+                return True
+        return False
+
+    async def remove_template(
+        self, template_id: UUID | str, organization_id: UUID | str
+    ) -> Tuple[Optional[bool], Optional[str]]:
+        """Deactivate a template in use (``template_in_use``), else delete it.
+
+        Returns ``(True, None)`` when deleted, ``(False, None)`` when
+        deactivated, and ``(None, error)`` on failure. A deactivated template
+        leaves the new-shift and pattern pickers but still resolves for the
+        shifts and patterns that already name it, checklists included.
+        """
         template = await self.get_template_by_id(template_id, organization_id)
         if not template:
-            return False, "Shift template not found"
-        return await self._crud_delete(template)
+            return None, "Shift template not found"
+        if await self.template_in_use(str(template.id), str(organization_id)):
+            template.is_active = False
+            try:
+                await self.db.commit()
+            except Exception as e:
+                await self.db.rollback()
+                return None, str(e)
+            return False, None
+        success, error = await self._crud_delete(template)
+        return (True, None) if success else (None, error)
+
+    async def basic_apparatus_in_use(
+        self, apparatus_id: str, organization_id: str
+    ) -> bool:
+        """True when a template, shift, pre-work session, equipment check or
+        call response names this vehicle.
+
+        None of those columns has a foreign key — each resolves against either
+        apparatus table through ``utils/apparatus_ref`` — so a hard delete
+        leaves every one of them dangling, and a template naming it then
+        fails to save with "Apparatus not found".
+        """
+        for model in (
+            ShiftTemplate,
+            Shift,
+            ShiftPreWorkSession,
+            ShiftEquipmentCheck,
+            OrgCallResponse,
+        ):
+            found = await self.db.scalar(
+                select(model.id)
+                .where(
+                    model.apparatus_id == apparatus_id,
+                    model.organization_id == organization_id,
+                )
+                .limit(1)
+            )
+            if found is not None:
+                return True
+        return False
+
+    async def remove_basic_apparatus(
+        self, apparatus: BasicApparatus, organization_id: str
+    ) -> bool:
+        """Deactivate a vehicle in use (``basic_apparatus_in_use``), else
+        delete it. Commits. Returns True when deleted, False when deactivated.
+
+        A deactivated vehicle leaves the vehicle pickers (they list active
+        rows only) but still resolves for the records that name it.
+        """
+        if await self.basic_apparatus_in_use(str(apparatus.id), organization_id):
+            apparatus.is_active = False
+            await self.db.commit()
+            return False
+        await self.db.delete(apparatus)
+        await self.db.commit()
+        return True
 
     # ============================================
     # Shift Pattern Management

@@ -40,13 +40,13 @@ const TIMING_LABELS: Record<string, { label: string; color: string }> = {
   },
   end_of_shift: {
     label: 'End of Shift',
-    color: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+    color: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20',
   },
 };
 
 const TEMPLATE_TYPE_COLORS: Record<string, string> = {
-  equipment: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
-  vehicle: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  equipment: 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border-emerald-500/20',
+  vehicle: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
   combined: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
 };
 

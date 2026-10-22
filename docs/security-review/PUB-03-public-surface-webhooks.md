@@ -1,6 +1,112 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (this PR)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (this PR)
+
+---
+
+## Pass 11 (2026-10-22, watchdog pickup) — a new unauthenticated public-minutes surface reviewed fresh; 0 fixed, 0 new findings
+
+Watchdog pickup: `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results and `ListAgents` found no other reachable session, checked
+fresh before starting. PR #3557 (Feature 02, Permissions & roles, pass 11) had
+merged, not docs-only — only this row's clearing rides along here. Rotation row
+03 was confirmed the next `⬜` by reading the table directly.
+
+**Baseline:** `11580157` (PR #3399's merge, pass 10). **Head:** current `main`.
+`git diff 11580157..HEAD --stat -- backend/app/api/public/
+backend/app/core/public_portal_security.py
+backend/app/services/integration_services/webhook_service.py
+backend/app/utils/webhook_replay.py` touches exactly **one** file: a new
+`backend/app/api/public/minutes.py` (169 L, 2 routes). Every other file in
+scope — both webhook receivers' signature verification, replay fingerprinting,
+`public_portal_security.py`, and the other 13 files under `app/api/public/` —
+is byte-identical to pass 10. No migration touches this feature's own tables
+this pass (the one table the new route reads, `minutes_public_copies`, was
+created by migration `89723c04ae94`, dated 2026-10-17, before pass 10's own
+baseline — Feature 24's work, not this pass's).
+
+**The one new file, read in full against all seven checklist dimensions, plus
+its collaborators (`app/utils/minutes_public.py`,
+`app/services/minutes_publishing_service.py`, the `MinutesPublicCopy` model):**
+
+- **Auth (dimension 1):** `GET /public/v1/minutes` and
+  `GET /public/v1/minutes/{copy_id}` are intentionally unauthenticated — a
+  department's public minutes page. Compensating control: both routes carry
+  `_rate_limit_minutes` (60/min per IP) ahead of any query; `get_db` is the
+  only other dependency and only yields a session, issuing no query itself,
+  so this matches the established "rate limit before DB work" shape pass 7/10
+  already verified for this feature's other public routes.
+- **Tenant isolation (dimension 3):** single-org-deployment rule, same pattern
+  as `legal.py`/`branding.py` — `_the_organization` resolves the deployment's
+  one `Organization` row (`limit(2)` + exact-count-of-one check, so a second
+  org makes every route 404 rather than guess) and gates on the `minutes`
+  module being enabled. From there, `MinutesPublishingService.get_public` and
+  `.list_public` both filter `MinutesPublicCopy.organization_id ==
+organization_id` directly in the `WHERE` clause (`minutes_publishing_service.py:247`,
+  `:273-274`) — `organization_id` is server-resolved, never client-supplied, so
+  there is no id to forge even though the by-id lookup is also directly
+  filtered (belt-and-suspenders, not relied on alone).
+- **Data exposure (dimension 5):** `content` is never the minutes record —
+  `narrow_for_public` (`app/utils/minutes_public.py`) builds the stored
+  snapshot by **naming** each field allowed out (attendance as counts, not the
+  roll; motions with text/mover/seconder/result but not individual votes or
+  discussion notes; closed-session reason/authority/times but not who was in
+  the room; election turnout and contest results but no voter-level detail;
+  attachments and library links dropped entirely), so a field added to the
+  internal printed copy later stays private until named here — the opposite
+  failure mode from an denylist. Officer/signer names that do appear
+  (`officers_present`, `moved_by`/`seconded_by`, `approval.signatures`) are
+  deliberate, matching how departments already publish minutes with named
+  officers acting in their public capacity, not personal member data. The
+  response schema (`PublicMinutesDetail`/`PublicMinutesItem`) carries exactly
+  this narrowed shape — no path returns the underlying `MeetingMinutes` record.
+- **Injection (dimension 4):** HTML-formatted section content is re-run
+  through `sanitize_html` on the way out of `narrow_for_public`
+  (`_section`, `app/utils/minutes_public.py`) even though the stored value was
+  already cleaned on write — "a public page is the last place to rely on
+  that," per the function's own comment. All text fields are length-capped
+  (`MAX_TEXT`/`MAX_SHORT`/`MAX_ITEMS`) before storage in the JSON snapshot.
+- **Abuse resistance (dimension 6):** `list_public` loads the org's own
+  `MinutesPublicCopy` rows (not an org-wide or cross-tenant table) and slices
+  in Python after an executive-session/settings filter that isn't
+  SQL-expressible in one clause; bounded in practice by one department's
+  meeting cadence (not attacker-growable) and additionally capped by
+  `PUBLIC_LIST_LIMIT = 200` per page regardless of the requested `limit`.
+- **Schema (dimension 7):** `MinutesPublicCopy.posted_by` is
+  `ForeignKey(..., ondelete="SET NULL")` and correctly `nullable=True`
+  (Pitfall #2); `organization_id`/`minutes_id` are `ondelete="CASCADE"` and
+  correctly `nullable=False`. No migration this pass — the table predates
+  pass 10's baseline.
+- **Visibility re-evaluated live, not cached from posting time, as the
+  module's own docstring claims:** `_servable` (`minutes_publishing_service.py:230`)
+  checks `withdrawn_at is None` and the current `public_allowed(is_executive(...))`
+  setting on every call, not at posting time — confirmed by reading the method
+  directly rather than trusting the docstring.
+
+**Nothing to fix, nothing to flag.** The new surface follows every established
+pattern this feature already uses for a brand-new public read route
+(single-org resolution, pre-work rate limiting, org-scoped-at-the-query
+lookups, defense-in-depth re-sanitization) and the response shape is built by
+an explicit allowlist rather than redacting a richer record.
+
+### Completion gate (pass 11)
+
+| Check                                                                                                                                         | Result                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                         | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (26.5.1)                                                                                                 | ✅ 2555 files unchanged                             |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                                                                                             | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                                             | ✅ single head `e5f9bb066e07`, 639 revisions        |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                         | ✅ 273 routes, 0 errors, 0 warnings                 |
+| scoped pytest, unit (`-k "minutes or public_portal or webhook or finance_approval" -m "not integration and not slow and not docker"`)         | ✅ 585 passed, 1 skipped (`py_vapid`, pre-existing) |
+| scoped pytest, integration (`tests/test_minutes_publishing_integration.py -m integration`)                                                    | ✅ 33 passed                                        |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants) | ✅ 157 passed                                       |
+| `cd frontend && npm run typecheck`                                                                                                            | ✅ 0 errors                                         |
+| `cd frontend && npm run lint` (whole repo, backend + frontend)                                                                                | ✅ 0 errors, 0 warnings                             |
+
+No `KNOWN_LIMITATIONS.md` change needed — nothing flagged this pass; PUB-8's
+row is unchanged (already resolved). Rotation row 03 → ✅ (pending this PR's
+merge); next is Feature 04 (Storefront & payments).
 
 ---
 

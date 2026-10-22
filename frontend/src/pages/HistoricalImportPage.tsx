@@ -422,7 +422,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                       mapping.action === action
                         ? action === 'skip'
                           ? 'bg-theme-surface-hover border-theme-surface-border text-theme-text-muted'
-                          : 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
+                          : 'border-red-500 bg-red-600/20 text-red-800 dark:text-red-400'
                         : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
                     }`}
                   >
@@ -617,7 +617,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
             onClick={() => setFilterType(f)}
             className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
               filterType === f
-                ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
+                ? 'border-red-500 bg-red-600/20 text-red-800 dark:text-red-400'
                 : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
             }`}
           >

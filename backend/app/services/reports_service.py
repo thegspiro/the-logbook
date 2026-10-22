@@ -38,7 +38,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
 )
-from app.models.user import User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User, UserStatus
 from app.services.call_tracking_service import CallTrackingService
 from app.services.training_compliance import (
     catch_up_deadline,
@@ -303,7 +303,7 @@ class ReportsService:
             .options(selectinload(User.positions))
             .where(
                 User.organization_id == str(organization_id),
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
@@ -713,7 +713,7 @@ class ReportsService:
                 # RPT-4: the column is String(36); compare against str() like
                 # every other method, not the raw UUID (dialect-fragile).
                 User.organization_id == str(organization_id),
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.compliance_exempt.is_(False),
             )
             .order_by(User.last_name, User.first_name)
@@ -881,7 +881,7 @@ class ReportsService:
         users_result = await self.db.execute(
             select(User).where(
                 User.organization_id == str(organization_id),
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
@@ -1183,7 +1183,7 @@ class ReportsService:
             .options(selectinload(User.positions))
             .where(
                 User.organization_id == str(organization_id),
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
@@ -1743,7 +1743,7 @@ class ReportsService:
         active_result = await self.db.execute(
             select(func.count(User.id)).where(
                 User.organization_id == org_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )

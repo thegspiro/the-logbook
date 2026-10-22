@@ -27,6 +27,15 @@ org-first layout each module had its own root (``documents/<org>/…``,
 ``scripts/relocate_uploads.py`` moves them, so :func:`resolve` accepts an
 area's legacy root as well — still only inside that organization's
 subdirectory.
+
+**Every read, existence check, delete and download goes through the
+operations at the bottom of this module** (:func:`exists`, :func:`read_bytes`,
+:func:`plaintext_size`, :func:`delete` / :func:`delete_quietly`,
+:func:`file_response`), never
+through ``os`` on a resolved path. A stored reference is the string a row
+holds; today it is always a local path, and :func:`_backend_for` is where a
+department's remote storage plugs in without any caller changing.
+``tests/test_storage_operations.py`` keeps callers off the filesystem.
 """
 
 import asyncio
@@ -262,18 +271,6 @@ def stored_file_response(
     )
 
 
-def remove_quietly(path: Optional[str]) -> None:
-    """Best-effort unlink of a path already confined by :func:`resolve`."""
-    if not path:
-        return
-    try:
-        os.remove(path)
-    except FileNotFoundError:
-        pass
-    except OSError as exc:
-        logger.warning(f"Could not remove stored file {path}: {exc}")
-
-
 class FileStorageService:
     """Validates, scans and stores uploads; see the module docstring."""
 
@@ -431,3 +428,101 @@ class FileStorageService:
             record_id=record_id,
             upload_kind=upload_kind,
         )
+
+
+# ----------------------------------------------------------------------------
+# Operations on a stored file
+# ----------------------------------------------------------------------------
+#
+# Callers pass the reference :func:`resolve` returned (or one they wrote
+# themselves), already confined to the right organization and area. These do
+# not confine again; they only do the I/O, off the event loop.
+
+
+class _LocalBackend:
+    """Files on the uploads volume, the only backend so far."""
+
+    @staticmethod
+    def exists(ref: str) -> bool:
+        return os.path.isfile(ref)
+
+    @staticmethod
+    def read_bytes(ref: str) -> bytes:
+        return file_encryption.read_plaintext(ref)
+
+    @staticmethod
+    def plaintext_size(ref: str) -> int:
+        return file_encryption.plaintext_size(ref)
+
+    @staticmethod
+    def delete(ref: str) -> bool:
+        try:
+            os.remove(ref)
+        except FileNotFoundError:
+            return True
+        except OSError as exc:
+            logger.warning(f"Could not remove stored file {ref}: {exc}")
+            return False
+        return True
+
+    @staticmethod
+    def response(
+        ref: str, filename: str, media_type: str, content_disposition_type: str
+    ) -> Response:
+        return stored_file_response(
+            ref,
+            filename=filename,
+            media_type=media_type,
+            content_disposition_type=content_disposition_type,
+        )
+
+
+def _backend_for(ref: str) -> type[_LocalBackend]:
+    return _LocalBackend
+
+
+async def exists(ref: Optional[str]) -> bool:
+    """Whether the stored file is there. False for an empty reference."""
+    if not ref:
+        return False
+    return await asyncio.to_thread(_backend_for(ref).exists, ref)
+
+
+async def read_bytes(ref: str) -> bytes:
+    """The stored file's plaintext, decrypted if it was stored encrypted."""
+    return await asyncio.to_thread(_backend_for(ref).read_bytes, ref)
+
+
+async def plaintext_size(ref: str) -> int:
+    """The size of the stored file's plaintext, without reading all of it."""
+    return await asyncio.to_thread(_backend_for(ref).plaintext_size, ref)
+
+
+async def delete(ref: str) -> bool:
+    """Remove the stored file. True when it is gone afterwards, however it
+    went (already missing counts); a failure is logged, never raised."""
+    return await asyncio.to_thread(_backend_for(ref).delete, ref)
+
+
+async def delete_quietly(ref: Optional[str]) -> None:
+    """:func:`delete` for callers that only need best effort, so a row can
+    always be deleted whatever happens to its file."""
+    if ref:
+        await delete(ref)
+
+
+async def file_response(
+    ref: str,
+    *,
+    filename: str,
+    media_type: str,
+    content_disposition_type: str = "attachment",
+) -> Response:
+    """The response that hands a stored file to its reader, as plaintext."""
+    return await asyncio.to_thread(
+        _backend_for(ref).response,
+        ref,
+        filename,
+        media_type,
+        content_disposition_type,
+    )

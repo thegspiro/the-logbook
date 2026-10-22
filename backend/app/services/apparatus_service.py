@@ -121,6 +121,16 @@ def _nfpa_status(last_date, next_due, today: date) -> str:
     return "current"
 
 
+class ApparatusStatusInUseError(ValueError):
+    """An apparatus status is still on an apparatus or in its status history.
+
+    ``apparatus.status_id`` and ``apparatus_status_history.status_id`` are both
+    RESTRICT, so deleting it would fail at the constraint. A ValueError so a
+    caller that does not tell it apart still answers 400; the route catches it
+    first to answer 409.
+    """
+
+
 class ApparatusService:
     """Service for apparatus management"""
 
@@ -420,8 +430,26 @@ class ApparatusService:
         )
         count = result.scalar() or 0
         if count > 0:
-            raise ValueError(
+            raise ApparatusStatusInUseError(
                 f"Cannot delete status. {count} apparatus use this status."
+            )
+
+        # Not org-filtered: the foreign key counts every referencing row, and
+        # the status itself was resolved in the caller's org above.
+        history_count = (
+            await self.db.scalar(
+                select(func.count(ApparatusStatusHistory.id)).where(
+                    ApparatusStatusHistory.status_id == apparatus_status.id
+                )
+            )
+            or 0
+        )
+        if history_count > 0:
+            noun = "entry records" if history_count == 1 else "entries record"
+            raise ApparatusStatusInUseError(
+                f"Cannot delete status. {history_count} apparatus status history "
+                f"{noun} it, and that history is kept. Mark the status inactive "
+                "instead to take it out of use."
             )
 
         await self.db.delete(apparatus_status)

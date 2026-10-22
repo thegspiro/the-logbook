@@ -1246,8 +1246,8 @@ export const routeParams = (path: string): string[] =>
  * Substitute recorded sample values into a route pattern.
  *
  * Returns null while any parameter is still blank: a URL with a literal
- * `:id` in it resolves to no route, and the catch-all would land the tester
- * on the dashboard with nothing to say why.
+ * `:id` in it resolves to no route, and the tester would land on "Page not found"
+ * for a link the registry itself built.
  */
 export const buildTestUrl = (path: string, values: Record<string, string>): string | null => {
   const params = routeParams(path);

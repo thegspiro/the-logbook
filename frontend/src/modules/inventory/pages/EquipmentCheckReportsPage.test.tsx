@@ -83,7 +83,7 @@ describe('EquipmentCheckReportsPage failure pagination', () => {
     mockGetFailureLog.mockResolvedValue({ items: [failure(1)], total: 60 });
   });
 
-  it('keeps the table and the pressed page button mounted while the next page loads', async () => {
+  it('keeps the list and the pressed page button mounted while the next page loads', async () => {
     const user = userEvent.setup();
     renderAt('/inventory/admin/checklists/reports?tab=failures');
     await screen.findByText('Item 1');
@@ -96,10 +96,10 @@ describe('EquipmentCheckReportsPage failure pagination', () => {
 
     expect(next).toBeInTheDocument();
     expect(next).toHaveFocus();
-    expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('region', { name: 'Failure log' })).toHaveAttribute('aria-busy', 'true');
 
     resolveNext({ items: [failure(2)], total: 60 });
     expect(await screen.findByText('Item 2')).toBeInTheDocument();
-    expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'false');
+    expect(screen.getByRole('region', { name: 'Failure log' })).toHaveAttribute('aria-busy', 'false');
   });
 });

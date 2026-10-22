@@ -7,7 +7,7 @@
 
 import { useEffect } from 'react';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
-import { useNavigate } from 'react-router';
+
 import {
   ClipboardCheck,
   Plus,
@@ -18,7 +18,6 @@ import {
   XCircle,
   MinusCircle,
   Calendar,
-  ArrowLeft,
   AlertTriangle,
   Pencil,
   RotateCcw,
@@ -30,10 +29,10 @@ import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 export default function InspectionsListPage() {
   const { canEdit, canDelete } = useFacilitiesAccess();
-  const navigate = useNavigate();
   const tz = useTimezone();
   const { facilities, loadFacilities } = useFacilitiesStore();
 
@@ -66,32 +65,19 @@ export default function InspectionsListPage() {
     facilities.find((f) => f.id === facilityId)?.name || 'Unknown facility';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => void navigate('/facilities')}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
-            aria-label="Back to facilities"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Inspections</h1>
-            <p className="text-theme-text-secondary mt-0.5 text-sm">
-              Track and manage inspections across all facilities
-            </p>
-          </div>
-        </div>
-        {canEdit && (
-          <button
-            onClick={() => openCreate()}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start py-2.5 text-sm sm:self-auto"
-          >
-            <Plus className="h-4 w-4" /> New Inspection
-          </button>
-        )}
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <OperationsPageHeader
+        icon={ClipboardCheck}
+        title="Inspections"
+        subtitle="Track and manage inspections across all facilities"
+        actions={
+          canEdit && (
+            <button onClick={() => openCreate()} className="btn-primary flex shrink-0 items-center gap-2">
+              <Plus className="h-4 w-4" /> New Inspection
+            </button>
+          )
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-md flex-1">
@@ -196,7 +182,7 @@ export default function InspectionsListPage() {
                   {!insp.inspectorName && insp.inspectorOrganization && <span>{insp.inspectorOrganization}</span>}
                   {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate, tz)}</span>}
                   {insp.correctiveActions && !insp.correctiveActionCompleted && (
-                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                    <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="h-3 w-3" /> Corrective action needed
                     </span>
                   )}

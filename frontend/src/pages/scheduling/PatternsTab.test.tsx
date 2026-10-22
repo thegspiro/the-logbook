@@ -135,6 +135,60 @@ describe('PatternsTab', () => {
     });
   });
 
+  describe('a preset whose name promises a shift length', () => {
+    const TWELVE = { ...TEMPLATE, duration_hours: 12 };
+    const TWENTY_FOUR = {
+      ...TEMPLATE,
+      id: 'tpl-24',
+      name: '24-hour tour',
+      start_time_of_day: '07:00',
+      end_time_of_day: '07:00',
+      duration_hours: 24,
+    };
+
+    beforeEach(() => {
+      mockGetTemplates.mockReset();
+      mockGetTemplates.mockResolvedValue([TWELVE, TWENTY_FOUR]);
+    });
+
+    async function choose(preset: RegExp, templateId: string) {
+      const user = userEvent.setup();
+      renderWithRouter(<PatternsTab />);
+      await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+      await user.click(await screen.findByRole('button', { name: preset }));
+      await user.selectOptions(screen.getByLabelText('Shift Template *'), templateId);
+      return user;
+    }
+
+    it('warns when a 24/48 is built on a 12-hour template', async () => {
+      await choose(/24-Hour On \/ 48-Hour Off/, 'tpl-1');
+
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /built on 24-hour shifts, but Day Shift A runs 12 hours, so each duty day gets one 12-hour shift/
+      );
+    });
+
+    it('still lets the officer create it: halves are a real way to staff it', async () => {
+      const user = await choose(/24-Hour On \/ 48-Hour Off/, 'tpl-1');
+      await user.type(screen.getByLabelText('Start Date *'), '2026-10-09');
+      await user.click(screen.getByRole('button', { name: 'Create Pattern' }));
+
+      expect(mockCreatePattern).toHaveBeenCalledWith(expect.objectContaining({ template_id: 'tpl-1' }));
+    });
+
+    it('says nothing when the template matches', async () => {
+      await choose(/24-Hour On \/ 48-Hour Off/, 'tpl-24');
+
+      expect(screen.queryByText(/built on 24-hour shifts/)).not.toBeInTheDocument();
+    });
+
+    it('checks the 12-hour preset against 12 hours, not 24', async () => {
+      await choose(/12-Hour Shifts/, 'tpl-24');
+
+      expect(screen.getByRole('status')).toHaveTextContent(/built on 12-hour shifts, but 24-hour tour runs 24 hours/);
+    });
+  });
+
   describe('manual weekly pattern with separate day and night shifts', () => {
     const NIGHT_TEMPLATE = {
       ...TEMPLATE,
@@ -301,5 +355,31 @@ describe('PatternsTab', () => {
       expect.stringMatching(/^No new shifts\. Dates already on the schedule/)
     );
     expect(mockToastError).not.toHaveBeenCalled();
+  });
+});
+
+// A template that shifts or patterns use is deactivated rather than deleted.
+// A pattern naming one still shows it; a new pattern is not offered it.
+describe('PatternsTab with a deactivated template', () => {
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([{ ...TEMPLATE, is_active: false }]);
+  });
+
+  it('still names it on the pattern that uses it, and asks for inactive ones too', async () => {
+    renderWithRouter(<PatternsTab />);
+
+    expect(await screen.findByText(/Template: Day Shift A/)).toBeInTheDocument();
+    expect(mockGetTemplates).toHaveBeenCalledWith({ active_only: false });
+  });
+
+  it('does not offer it to a new pattern', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+    await user.click(screen.getByRole('button', { name: /Manual Setup/ }));
+
+    expect(within(screen.getByLabelText('Shift Template *')).queryByRole('option', { name: /Day Shift A/ })).toBeNull();
   });
 });

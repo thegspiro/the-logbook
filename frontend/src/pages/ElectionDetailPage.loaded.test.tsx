@@ -11,6 +11,10 @@ import { renderWithRouter } from '../test/utils';
 
 const getElection = vi.fn();
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   electionService: {
     getElection: (...a: unknown[]) => getElection(...a) as unknown,
     getSettings: vi.fn().mockResolvedValue({}),
@@ -85,7 +89,8 @@ const election = (over: Record<string, unknown> = {}) => ({
 const renderPage = async () => {
   window.history.replaceState({}, '', '/elections/e-1');
   renderWithRouter(<ElectionDetailPage />);
-  await screen.findByRole('heading', { name: 'Officer Election', level: 2 });
+  // The title is the page's h1 now, drawn by the shared Governance header.
+  await screen.findByRole('heading', { name: 'Officer Election', level: 1 });
 };
 
 describe('ElectionDetailPage, loaded', () => {

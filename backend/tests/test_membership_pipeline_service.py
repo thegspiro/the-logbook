@@ -425,7 +425,9 @@ class TestMultiApprovalAndReferenceGates:
             step_type=PipelineStepType.MULTI_APPROVAL,
             config={"required_approvers": ["chief", "president"]},
         )
-        with pytest.raises(ValueError, match="president"):
+        with pytest.raises(
+            ValueError, match=r"^Approval still needed from: President\.$"
+        ):
             await service._validate_step_completion(
                 self._prospect_without_progress(),
                 step,

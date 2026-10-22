@@ -221,8 +221,10 @@ record for you.
    for the rest.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
-4. A record **still waiting for approval has no completion date**. It is
-   grouped under **Awaiting approval**, above the years, whatever you filter by.
+4. A record **with no completion date** is grouped under **No completion date**,
+   above the years, whatever you filter by. This includes a record still waiting
+   for approval and a completed record imported without a date; each row shows
+   its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -1343,8 +1345,8 @@ Turn it on for a requirement that online or outside training may satisfy —
 HIPAA is the usual example.
 
 **5. Is the record completed?** Only **completed** records count. A record
-waiting for approval is listed under **Awaiting approval** on the member's
-History tab until an officer approves it.
+waiting for approval has no completion date, so it is listed under **No completion
+date** on the member's History tab until an officer approves it.
 
 The member can see most of this themselves. **My Training** shows the
 requirement's progress and, for a window about to open, an **Opens** row. The
@@ -1987,9 +1989,27 @@ profile and printed record all follow this rule.
 
 ### Automated Certification Alerts
 
-Once certification alerts are switched on for the department, The Logbook sends
-them automatically as certifications get close to expiry. There is no button to
-send them by hand.
+**Who can do this:** training managers (`training.manage`).
+
+The Logbook emails members automatically as their certifications get close to
+expiry, and gives them a notice in the app each time. There is no button to send
+them by hand.
+
+**They are off until you turn them on.** Open **Training Admin → Overview →
+Expiring Certs**. At the top, **Expiry alert emails** has a switch,
+**Email members when a certification is close to expiring**. Tick it and select
+**Save**; nothing is sent for a department that has not. Two more choices apply
+to the notice sent once a certification has expired, and they are available
+only while the switch is on:
+
+- **Copy the chief officers on the expired notice**
+- **Also send the expired notice to the member's personal email address**
+
+All three start off. A member who has turned off training reminder emails in
+their own preferences is not emailed unless your department requires those
+emails; they still get the notice in the app.
+
+![The Expiry alert emails panel on the Expiring Certs tab: Email members when a certification is close to expiring ticked, with the two copy options for the expired notice available beneath it](./images/02-121-cert-alert-settings.png)
 
 | Days before expiry | Who is told                               | How                              |
 | ------------------ | ----------------------------------------- | -------------------------------- |
@@ -2001,8 +2021,8 @@ send them by hand.
 
 Each stage is sent only once per certification. An expired certification is
 escalated to the training and compliance officers. The chief officers are
-copied, and the member's personal email address is added, only if the
-department has turned those options on.
+copied, and the member's personal email address is added, only if you ticked
+those two choices above.
 
 ---
 
@@ -2818,6 +2838,13 @@ that use it fail with a message such as _"Row 12: Invalid training_type
 training type or status — which would apply to every row — stops the whole
 import before anything is saved.
 
+**Members see your library's course names.** A row matched to a library course
+keeps the file's own spelling on the record, but the member's **My Training**
+pages and their own training records show the library course's name instead,
+and their history search finds it by either name. Officers still see the
+record's stored name, which is what the record editor saves. A row left
+unmatched shows the name from the file.
+
 ![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
 ---
@@ -3305,7 +3332,7 @@ shown across the top. **Next** moves forward and **Previous** goes back. Steps
 ![The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers](./images/02-83-session-recurrence.png)
 
 5. Set the location, RSVP and participant limits, then select **Next**.
-6. On **Training Info**, choose **Use existing course template** and pick a
+6. On **Training Info**, choose **Use a course from the Course Library** and pick a
    **course**. The form fills in the training type, credit hours, instructor,
    expiry months and maximum participants from the course, and shows a preview
    card of what it took. The other choice, **Create new course for this
@@ -3387,6 +3414,14 @@ recorded and shows it again if you switch back. The Training Administration
 page's skills-test approval row and its tests-passed figure follow the choice.
 So does the **Evaluations** card on the Training Administration home: it
 describes only what the area holds under your method.
+
+**Under shift report sign-offs, no new skills test can be started**, practice
+runs included. A link or bookmark to a Skills Testing page opens a short
+explanation instead of the page. A test that was already under way when you
+switched can still be scored and finished, and results already on file can
+still be validated, released or voided. Members find their own past results on
+**My Training** under **Past skills test results**; the section appears only for
+a member who has some.
 
 Under Skills Testing, the **Shift Reports** settings still let you edit the
 **Observable Skills** list (**Feedback Defaults**) and the per-apparatus lists
@@ -3729,7 +3764,7 @@ Phase 3 is now 100% complete, and Alex moves on to Phase 4.
 
 **Edge case — certification expiring soon:** Alex's CPR/AED card expires in
 September. It appears on **Expiring Certs**, and on her list of upcoming
-expirations. If your department has certification alerts turned on, Alex gets an in-app and email alert at 90 days before expiry. Her
+expirations. If your department has turned on **Email members when a certification is close to expiring**, Alex gets an in-app and email alert at 90 days before expiry. Her
 compliance card shows yellow.
 
 ### Part 5: Phase 4 — Live Fire & Graduation (August – September)
@@ -3801,7 +3836,7 @@ Lt. Santos opens **Events > Create Event** and fills in the drill:
 | Event Type           | Training                                              |
 | Recurring            | No                                                    |
 | Date                 | Saturday, June 13, 2026                               |
-| Time                 | 08:30 – 12:30                                         |
+| Time                 | 08:00 – 12:00                                         |
 | Location             | 415 Industrial Pkwy (acquired structure)              |
 | RSVP Required        | Yes                                                   |
 | RSVP Fields          | Dietary restrictions, accessibility needs (for lunch) |
@@ -3866,7 +3901,7 @@ By 08:15, 24 of the 28 have checked in. Two more arrive by 08:20 and scan in.
 phone camera. Lt. Santos opens the event's check-in list on his tablet, finds
 Thompson, and checks him in.
 
-Final attendance at 08:30: 26 present out of 28. FF Garcia called in sick and one other member did not come.
+Final attendance at 08:30: 27 present out of 28. FF Garcia called in sick.
 
 ### Part 4: Drill Execution & Documentation
 
@@ -3885,9 +3920,8 @@ shift reports afterwards.
 
 ### Part 5: Post-Drill Reports (Same Evening)
 
-After the drill, Lt. Santos selects **End Event** at 12:30 and then finalizes the
-event's attendance. Each member is credited the time they were there, so everyone
-who stayed to the end gets the 4 hours of "Structural Firefighting Operations". The three
+After the drill, Lt. Santos finalizes the event's attendance, which credits
+everyone the 4 hours of "Structural Firefighting Operations". The three
 apparatus officers then file shift completion reports for their crews.
 
 Each officer starts from the drill shift. The form fills in the date, hours and
@@ -3913,8 +3947,8 @@ roof ventilation. All 10 get 4 hours.
 | Measure            | Value                              |
 | ------------------ | ---------------------------------- |
 | Reports filed      | 26 (one per trainee present)       |
-| Credit hours each  | 4 (2 for FF Patel)                 |
-| Total hours logged | 102                                |
+| Credit hours each  | 4                                  |
+| Total hours logged | 104                                |
 | Linked course      | Structural Firefighting Operations |
 
 ![The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating](./images/02-90-crew-summary-table.png)

@@ -104,6 +104,13 @@ retrying — that message is in the daily email to administrators too. Once the
 account has been disabled in Active Directory, or moved to the cloud, **Retry**
 looks again.
 
+**An account unblocked in the admin center after the member left** is blocked
+again by the same daily check as Google Workspace
+(`directory_account_departure_check`, 7:28), logged as
+`microsoft_365.account_active_after_departure`, and named in that morning's
+email to administrators. Accounts flagged as synced from Active Directory are
+not checked; see the Google Workspace page for the details.
+
 ---
 
 ## Members Added Outside the Pipeline

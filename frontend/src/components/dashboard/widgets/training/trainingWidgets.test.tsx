@@ -98,5 +98,7 @@ describe('training dashboard widgets', () => {
     expect(screen.getByText('Not set up')).toBeInTheDocument();
     expect(screen.queryByText('100%')).not.toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute('href', '/training/admin?page=setup&tab=requirements');
+    // The section is Curriculum; there is no "Setup" to look for.
+    expect(screen.getByText(/Add one under Curriculum › Requirements/)).toBeInTheDocument();
   });
 });

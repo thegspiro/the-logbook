@@ -8,14 +8,15 @@ firing (30/90 day), per-type dedup, the no-items skip, and the overdue
 listing. The email/send machinery is patched out. DB mocked; no MySQL.
 """
 
-from datetime import datetime, timedelta, timezone
+import uuid
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.models.user import UserStatus
+from app.models.user import MemberServicePeriod, Organization, User, UserStatus
 from app.services.property_return_reminder_service import (
     PropertyReturnReminderService,
     dropped_at,
@@ -54,6 +55,18 @@ def _member(days_ago=95, status=UserStatus.DROPPED_VOLUNTARY):
 
 def _org():
     return SimpleNamespace(id="org-1", name="FCFD", timezone="America/New_York")
+
+
+def _recorded_drops(svc, monkeypatch, overrides=None):
+    """Stand in for the stint lookup: each drop took effect when it was
+    recorded, unless ``overrides`` gives a member another effective moment."""
+
+    async def effective(_org_id, members, _org):
+        drops = {str(m.id): dropped_at(m) for m in members}
+        drops.update(overrides or {})
+        return drops
+
+    monkeypatch.setattr(svc, "_effective_drops", AsyncMock(side_effect=effective))
 
 
 def _item(name="Helmet", value=100.0):
@@ -119,6 +132,7 @@ class TestProcessReminders:
             "_send_reminder",
             AsyncMock(return_value=(send or {"reminder_type": "x"})),
         )
+        _recorded_drops(svc, monkeypatch)
         return svc
 
     async def test_old_drop_gets_only_the_latest_threshold(self, monkeypatch):
@@ -202,6 +216,29 @@ class TestProcessReminders:
         assert out["reminders_sent"] == 0
         svc._send_reminder.assert_not_awaited()
 
+    async def test_counts_from_the_effective_date_not_the_recording(self, monkeypatch):
+        # Recorded 10 days ago, back-dated to 35 days ago: the 30-day reminder
+        # is due now, and the email is dated from the effective drop.
+        member = _member(days_ago=10)
+        effective = datetime.now(timezone.utc) - timedelta(days=35)
+        db = _db(
+            [
+                _scalars([member]),
+                _one(_org()),
+                _one(None),  # existing 30-day -> none
+            ]
+        )
+        svc = self._svc(db, monkeypatch)
+        _recorded_drops(svc, monkeypatch, {"u1": effective})
+
+        out = await svc.process_reminders("org-1")
+
+        assert out["reminders_sent"] == 1
+        kwargs = svc._send_reminder.await_args.kwargs
+        assert kwargs["threshold"]["type"] == "30_day"
+        assert kwargs["days_since_drop"] == 35
+        assert kwargs["dropped_on"] == effective
+
 
 class TestLatestDueThreshold:
     def test_none_before_the_first_threshold(self):
@@ -242,6 +279,7 @@ class TestOverdueReturns:
             ]
         )
         svc = PropertyReturnReminderService(db)
+        _recorded_drops(svc, monkeypatch)
         monkeypatch.setattr(
             svc,
             "_get_outstanding_items",
@@ -263,12 +301,106 @@ class TestOverdueReturns:
     async def test_skips_members_without_items(self, monkeypatch):
         db = _db([_one(_org()), _scalars([_member(days_ago=40)])])
         svc = PropertyReturnReminderService(db)
+        _recorded_drops(svc, monkeypatch)
         monkeypatch.setattr(
             svc,
             "_get_outstanding_items",
             AsyncMock(return_value={"count": 0, "total_value": 0.0, "items": []}),
         )
         assert await svc.get_overdue_returns("org-1") == []
+
+    async def test_lists_by_effective_drop_and_dates_it_from_there(self, monkeypatch):
+        # Recorded first, but back-dated less far than the one recorded later.
+        early = SimpleNamespace(**{**vars(_member(days_ago=20)), "id": "early"})
+        late = SimpleNamespace(**{**vars(_member(days_ago=5)), "id": "late"})
+        late_effective = datetime(2026, 1, 10, 15, tzinfo=timezone.utc)
+        db = _db(
+            [
+                _one(_org()),
+                _scalars([early, late]),  # recording order
+                _scalars([]),  # reminders sent: late
+                _scalars([]),  # reminders sent: early
+            ]
+        )
+        svc = PropertyReturnReminderService(db)
+        _recorded_drops(svc, monkeypatch, {"late": late_effective})
+        monkeypatch.setattr(
+            svc,
+            "_get_outstanding_items",
+            AsyncMock(return_value={"count": 1, "total_value": 1.0, "items": []}),
+        )
+
+        out = await svc.get_overdue_returns("org-1")
+
+        assert [row["user_id"] for row in out] == ["late", "early"]
+        # 15:00 UTC on Jan 10 is still Jan 10 in New York.
+        assert out[0]["dropped_date"] == "2026-01-10"
+        assert (
+            out[0]["days_since_drop"]
+            == (datetime.now(timezone.utc) - late_effective).days
+        )
+
+
+@pytest.mark.integration
+class TestEffectiveDropsAgainstTheDatabase:
+    """The one batched stint read behind every reminder's start date."""
+
+    async def test_back_dated_and_recorded_drops_side_by_side(self, db_session):
+        org = Organization(
+            id=str(uuid.uuid4()),
+            name="Reminder Effective Drops",
+            slug=f"remind-{uuid.uuid4().hex[:8]}",
+            timezone="UTC",
+        )
+        db_session.add(org)
+        await db_session.flush()
+        recorded = datetime.now(timezone.utc).replace(microsecond=0)
+
+        def member(handle):
+            return User(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                username=f"u-{handle}-{uuid.uuid4().hex[:6]}",
+                email=f"{handle}-{uuid.uuid4().hex[:6]}@remind.test",
+                first_name="Sam",
+                last_name=handle,
+                password_hash="x",
+                status=UserStatus.DROPPED_VOLUNTARY,
+                status_changed_at=recorded,
+                hire_date=date(2018, 1, 1),
+            )
+
+        back_dated, on_time, no_history = (
+            member("back"),
+            member("on"),
+            member("none"),
+        )
+        db_session.add_all([back_dated, on_time, no_history])
+        await db_session.flush()
+        for who, end in (
+            (back_dated, recorded.date() - timedelta(days=40)),
+            (on_time, recorded.date()),
+        ):
+            db_session.add(
+                MemberServicePeriod(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    user_id=who.id,
+                    start_date=None,
+                    end_date=end,
+                    separation_status=UserStatus.DROPPED_VOLUNTARY.value,
+                    counts_toward_service=True,
+                )
+            )
+        await db_session.flush()
+
+        drops = await PropertyReturnReminderService(db_session)._effective_drops(
+            org.id, [back_dated, on_time, no_history], org
+        )
+
+        assert drops[back_dated.id] == recorded - timedelta(days=40)
+        assert drops[on_time.id] == recorded
+        assert drops[no_history.id] == recorded
 
 
 if __name__ == "__main__":  # pragma: no cover

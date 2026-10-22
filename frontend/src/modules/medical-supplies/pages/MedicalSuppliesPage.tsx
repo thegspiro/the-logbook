@@ -16,6 +16,7 @@ import {
   Archive,
   ArrowUpDown,
   CalendarClock,
+  ClipboardList,
   Layers,
   PackagePlus,
   Pencil,
@@ -35,6 +36,7 @@ import type { InventoryCategory, InventoryItem } from '../../../services/eventSe
 import { useAuthStore } from '../../../stores/authStore';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
@@ -46,7 +48,9 @@ import { MedicalItemFormModal } from '../components/MedicalItemFormModal';
 import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
 import { MedicalItemLotsModal } from '../components/MedicalItemLotsModal';
 import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
-import { EXPIRY_WINDOW_DAYS, storageNote, supplyLabel } from '../types';
+import { LotRecallSearch } from '../components/LotRecallSearch';
+import { StockRowsTable } from '../components/StockRowsTable';
+import { EXPIRY_WINDOW_DAYS, expiryLabel, expiryTone, storageNote, supplyLabel } from '../types';
 import type { MedicalExpiringStockRow, MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
@@ -59,21 +63,6 @@ const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
 ];
 const TAB_PANEL_ID = 'medical-supplies-panel';
 const PAGE_SIZE = 200;
-
-/** Severity of a dated lot, by how long is left on it. */
-function expiryTone(days: number | undefined): string {
-  if (days === undefined || days === null) return 'text-theme-text-muted';
-  if (days < 0) return 'text-red-700 dark:text-red-400';
-  if (days <= 7) return 'text-orange-700 dark:text-orange-400';
-  return 'text-amber-700 dark:text-amber-400';
-}
-
-function expiryLabel(days: number | undefined): string {
-  if (days === undefined || days === null) return '—';
-  if (days < 0) return `Expired ${Math.abs(days)}d ago`;
-  if (days === 0) return 'Expires today';
-  return `${days}d left`;
-}
 
 /**
  * Colour for a supply's next expiry. Beyond the expiring window a date is just
@@ -250,6 +239,20 @@ const MedicalSuppliesPage: React.FC = () => {
   // manager-only — a medical-only supply officer would be sent to Access
   // Denied by a sentence that was only ever an aside.
   const canManageGear = checkPermission('inventory.manage');
+  // Swapping and restocking truck stock already live in Inventory: the
+  // per-apparatus inventory (swap) and the supply worklist (restock). Links
+  // to them are offered only to a viewer those routes admit, with the same
+  // grants their ProtectedRoutes ask for, so none of them leads to Access
+  // Denied.
+  const { isModuleOn } = useEnabledModules();
+  const inventoryOn = isModuleOn('inventory');
+  const canOpenApparatusInventory =
+    inventoryOn &&
+    (checkPermission('inventory.check_submit') ||
+      checkPermission('inventory.check_view') ||
+      checkPermission('inventory.view'));
+  const canOpenSupplyWorklist =
+    inventoryOn && (checkPermission('inventory.check_view') || checkPermission('inventory.manage'));
   const tz = useTimezone();
 
   const [tab, setTab] = useState<Tab>('expiring');
@@ -736,6 +739,17 @@ const MedicalSuppliesPage: React.FC = () => {
               >
                 <RefreshCw className="h-4 w-4" />
               </button>
+              {canOpenSupplyWorklist && (
+                // What every truck needs swapped or topped up, grouped by
+                // apparatus, with the stock on hand to do it.
+                <Link
+                  to="/inventory/admin/checklists/supply"
+                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap"
+                >
+                  <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                  Restock worklist
+                </Link>
+              )}
               {canManage && (
                 <>
                   {/* Labelled, not an icon alone: a supply needs a category
@@ -910,6 +924,7 @@ const MedicalSuppliesPage: React.FC = () => {
           <SkeletonCard />
         ) : tab === 'expiring' ? (
           <section aria-label="Expiring stock">
+            {!noSuppliesYet && <LotRecallSearch linkToApparatus={canOpenApparatusInventory} />}
             {loaded.expiring && expiring.length === 0 && noSuppliesYet ? (
               // "Nothing expiring" over an empty catalog reads as an all-clear
               // for stock nobody has entered (CLAUDE.md pitfall #29: an empty set
@@ -922,66 +937,7 @@ const MedicalSuppliesPage: React.FC = () => {
                 description={`Nothing on the shelves or the apparatus expires within ${EXPIRY_WINDOW_DAYS} days.`}
               />
             ) : (
-              <div className="card overflow-x-auto p-0">
-                <table className="rwd-table w-full text-sm">
-                  <thead>
-                    <tr className="border-theme-surface-border border-b">
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                        Item
-                      </th>
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                        Where
-                      </th>
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Lot</th>
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                        Expires
-                      </th>
-                      <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
-                        On hand
-                      </th>
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expiring.map((lot) => (
-                      <tr key={lot.key} className="border-theme-surface-border border-b last:border-0">
-                        <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                          {lot.item_name ? supplyLabel({ name: lot.item_name, size: lot.item_size }) : '—'}
-                        </td>
-                        <td data-label="Where" className="text-theme-text-secondary px-4 py-3">
-                          <span className="inline-flex items-start gap-1">
-                            {lot.location === 'apparatus' ? (
-                              <Truck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-label="On an apparatus" />
-                            ) : (
-                              <Package className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-label="In storage" />
-                            )}
-                            <span>
-                              {lot.where || (lot.location === 'apparatus' ? 'On an apparatus' : 'In storage')}
-                            </span>
-                          </span>
-                        </td>
-                        <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
-                          {lot.lot_number || '—'}
-                        </td>
-                        <td data-label="Expires" className="text-theme-text-muted px-4 py-3">
-                          {lot.expiration_date ? formatDate(lot.expiration_date, tz) : '—'}
-                        </td>
-                        <td data-label="On hand" className="text-theme-text-primary px-4 py-3 text-right tabular-nums">
-                          {formatNumber(lot.quantity)}
-                        </td>
-                        <td
-                          data-label="Status"
-                          className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration ?? undefined)}`}
-                        >
-                          {expiryLabel(lot.days_until_expiration ?? undefined)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <StockRowsTable rows={expiring} linkToApparatus={canOpenApparatusInventory} />
             )}
           </section>
         ) : (

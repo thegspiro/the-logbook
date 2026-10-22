@@ -63,7 +63,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.permissions import get_rank_default_permissions, permission_matches
-from app.models.user import User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.utils.org_locks import ADMIN_CONTINUITY, lock_organization_scope
 
 # The capability that must survive every change. Whoever holds it can restore
@@ -99,7 +99,7 @@ def _effective_permissions(user: User) -> set[str]:
 
 def is_administrator(user: User) -> bool:
     """True if *user* can currently sign in and manage members."""
-    if user.status != UserStatus.ACTIVE or user.deleted_at is not None:
+    if user.status not in ACTIVE_ACCOUNT_STATUSES or user.deleted_at is not None:
         return False
     return permission_matches(ADMIN_PERMISSION, _effective_permissions(user))
 
@@ -126,7 +126,7 @@ async def _active_members_locked(db: AsyncSession, organization_id: str) -> list
         .options(joinedload(User.positions))
         .where(
             User.organization_id == organization_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.deleted_at.is_(None),
         )
         .with_for_update(read=True)

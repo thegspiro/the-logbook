@@ -13,7 +13,18 @@ import { RichTextEditor } from '../../../components/ux/RichTextEditor';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle, FileDown, Gavel, ListChecks } from 'lucide-react';
+import {
+  ArrowUp,
+  ArrowDown,
+  Plus,
+  Trash2,
+  BookOpen,
+  CheckCircle,
+  ClipboardList,
+  FileDown,
+  Gavel,
+  ListChecks,
+} from 'lucide-react';
 import { eventService } from '../../../services/api';
 import { electionService } from '../../../services/electionService';
 import { minutesService } from '../services/api';
@@ -63,6 +74,7 @@ import { useMinutesSuggestions } from '../hooks/useMinutesSuggestions';
 import { motionMakers } from '../utils/motionMakers';
 import { emptyVoteDraft, voteDraftPayload } from '../utils/voteDraft';
 import type { VoteDraft } from '../utils/voteDraft';
+import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -88,7 +100,7 @@ const MOTION_STATUS_BADGES: Record<string, string> = {
 const PRIORITY_BADGES: Record<string, string> = {
   low: 'bg-theme-surface-secondary text-theme-text-secondary',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
@@ -757,7 +769,7 @@ export const MinutesDetailPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-5xl px-4 py-8">
+        <div className="mx-auto max-w-7xl">
           <div className="text-theme-text-muted py-12 text-center" role="status" aria-live="polite">
             Loading minutes...
           </div>
@@ -769,7 +781,7 @@ export const MinutesDetailPage: React.FC = () => {
   if (error || !minutes) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-5xl px-4 py-8">
+        <div className="mx-auto max-w-7xl">
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-300">{error || 'Minutes not found'}</p>
           </div>
@@ -782,64 +794,68 @@ export const MinutesDetailPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <Link to="/minutes" className="text-sm text-blue-600 hover:text-blue-700">
-            &larr; Back to Minutes
-          </Link>
-          <div className="mt-2 flex items-start justify-between">
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">{minutes.title}</h1>
-              <p className="text-theme-text-muted mt-1">
+      <div className="mx-auto max-w-7xl">
+        <GovernancePageHeader
+          icon={ClipboardList}
+          breadcrumbLabel={minutes.title}
+          title={
+            <span className="flex flex-wrap items-center gap-3">
+              {minutes.title}{' '}
+              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
+                {STATUS_LABELS[minutes.status] ?? minutes.status}
+              </span>
+            </span>
+          }
+          subtitle={
+            <>
+              <p>
                 {formatDateTime(minutes.meeting_date, tz)}
                 {minutes.location && ` \u00b7 ${minutes.location}`}
                 {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
               </p>
-            </div>
-            <div className="flex shrink-0 flex-col items-end gap-2">
-              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
-                {STATUS_LABELS[minutes.status] ?? minutes.status}
-              </span>
-              <button
-                type="button"
-                disabled={downloadingPdf}
-                onClick={() => {
-                  void handleDownloadPdf();
-                }}
-                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2 text-sm"
-              >
-                <FileDown className="h-4 w-4" aria-hidden="true" />
-                {downloadingPdf ? 'Preparing…' : 'Download PDF'}
-              </button>
-            </div>
-          </div>
-
-          {/* How the body adopted them */}
-          {minutes.status === 'approved' && minutes.adopted_on && (
-            <p className="text-theme-text-secondary mt-1 text-sm">
-              Adopted {formatDate(minutes.adopted_on, tz)}
-              {minutes.adopted_as_amended === true && ' as amended'}
-              {minutes.adopted_as_amended === false && ' as presented'}
-              {minutes.adopting_minutes_id && (
-                <>
-                  {' at '}
-                  <Link to={`/minutes/${minutes.adopting_minutes_id}`} className="text-blue-600 hover:text-blue-700">
-                    {minutes.adopting_minutes_title ?? 'the adopting meeting'}
-                  </Link>
-                </>
+              {/* How the body adopted them */}
+              {minutes.status === 'approved' && minutes.adopted_on && (
+                <p className="text-theme-text-secondary mt-1 text-sm">
+                  Adopted {formatDate(minutes.adopted_on, tz)}
+                  {minutes.adopted_as_amended === true && ' as amended'}
+                  {minutes.adopted_as_amended === false && ' as presented'}
+                  {minutes.adopting_minutes_id && (
+                    <>
+                      {' at '}
+                      <Link
+                        to={`/minutes/${minutes.adopting_minutes_id}`}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        {minutes.adopting_minutes_title ?? 'the adopting meeting'}
+                      </Link>
+                    </>
+                  )}
+                </p>
               )}
-            </p>
-          )}
+            </>
+          }
+          actions={
+            <button
+              type="button"
+              disabled={downloadingPdf}
+              onClick={() => {
+                void handleDownloadPdf();
+              }}
+              className="btn-secondary touch:min-h-11 inline-flex items-center gap-2 text-sm"
+            >
+              <FileDown className="h-4 w-4" aria-hidden="true" />
+              {downloadingPdf ? 'Preparing…' : 'Download PDF'}
+            </button>
+          }
+        />
 
-          {/* Rejection notice */}
-          {minutes.status === 'rejected' && minutes.rejection_reason && (
-            <div className="mt-3 border-l-4 border-red-500 bg-red-500/10 p-4">
-              <p className="text-sm font-medium text-red-700 dark:text-red-300">Rejection Reason:</p>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{minutes.rejection_reason}</p>
-            </div>
-          )}
-        </div>
+        {/* Rejection notice */}
+        {minutes.status === 'rejected' && minutes.rejection_reason && (
+          <div className="mb-6 border-l-4 border-red-500 bg-red-500/10 p-4">
+            <p className="text-sm font-medium text-red-700 dark:text-red-300">Rejection Reason:</p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">{minutes.rejection_reason}</p>
+          </div>
+        )}
 
         {/* Linked Event */}
         {(linkedEvent || (canManage && isEditable)) && (
@@ -1172,7 +1188,7 @@ export const MinutesDetailPage: React.FC = () => {
               {canManage && isEditable && (
                 <button
                   onClick={() => setShowAddSection(true)}
-                  className="mt-3 text-sm text-cyan-600 hover:text-cyan-800"
+                  className="mt-3 text-sm text-cyan-700 hover:text-cyan-800 dark:text-cyan-600"
                 >
                   Add your first section
                 </button>

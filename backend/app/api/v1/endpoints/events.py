@@ -5,7 +5,6 @@ Endpoints for event management including events, RSVPs, and attendance tracking.
 """
 
 import copy
-import os
 import uuid as uuid_lib
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -46,7 +45,12 @@ from app.models.event import (
     RSVPStatus,
 )
 from app.models.notification import NotificationChannel
-from app.models.user import Organization, Position, User, UserStatus
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    Organization,
+    Position,
+    User,
+)
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     AnalyticsSummary,
@@ -91,6 +95,7 @@ from app.schemas.event import (
     VisibleEventTypesResponse,
 )
 from app.schemas.organization import MembershipTierSettings
+from app.services import file_storage_service as file_storage
 from app.services.documents_service import DocumentsService
 from app.services.event_organizer_service import (
     FALLBACK_POSITIONS_SETTING,
@@ -111,7 +116,6 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
@@ -122,7 +126,6 @@ from app.services.notifications_service import NotificationsService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
-from app.utils.event_attachments import is_path_in_org
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -271,9 +274,21 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         updated_by=event.updated_by,
         created_at=event.created_at,
         updated_at=event.updated_at,
+        check_in_opens_at=EventService._get_check_in_window(event)[0],
         check_in_closes_at=EventService._get_check_in_window(event)[1],
         **extra_fields,
     )
+
+
+def _may_view_attendees(event: Event, org_settings: Any, user: User) -> bool:
+    """Whether ``user`` may read the event's going-list.
+
+    The one rule: ``list_event_attendees`` enforces it and the detail response
+    reports it, so the page asks only when the answer will be yes.
+    """
+    return resolve_attendee_visibility(
+        event, org_settings
+    ) == AttendeeVisibility.MEMBERS or user_has_permission(user, "events.manage")
 
 
 def _display_name(user: Optional[User]) -> Optional[str]:
@@ -1233,6 +1248,23 @@ async def get_event(
     )
     resolved_names = {field: names.get(user_id) for field, user_id in wanted.items()}
 
+    # The list card's per-caller fields, from the same helpers the list uses,
+    # so the detail screen states the credit and the member's check-in exactly
+    # as the card does. The check-in window itself is set by the builder.
+    credited_hours, hour_category_label = await service.resolve_credited_hours(
+        event, current_user.organization_id
+    )
+    # Present by scan or by an officer's override, the list's rule for the same
+    # flag: an override writes override_check_in_at without setting checked_in.
+    user_attended = bool(
+        user_rsvp
+        and (user_rsvp.checked_in or user_rsvp.override_check_in_at is not None)
+    )
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+
     return _build_event_response(
         event,
         rsvp_count=rsvp_count,
@@ -1244,6 +1276,12 @@ async def get_event(
         organizer_name=resolved_names.get("organizer_name"),
         alternate_organizer_name=resolved_names.get("alternate_organizer_name"),
         can_manage_organizers=can_manage_organizers(event, current_user),
+        user_attended=user_attended,
+        credited_hours=credited_hours,
+        hour_category_label=hour_category_label,
+        can_view_attendees=_may_view_attendees(
+            event, organization.settings if organization else None, current_user
+        ),
         user_rsvp_status=(
             (
                 user_rsvp.status.value
@@ -1558,13 +1596,18 @@ async def delete_event(
 async def delete_event_series(
     event_id: UUID,
     delete_future_only: bool = False,
+    from_event_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """
     Delete all events in a recurring series.
 
-    If delete_future_only is True, only deletes future occurrences.
+    If from_event_id names an occurrence of the series, deletes that
+    occurrence and every later one and keeps the earlier ones ("this and
+    future occurrences"); delete_future_only is then ignored. Otherwise, if
+    delete_future_only is True, only deletes occurrences that have not
+    started yet.
 
     **Authentication required**
     **Requires permission: events.manage**
@@ -1576,6 +1619,7 @@ async def delete_event_series(
             parent_event_id=event_id,
             organization_id=current_user.organization_id,
             delete_future_only=delete_future_only,
+            from_event_id=from_event_id,
         )
 
         if deleted_count == 0:
@@ -1593,6 +1637,7 @@ async def delete_event_series(
                 "parent_event_id": str(event_id),
                 "deleted_count": deleted_count,
                 "future_only": delete_future_only,
+                "from_event_id": str(from_event_id) if from_event_id else None,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -2004,12 +2049,8 @@ async def list_event_attendees(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
     organization = org_result.scalar_one_or_none()
-    visibility = resolve_attendee_visibility(
-        event, organization.settings if organization else None
-    )
-
-    if visibility != AttendeeVisibility.MEMBERS and not user_has_permission(
-        current_user, "events.manage"
+    if not _may_view_attendees(
+        event, organization.settings if organization else None, current_user
     ):
         raise HTTPException(
             status_code=403,
@@ -2095,7 +2136,7 @@ async def get_eligible_members(
     members_result = await db.execute(
         select(User)
         .where(User.organization_id == str(current_user.organization_id))
-        .where(User.status == UserStatus.ACTIVE)
+        .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
         .where(User.deleted_at.is_(None))
         .order_by(User.last_name, User.first_name)
     )
@@ -3126,16 +3167,18 @@ async def download_event_attachment(
     # injected file_path that points at another organization's subdirectory —
     # and the generic event create/update payloads can carry attachment
     # dictionaries. Same fix, and same reasoning, as DOC-24 in documents.py.
-    resolved_path = os.path.realpath(file_path)
-    if not is_path_in_org(file_path, current_user.organization_id):
+    resolved_path = file_storage.resolve(
+        file_path, current_user.organization_id, StorageArea.EVENT_ATTACHMENTS
+    )
+    if resolved_path is None:
         logger.warning(
             f"Blocked out-of-org event attachment read for event {event_id}: "
-            f"{file_path} resolved to {resolved_path}, outside the upload "
-            f"subtree of org {current_user.organization_id}"
+            f"{file_path} is outside the upload subtree of org "
+            f"{current_user.organization_id}"
         )
         raise HTTPException(status_code=403, detail="Access denied")
 
-    if not os.path.exists(resolved_path):
+    if not await file_storage.exists(resolved_path):
         raise HTTPException(status_code=404, detail="Attachment file not found on disk")
 
     # The attachments column is also writable through the generic event
@@ -3150,8 +3193,8 @@ async def download_event_attachment(
     )
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return stored_file_response(
-        path=resolved_path,
+    return await file_storage.file_response(
+        resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(event.start_datetime, tz),
             event.title,
@@ -3219,14 +3262,10 @@ async def delete_event_attachment(
         # path was tampered with — a root-level check would let an injected
         # path delete another tenant's file. The metadata row is removed
         # regardless.
-        resolved_path = os.path.realpath(file_path)
-        try:
-            if is_path_in_org(
-                file_path, current_user.organization_id
-            ) and os.path.exists(resolved_path):
-                os.remove(resolved_path)
-        except OSError as e:
-            logger.warning(f"Failed to remove attachment file {file_path}: {e}")
+        confined = file_storage.resolve(
+            file_path, current_user.organization_id, StorageArea.EVENT_ATTACHMENTS
+        )
+        await file_storage.delete_quietly(confined)
 
     # Remove from attachments list
     event.attachments = [a for a in attachments if a.get("id") != attachment_id]

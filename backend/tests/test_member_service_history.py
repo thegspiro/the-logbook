@@ -11,6 +11,8 @@ the rows, not of the Python.
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
@@ -24,6 +26,7 @@ from app.schemas.member_service import (
 from app.schemas.organization import RejoinServiceCredit
 from app.services.member_service_history_service import (
     MemberServiceHistoryService,
+    effective_separation_at,
     is_separated,
     resolve_rejoin_credit,
     summarize,
@@ -197,6 +200,61 @@ class TestHelpers:
     )
     def test_the_department_default_degrades_to_continue(self, settings, expected):
         assert resolve_rejoin_credit(settings) is expected
+
+
+@pytest.mark.unit
+class TestEffectiveSeparationAt:
+    """The moment the undo-drop window and property reminders count from."""
+
+    RECORDED = datetime(2026, 9, 24, 15, 30, tzinfo=timezone.utc)
+    UTC = ZoneInfo("UTC")
+
+    def _at(self, periods, status=UserStatus.DROPPED_VOLUNTARY, tz=UTC):
+        return effective_separation_at(self.RECORDED, periods, status, tz)
+
+    def test_a_drop_not_back_dated_is_its_recording(self):
+        closed = _stint(None, date(2026, 9, 24), sep="dropped_voluntary")
+        assert self._at([closed]) == self.RECORDED
+
+    def test_a_back_dated_drop_moves_back_by_whole_days(self):
+        closed = _stint(None, date(2026, 9, 3), sep="dropped_voluntary")
+        assert self._at([closed]) == self.RECORDED - timedelta(days=21)
+
+    def test_a_later_end_never_moves_it_forward(self):
+        closed = _stint(None, date(2026, 10, 1), sep="dropped_voluntary")
+        assert self._at([closed]) == self.RECORDED
+
+    def test_without_a_stint_closed_by_this_status_it_is_the_recording(self):
+        retired = _stint(None, date(2026, 9, 1), sep="retired")
+        assert self._at([retired]) == self.RECORDED
+        assert self._at([]) == self.RECORDED
+
+    def test_an_open_stint_means_there_is_no_separation_to_date(self):
+        closed = _stint(None, date(2026, 9, 1), sep="dropped_voluntary")
+        current = _stint(date(2026, 9, 10))
+        assert self._at([closed, current]) == self.RECORDED
+
+    def test_the_recording_is_read_on_the_departments_calendar(self):
+        # 02:00 UTC on the 24th is the evening of the 23rd in New York, so a
+        # drop dated the 23rd there is not back-dated at all.
+        recorded = datetime(2026, 9, 24, 2, tzinfo=timezone.utc)
+        closed = _stint(None, date(2026, 9, 23), sep="dropped_voluntary")
+        assert (
+            effective_separation_at(
+                recorded,
+                [closed],
+                UserStatus.DROPPED_VOLUNTARY,
+                ZoneInfo("America/New_York"),
+            )
+            == recorded
+        )
+
+    def test_a_naive_recording_is_read_as_utc(self):
+        closed = _stint(None, date(2026, 9, 23), sep="dropped_voluntary")
+        naive = self.RECORDED.replace(tzinfo=None)
+        assert effective_separation_at(
+            naive, [closed], UserStatus.DROPPED_VOLUNTARY, self.UTC
+        ) == self.RECORDED - timedelta(days=1)
 
 
 @pytest.mark.unit
@@ -617,10 +675,15 @@ class TestReplacePeriods:
 
 
 def _caller(org, user_id=None, username="officer"):
+    # An administrator, with positions and a rank as the loaded current user
+    # has them: status changes check the caller holds every permission the
+    # member does.
     return SimpleNamespace(
         id=user_id or str(uuid.uuid4()),
         organization_id=org.id,
         username=username,
+        rank=None,
+        positions=[SimpleNamespace(permissions=["*"])],
     )
 
 
@@ -823,6 +886,72 @@ class TestStatusChangeWritesStints:
         if changed.tzinfo is None:
             changed = changed.replace(tzinfo=timezone.utc)
         assert changed >= before.replace(microsecond=0)
+
+    async def test_a_back_dated_drop_dates_its_return_letter_from_there(
+        self, db_session, monkeypatch
+    ):
+        from app.api.v1.endpoints.member_status import (
+            MemberStatusChangeRequest,
+            change_member_status,
+        )
+        from app.services.departure_clearance_service import (
+            DepartureClearanceService,
+        )
+        from app.services.property_return_service import PropertyReturnService
+
+        letter, clearance = {}, {}
+
+        async def write_letter(_self, **kwargs):
+            letter.update(kwargs)
+            report = {
+                "member_name": "Test",
+                "drop_type_display": "Voluntary Separation",
+                "item_count": 0,
+                "total_value": 0,
+                "return_deadline": "",
+            }
+            return report, "<p></p>"
+
+        async def open_clearance(_self, **kwargs):
+            clearance.update(kwargs)
+            return None, "not under test"
+
+        # The letter and the clearance are what this is about; the document
+        # store and the email are stubbed out of the way.
+        monkeypatch.setattr(PropertyReturnService, "generate_report", write_letter)
+        monkeypatch.setattr(
+            PropertyReturnService, "save_as_document", AsyncMock(return_value=None)
+        )
+        monkeypatch.setattr(
+            DepartureClearanceService, "initiate_clearance", open_clearance
+        )
+        org = await _org(db_session)
+        officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
+        member = await _user(db_session, org, hire_date=date(2012, 1, 1))
+        left_on = org_today(org) - timedelta(days=21)
+        before = datetime.now(timezone.utc)
+
+        await change_member_status(
+            member.id,
+            MemberStatusChangeRequest(
+                new_status="dropped_voluntary",
+                separation_date=left_on,
+                return_deadline_days=30,
+                send_property_return_email=False,
+            ),
+            BackgroundTasks(),
+            db=db_session,
+            current_user=_caller(org, officer.id),
+        )
+
+        assert letter["effective_date"] == left_on
+        assert letter["return_deadline_days"] == 30
+        # The clearance's deadline runs from the same day: 21 days back, at
+        # the time of the drop (the org is on UTC, so the day is the date).
+        counted_from = clearance["counted_from"]
+        assert counted_from.date() == left_on
+        assert before - timedelta(days=21) <= counted_from
+        assert clearance["return_deadline_days"] == 30
 
     async def test_a_future_effective_date_is_refused(self, db_session):
         from app.api.v1.endpoints.member_status import (

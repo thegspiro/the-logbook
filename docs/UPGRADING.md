@@ -504,6 +504,146 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Sessions now end after 12 hours, and idle sessions no longer sign you out everywhere (2026-10-20)
+
+Three changes to how a session ends. None blocks a restart and none needs a migration.
+
+- **A 12-hour absolute lifetime.** A session now ends 12 hours after sign-in however
+  active it is, and the member signs in again. Before, a session that kept refreshing
+  never had to. Change it with `SESSION_ABSOLUTE_MAX_HOURS` (`0` turns it off). **A
+  wall-mounted Check-In Station or inventory kiosk left signed in will ask for a
+  sign-in at least once every 12 hours.** A longer limit for kiosk accounts is planned
+  as a separate change; until it lands, raise `SESSION_ABSOLUTE_MAX_HOURS` if a
+  station must stay up longer.
+- **Idle sessions are refused on refresh, and no longer revoke the member's other
+  sessions.** Coming back to a tab after more than 15 minutes (but before the access
+  cookie lapsed) used to be read as a stolen refresh token, and signed the member
+  out on every device. It now just asks them to sign in on that device.
+- **Background polls no longer count as activity.** The notification count, the
+  shift board, the check-in station's target list and live election turnout send an
+  `X-Background-Request: 1` header, and the server leaves the idle timer alone for
+  them. A tab left open on an unattended computer therefore signs out after the idle
+  limit. Real typing or clicking reports itself to the server every couple of minutes
+  while it happens, so a member filling in a long form is not signed out.
+
+A reverse proxy that strips unknown request headers needs nothing: the header only
+shortens the sender's own session.
+
+### Positions named after a rank leave the member pickers (2026-10-21)
+
+Onboarding seeds Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant,
+Engineer, Firefighter and EMT as **positions** as well as ranks, because those
+positions carry the rank's own permission list. Add Member therefore offered
+"Firefighter" in the position dropdown beside "Firefighter" in the rank
+dropdown, and the roster could show the same word in both columns, or in
+neither.
+
+From this version those positions are not offered or shown on the member
+screens: the Add Member position dropdown, the roster's Positions column, the
+profile's position badges, Member Management's View by Position, and the
+positions a member can be given in Manage Positions. A rank is set in the Rank
+field, and a member holding the rank already has the access the position would
+give. Nothing is removed from the database:
+
+- A member who already holds one of these positions keeps it and its access.
+  It stays listed in that member's Manage Positions dialog, marked **Rank**,
+  so an officer can untick it.
+- **Organization Settings > Role Management** still lists every one of them,
+  marked **Mirrors a rank**, because that is where the access a rank carries is
+  edited.
+- **The member importer rejects a rank name in the `role` column.** A CSV row
+  whose `role` reads `Firefighter` (or any other rank name) is reported with
+  `role "Firefighter" is a rank — put it in the rank column instead` and not
+  imported; before this version it assigned the position. Move the value to
+  the `rank` column.
+
+To list the members who hold one of these positions:
+
+```sql
+SELECT u.id, u.username, u.rank, p.slug AS position
+FROM user_positions up
+JOIN positions p ON p.id = up.position_id
+JOIN users u ON u.id = up.user_id
+WHERE p.is_system = 1
+  AND p.slug IN ('fire_chief', 'deputy_chief', 'assistant_chief', 'captain',
+                 'lieutenant', 'engineer', 'firefighter', 'emt');
+```
+
+### Account status follows membership type for probationary members (2026-10-21)
+
+A member's **membership type** (probationary, active, life, administrative, or
+a tier of your ladder) and their **account status** (active, probationary, on
+leave, retired, dropped) were two separate facts that nothing connected: a
+member added as probationary had an active account, and the tier ladder
+advancing them off probation never changed their status.
+
+From this version the type drives the status, one way, between the two
+statuses that say nothing about leave or separation:
+
+- Setting a member's type to **Probationary** (Add Member, Edit Member, the
+  importer's `membershipType` column, or a prospect converted as one) puts an
+  **active** account on **probationary**.
+- Setting it to anything else, including the monthly tier advance moving a
+  member up the ladder, moves a **probationary** account back to **active**.
+- A member who is on leave, inactive, suspended, retired or dropped keeps that
+  status whatever their type says; it catches up when they return.
+- The profile's **Change Status** dialog still works on its own. A status set
+  there holds until the member's type is next written.
+
+**Migration `2794794bda6e` settles the members you already have.** On the
+first start after upgrading it moves every active account whose type is
+probationary onto probationary, and every probationary account whose type is
+anything else onto active. Each change is written to the audit log as
+`account_status_backfilled` with both statuses and the member, and sets the
+member's status-change reason to "Follows membership type …", so the profile's
+status history shows it. To list what moved:
+
+```sql
+SELECT JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.username')) AS member,
+       JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.previous_status')) AS was,
+       JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.new_status')) AS now_
+FROM audit_logs WHERE event_type = 'account_status_backfilled';
+```
+
+`alembic downgrade -1` restores the previous status of every member the
+migration moved who still holds the status it wrote, and logs each reversal
+the same way. A member whose status an officer changed since is not touched.
+Audit rows are never deleted.
+
+Because the previous version already counts a probationary account as a
+current member everywhere (the entry below), moving these accounts changes
+nothing about what a member can do; it changes what the roster, the admin
+hub's Active and Probationary tiles, and the status filters show.
+
+### A probationary account is a current member everywhere (2026-10-20)
+
+`probationary` is one of the account statuses an officer can set from a
+member's profile (**Change status**), and junior members derive to it. Sign-in
+and shift eligibility already treated it as current, but about forty other
+queries asked for the literal `active` status and left probationary accounts
+out: training compliance and the compliance officer views, certificate expiry
+alerts, the competency matrix, meeting quorum's denominator, the attendance
+dashboard, the org chart, the training and compliance reports and CSV exports,
+saved report recipients, the inventory assignee pickers and impact planner,
+the consent roster, the forms and skills-test member searches, event
+eligibility, pipeline sign-offs, and the administrator-continuity guard.
+
+All of them now count a probationary account as a current member. What you
+may notice after the upgrade, for any member whose status is probationary:
+
+- They appear in compliance, certification and training reports and alerts,
+  and can be picked as an assignee, candidate or recipient.
+- Percentage quorum divides by one more member each.
+- A probationary member holding an administrator position now counts as an
+  administrator, so removing the last active one is refused if a probationary
+  one remains, and vice versa.
+- "Active members" counts on the dashboards, the members page and the
+  reports include them. The admin hub keeps separate Active and Probationary
+  tiles, which still add up to the current roster.
+
+No data changes and no migration runs; the rule is enforced by
+`backend/tests/test_account_status_gates.py`.
+
 ### Ranked-choice paper ballots are counted, and entered ballot by ballot (2026-10-20)
 
 Paper votes in a **ranked-choice** race were miscounted. The instant-runoff

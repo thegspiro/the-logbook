@@ -238,9 +238,13 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
     // badge directly above it, which has always shown the direct count.
     const nested = node.children.length;
     // Sub-rooms survive: the backend re-parents them onto this room's parent.
-    const message = nested
-      ? `Delete "${node.room.name}"? Its ${nested === 1 ? 'sub-room' : `${nested} sub-rooms`} will move up a level rather than be deleted. This cannot be undone.`
-      : `Delete "${node.room.name}"? This cannot be undone.`;
+    // The room's location follows the shared location rule (`delete_room` ->
+    // `LocationService.remove_location`): deleted when nothing uses it,
+    // otherwise deactivated so events, templates and apparatus keep it.
+    const subRooms = nested
+      ? ` Its ${nested === 1 ? 'sub-room' : `${nested} sub-rooms`} will move up a level rather than be deleted.`
+      : '';
+    const message = `Delete "${node.room.name}"?${subRooms} Its location is deleted too — or, if events, event templates or apparatus still use it, deactivated and kept for them, so they do not lose where they were. This cannot be undone.`;
     if (
       !(await confirm({
         title: 'Delete room',
@@ -253,9 +257,10 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
     try {
       await facilitiesService.deleteRoom(node.room.id);
       toast.success('Room deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete room'));
+    } finally {
       void loadRooms();
-    } catch {
-      toast.error('Failed to delete room');
     }
   };
 

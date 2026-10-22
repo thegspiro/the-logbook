@@ -6,12 +6,14 @@ import { renderWithRouter } from '../../../test/utils';
 const getSystems = vi.fn();
 const createSystem = vi.fn();
 const updateSystem = vi.fn();
+const deleteSystem = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   facilitiesService: {
     getSystems: (...args: unknown[]) => getSystems(...args) as unknown,
     createSystem: (...args: unknown[]) => createSystem(...args) as unknown,
     updateSystem: (...args: unknown[]) => updateSystem(...args) as unknown,
+    deleteSystem: (...args: unknown[]) => deleteSystem(...args) as unknown,
   },
 }));
 
@@ -101,5 +103,38 @@ describe('SystemsSection save payload', () => {
       system_type: 'other',
       condition: 'good',
     });
+  });
+});
+
+describe('SystemsSection removing a system', () => {
+  // The endpoint archives; the dialog used to promise a permanent delete.
+  beforeEach(() => {
+    getSystems.mockReset();
+    deleteSystem.mockReset();
+    getSystems.mockResolvedValue([hvac]);
+    deleteSystem.mockResolvedValue(undefined);
+  });
+
+  it('calls it archiving, and says the record is kept', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Archive Main HVAC Unit' }));
+
+    expect(
+      await screen.findByText(
+        /Archive "Main HVAC Unit"\? It leaves this facility's systems list, but its record and history are kept\./
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/cannot be undone/)).not.toBeInTheDocument();
+    expect(deleteSystem).not.toHaveBeenCalled();
+  });
+
+  it('archives once confirmed', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Archive Main HVAC Unit' }));
+    await user.click(await screen.findByRole('button', { name: 'Archive' }));
+
+    await waitFor(() => expect(deleteSystem).toHaveBeenCalledWith('sys-1'));
   });
 });

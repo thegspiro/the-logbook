@@ -1711,6 +1711,11 @@ export interface BulkImportRequest {
   default_category_id?: string;
 }
 
+export interface ImportMatchedResponse {
+  imported: number;
+  failed: number;
+}
+
 export interface BulkImportResponse {
   total: number;
   imported: number;
@@ -1969,9 +1974,10 @@ export interface ShiftCompletionReport {
   shift_id?: string;
   shift_date: string;
   trainee_id: string;
-  officer_id: string;
+  /** Null once the filing officer's account has been permanently deleted. */
+  officer_id: string | null;
   trainee_name?: string;
-  officer_name?: string;
+  officer_name?: string | null;
   /** The apparatus the report's shift ran, e.g. "B-5 — Brush 5". Absent for a shift with none. */
   shift_label?: string;
   /** The shift's start, UTC. Formatted in the department's timezone for display. */
@@ -2090,6 +2096,16 @@ export interface OfficerShiftAnalytics {
   status_counts: Record<string, number>;
   trainees: OfficerAnalyticsTrainee[];
   monthly: MonthlyShiftData[];
+}
+
+// ============================================
+// Certification expiry alerts
+// ============================================
+
+export interface CertAlertSettings {
+  enabled: boolean;
+  cc_chief_on_escalation: boolean;
+  include_personal_email_on_final: boolean;
 }
 
 // ============================================

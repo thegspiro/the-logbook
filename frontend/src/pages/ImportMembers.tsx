@@ -4,9 +4,11 @@ import { Upload, Download, FileText, CheckCircle, AlertTriangle, ArrowRight } fr
 import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
 import { userService, roleService } from '../services/api';
+import { mirrorsRank } from '../utils/positions';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
+import { memberClassAndStatusFor } from '../utils/membership';
 
 /**
  * One rejected row: why it was rejected, and the cells it was rejected from.
@@ -71,6 +73,7 @@ const TEMPLATE_HEADERS = [
   'secondaryPhone',
   'email',
   'joinDate',
+  'membershipType',
   'rank',
   'role',
   'station',
@@ -108,6 +111,7 @@ const TEMPLATE_EXAMPLE: Record<(typeof TEMPLATE_HEADERS)[number], string> = {
   secondaryPhone: '(555) 987-6543',
   email: 'john.doe@example.com',
   joinDate: '2020-01-15',
+  membershipType: 'regular',
   rank: 'Firefighter',
   role: 'Member',
   station: 'Station 1',
@@ -181,6 +185,16 @@ const RECOGNIZED_HEADERS: readonly string[] = [...TEMPLATE_HEADERS.map(normalize
  * is created Active and adjusted afterwards.
  */
 const STATUS_HEADER = 'status';
+
+/**
+ * What the `membershipType` column accepts: the same choices as the Add Member
+ * form, which are the ones the create endpoint can express as a class/status
+ * pair. `active` is taken as a spelling of `regular`, because the edit page
+ * labels that standing "Active". Without the column every imported member was
+ * a regular operational member and nothing in the file could say otherwise.
+ */
+const MEMBERSHIP_TYPE_VALUES = ['probationary', 'regular', 'active', 'life', 'administrative'] as const;
+const MEMBERSHIP_TYPE_HELP = 'probationary, regular, life or administrative';
 
 /**
  * Length ceilings copied from `AdminUserCreate` and `EmergencyContact`.
@@ -368,6 +382,7 @@ const buildRow = (row: string[], headers: string[]): CSVMemberRow => ({
   email: cell(row, headers, 'email') || '',
   joinDate: cell(row, headers, 'joindate') || '',
   status: cell(row, headers, 'status'),
+  membershipType: cell(row, headers, 'membershiptype'),
   rank: cell(row, headers, 'rank'),
   role: cell(row, headers, 'role'),
   station: cell(row, headers, 'station'),
@@ -464,6 +479,11 @@ const validateRow = (data: CSVMemberRow): string[] => {
     }
   }
 
+  const membershipType = data.membershipType?.trim().toLowerCase();
+  if (membershipType && !(MEMBERSHIP_TYPE_VALUES as readonly string[]).includes(membershipType)) {
+    problems.push(`membershipType "${data.membershipType}" is not one of ${MEMBERSHIP_TYPE_HELP}`);
+  }
+
   return problems;
 };
 
@@ -534,6 +554,8 @@ const indexExistingMembers = (
  *
  * `knownRoles` is null when roles could not be loaded or none are configured,
  * which means the role column is skipped rather than failing every row.
+ * `rankNamedRoles` holds the seeded positions that mirror a rank (Chief,
+ * Captain, Firefighter, ...), which a CSV must put in the rank column instead.
  * `existing` is null when the roster could not be loaded, which likewise skips
  * the collision check rather than blocking the import on it.
  */
@@ -542,6 +564,7 @@ const runPreflight = (
   headerRow: string[],
   headers: string[],
   knownRoles: Set<string> | null,
+  rankNamedRoles: Set<string>,
   existing: ExistingMembers | null
 ): Preflight => {
   const dataRecords = records.slice(1).filter((record) => !isBlankRow(record.cells));
@@ -583,7 +606,9 @@ const runPreflight = (
 
     reasons.push(...validateRow(data));
 
-    if (knownRoles && data.role && !knownRoles.has(data.role.toLowerCase())) {
+    if (data.role && rankNamedRoles.has(data.role.toLowerCase())) {
+      reasons.push(`role "${data.role}" is a rank — put it in the rank column instead`);
+    } else if (knownRoles && data.role && !knownRoles.has(data.role.toLowerCase())) {
       reasons.push(
         `role "${data.role}" does not match any role configured under Roles — create it there, or clear the role column and use rank instead`
       );
@@ -768,10 +793,17 @@ const ImportMembers: React.FC = () => {
       // resolved once here and reused by the import rather than re-fetched.
       let knownRoles: Set<string> | null = null;
       const resolvedRoleIds = new Map<string, string>();
+      // A position that mirrors a rank is never assigned from the role column:
+      // the row is reported so the uploader moves the word to the rank column.
+      const rankNamedRoles = new Set<string>();
       if (headers.includes('role')) {
         try {
           const roles = await roleService.getRoles();
-          roles.forEach((role) => resolvedRoleIds.set(role.name.trim().toLowerCase(), role.id));
+          roles.forEach((role) => {
+            const key = role.name.trim().toLowerCase();
+            if (mirrorsRank(role)) rankNamedRoles.add(key);
+            else resolvedRoleIds.set(key, role.id);
+          });
           // An empty list means roles are not configured yet, which the import
           // treats as "skip the column" rather than "every row is wrong".
           knownRoles = resolvedRoleIds.size > 0 ? new Set(resolvedRoleIds.keys()) : null;
@@ -799,7 +831,7 @@ const ImportMembers: React.FC = () => {
         );
       }
 
-      const report = runPreflight(records, headerRow, headers, knownRoles, existing);
+      const report = runPreflight(records, headerRow, headers, knownRoles, rankNamedRoles, existing);
       setPreflight(report);
 
       if (report.invalid.length === 0) {
@@ -897,6 +929,10 @@ const ImportMembers: React.FC = () => {
           ...(rowData.secondaryPhone ? { mobile: rowData.secondaryPhone } : {}),
           ...(dateOfBirth ? { date_of_birth: dateOfBirth } : {}),
           ...(joinDate ? { hire_date: joinDate } : {}),
+          // Pre-flight has already rejected a value outside MEMBERSHIP_TYPE_VALUES.
+          ...(rowData.membershipType?.trim()
+            ? memberClassAndStatusFor(rowData.membershipType.trim().toLowerCase())
+            : {}),
           ...(rowData.rank ? { rank: rowData.rank } : {}),
           ...(rowData.station ? { station: rowData.station } : {}),
           ...(rowData.platoon ? { platoon: rowData.platoon } : {}),
@@ -994,7 +1030,11 @@ const ImportMembers: React.FC = () => {
             <li>Replace the sample row — it is imported like any other row if left in</li>
             <li>Wrap any value containing a comma in double quotes, or its row will be rejected</li>
             <li>Leave membershipNumber blank to have the system assign one</li>
-            <li>Role must match a role name configured under Roles</li>
+            <li>membershipType is probationary, regular, life or administrative; blank imports as regular</li>
+            <li>
+              Role must match a role name configured under Roles; Chief, Captain, Firefighter and the other ranks go in
+              the rank column
+            </li>
             <li>Dates accept either YYYY-MM-DD or MM/DD/YYYY</li>
             <li>Upload your completed CSV file and review the check results</li>
             <li>Rows that pass are imported; any that fail come back as a downloadable report</li>

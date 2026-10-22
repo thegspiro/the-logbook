@@ -17,6 +17,10 @@ const mockUpdateActionItem = vi.fn();
 const authState = { user: { id: ME }, checkPermission: () => false };
 
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   dashboardService: {
     getActionItems: (...args: unknown[]) => mockGetActionItems(...args) as unknown,
   },

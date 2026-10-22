@@ -10,8 +10,9 @@
  * Not wrapped: a member's own past result and its print view. Switching
  * deletes nothing, and a result already on file stays readable.
  *
- * Like the store it reads, this is not an access control: an unknown method
- * (still loading aside) shows the page, as the navigation does.
+ * Not the enforcement either: the server refuses to open a new test for a
+ * sign-offs department. So an unknown method (still loading aside) shows the
+ * page, as the navigation does.
  *
  * Lives here rather than in routes.tsx so that file exports only its route
  * factory — mixing a component into it breaks Fast Refresh for the module.

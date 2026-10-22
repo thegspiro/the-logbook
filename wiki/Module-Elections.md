@@ -552,7 +552,12 @@ Results Report** / **Send Report** (only after close).
 ### Reports
 
 - **Results report email** (`POST /elections/{id}/send-report`) is refused
-  with 400 until the election closes. It prints the close time and actor
+  with 400 until the election closes. **Send Report** emails it to the officer
+  who pressed it. The automatic copy at close goes, one message each, to the
+  election's creator and every leadership member who is a current member
+  (active or probationary) and receives election-administration email; a
+  creator who has left gets nothing. When nobody qualifies, the close logs an
+  error and audits `election_report_not_sent`. It prints the close time and actor
   ("… by Sam Ortiz", or "Automatic close"), per-item outcomes, tie wording
   ("Tie — co-winners per the election's tie policy" / "Tie — no winner
   declared; runoff round created") and recipient facts drawn from

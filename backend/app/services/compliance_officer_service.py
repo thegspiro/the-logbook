@@ -36,7 +36,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
 )
-from app.models.user import User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_compliance import (
     STANDING_NOT_APPLICABLE,
     ComplianceGrading,
@@ -213,7 +213,7 @@ class ISOReadinessService:
         members_result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
@@ -702,7 +702,7 @@ class ContributedHoursService:
         members_result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )
@@ -915,7 +915,7 @@ class AnnualComplianceReportService:
             .options(selectinload(User.positions))
             .where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )

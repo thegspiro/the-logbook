@@ -191,7 +191,23 @@ describe('ApplicantDetailDialog approval status', () => {
 
     expect(screen.queryByText('No approval data recorded yet.')).not.toBeInTheDocument();
     const rows = within(screen.getByRole('list', { name: 'Approval status' })).getAllByRole('listitem');
-    expect(rows.map((r) => r.textContent)).toEqual(['chiefApproved', 'presidentPending']);
+    expect(rows.map((r) => r.textContent)).toEqual(['ChiefApproved', 'PresidentPending']);
+  });
+
+  it('names each signer by the office label the step response carries, not the stored key', async () => {
+    renderDrawer({
+      ...signOff,
+      current_stage_config: {
+        required_approvers: ['ems_supply_officer', ' hose_master '],
+        require_notes: false,
+        approval_order: 'any',
+      },
+      current_stage_approver_labels: { ems_supply_officer: 'EMS Supply Officer', ' hose_master ': 'Hose Master' },
+    } as unknown as Partial<Applicant>);
+    await screen.findByText('Stage History');
+
+    const rows = within(screen.getByRole('list', { name: 'Approval status' })).getAllByRole('listitem');
+    expect(rows.map((r) => r.textContent)).toEqual(['EMS Supply OfficerPending', 'Hose MasterPending']);
   });
 });
 

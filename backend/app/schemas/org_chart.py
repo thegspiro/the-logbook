@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX
 
 _RESPONSE_CONFIG = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
@@ -199,7 +200,7 @@ class OrgChartNodeMove(BaseModel):
     # subtree. Saying which parent is now part of asking for the move.
     parent_id: Optional[str] = Field(..., max_length=36)
     # Index among the new parent's children; clamped server-side.
-    position: int = Field(0, ge=0)
+    position: int = Field(0, ge=0, le=INT32_MAX)
 
     @field_validator("parent_id")
     @classmethod

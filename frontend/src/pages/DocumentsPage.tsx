@@ -42,7 +42,7 @@ import {
   isAdminOnlyRefusal,
 } from '../components/documents/folderAccess';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 
 type ViewMode = 'grid' | 'list';
 
@@ -336,8 +336,8 @@ const DocumentsPage: React.FC = () => {
         if (selectedFolder) {
           await fetchDocuments(selectedFolder, debouncedSearch);
         }
-      } catch {
-        setError('Unable to delete document. Check your connection and try again.');
+      } catch (err: unknown) {
+        setError(getErrorDetail(err) ?? 'Unable to delete document. Check your connection and try again.');
       } finally {
         setActionLoading(false);
       }
@@ -589,7 +589,7 @@ const DocumentsPage: React.FC = () => {
               {(currentFolder || showAllDocuments) && (
                 <button
                   onClick={handleClearFolder}
-                  className="touch:min-h-11 flex items-center space-x-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+                  className="touch:min-h-11 flex items-center space-x-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-400"
                 >
                   <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                   <span>All Folders</span>

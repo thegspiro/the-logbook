@@ -71,7 +71,7 @@ export const PlatoonSelector: React.FC<PlatoonSelectorProps> = ({ members, plato
               className={`rounded-full border px-2 py-0.5 text-[11px] ${
                 count > 0
                   ? 'text-theme-text-secondary border-violet-500/20 bg-violet-500/10'
-                  : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                  : 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-400'
               }`}
             >
               Platoon {p}: {count} member{count === 1 ? '' : 's'}
@@ -86,7 +86,7 @@ export const PlatoonSelector: React.FC<PlatoonSelectorProps> = ({ members, plato
       </div>
 
       {platoons.every((p) => countForPlatoon(p) === 0) && (
-        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+        <p className="text-[11px] text-amber-700 dark:text-amber-400">
           No members are assigned to these platoons yet — shifts will be created but left unstaffed until members are
           given a platoon on their profile.
         </p>

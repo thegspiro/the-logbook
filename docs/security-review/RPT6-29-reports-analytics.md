@@ -508,3 +508,78 @@ Findings: 0 fixed in this feature's own code, 0 new, 1 standing finding
 a "✅ Resolved 2026-10-11" note matching the fix described above, checked
 against current code rather than taken on its own say-so, and needed no
 correction. Rotation row 29 → ✅. Next: Feature 30 (Onboarding).
+
+## Pass 10 (2026-10-20)
+
+**Prefix:** `RPT6` (unchanged) · **Rotation pass:** 10 · **Reviewed:**
+2026-10-20 · **PR:** (this PR)
+
+Baseline: pass 9's merge, PR #3379 (`11807edf`). `git log 11807edf..HEAD`
+restricted to this feature's backend scope files (`reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py` and
+their schemas/models, plus `reports_service.py`,
+`dashboard_widget_service.py`, `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`, `saved_report_schedule.py`)
+and `frontend/src/modules/reports` found exactly two real (non-merge)
+commits:
+
+- **`86882208` ("Count dashboard overdue dues by the dues screen's
+  rule").** `dashboard_widget_service.py`'s finance tile now counts
+  `MemberDues` rows via the shared `dues_overdue_clause(now)` (the same
+  predicate the Dues list, its filter and `mark_overdue_dues` already use)
+  instead of a hand-rolled `status IN (...) AND due_date < ...` that
+  double-counted part-paid records. Read in full: the query still filters
+  `MemberDues.organization_id == organization_id`; the change is a
+  predicate substitution for correctness, nothing touches scoping or
+  authorization. No finding.
+- **`5ef9c11e` (workflow-review W72, "reports — 3 fixed, 0 flagged").**
+  Adds an `admin_hours` entry to `get_available_reports()`'s catalog
+  (`reports_service.py`), fixes the Admin Hours report's per-row date to
+  use the org's local day instead of UTC
+  (`resolve_reporting_timezone`/`local_date`), and makes `ReportsPage.tsx`
+  actually call `/reports/available` to filter its fixed card list rather
+  than always offering every card. Re-verified from this feature's own
+  angle, not taken on the commit message's word: `admin_hours` was already
+  present in `PII_REPORT_PERMISSIONS`
+  (`saved_report_schedule.py:81` → `"admin_hours": "admin_hours.manage"`)
+  and `generate_report` already calls
+  `_enforce_report_pii_permission(current_user, request.report_type)`
+  (`reports.py:118`) before generating — so listing the catalog entry does
+  not open a new report type, it only lets `/available` (which already
+  filters `PII_REPORT_PERMISSIONS` entries by the caller's permission,
+  `reports.py:95-109`) and the frontend correctly show/hide a report that
+  was already gated server-side. The date fix and the frontend diffs
+  (`ExportControls.tsx`, `AdminHoursRenderer.tsx`, `SavedReportsPage.tsx`)
+  are touch-target/accessibility/label-formatting only — no
+  `dangerouslySetInnerHTML`, no new API call. No finding.
+
+**Re-verification, not re-citation.** Every standing item from pass 9
+(`LBL-29-2`, `LBL-29-4`, `RPT-5c`/`RPT-6`/`RPT-7`, `DASH-2`, `RPT5-29-1`/
+`RPT5-29-5`) re-confirmed unchanged by direct read this pass — none of this
+pass's two commits touch the files those findings cite
+(`labels.py`, `platform_analytics.py`, `dashboard.py`'s non-pulse routes,
+or `reports_service.py`'s `compliance_status`/`training_summary`/
+`_generate_inventory_status`/`apparatus_status` generators), so there is no
+new evidence to weigh and no re-litigation below. Route surface
+re-enumerated: unchanged at 7 + 3 + 1 + 12 + 12 = 35 routes across the five
+endpoint files; every route carries a recognized auth dependency
+(`require_permission`, `get_current_user`, or `get_current_active_user`).
+
+## Completion gate (pass 10)
+
+| Check                                                                                                                                                                                                                              | Result                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.3.0`, pinned)                                                                                                                                                                            | ✅ 0 violations                                      |
+| `black --check app/ tests/ alembic/` (`black==26.5.1`, pinned)                                                                                                                                                                     | ✅ clean                                             |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`, pinned, matches CI)                                                                                                                                                     | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                  | ✅ 631 revisions, single head `ca0c2111466f`         |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report" -m "not integration and not slow and not docker"` | ✅ **898 passed**, 1 skipped (`pywebpush`, env-only) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                 | ✅ 0 errors                                          |
+| `cd frontend && npm run lint`                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings                              |
+| `cd frontend && npx vitest run src/modules/reports`                                                                                                                                                                                | ✅ **77 passed** (9 files)                           |
+
+Findings: 0 fixed, 0 new, 0 standing findings changed. No
+`KNOWN_LIMITATIONS.md` change needed — nothing this pass found is an
+owner-decision item and RPT2-29-2's existing resolved note still matches
+current code. Rotation row 29 → ✅ (pending this PR's merge). Next: Feature
+30 (Onboarding).
