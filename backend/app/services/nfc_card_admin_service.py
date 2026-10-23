@@ -32,6 +32,7 @@ from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.services.nfc_card_status_sync import BLOCKED_MEMBER_STATUSES
 from app.services.nfc_tag_service import NfcTagService
 from app.utils.member_names import format_display_name
+from app.utils.sql_results import rows_affected
 
 SETTINGS_KEY = "nfc_id_cards"
 
@@ -431,7 +432,7 @@ class NfcCardAdminService:
                 NfcCardTap.tapped_at < cutoff,
             )
         )
-        return int(result.rowcount or 0)
+        return rows_affected(result)
 
     async def _org(self, organization_id: str) -> Organization:
         org = (
