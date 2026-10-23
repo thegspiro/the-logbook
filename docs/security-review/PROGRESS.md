@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3569](https://github.com/thegspiro/the-logbook/pull/3569)** (branch
+`claude/security-review-users-organizations`) — Feature 07 (Users &
+organizations), pass 11. `search_pull_requests` for
+`is:pr is:open head:claude/security-review-` returned 0 before this
+iteration started, so PR #3564 (Feature 06, pass 11) had already merged;
+row 07 was the next `⬜`. **0 fixed, 0 new findings** — real delta (733
+insertions across 7 files): the privilege ceiling was extended to
+delete/status-change/archive, a permanent-delete data-loss bug was fixed,
+membership type now drives account status, Add Member can create a
+directory account, and 3 new S3 file-storage settings routes landed —
+all reviewed end to end and found already correctly guarded. USR-5/USR-8
+(standing, owner-accepted) re-confirmed unchanged. See
+`USR-07-users-organizations.md`'s **Pass 11** section. Row 07 → ✅
+(pending this PR's merge); next is Feature 08 (Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 11, PR #3564, merged), preserved for history</summary>
+
 **PR [#3564](https://github.com/thegspiro/the-logbook/pull/3564)** (branch
 `claude/security-review-elections-ballots-p11`) — Feature 06 (Elections &
 ballots), pass 11, a watchdog pickup. PR #3562 (Feature 05, pass 11) merged;
@@ -24,6 +42,8 @@ no other `claude/security-review-*` PR was open. **1 flagged MEDIUM
 minutes), 1 LOW fixed as a guard (ELEC-50, `_build_election_response`
 viewer convention).** See `ELEC-06-elections-ballots.md`'s **Pass 11**
 section. Row 06 → ✅ (pending this PR's merge); next is Feature 07.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 11, PR #3562, merged), preserved for history</summary>
@@ -20632,7 +20652,7 @@ this iteration's commit" rule.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -36188,3 +36208,63 @@ current code rather than taken on its own say-so; CRON-31-7/8 are unchanged
 by this pass. Rotation row 31 → ✅ (pending this PR's merge). Next: Feature
 32 (Locations & kiosk) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+### 2026-10-22 — Feature 07 (Users & organizations, pass 11) — real delta (privilege ceiling extended to status-change/archive/delete, permanent-delete record preservation, membership-type/account-status sync, directory-account creation, S3 file storage settings), 0 fixed, 0 new findings
+
+`search_pull_requests` for `is:pr is:open head:claude/security-review-`
+returned 0 — no security-review PR open. Row 07 was the first `⬜` in the
+rotation table.
+
+**Baseline:** `cf2242e4` (PR #3410's merge, pass 10). **Head:** current
+`main`. Unlike the last two passes, this window's delta was real: 14
+non-merge commits touch this feature's declared files directly, 733
+insertions / 59 deletions across seven of the twelve (`member_leaves.py`,
+`user_service.py`, `member_leave_service.py`, and both MCP files are
+byte-identical to pass 10). Two of the commits are genuine security
+hardenings landed independently of this rotation, re-verified end to end
+rather than taken on their commit messages' word: **`5fc2c5f9`/`f2732e7b`**
+extend the existing password/MFA-reset privilege ceiling
+(`_enforce_account_reset_ceiling`) to `DELETE /users/{id}` (soft and hard),
+`PATCH /{user_id}/status`, and `POST /{user_id}/archive`, all three of
+which previously checked only `members.manage` and let a member manager
+deactivate, status-change, or permanently delete an account holding
+permissions beyond their own; and **`78a6a57e`** fixes a real data-loss bug
+where permanently deleting an examiner or shift officer silently destroyed
+every skill test or shift report they had filed _on other members_
+(`skill_tests.examiner_id`/`shift_completion_reports.officer_id` were
+`NOT NULL` + `CASCADE`, now `nullable=True` + `SET NULL` per migration
+`cbe0de50f202`, correctly paired per CLAUDE.md Pitfall #2) — the same
+commit also returns the member's held inventory to stock and releases
+their future shift seats in the same transaction, both read in full and
+confirmed org-scoped on every query. Also reviewed: the membership-type
+→ account-status sync (`37bf5845`, migration `2794794bda6e`) — confirmed
+it only toggles `ACTIVE`↔`PROBATIONARY`, both current-member statuses
+(Pitfall #32), so it does not bypass the ceiling check just added above;
+directory-account creation on `POST /users` (`55efca00`) — org-scoped
+throughout, temporary passwords never returned, and the one new
+error-text field (`last_error`) traced to a provider-client translator
+that returns only hand-authored, status-code-keyed messages; and three
+new S3/MinIO file-storage settings routes on `organizations.py`
+(`b51300c7`) — `settings.manage`-gated, rate-limited, audited, and the
+existing "generic settings PATCH cannot forge a protected key" guard
+(praised in pass 7 for `email_link_domain`) extended in the same commit to
+cover the new S3 activation record. All 82 routes across the four
+principal files re-enumerated (`organizations.py` 24→27 for the three new
+S3 routes, the rest unchanged); no new unescaped LIKE, raw `csv.writer`,
+or `window.confirm`/`alert`/`prompt`. **USR-5** and **USR-8**, both
+standing flagged/accepted items, re-confirmed unchanged — neither touched
+by this window's delta. See `USR-07-users-organizations.md`'s **Pass 11**
+section for the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (checked
+against both the repo's installed 9.0.2 and CI's pinned 9.0.1) on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` passed (640
+revisions, single head `cc8c16cb6d98`); `check_route_permissions.py
+--strict` 273 routes, 0 errors/warnings; scoped backend tests (pass 10's
+selection plus `account_status`, `membership_status`, `shift_release`,
+`kiosk`, `file_storage`, `numeric_bounds`, `mirrors_rank`) 2,396 passed, 1
+pre-existing skip (`py_vapid`); frontend `npm run typecheck` clean; `npm
+run lint` clean.
+
+Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline).
