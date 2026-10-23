@@ -1,7 +1,7 @@
 """NOT NULL on the 99 columns upgraded databases already enforce.
 
 Revision ID: 6dce1364ff7e
-Revises: f938324f8081
+Revises: 4250eb8b8378
 Create Date: 2026-10-23 15:53:00
 
 These columns were created ``NOT NULL`` with a default by the migration chain,
@@ -40,7 +40,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "6dce1364ff7e"
-down_revision: Union[str, None] = "f938324f8081"
+down_revision: Union[str, None] = "4250eb8b8378"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
