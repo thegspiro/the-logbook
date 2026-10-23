@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (pending)** — Feature 09 (Medical screening, PHI), pass 11, a watchdog
+pickup. PR #3574 (Feature 08, pass 12) had already merged. `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 before this
+iteration started; row 09 was confirmed the next `⬜` by reading the
+rotation table directly. **0 fixed, 0 new findings** — real delta (5
+non-merge commits since pass 10's merge): `screening_requirements.
+applies_to_roles` is now read, not just stored — a requirement grades a
+member only if they hold one of its named positions (blank list or
+malformed value applies to everyone, the fail-open direction; a prospect
+with no positions is graded on every requirement), through one shared
+helper both the single-subject and roster compliance paths call. Numeric
+bounds and one contrast-only a11y fix round out the window. MS-14/MS-15
+(standing, owner-accepted) re-confirmed unchanged. See
+`MS-09-medical-screening.md`'s **Pass 11** section. Row 09 → ✅ (pending
+this PR's merge); next is Feature 10 (Documents & legal).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 12, PR #3574, merged), preserved for history</summary>
+
 **PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)** (branch
 `claude/security-review-membership-pipeline-p12`) — Feature 08 (Membership
 pipeline), pass 12. PR #3569 (Feature 07, pass 11) had already merged
@@ -34,6 +53,8 @@ already correctly guarded. MP-10 (listing half) and MP-22 (standing,
 owner-accepted) re-confirmed OPEN/unchanged. See
 `MP-08-membership-pipeline.md`'s **Pass 12** section. Row 08 → ✅ (pending
 this PR's merge); next is Feature 09 (Medical screening, PHI).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 11, PR #3569, merged), preserved for history</summary>
@@ -20678,7 +20699,7 @@ this iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -36353,3 +36374,47 @@ files).
 
 Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
 screening, PHI).
+
+### 2026-10-23 — Feature 09 (Medical screening, PHI, pass 11) — watchdog pickup, real delta (screening requirements now scoped to the positions they name), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated security-review loop session was
+not reachable (`ListAgents`), and `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 both before this
+iteration started and immediately before branching. PR #3574 (Feature 08,
+pass 12) had already merged. Row 09 (Medical screening, PHI) was confirmed
+the next `⬜` by reading the rotation table directly.
+
+Baseline `d22f8693` (PR #3427's merge, pass 10). 5 non-merge commits touch
+this feature's declared scope (3 of the 5 declared backend files are
+byte-identical to pass 10); all read in full. The real delta:
+`screening_requirements.applies_to_roles` was stored and validated but read
+by nothing, so every active requirement graded every member regardless of
+what the form saved. It is now wired: a member is graded on a requirement
+only if they hold one of its named positions, a blank or malformed list
+applies to everyone (the fail-open direction — never silently drops a
+screening), and a prospect (no positions yet) is graded on every
+requirement. One shared helper (`_applicable_requirements`) feeds both the
+single-subject and roster compliance calculations, so the two screens
+cannot drift from each other's definition of "applies to this person"
+(this feature's own Pitfall #29 precedent). `_position_keys()` resolving
+held positions is org-scoped (`Position.organization_id`). Numeric bounds
+on two schema fields and one contrast-only a11y fix round out the window;
+no route, permission, or migration changed. **MS-14** and **MS-15** (the
+two standing flagged items) re-confirmed **OPEN**, unchanged — neither
+site touched by this window's delta.
+
+Full writeup: `docs/security-review/MS-09-medical-screening.md`'s
+**Pass 11** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.3.0/26.5.1/9.0.1) on `app/ tests/ alembic/` all clean; `validate_
+migrations.py --strict` — 640 revisions, single head `cc8c16cb6d98`;
+`check_route_permissions.py --strict` — 273 routes, 0 errors/warnings;
+scoped backend tests (`-k "medical_screening or screening"`) — 147 passed,
+1 skipped (environment-only, `pywebpush`); frontend `npm run typecheck`
+clean; `npm run lint` clean; scoped frontend suite (`npx vitest run
+src/modules/medical-screening`) — 59 passed (10 files).
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal) — re-check `search_pull_requests` fresh rather than trusting this
+note.
