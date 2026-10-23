@@ -16,6 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3575](https://github.com/thegspiro/the-logbook/pull/3575)** (branch
+`claude/security-review-membership-pipeline`) — Feature 08 (Membership
+pipeline), pass 12, a watchdog pickup (scheduled check-in; dedicated loop
+session unreachable). PR #3569 (Feature 07, pass 11) had already merged,
+docs-only. `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 before this iteration started; row 08 was confirmed the next `⬜`
+by reading the rotation table directly. **0 fixed, 0 new findings** — real
+delta (800 insertions across 27 files): a staff-facing 409 refusal for a
+duplicate applicant, approver-role string trimming, numeric bounds on two
+pipeline-step fields, UTC interview timestamps, audited stage deletion, and
+prospect-document file access rerouted through the shared
+`file_storage_service` interface (the department-S3-bucket feature) — all
+reviewed end to end and found sound. MP-22 (standing, owner-accepted)
+re-confirmed unchanged. See `MP-08-membership-pipeline.md`'s **Pass 12**
+section. Row 08 → ✅ (pending this PR's merge); next is Feature 09
+(Medical screening, PHI).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 11, PR #3569, merged, docs-only), preserved for history</summary>
+
 **PR [#3569](https://github.com/thegspiro/the-logbook/pull/3569)** (branch
 `claude/security-review-users-organizations`) — Feature 07 (Users &
 organizations), pass 11. `search_pull_requests` for
@@ -30,6 +50,8 @@ all reviewed end to end and found already correctly guarded. USR-5/USR-8
 (standing, owner-accepted) re-confirmed unchanged. See
 `USR-07-users-organizations.md`'s **Pass 11** section. Row 07 → ✅
 (pending this PR's merge); next is Feature 08 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 11, PR #3564, merged), preserved for history</summary>
