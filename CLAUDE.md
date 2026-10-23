@@ -151,6 +151,8 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **JSON column deep copy** — code modifying nested keys in JSON columns uses `copy.deepcopy()` or `flag_modified()`, never `dict()` shallow copy
 - [ ] **New route registered in all three registries** — `APPLICATION_PAGES.md`, `testingRegistry.ts` and `e2e/mobile-route-inventory.ts`, policed by three different CI jobs (see Pitfall #30a)
 - [ ] **DB-backed tests marked `integration`** — a `db_session` test under a module-level `pytest.mark.unit` runs in the no-database job and fails on the fixture (see Pitfall #30b)
+- [ ] **User text logged with `{!r}`** — never interpolated into a log message with an f-string, and never an f-string message combined with logger arguments (see Pitfall #33)
+- [ ] **New dependency verified** — name checked against the registry and the project's own docs, pinned like its neighbours, and named in the PR Summary (see Pitfall #34)
 
 ## Project Overview
 
@@ -1625,6 +1627,109 @@ it and the two are meant to add up (the admin hub's tiles), and such a site is
 named in `ALLOWED` in `tests/test_account_status_gates.py` with that reason.
 That test sweeps `app/` and fails on any other literal `== ACTIVE` against
 `User.status`.
+
+### 33. A Value a User Typed Is Logged with `{!r}`, Never Interpolated Raw _(2026-10-23)_
+
+Two of the three Loguru sinks `app/core/logging.py` installs write the message
+exactly as rendered: the text stdout handler and `logs/app.log`. Only the JSON
+sink escapes, because `json.dumps` does. A newline in a logged value therefore
+starts a new line that is indistinguishable from one the application wrote:
+
+```python
+v = "bob\nINFO | Admin login succeeded for chief"
+logger.info(f"Search by {v}")
+# INFO | Search by bob
+# INFO | Admin login succeeded for chief      <- forged, in the text and file logs
+```
+
+Those logs are what an incident is reconstructed from, so a member who can type
+into a search box, a name field or a header can plant entries in the record of
+their own activity. This is the most-missed class in Veracode's 2025 GenAI
+code security report — generated code left log injection open in 88% of the
+cases that called for a defence — and it looks entirely correct in review.
+
+There is a second failure, and it is a crash rather than a forgery. Loguru
+passes the message through `str.format` whenever positional or keyword
+arguments are supplied, so an f-string that interpolates user text **and** also
+passes arguments re-parses that text as a format string. A `{` in the value
+raises `KeyError` or `IndexError` at the call site, and the request fails on the
+logging line, not on anything it was doing.
+
+```python
+# WRONG — raw newline reaches the text and file sinks
+logger.info(f"Search by {search_term}")
+
+# WRONG — user text is re-parsed as a format string; "{x}" raises KeyError
+logger.info(f"Search by {search_term} in {{}}", org_id)
+
+# CORRECT — repr() escapes \n, \r and other control characters
+logger.info("Search by {!r} in {}", search_term, org_id)
+
+# BETTER, where it answers the question — an id instead of the free text
+logger.info("Search by user {} in {}", user_id, org_id)
+```
+
+Logging the id is often the better choice anyway: free text is where PHI turns
+up, and a log line rarely needs it.
+
+**Rule:** a value that came from a request, an import file, an email, or any
+column a user can write is passed to the logger as an argument formatted with
+`{!r}`, never interpolated into the message with an f-string, `%` or `+`. Never
+combine an f-string message with logger arguments. Values the code itself
+produced — ids, counts, enum values, status codes — may use `{}`. Nothing
+enforces this yet; it is review discipline until a check exists.
+
+### 34. A Dependency or API You Remember Is Checked Against the Real One First _(2026-10-23)_
+
+A model recalls package names and API signatures from training, not from the
+registry or from the version this repository pins. Both recollections fail in
+ways that look correct:
+
+- **The package may not exist, or may be someone else's.** A study of 576,000
+  generated samples found commercial models naming non-existent packages in
+  5.2% of them, open models in 21.7%, and the same invented names recurring on
+  repeated runs. That repetition is what makes it an attack: a name a model
+  reliably invents can be registered with a malicious payload under it
+  ("slopsquatting"). `pip-audit` and `npm audit` cannot help — a freshly
+  registered package has no advisories against it.
+- **The API may be from a different version.** Benchmarks of evolving library
+  APIs find models using deprecated or removed calls in roughly a quarter to a
+  third of cases, and naming the target version in the prompt does not fix it —
+  reading that version's documentation does.
+
+Before adding a dependency to `backend/requirements.txt` or a `package.json`:
+
+1. **Confirm the name resolves to the project you mean.** Take it from that
+   project's own documentation or repository, not from memory, and check the
+   registry entry points back at it:
+
+   ```bash
+   npm view <pkg> name version time.created repository.url
+   curl -s https://pypi.org/pypi/<pkg>/json | python3 -c "import json,sys; i=json.load(sys.stdin)['info']; print(i['name'], i['version'], i['project_urls'])"
+   ```
+
+   A package created in the last few weeks, a repository URL that does not match
+   the project, or a name one character off a well-known one is a stop: report
+   it rather than installing it.
+
+2. **Pin it the way its manifest already pins.** `backend/requirements.txt`
+   pins with `==`. In `frontend/package.json`, follow the neighbouring entries,
+   and install from the repo root with the targeted
+   `npm install <pkg>@<version> --workspace frontend` described under "Two
+   TypeScript installs".
+3. **Name the new dependency in the pull request's Summary**, with why an
+   existing one does not cover it. A dependency is a long-lived commitment that
+   a diff of a lockfile does not make visible to a reviewer.
+
+Before calling an API whose signature you are recalling rather than reading,
+check it against the installed version — the source under `node_modules/` or
+the virtualenv's `site-packages/`, or that release's documentation. A test that
+exercises the call is what proves it, not the fact that it type-checks, since
+stubs and the real library can disagree.
+
+**Rule:** no dependency is added on recall alone, and no unfamiliar call is
+written from memory against a pinned library without checking the version
+installed here. Nothing enforces either step; both are review discipline.
 
 ## Environment Variables
 
