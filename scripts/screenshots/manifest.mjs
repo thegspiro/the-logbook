@@ -10104,6 +10104,62 @@ export const SHOTS = [
     expect: { selector: "#void-reason" },
   },
   {
+    id: "09-31-cancel-draft-test-dialog",
+    doc: "09-skills-testing.md",
+    line: 1362,
+    anchor:
+      'The "Cancel unfinished test" dialog opened from the cancel icon on a draft Skill Test Records row',
+    alt: "The Cancel unfinished test dialog opened for a test that was set up but never started, naming the candidate and the test, with an optional reason typed in and the Keep it open and Cancel test buttons",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // A draft is a test set up but never started, so nothing has been scored
+    // and the dialog's "anything already scored is kept" has nothing to keep.
+    // Opened and never confirmed. The draft is one whose candidate holds no
+    // other unfinished test, so the icon's label names exactly one row.
+    prepare: async (page) => {
+      const draft = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          { credentials: "include" },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const unfinished = rows.filter(
+          (row) => row.status === "draft" || row.status === "in_progress",
+        );
+        const found = unfinished.find(
+          (row) =>
+            row.status === "draft" &&
+            unfinished.filter((r) => r.candidate_name === row.candidate_name)
+              .length === 1,
+        );
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!draft) {
+        throw new Error("no draft test to cancel");
+      }
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: draft.candidate })
+        .filter({ hasText: draft.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${draft.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      const reason = page.locator("#cancel-reason");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Candidate transferred to another shift");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#cancel-reason" },
+  },
+  {
     id: "09-09-member-skills-testing",
     doc: "09-skills-testing.md",
     line: 187,
