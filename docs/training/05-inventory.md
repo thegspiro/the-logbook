@@ -1651,9 +1651,7 @@ In **Distribute** or **Return** for a member, select **Tap NFC** next to
 like a scanned barcode. Select **Stop NFC** when done; closing the window also
 stops it.
 
-<!-- Screenshot needed:
-_[Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Assign for a demo member, NFC on: the scanner with Tap NFC armed (reading "Stop NFC") and one tapped item in the list. Web NFC does not exist in the capture harness, so this cannot be a manifest entry.]_
--->
+![The Assign items scanner on an Android phone with Tap NFC armed, the button reading Stop NFC, and the tapped Structural Coat — S added to the list](./images/05-138-scan-tap-nfc.png)
 
 ### Putting items away by tap
 
@@ -1758,9 +1756,7 @@ Cards**), the **Scan Member ID** window on the inventory screens also shows
 card marked lost, or one belonging to an inactive member, is refused with the
 reason.
 
-<!-- Screenshot needed:
-_[Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Scan Member ID, with inventory NFC and NFC ID Cards both on: the Scan Member ID window with "Or tap their ID card" below the camera controls. No card serial or member number may be visible. Not a manifest entry, because Web NFC is absent in the harness.]_
--->
+![The Scan Member ID window on an Android phone with the camera controls and, below them, Or tap their ID card](./images/05-139-scan-member-id-tap-card.png)
 
 ### Self-service kiosk
 

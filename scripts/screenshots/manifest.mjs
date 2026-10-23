@@ -22860,7 +22860,137 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
   },
+  {
+    // The inventory scanner's Tap NFC button renders only where the browser
+    // has Web NFC (Chrome on Android over HTTPS), so this is shot at phone
+    // width with that one capability stubbed: `scan()` resolves and the
+    // stub hands the page a tag read on request. The tag is the serial
+    // `seed_guide05_states` links to Structural Coat — S, so the app resolves
+    // it against the real database; only the radio is stand-in.
+    id: "05-138-scan-tap-nfc",
+    doc: "05-inventory.md",
+    line: 1648,
+    anchor:
+      "Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Assign",
+    alt: "The Assign items scanner on an Android phone with Tap NFC armed, the button reading Stop NFC, and the tapped Structural Coat — S added to the list",
+    route: "/inventory/admin/members",
+    viewport: "mobile",
+    expect: "Stop NFC",
+    // The members list behind the dialog is empty of dropped members, and
+    // that sentence is what the empty-state check finds; the dialog is the
+    // subject of the shot.
+    allowEmptyState: true,
+    beforeNavigate: webNfcStub,
+    prepare: withInventoryNfc(async (page) => {
+      await page.evaluate(() => sessionStorage.setItem("shots:web-nfc", "on"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: /^Assign items to / })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Tap NFC" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Stop NFC" })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(
+        (serial) => window.__shotsTapNfcTag(serial),
+        GUIDE05_COAT_S_TAG,
+      );
+      const tapped = page
+        .getByText("Structural Coat — S", { exact: false })
+        .first();
+      await tapped.waitFor({ timeout: 15_000 });
+      // Scrolled so the armed button and the tapped item share the frame.
+      // The dialog body, not the page, is what scrolls.
+      await page.getByRole("button", { name: "Stop NFC" }).evaluate((el) => {
+        let node = el.parentElement;
+        while (node && node.scrollHeight <= node.clientHeight + 1) {
+          node = node.parentElement;
+        }
+        if (node) node.scrollTop = node.scrollHeight;
+      });
+      await page.waitForTimeout(600);
+    }),
+    cleanup: async (page) => {
+      await page.evaluate(() => sessionStorage.removeItem("shots:web-nfc"));
+      await disableInventoryNfc(page);
+    },
+  },
+  {
+    // "Or tap their ID card" needs inventory NFC, the NFC ID Cards
+    // integration (connected by `seed_id_cards`) and Web NFC. The button is
+    // photographed unpressed, so no card serial or member is on screen.
+    id: "05-139-scan-member-id-tap-card",
+    doc: "05-inventory.md",
+    line: 1757,
+    anchor:
+      "Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Scan Member ID",
+    alt: "The Scan Member ID window on an Android phone with the camera controls and, below them, Or tap their ID card",
+    route: "/inventory/admin/members",
+    viewport: "mobile",
+    expect: "Or tap their ID card",
+    // Same page behind the dialog as 05-138, same empty sentence.
+    allowEmptyState: true,
+    beforeNavigate: webNfcStub,
+    prepare: withInventoryNfc(async (page) => {
+      await page.evaluate(() => sessionStorage.setItem("shots:web-nfc", "on"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: /^Scan( Member ID)?$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Or tap their ID card" })
+        .waitFor({ timeout: 15_000 });
+      // The dialog tries the camera as it opens and the harness has none, so
+      // it reports "No camera was found". A phone that has granted the camera
+      // shows a live view instead; the alert is the harness, not the product.
+      await page
+        .getByText("No camera was found on this device", { exact: false })
+        .evaluate((el) =>
+          (el.closest("[class*='bg-red']") ?? el.parentElement ?? el).remove(),
+        )
+        .catch((err) => {
+          throw new Error(`05-139: no camera alert to clear: ${err}`);
+        });
+      await page.waitForTimeout(600);
+    }),
+    cleanup: async (page) => {
+      await page.evaluate(() => sessionStorage.removeItem("shots:web-nfc"));
+      await disableInventoryNfc(page);
+    },
+  },
 ];
+
+/**
+ * Stand-in for the one browser capability the harness lacks: Web NFC. Installed
+ * only while the `shots:web-nfc` session flag is on, so it cannot reach a later
+ * shot on this reused page. `scan()` resolves as it does once the user grants
+ * the prompt; `__shotsTapNfcTag(serial)` then plays the part of a tag held to
+ * the phone, delivering a read with a serial and no NDEF records.
+ */
+async function webNfcStub(page) {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("shots:web-nfc") !== "on") return;
+    const readers = [];
+    window.NDEFReader = class {
+      constructor() {
+        readers.push(this);
+      }
+      async write() {}
+      async scan() {}
+    };
+    window.__shotsTapNfcTag = (serialNumber) => {
+      for (const reader of readers) {
+        if (typeof reader.onreading === "function") {
+          reader.onreading({ serialNumber, message: { records: [] } });
+        }
+      }
+    };
+  });
+}
 
 /**
  * Opens an event whose check-in window is open now, as the signed-in member,

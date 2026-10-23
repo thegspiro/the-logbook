@@ -40,8 +40,12 @@ Screenshot pass only; no guide wording changed beyond removing placeholders.
   (Compliance suggestion box, Member Emails required switch, Treasurer approvals
   table, Chief sign-offs) and were removed rather than re-shot. The status
   report now reads 810 captured, 2 remaining.
-- **Still open.** Two Android-only NFC captures in guide 05 (Web NFC does not
-  exist in the capture harness). The weekly-pattern list with its sun and moon
+- **Nothing left open.** The two Android NFC captures in guide 05 (Tap NFC armed in the
+  Distribute scanner, and "Or tap their ID card" in Scan Member ID) are now
+  manifest entries, `05-138` and `05-139`. They were written off as manual-only
+  because Web NFC does not exist in the harness, but `04-55` had already shown
+  the way: stub `NDEFReader` for the one shot. The status report reads 815
+  captured, 0 remaining. The weekly-pattern list with its sun and moon
   glyphs, the Short row in the Supplies to Replace email and the shelf/truck
   split on the Medical Supplies tiles were the other three; the seeder now
   produces each (a split Weekend Duty Rotation, Gauze counted 18 of 24, and a
@@ -51,7 +55,8 @@ Screenshot pass only; no guide wording changed beyond removing placeholders.
   fleet and fresh-department guides (the summary answered as a new department's),
   a vehicle with the Deficiency flag, the ranked-choice paper-ballot dialog,
   the pre-meeting package send states and the not-applicable member in the
-  compliance matrix. Each is commented in `scripts/screenshots/manifest.mjs`
+  compliance matrix, and the NFC radio in `05-138`/`05-139` (a stubbed tag whose
+  item is resolved for real). Each is commented in `scripts/screenshots/manifest.mjs`
   where the response is replaced; the screen, wording and controls are real.
 - **Bug found while seeding.** `POST /inventory/clearances` answered 500 after
   saving the clearance, because its response listed line items that were never
