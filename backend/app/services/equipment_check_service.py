@@ -2933,6 +2933,7 @@ class EquipmentCheckService:
         the compliance report still count them.
         """
         today = await resolve_org_today(self.db, organization_id)
+        now = datetime.now(timezone.utc)
         earliest = today - timedelta(days=MY_CHECKLISTS_OVERDUE_DAYS)
         # Get user's active shift assignments with shift data. Same status
         # filter as the submit guard in submit_check: a declined/cancelled
@@ -2989,15 +2990,33 @@ class EquipmentCheckService:
             )
             apparatus_name = apparatus_map.get(shift.apparatus_id or "", "")
             is_past = shift.shift_date < today
+            ended = self._shift_has_ended(shift, today, now)
             for cl in shift_checklists:
                 if is_past and cl["is_completed"]:
                     continue
+                cl["is_overdue"] = ended and not cl["is_completed"]
                 cl["shift_id"] = assignment.shift_id
                 cl["shift_date"] = shift.shift_date
                 cl["apparatus_name"] = apparatus_name
                 checklists.append(cl)
 
         return checklists
+
+    @staticmethod
+    def _shift_has_ended(shift: Shift, today: date, now: datetime) -> bool:
+        """Whether a shift is over, for marking its unfiled checks overdue.
+
+        Overdue is judged by the shift's end, not its date: an overnight shift
+        dated yesterday is still running at 2am, and its end-of-shift check is
+        not late yet. A shift with no recorded end falls back to its date, so it
+        turns overdue once its day has passed, as it did before.
+        """
+        if shift.end_time is None:
+            return shift.shift_date < today
+        end = shift.end_time
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        return end <= now
 
     async def get_my_checklist_history(
         self,
@@ -4320,6 +4339,7 @@ class EquipmentCheckService:
         today: date,
         item_ids: Optional[Iterable[str]] = None,
         lot_number: Optional[str] = None,
+        include_undated: bool = False,
     ) -> List[Dict[str, Any]]:
         """Stock on the trucks that expires within ``days_ahead``, or has.
 
@@ -4331,6 +4351,12 @@ class EquipmentCheckService:
         whose lot number contains it (case-insensitive), dated or not and
         whatever ``days_ahead`` says, since a recalled lot has to be found
         wherever it is. Positions holding nothing are left out.
+
+        ``include_undated`` (with ``days_ahead=None``) also returns undated
+        units that carry a lot number, and leaves out positions holding
+        nothing, as the recall lookup does: every lot aboard, for the lot
+        export. A position with neither a lot number nor a date is still left
+        out, since it records no lot to list.
 
         One row per dated lot aboard a position (a position carrying three
         boxes from two lots expires twice), and one per position with no lot
@@ -4375,6 +4401,8 @@ class EquipmentCheckService:
         def _wanted(when: Optional[date], number: Optional[str]) -> bool:
             if needle is not None:
                 return bool(number) and needle in str(number).casefold()
+            if include_undated and when is None:
+                return bool(number)
             return when is not None and (horizon is None or when <= horizon)
 
         positions = (
@@ -4475,7 +4503,7 @@ class EquipmentCheckService:
             if not _wanted(when, item.lot_number):
                 continue
             held = self._on_truck(item) or 0
-            if needle is not None and held <= 0:
+            if (needle is not None or include_undated) and held <= 0:
                 continue
             rows.append(
                 {
@@ -4578,6 +4606,76 @@ class EquipmentCheckService:
             }
             for item_id, entry in found.items()
         }
+
+    async def position_places(
+        self, organization_id: str, template_item_ids: Iterable[str]
+    ) -> Dict[str, Dict[str, Optional[str]]]:
+        """``{position_id: {"apparatus_id", "where"}}`` for checklist positions.
+
+        ``where`` names the position as the checklist does ("Medic 1 › Main
+        Compartment › Jump Bag"), and ``apparatus_id`` is the vehicle when the
+        template names one, so a screen can link to that truck's inventory. A
+        template for an apparatus *type* has none. Org-scoped through the
+        template; a position on an inactive template is left out, as it is
+        from every truck figure.
+        """
+        ids = list({str(i) for i in template_item_ids})
+        if not ids:
+            return {}
+        rows = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem.id,
+                    CheckTemplateItem.compartment_id,
+                    EquipmentCheckTemplate.id,
+                    EquipmentCheckTemplate.name,
+                    EquipmentCheckTemplate.apparatus_id,
+                    EquipmentCheckTemplate.apparatus_type,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .where(
+                    CheckTemplateItem.id.in_(ids),
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.is_active.is_(True),
+                )
+            )
+        ).all()
+        if not rows:
+            return {}
+        paths = await self._compartment_paths({str(r[2]) for r in rows})
+        apparatus_ids = {r[4] for r in rows if r[4]}
+        names: Dict[str, str] = {}
+        if apparatus_ids:
+            named = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            names = {str(aid): n for aid, n in named.all() if n}
+
+        found: Dict[str, Dict[str, Optional[str]]] = {}
+        for position_id, compartment_id, _tmpl_id, tmpl_name, app_id, app_type in rows:
+            if app_id:
+                carrier = names.get(str(app_id)) or tmpl_name
+            elif app_type:
+                carrier = f"Any {app_type}"
+            else:
+                carrier = tmpl_name
+            found[str(position_id)] = {
+                "apparatus_id": str(app_id) if app_id else None,
+                "where": " › ".join(
+                    [carrier or "Checklist", *paths.get(str(compartment_id), [])]
+                ),
+            }
+        return found
 
     async def swap_item_lot(
         self,

@@ -1131,6 +1131,13 @@ describe('ShiftDetailPanel delete and withdraw', () => {
   };
 
   beforeEach(() => {
+    // startingIn() is relative to now, and "started" is judged by calendar day.
+    // Run just after UTC midnight, a shift that began a minute ago is on
+    // yesterday's date, so Edit is withheld and the test fails. Midday keeps
+    // every offset used here on the same day. Only Date is faked, so waitFor
+    // and userEvent keep their real timers.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
     grantedPermissions.current = null;
     mediaListeners = [];
     mockViewport('phone');
@@ -1143,6 +1150,7 @@ describe('ShiftDetailPanel delete and withdraw', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     mockAssignments.mockResolvedValue([]);
   });
 

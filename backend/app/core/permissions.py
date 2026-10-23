@@ -195,6 +195,16 @@ SECURITY_MANAGE = Permission(
     "Manage IP security and access controls",
     PermissionCategory.SECURITY,
 )
+# Lets a member mark their own session as a station kiosk, which swaps the
+# standard idle timeout and absolute lifetime for the longer kiosk ones.
+# Seeded to no position: a department decides who may park a signed-in
+# tablet. The ``security.*`` module wildcard and ``*`` grant it, like every
+# security permission.
+SECURITY_KIOSK_SESSION = Permission(
+    "security.kiosk_session",
+    "Run a long-lived station kiosk session",
+    PermissionCategory.SECURITY,
+)
 SETTINGS_MANAGE_CONTACT_VISIBILITY = Permission(
     "settings.manage_contact_visibility",
     "Manage contact info visibility",
@@ -766,6 +776,7 @@ ALL_PERMISSIONS: list[Permission] = [
     SETTINGS_EDIT,
     SETTINGS_MANAGE,
     SECURITY_MANAGE,
+    SECURITY_KIOSK_SESSION,
     SETTINGS_MANAGE_CONTACT_VISIBILITY,
     # Legal documents (governance)
     LEGAL_PROPOSE,

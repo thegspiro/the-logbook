@@ -11,12 +11,21 @@
 # inside logbook_backup_TIMESTAMP.tar.gz + .sha256), so `backup.sh --restore`
 # and verify_backup.sh work on sidecar archives interchangeably.
 #
+# ENCRYPTION: when /keys holds a certificate (backup-recipient.pem) and/or a
+# drill key (backup-drill.key), the archive is encrypted before it reaches the
+# backups volume and only logbook_backup_T.tar.gz.enc + .enc.key + .sha256 are
+# written (scripts/backup_crypto.sh describes the format). The plaintext archive
+# is built in a temporary directory and never lands on the volume. With no key,
+# backups stay plaintext and every run says so; see docs/BACKUP.md.
+#
 # The backups volume is LOCAL to the host: sync it offsite (see
 # docs/BACKUP.md) — a backup on the host that died with the host is gone.
 #
 # Environment:
 #   DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD   dump credentials
 #   MYSQL_ROOT_PASSWORD                           verification (CREATE/DROP)
+#   BACKUP_KEYS_DIR      default /keys: backup-recipient.pem / backup-drill.key
+#   BACKUP_ENCRYPT_EXISTING default true: encrypt plaintext archives once keys exist
 #   BACKUP_TIME          HH:MM, default 02:00 (container timezone, UTC)
 #   BACKUP_RETENTION_DAYS default 30
 #   VERIFY_EVERY_N_BACKUPS default 7 (0 disables the drill)
@@ -34,6 +43,11 @@ RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 VERIFY_EVERY="${VERIFY_EVERY_N_BACKUPS:-7}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_COUNTER_FILE="$BACKUP_DIR/.verify_counter"
+BACKUP_KEYS_DIR="${BACKUP_KEYS_DIR:-/keys}"
+export BACKUP_KEYS_DIR
+
+# shellcheck source=backup_crypto.sh
+source "$SCRIPT_DIR/backup_crypto.sh"
 
 # NOTE on error handling: run_backup is invoked as `run_backup || ...`, and
 # POSIX errexit is IGNORED inside any function called in a || list — so `set -e`
@@ -43,7 +57,7 @@ RUN_COUNTER_FILE="$BACKUP_DIR/.verify_counter"
 # therefore abort the run itself, and prune must only ever run after a
 # successful publish.
 run_backup() {
-    local timestamp name workroot work archive
+    local timestamp name workroot work archive plain
     timestamp="$(date +%Y%m%d_%H%M%S)"
     name="logbook_backup_${timestamp}"
     if ! workroot="$(mktemp -d)"; then
@@ -96,21 +110,44 @@ run_backup() {
         fi
     fi
 
-    archive="$BACKUP_DIR/$name.tar.gz"
-    if ! tar -czf "$archive" -C "$workroot" "$name"; then
-        echo "[backup] ERROR: writing $archive failed — removing partial archive" >&2
-        rm -f "$archive"
+    # The plaintext archive is built beside the work files, not in $BACKUP_DIR,
+    # so an encrypted install never has it on the backups volume.
+    plain="$workroot/$name.tar.gz"
+    if ! tar -czf "$plain" -C "$workroot" "$name"; then
+        echo "[backup] ERROR: writing the archive failed — aborting run" >&2
         rm -rf "$workroot"
         return 1
     fi
-    if ! (cd "$BACKUP_DIR" && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"); then
+    if bk_encryption_configured; then
+        archive="$BACKUP_DIR/$name.tar.gz.enc"
+        if ! bk_encrypt_file "$plain" "$archive"; then
+            echo "[backup] ERROR: encrypting the archive failed — nothing published, nothing pruned" >&2
+            rm -f "$archive" "$archive.key"
+            rm -rf "$workroot"
+            return 1
+        fi
+    else
+        echo "[backup] WARNING: no backup key in $BACKUP_KEYS_DIR — this archive is NOT encrypted. Run scripts/backup-keygen.sh (docs/BACKUP.md)." >&2
+        archive="$BACKUP_DIR/$name.tar.gz"
+        if ! mv "$plain" "$archive"; then
+            echo "[backup] ERROR: writing $archive failed — removing partial archive" >&2
+            rm -f "$archive"
+            rm -rf "$workroot"
+            return 1
+        fi
+    fi
+    if ! (cd "$BACKUP_DIR" && sha256sum "$(basename "$archive")" > "$(basename "$archive").sha256"); then
         echo "[backup] ERROR: checksumming $archive failed — removing archive" >&2
-        rm -f "$archive" "$archive.sha256"
+        rm -f "$archive" "$archive.key" "$archive.sha256"
         rm -rf "$workroot"
         return 1
     fi
     rm -rf "$workroot"
     echo "[backup] wrote $archive ($(du -h "$archive" | cut -f1))"
+
+    # Archives taken before a key existed. A failure here must not fail the
+    # nightly run: the new archive is already safely published.
+    bk_encrypt_existing "$BACKUP_DIR" || echo "[backup] WARNING: some existing archives could not be encrypted" >&2
 
     # Prune ONLY after a verified-successful publish: pruning on a failed run
     # would delete good backups while adding a broken one.
@@ -141,6 +178,17 @@ maybe_verify() {
     echo "$counter" > "$RUN_COUNTER_FILE"
 }
 
+# Runs a backup and records the outcome where the application can read it, so
+# an administrator sees an unencrypted install without reading container logs.
+run_backup_recorded() {
+    local rc=0 ok=true encrypted=false
+    run_backup || rc=$?
+    [[ "$rc" -eq 0 ]] || ok=false
+    bk_encryption_configured && encrypted=true
+    bk_write_status "$BACKUP_DIR" "$ok" "$encrypted" || true
+    return "$rc"
+}
+
 seconds_until() {
     local target="$1" now target_epoch
     now="$(date +%s)"
@@ -152,7 +200,7 @@ seconds_until() {
 }
 
 if [[ "${RUN_ONCE:-0}" == "1" ]]; then
-    run_backup
+    run_backup_recorded
     exit 0
 fi
 
@@ -161,7 +209,7 @@ while true; do
     sleep "$(seconds_until "$BACKUP_TIME")"
     # Run asynchronously so the function itself is not evaluated as part of
     # the conditional below (which would disable errexit inside the function).
-    run_backup &
+    run_backup_recorded &
     backup_pid=$!
     if ! wait "$backup_pid"; then
         echo "[backup] !!! BACKUP RUN FAILED — investigate now" >&2

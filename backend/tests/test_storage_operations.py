@@ -21,8 +21,8 @@ pytestmark = pytest.mark.unit
 APP = Path(__file__).resolve().parents[1] / "app"
 
 # Calls that touch a file by path. Inside app/ only the storage layer itself,
-# the encryption and relocation tooling (which walk the local volume by
-# design), and files that never hold an upload may make them.
+# the encryption, relocation and bucket-migration tooling (which work on the
+# local volume by design), and files that never hold an upload may make them.
 FILESYSTEM_CALLS = {
     "os.remove",
     "os.unlink",
@@ -40,6 +40,7 @@ ALLOWED = {
     "core/file_encryption.py",
     "services/upload_encryption.py",
     "services/upload_relocation.py",
+    "services/s3_migration.py",
     # Not uploads: the log file, and a temporary PDF an election email is
     # built from and removes again.
     "core/logging.py",

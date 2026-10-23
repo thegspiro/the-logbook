@@ -2766,7 +2766,14 @@ async def parse_historical_import(
             row_errors.append(f"Invalid date format: {val}")
             return None
 
-        completion = parse_date(raw_row.get(col_date) if col_date else None)
+        raw_completion = (raw_row.get(col_date) or "").strip() if col_date else ""
+        completion = parse_date(raw_completion)
+        # The wizard imports every row as completed, and a completed record
+        # with no date counts toward no requirement window and no period total
+        # while still showing in the member's history. An unreadable date has
+        # already said so above; a blank or missing one says so here.
+        if not raw_completion:
+            row_errors.append("Missing completion date")
         expiration = parse_date(raw_row.get(col_expiration) if col_expiration else None)
 
         # Parse numeric fields
@@ -2963,6 +2970,16 @@ async def confirm_historical_import(
         if str(row.user_id) not in valid_member_ids:
             failed += 1
             errors.append("Row skipped: user is not a member of this organization")
+            continue
+
+        # The parse step flags these, but the confirm request carries every
+        # row it was handed, so the rule is enforced where the record is made.
+        if (
+            request.default_status == TrainingStatus.COMPLETED.value
+            and row.completion_date is None
+        ):
+            failed += 1
+            errors.append(f"Row {row.row_number}: no completion date")
             continue
 
         # Determine course_id and course_name

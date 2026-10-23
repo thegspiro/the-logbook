@@ -5,6 +5,71 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 22 – 23, 2026
+
+Merged to `main` since `68c22b0f` (2026-10-22 12:53 UTC) through `b92a4add`
+(2026-10-23 12:31 UTC). Security-review passes (facilities, inventory,
+documents-legal, medical-screening, membership-pipeline, users-organizations,
+elections; all "0 fixed" except DOC-31, LOW, flagged) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                         | Guide                     | Disposition                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- | -------------------------------------------------------------------------------------- |
+| Privileged members must use MFA (14-day grace, banner, email); step-up code before sensitive actions; `403 LB-AUTH-013`; migration `f7535f478280`                              | 00, 08, YouTube 03 and 06 | Added to the guides; UPGRADING and the Security-Authentication wiki already carried it |
+| Gear low-stock email links to `/inventory/admin/items?low_stock=true`, with a dismissible notice                                                                               | 05                        | Added                                                                                  |
+| Checklist overdue at shift end, not midnight                                                                                                                                   | 03                        | Written with the change                                                                |
+| Historical import refuses undated rows; required columns bold, not red                                                                                                         | 02                        | Written with the change; styling note added                                            |
+| Election and Minutes settings use the shared section header                                                                                                                    | 04, 14                    | Screenshot re-check queued                                                             |
+| Event page check-in/out controls in the Learning Center                                                                                                                        | Learning Center           | Written with the change                                                                |
+| Storage: own bucket (step 2) and moving files into it (step 3)                                                                                                                 | operator docs             | Written with the change (`BACKUP`, `KEY_ROTATION`, `UPGRADING`)                        |
+| iCal `include_shifts` removed                                                                                                                                                  | KNOWN_LIMITATIONS         | Written with the change                                                                |
+| Medical Supplies **Low stock** tab, station kiosk week-long session, grants/fundraising money bounds and donor-contact permission, null on required event fields no longer 500 | various                   | Already covered by the Oct 21 – 22 pass or written with the change                     |
+
+**Screenshots to create:** the MFA grace banner, the step-up box (code and
+password variants), and the filtered Inventory Items list. Re-check My Checklists,
+Election/Minutes settings and the Historical Import page. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Change audit: October 23, 2026 (screenshot pass)
+
+Screenshot pass only; no guide wording changed beyond removing placeholders.
+
+- **Placeholders filled.** 34 of the remaining 40 training-guide screenshot
+  placeholders were captured and applied (guides 00, 02, 03, 04, 05, 06, 07,
+  08, 11, 14). Four were stale duplicates of images already in the guide
+  (Compliance suggestion box, Member Emails required switch, Treasurer approvals
+  table, Chief sign-offs) and were removed rather than re-shot. The status
+  report now reads 810 captured, 2 remaining.
+- **Nothing left open.** The two Android NFC captures in guide 05 (Tap NFC armed in the
+  Distribute scanner, and "Or tap their ID card" in Scan Member ID) are now
+  manifest entries, `05-138` and `05-139`. They were written off as manual-only
+  because Web NFC does not exist in the harness, but `04-55` had already shown
+  the way: stub `NDEFReader` for the one shot. The status report reads 815
+  captured, 0 remaining. The weekly-pattern list with its sun and moon
+  glyphs, the Short row in the Supplies to Replace email and the shelf/truck
+  split on the Medical Supplies tiles were the other three; the seeder now
+  produces each (a split Weekend Duty Rotation, Gauze counted 18 of 24, and a
+  tourniquet on Rescue 7 dated three weeks out) and the pictures are in.
+- **Pictures that use a stand-in for state the seeder cannot make.** The
+  Items Not Seen report (two rows given a 212- and 301-day history), the empty
+  fleet and fresh-department guides (the summary answered as a new department's),
+  a vehicle with the Deficiency flag, the ranked-choice paper-ballot dialog,
+  the pre-meeting package send states and the not-applicable member in the
+  compliance matrix, and the NFC radio in `05-138`/`05-139` (a stubbed tag whose
+  item is resolved for real). Each is commented in `scripts/screenshots/manifest.mjs`
+  where the response is replaced; the screen, wording and controls are real.
+- **Bug found while seeding.** `POST /inventory/clearances` answered 500 after
+  saving the clearance, because its response listed line items that were never
+  loaded. Fixed in `DepartureClearanceService.initiate_clearance` with a test. A second one
+  turned up seeding the tourniquet: `PUT /equipment-checks/items/{id}` with an
+  `expiration_date` saved the position and then failed writing its change log,
+  because the logged changes held a `date`. The log now takes the JSON form.
+- **Capture tooling.** `seed_demo_data.py` gains a published and signed July
+  minutes record, a meeting whose agenda moved on after its minutes, a
+  legacy-form station and room for the Locations page, an overdue facility
+  maintenance record and a departure clearance. New `wizard-extra.mjs`,
+  `render_supply_email.py` and `email-shots.mjs`.
+
 ## Change audit: October 21 – 22, 2026
 
 Merged to `main` since the [October 20 – 21 pass](#change-audit-october-20--21-2026)
@@ -104,6 +169,32 @@ was found; confirm it.
 
 Screenshots: nothing captured. The gap report is the top section of
 [`SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-19--20-documentation-pass).
+
+### Upgrade-visible behaviour in this window
+
+Added by the second pass of the same day, after the training audit above.
+
+- **Screening requirements now honour Applies to Positions.** The field was
+  stored and read by nothing, so every active requirement graded every member. A
+  requirement that lists positions now grades only members holding one; blank still
+  means everyone; prospects are graded on all. A member left with nothing that
+  applies reads **Not applicable**. A department that typed a list into the field
+  while it did nothing will see rosters change. No migration. Recorded in
+  `KNOWN_LIMITATIONS.md`.
+- **Dashboard overdue dues** follows `dues_overdue_clause`: part-paid records are
+  Partial and no longer counted. `training/11-finance.md` now says so (this
+  corrects the disposition in the table above, which found nothing to change).
+- **Layout:** date and time `form-input` fields are pinned inside their grid
+  column so iOS WebKit cannot overflow them (Edit Member Date of Birth).
+- **Security review:** meetings-minutes pass 8 fixed MM-18 (a stale prepared
+  motion could still appear in a PUT response; the cause of a flaky test) and
+  flagged MM-19/MM-20 (lock-free find-or-create races); admin-hours flagged AH-18;
+  grants-fundraising GF-9 extended. Other passes found nothing new.
+- **Screenshots:** besides the queue in `SCREENSHOT_CURRENCY.md`, replace
+  `04-14-meeting-minutes.png` (one Settings button; action buttons wrap under
+  the title) and the Edit Member shot showing Date of Birth.
+- **Scripts:** `docs/youtube-scripts/SCRIPT_CURRENCY.md` queues script 07
+  (Settings page, search) and one-line edits for screening and finance narration.
 
 ## Change audit: October 18 – 19, 2026
 

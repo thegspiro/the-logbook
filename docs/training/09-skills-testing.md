@@ -1341,12 +1341,41 @@ is at least 10 characters, and the member can read what you write.
 
 ![The Void test result dialog, saying the record stays in the member's history marked as voided, with an example reason typed in and the amber Void result button enabled](./images/09-28-void-result-dialog.png)
 
+The void icon on a row in **Skill Test Records** opens the same dialog, so you
+can withdraw a result without opening it first.
+
+![The Void test result dialog opened from a Skill Test Records row, naming the candidate and the test, with an example reason typed in and the amber Void result button enabled](./images/09-29-void-dialog-test-records.png)
+
 > **An official result cannot be deleted.** A scored evaluation is a record of
 > what an examiner saw. It is withdrawn, not erased. Void is the action, and
 > the reason and the officer are part of the record.
 
 > **Cancel is not void.** An unscored test has no result to withdraw and
 > nothing to give back, so it needs neither.
+
+The cancel icon on an unfinished test's row in **Skill Test Records** opens a
+dialog that names the candidate and the test and says what will happen: anything
+already scored is kept, and no result is recorded. The reason is optional. **Keep
+it open** leaves the test as it was.
+
+![The Cancel unfinished test dialog, naming the candidate and the test and saying anything already scored is kept but no result is recorded, with an optional reason typed in and the Keep it open and Cancel test buttons](./images/09-30-cancel-unfinished-test-dialog.png)
+
+The two buttons at the foot are the whole decision. **Keep it open** closes the
+dialog and changes nothing, and **Cancel test** closes the test out.
+
+![The foot of the Cancel unfinished test dialog: the Keep it open button, which leaves the test as it was, beside the amber Cancel test button](./images/09-32-keep-it-open-button.png)
+
+**Cancel test** is the amber button. It closes the test out straight away, with
+no further confirmation, so check the candidate and the sheet named above it
+first.
+
+![The amber Cancel test button from the Cancel unfinished test dialog](./images/09-33-cancel-test-button.png)
+
+A **draft** test, one that was set up but never started, has the same cancel
+icon and opens the same dialog. Nothing has been scored on it, so there is
+nothing to keep.
+
+![The Cancel unfinished test dialog opened for a test that was set up but never started, naming the candidate and the test, with an optional reason typed in and the Keep it open and Cancel test buttons](./images/09-31-cancel-draft-test-dialog.png)
 
 **Send back to examiner** is the fourth option, for a result still awaiting
 validation that needs correcting. See

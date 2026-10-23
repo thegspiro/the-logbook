@@ -971,6 +971,18 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
   );
 };
 
+/**
+ * Unmapped rows first, each group in the order the API returned it. Settled
+ * once, when the list loads, rather than at every render: a row the officer
+ * has just mapped stays where their eyes are until the modal is reopened,
+ * instead of dropping to the foot of a 300-row list the moment they pick a
+ * member — which would hide a mis-click they still want to correct.
+ */
+const unmappedFirst = <T extends { is_mapped: boolean }>(items: T[]): T[] => [
+  ...items.filter((item) => !item.is_mapped),
+  ...items.filter((item) => item.is_mapped),
+];
+
 interface MappingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -1011,11 +1023,11 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
         externalTrainingService.getCourseMappings(providerId),
         trainingService.getCourses(true),
       ]);
-      setCategoryMappings(categories);
-      setUserMappings(users);
+      setCategoryMappings(unmappedFirst(categories));
+      setUserMappings(unmappedFirst(users));
       setInternalCategories(internal);
       setMembers(roster);
-      setCourseMappings(courses);
+      setCourseMappings(unmappedFirst(courses));
       setLibraryCourses(library);
     } catch (_err) {
       // Error silently handled - mappings modal will show empty state
@@ -1123,7 +1135,11 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
           </p>
         </div>
 
-        <div className="tab-scroll" role="tablist" {...tablist} aria-label="Mapping types">
+        {/* shrink-0: tab-scroll is overflow-x:auto, which lets a flex child
+            shrink below its content, while the flex-1 body below has a zero
+            basis and never shrinks. With hundreds of rows the tab bar was the
+            one child that gave, collapsing to a sliver under the header. */}
+        <div className="tab-scroll shrink-0" role="tablist" {...tablist} aria-label="Mapping types">
           <button
             onClick={() => setActiveTab('categories')}
             role="tab"
@@ -1165,7 +1181,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6" role="tabpanel">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6" role="tabpanel">
           {loading ? (
             <div className="text-theme-text-muted py-8 text-center" role="status" aria-live="polite">
               Loading mappings...

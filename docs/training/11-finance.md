@@ -339,9 +339,11 @@ Nobody else sees a restricted line in the request form's picker, and a request t
 - **A request already on a line stays editable** after the line is restricted; the rule applies to choosing the line.
 - **A budget owner needs no Treasurer for this.** On **Finance > My Budgets**, **Who can charge your lines** lists the categories you own (or that sit under one you own). **Edit** opens **Who can charge** _category_ with the same choices. The Treasurer sets any category from **Finance > Settings**.
 
-_[Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked.]_
+![The category settings dialog for Officer brass with Who can charge these lines set to Only the owner and the positions chosen below, and the positions ticked under Also allow these positions](./images/11-24-category-charge-access.png)
 
-_[Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog.]_
+![My Budgets with the Who can charge your lines card: each category the budget owner holds with a one-line summary of its rule and a pencil button to change it](./images/11-25-my-budgets-charge-access.png)
+
+![The Who can charge dialog for a category opened from My Budgets, with the same choices and the positions list as the Treasurer's category settings](./images/11-26-my-budgets-charge-dialog.png)
 
 ### Retiring a Category
 
@@ -892,10 +894,6 @@ separation-of-duties message (see [Separation of Duties](#separation-of-duties))
 
 ![The Approve as approvals admin dialog on a step assigned to the Captain position: the text naming who the step is assigned to, Notes, and the required Override reason box with its help text](./images/11-22-approvals-admin-override.png)
 
-<!-- Screenshot needed (replace):
-_[Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row.]_
--->
-
 ### On the request's own page
 
 Each purchase request, expense report and check request detail page shows,
@@ -1048,10 +1046,24 @@ Once approved, officers can progress the request through the fulfillment stages:
 
 > **Hint:** If the actual amount differs from the estimated amount, the budget adjusts automatically. For example, if $500 was encumbered but the actual payment was $475, only $475 moves to "spent" and the full $500 encumbrance is released (the $25 difference returns to the available balance). Payment can also be recorded directly from the Approved or Ordered status -- the Received step is optional.
 
+### Paying Yourself Back for a Purchase
+
+If you bought an approved item with your own money, claim it back from the request rather than starting an expense report from scratch:
+
+1. Open your purchase request. It must be **Approved**, **Ordered** or **Received**.
+2. Select **Request Reimbursement**.
+3. Enter what you actually paid, the day you paid it, and where. Each field starts from the request's own figures.
+4. Select **Start expense report**. A draft expense report opens, charged to the same budget line and carrying the request's receipt.
+5. Check the line and its receipt, then select **Submit for Approval**.
+
+The request now links to the report, and the report links back. Once the report is approved, the finance office pays you, usually by check (see [Paying a Report by Check](#paying-a-report-by-check)). When the report is paid, the request reads **Reimbursed**.
+
+> **Hint:** Only the member who raised the request can claim it back, because the report pays whoever submits it. While a submitted report claims a purchase, the finance office cannot also mark it paid or cancel it. A denied claim frees the purchase, so you can start another.
+
 ### Editing and Cancelling
 
 - **Editing:** A purchase request can only be edited while in **Draft** or **Submitted** status. Once it reaches Pending Approval, it cannot be modified.
-- **Cancelling:** A request can be cancelled from any status except **Paid**. If an approved, ordered, or received request is cancelled, the encumbrance is released back to the budget.
+- **Cancelling:** A request can be cancelled from any status except **Paid** or **Reimbursed**. If an approved, ordered, or received request is cancelled, the encumbrance is released back to the budget.
 
 ### Edge Cases
 
@@ -1179,6 +1191,22 @@ Each line's amount is recorded as spent against the budget that line names.
 
 > **Hint:** Receipts are required on every line, which is what an IRS accountable plan expects of a reimbursement.
 
+### Paying a Report by Check
+
+**Required Permission:** finance manager
+
+To send the member a check rather than recording a payment made some other way:
+
+1. Open the approved expense report.
+2. Select **Pay by Check**.
+3. Optionally enter a mailing address and a memo, then select **Request check**.
+
+This creates a check request made out to the member's legal name, for what the report still owes them (the total, less anything a cash advance already covered). It goes through the department's check-request approval chain like any other check. Once it is approved, [issue it](#issuing-a-check) as usual; issuing it marks the report **Paid** with the check's number and date, and closes the purchase request the report claims back, if any.
+
+While a check is paying a report, neither **Pay by Check** nor **Mark as Paid** is offered. If the check is denied, the report waits for payment again.
+
+> **Hint:** A reimbursement check is not charged to a budget line itself; the report's lines are. In the payments register and the QuickBooks export, the report appears once, dated by the check and showing its number.
+
 ### The Deadline for Claiming Expenses
 
 An accountable plan also expects expenses to be claimed promptly. The IRS treats **60 days** after the expense as a reasonable time; a reimbursement for an expense claimed later may have to be reported as taxable pay. Your department chooses what happens to a late line:
@@ -1282,6 +1310,8 @@ The system records the check number and the issuance date. The check amount is a
 ![Check request detail with payee, amount and approval status](./images/11-16-check-request-detail.png)
 
 ### Voiding an Issued Check
+
+> **Voiding a reimbursement check** puts its expense report back to **Approved**, takes its spending off the budget lines, and reopens the purchase request it claimed back, so the finance office can send another check. If the check had already gone to QuickBooks, the next export reverses exactly the entry it sent.
 
 If a check needs to be voided after issuance (e.g., lost in the mail, payment cancelled):
 
@@ -1428,6 +1458,12 @@ After creating a schedule, you need to generate individual dues records for each
 | **Overdue** | The due date has passed with nothing paid (a daily check moves Pending to Overdue; Partial stays Partial) |
 | **Waived**  | The dues have been waived by an officer (e.g., financial hardship, service credit)                        |
 | **Exempt**  | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues)                 |
+
+_(2026-10-19)_ The **overdue dues** number on the dashboard's finance tile uses
+the same rule as this page: Overdue records, plus Pending records past their due
+date with nothing paid. A Partial record is not counted, because it shows as
+Partial here. Before, the tile counted part-paid records too and read higher than
+the list it links to.
 
 ### Recording Payments
 

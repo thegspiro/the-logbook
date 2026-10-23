@@ -375,6 +375,7 @@ async def list_medical_items(
     fuzzy: bool = False,
     low_stock: bool = False,
     exclude_apparatus_only: bool = False,
+    uncounted: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.view_medical", "inventory.view")
@@ -387,6 +388,10 @@ async def list_medical_items(
     point — the set the summary's "Low stock" figure counts.
     ``exclude_apparatus_only=true`` leaves out supplies kept on the apparatus
     only, which have no shelf for a delivery to be received into.
+    ``uncounted=true`` narrows to the supplies carried on a truck position no
+    crew has counted, whose truck figure is therefore the position's target.
+    ``sort_by=next_expiry`` orders by the Next expiry each row shows, shelf
+    and trucks together; supplies with nothing dated come last.
 
     **Authentication required**
     **Requires permission: inventory.view_medical or inventory.view**
@@ -424,22 +429,32 @@ async def list_medical_items(
         location_id=location_id,
         storage_area_id=storage_area_id,
         exclude_apparatus_only=exclude_apparatus_only,
+        uncounted=uncounted,
+    )
+    filters: Dict[str, Any] = {
+        "category_id": category_id,
+        "status": status_enum,
+        "condition": condition_enum,
+        "item_types": MEDICAL_ITEM_TYPES,
+        "search": search,
+        "active_only": active_only,
+        "item_ids": item_ids,
+    }
+    sort_values = (
+        await _next_expiry_sort_values(db, service, org_id, filters)
+        if sort_by == NEXT_EXPIRY_SORT
+        else None
     )
 
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
-        category_id=category_id,
-        status=status_enum,
-        condition=condition_enum,
-        item_types=MEDICAL_ITEM_TYPES,
-        search=search,
-        active_only=active_only,
         sort_by=sort_by,
         sort_order=sort_order,
         skip=skip,
         limit=limit,
         fuzzy=fuzzy,
-        item_ids=item_ids,
+        sort_values=sort_values,
+        **filters,
     )
     await _attach_medical_list_extras(db, service, org_id, items)
     return ItemsListResponse(items=items, total=total, skip=skip, limit=limit)
@@ -453,6 +468,7 @@ async def _medical_filter_ids(
     location_id: Any,
     storage_area_id: Any,
     exclude_apparatus_only: bool = False,
+    uncounted: bool = False,
 ) -> Optional[List[str]]:
     """The id set the list and its export narrow to, or None for no narrowing.
 
@@ -479,7 +495,38 @@ async def _medical_filter_ids(
             await service.item_ids_kept_in_stock(organization_id, MEDICAL_ITEM_TYPES)
         )
         ids = stocked if ids is None else ids & stocked
+    if uncounted:
+        unseen = set(
+            await service.item_ids_with_uncounted_positions(
+                organization_id, MEDICAL_ITEM_TYPES
+            )
+        )
+        ids = unseen if ids is None else ids & unseen
     return sorted(ids) if ids is not None else None
+
+
+# The list's and the export's sort key for the Next expiry column. Not a
+# column or a SQL expression: the value spans shelf lots and truck positions
+# and is worked out in Python, so it is handed to get_items as sort_values.
+NEXT_EXPIRY_SORT = "next_expiry"
+
+
+async def _next_expiry_sort_values(
+    db: AsyncSession,
+    service: InventoryService,
+    org_id: str,
+    filters: Dict[str, Any],
+) -> Dict[str, date]:
+    """Each filtered supply's Next expiry, for ordering the whole set.
+
+    Worked out over every supply the filters match, not one page, so page two
+    continues where page one stopped. The same figure the rows show
+    (``_next_expiries``), so the order cannot disagree with the column.
+    """
+    ids = await service.item_ids_matching(org_id, **filters)
+    today = await resolve_org_today(db, org_id)
+    found = await _next_expiries(db, service, org_id, ids, today)
+    return {item_id: soonest[0] for item_id, soonest in found.items()}
 
 
 async def _attach_medical_list_extras(
@@ -494,24 +541,35 @@ async def _attach_medical_list_extras(
         return
     ids = [str(i.id) for i in items]
     today = await resolve_org_today(db, org_id)
-    on_shelf = await service.next_lot_expirations(org_id, ids)
+    soonest = await _next_expiries(db, service, org_id, ids, today)
     checks = EquipmentCheckService(db)
-    aboard = await _soonest_aboard(checks, org_id, ids, today)
     areas = await service.storage_area_index(org_id)
     rooms = await service.location_names(org_id)
     carriers = await checks.apparatus_places_for_items(org_id, ids)
     stock = await service.stock_breakdown(org_id, items)
+    unseen = await service.uncounted_positions(
+        org_id, [str(i.id) for i in items if stock[i.id]["uncounted"]]
+    )
+    places = await checks.position_places(
+        org_id, [p for positions in unseen.values() for p in positions]
+    )
     for item in items:
         item.storage_path = service.storage_path(item, areas, rooms)
-        _set_next_expiry(
-            item, on_shelf.get(str(item.id)), aboard.get(str(item.id)), today
-        )
+        _set_next_expiry(item, soonest.get(str(item.id)), today)
         carried = carriers.get(str(item.id))
         item.apparatus_count = carried["count"] if carried else 0
         item.apparatus_places = carried["places"] if carried else []
         parts = stock[item.id]
         item.apparatus_stock = parts["apparatus"]
         item.apparatus_uncounted = parts["uncounted"]
+        item.apparatus_uncounted_places = sorted(
+            (
+                {"template_item_id": position, **places[position]}
+                for position in unseen.get(str(item.id), [])
+                if position in places
+            ),
+            key=lambda place: str(place["where"]).lower(),
+        )
         # The same test the Low stock tile and the alert email apply, on the
         # same shelf-plus-trucks figure (InventoryService.ready_on_hand).
         item.is_low_stock = service.is_at_or_below_reorder_point(
@@ -538,33 +596,59 @@ async def _soonest_aboard(
     return soonest
 
 
-def _set_next_expiry(
-    item: Any,
-    shelf_date: Optional[date],
-    truck_row: Optional[Dict[str, Any]],
+async def _next_expiries(
+    db: AsyncSession,
+    service: InventoryService,
+    org_id: str,
+    ids: List[str],
     today: date,
-) -> None:
-    """The soonest of the shelf's and the trucks' next expiry, and where.
+) -> Dict[str, Tuple[date, str, Optional[str]]]:
+    """``{item_id: (date, location, truck where)}``: each supply's Next expiry.
 
-    A tie goes to the shelf: it is the stock the officer reading the list
-    manages directly.
+    The soonest of the shelf's and the trucks' next date. A tie goes to the
+    shelf: it is the stock the officer reading the list manages directly.
+    ``truck where`` names the position for a truck date and is None for a
+    shelf one, whose place is the supply's storage path. Supplies with
+    nothing dated are absent. The one definition behind the column, its sort
+    and the export.
     """
-    truck_date = truck_row["expiration_date"] if truck_row else None
-    if truck_date is not None and (shelf_date is None or truck_date < shelf_date):
-        item.next_expiration_date = truck_date
-        item.next_expiration_location = "apparatus"
-        item.next_expiration_where = truck_row["where"] if truck_row else None
-    elif shelf_date is not None:
-        item.next_expiration_date = shelf_date
-        item.next_expiration_location = "shelf"
-        item.next_expiration_where = item.storage_path
-    else:
+    if not ids:
+        return {}
+    on_shelf = await service.next_lot_expirations(org_id, ids)
+    aboard = await _soonest_aboard(EquipmentCheckService(db), org_id, ids, today)
+    found: Dict[str, Tuple[date, str, Optional[str]]] = {}
+    for item_id in ids:
+        shelf_date = on_shelf.get(item_id)
+        truck_row = aboard.get(item_id)
+        truck_date = truck_row["expiration_date"] if truck_row else None
+        if (
+            truck_row is not None
+            and truck_date is not None
+            and (shelf_date is None or truck_date < shelf_date)
+        ):
+            found[item_id] = (truck_date, "apparatus", truck_row["where"])
+        elif shelf_date is not None:
+            found[item_id] = (shelf_date, "shelf", None)
+    return found
+
+
+def _set_next_expiry(
+    item: Any, soonest: Optional[Tuple[date, str, Optional[str]]], today: date
+) -> None:
+    """Hang ``_next_expiries``' answer for this supply on it, for the schema."""
+    if soonest is None:
         item.next_expiration_date = None
         item.next_expiration_location = None
         item.next_expiration_where = None
-    item.days_until_next_expiration = (
-        (item.next_expiration_date - today).days if item.next_expiration_date else None
+        item.days_until_next_expiration = None
+        return
+    when, location, truck_where = soonest
+    item.next_expiration_date = when
+    item.next_expiration_location = location
+    item.next_expiration_where = (
+        truck_where if location == "apparatus" else item.storage_path
     )
+    item.days_until_next_expiration = (when - today).days
 
 
 async def _low_stock_ids(service: InventoryService, organization_id: Any) -> List[str]:
@@ -595,8 +679,16 @@ async def _low_stock_ids(service: InventoryService, organization_id: Any) -> Lis
 # filed as gear — gone from the page that imported it.
 # ============================================
 
+_DERIVED_STOCK_COLUMNS = [
+    "On Apparatus",
+    "Uncounted Positions",
+    "Next Expiry",
+    "Next Expiry Where",
+]
+
 # Column order is also the import's: a file exported here imports unchanged
-# (the derived Ready Lot Stock and Barcode columns are ignored on the way in).
+# (the derived Ready Lot Stock, Barcode and stock columns are ignored on the
+# way in).
 _MEDICAL_EXPORT_COLUMNS = [
     "Name",
     "Category",
@@ -625,6 +717,12 @@ _MEDICAL_EXPORT_COLUMNS = [
     "Purchase Date",
     "Purchase Price",
     "Notes",
+    # Derived, and read by nothing on import. Appended after the columns the
+    # import takes, so a file exported before they existed lines up with one
+    # exported after. "On Apparatus" is the in-date truck stock the On hand
+    # column adds to the shelf; "Uncounted Positions" how many positions
+    # entered it at their target because no crew has counted them.
+    *_DERIVED_STOCK_COLUMNS,
 ]
 
 _MEDICAL_LOT_EXPORT_COLUMNS = [
@@ -638,6 +736,11 @@ _MEDICAL_LOT_EXPORT_COLUMNS = [
     "Storage Location",
     "Unit Cost",
     "Notes",
+    # Appended, so the columns above keep their positions. "Location" is
+    # "In storage" or "On apparatus"; "Where" is the storage path, or the
+    # apparatus and compartment as the checklist names them.
+    "Location",
+    "Where",
 ]
 
 # Read on import only. A row carrying any of them records a stock lot of the
@@ -648,7 +751,7 @@ _LOT_IMPORT_COLUMNS = ["Lot Number", "Expiration Date", "Received Date"]
 _MEDICAL_TEMPLATE_HEADER = [
     column
     for column in _MEDICAL_EXPORT_COLUMNS
-    if column not in ("Ready Lot Stock", "Barcode")
+    if column not in ("Ready Lot Stock", "Barcode", *_DERIVED_STOCK_COLUMNS)
 ] + _LOT_IMPORT_COLUMNS
 
 # Sample lots for a few of the general template's medical rows, so the
@@ -737,6 +840,30 @@ def _medical_export_row(item: InventoryItem) -> List[Any]:
         str(item.purchase_date) if item.purchase_date else "",
         str(item.purchase_price) if item.purchase_price is not None else "",
         item.notes or "",
+        *_derived_stock_cells(item),
+    ]
+
+
+def _derived_stock_cells(item: InventoryItem) -> List[Any]:
+    """The ``_DERIVED_STOCK_COLUMNS`` cells, from ``_attach_medical_list_extras``.
+
+    Blank, not 0, where they were never attached: a zero would read as "none
+    on the trucks" rather than "not worked out".
+    """
+    aboard = getattr(item, "apparatus_stock", None)
+    uncounted = getattr(item, "apparatus_uncounted", None)
+    when = getattr(item, "next_expiration_date", None)
+    location = getattr(item, "next_expiration_location", None)
+    where = getattr(item, "next_expiration_where", None) or (
+        "On an apparatus"
+        if location == "apparatus"
+        else "In storage" if location == "shelf" else ""
+    )
+    return [
+        aboard if aboard is not None else "",
+        uncounted if uncounted is not None else "",
+        str(when) if when else "",
+        where if when else "",
     ]
 
 
@@ -830,6 +957,7 @@ async def export_medical_items_csv(
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     low_stock: bool = False,
+    uncounted: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.manage_medical", "inventory.manage")
@@ -874,6 +1002,25 @@ async def export_medical_items_csv(
         low_stock=low_stock,
         location_id=location_id,
         storage_area_id=storage_area_id,
+        uncounted=uncounted,
+    )
+    filters: Dict[str, Any] = {
+        "category_id": category_id,
+        "status": status_enum,
+        "condition": condition_enum,
+        "item_types": MEDICAL_ITEM_TYPES,
+        "search": search,
+        "active_only": active_only,
+        "item_ids": filter_ids,
+    }
+    # Worked out once, before streaming, over the whole filtered set: paging
+    # by it needs every page to share one ordering.
+    sort_values = (
+        await _next_expiry_sort_values(
+            db, InventoryService(db), organization_id, filters
+        )
+        if sort_by == NEXT_EXPIRY_SORT
+        else None
     )
 
     async def _rows() -> AsyncGenerator[str, None]:
@@ -897,20 +1044,20 @@ async def export_medical_items_csv(
             while True:
                 items = await service.get_items_page(
                     organization_id=organization_id,
-                    category_id=category_id,
-                    status=status_enum,
-                    condition=condition_enum,
-                    item_types=MEDICAL_ITEM_TYPES,
-                    search=search,
-                    active_only=active_only,
                     sort_by=sort_by,
                     sort_order=sort_order,
                     skip=skip,
                     limit=_EXPORT_PAGE_SIZE,
-                    item_ids=filter_ids,
+                    sort_values=sort_values,
+                    **filters,
                 )
                 if not items:
                     return
+                # The figures the list shows beside each row, worked out the
+                # same way, so the file and the screen agree.
+                await _attach_medical_list_extras(
+                    export_db, service, organization_id, items
+                )
                 for item in items:
                     writer.writerow(_medical_export_row(item))
                 yield drain()
@@ -935,7 +1082,12 @@ async def export_medical_lots_csv(
     ),
 ):
     """
-    Export every stocked medical lot as CSV, soonest expiry first
+    Export every stocked medical lot as CSV, on the shelves and the apparatus
+
+    Soonest expiry first, undated last. A unit aboard a truck is listed by its
+    deployed lot, or by the position's own lot number and date when no lot is
+    recorded; a position recording neither, or holding nothing, has no lot to
+    list.
 
     **Authentication required**
     **Requires permission: inventory.manage_medical or inventory.manage**
@@ -945,26 +1097,77 @@ async def export_medical_lots_csv(
     # The department's date, not the server's: a lot expiring "today" in the
     # department's timezone must not read as tomorrow's problem.
     today = await resolve_org_today(db, org_id)
-    rows = await service.get_lots_for_export(org_id, MEDICAL_ITEM_TYPES)
+    shelf = await service.get_lots_for_export(org_id, MEDICAL_ITEM_TYPES)
+    paths = await service.storage_paths_for(
+        org_id, {str(lot.inventory_item_id) for lot, _name, _cat in shelf}
+    )
+    aboard = await EquipmentCheckService(db).apparatus_expiring_stock(
+        org_id,
+        list(MEDICAL_ITEM_TYPES),
+        days_ahead=None,
+        today=today,
+        include_undated=True,
+    )
+    categories = await service.item_category_names(
+        org_id, {row["inventory_item_id"] for row in aboard}
+    )
+
+    def days(when: Optional[date]) -> Any:
+        return (when - today).days if when else ""
+
+    rows: List[Tuple[Optional[date], str, List[Any]]] = []
+    for lot, item_name, category_name in shelf:
+        rows.append(
+            (
+                lot.expiration_date,
+                item_name or "",
+                [
+                    item_name,
+                    category_name or "",
+                    lot.lot_number or "",
+                    str(lot.expiration_date) if lot.expiration_date else "",
+                    days(lot.expiration_date),
+                    lot.quantity,
+                    str(lot.received_date) if lot.received_date else "",
+                    lot.storage_location or "",
+                    str(lot.unit_cost) if lot.unit_cost is not None else "",
+                    lot.notes or "",
+                    "In storage",
+                    lot.storage_location or paths.get(str(lot.inventory_item_id)) or "",
+                ],
+            )
+        )
+    for row in aboard:
+        when = row["expiration_date"]
+        rows.append(
+            (
+                when,
+                row["item_name"] or "",
+                [
+                    row["item_name"] or "",
+                    categories.get(row["inventory_item_id"]) or "",
+                    row["lot_number"] or "",
+                    str(when) if when else "",
+                    days(when),
+                    row["quantity"],
+                    "",
+                    "",
+                    "",
+                    "",
+                    "On apparatus",
+                    row["where"],
+                ],
+            )
+        )
+    # The same order get_lots_for_export gives the shelf alone: dated first,
+    # soonest first, then by name; shelf before truck on a tie.
+    rows.sort(key=lambda r: (r[0] is None, r[0] or date.max, r[1].lower()))
 
     output = io.StringIO()
     writer = SafeCsvWriter(output)
     writer.writerow(_MEDICAL_LOT_EXPORT_COLUMNS)
-    for lot, item_name, category_name in rows:
-        writer.writerow(
-            [
-                item_name,
-                category_name or "",
-                lot.lot_number or "",
-                str(lot.expiration_date) if lot.expiration_date else "",
-                ((lot.expiration_date - today).days if lot.expiration_date else ""),
-                lot.quantity,
-                str(lot.received_date) if lot.received_date else "",
-                lot.storage_location or "",
-                str(lot.unit_cost) if lot.unit_cost is not None else "",
-                lot.notes or "",
-            ]
-        )
+    for _when, _name, cells in rows:
+        writer.writerow(cells)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -2247,6 +2450,10 @@ async def medical_supply_summary(
         today=today,
     )
     expired_aboard = sum(1 for r in aboard if r["expiration_date"] < today)
+    # Supplies, not positions: the figure the "Not yet counted" view lists.
+    uncounted = await service.item_ids_with_uncounted_positions(
+        org_id, MEDICAL_ITEM_TYPES
+    )
 
     return {
         "total_items": total,
@@ -2256,4 +2463,5 @@ async def medical_supply_summary(
         "expiring_within_days": expiring_within_days,
         "expiring_soon_on_apparatus": len(aboard) - expired_aboard,
         "expired_on_apparatus": expired_aboard,
+        "uncounted_on_apparatus": len(uncounted),
     }

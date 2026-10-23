@@ -6,6 +6,7 @@ Endpoints for user authentication, registration, and session management.
 
 import copy
 import secrets
+from datetime import datetime, timezone
 from typing import Annotated
 from urllib.parse import urlencode
 
@@ -27,9 +28,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import (
+    evaluate_mfa_requirement,
     get_current_active_user,
     get_current_user,
     require_permission,
+    require_stepup,
+    user_has_permission,
 )
 from app.core.audit import log_audit_event
 from app.core.captcha import require_captcha
@@ -52,7 +56,11 @@ from app.core.permissions import (
     expand_legacy_permissions,
     get_rank_default_permissions,
 )
-from app.core.security import create_mfa_pending_token, decode_token
+from app.core.security import (
+    create_mfa_pending_token,
+    decode_token,
+    verify_password,
+)
 from app.core.security_middleware import (
     get_client_ip,
     rate_limit_login,
@@ -76,6 +84,7 @@ from app.schemas.auth import (
     PasswordChange,
     PasswordReset,
     PasswordResetRequest,
+    StepUpRequest,
     TokenRefresh,
     UserLogin,
     UserRegister,
@@ -90,6 +99,8 @@ from app.services.auth_service import (
     AuthFailure,
     AuthService,
     RefreshTokenSuperseded,
+    session_ends_at,
+    session_limits,
 )
 from app.services.branding_service import get_primary_branding
 from app.services.security_monitoring import security_monitor
@@ -213,7 +224,13 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         if org
         else False
     )
-    mfa_enrollment_required = mfa_required and not bool(user.mfa_enabled)
+    requirement = (
+        await evaluate_mfa_requirement(db, user, mfa_required)
+        if not user.mfa_enabled
+        else None
+    )
+    mfa_enrollment_required = bool(requirement and requirement.required)
+    mfa_grace_ends_at = requirement.grace_ends_at if requirement else None
 
     current_user_dict: dict = CurrentUser(
         id=user.id,
@@ -236,6 +253,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         email_verified=user.email_verified,
         mfa_enabled=user.mfa_enabled,
         mfa_enrollment_required=mfa_enrollment_required,
+        mfa_grace_ends_at=mfa_grace_ends_at,
         password_expired=password_expired,
         must_change_password=bool(user.must_change_password),
         bottom_nav_slots=normalize_bottom_nav_slots(user.bottom_nav_slots),
@@ -1465,6 +1483,83 @@ async def mfa_disable(
     return {"mfa_enabled": False}
 
 
+@router.post("/step-up", dependencies=[rate_limit_login()])
+async def step_up(
+    data: StepUpRequest,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    access_token_cookie: str | None = Cookie(None, alias="access_token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-verify the member so sensitive actions open for a short window.
+
+    Proof is an authenticator code when MFA is enrolled, otherwise the account
+    password. A member with neither a password nor MFA (an SSO-only account)
+    cannot step up and is told to enroll in MFA, which they must anyway once
+    their grace period ends. The stamp is written to the caller's own session
+    only.
+    """
+    auth_service = AuthService(db)
+    token = _request_access_token(request, access_token_cookie)
+    session = await auth_service.get_session_for_token(token) if token else None
+    if session is None or str(session.user_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active session to verify.",
+        )
+
+    if current_user.mfa_enabled:
+        proven = bool(data.code) and await _verify_and_consume_totp(
+            db, current_user, data.code or ""
+        )
+    elif current_user.password_hash:
+        proven = (
+            bool(data.password)
+            and verify_password(data.password or "", current_user.password_hash)[0]
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This account signs in through a provider and has no password. "
+                "Set up two-factor authentication under Profile > Security to "
+                "confirm sensitive actions."
+            ),
+        )
+
+    if not proven:
+        await log_audit_event(
+            db=db,
+            event_type="stepup_failed",
+            event_category="authentication",
+            severity="warning",
+            event_data={"method": "totp" if current_user.mfa_enabled else "password"},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            ip_address=get_client_ip(request),
+        )
+        await db.commit()
+        raise CodedHTTPException(
+            status_code=400,
+            detail="Verification failed",
+            error_code=ErrorCode.AUTH_MFA_CODE_INVALID,
+        )
+
+    session.stepup_verified_at = datetime.now(timezone.utc)
+    await log_audit_event(
+        db=db,
+        event_type="stepup_verified",
+        event_category="authentication",
+        severity="info",
+        event_data={"method": "totp" if current_user.mfa_enabled else "password"},
+        user_id=str(current_user.id),
+        username=current_user.username,
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    return {"verified": True, "valid_for_minutes": settings.STEPUP_WINDOW_MINUTES}
+
+
 @router.get("/mfa/status")
 async def mfa_status(
     current_user: User = Depends(get_current_active_user),
@@ -1577,6 +1672,7 @@ async def set_mfa_policy(
         require_permission("settings.manage", "organization.update_settings")
     ),
     db: AsyncSession = Depends(get_db),
+    _stepup: User = Depends(require_stepup),
 ):
     """Set the org-wide MFA requirement. When on, un-enrolled members are
     forced into MFA setup before they can use the rest of the app."""
@@ -1743,23 +1839,118 @@ async def get_current_user_info(
     return await _build_current_user_dict(current_user, db)
 
 
+def _request_access_token(request: Request, cookie_token: str | None) -> str | None:
+    """The caller's access token: the cookie first, else the bearer header."""
+    if cookie_token:
+        return cookie_token
+    scheme, _, bearer = request.headers.get("authorization", "").partition(" ")
+    return bearer if scheme.lower() == "bearer" and bearer else None
+
+
 @router.get("/session-settings")
 async def get_session_settings(
+    request: Request,
     current_user: User = Depends(get_current_user),
+    access_token_cookie: str | None = Cookie(None, alias="access_token"),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Return HIPAA session timeout and password policy settings.
 
     The frontend uses this to configure its inactivity timer and
-    to warn users about expiring passwords.
+    to warn users about expiring passwords. The timeout and
+    ``session_ends_at`` describe THIS session: a kiosk session reports the
+    kiosk limits, but only while the member still holds the permission, the
+    same rule the server enforces.
 
     **Authentication required** — prevents unauthenticated enumeration
     of security configuration.
     """
+    auth_service = AuthService(db)
+    token = _request_access_token(request, access_token_cookie)
+    session = await auth_service.get_session_for_token(token) if token else None
+    is_kiosk = session is not None and await auth_service.holds_kiosk_session(session)
+    ends_at = session_ends_at(session, is_kiosk) if session is not None else None
+    idle_minutes, _ = session_limits(is_kiosk)
     return {
-        "session_timeout_minutes": settings.HIPAA_SESSION_TIMEOUT_MINUTES,
+        "session_timeout_minutes": idle_minutes,
         "password_max_age_days": settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS,
+        "session_ends_at": ends_at.isoformat() if ends_at else None,
+        "is_kiosk": is_kiosk,
+        "kiosk_available": user_has_permission(current_user, "security.kiosk_session"),
     }
+
+
+async def _set_session_kiosk(
+    request: Request,
+    current_user: User,
+    cookie_token: str | None,
+    db: AsyncSession,
+    enabled: bool,
+) -> dict:
+    auth_service = AuthService(db)
+    token = _request_access_token(request, cookie_token)
+    session = await auth_service.get_session_for_token(token) if token else None
+    if session is None or str(session.user_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active session to update.",
+        )
+    session.is_kiosk = enabled
+    await log_audit_event(
+        db=db,
+        event_type="kiosk_session_enabled" if enabled else "kiosk_session_disabled",
+        event_category="authentication",
+        severity="warning" if enabled else "info",
+        event_data={"session_id": str(session.id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    idle_minutes, _ = session_limits(enabled)
+    ends_at = session_ends_at(session, enabled)
+    return {
+        "is_kiosk": enabled,
+        "session_timeout_minutes": idle_minutes,
+        "session_ends_at": ends_at.isoformat() if ends_at else None,
+    }
+
+
+@router.post("/session/kiosk")
+async def enable_kiosk_session(
+    request: Request,
+    current_user: User = Depends(require_permission("security.kiosk_session")),
+    access_token_cookie: str | None = Cookie(None, alias="access_token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Switch the caller's own session to the longer kiosk limits.
+
+    For a shared station tablet that must stay signed in between shifts. Acts
+    only on the session making the request, never on another of the member's
+    sessions, and is audited as a warning because it relaxes the sign-out
+    controls (HIPAA §164.312(a)(2)(iii)).
+    """
+    return await _set_session_kiosk(
+        request, current_user, access_token_cookie, db, True
+    )
+
+
+@router.delete("/session/kiosk")
+async def disable_kiosk_session(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    access_token_cookie: str | None = Cookie(None, alias="access_token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the caller's own session to the standard limits.
+
+    Needs no permission: leaving kiosk mode only tightens the session, and a
+    member who lost the permission must still be able to say so.
+    """
+    return await _set_session_kiosk(
+        request, current_user, access_token_cookie, db, False
+    )
 
 
 @router.post("/change-password", dependencies=[rate_limit_password_change()])

@@ -2717,6 +2717,8 @@ class Seeder:
         result["room pair"] = self._guide04_room_pair(by_title)
         result["meeting minutes"] = self._guide04_meeting_minutes()
         result["accepted minutes"] = self._guide04_accepted_minutes()
+        result["published and signed minutes"] = self._guide04_publish_and_sign()
+        result["agenda minutes"] = self._guide04_agenda_minutes()
         result["short outline"] = self._guide04_short_outline()
         return result
 
@@ -2856,6 +2858,140 @@ class Seeder:
                 },
             )
         return self.api.post(f"/minutes-records/{minutes_id}/submit")
+
+    GUIDE04_PUBLISHED_MINUTES_TITLE = "Minutes: July Business Meeting"
+    GUIDE04_SIGNED_SLOT = "recording_secretary"
+
+    def _guide04_publish_and_sign(self) -> str:
+        """Publish the adopted July minutes and sign one of their two slots.
+
+        The publishing note, the public minutes page and the Signatures panel
+        all picture adopted minutes that have been through those steps, and
+        nothing else in the demo takes them. Public posting is left ON: the
+        public page answers only while the switch is on, and an anonymous
+        capture has no way to turn it on first. The Publishing settings shot
+        (04-73) was taken before this step and shows the switch off.
+        """
+        minutes = next(
+            (
+                m
+                for m in items(self.api.get("/minutes-records?limit=100"), "minutes")
+                if pick(m, "title") == self.GUIDE04_PUBLISHED_MINUTES_TITLE
+                and pick(m, "status") == "approved"
+            ),
+            None,
+        )
+        if minutes is None:
+            return "no adopted July minutes"
+        minutes_id = str(pick(minutes, "id"))
+        done = []
+
+        status = self.api.get(f"/minutes-records/{minutes_id}/publishing") or {}
+        if not pick(status, "library_published", "libraryPublished"):
+            self.api.patch(
+                "/organization/settings", {"minutes": {"public_posting": True}}
+            )
+            self.api.post(f"/minutes-records/{minutes_id}/publish")
+            done.append("published")
+
+        slots = (self.api.get(f"/minutes-records/{minutes_id}/signatures") or {}).get(
+            "slots"
+        ) or []
+        if not any(
+            pick(slot, "key", "slot_key") == self.GUIDE04_SIGNED_SLOT
+            and pick(slot, "signature")
+            for slot in slots
+        ):
+            self.api.post(
+                f"/minutes-records/{minutes_id}/signatures",
+                {
+                    "slot_key": self.GUIDE04_SIGNED_SLOT,
+                    "signed_name": "Dana Ruiz",
+                    "password": admin_password(),
+                },
+            )
+            done.append("signed")
+        return ", ".join(done) or "already done"
+
+    GUIDE04_AGENDA_MEETING_TITLE = "Station Operations Meeting"
+
+    def _guide04_agenda_minutes(self) -> str:
+        """A meeting whose agenda has moved on since its minutes were started.
+
+        The Agenda dialog, the Sync from agenda dialog and a section marked Not
+        taken up all need a meeting with agenda items, draft minutes made from
+        them, and an agenda edited afterwards: one item reworded and one added,
+        so the sync lists one changed and one new. Saved in that order because
+        saving an agenda never alters minutes that already exist.
+        """
+        title = self.GUIDE04_AGENDA_MEETING_TITLE
+        if any(
+            pick(m, "title") == title
+            for m in items(self.api.get("/meetings?limit=100"), "meetings")
+        ):
+            return "already done"
+
+        documents = items(self.api.get("/documents"), "documents")
+        # The structure-fire SOG is the document a hose testing item would cite.
+        cited = next(
+            (d for d in documents if "SOG 101" in str(pick(d, "name"))),
+            documents[0] if documents else None,
+        )
+        linked = (
+            [{"id": str(pick(cited, "id")), "name": pick(cited, "name")}]
+            if cited
+            else []
+        )
+        agenda = [
+            {
+                "key": "call-to-order",
+                "title": "Call to order",
+                "presenter": "Dana Ruiz",
+            },
+            {
+                "key": "hose-testing",
+                "title": "Annual hose testing",
+                "presenter": "Marcus Bell",
+                "notes": "Results from the October testing and the replacement list.",
+                "needs_motion": True,
+                "motion_text": "Move to approve the 2027 hose testing schedule.",
+                "documents": linked,
+            },
+            {"key": "station-tour", "title": "New station walkthrough"},
+            {"key": "open-floor", "title": "Open floor"},
+        ]
+        held = datetime.now(timezone.utc).date() - timedelta(days=20)
+        meeting = self.api.post(
+            "/meetings",
+            {
+                "title": title,
+                "meeting_type": "business",
+                "meeting_date": held.isoformat(),
+                "location": "Station 1",
+                "agenda_items": agenda,
+            },
+        )
+        meeting_id = str(pick(meeting, "id"))
+        minutes = self.api.post(f"/minutes-records/from-meeting/{meeting_id}")
+        minutes_id = str(pick(minutes, "id"))
+
+        detail = self.api.get(f"/minutes-records/{minutes_id}")
+        sections = list(pick(detail, "sections") or [])
+        for section in sections:
+            if section.get("key") == "agenda-station-tour":
+                section["not_taken_up"] = True
+        self.api.put(f"/minutes-records/{minutes_id}", {"sections": sections})
+
+        agenda[3] = {**agenda[3], "title": "Open floor and announcements"}
+        agenda.append(
+            {
+                "key": "mutual-aid",
+                "title": "Mutual aid agreement renewal",
+                "presenter": "Priya Raman",
+            }
+        )
+        self.api.patch(f"/meetings/{meeting_id}", {"agenda_items": agenda})
+        return f"{title}: agenda of {len(agenda)} items, minutes {minutes_id[:8]}"
 
     def _guide04_meeting_minutes(self) -> str:
         meetings = {
@@ -3332,6 +3468,7 @@ class Seeder:
             if templates:
                 payload["template_id"] = pick(templates[0], "id")
             patterns.append(self.api.post("/scheduling/patterns", payload))
+        self._weekend_pattern_shifts(patterns, templates)
 
         # Ask the same endpoint the shift form asks. /apparatus-options resolves
         # the department's fleet with a documented priority — full Apparatus
@@ -5493,6 +5630,8 @@ class Seeder:
 
         self._deploy_lots(positions, catalog)
         self._report_one_used(positions, str(pick(medic, "id")))
+        self._leave_one_short(positions)
+        self._expire_one_tourniquet()
         # Linking supply positions edits the template's items, which drafts it
         # again — and this step runs *after* `seed_equipment_checks`, so that
         # step's publish sweep has already been and gone. Without this the
@@ -6138,6 +6277,37 @@ class Seeder:
         if not item_id:
             return
         self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 18})
+
+    def _expire_one_tourniquet(self) -> None:
+        """Date the tourniquet on Rescue 7 to expire three weeks from now.
+
+        The Medical Supplies tiles split each figure into shelf and truck stock
+        only when truck stock expires inside the window, and every truck lot the
+        demo carries is dated years out. A position with no lot of its own is
+        counted by the date on the position itself, which is what this sets.
+        """
+        rigs = items(self.api.get("/apparatus?page_size=100"), "items")
+        rig = next(
+            (r for r in rigs if str(pick(r, "unit_number", "unitNumber")) == "R-7"),
+            None,
+        )
+        if rig is None:
+            return
+        inventory = self.api.get(
+            f"/equipment-checks/apparatus/{pick(rig, 'id')}/inventory"
+        )
+        for compartment in items(inventory, "compartments"):
+            for position in items(compartment, "items"):
+                if pick(position, "item_name", "itemName") != "Tourniquet, CAT":
+                    continue
+                self.api.put(
+                    f"/equipment-checks/items/{pick(position, 'template_item_id', 'templateItemId')}",
+                    {
+                        "has_expiration": True,
+                        "expiration_date": str(TODAY + timedelta(days=21)),
+                    },
+                )
+                return
 
     def _report_one_used(self, positions: dict[str, str], apparatus_id: str) -> None:
         """Raise a restock report as an ordinary member, not as the chief.
@@ -15663,6 +15833,9 @@ class Seeder:
     # file is one the department never stocks the polo in, which is what makes
     # the request form offer it as "not stocked".
     GEARLESS_MEMBER_USERNAME = "dokonkwo"
+    # Holds one permanently assigned item and is on no other shot's roster
+    # line, so opening a clearance for them changes nothing else.
+    DEPARTURE_CLEARANCE_USERNAME = "tlindqvist"
     GUIDE05_UNSTOCKED_PRODUCT = "Department Polo"
     GUIDE05_UNSTOCKED_SIZE = "XXL"
     GUIDE05_REORDER_NAME = "Rescue Rope, 150 ft"
@@ -15694,6 +15867,9 @@ class Seeder:
         self._guide05_requests(by_name)
         self._guide05_gearless_member()
         self._guide05_unlinked_order()
+        self._guide05_departure_clearance()
+        self._guide06_locations_station()
+        self._guide06_overdue_maintenance()
 
     def _guide05_shelf(self) -> str | None:
         areas = flatten_storage_areas(self.api.get("/inventory/storage-areas"))
@@ -15922,6 +16098,142 @@ class Seeder:
                 },
             )
 
+    WEEKEND_PATTERN = "Weekend Duty Rotation"
+
+    def _weekend_pattern_shifts(
+        self, patterns: list[dict], templates: list[dict]
+    ) -> None:
+        """Give the weekend pattern the shifts a split weekly pattern carries.
+
+        Friday night, Saturday day and night, Sunday day: the case the guide
+        describes, and what the pattern list draws a sun and a moon for. A plain
+        weekly pattern has no ``weekday_shifts``, so its row shows no glyphs.
+        Weekdays are numbered from Sunday, as the pattern form numbers them.
+        """
+        pattern = next(
+            (p for p in patterns if pick(p, "name") == self.WEEKEND_PATTERN), None
+        )
+        if pattern is None or (pick(pattern, "schedule_config") or {}).get(
+            "weekday_shifts"
+        ):
+            return
+        by_name = {str(pick(t, "name")): pick(t, "id") for t in templates}
+        day, night = by_name.get("Day Shift"), by_name.get("Night Shift")
+        if not day or not night:
+            return
+        config = dict(pick(pattern, "schedule_config") or {})
+        config.update(
+            {
+                "weekday_shifts": {"0": ["day"], "5": ["night"], "6": ["day", "night"]},
+                "weekdays": [0, 5, 6],
+                "day_template_id": day,
+                "night_template_id": night,
+            }
+        )
+        self.api.patch(
+            f"/scheduling/patterns/{pick(pattern, 'id')}", {"schedule_config": config}
+        )
+
+    GUIDE06_LOCATIONS_STATION = "Station 3 - Eastside"
+
+    def _guide06_locations_station(self) -> None:
+        """A station with a room, in the form the Locations page lists.
+
+        The demo's stations are all facility-linked and carry a room number, so
+        the simple Locations page files every one under "Other Locations" and
+        shows no station card at all. That page treats a location as a station
+        when it has an address and no room number, and a room as one that names
+        its station in ``building``.
+        """
+        name = self.GUIDE06_LOCATIONS_STATION
+        existing = {
+            str(pick(loc, "name"))
+            for loc in items(self.api.get("/locations"), "locations")
+        }
+        if name not in existing:
+            self.api.post(
+                "/locations",
+                {
+                    "name": name,
+                    "address": "75 Mill Lane",
+                    "city": "Oakville",
+                    "state": "NY",
+                    "zip": "12345",
+                },
+            )
+        room = "Eastside Day Room"
+        if room not in existing:
+            self.api.post(
+                "/locations",
+                {
+                    "name": room,
+                    "building": name,
+                    "room_number": "201",
+                    "floor": "1",
+                    "capacity": 20,
+                },
+            )
+
+    GUIDE06_OVERDUE_MAINTENANCE = "Service the generator transfer switch"
+
+    def _guide06_overdue_maintenance(self) -> None:
+        """One maintenance record past its due date and not done.
+
+        The facility maintenance list marks such a record "Overdue · due <date>",
+        and the demo's open records are all due weeks from now.
+        """
+        description = self.GUIDE06_OVERDUE_MAINTENANCE
+        records = items(self.api.get("/facilities/maintenance?limit=200"), "records")
+        if any(pick(r, "description") == description for r in records):
+            return
+        facilities = items(self.api.get("/facilities?limit=50"), "facilities")
+        types = items(self.api.get("/facilities/maintenance-types"), "types")
+        if not facilities or not types:
+            return
+        kind = next(
+            (t for t in types if pick(t, "name") == "Generator Annual Load Test"),
+            types[0],
+        )
+        self.api.post(
+            "/facilities/maintenance",
+            {
+                "facility_id": pick(facilities[0], "id"),
+                "maintenance_type_id": pick(kind, "id"),
+                "description": description,
+                "vendor": "PowerGen Services",
+                "cost": 780,
+                "is_completed": False,
+                "scheduled_date": str(TODAY - timedelta(days=12)),
+                "due_date": str(TODAY - timedelta(days=6)),
+                "notes": f"{description}, waiting on the vendor.",
+            },
+        )
+
+    def _guide05_departure_clearance(self) -> None:
+        """Open a departure clearance for a member still holding an item.
+
+        The admin hub's Needs attention card lists it as "Unresolved departure
+        clearance". Opened directly rather than by dropping the member: a drop
+        would take them off every roster the other shots picture, and the
+        clearance row is the same either way.
+        """
+        user_id = self._user_id(self.DEPARTURE_CLEARANCE_USERNAME)
+        if not user_id:
+            return
+        listed = self.api.get("/inventory/clearances?limit=200") or {}
+        if any(
+            str(pick(row, "user_id")) == user_id for row in items(listed, "clearances")
+        ):
+            return
+        self.api.post(
+            "/inventory/clearances",
+            {
+                "user_id": user_id,
+                "departure_type": "dropped_voluntary",
+                "return_deadline_days": 14,
+            },
+        )
+
     def _guide05_gearless_member(self) -> None:
         """Sign the gearless member in once, and give them an unstocked size.
 
@@ -16149,8 +16461,12 @@ class Seeder:
             if pick(event, "title") != self.GUIDE02_SESSION_TITLE:
                 continue
             try:
-                summary = self.api.get(
-                    f"/training/sessions/by-event/{pick(event, 'id')}/approval"
+                # null (no approval) on the current backend, a 404 on an older one.
+                summary = (
+                    self.api.get(
+                        f"/training/sessions/by-event/{pick(event, 'id')}/approval"
+                    )
+                    or {}
                 )
             except ApiError as exc:
                 if exc.code != 404:

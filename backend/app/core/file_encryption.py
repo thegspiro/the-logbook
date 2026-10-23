@@ -361,9 +361,15 @@ def key_id_of(path: str) -> bytes | None:
     """The key id an encrypted file was wrapped with; None for a plain file."""
     with open(path, "rb") as handle:
         head = handle.read(HEADER_SIZE)
+    return key_id_from_head(head)
+
+
+def key_id_from_head(head: bytes) -> bytes | None:
+    """:func:`key_id_of` for a file's first :data:`HEADER_SIZE` bytes read
+    from somewhere other than local disk."""
     if not is_encrypted_bytes(head):
         return None
-    return _parse_header(head).key_id
+    return _parse_header(head[:HEADER_SIZE]).key_id
 
 
 def rewrap(path: str) -> bool:

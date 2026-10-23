@@ -126,6 +126,7 @@ from app.services.notifications_service import NotificationsService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -2716,6 +2717,7 @@ async def get_qr_check_in_data(
     data, error = await service.get_qr_check_in_data(
         event_id=event_id,
         organization_id=current_user.organization_id,
+        user_id=current_user.id,
     )
 
     if error or data is None:
@@ -3482,9 +3484,13 @@ async def update_external_attendee(
 
     ALLOWED_ATTENDEE_FIELDS = {"name", "email", "phone", "organization_name", "notes"}
     update_data = data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        if field in ALLOWED_ATTENDEE_FIELDS:
-            setattr(attendee, field, value)
+    try:
+        apply_updates(
+            attendee,
+            {k: v for k, v in update_data.items() if k in ALLOWED_ATTENDEE_FIELDS},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     await db.commit()
     await db.refresh(attendee)

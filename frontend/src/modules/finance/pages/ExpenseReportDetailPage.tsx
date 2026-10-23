@@ -10,15 +10,27 @@
  * read it here too, receipts included.
  */
 
-import React, { useEffect } from 'react';
-import { useParams, Link } from 'react-router';
-import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban, CreditCard } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router';
+import {
+  ArrowLeft,
+  AlertTriangle,
+  Receipt,
+  Send,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Ban,
+  CreditCard,
+  FileText,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { LateLinesBadge } from '../components/LateLinesBadge';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
+import { PayByCheckDialog } from '../components/PayByCheckDialog';
 import { expenseReportService, functionalClassService } from '../services/api';
 import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundShortfallNotice } from '../components/FundShortfallNotice';
@@ -48,6 +60,14 @@ const STATUS_LABELS: Record<string, string> = {
   denied: 'Denied',
   paid: 'Paid',
   cancelled: 'Cancelled',
+};
+
+const CHECK_STATUS_LABELS: Record<string, string> = {
+  draft: 'draft',
+  submitted: 'submitted',
+  pending_approval: 'awaiting approval',
+  approved: 'approved, not yet issued',
+  issued: 'issued',
 };
 
 const APPROVAL_STEP_LABELS: Record<string, string> = {
@@ -89,6 +109,8 @@ const ExpenseReportDetailPage: React.FC = () => {
   const { selectedExpenseReport: er, isLoading, error, fetchExpenseReport, submitExpenseReport } = useFinanceStore();
   const access = useFinanceRequestAccess();
   const { confirm } = useConfirm();
+  const navigate = useNavigate();
+  const [payingByCheck, setPayingByCheck] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -167,7 +189,11 @@ const ExpenseReportDetailPage: React.FC = () => {
     );
   }
 
-  const canMarkPaid = er.status === ExpenseReportStatus.APPROVED && access.canManage;
+  // A check already paying the report is how it gets paid; the server refuses
+  // paying it another way, or by a second check, until that one is denied.
+  const paidByLiveCheck = Boolean(er.reimbursementCheckId);
+  const canMarkPaid = er.status === ExpenseReportStatus.APPROVED && access.canManage && !paidByLiveCheck;
+  const canPayByCheck = canMarkPaid && Number(er.amountOwed ?? er.totalAmount) > 0;
   // Submitting is the requester's action (or the finance office's).
   const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
   // Every line needs an uploaded receipt before the report is submitted;
@@ -235,6 +261,17 @@ const ExpenseReportDetailPage: React.FC = () => {
                 Submit for Approval
               </button>
             )}
+            {canPayByCheck && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setPayingByCheck(true)}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                Pay by Check
+              </button>
+            )}
             {canMarkPaid && (
               <button
                 type="button"
@@ -280,6 +317,38 @@ const ExpenseReportDetailPage: React.FC = () => {
             <div>
               <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
               <p className="text-theme-text-primary text-sm">{formatDateTime(er.qbExportedAt, tz)}</p>
+            </div>
+          )}
+          {er.purchaseRequestId && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Claims back purchase</p>
+              <p className="text-theme-text-primary text-sm">
+                <Link
+                  to={`/finance/purchase-requests/${er.purchaseRequestId}`}
+                  className="font-medium text-red-700 hover:underline dark:text-red-400"
+                >
+                  {er.purchaseRequestNumber ?? 'Purchase request'}
+                </Link>
+              </p>
+            </div>
+          )}
+          {er.reimbursementCheckId && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Reimbursement check</p>
+              <p className="text-theme-text-primary text-sm">
+                <Link
+                  to={`/finance/check-requests/${er.reimbursementCheckId}`}
+                  className="font-medium text-red-700 hover:underline dark:text-red-400"
+                >
+                  {er.reimbursementCheckNumber ?? 'Check request'}
+                </Link>
+                {er.reimbursementCheckStatus && (
+                  <span className="text-theme-text-secondary">
+                    {' '}
+                    ({CHECK_STATUS_LABELS[er.reimbursementCheckStatus] ?? er.reimbursementCheckStatus})
+                  </span>
+                )}
+              </p>
             </div>
           )}
           {er.advanceId && (
@@ -499,6 +568,17 @@ const ExpenseReportDetailPage: React.FC = () => {
               })}
           </div>
         </div>
+      )}
+
+      {payingByCheck && (
+        <PayByCheckDialog
+          report={er}
+          onClose={() => setPayingByCheck(false)}
+          onRequested={(check) => {
+            setPayingByCheck(false);
+            void navigate(`/finance/check-requests/${check.id}`);
+          }}
+        />
       )}
     </div>
   );

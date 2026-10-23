@@ -1,6 +1,225 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), pass 10 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), pass 11 (this PR)
+
+---
+
+## Pass 11 (2026-10-23) — watchdog pickup, real delta (29 commits, kit sizing + correctness fixes), 0 fixed, 0 new findings, INV-22 re-verified open/accepted
+
+**Watchdog pickup.** No PR with a `claude/security-review-` head branch was
+open (`search_pull_requests`, 0 results) and the dedicated `/loop 30m
+/security-review` session was not reachable (`ListAgents`). PR #3579
+(Feature 10, Documents & legal, pass 11) had already merged, all CI green.
+Per `PROGRESS.md`'s rotation table, row 11 (Inventory) was the next `⬜`.
+
+**Backend:** same scope as pass 10 (`inventory.py`, `inventory_service.py`,
+`labels.py`, `schemas/inventory.py`, plus the other inventory endpoint/schema/
+service files) — only `inventory.py`, `labels.py`, `schemas/inventory.py` and
+`inventory_service.py` actually changed; the rest are byte-identical to pass 10. **Frontend:** `modules/inventory/*` (unchanged scope). **Migrations:**
+none — confirmed by grepping every migration added since pass 10's baseline
+for `inventory`/`storage_area`/`equipment_kit`/`reorder`: zero matches. 640
+revisions total (up from 623 at pass 10), single head, no inventory table
+touched.
+
+### Scope
+
+Baseline is pass 10's own merge commit, `63b3e867` (PR #3432) — confirmed an
+ancestor of `HEAD` via `git merge-base --is-ancestor`. `git log --no-merges
+63b3e867..HEAD -- <every scope file>` returns **29** commits, mostly a11y/
+layout fixes and features owned by other rotation rows (Medical Supplies
+kiosk sessions, operations UTC timestamps, membership status) that happen to
+touch a shared frontend file. The real backend delta is in four files:
+`inventory.py` (+98/-0 net across diff), `labels.py` (+2 numeric bounds),
+`schemas/inventory.py` (+268/-91, almost entirely `INT32_MAX`/`MONEY_MAX`/
+`FLOAT32_MAX` bounds and blank-identifier normalization), and
+`inventory_service.py` (+618/-50). Route decorators diffed directly across
+all five endpoint files: **+2** (`GET /kits/product-options`, `GET
+/kits/{kit_id}/issue-plan`), 0 removed. Direct recount: `inventory.py`
+**151** (149 + 2), `labels.py` **12**, `inventory_kiosk.py` **4**,
+`inventory_last_seen.py` **2**, `inventory_nfc.py` **24**.
+`check_route_permissions.py --strict`: **273** routes repo-wide, 0 errors, 0
+warnings.
+
+### New real delta reviewed, all clean
+
+- **Kit sizing (the bulk of this window's `inventory_service.py` delta) —
+  `GET /kits/product-options`, `GET /kits/{kit_id}/issue-plan`, and
+  `issue_kit_to_member`'s new `selections` body.** A kit line now names a
+  _product_ rather than one fixed catalog row, and the quartermaster chooses
+  a size per member at issue time. Read `get_kit_product_options`,
+  `_kit_line_product`, `get_kit_issue_plan` and the rewritten
+  `issue_kit_to_member` in full:
+  - `_kit_catalog_query` scopes every candidate row to
+    `InventoryItem.organization_id == str(organization_id)`, active and
+    unretired — `get_kit_product_options` and `_kit_line_product` both build
+    on it, so there is one org-scoped source for "what this org's catalog
+    contains," not a second ad-hoc query to drift from it.
+  - **The client-supplied override in `issue_kit_to_member` is bounded, not
+    trusted.** `selections` maps a line id to a chosen `item_id`; the code
+    first rejects any line id not in `kit.line_items` (`unknown = set(
+selections) - line_ids`), then for each line resolves
+    `_kit_line_product` to get `sibling_ids` — the set of row ids that are
+    sizes of _that line's own product_, itself computed from the org-scoped
+    `_kit_catalog_query` — and refuses the chosen id with a 400-equivalent
+    message when it is not in `sibling_ids`. A chosen id can therefore only
+    ever resolve within the same product as the line already names, in the
+    caller's own org; it cannot be used to redirect an issuance at an
+    arbitrary item id, in-org or cross-org. `get_item_by_id(target_id,
+organization_id)` on the resolved id repeats the org filter before
+    anything is issued.
+  - `get_kit_issue_plan` and `issue_kit_to_member` both now call
+    `get_equipment_kit_by_id(kit_id, organization_id, active_only=True)` —
+    a deactivated kit cannot be issued from (matching the new docstring);
+    reading/editing a deactivated kit is deliberately still possible
+    elsewhere and untouched.
+  - `get_kit_issue_plan` checks `is_in_org(self.db, User, user_id,
+organization_id)` before building a plan for that member — the same
+    guard `issue_kit_to_member` already had.
+  - `GET /kits/product-options` is declared _before_
+    `GET /kits/{kit_id}/issue-plan`'s sibling `/kits/{kit_id}` route in
+    `inventory.py`, with a comment explaining why (`{kit_id}` would
+    otherwise greedily match the literal path and fail UUID parsing) —
+    confirmed by reading the route order directly, not merely trusting the
+    comment.
+  - Both new routes are gated `require_permission("inventory.manage")`,
+    matching every other kit-mutating route.
+- **`delete_storage_area` → `InventoryService.deactivate_storage_area`.**
+  The route no longer deactivates a storage area with a bare `UPDATE`; the
+  service now takes the row `with_for_update()`, counts active items stored
+  in it and active areas nested under it (both counts org-scoped on their
+  own `WHERE`, not inherited from the parent lookup), and raises
+  `StorageAreaNotEmptyError` — surfaced as 409 — before touching
+  `is_active`. This closes a real gap (deactivating a storage area out from
+  under items still stored in it, previously silent) rather than just
+  refactoring; reviewed as a correctness/data-integrity fix, not flagged.
+- **`delete_item_lot` → lot deletion now refuses a lot a reorder receipt
+  points at.** `delete_lot` joins `ReorderReceipt.inventory_lot_id ==
+lot.id` before deleting and raises `LotReceivedAgainstReorderError`
+  (409) when a receipt exists, rather than leaving
+  `reorder_receipts.inventory_lot_id` dangling against a RESTRICT FK (which
+  would have surfaced as a raw IntegrityError/500). The lookup is scoped
+  through `_get_lot(lot_id, organization_id)`, already org-scoped.
+- **`assign_item` — body/URL item-id confusion closed.** The route now
+  rejects `assignment_data.item_id != item_id` (400) before calling the
+  service, so a body naming a different item than the URL path can no
+  longer silently act on the URL's item while claiming the body's id (or
+  vice versa). A narrow but real correctness/IDOR-adjacent fix; already
+  present at this commit, not something this pass needed to add.
+- **`_assert_not_under_itself` — category cycle prevention.** `update_category`
+  now refuses setting `parent_category_id` to the category itself or one of
+  its own descendants, walking up the stored chain with a `seen` set that
+  also recovers from a pre-existing bad row rather than looping forever. The
+  walk re-queries `InventoryCategory.parent_category_id` scoped to
+  `organization_id` at each step.
+- **`_check_identifier_unique` generalizes the old `_check_serial_number_
+unique` to `asset_tag` and `barcode`.** All three identifiers are now
+  checked for an org-wide clash (including against retired items, since the
+  `uq_item_org_*` constraints span every row regardless of `active`) before
+  insert/update, naming the specific field in the error rather than letting
+  the constraint violation surface as a generic 500. Schema-side, blank
+  `serial_number`/`asset_tag`/`barcode` strings are normalized to `None`
+  before this check runs (`_blank_identifier_to_none`), so two items each
+  submitting `""` no longer collide with each other on the unique
+  constraint.
+- **`tracking_type` can no longer be flipped under a live assignment/
+  issuance.** `update_item` refuses changing `individual`↔`pool` while the
+  item is assigned to a member or has units issued, closing a state the
+  other tracking mode's screens cannot read.
+- **`unassign_item`/`return_pool_issuance`/`check_in_item` gain `commit:
+bool = True`.** A `commit=False` caller gets the same validation and
+  locking, skips the auto-archive side effect, and re-raises instead of
+  rolling back — read each of the three in full; none skips a check, they
+  only move where the transaction boundary and error handling sit for a
+  caller (a permanent member delete) that must finish more work atomically.
+- **Two `User.status == "active"` sites corrected to `User.status.in_(
+ACTIVE_ACCOUNT_STATUSES)`** (CLAUDE.md Pitfall #32) — a probationary
+  member search-eligibility query and the general member-listing filter.
+  Widens who is found/listed to match every other status gate in the
+  codebase; not a new grant.
+- **`get_lots_for_items`/`find_lots_by_number` (new) both apply
+  `_shelf_lots_count`** so an `apparatus_only` medical supply's shelf lots
+  are excluded from the replacement-stock/recall-lookup results, consistent
+  with pass 10's "kept on the apparatus only" feature. `find_lots_by_number`
+  uses `like_pattern(needle)` with `escape=LIKE_ESCAPE_CHAR` (Pitfall #25) on
+  a user-supplied lot number.
+- **`CheckoutExtendRequest`/`EquipmentRequestFulfill.expected_return_at`
+  moved to `UTCDateTime`** (schema type), replacing a hand-rolled naive-vs-
+  aware comparison with the shared parser — a robustness fix, not a new
+  rule.
+- **Numeric bounds added across `schemas/inventory.py`** —
+  `INT32_MIN`/`INT32_MAX`/`FLOAT32_MAX`/`MONEY_MAX` on every previously-
+  unbounded `int`/`float`/`Decimal` field in this file (quantities, costs,
+  `sort_order`, `min_rank_order`, `cylinder_pressure`, etc.) plus a parallel
+  fix in `labels.py`'s printer `dpi` field. `IssuanceAllowanceCreate.
+max_quantity` floor changed `ge=1` → `ge=0`, documented as deliberate (0
+  means "none issuable for this role/category," distinct from no allowance
+  row at all, which is uncapped) — read the docstring and confirmed this
+  does not create a mistaken no-cap state.
+- **Frontend-only commits** (phone-layout reflows across most inventory
+  pages, equipment-check Present/Absent UI, checklist builder/report
+  changes) — scanned all 37 non-test frontend files touched in this
+  window's diff for `dangerouslySetInnerHTML`, `window.confirm`/`alert`/
+  `prompt`, and a raw `axios.*`/`fetch(` call bypassing the module's service
+  layer: **zero matches**.
+
+### Re-verified: INV-22, still OPEN, owner-accepted, unchanged
+
+`get_fulfillment_options` / `get_requestable_categories` are untouched —
+neither function appears in this window's 29-commit diff of
+`inventory_service.py` (confirmed via `git diff ... | grep` on both
+definitions). `docs/KNOWN_LIMITATIONS.md`'s entry recording the owner's
+2026-10-05 decision is unchanged; nothing new to add.
+
+### Verified good ✅ (pass 11)
+
+- **No route removed; the 2 routes added (`/kits/product-options`,
+  `/kits/{kit_id}/issue-plan`) are both gated `inventory.manage`** and both
+  read/write only org-scoped data — confirmed by reading every query they
+  reach, not spot-checked.
+- **The new kit-issue size override (`selections`) cannot redirect an
+  issuance outside the kit line's own product/org** — the chosen item id is
+  checked against `sibling_ids`, itself derived from an org-scoped query,
+  before anything is issued. This is the one genuinely new client-
+  influenced write path in this window and it is XC-1/XC-3 sound.
+- **`deactivate_storage_area` and `delete_lot`'s new refusals close real
+  silent-corruption gaps** (an area deactivated out from under its stored
+  items; a lot deleted out from under a reorder's receipt record) rather
+  than merely refactoring — both now fail loudly (409) instead of leaving a
+  dangling reference.
+- **No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`**
+  (`find_lots_by_number` uses it correctly), no new bare `csv.writer`, no
+  new JSON-column shallow-copy mutation, and no new `window.confirm`/
+  `alert`/`prompt` or `dangerouslySetInnerHTML` anywhere in this window's
+  diff of this feature's scope files.
+- **INV-22's "leave as is" owner decision is unchanged** in code and in
+  `KNOWN_LIMITATIONS.md`.
+
+### Completion gate {#completion-gate-pass-11}
+
+| Check                                                    | Result                                            |
+| -------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (pinned 7.3.0)             | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/` (pinned 26.5.1)     | ✅ clean, 2567 files unchanged                    |
+| `isort --check-only app/ tests/ alembic/` (pinned 9.0.1) | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`        | ✅ single head (`cc8c16cb6d98`), 640 revisions    |
+| `python3 scripts/check_route_permissions.py --strict`    | ✅ 273 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -k "inventory or label or nfc or kiosk"`  | ✅ 1907 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck` (`tsc-native.mjs --noEmit`)          | ✅ clean                                          |
+| `npm run lint` (`eslint --max-warnings 10`)              | ✅ clean                                          |
+| `npx vitest run src/modules/inventory`                   | ✅ 1816 passed (122 files)                        |
+
+No application-code fix was needed this pass — the full 29-commit real delta
+since pass 10 (kit sizing/issue-plan, storage-area and lot-delete
+correctness guards, category-cycle prevention, identifier-uniqueness
+generalization, numeric bounds) was reviewed fresh against all seven
+checklist dimensions and found sound throughout: the one new client-
+influenced write path (kit issue size selection) is bounded to the line's
+own product and organization before use, both new routes are permission-
+gated, no migration touches this feature's tables, and no unsafe pattern
+was introduced anywhere in the frontend diff. INV-22 is the only standing
+item and remains unchanged.
+
+Rotation row 11 → ✅ (pending this PR merge). Next: Feature 12 (Facilities).
 
 ---
 

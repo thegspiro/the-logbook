@@ -504,6 +504,31 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
+
+Nothing runs on upgrade. Three operator commands, all inside the backend
+container (`intranet-backend`, or `logbook-backend` on Unraid):
+
+- **`python scripts/migrate_uploads_to_s3.py`** moves the files a department
+  stored on the `uploads` volume before it switched to its own bucket. A dry
+  run by default; `--apply` copies, verifies and repoints them and keeps the
+  disk copies; `--rollback MANIFEST` undoes it; `--finalize MANIFEST` deletes
+  the disk copies once each bucket copy verifies again. `--org ID` limits it
+  to one department, which must already have passed **Test and switch to
+  S3**. A file still in a module's pre-2026-10 folder is reported: run
+  `scripts/relocate_uploads.py` first.
+- **`python scripts/encrypt_uploads.py --rewrap`** now covers objects in
+  departments' buckets as well as the volume (`docs/KEY_ROTATION.md`). A
+  bucket object is downloaded and re-uploaded whole, so a large bucket takes
+  as long as moving its data. Keep a retired key in `ENCRYPTION_KEYS_LEGACY`
+  until both counts read zero.
+- **`scripts/backup.sh`** now lists the buckets holding department files,
+  under a warning that they are not in the archive. It never downloads them;
+  `docs/BACKUP.md` says how to back them up.
+
+`scripts/relocate_uploads.py` no longer reports a file in a department's
+bucket as missing on disk. It counts it as already in the new layout.
+
 ### A department can keep its files in its own S3 or MinIO bucket (2026-10-22)
 
 The Amazon S3 choice under **Organization Settings > Storage** (and in
@@ -516,8 +541,8 @@ switch to S3** on that screen. The test writes, reads back and deletes a small
 object with the saved settings, and only then are new uploads sent to the
 bucket. Editing those settings afterwards sends uploads back to the volume
 until the test passes again, and the screen says so. Files already stored stay
-where they are and keep working either way. Moving existing files into a bucket
-is a later release (step 3 of decision 31 in `docs/FILE_STORAGE_HARDENING.md`).
+where they are and keep working either way. `scripts/migrate_uploads_to_s3.py`
+moves them into the bucket (see the next entry up).
 
 What an operator needs to know:
 
@@ -531,14 +556,95 @@ What an operator needs to know:
   (`with-s3` profile, `http://minio:9000`). A department administrator types the
   endpoint, so the default stays closed. Cloud-metadata addresses are refused
   either way. The variable is in all three compose files' `environment:` blocks.
-- **Backups:** `scripts/backup.sh` still copies only the `uploads` volume. Back
+- **Backups:** `scripts/backup.sh` copies only the `uploads` volume. Back
   up a department's bucket with the provider's own tooling (versioning or
-  replication on AWS, `mc mirror` on MinIO) until step 3 adds it.
+  replication on AWS, `mc mirror` on MinIO); see `docs/BACKUP.md`.
 - **Anonymous suggestions:** a department on S3 stores suggestion screenshots in
   its bucket too, and the bucket records each object's exact upload time. On
   the volume that time is truncated to noon of the day so an anonymous
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
+
+### Backups can be encrypted (2026-10-23)
+
+Backups were plaintext. They can now be encrypted, and **nothing changes until
+you create a key**: with no key the nightly backup runs as before, logs a
+warning every run, and administrators see a critical "Backups are not
+encrypted" notice. No migration; no restart is needed to keep working.
+
+To turn it on, on the host in the install directory:
+
+1. `./scripts/backup-keygen.sh`. It writes `backup-keys/` (Unraid:
+   `/mnt/user/appdata/the-logbook/backup-keys`), prints a private key **once**
+   and asks you to confirm you stored it away from the server. **Store the
+   private key and a copy of `backup-keys/backup-drill.key` somewhere other
+   than this server and its backups. With both lost, encrypted backups cannot
+   be recovered.**
+2. Production compose only: `docker compose ... up -d backup backend` so the
+   sidecar mounts `./backup-keys` and the backend can read the sidecar's status
+   (the backend now mounts the `backups` volume read-only). Unraid users
+   re-apply the compose file (the key directory and `BACKUP_ENCRYPT_EXISTING`
+   are new).
+3. The next nightly run writes `.tar.gz.enc` + `.enc.key` + `.sha256` instead
+   of `.tar.gz`, and then **encrypts the plaintext archives already in the
+   backups directory and deletes the plaintext** after decrypting each copy and
+   comparing it with the original. Set `BACKUP_ENCRYPT_EXISTING=false` to keep
+   them.
+
+Things that change once a key exists:
+
+- **Backup files are three files, not one.** Anything that copies the backups
+  directory offsite must copy the `.enc`, `.enc.key` and `.sha256`.
+- **`backup.sh --destination s3|azure|gcs` now refuses to upload an
+  unencrypted archive** (before, it uploaded whatever it made). Create a key
+  first, or the offsite step fails.
+- Restoring an encrypted archive needs the drill key or the offline private key
+  (`backup.sh --restore FILE.enc [--drill-key F | --private-key F]`). Plaintext
+  archives restore as before.
+
+Full details: [BACKUP.md](./BACKUP.md#encrypted-backups).
+
+### Administrators must use two-factor authentication, and sensitive actions ask you to confirm (2026-10-23)
+
+Adds a migration (`users.mfa_grace_started_at`, `sessions.stepup_verified_at`, both
+nullable and applied by the normal startup). **Nothing is blocked on upgrade day.**
+
+- **Privileged members get 14 days.** A member holding administration or health-record
+  permissions (the fire, deputy and assistant chiefs, president, secretary, membership
+  coordinator and IT manager in the seeded positions; the full list is on the
+  Security-Authentication wiki page) has 14 days from the first request after the
+  upgrade to enroll in two-factor authentication. They are emailed once and see a
+  banner. After that they can reach only the setup screens. Change the period with
+  `MFA_GRACE_DAYS` (`0` closes it at once). **Make sure the IT manager has saved their
+  recovery codes first**: they hold `*`, and recovery codes are their only way back
+  from a lost authenticator.
+- **Sensitive actions ask for a code (or password).** Exports of the audit and error
+  logs, security and role changes, positions assignment, IP and integration changes,
+  administrator password/MFA resets and deleting or anonymizing a member now need a
+  re-verification within the last 10 minutes (`STEPUP_WINDOW_MINUTES`). The app
+  prompts and repeats the action. **Scripts calling these endpoints directly** must
+  `POST /auth/step-up` first on the same session, or they receive `403 LB-AUTH-013`.
+- **Single-sign-on-only accounts without MFA cannot step up** and are told to enroll
+  in MFA; they must anyway once their grace period ends.
+
+### Station kiosks can stay signed in for a week (2026-10-21)
+
+Adds a migration (`sessions.is_kiosk`, additive, applied by the normal startup) and one
+permission, `security.kiosk_session`, **seeded to no position and no rank**. Nothing
+changes for anyone until a department grants it.
+
+- A member holding it sees a "Kiosk session" card on the Check-In Station and the
+  inventory kiosk and can switch their own session to a 12-hour idle timeout and a
+  7-day lifetime. They can switch it back at any time, and enabling it is audited.
+  Change the limits with `SESSION_KIOSK_IDLE_TIMEOUT_MINUTES` (default `720`) and
+  `SESSION_KIOSK_ABSOLUTE_MAX_HOURS` (default `168`); `0` turns a limit off.
+- The kiosk limits apply only while the member still holds the permission. The `*` and
+  `security.*` wildcards grant it, so an administrator already can.
+- **Sign a station in with a dedicated account** holding only that station's
+  permissions plus `security.kiosk_session`, not a chief's own account: a session left
+  on a shared tablet carries every permission of whoever signed in.
+- Every session now shows a toast five minutes before its lifetime ends, so a member
+  can save work.
 
 ### Sessions now end after 12 hours, and idle sessions no longer sign you out everywhere (2026-10-20)
 
@@ -548,9 +654,9 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
   active it is, and the member signs in again. Before, a session that kept refreshing
   never had to. Change it with `SESSION_ABSOLUTE_MAX_HOURS` (`0` turns it off). **A
   wall-mounted Check-In Station or inventory kiosk left signed in will ask for a
-  sign-in at least once every 12 hours.** A longer limit for kiosk accounts is planned
-  as a separate change; until it lands, raise `SESSION_ABSOLUTE_MAX_HOURS` if a
-  station must stay up longer.
+  sign-in at least once every 12 hours.** Members with the new
+  `security.kiosk_session` permission can give a station its own longer limits; see
+  the kiosk entry above.
 - **Idle sessions are refused on refresh, and no longer revoke the member's other
   sessions.** Coming back to a tab after more than 15 minutes (but before the access
   cookie lapsed) used to be read as a stolen refresh token, and signed the member

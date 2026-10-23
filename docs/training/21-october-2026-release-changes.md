@@ -144,6 +144,23 @@ Screenshots to create or replace are in
 | Claude (MCP) member sign-in tool calls fixed                                                                | [16 — Integrations](./16-integrations.md)                                                               |
 | Plain-language rewrites of guides 02, 06–09, 11–15, 17                                                      | The guides themselves; moved screenshot notes are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) |
 
+# October 19–20, 2026 workflow updates
+
+Index for the eleventh window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                        | Now in                                                                                                         |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Minutes: one Settings page (Attendance, Signatures, Reminders, Publishing)   | [04 — Events & Meetings](./04-events-meetings.md#who-is-listed-on-the-roll-department-default-and-per-minutes) |
+| Minutes: search the words inside the archive                                 | [04 — Events & Meetings](./04-events-meetings.md)                                                              |
+| Screening requirements apply only to the positions they name                 | [13 — Medical Screening](./13-medical-screening.md)                                                            |
+| Dashboard overdue dues counted by the dues screen's rule                     | [11 — Finance](./11-finance.md)                                                                                |
+| Date and time fields no longer spill over their neighbour on iPad and iPhone | Layout only; the Edit Member screenshot is queued                                                              |
+
+---
+
 # October 18–19, 2026 workflow updates
 
 Index for the tenth window. Audit:
@@ -238,6 +255,25 @@ Screenshots to create or replace are in
 | Saved reports; Department pulse Customize; Legal Documents Load more                          | [08 — Admin & Reports](./08-admin-reports.md)                                    |
 | Grant lifecycle and overspend; anonymous donors hidden                                        | [12 — Grants & Fundraising](./12-grants-fundraising.md)                          |
 | Claude (MCP) Settings button and connection walkthrough; Salesforce client credentials        | [16 — Integrations](./16-integrations.md)                                        |
+
+---
+
+# October 22–23, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                                                                   | Now in                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Two-step sign-in required of administrative roles (14-day grace); step-up code before sensitive actions | [00 — Getting Started](./00-getting-started.md), [08 — Admin & Reports](./08-admin-reports.md), [`UPGRADING.md`](../UPGRADING.md) |
+| Gear low-stock email links to a filtered Inventory Items list                                           | [05 — Inventory](./05-inventory.md) (Low stock emails)                                                                            |
+| A checklist is overdue when its shift ends, not at midnight                                             | [03 — Scheduling](./03-scheduling.md) (written with the change)                                                                   |
+| Historical training import refuses undated rows                                                         | [02 — Training](./02-training.md) (written with the change)                                                                       |
+| Event page check-in and check-out controls                                                              | [Learning Center](./LEARNING_CENTER_SCREENSHOTS.md), 04 (written with the change)                                                 |
+| Department's own S3 / MinIO bucket and moving existing files into it                                    | Operator-facing: `BACKUP.md`, `FILE_STORAGE_HARDENING.md`, `UPGRADING.md`                                                         |
+| iCal integration drops the unused include-shifts setting                                                | `KNOWN_LIMITATIONS.md`                                                                                                            |
 
 ---
 

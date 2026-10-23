@@ -5,6 +5,40 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 22 – 23, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
+
+- **Administrators must use two-step sign-in.** Members with administration or
+  health-record permissions have 14 days after the upgrade to enroll, with an email
+  and a countdown banner. The IT manager should save recovery codes first.
+- **Sensitive actions ask for a code.** Log exports, role, position, security and
+  integration changes, administrator resets and deleting a member need a fresh
+  authenticator code (or password), good for 10 minutes.
+- **Low-stock gear email** now links to the Inventory Items list filtered to items
+  at or below their reorder point.
+- **Checklists** are marked overdue when their shift ends, so an overnight shift is
+  not overdue at midnight.
+- **Historical training import** refuses rows with no completion date.
+- Screenshots for the banner, the code box and the filtered list are queued in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Recent changes: October 23, 2026 (screenshots)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
+
+The training guides gained 45 screenshots: the setup guides for a department
+that has nothing configured yet, the Agenda and Sync from the agenda dialogs,
+publishing and signing of adopted minutes, the ranked-choice paper ballot
+dialog, the departure clearance row on the inventory hub, and the phone layouts
+for My Checklists, Apparatus Inventory and the Suggestions review. Opening a
+departure clearance no longer reports an error after it has saved. The last two
+of the guides' pictures, the Android NFC scanner with Tap NFC armed and the
+"Or tap their ID card" button in Scan Member ID, are in guide 05; no placeholder
+remains.
+
 ## Recent changes: October 21 – 22, 2026
 
 The engineering audit is
@@ -58,6 +92,16 @@ The engineering audit is
   revised, and fills in the adoption form.
 - **Screenshots.** Nothing was re-captured. The gap report is in
   `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Also in this window:**
+
+- **Check your screening requirements.** If **Applies to Positions** has text in
+  it, that list now decides who is graded; blank means everyone, and a member with
+  nothing that applies reads **Not applicable**.
+- **The dashboard's overdue-dues number may drop.** Part-paid dues are Partial,
+  matching the dues page.
+- **iPad and iPhone:** date and time fields no longer overlap the field beside
+  them on Edit Member.
 
 ## Recent changes: October 18 – 19, 2026
 

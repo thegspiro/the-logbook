@@ -83,7 +83,12 @@ Re-verify findings those left open. Do not re-report ones they fixed.
 Work the feature against all seven checklist dimensions. Read the real code —
 endpoints, service, models, schemas, migrations, frontend module. **Enumerate**
 the endpoints and check each one's auth dependency and permission string rather
-than spot-checking. Read a large service in sections; a truncated read reported
+than spot-checking. **A repeat pass re-enumerates too**: walk every route
+decorator by AST and compare the count with the previous pass's, rather than
+reviewing only the files the diff lists. A diff table shows which files changed,
+not that one of them gained a route — `GET /my-sign-offs` (MP-32) sat inside a
+reviewed window for exactly that reason, and was found only by a session that
+re-listed the routes. Read a large service in sections; a truncated read reported
 as "clean" is worse than an honest partial-scope note.
 
 ## Step 4 — Fix what is safe, flag what is not

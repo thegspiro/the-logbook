@@ -799,6 +799,9 @@ async def update_item(
 
     service = EquipmentCheckService(db)
     changes = data.model_dump(exclude_unset=True)
+    # The change log is a JSON column, which cannot hold the `date` an
+    # expiration carries; the update itself keeps the typed values.
+    logged_changes = data.model_dump(mode="json", exclude_unset=True)
     try:
         item = await service.update_item(
             item_id,
@@ -823,7 +826,7 @@ async def update_item(
             entity_type="item",
             entity_id=item_id,
             entity_name=item.name,
-            changes=changes,
+            changes=logged_changes,
         )
         await db.commit()
     return item
@@ -1198,6 +1201,9 @@ async def get_my_checklists(
                 "templateName": tmpl.name,
                 "checkTiming": tmpl.check_timing,
                 "status": status,
+                # Decided by the service from the shift's end time; both member
+                # screens show it rather than re-deriving it from shiftDate.
+                "isOverdue": bool(cl.get("is_overdue")),
                 "totalItems": (
                     check.total_items
                     if check

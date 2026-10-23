@@ -364,14 +364,15 @@ the app):
 
 ## Session Management
 
-| Feature                | Details                                                                                                                 |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Access token lifetime  | 30 minutes by default (`ACCESS_TOKEN_EXPIRE_MINUTES`), renewed silently by the refresh flow                             |
-| Refresh token lifetime | 7 days by default (`REFRESH_TOKEN_EXPIRE_DAYS`)                                                                         |
-| Inactivity timeout     | 15 minutes by default (`HIPAA_SESSION_TIMEOUT_MINUTES`), enforced server-side; the app warns 60 seconds before sign-out |
-| Absolute lifetime      | 12 hours by default (`SESSION_ABSOLUTE_MAX_HOURS`), however active the session is; the member then signs in again       |
-| Session IP monitoring  | Alerts on IP change during session                                                                                      |
-| Password change        | Signs the member out of every session                                                                                   |
+| Feature                | Details                                                                                                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token lifetime  | 30 minutes by default (`ACCESS_TOKEN_EXPIRE_MINUTES`), renewed silently by the refresh flow                                                                                                                                                  |
+| Refresh token lifetime | 7 days by default (`REFRESH_TOKEN_EXPIRE_DAYS`)                                                                                                                                                                                              |
+| Inactivity timeout     | 15 minutes by default (`HIPAA_SESSION_TIMEOUT_MINUTES`), enforced server-side; the app warns 60 seconds before sign-out                                                                                                                      |
+| Absolute lifetime      | 12 hours by default (`SESSION_ABSOLUTE_MAX_HOURS`), however active the session is; the member then signs in again                                                                                                                            |
+| Kiosk sessions         | Members with `security.kiosk_session` can switch their own session to a 12-hour idle timeout and 7-day lifetime (`SESSION_KIOSK_IDLE_TIMEOUT_MINUTES`, `SESSION_KIOSK_ABSOLUTE_MAX_HOURS`); the app warns 5 minutes before the lifetime ends |
+| Session IP monitoring  | Alerts on IP change during session                                                                                                                                                                                                           |
+| Password change        | Signs the member out of every session                                                                                                                                                                                                        |
 
 ### Refresh Rotation Is Strict — No Replay Grace
 
@@ -475,3 +476,59 @@ GET    /api/v1/auth/oauth/authentik/callback # Authentik OAuth callback
 ---
 
 **See also:** [Security Overview](Security-Overview) | [Security Configuration](Configuration-Security) | [Encryption](Security-Encryption)
+
+### Station kiosks
+
+A wall-mounted Check-In Station or inventory kiosk has to stay signed in
+between shifts, which the 15-minute idle timeout and 12-hour lifetime do not
+allow. Rather than weakening those for everyone, a member holding
+`security.kiosk_session` (seeded to no position) can switch **their own
+session** to the kiosk limits from the station or kiosk page, and switch it
+back at any time.
+
+- The kiosk limits apply only while the member still holds the permission;
+  revoke it and the session returns to the standard limits on its next request.
+- Turning it on is recorded in the audit log as a warning.
+- **Recommendation:** sign a station in with a dedicated account that holds
+  only the permissions that station needs (`members.check_in` or
+  `inventory.kiosk`, plus `security.kiosk_session`), never a chief's or
+  administrator's own account. A session left signed in on a shared tablet
+  carries that account's full access.
+- Every session, kiosk or not, shows a toast 5 minutes before its lifetime ends.
+
+### Mandatory MFA for privileged members and step-up re-verification
+
+Two controls sit on top of the organization-wide MFA switch (Organization
+Settings > Security), which still works as before.
+
+**Who must use MFA.** A member who holds any of these permissions (wildcards
+count) must enroll in two-factor authentication whatever the organization
+chose: `*`, `settings.manage`, `security.manage`, `integrations.manage`,
+`users.create`, `users.edit`, `users.delete`, `users.update_positions`,
+`audit.export`, `audit.manage`, `medical_screening.view`,
+`medical_screening.manage`. The list is computed from permissions, so it
+follows role changes. In the seeded positions that is the fire, deputy and
+assistant chiefs, the president, the secretary, the membership coordinator and
+the IT manager; it is defined in `app/services/mfa_policy.py`.
+
+- **Grace period.** The first time the server sees a privileged member without
+  MFA it starts a 14-day clock (`MFA_GRACE_DAYS`), emails them, and shows a
+  banner counting down. After it ends they can reach only the enrollment
+  screens, as under the org-wide switch.
+- **Losing and regaining privilege.** The clock is cleared when a member stops
+  being privileged, so a later promotion gets a fresh period.
+
+**Step-up.** Some actions need the member to have re-verified on the current
+session in the last 10 minutes (`STEPUP_WINDOW_MINUTES`): an authenticator
+code, or the password for a member without MFA. The stamp is stored on the
+session row, so it never carries to another device or tab. Without it the API
+answers `403 LB-AUTH-013` and the app prompts and repeats the request. A
+member who signs in only through a provider and has neither a password nor MFA
+cannot step up; they are told to enroll in MFA.
+
+| Group               | Actions                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Exports             | audit log export, error log export                                                                                                                                                                                                         |
+| Security and policy | MFA policy, organization auth and file-storage settings, audit chain re-hash, role create/edit/delete/clone, assigning or removing a member's positions, IP exceptions approve/revoke, country blocks, integration connect/disconnect/edit |
+| Account recovery    | administrator password reset, administrator MFA reset                                                                                                                                                                                      |
+| Destructive         | delete a member, anonymize a member                                                                                                                                                                                                        |

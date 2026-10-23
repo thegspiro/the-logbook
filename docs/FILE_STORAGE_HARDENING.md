@@ -175,7 +175,8 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | done         |
 | 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | done         |
 | 6     | A department's own S3 / MinIO bucket (decision 31), step 1 of 3: one storage interface every caller uses                                        | done (#3537) |
-| 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | this change  |
+| 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | done (#3561) |
+| 8     | Decision 31, step 3 of 3: moving existing files into a bucket, rewrap on S3, backup notice                                                      | this change  |
 
 ### Phase 1 — what changed
 
@@ -368,10 +369,27 @@ This revision also joins the two Alembic heads `3f3bd6f3c7e4` and
 | Settings cache        | Per worker, 30 s, 256 departments; cleared in the worker that saves. Another worker follows within 30 s                                                         |
 
 Encrypted before upload with the same format and key as the volume, so the
-bucket's operator never holds plaintext. Not in this step, and recorded in
-`docs/KNOWN_LIMITATIONS.md`: moving existing files into a bucket, key rotation
-(`rewrap`) and the plain-file notice for objects in a bucket, and backing a
-bucket up (step 3).
+bucket's operator never holds plaintext. Step 3 (phase 8, below) covers
+moving existing files in, key rotation and backups.
+
+### Phase 8 — moving existing files into a bucket (2026-10-22)
+
+Owner decisions: the copies on disk are **kept until finalize**, as relocation
+and encryption keep theirs; and backups **stay with the bucket's own tooling**
+— `backup.sh` names the buckets it leaves out rather than downloading them.
+
+| Piece        | Where                                                                                                                                                    |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The move     | `app/services/s3_migration.py`, driven by `scripts/migrate_uploads_to_s3.py`: apply (copy, read back, compare SHA-256, repoint), rollback, finalize      |
+| Which rows   | `upload_relocation.collect_references`, now including minutes attachments; one file shared by several rows moves once                                    |
+| Which files  | Only files in the org-first layout, for departments that passed the connection test; a legacy-layout file is reported for `relocate_uploads.py` first    |
+| Manifest     | `/app/uploads/.s3-migration/`, written before any row changes                                                                                            |
+| Key rotation | `encrypt_uploads.py --rewrap` also rewraps bucket objects, found through the rows that reference them                                                    |
+| Backups      | `backup.sh` calls `migrate_uploads_to_s3.py --buckets` and warns which buckets hold files the archive does not; `docs/BACKUP.md` covers provider tooling |
+
+A moved anonymous screenshot's bucket copy carries the migration's time, not
+the submission's. Relocation now counts an `s3://` reference as already in the
+new layout; before this it reported one as missing on disk.
 
 ### Found in passing, not in this change
 

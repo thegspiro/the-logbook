@@ -20,7 +20,7 @@ keeps each one, in the ``reason`` of its
 ``training_enrollment_completed_manually`` event.
 
 Revision ID: a0195b397bf3
-Revises: e5f9bb066e07
+Revises: 4250eb8b8378
 Create Date: 2026-10-23 19:15:47.668983
 
 """
@@ -32,7 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a0195b397bf3"
-down_revision: Union[str, None] = "e5f9bb066e07"
+down_revision: Union[str, None] = "4250eb8b8378"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

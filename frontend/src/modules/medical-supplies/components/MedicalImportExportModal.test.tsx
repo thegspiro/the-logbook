@@ -83,7 +83,16 @@ describe('MedicalImportExportModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /export supply list/i }));
 
     await waitFor(() => expect(mockExportItems).toHaveBeenCalledWith({ search: 'gauze', category_id: 'cat-1' }));
-    expect(screen.getByText(/uses the search and category filter/i)).toBeInTheDocument();
+    expect(screen.getByText(/uses the filters on the page/i)).toBeInTheDocument();
+  });
+
+  it('says a view filter applies too, not only a search', async () => {
+    renderModal({ uncounted: true });
+
+    await userEvent.click(screen.getByRole('button', { name: /export supply list/i }));
+
+    await waitFor(() => expect(mockExportItems).toHaveBeenCalledWith({ uncounted: true }));
+    expect(screen.getByText(/uses the filters on the page/i)).toBeInTheDocument();
   });
 
   it('exports the lot list', async () => {

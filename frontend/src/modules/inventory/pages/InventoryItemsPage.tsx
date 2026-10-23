@@ -955,6 +955,10 @@ const InventoryItemsPage: React.FC = () => {
   // shareable link is the point.
   const [searchParams, setSearchParams] = useSearchParams();
   const vendorFilter = searchParams.get('vendor_id') ?? '';
+  // Arrived at from the low-stock alert email, so it lives in the URL like the
+  // vendor scope. Only the literal 'true' turns it on: anything else is an
+  // unrecognized value and degrades to the full list rather than an error.
+  const lowStockOnly = searchParams.get('low_stock') === 'true';
   // The type filter is URL-driven for the same reason vendor scoping is: the
   // inventory hub's supply-line cards link straight at one domain
   // (?item_type=uniform), and that only works if the list reads the URL.
@@ -1130,6 +1134,7 @@ const InventoryItemsPage: React.FC = () => {
       location_id: fLoc && fLoc !== UNASSIGNED_LOCATION ? fLoc : undefined,
       unassigned_location: fLoc === UNASSIGNED_LOCATION ? true : undefined,
       vendor_id: vendorFilter || undefined,
+      low_stock: lowStockOnly || undefined,
       size: fSize || undefined,
       color: fColor || undefined,
       style: fStyle || undefined,
@@ -1138,7 +1143,23 @@ const InventoryItemsPage: React.FC = () => {
       sort_order: sortOrd,
       group_by: groupBy || undefined,
     }),
-    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, fLabel, sortBy, sortOrd, groupBy]
+    [
+      search,
+      fCat,
+      fStatus,
+      fCond,
+      fType,
+      fLoc,
+      vendorFilter,
+      lowStockOnly,
+      fSize,
+      fColor,
+      fStyle,
+      fLabel,
+      sortBy,
+      sortOrd,
+      groupBy,
+    ]
   );
 
   const loadItems = useCallback(
@@ -1863,6 +1884,24 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Low-stock scope, arrived at from the alert email */}
+      {lowStockOnly && (
+        <div className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+          <span>Showing only items at or below their reorder point.</span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('low_stock');
+              setSearchParams(next, { replace: true });
+            }}
+            className="touch-target-phone font-medium underline"
+          >
+            Show all items
+          </button>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="card-secondary mb-4 p-4">
         {/* Seven columns only from 2xl: below that a column is ~140px, and at
@@ -2217,7 +2256,8 @@ const InventoryItemsPage: React.FC = () => {
           fColor ||
           fStyle ||
           fLabel ||
-          vendorFilter ? (
+          vendorFilter ||
+          lowStockOnly ? (
           <EmptyState
             icon={Package}
             title="No items found"

@@ -213,13 +213,9 @@ server's log. Once a mail server answers, a wrong password or an encryption
 mismatch is reported in detail. After setup, **Settings → Email → Test
 Connection** gives detailed messages.
 
-<!-- Screenshot needed:
-_[System Owner during setup at `/onboarding/it-team`: step 7 IT & Backup Contacts with its "Optional. Choose Skip for now if your department has no IT contact." line, one demo IT contact filled in, the Recovery contacts note, and both Continue to Email and Skip for now in frame. Demo names and example.org addresses only; no real phone numbers.]_
--->
+![Setup step IT & Backup Contacts: the line that the step is optional and Skip for now is the choice for a department with no IT contact, one made-up IT contact filled in as the primary, the Recovery contacts note, and Continue to Email with Skip for now below it](./images/08-116-onboarding-it-team.png)
 
-<!-- Screenshot needed:
-_[Anonymous on a fresh install, then the new System Owner (scripts/screenshots/wizard-walk.mjs), at `/onboarding/apparatus`: Engine 1 carrying Officer, Driver, Firefighter, Firefighter and EMT chips — two Firefighter seats visible — and the + EMT add chip. Crop to the unit card; the administrator password from the previous step must not be in frame.]_
--->
+![The apparatus setup step with Engine 1: riding positions Officer, Driver, Firefighter, Firefighter and EMT as chips with a remove button each, and the add chips below, + EMT among them](./images/08-117-onboarding-apparatus-seats.png)
 
 #### Run the wizard in one tab
 
@@ -263,6 +259,17 @@ department-wide settings.
 The screen has these sections: **General** (Profile, Contact, Addresses),
 **Modules**, **Email**, **Department Email**, **Storage**, **Label Printers**
 and **Authentication** (Sign-in, MFA Policy).
+
+> **MFA Policy is a floor, not the whole rule.** Members holding administration
+> or health-record permissions must use two-step sign-in even when the policy is
+> off for everyone else, with a 14-day grace period that starts the first time
+> the server sees them without it (`MFA_GRACE_DAYS`). Before upgrading, make sure
+> the IT manager has saved their recovery codes. Sensitive actions (log exports,
+> role and position changes, security and integration settings, administrator
+> resets, deleting a member) also ask for a fresh authenticator code, valid 10
+> minutes (`STEPUP_WINDOW_MINUTES`). Anything calling those endpoints directly
+> must `POST /auth/step-up` first or receives `403 LB-AUTH-013`. Details:
+> [`UPGRADING.md`](../UPGRADING.md) and the Security-Authentication wiki page.
 
 ### How settings screens are laid out
 
@@ -341,9 +348,7 @@ The year in order and request numbers (for example "ORD-2026-…") still follows
 UTC, so it can differ on the evening of December 31. See
 [Known Limitations](../KNOWN_LIMITATIONS.md#today-is-the-departments-date--what-still-reads-utc-2026-09-26).
 
-<!-- Screenshot needed:
-_[Settings → Organization → Profile at laptop width, with the **Timezone** select open on the department's zone, beside the department name — the one setting this section asks every administrator to check.]_
--->
+![Settings → Organization → Profile at laptop width: the department name beside the Timezone select, focused on the department's zone](./images/08-113-organization-timezone.png)
 
 ### Contact Info Visibility
 
@@ -2137,10 +2142,9 @@ email means the scheduler or mail is broken, not that the week was calm.
   nothing. After an upgrade the first report waits for the next scheduled day and
   hour.
 
-_[Screenshot to create: Organization Settings → Authentication → Security Report,
-with the weekday and hour pickers, the recipient line and "Last sent". Capture
-once with the IT Manager position held and once with the administrator fallback
-notice showing.]_
+![Settings → Authentication → Security Report with the weekday and hour pickers, the recipient line naming administrators, the notice that no one holds the IT Manager position, and Last sent](./images/08-114-security-report-fallback.png)
+
+![The same Security Report settings once a member holds the IT Manager position: the recipient line names them and the administrator notice is gone](./images/08-115-security-report-it-manager.png)
 
 ### Too many sign-in attempts
 

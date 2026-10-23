@@ -67,6 +67,9 @@ services:
       # silently loses the CA mount, which is precisely where private-CA TLS
       # is actually used.
       - ${SSL_CERTS_DIR:-./infrastructure/certs}:/etc/ssl/logbook:ro
+      # Read-only: only the backup sidecar's status file is read from here, so
+      # administrators are told when backups are not encrypted.
+      - backups:/backups:ro
     # Do NOT publish the backend port to the host in production; it sits behind
     # the reverse proxy on the internal Docker network. The `!reset` tag clears
     # the base file's port publish (requires Docker Compose v2.24+); on older
@@ -96,9 +99,14 @@ services:
       BACKUP_TIME: ${BACKUP_TIME:-02:00}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       VERIFY_EVERY_N_BACKUPS: ${VERIFY_EVERY_N_BACKUPS:-7}
+      BACKUP_ENCRYPT_EXISTING: ${BACKUP_ENCRYPT_EXISTING:-true}
     volumes:
       - ./scripts:/scripts:ro
       - backups:/backups
+      # Created by scripts/backup-keygen.sh. Read-only: the sidecar only needs
+      # the public certificate and the drill key. With no keys here, backups
+      # stay unencrypted and say so on every run.
+      - ./backup-keys:/keys:ro
       - uploads:/uploads:ro
       - audit_archives:/audit_archives:ro
     networks:

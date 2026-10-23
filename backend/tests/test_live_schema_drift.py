@@ -5,6 +5,8 @@ the Alembic chain plus ``repair_schema``. Nothing compared the two, and on
 2026-10-20 they differed in ways that mattered: 18 apparatus columns carried a
 leftover RESTRICT foreign key beside their SET NULL one (blocking member
 deletion), and three indexes existed on one kind of database and not the other.
+On 2026-10-22 a third: ``training_waivers.end_date`` was still NOT NULL on
+upgraded databases, so a permanent waiver or an open-ended leave failed there.
 
 CI's integration job builds its database the upgraded way (migrations, then
 ``scripts/repair_schema.py``), so these checks run against that shape there.
@@ -19,7 +21,7 @@ deliberately not checked here.
 
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 from sqlalchemy import Column, select, text
@@ -33,7 +35,9 @@ from app.models.apparatus import (
     ApparatusType,
     FuelType,
 )
+from app.models.training import TrainingWaiver
 from app.models.user import Organization, User
+from app.services.member_leave_service import MemberLeaveService
 from app.services.user_deletion_service import release_user_references
 
 pytestmark = pytest.mark.integration
@@ -149,3 +153,42 @@ async def test_member_who_logged_fuel_can_be_hard_deleted(db_session: AsyncSessi
         .execution_options(populate_existing=True)
     )
     assert recorded_by is None
+
+
+async def test_open_ended_leave_stores_a_permanent_waiver(db_session: AsyncSession):
+    """A NULL end date means a permanent waiver, and the database must allow it.
+
+    Before f938324f8081 an upgraded database refused this with MySQL 1048,
+    because ``training_waivers.end_date`` was created NOT NULL and never relaxed
+    when the model was. An open-ended leave creates exactly this waiver.
+    """
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(id=str(uuid.uuid4()), name="Waiver", slug=f"waiver-{suffix}")
+    db_session.add(org)
+    await db_session.flush()
+    member = User(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        username=f"leave-{suffix}",
+        email=f"leave-{suffix}@example.org",
+    )
+    db_session.add(member)
+    await db_session.flush()
+
+    waiver_id = await MemberLeaveService(db_session)._create_linked_waiver(
+        organization_id=org.id,
+        user_id=member.id,
+        leave_type="leave_of_absence",
+        start_date=date(2026, 10, 1),
+        end_date=None,
+        reason="Open-ended leave",
+        granted_by=member.id,
+    )
+    await db_session.flush()
+
+    end_date = await db_session.scalar(
+        select(TrainingWaiver.end_date)
+        .where(TrainingWaiver.id == waiver_id)
+        .execution_options(populate_existing=True)
+    )
+    assert end_date is None

@@ -6527,6 +6527,7 @@ class MembershipPipelineService:
         organization_id: str,
         prospect_ids: Optional[List[str]] = None,
         purged_by: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> int:
         """Permanently delete inactive prospects from a pipeline.
 
@@ -6543,12 +6544,20 @@ class MembershipPipelineService:
         the server. A file that exists but cannot be removed raises before any
         row is deleted, so a retry can finish the job; files already removed by
         then are treated as gone on the retry.
+
+        ``exclude_prospect_ids`` carries the caller's own prospect record (see
+        app/api/prospect_privacy.py): a coordinator whose own application is
+        inactive must not be able to destroy the file other members wrote
+        about them, whether by naming its id or by purging the whole tab.
         """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return 0
         ids = await self._delete_inactive_prospects(
-            pipeline_id, organization_id, prospect_ids=prospect_ids
+            pipeline_id,
+            organization_id,
+            prospect_ids=prospect_ids,
+            exclude_prospect_ids=exclude_prospect_ids,
         )
         if ids:
             await self.db.commit()
@@ -6560,6 +6569,7 @@ class MembershipPipelineService:
         organization_id: str,
         prospect_ids: Optional[List[str]] = None,
         inactive_before: Optional[datetime] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> List[str]:
         """Delete the matching inactive applications and their files; no commit.
 
@@ -6582,19 +6592,13 @@ class MembershipPipelineService:
             conditions.append(ProspectiveMember.inactive_since.isnot(None))
             conditions.append(ProspectiveMember.inactive_since <= inactive_before)
 
+        query = self._apply_prospect_exclusions(
+            select(ProspectiveMember.id).where(and_(*conditions)),
+            exclude_prospect_ids,
+        )
         # Locked so an applicant reactivated mid-purge is either purged before
         # the reactivation or not at all.
-        ids = list(
-            (
-                await self.db.execute(
-                    select(ProspectiveMember.id)
-                    .where(and_(*conditions))
-                    .with_for_update()
-                )
-            )
-            .scalars()
-            .all()
-        )
+        ids = list((await self.db.execute(query.with_for_update())).scalars().all())
         if not ids:
             return []
 

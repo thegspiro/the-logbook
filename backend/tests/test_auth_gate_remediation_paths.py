@@ -150,3 +150,52 @@ def test_ordinary_routes_stay_closed_while_either_gate_applies(path: str):
             f"{must_change_password}, mfa_required={mfa_required}"
         )
         assert getattr(refusal, "status_code", None) == 403
+
+
+async def _resolve_privileged(path: str, *, grace_days_ago: int):
+    """``get_current_user`` for a privileged member, org switch off."""
+    from datetime import datetime, timedelta, timezone
+
+    user = SimpleNamespace(
+        id="user-1",
+        organization_id="org-1",
+        must_change_password=False,
+        mfa_enabled=False,
+        is_active=True,
+        positions=[SimpleNamespace(permissions=["settings.manage"])],
+        rank=None,
+        mfa_grace_started_at=datetime.now(timezone.utc)
+        - timedelta(days=grace_days_ago),
+    )
+    db = _OrgSettingsDB({"security": {"mfa_required": False}})
+    db.flush = AsyncMock()
+    with patch.object(
+        deps.AuthService, "get_user_from_token", AsyncMock(return_value=user)
+    ):
+        try:
+            await deps.get_current_user(_request(path), None, "access-token", db)
+        except Exception as exc:  # noqa: BLE001 - the refusal is the assertion
+            return exc
+    return None
+
+
+def test_a_privileged_member_inside_the_grace_period_is_not_blocked():
+    assert asyncio.run(_resolve_privileged("/api/v1/users", grace_days_ago=3)) is None
+
+
+def test_a_privileged_member_past_the_grace_period_is_blocked_from_the_app():
+    refusal = asyncio.run(_resolve_privileged("/api/v1/users", grace_days_ago=30))
+    assert refusal is not None
+    assert refusal.error_code == deps.ErrorCode.AUTH_MFA_ENROLLMENT_REQUIRED
+    assert refusal.headers == {"X-MFA-Enrollment-Required": "true"}
+
+
+def test_a_blocked_privileged_member_can_still_enroll():
+    for path in (
+        "/api/v1/auth/mfa/setup",
+        "/api/v1/auth/mfa/verify-setup",
+        "/api/v1/auth/mfa/status",
+        "/api/v1/auth/me",
+        "/api/v1/auth/logout",
+    ):
+        assert asyncio.run(_resolve_privileged(path, grace_days_ago=30)) is None, path

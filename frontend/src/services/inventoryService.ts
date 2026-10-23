@@ -274,6 +274,8 @@ export const inventoryService = {
     unassigned_location?: boolean | undefined;
     storage_area_id?: string | undefined;
     vendor_id?: string | undefined;
+    /** Only items at or below their reorder point — the set the low-stock alert email lists. */
+    low_stock?: boolean | undefined;
     /** These three reached the API untyped: the caller spreads a filter object,
      *  which slips past TS's excess-property check (CLAUDE.md pitfall #5). */
     size?: string | undefined;
@@ -1007,6 +1009,7 @@ export const inventoryService = {
     unassigned_location?: boolean | undefined;
     storage_area_id?: string | undefined;
     vendor_id?: string | undefined;
+    low_stock?: boolean | undefined;
     search?: string | undefined;
     size?: string | undefined;
     color?: string | undefined;

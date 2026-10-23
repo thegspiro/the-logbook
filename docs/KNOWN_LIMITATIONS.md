@@ -971,21 +971,23 @@ application server and has no indication of it — the step offers the options
 without saying they are not yet in effect (CLAUDE.md pitfall #19).
 
 **Partly resolved (2026-10-22): the S3 / MinIO option works** (decision 31,
-step 2, in `docs/FILE_STORAGE_HARDENING.md`). A department's uploads go to its
+steps 2 and 3, in `docs/FILE_STORAGE_HARDENING.md`). A department's uploads go to its
 own bucket once **Test and switch to S3** passes with its saved settings, and
 the Storage screen reports where new files go whatever platform is picked.
 Still open:
 
 - **Google Drive, OneDrive / SharePoint and "Other" are still unread.** The
   screen now says files stay on the server for them.
-- **Existing files stay where they were written** until step 3's migration
-  command moves them. Both are served, so nothing breaks.
-- **Key rotation and the plain-file notice cover the volume only.**
-  `scripts/encrypt_uploads.py`'s rewrap does not reach objects in a bucket,
-  so after a key rotation they stay under the old key, which must be kept
-  until step 3 rewraps them. Every object is written encrypted, so the
-  plain-file notice has nothing to find there.
-- **Backups:** `scripts/backup.sh` copies the volume, not a bucket.
+- **Resolved 2026-10-22: existing files move with
+  `scripts/migrate_uploads_to_s3.py`** (apply, rollback, finalize), and
+  `scripts/encrypt_uploads.py --rewrap` reaches bucket objects. Every object
+  is written encrypted, so the plain-file notice has nothing to find in a
+  bucket; until a migration is finalized, the disk copies it keeps are still
+  covered by the notice.
+- **Backups do not include buckets, by decision (2026-10-22).**
+  `scripts/backup.sh` names the buckets it left out; `docs/BACKUP.md` says how
+  to protect them with the provider's tooling. A department that skips that
+  has no second copy of its bucket.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.
@@ -1999,13 +2001,34 @@ them), or leave them as harmless empty tables.
 **Upgraded databases are stricter than the models.** About 100 columns are
 `NOT NULL` on an upgraded database and nullable in the models, and about 177
 carry a server default that a fresh install lacks. They are mostly booleans,
-sort orders and timestamps. The
-application supplies every one of these values on insert, so ordinary use does
-not reach the gap. It shows up when code writes an explicit `null` to one of
-these columns: `apply_updates` reads nullability from the models, so it passes
-the write, and an upgraded database then rejects it at flush time with a 500
-instead of a 400. Closing it means choosing, per column, which side is right.
-That makes it a sweep with its own review, not a mechanical migration.
+sort orders and timestamps. It shows up when code writes an explicit `null` to
+one of these columns: `apply_updates` reads nullability from the models, so it
+passes the write, and an upgraded database then rejects it at flush time with
+MySQL 1048, returned as a 500 or as a generic 400.
+
+_Traced 2026-10-22._ One column was reached by ordinary requests:
+`training_waivers.end_date`, where a NULL means a permanent waiver. It was
+relaxed by `f938324f8081`, because there the model is right. Every other path
+needs a request that carries an explicit `null` for an on/off or count setting.
+This pass traced the backend only and did not check whether any frontend form
+sends one. About 45 such paths were found, for example:
+
+- training module configuration (25 display switches)
+- self-report and shift-report settings, and shift templates
+- inventory categories, items, variant groups, kits, maintenance records and
+  NFPA compliance, plus `quantity` on `POST /inventory/items/bulk`
+- membership pipelines and steps, and department messages
+
+For these the upgraded database is the one that is right. The fix is a sweep:
+
+- declare the columns `NOT NULL` with their defaults in the models, so
+  `apply_updates` returns a 400;
+- add the same null check to the hand-written update loops that bypass
+  `apply_updates`;
+- add a migration that settles any NULLs already stored on fresh installs.
+
+**Open decision:** that sweep is a schema change across those columns and
+waits on an owner's go-ahead.
 
 **One unused index on upgraded databases.** `20260808_0003` dropped the
 foreign key on `shift_equipment_checks.apparatus_id`, and MySQL kept the index
@@ -2073,8 +2096,9 @@ shows one URL with a copy button and a **Reset link** control
 (`/api/public/v1/calendar/org/{token}.ics`). The integration's stored
 `included_event_types` narrows that feed by event type, but no screen sets it,
 so in practice the card's link carries every published event. There is no
-training-only feed and no per-filter list of URLs. `ICalConfig.include_shifts`
-is accepted and stored but read by nothing; no screen offers it.
+training-only feed and no per-filter list of URLs. The department feed carries
+no shifts; an `include_shifts` setting that was accepted and stored but read by
+nothing was removed on 2026-10-23.
 
 The guide-03 subscribe card is deliberately not captured because expanding it
 exposes the calendar feed's bearer credential; the same applies to a connected
@@ -3056,6 +3080,22 @@ in-progress guard, because both mint fresh tokens. The synchronous
 `POST /elections/{id}/remind-non-voters` is kept for API callers and now also
 answers `409` while a send is running.
 
+## Elections — A Rolled-Back Election Leaves Its Filed Result in Circulated Minutes (2026-10-22)
+
+Closing an election files its result with its meeting's minutes
+automatically (`auto_file_election_results`, on by default). When those minutes
+are already circulated or adopted, the result is a permanent addendum.
+`rollback_election` reopens a closed election but does not touch that filing,
+so after a rollback the minutes keep the old tally, the next close files
+nothing (a result is filed once per minutes and election), and the addendum
+cannot be removed. Found by the pass-11 security review (ELEC-49).
+
+**Needs an owner decision:** on a rollback, supersede the addendum with a
+dated correction, annotate it as withdrawn, or refuse a rollback once the
+result sits in adopted minutes. Until then, a manager who must roll back an
+election whose result is in adopted minutes should record the correction in
+the next meeting's minutes.
+
 ## Elections — Broadcast Election Emails Go One Message Per Member (2026-10-18)
 
 The nominations-open announcement and the pre-meeting package used to go out as
@@ -3409,6 +3449,28 @@ Recorded here rather than as a second entry (security review MP-08 pass 8,
 **Accepted by the owner (2026-10-05):** both sites keep the file-first order;
 the residual is retry-safe and needs a rare compound failure, so no
 trash-and-restore scheme is built.
+
+## Membership Pipeline — Typing Your Own Email Into the Duplicate Check Names Your Own Application (2026-10-23, resolved 2026-10-23)
+
+`POST /prospective-members/prospects/check-existing` returns
+`existing_applicant` (name, pipeline, stage) for the active applicant holding
+the email the caller typed, and `POST /prospects` refuses that email with a
+409 that names the same three things. Neither route has `{prospect_id}` in its
+path, so the router-wide `block_self_prospect_access` guard never runs, and
+neither applies `get_hidden_prospect_ids`. A caller holding `members.create`
+or `prospective_members.manage` who also has an active application of their
+own can type their own email and learn which pipeline and stage that
+application is at. `prospect_privacy.py` says a member must never be able to
+read that about their own file.
+
+**Resolved (2026-10-23, owner decision: hide the caller's own match).** Both
+routes now depend on `get_hidden_prospect_ids`. `check-existing` returns
+`existing_applicant: null` when the match is the caller's own application,
+and the 409 says only "An active applicant already uses this email", with no
+name, pipeline or stage. The refusal still confirms that an active
+application holds the email; it has to refuse, and the caller already knows
+they applied. That is the same line the router guard's 404 draws. Both routes
+were removed from `EXEMPT` in `tests/test_prospect_route_self_access_coverage.py`.
 
 ## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02, resolved 2026-10-11)
 
@@ -6937,6 +6999,34 @@ declared scope — it is the closest sibling (a requirement-credit path,
 like `training_programs.py`'s own enrollment logic) — and give it a first
 full pass before Feature 17 is next due in the rotation, rather than let it
 ride uncovered through another full cycle under Feature 17's existing ✅.
+
+## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)
+
+Found by security review DOC-10 pass 11
+(`docs/security-review/DOC-10-documents-legal.md`, pass 11, DOC-31). An
+owner-direct change landed between pass 10 and pass 11 that makes
+`DocumentsService.delete_document`/`delete_folder` refuse to delete a
+document that is the receipt on a purchase request or expense report once
+that record has left `DRAFT` — closing a prior silent-data-loss gap where the
+`SET NULL` foreign key let the receipt reference disappear with no trace.
+
+The new check (`_release_document_references`) reads the referencing
+`PurchaseRequest`/`ExpenseReport` rows with a plain `SELECT`, not
+`.with_for_update()`. If another transaction submits that same request past
+`DRAFT` between this read and the deleting transaction's commit, the delete
+can still proceed and the request ends up referencing a document that no
+longer exists — the original failure mode, reached through a race instead of
+through the missing check. The window is one request's own transaction, and
+the worst case is no worse than the pre-pass-11 behavior; this is an unclosed
+gap in the new guard, not a regression.
+
+**Not fixed.** Closing it means taking a locking read
+(`.with_for_update()`) on the referencing `PurchaseRequest`/`ExpenseReport`
+rows inside a document-delete transaction, which raises a lock-ordering
+question against Finance's own locking conventions (Pitfall #27) that a
+documents-feature review pass should not decide unilaterally — Finance and
+Documents would need to agree on one order before this can lock safely
+without risking a new cross-feature deadlock.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be

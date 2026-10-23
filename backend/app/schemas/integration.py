@@ -156,7 +156,6 @@ class ICalConfig(BaseModel):
     # on rotate (see the ical-feed endpoints), so a client cannot pick a
     # guessable one. Empty included_event_types means every event type.
     included_event_types: List[str] = Field(default_factory=list)
-    include_shifts: bool = False
 
 
 class CSVImportConfig(BaseModel):

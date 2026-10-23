@@ -671,10 +671,6 @@ and who has signed. A stage that needs several approvers names each by office
 
 ---
 
-<!-- Screenshot needed:
-_[A member holding the Fire Chief position but no prospective_members permission, at /prospective-members/sign-offs. Seed a pipeline with a Required Multi-Signer Approval stage requiring chief and president and one demo applicant on it with the President's signature recorded. Capture the heading and subtitle, the applicant card with stage · pipeline, pills "President: signed" and "Chief: waiting", and the "Sign as Chief" button.]_
--->
-
 ![The Sign as Chief dialog naming the applicant and stage, with an optional Note and the Sign and Not now buttons](./images/15-26-sign-off-dialog.png)
 
 ## Converting to a Full Member

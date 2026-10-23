@@ -33,6 +33,10 @@ const matchers = [...declaredRoutes]
   .filter((routePath) => routePath !== '*')
   .map((routePath) => new RegExp(`^${routePath.replace(/\*/g, '.*').replace(/:[^/]+/g, '[^/]+')}$`));
 
+// JSX spells an apostrophe &apos; and a lesson may use a typographic one; none
+// of the three is a different word.
+const straight = (text: string): string => text.replace(/&apos;|’/g, "'");
+
 describe('learning path content', () => {
   it('collected the router it is meant to check against', () => {
     // A silent zero-match sweep would pass every assertion below while
@@ -93,6 +97,8 @@ describe('learning path content', () => {
       ['events.rsvp', 'Submit RSVP', 'components/event-detail/EventRSVPModal.tsx'],
       ['events.checkin', 'Check In to This Event', 'pages/EventSelfCheckInPage.tsx'],
       ['events.checkin', 'Check Out of This Event', 'pages/EventSelfCheckInPage.tsx'],
+      ['events.checkin', 'You’re checked in', 'pages/EventDetailPage.tsx'],
+      ['events.browse', 'Credit', 'pages/EventDetailPage.tsx'],
       ['training.history', 'Upcoming Expirations & Due Dates', 'pages/MyTrainingPage.tsx'],
       ['training.submit', 'Save Draft', 'pages/SubmitTrainingPage.tsx'],
       ['training.verify', 'Needs Edits', 'components/training/submit/SubmissionStatusBadge.tsx'],
@@ -113,8 +119,10 @@ describe('learning path content', () => {
     for (const [key, label, source] of quoted) {
       const [pathId = '', stepId = ''] = key.split('.');
       const step = findLearningPath(pathId)?.steps.find((candidate) => candidate.id === stepId);
-      expect(step?.how.join(' '), `${key} names ${label}`).toContain(label);
-      expect(fs.readFileSync(path.join(SRC, source), 'utf8'), `${source} renders ${label}`).toContain(label);
+      expect(straight(step?.how.join(' ') ?? ''), `${key} names ${label}`).toContain(straight(label));
+      expect(straight(fs.readFileSync(path.join(SRC, source), 'utf8')), `${source} renders ${label}`).toContain(
+        straight(label)
+      );
     }
   });
 
@@ -124,10 +132,11 @@ describe('learning path content', () => {
     const imageDir = path.resolve(SRC, '../public/lesson-images');
     for (const learningPath of learningPaths) {
       for (const step of learningPath.steps) {
-        if (!step.screenshot) continue;
-        const key = `${learningPath.id}.${step.id}`;
-        expect(fs.existsSync(path.join(imageDir, step.screenshot.file)), `${key} image exists`).toBe(true);
-        expect(step.screenshot.alt.trim().length, `${key} alt text`).toBeGreaterThan(20);
+        for (const shot of step.screenshots ?? []) {
+          const key = `${learningPath.id}.${step.id}`;
+          expect(fs.existsSync(path.join(imageDir, shot.file)), `${key} image ${shot.file} exists`).toBe(true);
+          expect(shot.alt.trim().length, `${key} alt text for ${shot.file}`).toBeGreaterThan(20);
+        }
       }
     }
   });

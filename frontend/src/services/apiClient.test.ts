@@ -32,6 +32,7 @@ vi.mock('./errorReporting', () => ({
 // Import AFTER the mocks are in place.
 import api from './apiClient';
 import { clearCache } from '../utils/apiCache';
+import { registerStepUpRequester } from '../utils/stepUp';
 
 /**
  * Drives the real interceptor chain (as createApiClient.test.ts does for the
@@ -467,5 +468,94 @@ describe('apiClient — 503 retry', () => {
 
     expect(response.data).toEqual({ retried: true });
     expect(calls).toBe(2);
+  });
+});
+
+/** Answers 403 LB-AUTH-013 until `verified` is true, then succeeds. */
+function stepUpAdapter(state: { verified: boolean }, seen: InternalAxiosRequestConfig[]): AxiosAdapter {
+  return (config) => {
+    seen.push(config);
+    if (state.verified) {
+      return Promise.resolve({ data: { done: true }, status: 200, statusText: 'OK', headers: {}, config });
+    }
+    return Promise.reject(
+      Object.assign(new Error('Request failed with status code 403'), {
+        isAxiosError: true,
+        config,
+        response: {
+          status: 403,
+          data: { detail: 'Please confirm your identity to continue.', code: 'LB-AUTH-013' },
+          statusText: '',
+          headers: {},
+          config,
+        },
+      })
+    );
+  };
+}
+
+describe('apiClient — step-up re-verification', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCache();
+  });
+
+  afterEach(() => {
+    registerStepUpRequester(null);
+  });
+
+  it('prompts once, then repeats the request when the member confirms', async () => {
+    const state = { verified: false };
+    const seen: InternalAxiosRequestConfig[] = [];
+    withAdapter(stepUpAdapter(state, seen));
+    const requester = vi.fn(() => {
+      state.verified = true;
+      return Promise.resolve(true);
+    });
+    registerStepUpRequester(requester);
+
+    const response = await api.get('/security/audit-log/export');
+
+    expect(response.data).toEqual({ done: true });
+    expect(requester).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveLength(2);
+  });
+
+  it('surfaces the original 403 when the member cancels', async () => {
+    const seen: InternalAxiosRequestConfig[] = [];
+    withAdapter(stepUpAdapter({ verified: false }, seen));
+    registerStepUpRequester(() => Promise.resolve(false));
+
+    await expect(api.get('/security/audit-log/export')).rejects.toMatchObject({
+      response: { status: 403, data: { code: 'LB-AUTH-013' } },
+    });
+    expect(seen).toHaveLength(1);
+  });
+
+  it('does not loop when the repeat is refused again', async () => {
+    const seen: InternalAxiosRequestConfig[] = [];
+    withAdapter(stepUpAdapter({ verified: false }, seen));
+    const requester = vi.fn(() => Promise.resolve(true));
+    registerStepUpRequester(requester);
+
+    await expect(api.get('/security/audit-log/export')).rejects.toMatchObject({ response: { status: 403 } });
+    expect(requester).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveLength(2);
+  });
+
+  it('shares one prompt between requests that fail together', async () => {
+    const state = { verified: false };
+    const seen: InternalAxiosRequestConfig[] = [];
+    withAdapter(stepUpAdapter(state, seen));
+    const requester = vi.fn(async () => {
+      await Promise.resolve();
+      state.verified = true;
+      return true;
+    });
+    registerStepUpRequester(requester);
+
+    await Promise.all([api.get('/a'), api.get('/b')]);
+
+    expect(requester).toHaveBeenCalledTimes(1);
   });
 });

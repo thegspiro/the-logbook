@@ -29,7 +29,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.ext.asyncio import AsyncSession
 
-__all__ = ["apply_updates", "reload_updated_at"]
+__all__ = ["apply_updates", "reject_null_for_required", "reload_updated_at"]
 
 
 def _nullable_columns(instance: Any) -> dict[str, bool]:
@@ -49,6 +49,27 @@ def _nullable_columns(instance: Any) -> dict[str, bool]:
     except NoInspectionAvailable:
         return {}
     return {key: bool(column.nullable) for key, column in mapper.columns.items()}
+
+
+def reject_null_for_required(
+    instance: Any,
+    updates: Mapping[str, Any],
+    *,
+    skip: Iterable[str] = (),
+) -> None:
+    """Raise ValueError for an explicit null aimed at a NOT NULL column.
+
+    For a caller that reads `updates` before it writes them (a date comparison, a
+    lock, a conflict check) and would otherwise trip over the null first, as a
+    TypeError or as an IntegrityError at flush: the same refusal
+    :func:`apply_updates` makes, made early. The message matches it, so a handler
+    that turns a ValueError into a 400 treats the two alike.
+    """
+    skipped = set(skip)
+    nullable = _nullable_columns(instance)
+    for key, value in updates.items():
+        if key not in skipped and value is None and not nullable.get(key, True):
+            raise ValueError(f"Field '{key}' cannot be cleared")
 
 
 def apply_updates(

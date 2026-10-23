@@ -31,6 +31,8 @@ export const PurchaseRequestStatus = {
   ORDERED: 'ordered',
   RECEIVED: 'received',
   PAID: 'paid',
+  /** Bought by the requester and paid back through an expense report. */
+  REIMBURSED: 'reimbursed',
   CANCELLED: 'cancelled',
 } as const;
 export type PurchaseRequestStatus = (typeof PurchaseRequestStatus)[keyof typeof PurchaseRequestStatus];
@@ -159,6 +161,7 @@ export const PURCHASE_REQUEST_STATUS_COLORS: Record<string, string> = {
   ordered: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
   received: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
   paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
+  reimbursed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
@@ -979,9 +982,26 @@ export interface PurchaseRequest extends FunctionalClassFields, FundFields {
   receiptFileUrl?: string | null;
   apparatusId?: string;
   facilityId?: string;
+  /** The expense report claiming this purchase back for the requester, while one does (detail responses only). */
+  reimbursementReportId?: string | null;
+  reimbursementReportNumber?: string | null;
+  reimbursementReportStatus?: ExpenseReportStatus | null;
   createdAt: string;
   updatedAt: string;
   approvalSteps: ApprovalStepRecord[];
+}
+
+/** Claiming back an approved purchase; each field defaults to the request's own. */
+export interface ReimbursementReportPayload {
+  amount?: MonetaryAmount | undefined;
+  dateIncurred?: string | undefined;
+  merchant?: string | undefined;
+}
+
+/** Paying an approved expense report by check, to the member who filed it. */
+export interface ReimbursementCheckPayload {
+  payeeAddress?: string | undefined;
+  memo?: string | undefined;
 }
 
 export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
@@ -1042,6 +1062,15 @@ export interface ExpenseReport {
   awaitingLateAcknowledgement?: boolean;
   /** How far its lines would take their restricted funds past what they have left, until approved (detail responses only). */
   fundShortfall?: MonetaryAmount | null;
+  /** The purchase request this report claims back. */
+  purchaseRequestId?: string | null;
+  purchaseRequestNumber?: string | null;
+  /** The check paying the member, while one does (detail responses only). */
+  reimbursementCheckId?: string | null;
+  reimbursementCheckNumber?: string | null;
+  reimbursementCheckStatus?: CheckRequestStatus | null;
+  /** What a check would pay: the total less what a cash advance covered (detail responses only). */
+  amountOwed?: MonetaryAmount | null;
   createdAt: string;
   updatedAt: string;
   lineItems: ExpenseLineItem[];
@@ -1081,6 +1110,9 @@ export interface CheckRequest extends FunctionalClassFields, FundFields {
   qbExportedAt?: string | null;
   /** When the reversing entry for a void went to QuickBooks. */
   qbVoidExportedAt?: string | null;
+  /** The expense report this check reimburses the member for; it charges no budget line or fund itself. */
+  expenseReportId?: string | null;
+  expenseReportNumber?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;

@@ -1,5 +1,19 @@
 # Screenshot currency
 
+## Queued by the October 22 – 23 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 00 | The grace-period banner across the top of the app (days left to enroll in two-step sign-in) | Create |
+| 00 | The step-up box (**Authenticator code** field, and the **Password** variant) over a sensitive action such as a role change | Create |
+| 05 | Inventory Items opened from the low-stock email: the **Showing only items at or below their reorder point** notice with **Show all items** | Create |
+| 03 | My Checklists with a day marked overdue only after its shift has ended | Check `03-` My Checklists shots |
+| 14, 04 | Election Settings and Minutes Settings with the shared section header | Re-check any full-page shot (extends the Oct 21 – 22 row) |
+| 02 | Historical Import format list: required columns now bold primary text, not red | Re-check the import page shot |
+
 ## Queued by the October 21 – 22 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
@@ -43,7 +57,7 @@ Nothing was captured by this pass. It is a gap report: the screens below are the
 ones the Minutes settings consolidation, archive search and accepted-previous-minutes
 changes (merged after the October 18 – 19 pass) put on screen, plus the rows of the
 earlier passes that named screens which no longer exist in that form. Placeholders
-for the new screens are in [04](./04-events-meetings.md) as `_[Screenshot to create: …]_`.
+for the new screens are in [04](./04-events-meetings.md) as `<!-- Screenshot needed: … -->` comments.
 
 ### New screens to create
 
@@ -104,7 +118,7 @@ full-page on a stack with scanning on if the app shell is wanted around them.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
 Nothing was captured by this pass. Placeholders for the new screens are in the
-guides as `_[Screenshot to create: …]_`.
+guides as `<!-- Screenshot needed: … -->` comments.
 
 ### New screens to create
 
@@ -140,7 +154,7 @@ Nothing was captured by this pass. The 2026-10-17 pipeline run (sections below)
 re-shot most guides; these rows are screens that run could not have pictured
 (merged after it, or never in its manifest) and images it took **before** a
 later change landed. Placeholders for the new ones are in the guides as
-`_[Screenshot to create: …]_`.
+`<!-- Screenshot needed: … -->` comments.
 
 ### New screens to create
 
@@ -330,7 +344,7 @@ down carry their own dispositions.
 | `03-117-reporting-summary`, `03-118-report-card-phone` | **CURRENT** 2026-10-17 | New: Your reporting summary with the per-month chart; a report card at 390px |
 | `03-119-pattern-generate-nothing-new` | **CURRENT** 2026-10-17 | New: a pattern re-run over the seeded platoon window, creating nothing |
 | `03-120-history-import-list`, `03-121-history-import-members` | **CURRENT** 2026-10-17 | New: the import list with one draft, and the draft's Members tab |
-| My Checklists on a phone (03 placeholder) | **NOT POSSIBLE** as described | Left open; see the October 15 – 16 queue below |
+| My Checklists on a phone (03 placeholder), `03-126-my-checklists-phone` | **CURRENT** 2026-10-23 (re-shot) | Was NOT POSSIBLE, left open; see the October 15 – 16 queue below. Re-shot after overdue moved to the server's end-of-shift rule, as the demo member (`auth: "member"`, so no two-factor grace banner): her unfiled checks on Mon Oct 19 (ended 23:00 UTC) and the overnight Wed Oct 21 shift (ended 11:00 UTC the next morning) carry `isOverdue`; the ⋯ menu holds only Apparatus inventory, since Manage templates needs `inventory.check_manage` |
 | Scheduling setup guide card (03 placeholder) | **NOT POSSIBLE** in the seeded demo | Renders only while a department has no templates |
 
 ## Guide 01 re-shot or added 2026-10-17
@@ -408,7 +422,7 @@ row.
 | Medical Supplies **Lots** dialog                    | **CURRENT** 2026-10-17, covered by `05-89`                  | The Lots button opens the same dialog: Where it is, then Stock lots with the edit and delete controls and the Add lot form                                                                                                                                                                                                                                                       |
 | Medical categories page                             | **CURRENT** 2026-10-17 as `05-91-medical-categories`        | Cards read "Show N supplies"; Airway & Oxygen opened to its supplies                                                                                                                                                                                                                                                                                                             |
 | Catalog Links, after **Link matches automatically** | **CURRENT** 2026-10-17 as `05-92-catalog-links-auto-linked` | The shot runs a real pass and undoes every link afterwards; the next seed also restores the Rescue 7 lines                                                                                                                                                                                                                                                                       |
-| My Checklists on a phone                            | **NOT POSSIBLE** as described                               | The placeholder asks for the overdue marker, and the member's list never contains a past day: `get_my_checklists` returns shifts dated today or later only, so the marker the page draws for a past day with an unfiled check is never reached. The day headings and the **⋯** menu render; the placeholder is left open until the guide's overdue sentence or the query changes. **Update 2026-10-22:** the query changed — it now also returns a shift from the last seven days while a check on it is unfiled — so the shot can be taken with a member seated on a shift two or three days back whose checklist was never filed |
+| My Checklists on a phone                            | **CURRENT** 2026-10-23 as `03-126-my-checklists-phone` (was **NOT POSSIBLE** as described) | The placeholder asks for the overdue marker, and the member's list never contains a past day: `get_my_checklists` returns shifts dated today or later only, so the marker the page draws for a past day with an unfiled check is never reached. The day headings and the **⋯** menu render; the placeholder is left open until the guide's overdue sentence or the query changes. **Update 2026-10-22:** the query changed — it now also returns a shift from the last seven days while a check on it is unfiled — so the shot can be taken with a member seated on a shift two or three days back whose checklist was never filed |
 | Check form with a count at its minimum              | **CURRENT** 2026-10-17                                      | Checked: no captured image shows a **CRITICAL — below minimum** warning (`03-70` and `03-72` show counts at par with no critical minimum set), so none pictures the old behaviour                                                                                                                                                                                                |
 | Google Workspace card (16)                          | **NOT POSSIBLE** in the demo                                | **Link existing members** appears only on a connected card, and both connecting and its preview call Google with a real service account key                                                                                                                                                                                                                                      |
 | Documents admin-only folder confirmation (07)       | **CURRENT** 2026-10-17 as `07-25-folder-admin-only-confirm` | Manage folder on Forms & Templates with Specific positions set to Historian, a position nobody holds; never confirmed                                                                                                                                                                                                                                                            |
@@ -5448,11 +5462,14 @@ Three things about that group are worth knowing before editing it:
   shift — one the wizard captures do not use, so the two do not fight over
   `closeout_step`.
 
-**The NFC captures cannot be automated at all.** Web NFC does not exist in the
-headless Chromium the harness drives, and it is not exposed over `http://`
-either. They are manual captures on a real Android phone, like the
-camera-viewfinder shots recorded under the 2026-08-12 entry below, and they must
-not be added to `manifest.mjs`.
+**The NFC captures can be automated, with one stand-in** _(corrected 2026-10-23)_.
+Web NFC does not exist in the headless Chromium the harness drives, which is why
+this entry once said they must not be manifest entries. That was too strong:
+`04-55`, `05-138` and `05-139` stub `NDEFReader` through the `shots:web-nfc`
+session flag (`webNfcStub` in `manifest.mjs`), so the app renders the Android
+UI and a tapped tag is resolved against the real database. Only the radio is a
+stand-in. The camera-viewfinder shots recorded under the 2026-08-12 entry below
+remain manual.
 
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 

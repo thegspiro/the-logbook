@@ -32,6 +32,7 @@ from app.api.dependencies import (
     _has_permission,
     get_current_user,
     require_permission,
+    require_stepup,
 )
 from app.core.audit import log_audit_event
 from app.core.config import settings
@@ -1315,6 +1316,7 @@ async def assign_user_roles(
             "members.assign_roles",
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Assign roles to a user (replaces all existing roles)
@@ -1459,6 +1461,7 @@ async def add_role_to_user(
             "members.assign_roles",
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Add a single role to a user (keeps existing roles)
@@ -1567,6 +1570,7 @@ async def remove_role_from_user(
             "members.assign_roles",
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Remove a role from a user
@@ -2262,6 +2266,7 @@ async def delete_user(
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Delete a member. By default this is a soft-delete (sets deleted_at).
@@ -2442,6 +2447,7 @@ async def admin_reset_password(
     reset_data: AdminPasswordReset,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Reset a user's password (IT Lead / Admin only)
@@ -2550,6 +2556,7 @@ async def admin_reset_mfa(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Reset (disable) a user's two-factor authentication (IT Lead / Admin only).
@@ -3252,6 +3259,7 @@ async def anonymize_member(
     request: Request,
     current_user: User = Depends(require_permission("members.manage")),
     db: AsyncSession = Depends(get_db),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Irreversibly scrub a departed member's PII while retaining their

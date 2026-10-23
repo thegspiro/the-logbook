@@ -17,7 +17,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_permission, require_stepup
 from app.core.audit import (
     audit_logger,
     get_audit_log_status,
@@ -402,6 +402,7 @@ async def rehash_audit_chain(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.export")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Recompute the audit log hash chain
@@ -567,6 +568,7 @@ async def export_audit_logs(
     limit: int = Query(1000, ge=1, le=10000, description="Max entries to export"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.export")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Export audit logs for backup and compliance purposes
