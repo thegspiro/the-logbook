@@ -1360,6 +1360,12 @@ it open** leaves the test as it was.
 
 ![The Cancel unfinished test dialog, naming the candidate and the test and saying anything already scored is kept but no result is recorded, with an optional reason typed in and the Keep it open and Cancel test buttons](./images/09-30-cancel-unfinished-test-dialog.png)
 
+A **draft** test, one that was set up but never started, has the same cancel
+icon and opens the same dialog. Nothing has been scored on it, so there is
+nothing to keep.
+
+![The Cancel unfinished test dialog opened for a test that was set up but never started, naming the candidate and the test, with an optional reason typed in and the Keep it open and Cancel test buttons](./images/09-31-cancel-draft-test-dialog.png)
+
 **Send back to examiner** is the fourth option, for a result still awaiting
 validation that needs correcting. See
 [If you are a training officer](#if-you-are-a-training-officer).
