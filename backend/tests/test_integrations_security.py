@@ -134,6 +134,8 @@ class TestIntegrationToDict:
             "last_error",
             "last_error_at",
             "consecutive_error_count",
+            "credential_days_left",
+            "credential_expiring",
             "health",
             "supports_sync",
             "created_at",

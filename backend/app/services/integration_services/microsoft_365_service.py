@@ -37,6 +37,7 @@ can echo addresses and request detail.
 
 import asyncio
 import re
+from datetime import date
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
 from urllib.parse import quote
 
@@ -98,6 +99,33 @@ class Microsoft365ManagedOnPremisesError(
     Microsoft365Error, DirectoryAccountManagedElsewhereError
 ):
     """The account is synced from on-premises Active Directory."""
+
+
+# The integration config key an administrator fills from Entra ID, and the
+# days before it at which the administrators are warned: a month to arrange a
+# new secret, a week as the reminder, and the day it has run out.
+SECRET_EXPIRY_KEY = "client_secret_expires_on"
+SECRET_WARNING_DAYS = (30, 7, 0)
+
+
+def client_secret_days_left(config: Any, today: date) -> Optional[int]:
+    """Days from *today* until the client secret expires, negative once it
+    has; None when no date is recorded (or the stored one is unreadable)."""
+    raw = config.get(SECRET_EXPIRY_KEY) if isinstance(config, dict) else None
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        return (date.fromisoformat(raw) - today).days
+    except ValueError:
+        return None
+
+
+def client_secret_warning_level(days_left: Optional[int]) -> Optional[int]:
+    """The smallest warning threshold *days_left* has reached, if any."""
+    if days_left is None:
+        return None
+    reached = [days for days in SECRET_WARNING_DAYS if days_left <= days]
+    return min(reached) if reached else None
 
 
 MANAGED_ON_PREMISES_MESSAGE = (

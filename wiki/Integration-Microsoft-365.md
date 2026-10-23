@@ -39,7 +39,7 @@ either is refused while the other is connected.
 
 1. In **Organization Settings → Department Email**, turn on department email addresses for a domain that is **verified** in your Microsoft 365 tenant. Connecting is refused until this matches the integration's domain.
 2. In the **Microsoft Entra admin center**, open **App registrations → New registration**. Single tenant is right. Note the **Application (client) ID** and **Directory (tenant) ID** on its Overview page.
-3. Under **Certificates & secrets**, add a **client secret** and copy its **Value** (not its ID). Note when it expires: provisioning stops on that day until a new secret is entered.
+3. Under **Certificates & secrets**, add a **client secret** and copy its **Value** (not its ID). Note its **Expires** date: provisioning stops on that day until a new secret is entered. Enter it as **Client secret expires on** in step 6, and The Logbook warns before it (see [Client secret expiry](#client-secret-expiry)).
 4. Under **API permissions → Add a permission → Microsoft Graph → Application permissions**, add the following, then click **Grant admin consent**:
 
    | Permission                           | Why                                                                                 |
@@ -133,6 +133,17 @@ is linked when their **Logbook email** is an account's **sign-in name**
 two members — one by sign-in name, the other by email — neither is linked, and
 both are counted as an account still recorded for another member: one account
 is only ever governed by one member. Nothing changes in Microsoft 365.
+
+---
+
+## Client Secret Expiry
+
+An Entra ID client secret lasts at most 24 months, and when it lapses every account change fails until a new one is entered. Record its **Expires** date as **Client secret expires on** in the integration's settings. From 30 days before it:
+
+- the Microsoft 365 card on **Integrations** says how many days are left (or that it has expired);
+- the administrators' morning email (`google_workspace_attention_digest`, 7:35) warns once at 30 days, once at 7 and once on the day, and repeats the line in any other email it sends while the date is that close.
+
+When you create the replacement secret, enter its value **and** its new expiry date together; a new date starts the warnings over. The Logbook does not read the date from Microsoft, because that needs the Application.Read.All permission, which can read every app registration in the tenant.
 
 ---
 

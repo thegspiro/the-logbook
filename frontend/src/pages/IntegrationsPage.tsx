@@ -463,6 +463,7 @@ const IntegrationsPage: React.FC = () => {
   const [msUsageLocation, setMsUsageLocation] = useState('US');
   const [msLicenseSkuId, setMsLicenseSkuId] = useState('');
   const [msGroups, setMsGroups] = useState('');
+  const [msSecretExpiresOn, setMsSecretExpiresOn] = useState('');
   // The connect form doubles as the settings form for a connected Claude
   // (MCP) integration. Reconnecting is not an option there: disconnect
   // revokes the service key and ends every member connection.
@@ -656,6 +657,9 @@ const IntegrationsPage: React.FC = () => {
     setMsDomain(typeof stored['domain'] === 'string' ? stored['domain'] : '');
     setMsUsageLocation(typeof stored['usage_location'] === 'string' ? stored['usage_location'] : 'US');
     setMsLicenseSkuId(typeof stored['license_sku_id'] === 'string' ? stored['license_sku_id'] : '');
+    setMsSecretExpiresOn(
+      typeof stored['client_secret_expires_on'] === 'string' ? stored['client_secret_expires_on'] : ''
+    );
     setMsGroups(
       Array.isArray(stored['groups'])
         ? stored['groups'].filter((g): g is string => typeof g === 'string').join('\n')
@@ -722,6 +726,8 @@ const IntegrationsPage: React.FC = () => {
           usage_location: msUsageLocation.trim().toUpperCase() || 'US',
           // Sent even when blank: clearing it switches to group-based licensing.
           license_sku_id: msLicenseSkuId.trim(),
+          // Sent even when blank, so clearing the date stops the warnings.
+          client_secret_expires_on: msSecretExpiresOn,
           groups: msGroups
             .split(/[\s,]+/)
             .map((g) => g.trim())
@@ -1572,6 +1578,23 @@ const IntegrationsPage: React.FC = () => {
               </p>
             </div>
             <div>
+              <label htmlFor="ms-secret-expires" className={labelClass}>
+                Client secret expires on (optional)
+              </label>
+              <input
+                id="ms-secret-expires"
+                type="date"
+                value={msSecretExpiresOn}
+                onChange={(e) => setMsSecretExpiresOn(e.target.value)}
+                className="form-input w-48"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                The &quot;Expires&quot; date Entra ID shows beside the secret. Administrators are emailed 30 days and 7
+                days before it, and on the day; an expired secret stops every account change. Update it whenever you
+                replace the secret.
+              </p>
+            </div>
+            <div>
               <label htmlFor="ms-domain" className={labelClass}>
                 Domain
               </label>
@@ -2193,6 +2216,19 @@ const IntegrationsPage: React.FC = () => {
                           <span>Settings</span>
                         </button>
                       )}
+                      {integration.credential_expiring === true &&
+                        typeof integration.credential_days_left === 'number' && (
+                          <span className="flex items-center space-x-1 rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm text-amber-800 dark:text-amber-300">
+                            <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>
+                              {integration.credential_days_left <= 0
+                                ? 'Client secret expired'
+                                : `Client secret expires in ${integration.credential_days_left} day${
+                                    integration.credential_days_left === 1 ? '' : 's'
+                                  }`}
+                            </span>
+                          </span>
+                        )}
                       {isDirectory(integration.integration_type) && googleAttention.length > 0 && (
                         <button
                           onClick={() => setShowGoogleAttention(!showGoogleAttention)}

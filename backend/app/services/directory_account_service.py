@@ -284,6 +284,12 @@ class DirectoryAccountService:
             return None
         return integration
 
+    async def active_integration(
+        self, organization_id: str, info: DirectoryProviderInfo
+    ) -> Optional[Integration]:
+        """The department's connected, enabled integration for *info*."""
+        return await self._active_integration(organization_id, info)
+
     async def stage_for_transfer(
         self,
         *,

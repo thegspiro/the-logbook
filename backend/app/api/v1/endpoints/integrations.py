@@ -29,6 +29,7 @@ from app.core.utils import sanitize_connector_error
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
 from app.mcp.oauth import McpOAuthService
+from app.models.directory_account import MICROSOFT_365_INTEGRATION
 from app.models.integration import (
     CalendarSyncMapping,
     Integration,
@@ -65,6 +66,10 @@ from app.services.integration_services.ical_service import (
     hash_feed_token,
     org_feed_path,
     org_feed_token_matches,
+)
+from app.services.integration_services.microsoft_365_service import (
+    client_secret_days_left,
+    client_secret_warning_level,
 )
 from app.utils.url_validator import validate_integration_url
 
@@ -562,6 +567,21 @@ def _iso(value: Any) -> str | None:
     return value.isoformat() if isinstance(value, datetime) else None
 
 
+def _credential_days_left(integration: Integration) -> int | None:
+    """Days until the stored credential stops working, where it is known.
+
+    Only Microsoft 365 records it (an administrator types in the client
+    secret's expiry date). The card shows it in UTC days; the morning email
+    counts in the department's own timezone, so the two can differ by a day
+    around midnight.
+    """
+    if integration.integration_type != MICROSOFT_365_INTEGRATION:
+        return None
+    return client_secret_days_left(
+        integration.config or {}, datetime.now(timezone.utc).date()
+    )
+
+
 def _integration_to_dict(
     integration: Integration, *, sanitize_secrets: bool = True
 ) -> dict[str, Any]:
@@ -572,6 +592,7 @@ def _integration_to_dict(
     # The row's description is a copy taken when the catalog was seeded for
     # the org; the catalog is what describes the integration as it is today.
     catalog = _CATALOG_BY_TYPE.get(integration.integration_type)
+    credential_days_left = _credential_days_left(integration)
     return {
         "id": integration.id,
         "organization_id": integration.organization_id,
@@ -592,6 +613,9 @@ def _integration_to_dict(
         "consecutive_error_count": int(
             getattr(integration, "consecutive_error_count", 0) or 0
         ),
+        "credential_days_left": credential_days_left,
+        "credential_expiring": client_secret_warning_level(credential_days_left)
+        is not None,
         "health": health_state(integration),
         "supports_sync": integration.integration_type in SYNC_CAPABLE_TYPES,
         "created_at": (

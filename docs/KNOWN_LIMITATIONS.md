@@ -185,10 +185,16 @@ and an owner may want to revisit each:
   there. A tenant that already uses Exchange custom attribute 15 for every
   user (in a dynamic-group rule, say) will see The Logbook's value on new
   members' accounts instead.
-- **Client secrets expire.** An Entra ID secret lasts at most 24 months, and
-  The Logbook cannot read its expiry date without a further permission. When
-  it lapses, creation and blocking fail with "The client secret has expired"
-  until a new one is entered. A certificate is not supported.
+- **Client secrets expire, and the date is typed in.** An Entra ID secret
+  lasts at most 24 months. Reading its expiry from Graph would need
+  Application.Read.All, which can read every app registration in the tenant,
+  so an administrator records the date in the integration's settings instead
+  (owner decision, 2026-10-23). With a date recorded, the Integrations card
+  says so from 30 days out and the administrators' morning email warns at 30
+  days, at 7 and on the day. Without one, or with a stale one after the secret
+  is replaced, nothing warns: creation and blocking simply fail with "The
+  client secret has expired" until a new one is entered. A certificate is not
+  supported.
 - **One directory per department.** Google Workspace and Microsoft 365 cannot
   both be connected. Switching moves nothing: records for the old directory
   stay, and their suspensions wait until it is connected again.

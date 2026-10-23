@@ -15,6 +15,11 @@ suspended again. That re-suspension usually succeeds at once, so it never
 waits long enough to be overdue -- but somebody re-enabling a departed
 member's account is exactly what an administrator needs to hear about.
 
+For Microsoft 365 it also warns before the client secret expires, from the
+date an administrator recorded: once at 30 days, once at 7 and once on the
+day it runs out, and in every email sent while it is that close. An expired
+secret stops every account change, and nothing else would say why.
+
 The list is :meth:`DirectoryAccountService.attention_items`, not a
 re-derivation of it (CLAUDE.md pitfall #29).
 """
@@ -47,12 +52,20 @@ from app.services.email_policy import (
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_theme import ACCENT_AMBER, action
 from app.services.integration_services.directory_common import DirectoryProviderInfo
+from app.services.integration_services.microsoft_365_service import (
+    SECRET_EXPIRY_KEY,
+    client_secret_days_left,
+    client_secret_warning_level,
+)
 from app.utils.org_timezone import org_today
 
 # Stored under the Google-era key whichever directory is connected: renaming it
 # would forget the day a digest last went out and send a second one.
 SETTINGS_KEY = "google_workspace"
 LAST_DIGEST_KEY = "attention_digest_last_sent"
+# "<expiry date>:<threshold>" of the last secret warning sent, so each
+# threshold is announced once; a new expiry date starts the count again.
+SECRET_WARNED_KEY = "secret_expiry_warned"
 DIGEST_ROWS_SHOWN = 50
 RECIPIENT_PERMISSION = "admin.access"
 # How far back the email looks for accounts found active after a departure:
@@ -60,10 +73,14 @@ RECIPIENT_PERMISSION = "admin.access"
 REACTIVATED_WINDOW = timedelta(hours=24)
 
 
-def _last_digest_day(organization: Organization) -> Optional[date]:
+def _settings_section(organization: Organization) -> dict:
     stored = organization.settings if isinstance(organization.settings, dict) else {}
     section = stored.get(SETTINGS_KEY)
-    raw = section.get(LAST_DIGEST_KEY) if isinstance(section, dict) else None
+    return section if isinstance(section, dict) else {}
+
+
+def _last_digest_day(organization: Organization) -> Optional[date]:
+    raw = _settings_section(organization).get(LAST_DIGEST_KEY)
     if not isinstance(raw, str):
         return None
     try:
@@ -73,7 +90,9 @@ def _last_digest_day(organization: Organization) -> Optional[date]:
         return None
 
 
-def _record_digest(organization: Organization, today: date) -> None:
+def _record_digest(
+    organization: Organization, today: date, secret_warned: Optional[str]
+) -> None:
     # A deep copy reassigned whole: a nested mutation of a JSON column is not
     # seen by SQLAlchemy (CLAUDE.md pitfall #12).
     current = copy.deepcopy(organization.settings or {})
@@ -81,8 +100,31 @@ def _record_digest(organization: Organization, today: date) -> None:
     if not isinstance(section, dict):
         section = {}
     section[LAST_DIGEST_KEY] = today.isoformat()
+    if secret_warned is not None:
+        section[SECRET_WARNED_KEY] = secret_warned
     current[SETTINGS_KEY] = section
     organization.settings = current
+
+
+def _secret_section(info: DirectoryProviderInfo, expires_on: str, days: int) -> str:
+    where = (
+        f"Integrations &rarr; {html.escape(info.product)} &rarr; "
+        "<strong>Settings</strong>"
+    )
+    if days <= 0:
+        return (
+            f"<p><strong>The {html.escape(info.product)} client secret expired "
+            f"on {html.escape(expires_on)}.</strong> Until a new one is entered "
+            f"under {where}, The Logbook cannot create, suspend or change any "
+            "account.</p>"
+        )
+    return (
+        f"<p><strong>The {html.escape(info.product)} client secret expires on "
+        f"{html.escape(expires_on)}, in {days} day(s).</strong> Create a new "
+        "secret in Entra ID (App registrations &rarr; the app &rarr; "
+        "Certificates &amp; secrets), then enter its value and its expiry date "
+        f"under {where}.</p>"
+    )
 
 
 async def _administrators(db: AsyncSession, organization_id: str) -> list[User]:
@@ -221,7 +263,19 @@ async def send_google_workspace_attention_digest(
         return 0
     overdue = [i for i in await service.attention_items(org_id) if i.overdue]
     reactivated = await _recently_reactivated(db, org_id, info)
-    if not overdue and not reactivated:
+    secret_html = ""
+    secret_warned: Optional[str] = None
+    integration = await service.active_integration(org_id, info)
+    config = (integration.config if integration is not None else None) or {}
+    days_left = client_secret_days_left(config, today)
+    level = client_secret_warning_level(days_left)
+    if days_left is not None and level is not None:
+        expires_on = str(config.get(SECRET_EXPIRY_KEY))
+        secret_html = _secret_section(info, expires_on, days_left)
+        marker = f"{expires_on}:{level}"
+        if _settings_section(organization).get(SECRET_WARNED_KEY) != marker:
+            secret_warned = marker
+    if not overdue and not reactivated and secret_warned is None:
         return 0
     recipients = recipients_for(
         await _administrators(db, org_id),
@@ -235,14 +289,18 @@ async def send_google_workspace_attention_digest(
     html_body = wrap_email_body(
         organization,
         f"{info.product} accounts need attention",
-        _reactivated_section(info, reactivated)
+        secret_html
+        + _reactivated_section(info, reactivated)
         + _body(info, overdue)
         + action(html.escape(f"{base}/integrations"), "Open Integrations"),
         header_color=ACCENT_AMBER,
         chip=info.product,
     )
+    count = len(overdue) + len(reactivated)
     subject = (
-        f"{len(overdue) + len(reactivated)} {info.product} account(s) need attention"
+        f"{count} {info.product} account(s) need attention"
+        if count
+        else f"{info.product} client secret needs replacing"
     )
     sent_total = 0
     for member in recipients:
@@ -263,6 +321,6 @@ async def send_google_workspace_attention_digest(
                 type(exc).__name__,
             )
     if sent_total:
-        _record_digest(organization, today)
+        _record_digest(organization, today, secret_warned)
         await db.commit()
     return sent_total
