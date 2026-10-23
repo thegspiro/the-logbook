@@ -7140,8 +7140,11 @@ async def update_variant_group(
         current_user.organization_id,
         updates,
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or group is None:
+        raise HTTPException(
+            status_code=400,
+            detail=sanitize_error_message(error or "Variant group not found"),
+        )
     await db.commit()
     await db.refresh(group)
     if "name" in updates:
