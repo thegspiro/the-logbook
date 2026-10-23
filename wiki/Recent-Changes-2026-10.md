@@ -15,7 +15,10 @@ that has nothing configured yet, the Agenda and Sync from the agenda dialogs,
 publishing and signing of adopted minutes, the ranked-choice paper ballot
 dialog, the departure clearance row on the inventory hub, and the phone layouts
 for My Checklists, Apparatus Inventory and the Suggestions review. Opening a
-departure clearance no longer reports an error after it has saved.
+departure clearance no longer reports an error after it has saved. The last two
+of the guides' pictures, the Android NFC scanner with Tap NFC armed and the
+"Or tap their ID card" button in Scan Member ID, are in guide 05; no placeholder
+remains.
 
 ## Recent changes: October 21 – 22, 2026
 

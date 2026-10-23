@@ -5448,11 +5448,14 @@ Three things about that group are worth knowing before editing it:
   shift — one the wizard captures do not use, so the two do not fight over
   `closeout_step`.
 
-**The NFC captures cannot be automated at all.** Web NFC does not exist in the
-headless Chromium the harness drives, and it is not exposed over `http://`
-either. They are manual captures on a real Android phone, like the
-camera-viewfinder shots recorded under the 2026-08-12 entry below, and they must
-not be added to `manifest.mjs`.
+**The NFC captures can be automated, with one stand-in** _(corrected 2026-10-23)_.
+Web NFC does not exist in the headless Chromium the harness drives, which is why
+this entry once said they must not be manifest entries. That was too strong:
+`04-55`, `05-138` and `05-139` stub `NDEFReader` through the `shots:web-nfc`
+session flag (`webNfcStub` in `manifest.mjs`), so the app renders the Android
+UI and a tapped tag is resolved against the real database. Only the radio is a
+stand-in. The camera-viewfinder shots recorded under the 2026-08-12 entry below
+remain manual.
 
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 
