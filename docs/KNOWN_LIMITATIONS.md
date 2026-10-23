@@ -168,9 +168,13 @@ and an owner may want to revisit each:
   real tenant. Two behaviours rest on documentation alone: that a cloud-only
   user's `extensionAttribute15` can be set in the request that creates it
   (the tag that tells a retry its own account from someone else's), and the
-  shape of Graph's "already exists" and on-premises errors. A department's
-  first conversion is the first real test; **Test** checks credentials,
-  license and groups beforehand but creates nothing.
+  shape of Graph's "already exists" and on-premises errors. A third, added
+  2026-10-23: that Graph reports a group's `assignedLicenses` to this
+  application, which is how a licensing group is told apart and left alone on
+  departure; if it does not, every group is left alone. The wiki's
+  "Verifying Against a Real Tenant" checklist exercises all three and the
+  rest of the integration, step by step; until a department has run it, its
+  first conversion is the first real test.
 - **The User Administrator role may be more than is needed.** Microsoft's
   documentation does not say whether resetting a password with the
   `User-PasswordProfile.ReadWrite.All` application permission also needs a

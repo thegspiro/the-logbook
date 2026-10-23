@@ -17,8 +17,8 @@ either is refused while the other is connected.
 
 > **Tested against Microsoft's documented API only.** The Microsoft Graph calls
 > are covered by automated tests against recorded Graph responses, not yet
-> against a live tenant. Run **Test** after connecting, and convert one
-> applicant before relying on it. See
+> against a live tenant. Before relying on it, work through
+> [Verifying Against a Real Tenant](#verifying-against-a-real-tenant). See
 > [Known Limitations](../docs/KNOWN_LIMITATIONS.md).
 
 ---
@@ -171,9 +171,71 @@ POST   /api/v1/integrations/google-workspace/link-existing?apply=false   # Previ
 
 ---
 
+## Verifying Against a Real Tenant
+
+Every Graph call in the test suite answers from recorded responses built from
+Microsoft's documentation. Run the integration once against your own tenant
+before relying on it, ideally with a spare license and two test groups: one
+ordinary Microsoft 365 group, and one that assigns a license (group-based
+licensing). Each step names what it proves; if one fails, stop and report the
+message the member's profile or **Test** shows.
+
+1. **Connect and Test.** Enter the tenant, client ID, secret, domain, license
+   SKU (or none, for group-based licensing), both groups, and the secret's
+   **Expires** date. **Test** should report the license with the number left,
+   and each group. Change one group to an address that does not exist and
+   **Test** again: it should say so. _Proves the permissions, the license and
+   the group checks._
+2. **Convert** a test applicant whose department address does not exist yet.
+   The account should appear with the license (or from the licensing group),
+   in both groups, and the temporary password should reach the applicant's
+   personal address. Sign in once: Microsoft should ask for a new password.
+   _Proves creation, licensing, groups and password delivery._
+3. In the Exchange admin center, open the account's **Custom attributes**:
+   attribute 15 should be `the-logbook-member:<member id>`. _Proves the
+   creation tag can be set in the request that creates the account, which
+   rests on documentation alone._
+4. On the member's profile, **Retry** should report nothing left to do. Then
+   change the member's last name in The Logbook: within a minute the account's
+   display name and surname should change, and its sign-in name should not.
+   _Proves renaming._
+5. **Drop** the member. Within a minute sign-in should be blocked and the
+   profile should say so. The account should have left the ordinary group and
+   **still be in the licensing group**, with its license. _Proves blocking,
+   group removal, and that Graph reports a group's licenses to this
+   application (if it does not, both groups are left alone, and the profile
+   shows nothing wrong: check the membership by hand)._
+6. **Undo** the drop: sign-in should be unblocked and the account back in the
+   ordinary group. Then block sign-in by hand in the admin center, and drop
+   and undo-drop the member: the account must **stay** blocked. _Proves only
+   The Logbook's own blocks are lifted._
+7. Drop the member again, then unblock the account by hand in the admin
+   center. The next morning (or sooner, by having a member with
+   `system.run_tasks` call
+   `POST /api/v1/scheduled/run-task?task=directory_account_departure_check`),
+   sign-in should be blocked again, and the administrators' email should say
+   the account was turned back on. _Proves the departure check._
+8. Create a user by hand at another member's Logbook email, then run **Link
+   existing members**: the preview should count one, and applying should link
+   it without changing anything in Microsoft 365. _Proves linking, and Graph's
+   "already exists" answer if you then convert an applicant at that address._
+9. If any accounts are synced from on-premises Active Directory, drop a test
+   member whose account is one: the profile should say to disable it in
+   Active Directory, and the sweep should stop retrying. _Proves the
+   on-premises error shape, which rests on documentation alone._
+10. Remove the **User Administrator** role from the application, convert a
+    second test applicant who never receives their password, and **Retry** on
+    their profile. If the reset works, the role can stay off (see Known
+    Limitations). Put it back otherwise.
+11. Delete the test accounts and groups in Microsoft 365, and the test members
+    in The Logbook. Note the date the run passed wherever your department
+    keeps its IT records, so the next administrator knows it has been
+    checked.
+
+---
+
 ## Not Covered
 
-- Deleting the account, or removing its license, when a member leaves — blocking sign-in keeps both.
-- Renaming the account when a member's name changes.
+- Deleting the account, or removing its license, when a member leaves — blocking sign-in keeps both. Accounts still blocked 90 days on are listed under **N need attention** instead.
 - A certificate instead of a client secret.
 - Switching a department from Google Workspace to Microsoft 365 moves nothing: accounts recorded for Google stay Google's, and their suspension waits until Google Workspace is connected again.

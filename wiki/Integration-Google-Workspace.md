@@ -288,5 +288,5 @@ organizational unit (for example `/Logbook Test`) and a test applicant:
 
 ## Not Covered
 
-- Deleting the Google account, or freeing its license, when a member leaves — suspension keeps both.
-- Renaming the account when a member's name changes.
+- Deleting the Google account, or freeing its license, when a member leaves — suspension keeps both. Accounts still suspended 90 days on are listed under **N need attention** instead.
+- Changing the account's address when a member's name changes; only the name changes.
