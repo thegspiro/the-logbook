@@ -116,10 +116,28 @@ class TestLowStockAlerts:
         assert f'<a href="{url}">' in _FakeEmail.sent["html"]
         assert url in _FakeEmail.sent["text"]
 
-    async def test_a_gear_only_email_has_no_medical_link(self):
+    async def test_a_gear_only_email_links_to_the_gear_list_and_not_the_medical_one(
+        self,
+    ):
         await _run([_low_stock_item()], [_quartermaster()])
+        gear_url = f"{settings.FRONTEND_URL}/inventory/admin/items?low_stock=true"
+        assert f'<a href="{gear_url}">' in _FakeEmail.sent["html"]
+        assert gear_url in _FakeEmail.sent["text"]
         assert "/medical-supplies" not in _FakeEmail.sent["html"]
         assert "/medical-supplies" not in _FakeEmail.sent["text"]
+
+    async def test_a_medical_only_email_has_no_gear_link(self):
+        # A medical-only officer lacks inventory.manage, so the gear page would
+        # send them to Access Denied.
+        await _run([_medical_low_stock_item()], [_quartermaster()])
+        assert "/inventory/admin/items" not in _FakeEmail.sent["html"]
+        assert "/inventory/admin/items" not in _FakeEmail.sent["text"]
+
+    async def test_a_mixed_email_links_to_both_lists(self):
+        await _run([_low_stock_item(), _medical_low_stock_item()], [_quartermaster()])
+        html = _FakeEmail.sent["html"]
+        assert f"{settings.FRONTEND_URL}/medical-supplies?tab=low" in html
+        assert f"{settings.FRONTEND_URL}/inventory/admin/items?low_stock=true" in html
 
     async def test_no_text_is_sent_even_with_a_number_on_file(self):
         # The regression guard for the 2026-08 email-first change: this alert
