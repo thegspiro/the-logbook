@@ -1221,11 +1221,15 @@ export const trainingSessionService = {
   /**
    * The training session attached to an event, or null when the event has
    * none (a plain event, or one created before training sessions existed).
+   *
+   * The server answers `200` with a `null` body for "none". The 404 branch is
+   * for a backend that has not been updated yet, so a frontend deployed first
+   * keeps working through a rolling upgrade.
    */
   async getSessionByEvent(eventId: string): Promise<TrainingSessionResponse | null> {
     try {
-      const response = await api.get<TrainingSessionResponse>(`/training/sessions/by-event/${eventId}`);
-      return response.data;
+      const response = await api.get<TrainingSessionResponse | null>(`/training/sessions/by-event/${eventId}`);
+      return response.data ?? null;
     } catch (err: unknown) {
       if (toAppError(err).status === 404) return null;
       throw err;
@@ -1279,11 +1283,14 @@ export const trainingSessionService = {
   /**
    * Where the event's training approval stands, or null when it has none.
    * Carries the approval link's token only for a caller who may approve.
+   *
+   * The server answers `200` with a `null` body for "none"; the 404 branch is
+   * for a backend that has not been updated yet (see getSessionByEvent).
    */
   async getApprovalSummary(eventId: string): Promise<TrainingApprovalSummary | null> {
     try {
-      const response = await api.get<TrainingApprovalSummary>(`/training/sessions/by-event/${eventId}/approval`);
-      return response.data;
+      const response = await api.get<TrainingApprovalSummary | null>(`/training/sessions/by-event/${eventId}/approval`);
+      return response.data ?? null;
     } catch (err: unknown) {
       if (toAppError(err).status === 404) return null;
       throw err;

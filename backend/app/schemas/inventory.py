@@ -503,6 +503,16 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+class UncountedPosition(BaseModel):
+    """A truck position whose stock is assumed at target: nobody counted it."""
+
+    template_item_id: str
+    # The vehicle, when the checklist names one; None for a template written
+    # for an apparatus type, which has no single truck to open.
+    apparatus_id: Optional[str] = None
+    where: str
+
+
 class MedicalExpiringStockRow(BaseModel):
     """A medical supply expiring soon, on a shelf or aboard an apparatus.
 
@@ -867,6 +877,9 @@ class InventoryItemResponse(InventoryItemBase):
     # Medical supply list only.
     apparatus_stock: Optional[int] = None
     apparatus_uncounted: Optional[int] = None
+    # The positions behind apparatus_uncounted, named as the checklist names
+    # them, with the vehicle to open to count each. Medical supply list only.
+    apparatus_uncounted_places: Optional[List[UncountedPosition]] = None
     is_low_stock: Optional[bool] = None
 
     # The requesting member's own pin position, 0-based, or null when they

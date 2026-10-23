@@ -5323,7 +5323,7 @@ export const SHOTS = [
           `/api/v1/training/sessions/by-event/${event.id}/approval`,
           { credentials: "include" },
         );
-        return summary.ok ? (await summary.json()).token : null;
+        return summary.ok ? ((await summary.json())?.token ?? null) : null;
       });
       if (!token)
         throw new Error(
@@ -10022,6 +10022,59 @@ export const SHOTS = [
     expect: { selector: "#void-reason-detail" },
   },
   {
+    id: "09-30-cancel-unfinished-test-dialog",
+    doc: "09-skills-testing.md",
+    line: 1352,
+    anchor:
+      'The "Cancel unfinished test" dialog opened from the cancel icon on an in-progress Skill Test Records row',
+    alt: "The Cancel unfinished test dialog, naming the candidate and the test and saying anything already scored is kept but no result is recorded, with an optional reason typed in and the Keep it open and Cancel test buttons",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // Opened and never confirmed: the one in-progress test is also the subject
+    // of the scoring-screen shots, and cancelling it would take them out of the
+    // seeded data. Its candidate is not known until run time, so it is looked
+    // up rather than named. The icon is matched exactly because the row is
+    // itself a role="button" whose name contains the icon's label.
+    prepare: async (page) => {
+      const open = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          {
+            credentials: "include",
+          },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const found = rows.find((row) => row.status === "in_progress");
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!open) {
+        throw new Error("no in-progress test to cancel");
+      }
+      // Drafts can be cancelled too, and one candidate can hold both, so the
+      // row is picked by its template as well as its candidate.
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: open.candidate })
+        .filter({ hasText: open.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${open.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      const reason = page.locator("#cancel-reason");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Drill called off for a run");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#cancel-reason" },
+  },
+  {
     id: "09-29-void-dialog-test-records",
     doc: "09-skills-testing.md",
     line: 1344,
@@ -10049,6 +10102,109 @@ export const SHOTS = [
     },
     selector: "[role='dialog'] [data-testid='modal-panel']",
     expect: { selector: "#void-reason" },
+  },
+  {
+    id: "09-31-cancel-draft-test-dialog",
+    doc: "09-skills-testing.md",
+    line: 1362,
+    anchor:
+      'The "Cancel unfinished test" dialog opened from the cancel icon on a draft Skill Test Records row',
+    alt: "The Cancel unfinished test dialog opened for a test that was set up but never started, naming the candidate and the test, with an optional reason typed in and the Keep it open and Cancel test buttons",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // A draft is a test set up but never started, so nothing has been scored
+    // and the dialog's "anything already scored is kept" has nothing to keep.
+    // Opened and never confirmed. The draft is one whose candidate holds no
+    // other unfinished test, so the icon's label names exactly one row.
+    prepare: async (page) => {
+      const draft = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          { credentials: "include" },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const unfinished = rows.filter(
+          (row) => row.status === "draft" || row.status === "in_progress",
+        );
+        const found = unfinished.find(
+          (row) =>
+            row.status === "draft" &&
+            unfinished.filter((r) => r.candidate_name === row.candidate_name)
+              .length === 1,
+        );
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!draft) {
+        throw new Error("no draft test to cancel");
+      }
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: draft.candidate })
+        .filter({ hasText: draft.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${draft.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      const reason = page.locator("#cancel-reason");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Candidate transferred to another shift");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#cancel-reason" },
+  },
+  {
+    id: "09-32-keep-it-open-button",
+    doc: "09-skills-testing.md",
+    line: 1368,
+    anchor:
+      'The "Keep it open" and "Cancel test" buttons at the foot of the Cancel unfinished test dialog',
+    alt: "The foot of the Cancel unfinished test dialog: the Keep it open button, which leaves the test as it was, beside the amber Cancel test button",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // The dialog's own footer rather than the whole dialog: the full dialog is
+    // already 09-30, and the buttons are what this one is about. Nothing is
+    // clicked, so the seeded in-progress test survives for the scoring shots.
+    prepare: async (page) => {
+      const open = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          { credentials: "include" },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const found = rows.find((row) => row.status === "in_progress");
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!open) {
+        throw new Error("no in-progress test to cancel");
+      }
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: open.candidate })
+        .filter({ hasText: open.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${open.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      await page
+        .getByRole("button", { name: "Keep it open", exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-footer']",
+    expect: "Keep it open",
   },
   {
     id: "09-09-member-skills-testing",
@@ -22704,7 +22860,137 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
   },
+  {
+    // The inventory scanner's Tap NFC button renders only where the browser
+    // has Web NFC (Chrome on Android over HTTPS), so this is shot at phone
+    // width with that one capability stubbed: `scan()` resolves and the
+    // stub hands the page a tag read on request. The tag is the serial
+    // `seed_guide05_states` links to Structural Coat — S, so the app resolves
+    // it against the real database; only the radio is stand-in.
+    id: "05-138-scan-tap-nfc",
+    doc: "05-inventory.md",
+    line: 1648,
+    anchor:
+      "Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Assign",
+    alt: "The Assign items scanner on an Android phone with Tap NFC armed, the button reading Stop NFC, and the tapped Structural Coat — S added to the list",
+    route: "/inventory/admin/members",
+    viewport: "mobile",
+    expect: "Stop NFC",
+    // The members list behind the dialog is empty of dropped members, and
+    // that sentence is what the empty-state check finds; the dialog is the
+    // subject of the shot.
+    allowEmptyState: true,
+    beforeNavigate: webNfcStub,
+    prepare: withInventoryNfc(async (page) => {
+      await page.evaluate(() => sessionStorage.setItem("shots:web-nfc", "on"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: /^Assign items to / })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Tap NFC" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Stop NFC" })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(
+        (serial) => window.__shotsTapNfcTag(serial),
+        GUIDE05_COAT_S_TAG,
+      );
+      const tapped = page
+        .getByText("Structural Coat — S", { exact: false })
+        .first();
+      await tapped.waitFor({ timeout: 15_000 });
+      // Scrolled so the armed button and the tapped item share the frame.
+      // The dialog body, not the page, is what scrolls.
+      await page.getByRole("button", { name: "Stop NFC" }).evaluate((el) => {
+        let node = el.parentElement;
+        while (node && node.scrollHeight <= node.clientHeight + 1) {
+          node = node.parentElement;
+        }
+        if (node) node.scrollTop = node.scrollHeight;
+      });
+      await page.waitForTimeout(600);
+    }),
+    cleanup: async (page) => {
+      await page.evaluate(() => sessionStorage.removeItem("shots:web-nfc"));
+      await disableInventoryNfc(page);
+    },
+  },
+  {
+    // "Or tap their ID card" needs inventory NFC, the NFC ID Cards
+    // integration (connected by `seed_id_cards`) and Web NFC. The button is
+    // photographed unpressed, so no card serial or member is on screen.
+    id: "05-139-scan-member-id-tap-card",
+    doc: "05-inventory.md",
+    line: 1757,
+    anchor:
+      "Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Scan Member ID",
+    alt: "The Scan Member ID window on an Android phone with the camera controls and, below them, Or tap their ID card",
+    route: "/inventory/admin/members",
+    viewport: "mobile",
+    expect: "Or tap their ID card",
+    // Same page behind the dialog as 05-138, same empty sentence.
+    allowEmptyState: true,
+    beforeNavigate: webNfcStub,
+    prepare: withInventoryNfc(async (page) => {
+      await page.evaluate(() => sessionStorage.setItem("shots:web-nfc", "on"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: /^Scan( Member ID)?$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Or tap their ID card" })
+        .waitFor({ timeout: 15_000 });
+      // The dialog tries the camera as it opens and the harness has none, so
+      // it reports "No camera was found". A phone that has granted the camera
+      // shows a live view instead; the alert is the harness, not the product.
+      await page
+        .getByText("No camera was found on this device", { exact: false })
+        .evaluate((el) =>
+          (el.closest("[class*='bg-red']") ?? el.parentElement ?? el).remove(),
+        )
+        .catch((err) => {
+          throw new Error(`05-139: no camera alert to clear: ${err}`);
+        });
+      await page.waitForTimeout(600);
+    }),
+    cleanup: async (page) => {
+      await page.evaluate(() => sessionStorage.removeItem("shots:web-nfc"));
+      await disableInventoryNfc(page);
+    },
+  },
 ];
+
+/**
+ * Stand-in for the one browser capability the harness lacks: Web NFC. Installed
+ * only while the `shots:web-nfc` session flag is on, so it cannot reach a later
+ * shot on this reused page. `scan()` resolves as it does once the user grants
+ * the prompt; `__shotsTapNfcTag(serial)` then plays the part of a tag held to
+ * the phone, delivering a read with a serial and no NDEF records.
+ */
+async function webNfcStub(page) {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("shots:web-nfc") !== "on") return;
+    const readers = [];
+    window.NDEFReader = class {
+      constructor() {
+        readers.push(this);
+      }
+      async write() {}
+      async scan() {}
+    };
+    window.__shotsTapNfcTag = (serialNumber) => {
+      for (const reader of readers) {
+        if (typeof reader.onreading === "function") {
+          reader.onreading({ serialNumber, message: { records: [] } });
+        }
+      }
+    };
+  });
+}
 
 /**
  * Opens an event whose check-in window is open now, as the signed-in member,

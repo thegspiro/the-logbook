@@ -61,6 +61,16 @@ def _csv(*rows: list[str]) -> str:
     return buffer.getvalue()
 
 
+class _Session:
+    """Stands in for async_session_factory() in the streamed exports."""
+
+    async def __aenter__(self):
+        return AsyncMock()
+
+    async def __aexit__(self, *exc):
+        return False
+
+
 async def _body(response) -> str:
     chunks = []
     async for chunk in response.body_iterator:
@@ -544,14 +554,17 @@ class TestMedicalExports:
         )
         svc.get_items_page = AsyncMock(return_value=[item])
 
-        class _Session:
-            async def __aenter__(self):
-                return AsyncMock()
+        async def attach(_db, _service, _org, items):
+            for each in items:
+                each.apparatus_stock = 5
+                each.apparatus_uncounted = 1
+                each.next_expiration_date = date(2027, 2, 28)
+                each.next_expiration_location = "apparatus"
+                each.next_expiration_where = "Medic 1 › Main › Jump Bag"
 
-            async def __aexit__(self, *exc):
-                return False
-
-        with patch.object(ms, "async_session_factory", return_value=_Session()):
+        with patch.object(
+            ms, "async_session_factory", return_value=_Session()
+        ), patch.object(ms, "_attach_medical_list_extras", new=attach):
             response = await ms.export_medical_items_csv(
                 category_id=None,
                 status_filter=None,
@@ -577,6 +590,80 @@ class TestMedicalExports:
         assert record["Kept on Apparatus Only"] == "No"
         # SafeCsvWriter neutralizes a formula-looking cell.
         assert not record["Name"].startswith("=")
+        # The truck figures the list shows beside the row.
+        assert record["On Apparatus"] == "5"
+        assert record["Uncounted Positions"] == "1"
+        assert record["Next Expiry"] == "2027-02-28"
+        assert record["Next Expiry Where"] == "Medic 1 › Main › Jump Bag"
+        # Appended: every column the import reads keeps its position.
+        assert rows[0][: len(rows[0]) - 4][-1] == "Notes"
+
+    async def test_a_next_expiry_sort_orders_every_page_by_one_ranking(self, svc):
+        """Worked out once over the filtered set, and handed to each page."""
+        svc.get_items_page = AsyncMock(return_value=[])
+        ranking = {"i-1": date(2027, 1, 1)}
+        ranker = AsyncMock(return_value=ranking)
+
+        with patch.object(
+            ms, "async_session_factory", return_value=_Session()
+        ), patch.object(ms, "_next_expiry_sort_values", new=ranker):
+            response = await ms.export_medical_items_csv(
+                category_id=None,
+                status_filter=None,
+                condition=None,
+                location_id=None,
+                storage_area_id=None,
+                search="gauze",
+                active_only=True,
+                sort_by="next_expiry",
+                sort_order="asc",
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+            await _body(response)
+
+        filters = ranker.await_args.args[3]
+        assert filters["search"] == "gauze"
+        assert filters["item_types"] == MEDICAL_ITEM_TYPES
+        assert svc.get_items_page.await_args.kwargs["sort_values"] == ranking
+
+    async def test_an_uncounted_export_holds_only_those_supplies(self, svc):
+        svc.get_items_page = AsyncMock(return_value=[])
+        svc.item_ids_with_uncounted_positions = AsyncMock(return_value=["i-2"])
+
+        with patch.object(ms, "async_session_factory", return_value=_Session()):
+            response = await ms.export_medical_items_csv(
+                category_id=None,
+                status_filter=None,
+                condition=None,
+                location_id=None,
+                storage_area_id=None,
+                search=None,
+                active_only=True,
+                sort_by=None,
+                sort_order=None,
+                uncounted=True,
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+            await _body(response)
+
+        assert svc.get_items_page.await_args.kwargs["item_ids"] == ["i-2"]
+        assert svc.get_items_page.await_args.kwargs["sort_values"] is None
+
+    def test_derived_cells_are_blank_where_nothing_was_worked_out(self):
+        """Blank, not 0: a zero would claim the trucks carry none."""
+        assert ms._derived_stock_cells(SimpleNamespace()) == ["", "", "", ""]
+
+    def test_a_shelf_expiry_without_a_storage_path_still_says_where(self):
+        item = SimpleNamespace(
+            apparatus_stock=0,
+            apparatus_uncounted=0,
+            next_expiration_date=date(2027, 5, 1),
+            next_expiration_location="shelf",
+            next_expiration_where=None,
+        )
+        assert ms._derived_stock_cells(item) == [0, 0, "2027-05-01", "In storage"]
 
     async def test_the_items_export_refuses_a_gear_category_filter(self, svc):
         with pytest.raises(HTTPException) as err:
@@ -639,10 +726,35 @@ class TestMedicalExports:
         assert [lot["Lot Number"] for lot in lots] == ["GZ-24117", "GZ-25002"]
 
     def test_an_export_is_importable_column_for_column(self):
-        """Every exported column but the two derived ones is read on import."""
+        """Every exported column but the derived ones is read on import."""
         assert set(ms._MEDICAL_TEMPLATE_HEADER) == (
-            set(ms._MEDICAL_EXPORT_COLUMNS) - {"Ready Lot Stock", "Barcode"}
+            set(ms._MEDICAL_EXPORT_COLUMNS)
+            - {"Ready Lot Stock", "Barcode", *ms._DERIVED_STOCK_COLUMNS}
         ) | set(ms._LOT_IMPORT_COLUMNS)
+
+    async def test_the_derived_stock_columns_are_ignored_on_import(self, svc):
+        """A file exported with the truck columns imports as if they were not there."""
+        result = await _import(
+            _csv(
+                [
+                    "Name",
+                    "Category",
+                    "Quantity",
+                    "On Apparatus",
+                    "Uncounted Positions",
+                    "Next Expiry",
+                    "Next Expiry Where",
+                ],
+                ["Nasal Cannula", "Airway", "10", "4", "1", "2027-01-31", "Medic 1"],
+            )
+        )
+
+        assert result["imported"] == 1
+        assert result["failed"] == 0
+        svc.add_lot.assert_not_awaited()
+        stored = svc.create_item.await_args.kwargs["item_data"]
+        assert stored["quantity"] == 10
+        assert not {"lot_number", "expiration_date"} & set(stored)
 
 
 @pytest.mark.integration

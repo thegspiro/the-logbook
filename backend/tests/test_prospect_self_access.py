@@ -472,6 +472,43 @@ class TestGuardOverHttp:
         untouched = await svc.get_prospect(mine.id, org_id)
         assert untouched.status == ProspectStatus.ACTIVE
 
+    async def test_purge_inactive_spares_the_callers_own_record(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        """Purge ids arrive in the body too, and an empty list purges the whole
+        tab, so neither path may reach the caller's own inactive file."""
+        org_id, viewer = org_and_viewer
+        await self._grant_manage(db_session, org_id, viewer)
+        svc = MembershipPipelineService(db_session)
+        pipeline = await svc.create_pipeline(organization_id=org_id, name="P")
+        mine = await _make_prospect(
+            svc, org_id, email=viewer.email, pipeline_id=pipeline.id
+        )
+        named = await _make_prospect(svc, org_id, pipeline_id=pipeline.id)
+        unnamed = await _make_prospect(svc, org_id, pipeline_id=pipeline.id)
+        for prospect in (mine, named, unnamed):
+            prospect.status = ProspectStatus.INACTIVE
+        await db_session.flush()
+
+        async with await self._client(db_session, viewer) as client:
+            by_id = await client.post(
+                f"/prospective-members/pipelines/{pipeline.id}/purge-inactive",
+                json={"confirm": True, "prospect_ids": [mine.id, named.id]},
+            )
+            whole_tab = await client.post(
+                f"/prospective-members/pipelines/{pipeline.id}/purge-inactive",
+                json={"confirm": True},
+            )
+
+        assert by_id.status_code == 200
+        assert by_id.json()["purged_count"] == 1
+        assert whole_tab.status_code == 200
+        assert whole_tab.json()["purged_count"] == 1
+
+        assert await svc.get_prospect(named.id, org_id) is None
+        assert await svc.get_prospect(unnamed.id, org_id) is None
+        assert await svc.get_prospect(mine.id, org_id) is not None
+
     async def test_mutations_on_own_record_are_refused(
         self, db_session: AsyncSession, org_and_viewer
     ):

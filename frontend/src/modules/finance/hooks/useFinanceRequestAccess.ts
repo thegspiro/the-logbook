@@ -27,6 +27,11 @@ export interface FinanceRequestAccess {
   seesAllExpenseReports: boolean;
   /** May edit, submit or withdraw this record (given who raised it). */
   canActAsRequester: (requesterId: string | null | undefined) => boolean;
+  /**
+   * Raised this record themselves. Claiming a purchase back is the buyer's
+   * alone, finance office or not: the expense report pays whoever files it.
+   */
+  isOwn: (requesterId: string | null | undefined) => boolean;
 }
 
 export function useFinanceRequestAccess(): FinanceRequestAccess {
@@ -42,5 +47,6 @@ export function useFinanceRequestAccess(): FinanceRequestAccess {
     seesAllRequests: canManage || checkPermission('finance.view'),
     seesAllExpenseReports: canManage,
     canActAsRequester: (requesterId) => canManage || (canRequest && !!userId && requesterId === userId),
+    isOwn: (requesterId) => (canRequest || canManage) && !!userId && requesterId === userId,
   };
 }

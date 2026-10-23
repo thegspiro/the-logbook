@@ -1,6 +1,6 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), pass 17 PR recorded in `PROGRESS.md`
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 18 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/apparatus.py` (94 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
@@ -8,6 +8,113 @@
 `services/nfc_tag_service.py`, `mcp/tools/apparatus.py`
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 18 (2026-10-23, watchdog pickup) — real delta (8 commits), 0 fixed, 0 new findings
+
+**Watchdog pickup.** Per Step 0, `search_pull_requests` against
+`thegspiro/the-logbook` for an open `claude/security-review-*` head branch:
+0 matches. PR #3585 (Feature 12, Facilities, pass 11) had already merged,
+docs-only — not independently recordable. The dedicated
+`/loop 30m /security-review` session was not reachable via `ListAgents`.
+Rotation row 13 (Apparatus & NFC) was confirmed the next `⬜` by reading the
+rotation table directly.
+
+### Scope
+
+Baseline: pass 17's merge, PR #3434 (`1460531f`). `git log 1460531f..HEAD
+--no-merges` against every declared scope file plus `frontend/src/modules/apparatus`
+returned **8 non-merge commits** out of several hundred repo-wide in this
+window — a real delta, not zero. Every commit read via `git show`:
+
+- **`92505187`** — `delete_apparatus_status` gained a second refusal check: a
+  custom (non-system) status still referenced by `ApparatusStatusHistory` now
+  answers 409 (`ApparatusStatusInUseError`, caught by the route) instead of
+  hitting the `RESTRICT` FK constraint and surfacing as a 500. The history
+  count query is deliberately not org-filtered (`ApparatusStatusHistory.status_id
+== apparatus_status.id`), which is safe only because the status itself was
+  already resolved in-org (or rejected as `is_system`) one line above —
+  traced `get_apparatus_status`'s `or_(organization_id == ..., organization_id
+IS NULL)` resolution and `create_apparatus_status`'s always-org-stamped
+  write path to confirm every non-system status row carries a real,
+  single-org `organization_id`, so no cross-org history count is reachable
+  through this path. Not a finding — a correctly-scoped refusal, same shape
+  as the Facilities/Documents `*InUseError` 409 fixes reviewed in earlier
+  rotation turns.
+- **`74638250`** (repo-wide numeric-bounds sweep) — purely additive `ge`/`le`
+  bounds added to `schemas/apparatus.py` fields previously unbounded. No
+  field removed, widened, or made optional that was previously required.
+- **`7197f577`** (UTC-normalization sweep) — `ApparatusFuelLogBase.fuel_date`
+  and `ApparatusPhotoBase.taken_at` annotated `UTCDateTime` in place of a bare
+  `datetime`, fixing a wall-clock/UTC storage mismatch. No auth, tenancy, or
+  injection surface touched.
+- **`65eb0e1c`**, **`21daaf00`**, **`75501134`**, **`2f545786`**, **`11e988af`**
+  — frontend-only: the shared Operations/Governance page-header refactor
+  reaching `ApparatusDetailPage.tsx`/`ApparatusFormPage.tsx` (layout only, no
+  `canManage`/permission-gated control removed or relocated — the add/edit
+  buttons' existing gates are untouched), a 44px touch-target a11y fix, an
+  AA-contrast badge-color fix, and matching test-file updates. None changes a
+  fetch call, an auth header, or a rendered permission check.
+
+No commit in this window touches `evoc_level_service.py`, `nfc_tags.py`,
+`nfc_tag_service.py`, `driver_exception_service.py`,
+`external_apparatus_service.py`, or `mcp/tools/apparatus.py`.
+
+### Route inventory
+
+Re-enumerated fresh: **`apparatus.py` 94 routes, `nfc_tags.py` 5 routes —
+unchanged from pass 17.**
+
+### Re-verified good ✅ (pass 18)
+
+- **LIKE escaping, tenant isolation (NFC), module axios auth, cache
+  exclusions** — all four files/mechanisms pass 17 re-verified are untouched
+  in this window's delta, so unchanged rather than merely unexamined.
+- No new raw SQL, no new CSV export, no new JSON-column shallow-copy
+  mutation, no new seeded-grant change, no new upload/download route.
+
+### Standing flagged item (app-review rotation, cross-referenced, unchanged)
+
+**AP2-4 (MED, `docs/app-review/apparatus.md`, mirrored in
+`docs/KNOWN_LIMITATIONS.md`)** — the EVOC gate still fails open (`eligible:
+True`) when `Shift.apparatus_id` points at a deleted apparatus row (no FK).
+Re-confirmed unchanged: `evoc_level_service.py` has zero commits in this
+pass's delta, and the owner decision it is pending on is untouched.
+
+## Findings (pass 18)
+
+None new. No prior OPEN finding besides AP2-4 exists to re-verify; AP-19
+(fixed pass 15) re-confirmed intact — file untouched this window.
+
+## Completion gate (pass 18)
+
+| Check                                                                                                                | Result                                              |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI-pinned)                                                                     | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (26.5.1, CI-pinned)                                                             | ✅ clean                                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned)                                                         | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                    | ✅ single head `f7535f478280`, 641 revisions        |
+| `python3 scripts/check_route_permissions.py --strict`                                                                | ✅ 273 routes, 0 errors, 0 warnings                 |
+| `pytest tests/ -k "apparatus or nfc or evoc or driver_exception"`                                                    | ✅ 1258 passed, 1 pre-existing skip (`pywebpush`)   |
+| Tenancy/security guard tests (LIKE escaping, capacity locking, CSV sweep, org-scoping ratchet, account-status gates) | ✅ 99 passed, 1 pre-existing skip                   |
+| `cd frontend && npm run typecheck`                                                                                   | ✅ clean                                            |
+| `cd frontend && npm run lint`                                                                                        | ✅ clean, exit 0                                    |
+| `npx vitest run src/modules/apparatus`                                                                               | ✅ 114 passed (15 files, up from 113/14 at pass 17) |
+
+**Note on the gate environment:** the sandbox's MySQL test database was
+missing `users.mfa_grace_started_at` from a migration
+(`f7535f478280`, "MFA grace period... and step-up on a session") that
+`alembic upgrade head` had not yet been run against, which failed 57
+unrelated tests (`test_apparatus_files.py`, `test_nfc_tag_service.py`,
+`test_apparatus_service_fk_scoping_integration.py`, and others) on
+fixture setup with an `OperationalError`, not on anything they assert.
+Running `alembic upgrade head` fixed all of them with no source change —
+the same shape of environment gap pass 16 (`document_folders.admin_only_confirmed_at`)
+hit on this same feature.
+
+Rotation row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment
+check & shifts).
 
 ---
 

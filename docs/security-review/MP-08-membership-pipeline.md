@@ -4,6 +4,51 @@
 
 ---
 
+## Follow-up (2026-10-23) — route-coverage guard for the MP-32 class; MP-33 fixed, MP-34 flagged
+
+Pass 8 missed `GET /my-sign-offs` because it reviewed changed files only and
+did not re-list the routes. Two changes so that miss cannot recur unnoticed:
+
+- **Guard test:** `tests/test_prospect_route_self_access_coverage.py` (unit, no
+  database). It walks every route on the membership-pipeline router through
+  its `Depends` tree. Any route without `{prospect_id}` must depend on
+  `get_hidden_prospect_ids`, carry `block_self_interview_access`, or be listed
+  in `EXEMPT` with a reason. A second test fails on a stale `EXEMPT` entry.
+- **Command:** `.claude/commands/security-review.md` Step 3 now says a repeat
+  pass re-lists the routes by AST and compares the count with the previous
+  pass, rather than reviewing only the files in the diff.
+
+Writing the guard turned up two more routes of the MP-32 shape:
+
+### MP-33 — LOW — `purge-inactive` could delete the caller's own application — ✅ FIXED
+
+**What:** `POST /pipelines/{pipeline_id}/purge-inactive` takes applicant ids in
+the request body, or none at all to purge the whole Inactive tab. The router
+guard cannot see body ids. Both bulk routes exclude the caller's own record
+for this reason, but purge did not.
+
+**Failure scenario:** a coordinator whose own application is inactive purges
+the tab, or names their own id. Their file is permanently deleted, along with
+the interview notes and recommendations other members wrote about them.
+
+**Fix:** the endpoint depends on `get_hidden_prospect_ids`, and
+`purge_inactive_prospects` passes the set to `_delete_inactive_prospects`,
+which drops it from the locked select through `_apply_prospect_exclusions`.
+The scheduled auto-purge passes nothing and is unchanged.
+
+**Test:**
+`test_prospect_self_access.py::TestGuardOverHttp::test_purge_inactive_spares_the_callers_own_record`
+covers both the named-id and the whole-tab paths. It fails with the fix
+stashed and passes with it.
+
+### MP-34 — LOW — the duplicate-email check names the caller's own application — FLAGGED
+
+`POST /prospects/check-existing` and the `POST /prospects` 409 both name the
+active applicant for an email the caller types, so a caller can type their
+own email and see their own application's pipeline and stage. Flagged for an
+owner decision. See `docs/KNOWN_LIMITATIONS.md`, "Typing Your Own Email Into
+the Duplicate Check Names Your Own Application".
+
 ## Pass 12 (2026-10-23) — real delta (staff duplicate-applicant refusal, approver-role trimming/labeling, file-storage interface migration, numeric bounds, UTC interview times), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
 
 **Step 0/1.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)

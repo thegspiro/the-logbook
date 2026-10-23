@@ -981,6 +981,83 @@ when it is paid, so the two reports differ by the advances paid and not yet
 accounted for, and for a period with advances in it the register no longer
 totals exactly to the change in budget-vs-actual **Spent**.
 
+## Reimbursing a purchase _(2026-10-23)_
+
+A member who buys an approved purchase with their own money is paid back by
+check, without anyone re-keying the purchase. Three records, linked (migration
+`4250eb8b8378`); the rules are in `app/services/finance_reimbursement.py`.
+
+1. **Purchase request → expense report.** On an approved, ordered or received
+   request, its requester chooses **Request Reimbursement** (what they paid,
+   when, where). `POST /finance/purchase-requests/{id}/reimbursement-report`
+   raises a draft expense report with `purchase_request_id` set and one line
+   copied from the request: its budget line, restricted fund, functional class,
+   vendor and receipt. Only the member who raised the request may claim it —
+   not the finance office on their behalf, because a report pays whoever files
+   it. One report claims a purchase at a time; a denied one lets another
+   follow.
+2. **Expense report → check request.** The report is submitted and approved
+   like any other. On the approved report the finance office chooses **Pay by
+   Check** (`POST /finance/expense-reports/{id}/reimbursement-check`,
+   `finance.manage`; optional mailing address and memo). That raises a check
+   request with `expense_report_id` set, in the member's name and payable to
+   their legal name, for what the report still owes (`amountOwed`: the total
+   less any cash advance), and **submits it through the check-request approval
+   chain** (owner decision, 2026-10-23). **Mark Paid** stays for cash, direct
+   deposit and the rest. While a check is paying a report, neither a second
+   check nor Mark Paid is accepted.
+3. **Check issued → report paid.** Issuing the check marks the report paid
+   (method `check`, dated by the check) and closes the request as
+   **reimbursed**. The usual separation of duties applies: the member cannot
+   approve or issue their own check.
+
+**Counted once.** Each record counted its own money when it settled alone, so
+the link decides which one carries it:
+
+| Record           | Budget line                                                   | Restricted fund                                     | Board reports and QuickBooks                       |
+| ---------------- | ------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------- |
+| Purchase request | estimate encumbered until the report is paid, then released   | estimate committed until the report is **approved** | not shown once reimbursed                          |
+| Expense report   | lines spent when it is paid                                   | lines committed when approved, spent when paid      | shown **through the check**                        |
+| Check            | charges nothing (`budget_id` and fund refused, as an advance) | charges nothing                                     | the report's payment: dated by it, with its number |
+
+The request's release and the report's spend on a line are applied in one
+budget mutation, so a nearly full line is not refused for counting both at
+once. A purchase claimed by a submitted report cannot be marked paid or
+cancelled (400, naming the report); a draft claim does not hold it, and is
+refused on submission once the request has been settled another way.
+
+**Voiding the check** puts the report back to approved and unpaid, reverses
+its lines' spend, and reopens the request — to received, ordered or approved,
+from its own timestamps — with its estimate encumbered again, so another
+check can be cut. That re-encumbrance is held to the line's ceiling like any
+other: if the line has since been cut below it, the void is refused (409) until
+the budget is amended.
+
+**QuickBooks.** A report paid by a reimbursement check is exported as that
+check's entry: its lines' debits and the bank (and, where an advance covers
+part, advances-account) credits, under the **check's** request number, so a
+report voided and paid again posts under a number QuickBooks has not seen. The
+first export records that entry on the check (`check_requests.qb_export_entry`,
+`[account, debit, credit, description]` per row) and stamps the report too. A
+check voided after that export is reversed from the recorded entry with every
+row's sides swapped, as `CK-…-V`, in the export covering the void — never from
+the account mappings, which may have moved since. The report's own stamp is
+cleared on the void so its next payment is exported afresh.
+
+**Board reports.** The payments register shows the report once, on the
+check's date and with its check number, and a voided reimbursement check as a
+negative row on the day of the void; functional expenses count the report's
+lines when the check is issued and take them back when it is voided; the
+as-of spent on budget-vs-actual counts them between the two dates. Re-running
+an earlier period after a void therefore still shows what was paid in it.
+
+**Screens.** The purchase request shows **Request Reimbursement** to its
+requester, a link to the report claiming it, and **Reimbursed** once paid;
+**Mark Paid** and **Cancel Request** are hidden while a submitted claim holds
+it. The expense report links to its purchase and its check, and shows **Pay by
+Check** beside **Mark Paid** to the finance office. The check request links to
+the report it pays and offers no expense classification of its own.
+
 ## Board reports _(2026-10-12)_
 
 **Finance › Reports** (`/finance/reports`, `finance.view`) holds the three
@@ -1348,7 +1425,7 @@ Where `PENDING_APPROVAL` means "at least one approval step is pending." The serv
 
 Enums:
 
-- `PurchaseRequestStatus`: DRAFT, SUBMITTED, PENDING_APPROVAL, APPROVED, DENIED, ORDERED, RECEIVED, PAID, CANCELLED
+- `PurchaseRequestStatus`: DRAFT, SUBMITTED, PENDING_APPROVAL, APPROVED, DENIED, ORDERED, RECEIVED, PAID, REIMBURSED, CANCELLED — `REIMBURSED` is a purchase the requester paid for and was paid back through an expense report; see [Reimbursing a purchase](#reimbursing-a-purchase-2026-10-23)
 
 **Endpoints:**
 
@@ -1361,6 +1438,7 @@ Enums:
 - `POST /finance/purchase-requests/{id}/mark-paid`
 - `GET/POST /finance/purchase-requests/{id}/receipt`
 - `PUT /finance/purchase-requests/{id}/functional-class`
+- `POST /finance/purchase-requests/{id}/reimbursement-report` — claim it back; see [Reimbursing a purchase](#reimbursing-a-purchase-2026-10-23)
 
 There is no per-request approve or deny endpoint. Approval goes through the
 shared approval endpoints — `POST /finance/approvals/{step_record_id}/approve`
@@ -1407,6 +1485,7 @@ Enums:
 - `GET/PUT /finance/expense-reports/{id}`
 - `POST /finance/expense-reports/{id}/submit`
 - `POST /finance/expense-reports/{id}/mark-paid`
+- `POST /finance/expense-reports/{id}/reimbursement-check` — pay it by check; see [Reimbursing a purchase](#reimbursing-a-purchase-2026-10-23)
 - `POST /finance/expense-reports/{id}/items` (add a line item; lines are read
   back on the report)
 - `GET/POST /finance/expense-reports/{id}/items/{item_id}/receipt`

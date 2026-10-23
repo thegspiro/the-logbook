@@ -2033,13 +2033,34 @@ them), or leave them as harmless empty tables.
 **Upgraded databases are stricter than the models.** About 100 columns are
 `NOT NULL` on an upgraded database and nullable in the models, and about 177
 carry a server default that a fresh install lacks. They are mostly booleans,
-sort orders and timestamps. The
-application supplies every one of these values on insert, so ordinary use does
-not reach the gap. It shows up when code writes an explicit `null` to one of
-these columns: `apply_updates` reads nullability from the models, so it passes
-the write, and an upgraded database then rejects it at flush time with a 500
-instead of a 400. Closing it means choosing, per column, which side is right.
-That makes it a sweep with its own review, not a mechanical migration.
+sort orders and timestamps. It shows up when code writes an explicit `null` to
+one of these columns: `apply_updates` reads nullability from the models, so it
+passes the write, and an upgraded database then rejects it at flush time with
+MySQL 1048, returned as a 500 or as a generic 400.
+
+_Traced 2026-10-22._ One column was reached by ordinary requests:
+`training_waivers.end_date`, where a NULL means a permanent waiver. It was
+relaxed by `f938324f8081`, because there the model is right. Every other path
+needs a request that carries an explicit `null` for an on/off or count setting.
+This pass traced the backend only and did not check whether any frontend form
+sends one. About 45 such paths were found, for example:
+
+- training module configuration (25 display switches)
+- self-report and shift-report settings, and shift templates
+- inventory categories, items, variant groups, kits, maintenance records and
+  NFPA compliance, plus `quantity` on `POST /inventory/items/bulk`
+- membership pipelines and steps, and department messages
+
+For these the upgraded database is the one that is right. The fix is a sweep:
+
+- declare the columns `NOT NULL` with their defaults in the models, so
+  `apply_updates` returns a 400;
+- add the same null check to the hand-written update loops that bypass
+  `apply_updates`;
+- add a migration that settles any NULLs already stored on fresh installs.
+
+**Open decision:** that sweep is a schema change across those columns and
+waits on an owner's go-ahead.
 
 **One unused index on upgraded databases.** `20260808_0003` dropped the
 foreign key on `shift_equipment_checks.apparatus_id`, and MySQL kept the index
@@ -3460,6 +3481,26 @@ Recorded here rather than as a second entry (security review MP-08 pass 8,
 **Accepted by the owner (2026-10-05):** both sites keep the file-first order;
 the residual is retry-safe and needs a rare compound failure, so no
 trash-and-restore scheme is built.
+
+## Membership Pipeline — Typing Your Own Email Into the Duplicate Check Names Your Own Application (2026-10-23)
+
+`POST /prospective-members/prospects/check-existing` returns
+`existing_applicant` (name, pipeline, stage) for the active applicant holding
+the email the caller typed, and `POST /prospects` refuses that email with a
+409 that names the same three things. Neither route has `{prospect_id}` in its
+path, so the router-wide `block_self_prospect_access` guard never runs, and
+neither applies `get_hidden_prospect_ids`. A caller holding `members.create`
+or `prospective_members.manage` who also has an active application of their
+own can type their own email and learn which pipeline and stage that
+application is at. `prospect_privacy.py` says a member must never be able to
+read that about their own file.
+
+Flagged rather than fixed. Hiding the match from that one caller means the
+409 can no longer say why the email is refused, which leaves a coordinator
+looking at an unexplained refusal. Choosing between that and the disclosure
+is a product decision. Both routes are listed in `EXEMPT` in
+`tests/test_prospect_route_self_access_coverage.py` with this reason, so
+removing them from the list is part of whichever fix is chosen.
 
 ## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02, resolved 2026-10-11)
 
