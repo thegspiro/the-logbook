@@ -116,6 +116,10 @@ OFFICER_PROGRESS_NOTE_KEYS = (
 # the day an annual requirement's window rolled over.
 _LIVE_ENROLLMENT_STATUSES = (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
 
+# Enrollments an officer may mark complete by hand (complete_enrollment_manually).
+# Wider than the rollup's ACTIVE-only rule on purpose; see that method.
+MANUALLY_COMPLETABLE_STATUSES = (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
+
 # Recorded on enrollments still in progress when their program is deactivated,
 # whether in place of a delete or from the edit form (see
 # _withdraw_in_progress_enrollments).
@@ -516,6 +520,79 @@ class TrainingProgramService:
                 f"{enrollment.user_id} after EVOC level {evoc_level.level_number} "
                 f"completion"
             )
+
+    async def _claim_completion(
+        self,
+        enrollment_id: UUID | str,
+        from_statuses: Sequence[EnrollmentStatus],
+    ) -> bool:
+        """Move an enrollment to COMPLETED if it is still in one of
+        ``from_statuses``; True when this call made the change.
+
+        A compare-and-set rather than a read then a write: the status check is
+        in the UPDATE's own WHERE clause, which InnoDB evaluates against the
+        latest committed row, so two completions racing each other — the
+        rollup and an officer, or two officers — cannot both succeed, and the
+        completion side effects (``_after_enrollment_completed``) are fired
+        only by the caller that got True. Does not commit.
+        """
+        now = datetime.now(timezone.utc)
+        claimed = await self.db.execute(
+            update(ProgramEnrollment)
+            .where(
+                ProgramEnrollment.id == str(enrollment_id),
+                ProgramEnrollment.status.in_(tuple(from_statuses)),
+            )
+            .values(
+                status=EnrollmentStatus.COMPLETED,
+                completed_at=now,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return rows_affected(claimed) == 1
+
+    async def _after_enrollment_completed(
+        self,
+        enrollment: ProgramEnrollment,
+        completion_credit_id: Optional[str] = None,
+    ) -> None:
+        """Everything that follows an enrollment becoming COMPLETED.
+
+        The single list of completion side effects, shared by the automatic
+        rollup (``_recalculate_enrollment_progress``) and an officer's manual
+        completion (``complete_enrollment_manually``) so the two cannot drift
+        (pitfall #29): the member's completion notice, then the EVOC operator
+        grant for a program linked to an EVOC level. Call it only after the
+        ``_claim_completion`` that returned True has been committed.
+
+        Best-effort: the completion is already committed, and a notification
+        failure must not turn it into an error for the caller.
+        """
+        try:
+            await self.db.refresh(enrollment)
+            program_result = await self.db.execute(
+                select(TrainingProgram).where(
+                    TrainingProgram.id == str(enrollment.program_id)
+                )
+            )
+            program = program_result.scalar_one_or_none()
+            user_result = await self.db.execute(
+                select(User).where(User.id == str(enrollment.user_id))
+            )
+            user = user_result.scalar_one_or_none()
+            if program and user:
+                await self._notify_program_completion(
+                    enrollment, program, user, UUID(str(program.organization_id))
+                )
+
+                # Auto-add as operator on matching apparatus when
+                # an EVOC training program completes
+                await self._handle_evoc_completion(
+                    program, enrollment, completion_credit_id
+                )
+        except Exception as e:
+            logger.error(f"Failed to send program completion notification: {e}")
 
     # ==================== Training Requirement Methods ====================
 
@@ -4869,6 +4946,94 @@ class TrainingProgramService:
         await self._ensure_program_loaded(enrollment)
         return enrollment, None
 
+    async def complete_enrollment_manually(
+        self,
+        enrollment_id: UUID | str,
+        organization_id: UUID | str,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str], int]:
+        """An officer marks a member's whole enrollment complete by hand.
+
+        For a pipeline the rollup will not finish — every required item
+        retired — or a member the department has decided is done, whether or
+        not every required item is met. Returns
+        ``(enrollment, error, unmet_required_count)``; the count is how many
+        required items the member had not met, which the endpoint audits with
+        the officer's reason.
+
+        ON_HOLD is allowed as well as ACTIVE. The rollup refuses ON_HOLD
+        because nobody chose that completion; here an officer does, and a
+        member paused while waiting for exactly this sign-off is the case the
+        action exists for. WITHDRAWN, FAILED and EXPIRED are outcomes on record
+        and are reopened through their own paths first.
+
+        Completion goes through ``_claim_completion`` and
+        ``_after_enrollment_completed`` — the same write and the same side
+        effects as an automatic completion. Requirement progress is untouched:
+        what the member had not met stays unmet on record.
+        """
+        # Locked so two officers, or an officer and the rollup, serialize on
+        # the row (pitfall #27); the claim re-checks the status in its own
+        # WHERE clause besides. Org-scoped through the program, as the other
+        # enrollment actions are (pitfall #14).
+        result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram, TrainingProgram.id == ProgramEnrollment.program_id)
+            .where(
+                ProgramEnrollment.id == str(enrollment_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+            .with_for_update(of=ProgramEnrollment)
+            .execution_options(populate_existing=True)
+        )
+        enrollment = result.scalar_one_or_none()
+        if not enrollment:
+            return None, "Enrollment not found", 0
+
+        if enrollment.status not in MANUALLY_COMPLETABLE_STATUSES:
+            current = getattr(enrollment.status, "value", enrollment.status)
+            if enrollment.status == EnrollmentStatus.COMPLETED:
+                message = "This enrollment is already complete"
+            else:
+                message = (
+                    "Only an active or on-hold enrollment can be marked "
+                    f"complete; this one is {str(current).replace('_', ' ')}"
+                )
+            return None, message, 0
+
+        unmet = await self._unmet_required_count(enrollment.id, enrollment.program_id)
+
+        if not await self._claim_completion(
+            enrollment.id, MANUALLY_COMPLETABLE_STATUSES
+        ):
+            return None, "This enrollment is already complete", 0
+
+        await self.db.commit()
+        await self._after_enrollment_completed(enrollment)
+        await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
+        return enrollment, None, unmet
+
+    async def _unmet_required_count(self, enrollment_id: Any, program_id: Any) -> int:
+        """How many of a program's counting (required, active) items this
+        enrollment has not met — met meaning 100%, the rollup's own test, and a
+        missing progress row counting as unmet as it does in
+        ``_is_phase_complete``. ``program_id`` must come from an org-scoped
+        read (pitfall #14)."""
+        required_ids = set(
+            await self.get_required_requirement_ids(program_id=program_id)
+        )
+        if not required_ids:
+            return 0
+        result = await self.db.execute(
+            select(RequirementProgress.requirement_id).where(
+                RequirementProgress.enrollment_id == str(enrollment_id),
+                RequirementProgress.requirement_id.in_(required_ids),
+                RequirementProgress.progress_percentage >= 100.0,
+            )
+        )
+        met = {str(rid) for rid in result.scalars().all()}
+        return len(required_ids - met)
+
     async def auto_reset_if_due(
         self, enrollment: ProgramEnrollment, today: Optional[date] = None
     ) -> bool:
@@ -5221,22 +5386,26 @@ class TrainingProgramService:
         # EXPIRED, or ON_HOLD enrollment retains its progress rows, so without
         # this guard a progress edit that reaches 100% would silently flip it to
         # COMPLETED — reversing a withdrawal or overriding a terminal state.
-        newly_completed = avg_percentage >= 100.0 and was_active
-        if newly_completed:
-            await self.db.execute(
-                update(ProgramEnrollment)
-                .where(ProgramEnrollment.id == str(enrollment_id))
-                .values(
-                    status=EnrollmentStatus.COMPLETED,
-                    completed_at=datetime.now(timezone.utc),
-                )
-            )
-        elif avg_percentage < 100.0 and was_completed:
+        # The status is part of the claim's WHERE clause, so an officer's
+        # manual completion committed since ``was_active`` was read wins and
+        # the side effects below fire once, not twice.
+        newly_completed = (
+            avg_percentage >= 100.0
+            and was_active
+            and await self._claim_completion(enrollment_id, (EnrollmentStatus.ACTIVE,))
+        )
+        if avg_percentage < 100.0 and was_completed and previous_percentage >= 100.0:
             # Progress fell back below 100% for an enrollment that had already
             # completed — e.g. an officer corrected an over-count downward, or a
             # new required requirement was added to the program. Reopen it so it
             # doesn't stay marked complete without actually satisfying every
             # required item.
+            #
+            # Only when it *fell*: an enrollment an officer marked complete by
+            # hand (``complete_enrollment_manually``) was completed below 100%
+            # on purpose and keeps whatever percentage it had, so the next
+            # progress edit must not quietly undo the officer's decision. An
+            # automatic completion always stores >= 100 in the same write.
             await self.db.execute(
                 update(ProgramEnrollment)
                 .where(ProgramEnrollment.id == str(enrollment_id))
@@ -5260,33 +5429,8 @@ class TrainingProgramService:
             except Exception as e:
                 logger.error(f"Failed to send milestone notification: {e}")
 
-        # Send completion notification if newly completed
         if newly_completed:
-            try:
-                # Re-fetch enrollment for notification
-                await self.db.refresh(enrollment)
-                program_result = await self.db.execute(
-                    select(TrainingProgram).where(
-                        TrainingProgram.id == str(enrollment.program_id)
-                    )
-                )
-                program = program_result.scalar_one_or_none()
-                user_result = await self.db.execute(
-                    select(User).where(User.id == str(enrollment.user_id))
-                )
-                user = user_result.scalar_one_or_none()
-                if program and user:
-                    await self._notify_program_completion(
-                        enrollment, program, user, UUID(str(program.organization_id))
-                    )
-
-                    # Auto-add as operator on matching apparatus when
-                    # an EVOC training program completes
-                    await self._handle_evoc_completion(
-                        program, enrollment, completion_credit_id
-                    )
-            except Exception as e:
-                logger.error(f"Failed to send program completion notification: {e}")
+            await self._after_enrollment_completed(enrollment, completion_credit_id)
 
         # A requirement's own completion message. Every progress write ends in
         # this rollup, so this is the one place that sees every path that can

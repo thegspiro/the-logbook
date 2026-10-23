@@ -30,6 +30,7 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     MemberProgramProgress,
     PhaseReorderRequest,
     ProgramBuildRequest,
+    ProgramEnrollmentComplete,
     ProgramEnrollmentCreate,
     ProgramEnrollmentReopen,
     ProgramEnrollmentResponse,
@@ -1972,6 +1973,61 @@ async def reopen_enrollment(
                 else None
             ),
             "action": "enrollment_reopened",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return enrollment
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/complete", response_model=ProgramEnrollmentResponse
+)
+async def complete_enrollment(
+    enrollment_id: UUID,
+    payload: ProgramEnrollmentComplete,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Mark a member's whole pipeline enrollment complete by hand, with a reason.
+
+    For an active or on-hold enrollment, finished or not — including a
+    pipeline whose required items are all inactive, which never completes on
+    its own. The member is completed now, through the same path as an
+    automatic completion (completion notice, EVOC operator handling); required
+    items they had not met stay unmet on record. Audited with the reason and
+    the unmet count.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    enrollment, error, unmet = await service.complete_enrollment_manually(
+        enrollment_id=enrollment_id,
+        organization_id=current_user.organization_id,
+    )
+    if error == "Enrollment not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error or "An unexpected error occurred",
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_completed_manually",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "enrollment_id": str(enrollment_id),
+            "target_user_id": str(enrollment.user_id),
+            "program_id": str(enrollment.program_id),
+            "program_name": enrollment.program.name if enrollment.program else None,
+            "reason": payload.reason,
+            "unmet_required_count": unmet,
+            "action": "enrollment_completed_manually",
         },
         user_id=str(current_user.id),
         username=current_user.username,

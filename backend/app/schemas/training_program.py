@@ -534,6 +534,24 @@ class ProgramEnrollmentWithdraw(BaseModel):
     reason: Optional[str] = Field(None, max_length=500)
 
 
+class ProgramEnrollmentComplete(BaseModel):
+    """An officer marking a member's whole enrollment complete by hand.
+
+    The reason is required: the completion is recorded in the audit log with
+    it, alongside how many required items were still unmet. 500 characters,
+    as for a withdrawal reason.
+    """
+
+    reason: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def _strip_reason(cls, value: object) -> object:
+        # Trimmed before the length check, so a reason of only spaces is
+        # refused as empty rather than audited as one.
+        return value.strip() if isinstance(value, str) else value
+
+
 class ProgramEnrollmentReopen(BaseModel):
     """Options when an officer reopens an expired enrollment.
 

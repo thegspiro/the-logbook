@@ -8,6 +8,7 @@
  */
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { MARK_PIPELINE_COMPLETE_LABEL } from './markPipelineComplete';
 
 export const NO_ACTIVE_REQUIREMENTS_LABEL = 'No active requirements';
 
@@ -22,7 +23,8 @@ const EXPLANATION: Record<'pipeline' | 'phase', Record<'officer' | 'member', str
   pipeline: {
     officer:
       'Nothing in this pipeline currently counts toward finishing it, so no member is completed automatically. ' +
-      'Reactivate a requirement, or mark one required, and members who have finished it complete on their own.',
+      `Use ${MARK_PIPELINE_COMPLETE_LABEL} to complete a member by hand, or reactivate a requirement (or mark one ` +
+      'required) and members who have finished it complete on their own.',
     member:
       'Nothing in this pipeline currently counts toward finishing it, so it will not complete on its own. ' +
       'A training officer will reactivate a requirement or follow up with you.',
