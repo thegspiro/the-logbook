@@ -15,6 +15,11 @@ suspended again. That re-suspension usually succeeds at once, so it never
 waits long enough to be overdue -- but somebody re-enabling a departed
 member's account is exactly what an administrator needs to hear about.
 
+It also names, once, each departed member whose account the daily check has
+just found still in the directory more than 90 days after its suspension: a
+suspended account keeps its license until it is deleted or unlicensed, and
+The Logbook only lists these, never removes anything.
+
 For Microsoft 365 it also warns before the client secret expires, from the
 date an administrator recorded: once at 30 days, once at 7 and once on the
 day it runs out, and in every email sent while it is that close. An expired
@@ -37,6 +42,7 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import user_has_permission
 from app.core.config import settings as app_settings
 from app.models.audit import AuditLog
+from app.models.directory_account import DirectoryAccountProvision
 from app.models.user import Organization, User
 from app.services.directory_account_service import (
     ACTIVE_AFTER_DEPARTURE_EVENT,
@@ -190,6 +196,58 @@ async def _recently_reactivated(
     return list(members)
 
 
+async def _newly_long_suspended(
+    db: AsyncSession, organization_id: str, info: DirectoryProviderInfo
+) -> list[User]:
+    """Departed members the daily check first found long suspended in the
+    window (each is reported once: the mark is set only when first found)."""
+    since = datetime.now(timezone.utc) - REACTIVATED_WINDOW
+    members = (
+        (
+            await db.execute(
+                select(User)
+                .join(
+                    DirectoryAccountProvision,
+                    DirectoryAccountProvision.user_id == User.id,
+                )
+                .where(
+                    User.organization_id == organization_id,
+                    DirectoryAccountProvision.organization_id == organization_id,
+                    DirectoryAccountProvision.provider == info.provider,
+                    DirectoryAccountProvision.suspension_wanted.is_(True),
+                    DirectoryAccountProvision.long_suspended_since >= since,
+                )
+                .order_by(User.last_name, User.first_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return list(members)
+
+
+def _long_suspended_section(info: DirectoryProviderInfo, members: list[User]) -> str:
+    if not members:
+        return ""
+    base = app_settings.FRONTEND_URL.rstrip("/")
+    rows = "".join(
+        "<li>"
+        f'<a href="{html.escape(f"{base}/members/{m.id}")}">'
+        f"{html.escape(m.full_name)}</a> ({html.escape(m.email or '')})"
+        "</li>"
+        for m in members[:DIGEST_ROWS_SHOWN]
+    )
+    return (
+        f"<p><strong>{len(members)} departed member(s) have had their "
+        f"{html.escape(info.vendor)} account suspended for over 90 days.</strong> "
+        "A suspended account keeps its license until the license is removed or "
+        f"the account is deleted in {html.escape(info.admin_console)}. The "
+        "Logbook does neither. They stay on the Integrations attention list "
+        "until one is done.</p>"
+        f"<ul>{rows}</ul>"
+    )
+
+
 def _reactivated_section(info: DirectoryProviderInfo, members: list[User]) -> str:
     if not members:
         return ""
@@ -263,6 +321,7 @@ async def send_google_workspace_attention_digest(
         return 0
     overdue = [i for i in await service.attention_items(org_id) if i.overdue]
     reactivated = await _recently_reactivated(db, org_id, info)
+    long_suspended = await _newly_long_suspended(db, org_id, info)
     secret_html = ""
     secret_warned: Optional[str] = None
     integration = await service.active_integration(org_id, info)
@@ -275,8 +334,9 @@ async def send_google_workspace_attention_digest(
         marker = f"{expires_on}:{level}"
         if _settings_section(organization).get(SECRET_WARNED_KEY) != marker:
             secret_warned = marker
-    if not overdue and not reactivated and secret_warned is None:
-        return 0
+    if not overdue and not reactivated and not long_suspended:
+        if secret_warned is None:
+            return 0
     recipients = recipients_for(
         await _administrators(db, org_id),
         EmailKind.MEMBERSHIP_ADMIN,
@@ -292,11 +352,12 @@ async def send_google_workspace_attention_digest(
         secret_html
         + _reactivated_section(info, reactivated)
         + _body(info, overdue)
+        + _long_suspended_section(info, long_suspended)
         + action(html.escape(f"{base}/integrations"), "Open Integrations"),
         header_color=ACCENT_AMBER,
         chip=info.product,
     )
-    count = len(overdue) + len(reactivated)
+    count = len(overdue) + len(reactivated) + len(long_suspended)
     subject = (
         f"{count} {info.product} account(s) need attention"
         if count

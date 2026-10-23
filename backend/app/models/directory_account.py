@@ -128,6 +128,13 @@ class DirectoryAccountProvision(Base):
     suspension_requested_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When the daily departure check, listing the directory, first found this
+    # departed member's account still there more than 90 days after it was
+    # suspended -- still holding its license. Cleared when the account is
+    # gone from the directory, or the member returns.
+    long_suspended_since: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

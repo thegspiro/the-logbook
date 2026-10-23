@@ -215,12 +215,14 @@ Workspace card on **Integrations** shows **N need attention**. It opens a list
 of those members, each linked to their profile (where the reason and **Retry**
 are), most urgent first:
 
-| Listed as                                    | Means                                                                                  |
-| -------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Left, but the account is not suspended       | A departure's suspension Google has not taken yet                                      |
-| Returned, but the account is still suspended | A return's unsuspension Google has not taken yet                                       |
-| Account not created                          | Creation failed, or has been "being created" for over an hour with no answer           |
-| Account setup unfinished                     | The account exists but a group was not added, or its password never reached the member |
+| Listed as                                      | Means                                                                                                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Left, but the account is not suspended         | A departure's suspension Google has not taken yet                                                                                            |
+| Returned, but the account is still suspended   | A return's unsuspension Google has not taken yet                                                                                             |
+| Account not created                            | Creation failed, or has been "being created" for over an hour with no answer                                                                 |
+| Account setup unfinished                       | The account exists but a group was not added, or its password never reached the member                                                       |
+| Left, but still in a group                     | Suspended, but a group would not let the account go; the sweep keeps trying                                                                  |
+| Suspended over 90 days, still in the directory | A departed member's account the daily check still finds 90 days after its suspension: it keeps its license until it is deleted or unlicensed |
 
 A member who has left is listed only for their suspension: creating or
 finishing their account is not wanted. One case is listed for a person to
@@ -237,7 +239,11 @@ Anything waiting over a day is also emailed to every active member holding
 `admin.access`, once each morning while it lasts
 (`google_workspace_attention_digest`, 7:35). The email leads with departed
 members whose account was found turned back on that morning, then those whose
-account still works. It is filed under **Membership and store
+account still works. It also names, once, each departed member whose account
+the daily check has just found still in the directory 90 days after its
+suspension. Those are listed for information and never count as overdue; The
+Logbook deletes and unlicenses nothing, and the entry goes away when the
+account is deleted in the directory or the member returns. The email is filed under **Membership and store
 administration** in each member's email preferences, so an administrator can
 turn it off for themselves.
 

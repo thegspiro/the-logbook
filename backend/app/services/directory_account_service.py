@@ -95,6 +95,10 @@ STALE_PENDING_AFTER = timedelta(hours=1)
 # How long an item may wait before the daily alert reports it. The sweep has
 # retried a failed suspension dozens of times by then.
 ATTENTION_OVERDUE_AFTER = timedelta(hours=24)
+# A departed member's account still in the directory this long after its
+# suspension is listed for an administrator to delete or unlicense: it keeps
+# its license until then (owner decision, 2026-10-23: list, never remove).
+LONG_SUSPENSION_AFTER = timedelta(days=90)
 
 
 class AttentionIssue:
@@ -103,6 +107,7 @@ class AttentionIssue:
     NOT_CREATED = "not_created"
     SETUP_UNFINISHED = "setup_unfinished"
     GROUPS_NOT_LEFT = "groups_not_left"
+    LONG_SUSPENDED = "long_suspended"
 
 
 # The one wording of each issue: the list's response carries it, and the
@@ -114,7 +119,11 @@ ATTENTION_LABELS = {
     AttentionIssue.NOT_CREATED: "Account not created",
     AttentionIssue.SETUP_UNFINISHED: "Account setup unfinished",
     AttentionIssue.GROUPS_NOT_LEFT: "Left, but still in a group",
+    AttentionIssue.LONG_SUSPENDED: "Suspended over 90 days, still in the directory",
 }
+# Listed for information, never overdue: an account can stay suspended for
+# good, and the morning email names each one once, when it is first found.
+NEVER_OVERDUE = frozenset({AttentionIssue.LONG_SUSPENDED})
 
 
 def unanswered_creation_message(info: DirectoryProviderInfo) -> str:
@@ -738,6 +747,8 @@ class DirectoryAccountService:
             row.suspension_settled = True
             row.suspension_error = None
             row.managed_on_premises = False
+            if outcome in ("suspended", "unsuspended") or not wanted:
+                row.long_suspended_since = None
             await self._follow_groups(row, integration, info, directory, outcome)
         except DirectoryAccountNotFoundError as exc:
             # Deleted in the directory: nothing left to suspend or restore.
@@ -1168,6 +1179,7 @@ class DirectoryAccountService:
         }
         now = datetime.now(timezone.utc)
         found: list[str] = []
+        marked = False
         for row in departed:
             # A record that knows its account's id is matched by the id alone:
             # the address may since belong to a different, newer account.
@@ -1176,7 +1188,24 @@ class DirectoryAccountService:
                 if row.external_user_id
                 else by_address.get((row.primary_email or "").lower())
             )
-            if account is None or account.suspended:
+            if account is None:
+                # Deleted in the directory, so no longer holding a license. Only
+                # an id says so for certain; a missing address may be a rename.
+                if row.external_user_id and row.long_suspended_since is not None:
+                    row.long_suspended_since = None
+                    marked = True
+                continue
+            if account.suspended:
+                suspended_since = _aware(
+                    row.suspended_at or row.suspension_requested_at
+                )
+                if (
+                    row.long_suspended_since is None
+                    and suspended_since is not None
+                    and now - suspended_since >= LONG_SUSPENSION_AFTER
+                ):
+                    row.long_suspended_since = now
+                    marked = True
                 continue
             # Staged exactly as a departure stages it, with the suspension no
             # longer counted as ours: the reconcile below then asks the
@@ -1186,8 +1215,11 @@ class DirectoryAccountService:
             row.suspension_settled = False
             row.suspension_requested_at = now
             row.suspension_error = active_after_departure_message(info)
+            row.long_suspended_since = None
             found.append(str(row.user_id))
         if not found:
+            if marked:
+                await self.db.commit()
             return []
         await self.db.commit()
         from app.core.audit import log_audit_event
@@ -1254,7 +1286,8 @@ class DirectoryAccountService:
                     label=ATTENTION_LABELS[issue],
                     detail=detail,
                     since=since,
-                    overdue=since is not None
+                    overdue=issue not in NEVER_OVERDUE
+                    and since is not None
                     and now - since >= ATTENTION_OVERDUE_AFTER,
                 )
             )
@@ -1497,6 +1530,18 @@ def _attention_issue(
             AttentionIssue.GROUPS_NOT_LEFT,
             f"The account is suspended, but it could not be removed from: {groups}",
             row.suspended_at or row.suspension_requested_at or row.updated_at,
+        )
+    if row.suspension_wanted and row.long_suspended_since is not None:
+        info = provider_info(row.provider)
+        since = _aware(row.suspended_at or row.suspension_requested_at)
+        days = (now - since).days if since is not None else None
+        held = f"Suspended {days} days ago" if days is not None else "Suspended"
+        return (
+            AttentionIssue.LONG_SUSPENDED,
+            f"{held} and still in {info.product}. A suspended account keeps its "
+            "license until the license is removed or the account is deleted in "
+            f"{info.admin_console}.",
+            since,
         )
     # Waiting is measured from the record's creation, never from the latest
     # attempt: a Retry that fails again must not restart the clock.

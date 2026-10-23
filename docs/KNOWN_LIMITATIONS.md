@@ -217,6 +217,12 @@ choice an owner may want to revisit:
   Logbook-suspended members always keep a working account.
 - **Suspended, never deleted.** A departed member's account keeps its mailbox
   and its Workspace license until an administrator deletes it in Google.
+- **Long-suspended accounts are listed, not unlicensed.** The daily departure
+  check marks an account still in the directory 90 days after its suspension;
+  the attention list shows it and the morning email names it once (owner
+  decision, 2026-10-23). Nothing is removed. An account deleted in the
+  directory is unmarked only when its record holds the directory's id; one
+  matched by address alone stays listed until the member returns.
 - **A permanent delete cannot be retried.** The account record goes with the
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
