@@ -608,6 +608,9 @@ class BudgetOptionResponse(BaseModel):
     id: str
     label: str
     amount_remaining: Optional[Decimal] = None
+    # False when the line's category is inactive: still listed so a request
+    # already on the line can show it, never offered as a new choice.
+    category_active: bool = True
 
 
 class FiscalYearOptionResponse(BaseModel):

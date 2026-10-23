@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
 import { purchaseRequestService } from '../services/api';
-import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
+import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -416,11 +416,13 @@ const PurchaseRequestFormPage: React.FC = () => {
             </label>
             <select className={selectClass} id="pr-budgetId" {...register('budgetId')}>
               <option value="">No budget linked</option>
-              {budgetOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {budgetOptionLabel(option)}
-                </option>
-              ))}
+              {selectableBudgetOptions(budgetOptions, isEdit ? selectedPurchaseRequest?.budgetId : undefined).map(
+                (option) => (
+                  <option key={option.id} value={option.id}>
+                    {budgetOptionLabel(option)}
+                  </option>
+                )
+              )}
             </select>
           </div>
 

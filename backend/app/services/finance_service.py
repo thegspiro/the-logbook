@@ -2461,6 +2461,11 @@ class FinanceService:
         ``finance.manage``, lists every line. The request writes enforce the
         same rule, so a line hidden here is also refused there.
 
+        A line whose category is inactive is listed with ``category_active``
+        False: the forms offer it only as a request's existing selection, and
+        the request writes refuse it as a new charge
+        (``_assert_budget_open_for_new_charges``).
+
         The label is the category's path — ``Quartermaster › Officer brass``
         for a sub-category — plus the station when the line has one. Two lines
         that would still read the same are numbered, so a member never has to
@@ -2487,6 +2492,7 @@ class FinanceService:
                 Budget.amount_spent,
                 Budget.amount_encumbered,
                 BudgetCategory.name.label("category_name"),
+                BudgetCategory.is_active.label("category_active"),
                 Facility.name.label("station_name"),
             )
             .join(
@@ -2540,6 +2546,7 @@ class FinanceService:
                         if sees_all_amounts or str(row.id) in owned_ids
                         else None
                     ),
+                    "category_active": bool(row.category_active),
                 }
             )
         return options
@@ -4794,6 +4801,9 @@ class FinanceService:
     ) -> PurchaseRequest:
         await self._validate_finance_fks(org_id, kwargs)
         await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
+        await self._assert_budget_open_for_new_charges(
+            org_id, [kwargs.get("budget_id")]
+        )
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         pr = PurchaseRequest(
@@ -4834,6 +4844,12 @@ class FinanceService:
             await assert_may_charge(
                 self.db, org_id, requester_id, kwargs.get("budget_id")
             )
+            # Same rule for an inactive category: refused only when the line
+            # is newly chosen, so a draft already on it can still be edited
+            # (submitting it is what is refused).
+            await self._assert_budget_open_for_new_charges(
+                org_id, [kwargs.get("budget_id")]
+            )
         apply_updates(pr, kwargs)
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
@@ -4850,6 +4866,7 @@ class FinanceService:
         await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
         if pr.status != PurchaseRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
+        await self._assert_budget_open_for_new_charges(org_id, [pr.budget_id])
 
         pr.status = PurchaseRequestStatus.SUBMITTED
 
@@ -5125,6 +5142,9 @@ class FinanceService:
             await assert_may_charge(
                 self.db, org_id, charger_id, item_data.get("budget_id")
             )
+        await self._assert_budget_open_for_new_charges(
+            org_id, [item_data.get("budget_id") for item_data in line_items or []]
+        )
         if kwargs.get("advance_id"):
             await assert_settleable(self.db, org_id, kwargs["advance_id"], submitted_by)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
@@ -5201,6 +5221,9 @@ class FinanceService:
             raise ValueError("Can only add items to draft reports")
         await self._validate_finance_fks(org_id, kwargs)
         await assert_may_charge(self.db, org_id, requester_id, kwargs.get("budget_id"))
+        await self._assert_budget_open_for_new_charges(
+            org_id, [kwargs.get("budget_id")]
+        )
         item = ExpenseLineItem(expense_report_id=er_id, **kwargs)
         self.db.add(item)
         await self.db.flush()
@@ -5268,6 +5291,9 @@ class FinanceService:
             raise ValueError("Only draft reports can be submitted")
         if er.total_amount <= 0:
             raise ValueError("Expense report must have line items")
+        await self._assert_budget_open_for_new_charges(
+            org_id, [item.budget_id for item in er.line_items]
+        )
         missing = [item for item in er.line_items if not item.receipt_document_id]
         if missing:
             named = ", ".join(f'"{item.description}"' for item in missing[:3])
@@ -5466,6 +5492,9 @@ class FinanceService:
             _refuse_advance_charges(kwargs)
         await self._validate_finance_fks(org_id, kwargs)
         await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
+        await self._assert_budget_open_for_new_charges(
+            org_id, [kwargs.get("budget_id")]
+        )
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         cr = CheckRequest(
@@ -5505,6 +5534,9 @@ class FinanceService:
             await assert_may_charge(
                 self.db, org_id, requester_id, kwargs.get("budget_id")
             )
+            await self._assert_budget_open_for_new_charges(
+                org_id, [kwargs.get("budget_id")]
+            )
         apply_updates(cr, kwargs)
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
@@ -5521,6 +5553,7 @@ class FinanceService:
         await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
         if cr.status != CheckRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
+        await self._assert_budget_open_for_new_charges(org_id, [cr.budget_id])
         if cr.is_advance:
             await assert_no_overdue(self.db, org_id, cr.requested_by)
 
@@ -7901,3 +7934,51 @@ class FinanceService:
         fund_campaign_id = data.get("fund_campaign_id")
         if fund_campaign_id:
             await assert_chargeable(self.db, org_id, fund_campaign_id)
+
+    async def _assert_budget_open_for_new_charges(
+        self, org_id: str, budget_ids: Iterable[Optional[str]]
+    ) -> None:
+        """Refuse new spending on a line whose budget category is inactive.
+
+        A category in use is deactivated rather than deleted
+        (``delete_budget_category``); the owner's rule (2026-10-22) is that
+        its lines then take no new charges. "New" means the moment spending
+        attaches to the line: creating a request, adding an expense line,
+        repointing a request at the line, or submitting a draft into approval.
+        Approving, paying, issuing and cancelling are deliberately not
+        checked, so a request already in flight finishes on the line it was
+        approved against, and the spend still shows in every report.
+
+        Only the line's own category is consulted, the same test
+        ``create_budget`` applies to a new line.
+        """
+        wanted = {str(budget_id) for budget_id in budget_ids if budget_id}
+        if not wanted:
+            return
+        result = await self.db.execute(
+            select(BudgetCategory.name)
+            .join(
+                Budget,
+                and_(
+                    Budget.category_id == BudgetCategory.id,
+                    Budget.organization_id == org_id,
+                ),
+            )
+            .where(
+                Budget.id.in_(wanted),
+                BudgetCategory.organization_id == org_id,
+                BudgetCategory.is_active.is_(False),
+            )
+            .order_by(BudgetCategory.name)
+        )
+        closed = list(dict.fromkeys(result.scalars().all()))
+        if closed:
+            named = ", ".join(f'"{name}"' for name in closed)
+            single = len(closed) == 1
+            noun = "category" if single else "categories"
+            verb = "is" if single else "are"
+            their = "its" if single else "their"
+            raise ValueError(
+                f"The budget {noun} {named} {verb} inactive, so {their} budget lines "
+                "take no new charges. Choose another budget line."
+            )

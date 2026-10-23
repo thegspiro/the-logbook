@@ -350,7 +350,11 @@ approval chains is **deactivated** instead of deleted: its budget lines in every
 fiscal year are kept, and a category-specific approval chain stays specific
 rather than becoming a catch-all. The confirmation and the toast say which
 happened. A deactivated category is hidden from new-record pickers but still
-resolves on existing rows. A category nothing uses is deleted outright.
+resolves on existing rows. Its budget lines also **take no new charges**: a new
+purchase request, check request or expense line on one is refused, and so is
+moving a request onto one or submitting a draft that is on one. Requests already
+submitted or approved finish normally, and their spending still shows in
+reports. A category nothing uses is deleted outright.
 
 ### Edge Cases
 

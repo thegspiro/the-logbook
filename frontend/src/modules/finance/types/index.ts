@@ -575,6 +575,12 @@ export interface BudgetOption {
   /** Category name, plus the station when the line has one. */
   label: string;
   amountRemaining: MonetaryAmount | null;
+  /**
+   * False when the line's category is inactive. Such a line takes no new
+   * charges (the server refuses it), so a picker shows it only as a
+   * request's existing selection — see `selectableBudgetOptions`.
+   */
+  categoryActive: boolean;
 }
 
 /** An active or draft fiscal year — `GET /finance/fiscal-years/options`. */
