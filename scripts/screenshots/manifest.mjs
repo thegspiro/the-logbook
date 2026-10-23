@@ -14861,6 +14861,7 @@ export const SHOTS = [
     line: 846,
     anchor: "Record Paper Ballots on a ranked-choice race",
     alt: "Record Paper Ballots on a ranked-choice race: one ballot already added with its choices in order, and the next ballot being entered with its 1st and 2nd choice menus and the Identical ballots count",
+    expect: "ranked choice",
     route: "/elections",
     viewport: { width: 1280, height: 1500 },
     // Every seeded race is simple-majority, and a ranked one needs an election
@@ -17049,6 +17050,7 @@ export const SHOTS = [
     line: 1785,
     anchor: "__paired-with-04-85__",
     alt: "The Sign dialog: the slot being signed, the name as it stands on the account and the password confirmation",
+    expect: "Sign as Presiding Officer",
     route: "/minutes",
     // The dialog over the Signatures panel it opened from, filled in and
     // never submitted.
@@ -22196,6 +22198,7 @@ export const SHOTS = [
     line: 2765,
     anchor: "at 390px: the apparatus detail header and pinned tabs",
     alt: "One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header",
+    expect: "Medic 3",
     route: "/apparatus",
     viewport: "mobile",
     prepare: async (page) => {

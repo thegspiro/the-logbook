@@ -48,15 +48,19 @@ try {
   await page.goto(pathToFileURL(path.resolve(htmlFile)).toString());
   const target = path.join(OUT, `${imageName}.png`);
   await page.screenshot({ path: target, fullPage: true });
-  await run("pngquant", [
-    "--quality=70-92",
-    "--speed",
-    "1",
-    "--force",
-    "--output",
-    target,
-    target,
-  ]).catch(() => {});
+  try {
+    await run("pngquant", [
+      "--quality=70-92",
+      "--speed",
+      "1",
+      "--force",
+      "--output",
+      target,
+      target,
+    ]);
+  } catch {
+    // pngquant missing is not fatal -- the capture is correct, just larger.
+  }
   console.log(`wrote ${target}`);
 } finally {
   await browser.close();

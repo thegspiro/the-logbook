@@ -35,15 +35,19 @@ async function shoot(page, id, opts = {}) {
   if (opts.locator) await opts.locator.screenshot({ path: target });
   else
     await page.screenshot({ path: target, fullPage: Boolean(opts.fullPage) });
-  await run("pngquant", [
-    "--quality=70-92",
-    "--speed",
-    "1",
-    "--force",
-    "--output",
-    target,
-    target,
-  ]).catch(() => {});
+  try {
+    await run("pngquant", [
+      "--quality=70-92",
+      "--speed",
+      "1",
+      "--force",
+      "--output",
+      target,
+      target,
+    ]);
+  } catch {
+    // pngquant missing is not fatal -- the capture is correct, just larger.
+  }
   console.log(`  + ${id}`);
 }
 
