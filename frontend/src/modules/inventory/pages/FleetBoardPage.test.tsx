@@ -135,11 +135,33 @@ describe('FleetBoardPage', () => {
         templateName: 'Engine Daily Check',
         checkTiming: 'start_of_shift',
         status: 'not_started',
+        isOverdue: true,
       },
     ]);
     renderWithRouter(<FleetBoardPage />);
     expect(await screen.findByText('You have 1 check waiting')).toBeInTheDocument();
     expect(screen.getByText('1 overdue')).toBeInTheDocument();
+  });
+
+  it('lists a past-dated check whose shift is still running as due, not overdue', async () => {
+    // An overnight shift dated yesterday: owed now, but late only once the
+    // server says its shift has ended.
+    mockGetMyChecklists.mockResolvedValue([
+      {
+        shiftId: 's-n',
+        shiftDate: '2026-08-11',
+        apparatusName: 'E-2',
+        templateId: 't-2',
+        templateName: 'Engine End of Shift',
+        checkTiming: 'end_of_shift',
+        status: 'not_started',
+        isOverdue: false,
+      },
+    ]);
+    renderWithRouter(<FleetBoardPage />);
+    expect(await screen.findByText('You have 1 check waiting')).toBeInTheDocument();
+    expect(screen.queryByText(/\d+ overdue/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Engine End of Shift \(due now\)/)).toBeInTheDocument();
   });
 
   it('leaves future checks out of the member strip', async () => {

@@ -2356,10 +2356,11 @@ You can also get there from your shift:
 Both take you to My Checklists with that shift's checks at the top.
 
 On a phone the list is compact: one row per checklist under a heading for each
-day (**Today**, **Tomorrow**, then the date). A day that has passed and still
-holds an unfiled check is marked overdue, and you can still start that check
-from it. A missed check stays on your list for seven days, which also keeps an
-overnight shift's end-of-shift check reachable after midnight; after that it
+day (**Today**, **Tomorrow**, then the date). A day is marked overdue once one
+of its shifts has ended with a check still unfiled, and you can still start
+that check from it. An overnight shift is not overdue at midnight: its
+end-of-shift check stays under the day the shift started, unmarked, until the
+shift ends. A missed check stays on your list for seven days; after that it
 drops off your list, though the fleet board and compliance report still count
 it. **Unscheduled checklist** sits beside
 the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
