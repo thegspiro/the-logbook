@@ -1082,7 +1082,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               aria-live="polite"
             >
               <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
                 <div>
                   <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict</p>
                   <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">

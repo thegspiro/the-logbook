@@ -32,6 +32,7 @@ import { useConnectedIntegrations } from '../../../hooks/useConnectedIntegration
 import { signalUserActivity } from '../../../hooks/useIdleTimer';
 import { ScanSuccessFlash } from '../../../components/ux/ScanSuccessFlash';
 import { Breadcrumbs } from '../../../components/ux';
+import { KioskSessionCard } from '../../../components/KioskSessionCard';
 import { parseInventoryTagCode } from '../../../constants/nfc';
 import { formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
@@ -312,6 +313,8 @@ export const InventoryKioskPage: React.FC = () => {
             </button>
           ))}
       </header>
+
+      <KioskSessionCard />
 
       {!supported && (
         <div className="alert-warning" role="status">

@@ -197,8 +197,15 @@ const ErrorMonitoringPage: React.FC = () => {
       {/* Actions Bar */}
       <div className="bg-theme-surface mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg p-4 shadow-md backdrop-blur-xs">
         <div className="flex items-center gap-2">
-          <label className="text-theme-text-secondary text-sm font-medium">Filter:</label>
-          <select value={filter} onChange={(e) => setFilter(e.target.value)} className="form-input">
+          <label htmlFor="error-type-filter" className="text-theme-text-secondary text-sm font-medium">
+            Filter:
+          </label>
+          <select
+            id="error-type-filter"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="form-input"
+          >
             <option value="all">All Errors</option>
             {stats &&
               Object.keys(stats.byType).map((type) => (
@@ -584,7 +591,7 @@ const ErrorMonitoringPage: React.FC = () => {
                     <p className="text-sm font-medium text-red-700 dark:text-red-300">{error.errorType}</p>
                     <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error.userMessage}</p>
                   </div>
-                  <span className="text-xs text-red-600">{formatTime(error.timestamp, tz)}</span>
+                  <span className="text-xs text-red-700 dark:text-red-400">{formatTime(error.timestamp, tz)}</span>
                 </div>
               </div>
             ))}

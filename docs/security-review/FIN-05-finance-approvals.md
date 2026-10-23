@@ -1,8 +1,164 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
 
 ---
+
+## Pass 11 (2026-10-22) — watchdog pickup: real delta (QuickBooks chart-of-accounts upload, reimport confirmation, approval-chain range validation, an approve/cancel race fix), 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
+
+**Scope.** Pass 10 merged as `765f79f5` (PR #3401). `git log --no-merges
+765f79f5..HEAD` over this feature's files (`finance.py`, `finance_service.py`,
+`finance_budget_request_service.py`, `finance_settings.py`,
+`schemas/finance.py`, `models/finance.py`, `public/finance_approvals.py`,
+`frontend/src/modules/finance/`): 26 non-merge commits — a substantially
+larger window than recent near-zero-delta passes, read in full rather than
+spot-checked. `public/finance_approvals.py` and `finance_settings.py` are
+byte-identical to pass 10 (confirmed by `git diff --stat`); the public,
+token-scoped email-approval surface is unchanged.
+
+**Backend delta, by area:**
+
+- **Numeric-bounds hardening** (`74638250`, repo-wide) — adds `max_digits=12`
+  to every finance money `Decimal` field (matching the `Numeric(12,2)`
+  columns) and `le=INT32_MAX` / `ge=INT32_MIN` to integer fields
+  (`sort_order`, `step_order`, `grace_period_days`). Strictly tightens
+  existing `gt=0`/`ge=0` fields — nothing widened. Already covered by its own
+  repo-wide guard test.
+- **QuickBooks chart-of-accounts upload** (new feature, `finance.py` +
+  `finance_service.py` + `models/finance.py` + migration
+  `a33ffa561e4f`) — a new `QuickBooksChartAccount` model/table and three
+  endpoints (`GET`/`POST`/`DELETE /finance/export/chart-of-accounts`), all
+  gated `finance.manage`, all org-scoped (`organization_id` filtered on every
+  query; `replace_chart_of_accounts`/`clear_chart_of_accounts` take the
+  existing `lock_organization_scope(..., QUICKBOOKS_EXPORT)` lock). Upload
+  hardening verified directly: `read_upload_limited` caps the file at 5 MB
+  before parsing; `reject_if_malicious` (the repo's existing upload-scanning
+  service) runs before any parse; `parse_chart_of_accounts`
+  (`app/utils/quickbooks_chart.py`) caps rows read (20,000), accounts kept
+  (5,000) and per-name length (255, matching the column), and reads `.xlsx`
+  via `openpyxl` with `defusedxml` installed (confirmed pinned in
+  `requirements.txt`) — no XXE/zip-bomb-via-entity-expansion surface. Account
+  names are compared for export-safety via the pre-existing
+  `csv_safe_cell`/`SafeCsvWriter` formula-injection guard
+  (`_unsafe_account_name`), not re-implemented. New model's one
+  `ondelete="SET NULL"` FK (`uploaded_by`) is `nullable=True` (Pitfall #2);
+  `organization_id` is `CASCADE`+`NOT NULL`. The migration is
+  `create_all`-tolerant (Pitfall #26) for the pre-existing `finance_export_logs`
+  table it also alters.
+- **Reimport confirmation** (`ExportLog.imported_at`/`imported_by`,
+  `confirm_export_imported`/`withdraw_export_imported`,
+  `ReimportConfirmationRequired`) — lets the Treasurer record that an export's
+  file was actually imported into QuickBooks, and refuses (409) a resend of
+  those same payments unless `confirm_reimport` is set. Every new query
+  (`_export_log`, `_export_log_rows`, `_count_confirmed_imported`) filters
+  `organization_id`; the new FK is `nullable=True` SET NULL. Both endpoints
+  are `finance.manage`-gated and audit-logged
+  (`finance.export_import_confirmed`/`_withdrawn`).
+- **Approval-chain range validation** (`20d5e337`,
+  `ApprovalChainCreate`/`Update` + `update_approval_chain`) — refuses
+  `min_amount > max_amount` at both the schema and service layer (a change to
+  only one end is checked against the other end as stored). `pick_approval_chain`
+  (extracted, same logic, now unit-tested in isolation) keeps both range ends
+  inclusive and breaks ties by chain id, closing an ambiguity at the exact
+  boundary between two chains rather than changing it.
+- **Approve/cancel race fix** (`_lock_entity_awaiting_approval`,
+  `_finalize_approval`'s added `entity.status != pending_status` check,
+  `cancel_purchase_request`'s added `_terminate_entity_pending_steps` call) —
+  a genuine correctness/integrity fix, not a regression: a request cancelled
+  before its chain closed still carried PENDING step records, so approving
+  the last one could finalize a cancelled/denied request as APPROVED and
+  encumber budget against it. The new lock takes the entity row
+  `.with_for_update()` before reading its status, matching
+  `cancel_purchase_request`'s own lock on the same row (Pitfall #27's "lock
+  the parent row to serialize the decision" shape) — read and confirmed both
+  call the same row under the same lock.
+- **Chain matching no longer falls back to `PURCHASE_REQUEST`'s chains for
+  other entity types** (`find_matching_chain`) — previously an expense report
+  or check request with no chain of its own silently borrowed purchase-request
+  chains (`applies_to == ApprovalEntityType.PURCHASE_REQUEST` was OR'd into
+  every entity type's query). Now `applies_to == entity_type` only. This is a
+  bug fix (routing reimbursements/payouts to approvers nobody assigned to
+  them was the defect), not a scoping regression — chains remain
+  `organization_id`-filtered either way.
+- **Coverage-report fix** (`get_pending_approvals`'s coverage query,
+  `_coverage_problem`) — the "who can approve this step" admin report now
+  checks `finance.approve` (via `user_has_permission`) in addition to the
+  approver-type match before counting someone as `eligible`, and distinguishes
+  "nobody in this step" (`no_active_members`) from "someone's in this step but
+  nobody holds the grant" (`no_approve_permission`). This changes only a
+  diagnostic report's output, not an authorization decision — `approve_step`
+  /`deny_step` already separately re-check `finance.approve` via
+  `require_permission` at the endpoint, unchanged by this commit.
+- **`delete_budget_category` now deactivates instead of deleting** when a
+  budget line, approval chain or budget request still references the
+  category (`budget_category_in_use`, all three reference queries
+  org-filtered) — avoids silently cascading away approval-step history and
+  budget links. `create_budget`/`FinanceBudgetRequestService` both now also
+  refuse an inactive category (`is_active` check, 7-line addition to
+  `finance_budget_request_service.py`), consistent with the existing
+  `assert_in_org`-validated `category_id`.
+- **Dues overdue-status fixes** (`effective_dues_status`,
+  `dues_overdue_clause`, `generate_member_dues`'s `initial_status`) —
+  correctness only: a dues record whose due date has already passed is now
+  reported as overdue immediately rather than waiting for the next daily
+  `mark_overdue_dues` run. No new query is unbounded or unscoped; all read
+  through the existing org-scoped `list_member_dues`/`get_dues_summary`.
+- **`list_budget_options`'s `amount_remaining` is now hidden from a
+  `finance.request`-only caller who does not own the line** (`sees_all_amounts`,
+  `owned_ids` via the existing `owned_budgets_query`) — a tightening of data
+  exposure, not a new leak: the endpoint already restricted the fields
+  returned (CLAUDE.md's "a member-facing schema must not carry admin-only
+  fields" dimension-5 item), and this closes the one field (how much budget is
+  left) that had been visible to every requester regardless of ownership.
+- **Draft-autosave** (`useDraftAutosave`, `PurchaseRequestFormPage.tsx`) —
+  frontend-only; creates/updates a `PurchaseRequest` through the existing,
+  already-validated `create`/`update`/`cancel` endpoints as the member types.
+  `PurchaseRequestStatus.DRAFT` is a pre-existing status (predates this
+  window); no new backend surface, no bypass of `submit_purchase_request`'s
+  own transition into `PENDING_APPROVAL`.
+
+**Not security-relevant, confirmed by reading each commit:** 5 `fix(a11y)`
+commits (text-contrast-only CSS), 1 `fix(layout)` commit (phone/tablet
+overflow), 5 `docs(workflow-review)` log-entry commits (W61–W66, already
+reviewed and fixed/flagged under their own passes — see
+`docs/workflow-review/PROGRESS.md`), and 1 migration-merge-conflict fix
+(`dafc58cb`, no DDL of its own).
+
+**Migrations.** Two real finance migrations landed this window, both
+reviewed directly: `a33ffa561e4f` (QuickBooks chart of accounts + export-log
+import columns, above) and `da76465bc3d2` (one-time backfill converting 19
+finance tables' `DATETIME` columns from the server's local zone to UTC,
+guarded by an identifier allowlist before building per-table SQL, refuses
+rather than corrupts when the source zone cannot be resolved, skips
+`create_all`-only tables). Two no-op merge-heads revisions reconcile branch
+graphs with no DDL of their own. No seeded-grant or JSON-column change.
+
+**Standing items re-verified, both unchanged (neither file touched by this
+window's delta):**
+
+- **FIN8-05-1 (MED) — still OPEN (flagged).** `finance_budget_request_service.py`'s
+  `decide_request` (now line 660, shifted by this window's earlier insertions,
+  confirmed same body by direct read) still has no `assert_different_person`
+  check, unlike `review_request`.
+- **FIN-30 (LOW) — still FLAGGED.** `list_dues_payments`
+  (`finance_service.py:6116`, shifted from `:5760`, confirmed same body by
+  direct read) still takes no limit/offset.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 11)
+
+| Check                                                                                                                                                               | Result                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                       | clean                                                 |
+| `black --check app/ tests/ alembic/`                                                                                                                                | clean                                                 |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                           | clean                                                 |
+| `scripts/validate_migrations.py --strict`                                                                                                                           | passed, single head (`e5f9bb066e07`, 639 revisions)   |
+| `scripts/check_route_permissions.py --strict`                                                                                                                       | 273 routes, 0 errors/warnings                         |
+| `pytest -k "finance or budget_request or approval_chain or dues or quickbooks"` (unit)                                                                              | 575 passed, 1 skipped (environment-only, `pywebpush`) |
+| Standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, account-status gates) | 169 passed                                            |
+| `frontend: npm run typecheck`                                                                                                                                       | clean                                                 |
+| `frontend: npm run lint`                                                                                                                                            | clean                                                 |
 
 ## Pass 10 (2026-10-18) — watchdog pickup: real delta (approval-chain/step delete restriction + audit logging), 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
 

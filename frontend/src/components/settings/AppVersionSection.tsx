@@ -139,7 +139,7 @@ export const AppVersionSection: React.FC = () => {
             Asks the server whether a newer version has been released. If one has, the app reloads onto it.
           </p>
           {upToDate && (
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-green-700 dark:text-green-400">
               <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
               You are running the latest version.
             </p>

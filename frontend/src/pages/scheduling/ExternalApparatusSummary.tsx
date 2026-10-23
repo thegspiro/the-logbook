@@ -71,7 +71,7 @@ export const ExternalApparatusSummary: React.FC<ExternalApparatusSummaryProps> =
           <p className="text-theme-text-muted text-sm">No outside apparatus was staffed in this period.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Outside apparatus staffed">
           <table className="rwd-table w-full text-sm">
             <caption className="sr-only">Outside apparatus staffed by members in this period</caption>
             <thead>

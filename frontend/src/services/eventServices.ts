@@ -1488,6 +1488,47 @@ export interface EquipmentKitCreate {
   }>;
 }
 
+/** One size/colour/style of a catalog product a kit line can hand out. */
+export interface KitProductVariant {
+  item_id: string;
+  /** Every row of this variant, so a line stored against any one is recognised. */
+  item_ids: string[];
+  label: string;
+  size_label?: string | null;
+  available: number;
+}
+
+/** A catalog product with its sizes collapsed, as the kit editor offers it. */
+export interface KitProductOption {
+  key: string;
+  name: string;
+  category_id?: string | null;
+  category_name?: string | null;
+  has_sizes: boolean;
+  variants: KitProductVariant[];
+}
+
+export interface KitIssuePlanLine {
+  line_id: string;
+  item_name: string;
+  quantity: number;
+  optional: boolean;
+  size_selectable: boolean;
+  /** False when the line names no catalog item, or its item is gone. */
+  issuable: boolean;
+  /** The member's recorded size for this kind of garment, if any. */
+  member_size?: string | null;
+  /** The row that would be issued; null means a size must be chosen. */
+  selected_item_id?: string | null;
+  variants: KitProductVariant[];
+}
+
+export interface KitIssuePlan {
+  kit_id: string;
+  user_id: string;
+  lines: KitIssuePlanLine[];
+}
+
 export interface MemberSizePreferences {
   id: string;
   organization_id: string;

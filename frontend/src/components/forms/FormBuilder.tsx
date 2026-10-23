@@ -163,7 +163,7 @@ const SortableFieldRow = ({
       {/* Type icon */}
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-          warning ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' : 'bg-theme-surface text-theme-text-muted'
+          warning ? 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400' : 'bg-theme-surface text-theme-text-muted'
         }`}
       >
         {FIELD_TYPE_ICONS[field.field_type] || <Type className="h-4 w-4" />}
@@ -174,7 +174,7 @@ const SortableFieldRow = ({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-theme-text-primary truncate text-sm font-medium">{field.label}</span>
           {field.required && (
-            <span className="rounded-sm bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-400">
+            <span className="rounded-sm bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-800 dark:text-red-400">
               Required
             </span>
           )}
@@ -190,7 +190,7 @@ const SortableFieldRow = ({
             </span>
           )}
           {warning && (
-            <span className="flex items-center gap-0.5 rounded-sm bg-yellow-500/20 px-1.5 py-0.5 text-[10px] font-medium text-yellow-700 dark:text-yellow-400">
+            <span className="flex items-center gap-0.5 rounded-sm bg-yellow-500/20 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800 dark:text-yellow-400">
               <AlertCircle className="h-2.5 w-2.5" />
               Needs setup
             </span>

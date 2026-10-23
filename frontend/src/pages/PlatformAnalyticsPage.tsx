@@ -276,9 +276,9 @@ interface StatCardProps {
 
 const colorMap: Record<string, string> = {
   blue: 'text-blue-600',
-  green: 'text-green-600',
+  green: 'text-green-700 dark:text-green-600',
   red: 'text-red-600',
-  yellow: 'text-yellow-600',
+  yellow: 'text-yellow-700 dark:text-yellow-600',
   purple: 'text-purple-600',
 };
 
@@ -351,7 +351,7 @@ const BarChart: React.FC<BarChartProps> = ({ data, color }) => {
   const colors = barColors[color];
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Daily activity chart">
       <div className="flex h-32 min-w-full items-end justify-between gap-1">
         {data.map(({ date, count }) => {
           const heightPercent = (count / maxCount) * 100;

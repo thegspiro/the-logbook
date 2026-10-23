@@ -10893,14 +10893,199 @@ class InventoryService:
             logger.error(f"Error deleting equipment kit: {e}")
             return False, str(e)
 
+    def _kit_catalog_query(self, organization_id: UUID | str):
+        """Rows a kit line may resolve to: active, unretired, in this org."""
+        return select(InventoryItem).where(
+            InventoryItem.organization_id == str(organization_id),
+            InventoryItem.active.is_(True),
+            InventoryItem.status != ItemStatus.RETIRED,
+        )
+
+    @classmethod
+    def _kit_variant_label(cls, variant: Dict[str, Any]) -> str:
+        """One variant as a quartermaster reads it: "L — Red — Men's"."""
+        parts = [variant.get("size_label"), variant.get("color")]
+        parts.append(variant.get("style_label"))
+        return " — ".join(str(part) for part in parts if part) or "Standard"
+
+    @classmethod
+    def _kit_product_payload(
+        cls, product: Dict[str, Any], rows: List[InventoryItem]
+    ) -> Dict[str, Any]:
+        """A grouped product, with every row id mapped back to its variant.
+
+        A variant's ``item_id`` is one representative row, but a kit line saved
+        before products existed may point at any row of the product (another
+        unit of the same serialized radio, say). ``item_ids`` lets the editor
+        recognise those as this product and this variant.
+        """
+        ids_by_variant: Dict[Tuple[str, str, str], List[str]] = {}
+        for row in rows:
+            ids_by_variant.setdefault(cls._variant_key(row), []).append(row.id)
+        key_of = {row.id: cls._variant_key(row) for row in rows}
+        variants = []
+        for variant in product["variants"]:
+            key = key_of.get(variant["item_id"])
+            variants.append(
+                {
+                    "item_id": variant["item_id"],
+                    "item_ids": (ids_by_variant[key] if key else [variant["item_id"]]),
+                    "label": cls._kit_variant_label(variant),
+                    "size_label": variant["size_label"],
+                    "available": variant["available"],
+                }
+            )
+        return {
+            "key": product["key"],
+            "name": product["name"],
+            "category_id": product["category_id"],
+            "category_name": product["category_name"],
+            "has_sizes": product["has_sizes"],
+            "variants": variants,
+        }
+
+    async def get_kit_product_options(
+        self, organization_id: UUID | str
+    ) -> List[Dict[str, Any]]:
+        """The catalog as products, for choosing what a kit line hands out.
+
+        A kit is a template issued to many members, so a line names a product
+        ("Blauer Jacket") rather than one of its sizes; the size is settled per
+        member when the kit is issued. Listing every size/colour row made the
+        quartermaster pick a size for a member who did not exist yet.
+        """
+        query = (
+            self._kit_catalog_query(organization_id)
+            .options(
+                selectinload(InventoryItem.category),
+                selectinload(InventoryItem.variant_group),
+            )
+            .order_by(InventoryItem.name.asc(), InventoryItem.id.asc())
+            .limit(self._REQUESTABLE_ROW_CAP)
+        )
+        rows = list((await self.db.execute(query)).scalars().unique().all())
+        await self._attach_lot_stock(str(organization_id), rows)
+        rows_by_product: Dict[str, List[InventoryItem]] = {}
+        for row in rows:
+            rows_by_product.setdefault(self._product_key(row), []).append(row)
+        options = [
+            self._kit_product_payload(product, rows_by_product[product["key"]])
+            for product in self._group_requestable(rows)
+        ]
+        options.sort(key=lambda option: option["name"].casefold())
+        return options
+
+    async def _kit_line_product(
+        self,
+        kit_item: EquipmentKitItem,
+        organization_id: UUID | str,
+        prefs: Optional[MemberSizePreferences],
+    ) -> Tuple[Optional[Dict[str, Any]], Set[str]]:
+        """The product behind a kit line, sized for a member, plus its row ids.
+
+        Resolves through the stored row: every row sharing its product is a
+        size the line may be issued in. Returns ``(None, set())`` when the
+        stored row is gone, which the caller treats as a missing item.
+        """
+        if not kit_item.item_id:
+            return None, set()
+        referenced = await self.get_item_by_id(kit_item.item_id, organization_id)
+        if referenced is None:
+            return None, set()
+        query = self._narrow_to_variant_siblings(
+            self._kit_catalog_query(organization_id).options(
+                selectinload(InventoryItem.category),
+                selectinload(InventoryItem.variant_group),
+            ),
+            referenced,
+        )
+        key = self._product_key(referenced)
+        siblings = [
+            row
+            for row in (await self.db.execute(query)).scalars().unique().all()
+            if self._product_key(row) == key
+        ]
+        if not siblings:
+            return None, set()
+        await self._attach_lot_stock(str(organization_id), siblings)
+        products = self._group_requestable(siblings)
+        product = products[0] if products else None
+        if product is None:
+            return None, set()
+        if kit_item.size_selectable:
+            self._apply_member_size(product, prefs)
+        payload = self._kit_product_payload(product, siblings)
+        payload["member_size"] = product.get("member_size")
+        suggested = product.get("suggested_variant")
+        payload["suggested_item_id"] = suggested["item_id"] if suggested else None
+        return payload, {row.id for row in siblings}
+
+    async def get_kit_issue_plan(
+        self,
+        kit_id: UUID,
+        user_id: UUID,
+        organization_id: UUID | str,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """What issuing *kit_id* to *user_id* would hand over, line by line.
+
+        A size-selectable line defaults to the member's recorded size. When
+        the member has none on file, or nothing stocked matches it, the line
+        comes back with no selection rather than an arbitrary size, so the
+        quartermaster is asked instead of a wrong jacket going out.
+        """
+        kit = await self.get_equipment_kit_by_id(
+            kit_id, organization_id, active_only=True
+        )
+        if not kit:
+            return None, "Equipment kit not found"
+        if not await is_in_org(self.db, User, user_id, organization_id):
+            return None, "Member not found"
+
+        prefs = await self.get_member_size_preferences(user_id, organization_id)
+        lines: List[Dict[str, Any]] = []
+        for kit_item in sorted(kit.line_items, key=lambda li: li.sort_order or 0):
+            product, _ = await self._kit_line_product(kit_item, organization_id, prefs)
+            line: Dict[str, Any] = {
+                "line_id": kit_item.id,
+                "item_name": kit_item.item_name,
+                "quantity": kit_item.quantity,
+                "optional": bool(kit_item.optional),
+                "size_selectable": bool(kit_item.size_selectable),
+                "issuable": product is not None,
+                "member_size": None,
+                "selected_item_id": None,
+                "variants": [],
+            }
+            if product is not None:
+                line["variants"] = product["variants"]
+                if kit_item.size_selectable:
+                    line["member_size"] = product["member_size"]
+                    if product["suggested_item_id"]:
+                        line["selected_item_id"] = product["suggested_item_id"]
+                    elif len(product["variants"]) == 1:
+                        line["selected_item_id"] = product["variants"][0]["item_id"]
+                else:
+                    line["selected_item_id"] = kit_item.item_id
+            lines.append(line)
+        return {"kit_id": kit.id, "user_id": str(user_id), "lines": lines}, None
+
     async def issue_kit_to_member(
         self,
         kit_id: UUID,
         user_id: UUID,
         organization_id: UUID | str,
         issued_by: UUID,
+        selections: Optional[Dict[str, str]] = None,
     ) -> Tuple[Optional[List[ItemIssuance | ItemAssignment]], Optional[str]]:
-        """Issue all items in a kit to a member. A deleted kit is not found."""
+        """Issue all items in a kit to a member. A deleted kit is not found.
+
+        ``selections`` maps a line id to the row the quartermaster chose for
+        it, which must be a size of that line's own product. A size-selectable
+        line with no selection falls back to the member's recorded size, then
+        to the row stored on the line -- the behaviour callers had before
+        sizes were resolved, so an API client that sends no body is unchanged
+        apart from now getting the member's size where one is on file.
+        """
         try:
             kit = await self.get_equipment_kit_by_id(
                 kit_id, organization_id, active_only=True
@@ -10914,41 +11099,78 @@ class InventoryService:
             if not await is_in_org(self.db, User, user_id, organization_id):
                 return None, "Member not found"
 
+            selections = {str(k): str(v) for k, v in (selections or {}).items()}
+            line_ids = {line.id for line in kit.line_items}
+            unknown = set(selections) - line_ids
+            if unknown:
+                return None, "Size selection refers to a line not in this kit"
+
+            needs_prefs = any(li.size_selectable for li in kit.line_items)
+            prefs = (
+                await self.get_member_size_preferences(user_id, organization_id)
+                if needs_prefs
+                else None
+            )
+
             issuances: List[ItemIssuance | ItemAssignment] = []
             for kit_item in kit.line_items:
-                if kit_item.item_id:
-                    item = await self.get_item_by_id(
-                        UUID(kit_item.item_id), organization_id
+                if not kit_item.item_id:
+                    continue
+
+                target_id: str = kit_item.item_id
+                chosen = selections.get(kit_item.id)
+                if kit_item.size_selectable or chosen:
+                    if chosen and not kit_item.size_selectable:
+                        return (
+                            None,
+                            f"{kit_item.item_name} is issued in a fixed size",
+                        )
+                    product, sibling_ids = await self._kit_line_product(
+                        kit_item, organization_id, prefs
                     )
-                    if not item:
-                        if not kit_item.optional:
+                    if chosen:
+                        # The override is bounded to the line's own product:
+                        # it changes the size, never what is being issued.
+                        if chosen not in sibling_ids:
                             return (
                                 None,
-                                f"Required kit item not found: {kit_item.item_id}",
+                                f"Selected size is not a variant of "
+                                f"{kit_item.item_name}",
                             )
-                        continue
+                        target_id = chosen
+                    elif product and product["suggested_item_id"]:
+                        target_id = product["suggested_item_id"]
 
-                    result: ItemIssuance | ItemAssignment | None
-                    if item.tracking_type == TrackingType.POOL:
-                        result, err = await self.issue_from_pool(
-                            item_id=UUID(item.id),
-                            user_id=user_id,
-                            organization_id=organization_id,
-                            quantity=kit_item.quantity,
-                            issued_by=issued_by,
+                item = await self.get_item_by_id(target_id, organization_id)
+                if not item:
+                    if not kit_item.optional:
+                        return (
+                            None,
+                            f"Required kit item not found: {kit_item.item_id}",
                         )
-                    else:
-                        result, err = await self.assign_item_to_user(
-                            item_id=UUID(item.id),
-                            user_id=user_id,
-                            organization_id=organization_id,
-                            assigned_by=issued_by,
-                        )
+                    continue
 
-                    if err and not kit_item.optional:
-                        return None, f"Failed to issue kit item: {err}"
-                    if result:
-                        issuances.append(result)
+                result: ItemIssuance | ItemAssignment | None
+                if item.tracking_type == TrackingType.POOL:
+                    result, err = await self.issue_from_pool(
+                        item_id=UUID(item.id),
+                        user_id=user_id,
+                        organization_id=organization_id,
+                        quantity=kit_item.quantity,
+                        issued_by=issued_by,
+                    )
+                else:
+                    result, err = await self.assign_item_to_user(
+                        item_id=UUID(item.id),
+                        user_id=user_id,
+                        organization_id=organization_id,
+                        assigned_by=issued_by,
+                    )
+
+                if err and not kit_item.optional:
+                    return None, f"Failed to issue kit item: {err}"
+                if result:
+                    issuances.append(result)
 
             return issuances, None
         except Exception as e:

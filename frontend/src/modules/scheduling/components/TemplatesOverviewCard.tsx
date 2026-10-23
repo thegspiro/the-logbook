@@ -34,7 +34,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
       {activeTemplates.length === 0 ? (
         <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
           <div className="flex items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-400" />
             <div>
               <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">No templates configured</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">
@@ -74,7 +74,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
                 })()}
               </div>
               {t.is_default && (
-                <span className="shrink-0 rounded-sm bg-green-500/10 px-1.5 py-0.5 text-[10px] text-green-700 dark:text-green-400">
+                <span className="shrink-0 rounded-sm bg-green-500/10 px-1.5 py-0.5 text-[10px] text-green-800 dark:text-green-400">
                   Default
                 </span>
               )}

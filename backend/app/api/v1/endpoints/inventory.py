@@ -145,6 +145,9 @@ from app.schemas.inventory import (
     ItemVariantGroupDetailResponse,
     ItemVariantGroupResponse,
     ItemVariantGroupUpdate,
+    KitIssuePlanResponse,
+    KitIssueRequest,
+    KitProductOptionResponse,
     LabelGenerateRequest,
     LabelMarkPrintedRequest,
     LabelMarkPrintedResponse,
@@ -7211,6 +7214,23 @@ async def create_equipment_kit(
     return EquipmentKitDetailResponse.model_validate(kit)
 
 
+# Declared before /kits/{kit_id}: that route would otherwise claim the path and
+# reject "product-options" as an invalid UUID.
+@router.get("/kits/product-options", response_model=List[KitProductOptionResponse])
+async def list_kit_product_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    The catalog grouped into products, for choosing what a kit line issues.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_kit_product_options(current_user.organization_id)
+
+
 @router.get("/kits/{kit_id}", response_model=EquipmentKitDetailResponse)
 async def get_equipment_kit(
     kit_id: UUID,
@@ -7286,25 +7306,57 @@ async def delete_equipment_kit(
     )
 
 
+@router.get("/kits/{kit_id}/issue-plan", response_model=KitIssuePlanResponse)
+async def get_kit_issue_plan(
+    kit_id: UUID,
+    user_id: UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Preview a kit issue: each line sized from the member's size preferences.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    plan, error = await service.get_kit_issue_plan(
+        kit_id, user_id, current_user.organization_id
+    )
+    if error or plan is None:
+        raise HTTPException(status_code=404, detail=sanitize_error_message(error or ""))
+    return plan
+
+
 @router.post("/kits/{kit_id}/issue/{user_id}")
 async def issue_kit_to_member(
     kit_id: UUID,
     user_id: UUID,
+    body: Optional[KitIssueRequest] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Issue all items in a kit to a member.
 
+    The optional body carries the quartermaster's size choices per line;
+    lines left out are issued in the member's recorded size.
+
     **Authentication required**
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
+    selections = (
+        {str(line): str(item) for line, item in body.selections.items()}
+        if body
+        else None
+    )
     issuances, error = await service.issue_kit_to_member(
         kit_id=kit_id,
         user_id=user_id,
         organization_id=current_user.organization_id,
         issued_by=UUID(current_user.id),
+        selections=selections,
     )
     if error or issuances is None:
         raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))

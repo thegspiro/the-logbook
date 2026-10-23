@@ -457,7 +457,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
                   Medical
                 </span>
               )}
-              <span className="shrink-0 rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-400">
+              <span className="shrink-0 rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:text-green-400">
                 Link
               </span>
             </button>

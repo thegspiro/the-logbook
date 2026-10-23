@@ -233,7 +233,7 @@ const PendingReviewTab: React.FC = () => {
                         style={{ backgroundColor: entry.categoryColor ?? '#6B7280' }}
                       />
                       <span className="text-theme-text-primary font-semibold">{entry.userName ?? 'Unknown'}</span>
-                      <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-700 dark:text-yellow-400">
+                      <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-800 dark:text-yellow-400">
                         Editing
                       </span>
                     </div>

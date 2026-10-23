@@ -269,3 +269,13 @@ def test_the_finance_office_grants_are_not_baseline():
         "finance.configure_approvals",
     ):
         assert permission not in baseline, permission
+
+
+def test_the_kiosk_session_grant_is_not_baseline():
+    """A member opts a session into the longer kiosk limits only if the
+    department decided they may; it is seeded to no position and no rank."""
+    assert "security.kiosk_session" not in _baseline_permissions()
+    for registry in (DEFAULT_POSITIONS, OPERATIONAL_RANKS):
+        for slug, entry in registry.items():
+            granted = entry.get("permissions") or entry.get("default_permissions") or []
+            assert "security.kiosk_session" not in granted, slug

@@ -77,6 +77,7 @@ class ErrorCode(str, Enum):
     UPLD_VALIDATION_UNAVAILABLE = "LB-UPLD-003"
     UPLD_MALWARE_DETECTED = "LB-UPLD-004"
     UPLD_SCAN_UNAVAILABLE = "LB-UPLD-005"
+    UPLD_STORAGE_UNAVAILABLE = "LB-UPLD-006"
 
     # --- Onboarding ------------------------------------------------------
     ONBD_ALREADY_COMPLETED = "LB-ONBD-001"
@@ -479,6 +480,21 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "If it persists, check the clamav container is running and "
             "healthy (it can take several minutes to load signatures after "
             "a restart) and that CLAMAV_HOST / CLAMAV_PORT point at it.",
+        ),
+    ),
+    ErrorCode.UPLD_STORAGE_UNAVAILABLE: ErrorCodeInfo(
+        title="File storage unavailable",
+        description=(
+            "The department keeps its files in its own S3 or MinIO bucket and "
+            "the bucket could not be reached or refused the request, so the "
+            "file was not stored or read. Files are never written anywhere "
+            "else instead."
+        ),
+        resolution=(
+            "Retry in a few minutes.",
+            "If it persists, an administrator should check the bucket, its "
+            "credentials and its endpoint under Organization Settings > File "
+            "Storage and run Test and switch to S3 again.",
         ),
     ),
     ErrorCode.ONBD_ALREADY_COMPLETED: ErrorCodeInfo(

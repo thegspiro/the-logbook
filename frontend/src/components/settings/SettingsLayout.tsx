@@ -115,6 +115,21 @@ interface SettingsLayoutProps<K extends string, S extends string> {
    * 185px of a 320px screen.
    */
   inHub?: boolean;
+  /**
+   * A page header that replaces the shell's own back button, icon tile, title
+   * and subtitle — for a settings screen that belongs to a group of sibling
+   * pages with a shared header (Election and Minutes settings, under
+   * Governance). The group's section strip and trail are the way back, so a
+   * back button beside them would be a second one; and the header is drawn
+   * at the group's width, above the 960px settings column, so its strip lines
+   * up with the strip on every other page in the group.
+   *
+   * A function, handed the shell's header controls (`headerAside` and the
+   * autosave pill) to place among the header's own actions. Drawn as a row of
+   * their own instead, they left a blank band while the pill was idle, and
+   * pushed the page down the moment it first showed "Saving…".
+   */
+  pageHeader?: ((controls: React.ReactNode) => React.ReactNode) | undefined;
   children: React.ReactNode;
 }
 
@@ -135,16 +150,28 @@ export function SettingsLayout<K extends string, S extends string = string>({
   showBreadcrumbs = false,
   width = 'standard',
   inHub = false,
+  pageHeader,
   children,
 }: SettingsLayoutProps<K, S>) {
   const current = sections.find((section) => section.key === activeSection);
   const subPages = current?.subPages ?? [];
   const hasSubPages = subPages.length > 0;
+  // An idle pill draws nothing, so it is not a control to hand anyone: passed
+  // on, it left an empty actions box — and its gap — under a phone's title.
+  const showPill = saveState !== undefined && saveState !== 'idle';
+  const controls =
+    headerAside || showPill ? (
+      <>
+        {headerAside}
+        {showPill ? <SaveStatusPill state={saveState} onRetry={onRetrySave} /> : null}
+      </>
+    ) : null;
 
   return (
     <div
-      className={`mx-auto py-8 sm:px-6 lg:px-8 ${inHub ? 'px-4' : 'px-0'} ${width === 'wide' ? 'max-w-[1600px]' : 'max-w-6xl'}`}
+      className={`mx-auto py-8 sm:px-6 lg:px-8 ${inHub ? 'px-4' : 'px-0'} ${width === 'wide' ? 'max-w-[1600px]' : pageHeader ? 'max-w-7xl' : 'max-w-6xl'}`}
     >
+      {pageHeader?.(controls)}
       {/* One content column at every settings screen, replacing the max-w-4xl /
           5xl / 6xl / 1600px the nine screens had drifted into. `wide` is the
           single documented exception — see the prop. Both caps are applied
@@ -163,34 +190,33 @@ export function SettingsLayout<K extends string, S extends string = string>({
             screen, so a second icon tile, <h1> and subtitle would repeat them
             and give the page two top-level headings. The title stays for
             heading navigation only; the controls beside it stay as they are. */}
-        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-          {inHub ? <h2 className="sr-only">{title}</h2> : null}
-          {!inHub && (
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              {onBack ? (
-                <button
-                  type="button"
-                  onClick={onBack}
-                  aria-label={backLabel}
-                  className="btn-icon text-theme-text-muted hover:text-theme-text-primary shrink-0"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-              ) : null}
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800">
-                <SettingsIcon className="h-6 w-6 text-white" aria-hidden="true" />
+        {pageHeader ? null : (
+          <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            {inHub ? <h2 className="sr-only">{title}</h2> : null}
+            {!inHub && (
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                {onBack ? (
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    aria-label={backLabel}
+                    className="btn-icon text-theme-text-muted hover:text-theme-text-primary shrink-0"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                ) : null}
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800">
+                  <SettingsIcon className="h-6 w-6 text-white" aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-theme-text-primary text-2xl leading-8 font-bold">{title}</h1>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">{subtitle ?? current?.description}</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h1 className="text-theme-text-primary text-2xl leading-8 font-bold">{title}</h1>
-                <p className="text-theme-text-muted mt-0.5 text-sm">{subtitle ?? current?.description}</p>
-              </div>
-            </div>
-          )}
-          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
-            {headerAside}
-            {saveState ? <SaveStatusPill state={saveState} onRetry={onRetrySave} /> : null}
-          </div>
-        </header>
+            )}
+            <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">{controls}</div>
+          </header>
+        )}
 
         {/* Both navs scroll sideways below md rather than wrapping, so both
             declare themselves as intentional scroll regions: the attribute is

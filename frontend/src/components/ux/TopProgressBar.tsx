@@ -62,6 +62,7 @@ export const TopProgressBar: React.FC = () => {
          status bar and give no loading feedback at all. */
       className="safe-top pointer-events-none fixed top-0 right-0 left-0 z-60 box-content h-0.5 bg-transparent"
       role="progressbar"
+      aria-label="Page loading"
       aria-valuenow={progress}
       aria-valuemin={0}
       aria-valuemax={100}

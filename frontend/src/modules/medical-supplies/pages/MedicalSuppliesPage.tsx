@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   AlertTriangle,
   Archive,
@@ -55,12 +55,22 @@ import type { MedicalExpiringStockRow, MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
-type Tab = 'expiring' | 'stock';
+type Tab = 'expiring' | 'stock' | 'low';
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'expiring', label: 'Expiring stock' },
   { id: 'stock', label: 'All supplies' },
+  { id: 'low', label: 'Low stock' },
 ];
+
+/**
+ * The tab a `?tab=` value names, so a link can open the page on it -- the
+ * low-stock alert email lands the purchaser directly on the reorder list. An
+ * unknown value falls back to the default tab rather than an empty panel.
+ */
+function tabFromParam(value: string | null): Tab {
+  return TABS.find((candidate) => candidate.id === value)?.id ?? 'expiring';
+}
 const TAB_PANEL_ID = 'medical-supplies-panel';
 const PAGE_SIZE = 200;
 
@@ -255,7 +265,15 @@ const MedicalSuppliesPage: React.FC = () => {
     inventoryOn && (checkPermission('inventory.check_view') || checkPermission('inventory.manage'));
   const tz = useTimezone();
 
-  const [tab, setTab] = useState<Tab>('expiring');
+  // Read once, not mirrored back into the URL: the link only has to open the
+  // right view, and writing every tab change to the address bar would leave a
+  // stale `?tab=` behind for the next visit's initial state.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => tabFromParam(searchParams.get('tab')));
+  // The Low stock tab is the supply table with the server's low-stock filter
+  // on, so it shares the search, category and location controls below.
+  const lowStockOnly = tab === 'low';
+  const showsSupplyTable = tab !== 'expiring';
   const [summary, setSummary] = useState<MedicalSupplySummary | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -284,7 +302,6 @@ const MedicalSuppliesPage: React.FC = () => {
   // one page would only reorder whichever rows happened to be fetched.
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
-  const [lowStockOnly, setLowStockOnly] = useState(false);
   // "room:<id>" or "area:<id>"; empty for everywhere.
   const [storageFilter, setStorageFilter] = useState('');
   const storageQuery = useMemo(() => storageParams(storageFilter), [storageFilter]);
@@ -571,6 +588,13 @@ const MedicalSuppliesPage: React.FC = () => {
     void loadSectionsRef.current(['items']);
   }, [debouncedSearch, categoryFilter, sortKey, page]);
 
+  // Moving into or out of the low-stock view changes the query, so the page
+  // goes back to the first one; a tab change within the same query does not.
+  const selectTab = (next: Tab) => {
+    if ((next === 'low') !== lowStockOnly) setPage(0);
+    setTab(next);
+  };
+
   const handleSort = (field: string, direction: SortDirection) => {
     setSortField(direction ? (field as SortField) : null);
     setSortDirection(direction);
@@ -599,7 +623,7 @@ const MedicalSuppliesPage: React.FC = () => {
     event.preventDefault();
     const target = TABS[next];
     if (!target) return;
-    setTab(target.id);
+    selectTab(target.id);
     document.getElementById(`medical-tab-${target.id}`)?.focus();
   };
 
@@ -824,11 +848,7 @@ const MedicalSuppliesPage: React.FC = () => {
             value={summary.total_items}
             tone="bg-sky-500/10"
             actionLabel={`Show all ${summary.total_items} supplies`}
-            onSelect={() => {
-              setLowStockOnly(false);
-              setPage(0);
-              setTab('stock');
-            }}
+            onSelect={() => selectTab('stock')}
           />
           <StatTile
             icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
@@ -837,7 +857,7 @@ const MedicalSuppliesPage: React.FC = () => {
             tone="bg-amber-500/10"
             actionLabel={`Show ${expiringTotal} lots expiring within ${summary.expiring_within_days} days`}
             detail={splitDetail(summary.expiring_soon, summary.expiring_soon_on_apparatus ?? 0)}
-            onSelect={() => setTab('expiring')}
+            onSelect={() => selectTab('expiring')}
           />
           <StatTile
             icon={<AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400" />}
@@ -846,7 +866,7 @@ const MedicalSuppliesPage: React.FC = () => {
             tone="bg-red-500/10"
             actionLabel={`Show ${expiredTotal} expired lots`}
             detail={splitDetail(summary.expired, summary.expired_on_apparatus ?? 0)}
-            onSelect={() => setTab('expiring')}
+            onSelect={() => selectTab('expiring')}
           />
           <StatTile
             icon={<TrendingDown className="h-4 w-4 text-orange-700 dark:text-orange-400" />}
@@ -854,11 +874,7 @@ const MedicalSuppliesPage: React.FC = () => {
             value={summary.low_stock}
             tone="bg-orange-500/10"
             actionLabel={`Show ${summary.low_stock} supplies at or below their reorder point`}
-            onSelect={() => {
-              setLowStockOnly(true);
-              setPage(0);
-              setTab('stock');
-            }}
+            onSelect={() => selectTab('low')}
           />
         </div>
       )}
@@ -866,7 +882,7 @@ const MedicalSuppliesPage: React.FC = () => {
       {/* A real tablist (WAI-ARIA tabs pattern): screen readers announce
           "tab, 1 of 2, selected", and the arrow keys move between tabs with
           only the selected one in the Tab order. */}
-      <div className="tab-scroll mb-4" role="tablist" aria-label="Medical supply views">
+      <div className="tab-scroll mb-4" data-mobile-scroll-region role="tablist" aria-label="Medical supply views">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -876,7 +892,7 @@ const MedicalSuppliesPage: React.FC = () => {
             aria-selected={tab === id}
             aria-controls={TAB_PANEL_ID}
             tabIndex={tab === id ? 0 : -1}
-            onClick={() => setTab(id)}
+            onClick={() => selectTab(id)}
             onKeyDown={handleTabKeyDown}
             className={`mobile-touch-target px-4 py-2 text-sm font-medium ${
               tab === id
@@ -897,7 +913,7 @@ const MedicalSuppliesPage: React.FC = () => {
           onRetry={() => void loadSections(['expiring'], { bypassCache: true })}
         />
       )}
-      {tab === 'stock' && errors.categories && (
+      {showsSupplyTable && errors.categories && (
         <SectionError
           section="categories"
           message={errors.categories}
@@ -910,7 +926,7 @@ const MedicalSuppliesPage: React.FC = () => {
        * a failure left A's error standing under B's controls for as long as B
        * took to load, and its Retry re-ran A.
        */}
-      {tab === 'stock' && errors.items && itemsErrorKey === filterKey && (
+      {showsSupplyTable && errors.items && itemsErrorKey === filterKey && (
         <SectionError
           section="items"
           message={errors.items}
@@ -941,7 +957,7 @@ const MedicalSuppliesPage: React.FC = () => {
             )}
           </section>
         ) : (
-          <section aria-label="All supplies" aria-busy={loading.items}>
+          <section aria-label={lowStockOnly ? 'Low stock supplies' : 'All supplies'} aria-busy={loading.items}>
             <div className="mb-4 flex flex-wrap gap-2">
               <div className="relative min-w-[200px] flex-1">
                 <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -1016,25 +1032,6 @@ const MedicalSuppliesPage: React.FC = () => {
                 </select>
               )}
             </div>
-
-            {lowStockOnly && (
-              <div
-                className="alert-warning mb-3 flex flex-wrap items-center justify-between gap-2 text-sm"
-                role="status"
-              >
-                <span>Showing only supplies at or below their reorder point.</span>
-                <button
-                  type="button"
-                  className="touch-target-phone font-medium underline"
-                  onClick={() => {
-                    setLowStockOnly(false);
-                    setPage(0);
-                  }}
-                >
-                  Show all supplies
-                </button>
-              </div>
-            )}
 
             {/*
              * Rows are shown only when they answer the query that is on screen.

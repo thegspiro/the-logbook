@@ -194,8 +194,8 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
       <div
         className={`mb-4 rounded p-3 text-sm ${
           proxyVotingEnabled
-            ? 'border border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300'
-            : 'border border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300'
+            ? 'border border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300'
+            : 'border border-yellow-500/30 bg-yellow-500/10 text-yellow-800 dark:text-yellow-300'
         }`}
         role="status"
         aria-live="polite"
@@ -334,7 +334,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                     >
                       {auth.proxy_type === 'single_election' ? 'Single Election' : 'Regular'}
                     </span>
-                    <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-700 dark:text-green-300">
+                    <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-800 dark:text-green-300">
                       Active
                     </span>
                   </div>
@@ -352,7 +352,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                     }}
                     disabled={revokingId === auth.id}
                     aria-label={`Revoke proxy authorization for ${auth.delegating_user_name || auth.delegating_user_id}`}
-                    className="ml-4 rounded-sm bg-red-500/20 px-3 py-1 text-xs text-red-700 hover:bg-red-500/30 disabled:opacity-50 dark:text-red-300"
+                    className="ml-4 rounded-sm bg-red-500/20 px-3 py-1 text-xs text-red-800 hover:bg-red-500/30 disabled:opacity-50 dark:text-red-300"
                   >
                     {revokingId === auth.id ? 'Revoking...' : 'Revoke'}
                   </button>
@@ -386,7 +386,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                     >
                       {auth.proxy_type === 'single_election' ? 'Single Election' : 'Regular'}
                     </span>
-                    <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-300">
+                    <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-800 dark:text-red-300">
                       Revoked
                     </span>
                   </div>

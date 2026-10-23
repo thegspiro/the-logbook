@@ -855,7 +855,7 @@ If a save is refused, the message gives the reason.
 
 ![Facility maintenance view with upcoming items and completed history](./images/06-13-facility-maintenance.png)
 
-_[Screenshot needed: the New Record dialog on a facility page with Maintenance Type marked required; and the maintenance list with Overdue · due and Completed rows. REPLACE the maintenance shots in this section.]_
+<!-- Screenshot needed: the New Record dialog on a facility page with Maintenance Type marked required; and the maintenance list with Overdue · due and Completed rows. REPLACE the maintenance shots in this section. -->
 
 ---
 

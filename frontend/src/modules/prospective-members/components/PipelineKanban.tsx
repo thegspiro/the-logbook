@@ -202,7 +202,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
                     onToggleSelect(applicant.id);
                   }}
                   aria-label={`Select ${applicant.first_name} ${applicant.last_name}`}
-                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                 />
               </div>
             )}
@@ -223,7 +223,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
       {withheldCount > 0 && (
         <div
           role="status"
-          className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400"
+          className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-400"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>

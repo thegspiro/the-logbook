@@ -22,6 +22,12 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const WIDTH_GATED_TARGET =
   /(?<![\w-])max-(?:sm|md|lg|xl):(?:min-[hw]-(?:\[44px\]|11)|mobile-touch-target|touch-target-phone)(?![\w-])/g;
 
+// `pointer-fine:` is emitted after the shared utilities, so on a phone-width
+// window driven by a mouse (a narrow desktop browser, the CI emulation) a bare
+// `pointer-fine:min-h-6` beats touch-target-phone's 44px. It has to be scoped to
+// `md:` so the 24px floor only applies where the 44px rule does not.
+const FINE_POINTER_FLOOR = /(?<![\w-]:)pointer-fine:min-[hw]-/;
+
 const collectSourceFiles = (dir: string): string[] => {
   const found: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -61,5 +67,24 @@ describe('touch-target integrity', () => {
       expect(`a ${ok} b`).not.toMatch(WIDTH_GATED_TARGET);
       WIDTH_GATED_TARGET.lastIndex = 0;
     }
+  });
+
+  it('does not let a fine-pointer size floor undercut touch-target-phone on a narrow window', () => {
+    const offenders: string[] = [];
+    for (const file of collectSourceFiles(SRC)) {
+      fs.readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (line.includes('touch-target-phone') && FINE_POINTER_FLOOR.test(line)) {
+            offenders.push(`${path.relative(SRC, file)}:${i + 1}`);
+          }
+        });
+    }
+    expect(offenders, 'Write md:pointer-fine:min-h-* so the floor stops applying at phone width').toEqual([]);
+  });
+
+  it('detects the unscoped fine-pointer floor but not the md-scoped one', () => {
+    expect('x pointer-fine:min-h-6 y').toMatch(FINE_POINTER_FLOOR);
+    expect('x md:pointer-fine:min-h-6 y').not.toMatch(FINE_POINTER_FLOOR);
   });
 });

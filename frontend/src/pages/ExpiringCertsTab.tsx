@@ -43,8 +43,8 @@ const ExpiringCertsTab: React.FC = () => {
   const getUrgencyClass = (days: number) => {
     if (days < 0) return 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/20';
     if (days <= 7) return 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/20';
-    if (days <= 30) return 'text-orange-700 dark:text-orange-400 bg-orange-500/10 border-orange-500/20';
-    if (days <= 60) return 'text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
+    if (days <= 30) return 'text-orange-800 dark:text-orange-400 bg-orange-500/10 border-orange-500/20';
+    if (days <= 60) return 'text-yellow-800 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
     return 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/20';
   };
 

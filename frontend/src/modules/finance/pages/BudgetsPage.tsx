@@ -78,7 +78,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
     {
       label: 'Total Budgeted',
       value: formatCurrencyWhole(totalBudgeted),
-      color: 'text-green-600',
+      color: 'text-green-700 dark:text-green-600',
     },
     {
       label: 'Total Spent',
@@ -88,12 +88,12 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
     {
       label: 'Encumbered',
       value: formatCurrencyWhole(totalEncumbered),
-      color: 'text-yellow-600',
+      color: 'text-yellow-700 dark:text-yellow-600',
     },
     {
       label: 'Remaining',
       value: formatCurrencyWhole(totalRemaining),
-      color: totalRemaining < 0 ? 'text-red-600' : 'text-green-600',
+      color: totalRemaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600',
     },
   ];
 
@@ -400,7 +400,7 @@ const BudgetsPage: React.FC = () => {
                           {formatCurrencyWhole(Number(budget.amountEncumbered))}
                         </td>
                         <td
-                          className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}
+                          className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                         >
                           {formatCurrencyWhole(remaining)}
                         </td>
@@ -467,7 +467,7 @@ const BudgetsPage: React.FC = () => {
                     {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountEncumbered), 0))}
                   </td>
                   <td
-                    className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${totalRemaining < 0 ? 'text-red-600' : 'text-green-600'}`}
+                    className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${totalRemaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                   >
                     {formatCurrencyWhole(totalRemaining)}
                   </td>

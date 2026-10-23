@@ -373,7 +373,7 @@ const ApparatusCard: React.FC<{ unit: FleetApparatusReadiness; tz: string }> = (
         {unit.readiness === 'out_of_service' ? (
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
         ) : unit.readiness === 'attention' ? (
-          <Wrench className="mt-0.5 h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <Wrench className="mt-0.5 h-3 w-3 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
         ) : (
           <ClipboardCheck className="text-theme-text-muted mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
         )}

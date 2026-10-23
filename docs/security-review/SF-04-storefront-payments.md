@@ -1,6 +1,103 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 11 (2026-10-22) — watchdog pickup: delta re-verify, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed open, unchanged
+
+**Scope.** Diffed pass 10's own merge (`8bb9a74d`, PR #3400) against current
+`HEAD` across the same declared file set (`storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, the `frontend/src/modules/storefront/` tree, and any
+migration touching storefront/embroidery/personalization tables).
+
+**Unshallowed before trusting the delta** — same precaution passes 9/10 took
+(`git rev-parse --is-shallow-repository` → `true`; `git fetch --unshallow`
+resolved it).
+
+**6 non-merge commits since pass 10 touch this scope, all read in full:**
+
+1. **`74638250` — numeric-bounds hardening (repo-wide, 408 fields).** Adds
+   `le=MONEY_MAX` / `le=INT32_MAX` / `ge=INT32_MIN` to every previously-
+   unbounded numeric field in `schemas/storefront.py` (`price`, `cost`,
+   `shipping_flat_rate`, `price_delta`, `stock_quantity`, `max_per_member`,
+   `personalization_price`, `sort_order`, …). Strictly tightens existing
+   lower-bound-only fields; nothing widened or removed. Already covered by
+   its own repo-wide guard test (`tests/test_request_numeric_bounds.py`).
+   Defense-in-depth improvement, not a new gap.
+2. **`8a57d069` — CLAUDE.md Pitfall #32 fix in `storefront_notification_service.py`.**
+   `_notification_recipients`'s `User.status == UserStatus.ACTIVE` →
+   `.in_(ACTIVE_ACCOUNT_STATUSES)`, so a probationary member now receives
+   store notification emails like any other current member. Already swept
+   by `tests/test_account_status_gates.py`'s repo-wide allowlist check.
+3. **`7197f577` — UTC datetime fix in `schemas/storefront.py`.** `opens_at`/
+   `closes_at`/`expected_delivery_date` annotated `UTCDateTime` so a naive
+   datetime is read as UTC instead of silently losing its offset (closed a
+   stored-time bug and a `TypeError`-as-500 comparing naive vs. aware
+   datetimes). Correctness fix, not an auth/tenancy change.
+4. **`3982e653` — W67 workflow-review (5 fixed, 1 flagged, already landed).**
+   Adds `stock_available` (stock/window cap only, no per-member allowance) to
+   `StorefrontVariantOption`/`StorefrontProductOffer` and a clearer
+   over-per-member-limit error message in `StorefrontService._validate_cart`
+   (`storefront_service.py:1708-1731`). Read both hunks in full: purely
+   additive, read-only display/error-message logic — no new mutation path,
+   no permission or org-scoping change. The flagged item (W67-6, cart not
+   surviving a reload) is a UX/data-loss concern, not a security finding, and
+   already tracked in its own workflow-review record.
+5. **`382758ab` / `75501134` — accessibility/contrast CSS only**
+   (`StoreWindowsTab.tsx`, `StorePaymentsTab.tsx`, `types/index.ts`). Class-
+   string and type-literal changes only; no logic touched. Confirmed by
+   reading both diffs — the `types/index.ts` hunk in `75501134` is a
+   same-file coincidence with the color-token sweep, not a storefront type
+   change.
+
+**No migrations** touching storefront/embroidery/personalization tables
+landed in this window (confirmed via `--diff-filter=AM` on the versions
+directory; none of the 6 commits above touch `alembic/versions/`).
+
+**Re-verified unchanged, by direct read:** `update_order_status` still reads
+the order via a plain `get_order()` (no `for_update`) at
+`storefront_service.py:1905`, and its `settles_payment` branch (`:1917-1951`)
+still writes `payment_status`/`amount_paid` from that unlocked read —
+**SF8-04-2 stays OPEN (flagged)**, unchanged in shape and line position from
+pass 10's description. `waive_order_payment` still reads unlocked at `:2134`
+and still has no `_is_settled()` guard before unconditionally setting
+`payment_status = WAIVED` at `:2142` — **SF8-04-3 stays OPEN (flagged)**,
+likewise unchanged. Both remain an owner decision, not a low-risk mechanical
+fix, per pass 8's original rationale (mirrored in `KNOWN_LIMITATIONS.md`).
+
+Re-enumerated all 48 routes in `storefront.py` against their
+`require_permission`/`Depends` gate directly (not spot-checked): the member
+self-service surface (`/orders/mine*`, payment-method update, `report_payment`)
+is `storefront.view`, order creation is the dedicated `storefront.order`,
+every staff/admin route is `storefront.manage`, and `/permissions` requires
+only authentication (a self-introspection endpoint, returns the caller's own
+permission flags — no data exposure). All unchanged from pass 10's count and
+shape. The five self-settlement separation-of-duties guards (`record_payment`,
+`mark_order_paid`, `waive_order_payment`, `refund_order`,
+`update_order_status`'s `settles_payment` branch) all still call
+`assert_different_person` before any mutation — confirmed by direct read of
+each, none touched this window. PayPal webhook signature verification
+(`verify_webhook_signature`, `paypal_webhook.py:92`) and the replay guard are
+untouched (file not in this window's delta).
+
+**0 fixed, 0 new findings.**
+
+## Completion gate (pass 11)
+
+- `flake8`/`black --check`/`isort --check-only` over `app/ tests/ alembic/`
+  (7.4.1 / 26.5.1 / isort 9.0.1, CI-pinned): clean.
+- `validate_migrations.py --strict`: 639 revisions, single head (`e5f9bb066e07`).
+- `check_route_permissions.py --strict`: 273 routes, 0 errors, 0 warnings.
+- Scoped backend tests (`-k "storefront or paypal_webhook"`): 765 passed, 1
+  skipped (environment-only: `pywebpush`).
+- Standing guard suites (org-scoping ratchet, capacity locking, CSV sweep,
+  LIKE escaping, `create_all`-table tolerance, baseline member grants,
+  account-status gates, numeric-bounds sweep): 682 passed.
+- `cd frontend && npm run typecheck`: 0 errors.
+- `npm run lint` (whole repo, backend + frontend): 0 errors, 0 warnings.
 
 ---
 
