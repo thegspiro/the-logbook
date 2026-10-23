@@ -16,8 +16,11 @@ Screenshot pass only; no guide wording changed beyond removing placeholders.
   table, Chief sign-offs) and were removed rather than re-shot. The status
   report now reads 810 captured, 2 remaining.
 - **Still open.** Two Android-only NFC captures in guide 05 (Web NFC does not
-  exist in the capture harness), and the weekly-pattern list with its sun and
-  moon glyphs, which the demo has no split pattern to show.
+  exist in the capture harness). The weekly-pattern list with its sun and moon
+  glyphs, the Short row in the Supplies to Replace email and the shelf/truck
+  split on the Medical Supplies tiles were the other three; the seeder now
+  produces each (a split Weekend Duty Rotation, Gauze counted 18 of 24, and a
+  tourniquet on Rescue 7 dated three weeks out) and the pictures are in.
 - **Pictures that use a stand-in for state the seeder cannot make.** The
   Items Not Seen report (two rows given a 212- and 301-day history), the empty
   fleet and fresh-department guides (the summary answered as a new department's),
@@ -27,7 +30,10 @@ Screenshot pass only; no guide wording changed beyond removing placeholders.
   where the response is replaced; the screen, wording and controls are real.
 - **Bug found while seeding.** `POST /inventory/clearances` answered 500 after
   saving the clearance, because its response listed line items that were never
-  loaded. Fixed in `DepartureClearanceService.initiate_clearance` with a test.
+  loaded. Fixed in `DepartureClearanceService.initiate_clearance` with a test. A second one
+  turned up seeding the tourniquet: `PUT /equipment-checks/items/{id}` with an
+  `expiration_date` saved the position and then failed writing its change log,
+  because the logged changes held a `date`. The log now takes the JSON form.
 - **Capture tooling.** `seed_demo_data.py` gains a published and signed July
   minutes record, a meeting whose agenda moved on after its minutes, a
   legacy-form station and room for the Locations page, an overdue facility

@@ -3468,6 +3468,7 @@ class Seeder:
             if templates:
                 payload["template_id"] = pick(templates[0], "id")
             patterns.append(self.api.post("/scheduling/patterns", payload))
+        self._weekend_pattern_shifts(patterns, templates)
 
         # Ask the same endpoint the shift form asks. /apparatus-options resolves
         # the department's fleet with a documented priority — full Apparatus
@@ -5629,6 +5630,8 @@ class Seeder:
 
         self._deploy_lots(positions, catalog)
         self._report_one_used(positions, str(pick(medic, "id")))
+        self._leave_one_short(positions)
+        self._expire_one_tourniquet()
         # Linking supply positions edits the template's items, which drafts it
         # again — and this step runs *after* `seed_equipment_checks`, so that
         # step's publish sweep has already been and gone. Without this the
@@ -6274,6 +6277,37 @@ class Seeder:
         if not item_id:
             return
         self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 18})
+
+    def _expire_one_tourniquet(self) -> None:
+        """Date the tourniquet on Rescue 7 to expire three weeks from now.
+
+        The Medical Supplies tiles split each figure into shelf and truck stock
+        only when truck stock expires inside the window, and every truck lot the
+        demo carries is dated years out. A position with no lot of its own is
+        counted by the date on the position itself, which is what this sets.
+        """
+        rigs = items(self.api.get("/apparatus?page_size=100"), "items")
+        rig = next(
+            (r for r in rigs if str(pick(r, "unit_number", "unitNumber")) == "R-7"),
+            None,
+        )
+        if rig is None:
+            return
+        inventory = self.api.get(
+            f"/equipment-checks/apparatus/{pick(rig, 'id')}/inventory"
+        )
+        for compartment in items(inventory, "compartments"):
+            for position in items(compartment, "items"):
+                if pick(position, "item_name", "itemName") != "Tourniquet, CAT":
+                    continue
+                self.api.put(
+                    f"/equipment-checks/items/{pick(position, 'template_item_id', 'templateItemId')}",
+                    {
+                        "has_expiration": True,
+                        "expiration_date": str(TODAY + timedelta(days=21)),
+                    },
+                )
+                return
 
     def _report_one_used(self, positions: dict[str, str], apparatus_id: str) -> None:
         """Raise a restock report as an ordinary member, not as the chief.
@@ -16063,6 +16097,42 @@ class Seeder:
                     "reason": "For the open house next month.",
                 },
             )
+
+    WEEKEND_PATTERN = "Weekend Duty Rotation"
+
+    def _weekend_pattern_shifts(
+        self, patterns: list[dict], templates: list[dict]
+    ) -> None:
+        """Give the weekend pattern the shifts a split weekly pattern carries.
+
+        Friday night, Saturday day and night, Sunday day: the case the guide
+        describes, and what the pattern list draws a sun and a moon for. A plain
+        weekly pattern has no ``weekday_shifts``, so its row shows no glyphs.
+        Weekdays are numbered from Sunday, as the pattern form numbers them.
+        """
+        pattern = next(
+            (p for p in patterns if pick(p, "name") == self.WEEKEND_PATTERN), None
+        )
+        if pattern is None or (pick(pattern, "schedule_config") or {}).get(
+            "weekday_shifts"
+        ):
+            return
+        by_name = {str(pick(t, "name")): pick(t, "id") for t in templates}
+        day, night = by_name.get("Day Shift"), by_name.get("Night Shift")
+        if not day or not night:
+            return
+        config = dict(pick(pattern, "schedule_config") or {})
+        config.update(
+            {
+                "weekday_shifts": {"0": ["day"], "5": ["night"], "6": ["day", "night"]},
+                "weekdays": [0, 5, 6],
+                "day_template_id": day,
+                "night_template_id": night,
+            }
+        )
+        self.api.patch(
+            f"/scheduling/patterns/{pick(pattern, 'id')}", {"schedule_config": config}
+        )
 
     GUIDE06_LOCATIONS_STATION = "Station 3 - Eastside"
 

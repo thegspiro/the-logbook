@@ -22635,6 +22635,46 @@ export const SHOTS = [
     },
     fullPage: false,
   },
+  {
+    id: "03-128-pattern-list-glyphs",
+    doc: "03-scheduling.md",
+    line: 3222,
+    anchor: "the pattern list showing the glyphs",
+    alt: "The Weekend Duty Rotation weekly pattern in the pattern list, expanded: its covered weekdays with a sun for the day shift and a moon for the night shift, Friday night only, Saturday both and Sunday day only",
+    route: "/scheduling/admin/planning/patterns",
+    expect: "Weekend Duty Rotation",
+    viewport: { width: 1280, height: 900 },
+    allowEmptyState: true,
+    prepare: async (page) => {
+      const card = page.locator("div.card", {
+        has: page.locator("p", { hasText: /^Weekend Duty Rotation$/ }),
+      });
+      await card.waitFor({ timeout: 20_000 });
+      await card.getByRole("button", { name: /Details/ }).click();
+      await page.waitForTimeout(600);
+      await hideScanNotice(page);
+      await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-137-medical-expiring-split",
+    doc: "05-inventory.md",
+    line: 3041,
+    anchor: "the Expiring tab with the shelf/truck split on its tiles",
+    alt: "The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile split into shelf and on-trucks counts, and the list carrying a shelf lot beside the tourniquet on Rescue 7",
+    route: "/medical-supplies",
+    expect: "on trucks",
+    viewport: { width: 1440, height: 1100 },
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Expiring/ })
+        .click({ timeout: 15_000 });
+      await page.getByText("on trucks").first().waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(500);
+    },
+  },
 ];
 
 /**
