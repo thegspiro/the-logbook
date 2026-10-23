@@ -862,6 +862,7 @@ async def purge_inactive_prospects(
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Permanently delete inactive prospects from a pipeline, with their files.
@@ -869,6 +870,10 @@ async def purge_inactive_prospects(
     Only applications in the ``inactive`` status are deleted; any other id is
     skipped, and ``purged_count`` is the number actually deleted. With no
     ``prospect_ids``, every inactive application in the pipeline is purged.
+
+    The caller's own application is never purged, named or not: the body
+    carries ids the router's path-parameter guard cannot see, the same reason
+    both bulk routes filter explicitly.
 
     Requires `confirm: true` in the request body to execute.
 
@@ -890,6 +895,7 @@ async def purge_inactive_prospects(
             organization_id=current_user.organization_id,
             prospect_ids=prospect_ids,
             purged_by=current_user.id,
+            exclude_prospect_ids=hidden_prospect_ids,
         )
 
     # Irreversible deletion of applicant PII, so it is recorded -- by count

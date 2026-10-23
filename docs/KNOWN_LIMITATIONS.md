@@ -3429,6 +3429,26 @@ Recorded here rather than as a second entry (security review MP-08 pass 8,
 the residual is retry-safe and needs a rare compound failure, so no
 trash-and-restore scheme is built.
 
+## Membership Pipeline — Typing Your Own Email Into the Duplicate Check Names Your Own Application (2026-10-23)
+
+`POST /prospective-members/prospects/check-existing` returns
+`existing_applicant` (name, pipeline, stage) for the active applicant holding
+the email the caller typed, and `POST /prospects` refuses that email with a
+409 that names the same three things. Neither route has `{prospect_id}` in its
+path, so the router-wide `block_self_prospect_access` guard never runs, and
+neither applies `get_hidden_prospect_ids`. A caller holding `members.create`
+or `prospective_members.manage` who also has an active application of their
+own can type their own email and learn which pipeline and stage that
+application is at. `prospect_privacy.py` says a member must never be able to
+read that about their own file.
+
+Flagged rather than fixed. Hiding the match from that one caller means the
+409 can no longer say why the email is refused, which leaves a coordinator
+looking at an unexplained refusal. Choosing between that and the disclosure
+is a product decision. Both routes are listed in `EXEMPT` in
+`tests/test_prospect_route_self_access_coverage.py` with this reason, so
+removing them from the list is part of whichever fix is chosen.
+
 ## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02, resolved 2026-10-11)
 
 **✅ Resolved 2026-10-11 (owner decision 2026-10-05: require `step_id` only
