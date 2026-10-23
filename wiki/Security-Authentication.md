@@ -495,3 +495,40 @@ back at any time.
   administrator's own account. A session left signed in on a shared tablet
   carries that account's full access.
 - Every session, kiosk or not, shows a toast 5 minutes before its lifetime ends.
+
+### Mandatory MFA for privileged members and step-up re-verification
+
+Two controls sit on top of the organization-wide MFA switch (Organization
+Settings > Security), which still works as before.
+
+**Who must use MFA.** A member who holds any of these permissions (wildcards
+count) must enroll in two-factor authentication whatever the organization
+chose: `*`, `settings.manage`, `security.manage`, `integrations.manage`,
+`users.create`, `users.edit`, `users.delete`, `users.update_positions`,
+`audit.export`, `audit.manage`, `medical_screening.view`,
+`medical_screening.manage`. The list is computed from permissions, so it
+follows role changes. In the seeded positions that is the fire, deputy and
+assistant chiefs, the president, the secretary, the membership coordinator and
+the IT manager; it is defined in `app/services/mfa_policy.py`.
+
+- **Grace period.** The first time the server sees a privileged member without
+  MFA it starts a 14-day clock (`MFA_GRACE_DAYS`), emails them, and shows a
+  banner counting down. After it ends they can reach only the enrollment
+  screens, as under the org-wide switch.
+- **Losing and regaining privilege.** The clock is cleared when a member stops
+  being privileged, so a later promotion gets a fresh period.
+
+**Step-up.** Some actions need the member to have re-verified on the current
+session in the last 10 minutes (`STEPUP_WINDOW_MINUTES`): an authenticator
+code, or the password for a member without MFA. The stamp is stored on the
+session row, so it never carries to another device or tab. Without it the API
+answers `403 LB-AUTH-013` and the app prompts and repeats the request. A
+member who signs in only through a provider and has neither a password nor MFA
+cannot step up; they are told to enroll in MFA.
+
+| Group               | Actions                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Exports             | audit log export, error log export                                                                                                                                                                                                         |
+| Security and policy | MFA policy, organization auth and file-storage settings, audit chain re-hash, role create/edit/delete/clone, assigning or removing a member's positions, IP exceptions approve/revoke, country blocks, integration connect/disconnect/edit |
+| Account recovery    | administrator password reset, administrator MFA reset                                                                                                                                                                                      |
+| Destructive         | delete a member, anonymize a member                                                                                                                                                                                                        |

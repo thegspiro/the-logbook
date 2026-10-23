@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import (
     get_current_user,
     require_permission,
+    require_stepup,
     user_has_permission,
 )
 from app.api.v1.endpoints.mcp_keys import require_audit_entry
@@ -978,6 +979,7 @@ async def connect_integration(
     body: IntegrationConnectRequest = Body(default_factory=IntegrationConnectRequest),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("integrations.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """Connect/enable an integration"""
     result = await db.execute(
@@ -1083,6 +1085,7 @@ async def disconnect_integration(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("integrations.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """Disconnect an integration"""
     result = await db.execute(
@@ -1217,6 +1220,7 @@ async def update_integration(
     body: IntegrationUpdateRequest = Body(default_factory=IntegrationUpdateRequest),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("integrations.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """Update integration configuration"""
     result = await db.execute(

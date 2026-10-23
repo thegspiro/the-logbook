@@ -15,6 +15,7 @@ vi.mock('../services/errorReporting', () => ({
 
 // Import AFTER the mocks are in place.
 import { createApiClient } from './createApiClient';
+import { registerStepUpRequester } from './stepUp';
 
 /**
  * These tests drive the real interceptor chain rather than a mocked axios.
@@ -362,6 +363,40 @@ describe('createApiClient', () => {
       await api.get('/things').catch(() => undefined);
 
       expect(mockReportApiError).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('step-up re-verification', () => {
+    afterEach(() => {
+      registerStepUpRequester(null);
+    });
+
+    it('prompts, then repeats the request, on a module instance too', async () => {
+      const seen: InternalAxiosRequestConfig[] = [];
+      let verified = false;
+      const adapter: AxiosAdapter = (config) => {
+        seen.push(config);
+        if (verified) {
+          return Promise.resolve({ data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config });
+        }
+        return Promise.reject(
+          Object.assign(new Error('Request failed with status code 403'), {
+            isAxiosError: true,
+            config,
+            response: { status: 403, data: { code: 'LB-AUTH-013' }, statusText: '', headers: {}, config },
+          })
+        );
+      };
+      registerStepUpRequester(() => {
+        verified = true;
+        return Promise.resolve(true);
+      });
+      const api = withAdapter(createApiClient(), adapter);
+
+      const response = await api.post('/ip-security/blocked-countries', {});
+
+      expect(response.data).toEqual({ ok: true });
+      expect(seen).toHaveLength(2);
     });
   });
 });
