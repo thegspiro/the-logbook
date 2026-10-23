@@ -26,6 +26,10 @@ from app.core.utils import generate_uuid
 
 GOOGLE_WORKSPACE_INTEGRATION = "google-workspace"
 MICROSOFT_365_INTEGRATION = "microsoft-365"
+DIRECTORY_INTEGRATION_TYPES = (GOOGLE_WORKSPACE_INTEGRATION, MICROSOFT_365_INTEGRATION)
+# Integration config key: retiring suspends the member's directory account too.
+# Off unless the department turns it on (owner decision, 2026-10-23).
+SUSPEND_ON_RETIREMENT_KEY = "suspend_on_retirement"
 
 
 class DirectoryProvider(str, Enum):

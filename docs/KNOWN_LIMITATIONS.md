@@ -208,9 +208,13 @@ converted to a member and suspends it when the member is dropped or deleted
 (`wiki/Integration-Google-Workspace.md`). Each of these is a deliberate
 choice an owner may want to revisit:
 
-- **Retirement keeps the account.** Only a drop or a delete suspends it; a
-  department may let retirees keep their address. Retired, on-leave, inactive
-  and Logbook-suspended members keep a working Google account.
+- **Retirement keeps the account unless the department opts in.** A drop or a
+  delete always suspends it. Retiring does only when the integration's
+  "suspend when a member retires" setting is on (off by default; owner
+  decision, 2026-10-23), and only for members who retire while it is on:
+  turning it on does not reach back to members already retired, and turning
+  it off does not lift suspensions it caused. On-leave, inactive and
+  Logbook-suspended members always keep a working account.
 - **Suspended, never deleted.** A departed member's account keeps its mailbox
   and its Workspace license until an administrator deletes it in Google.
 - **A permanent delete cannot be retried.** The account record goes with the

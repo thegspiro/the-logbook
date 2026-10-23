@@ -1535,6 +1535,7 @@ describe('IntegrationsPage', () => {
         license_sku_id: 'c42b9cae-ea4f-4ab7-9717-81576235ccac',
         client_secret_expires_on: '',
         groups: ['members@firedept.org', '99999999-8888-7777-6666-555555555555'],
+        suspend_on_retirement: false,
       });
     });
 
@@ -1557,6 +1558,7 @@ describe('IntegrationsPage', () => {
         license_sku_id: '',
         client_secret_expires_on: '',
         groups: ['members@firedept.org'],
+        suspend_on_retirement: false,
       });
     });
 
@@ -1578,6 +1580,18 @@ describe('IntegrationsPage', () => {
         'ms-1',
         expect.objectContaining({ client_secret_expires_on: '' })
       );
+    });
+
+    it('shows a stored retirement choice as ticked', async () => {
+      mockGetIntegrations.mockResolvedValue([
+        { ...microsoftConnected, config: { ...microsoftConnected.config, suspend_on_retirement: true } },
+      ]);
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      await user.click(screen.getByRole('button', { name: 'Microsoft 365 settings' }));
+
+      expect(screen.getByRole('checkbox', { name: /Block sign-in when a member retires/ })).toBeChecked();
     });
 
     it('warns on the card when the client secret is about to expire', async () => {
@@ -1697,6 +1711,7 @@ describe('IntegrationsPage', () => {
         domain: 'firedept.org',
         org_unit_path: '/Members',
         group_emails: ['members@firedept.org', 'all@firedept.org'],
+        suspend_on_retirement: false,
       });
     });
 
@@ -1716,7 +1731,26 @@ describe('IntegrationsPage', () => {
         domain: 'firedept.org',
         org_unit_path: '/Members',
         group_emails: ['members@firedept.org'],
+        suspend_on_retirement: false,
       });
+    });
+
+    it('turns on suspending the account when a member retires', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+      renderPage();
+      await screen.findByText('Google Workspace');
+      await user.click(screen.getByRole('button', { name: 'Google Workspace settings' }));
+
+      const box = screen.getByRole('checkbox', { name: /Suspend the account when a member retires/ });
+      expect(box).not.toBeChecked();
+      await user.click(box);
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith(
+        'gws-1',
+        expect.objectContaining({ suspend_on_retirement: true })
+      );
     });
 
     it('leaves connecting to an organization administrator', async () => {

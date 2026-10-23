@@ -37,6 +37,7 @@ from app.models.directory_account import (
 from app.models.directory_account_departure import (
     SUSPENDABLE_STATUSES,
     has_departed,
+    suspends_retired,
 )
 from app.models.integration import Integration
 from app.models.user import Organization, User
@@ -154,8 +155,13 @@ def suspendable_address(row: Optional[DirectoryAccountProvision]) -> Optional[st
     return _account_key(row)
 
 
-def member_has_departed(user: User) -> bool:
-    return has_departed(user.status, user.deleted_at)
+def member_has_departed(user: User, suspend_retired: bool) -> bool:
+    """Whether *user* has left, as their directory account sees it.
+
+    *suspend_retired* is the department's ``suspend_on_retirement`` switch
+    (:func:`suspends_retired` on the integration's config).
+    """
+    return has_departed(user.status, user.deleted_at, suspend_retired)
 
 
 class ProvisionRetryError(Exception):
@@ -820,6 +826,7 @@ class DirectoryAccountService:
             for r in records
             if r.external_user_id and r.provider == info.provider
         }
+        retirement_suspends = suspends_retired(integration.config)
         member_query = select(User).where(User.organization_id == str(organization_id))
         if apply:
             # A locking read, so a member dropped while this runs is either
@@ -860,7 +867,7 @@ class DirectoryAccountService:
             if match is None:
                 counts["not_in_google"] += 1
                 continue
-            if member_has_departed(member):
+            if member_has_departed(member, retirement_suspends):
                 counts["departed"] += 1
                 continue
             candidates.append((member, address, match))
@@ -940,7 +947,9 @@ class DirectoryAccountService:
             return None
         integration = await self._active_integration(organization_id, info)
         member = await self._load_member(user_id, organization_id)
-        if integration is None or member is None or member_has_departed(member):
+        if integration is None or member is None:
+            return None
+        if member_has_departed(member, suspends_retired(integration.config)):
             return None
         if await self._load(organization_id, user_id=user_id) is not None:
             return None
@@ -1036,7 +1045,12 @@ class DirectoryAccountService:
                 )
             )
         ).all()
-        departed = [row for row, member in rows if member_has_departed(member)]
+        retirement_suspends = suspends_retired(integration.config)
+        departed = [
+            row
+            for row, member in rows
+            if member_has_departed(member, retirement_suspends)
+        ]
         if not departed:
             return []  # nothing to compare: no listing call
         domain = str((integration.config or {}).get("domain", "")).lower()
@@ -1107,6 +1121,13 @@ class DirectoryAccountService:
         is the risk this list exists to surface.
         """
         now = now or datetime.now(timezone.utc)
+        info = await self.connected_provider(organization_id)
+        integration = (
+            await self._active_integration(organization_id, info) if info else None
+        )
+        retirement_suspends = suspends_retired(
+            integration.config if integration is not None else None
+        )
         rows = (
             await self.db.execute(
                 select(DirectoryAccountProvision, User)
@@ -1119,7 +1140,7 @@ class DirectoryAccountService:
         ).all()
         items: list[AttentionItem] = []
         for row, member in rows:
-            found = _attention_issue(row, member, now)
+            found = _attention_issue(row, member, now, retirement_suspends)
             if found is None:
                 continue
             issue, detail, since = found
@@ -1297,7 +1318,9 @@ class DirectoryAccountService:
         # all hand something to the member; none of it is for someone who has
         # left. Only the suspension, settled above, still applies to them.
         member = await self._load_member(row.user_id, organization_id)
-        if member is None or member_has_departed(member):
+        if member is None or member_has_departed(
+            member, suspends_retired(integration.config)
+        ):
             raise ProvisionRetryError(
                 f"This member has left the department, so their {info.vendor} "
                 "account is not set up any further."
@@ -1350,7 +1373,10 @@ def _aware(moment: Optional[datetime]) -> Optional[datetime]:
 
 
 def _attention_issue(
-    row: DirectoryAccountProvision, member: User, now: datetime
+    row: DirectoryAccountProvision,
+    member: User,
+    now: datetime,
+    suspend_retired: bool,
 ) -> Optional[tuple[str, Optional[str], Optional[datetime]]]:
     """(issue, detail, waiting since) for one record, or None if it is fine."""
     if not row.suspension_settled and row.status in _SUSPENDABLE:
@@ -1370,7 +1396,7 @@ def _attention_issue(
         attempted = _aware(row.last_attempt_at or row.created_at)
         if attempted is None or now - attempted < STALE_PENDING_AFTER:
             return None  # still in flight
-        if member_has_departed(member):
+        if member_has_departed(member, suspend_retired):
             # The create call may have reached the directory with its answer
             # lost: the departure hook cannot suspend what it has no record of.
             return (
@@ -1379,7 +1405,7 @@ def _attention_issue(
                 row.created_at,
             )
         return AttentionIssue.NOT_CREATED, row.last_error, row.created_at
-    if member_has_departed(member):
+    if member_has_departed(member, suspend_retired):
         return None
     if row.status == DirectoryAccountStatus.FAILED.value:
         return AttentionIssue.NOT_CREATED, row.last_error, row.created_at

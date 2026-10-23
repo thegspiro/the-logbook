@@ -464,6 +464,8 @@ const IntegrationsPage: React.FC = () => {
   const [msLicenseSkuId, setMsLicenseSkuId] = useState('');
   const [msGroups, setMsGroups] = useState('');
   const [msSecretExpiresOn, setMsSecretExpiresOn] = useState('');
+  // Shared by Google Workspace and Microsoft 365: only one form is open at once.
+  const [suspendOnRetirement, setSuspendOnRetirement] = useState(false);
   // The connect form doubles as the settings form for a connected Claude
   // (MCP) integration. Reconnecting is not an option there: disconnect
   // revokes the service key and ends every member connection.
@@ -660,6 +662,7 @@ const IntegrationsPage: React.FC = () => {
     setMsSecretExpiresOn(
       typeof stored['client_secret_expires_on'] === 'string' ? stored['client_secret_expires_on'] : ''
     );
+    setSuspendOnRetirement(stored['suspend_on_retirement'] === true);
     setMsGroups(
       Array.isArray(stored['groups'])
         ? stored['groups'].filter((g): g is string => typeof g === 'string').join('\n')
@@ -715,6 +718,7 @@ const IntegrationsPage: React.FC = () => {
             .split(/[\s,]+/)
             .map((g) => g.trim())
             .filter(Boolean),
+          suspend_on_retirement: suspendOnRetirement,
         };
       case 'microsoft-365':
         return {
@@ -732,6 +736,7 @@ const IntegrationsPage: React.FC = () => {
             .split(/[\s,]+/)
             .map((g) => g.trim())
             .filter(Boolean),
+          suspend_on_retirement: suspendOnRetirement,
         };
       case 'claude-mcp':
         return {
@@ -1519,6 +1524,22 @@ const IntegrationsPage: React.FC = () => {
               />
               <p className="text-theme-text-muted mt-1 text-xs">One address per line, up to 20.</p>
             </div>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={suspendOnRetirement}
+                onChange={(e) => setSuspendOnRetirement(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Suspend the account when a member retires</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Off by default: retired members keep their account. When on, retiring suspends the account as a drop
+                  does, and returning to active lifts it. It applies to members who retire while it is on; members
+                  already retired are not changed when you turn it on or off.
+                </span>
+              </span>
+            </label>
             <p className="text-theme-text-muted text-xs">
               In the Google Admin console, open Security &rarr; API controls &rarr; Domain-wide delegation and authorize
               the service account&apos;s client ID for <code>https://www.googleapis.com/auth/admin.directory.user</code>{' '}
@@ -1662,6 +1683,22 @@ const IntegrationsPage: React.FC = () => {
                 Distribution lists, mail-enabled security groups and dynamic groups cannot be used; Test rejects them.
               </p>
             </div>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={suspendOnRetirement}
+                onChange={(e) => setSuspendOnRetirement(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Block sign-in when a member retires</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Off by default: retired members keep their account. When on, retiring blocks the account as a drop
+                  does, and returning to active lifts it. It applies to members who retire while it is on; members
+                  already retired are not changed when you turn it on or off.
+                </span>
+              </span>
+            </label>
             <p className="text-theme-text-muted text-xs">
               In Entra ID, register an application, add a client secret, and grant it these Microsoft Graph application
               permissions with admin consent: <code>User.ReadWrite.All</code>,{' '}

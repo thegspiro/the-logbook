@@ -93,8 +93,10 @@ Logbook creates will carry its value there instead.
 
 The same events as Google Workspace: a drop or delete blocks sign-in (and ends
 active sessions); undoing the drop, a rejoin or a reactivation unblocks an
-account The Logbook blocked. Retired, on-leave, inactive and
-Logbook-suspended members keep their account. An account that was already
+account The Logbook blocked. On-leave, inactive and Logbook-suspended members
+keep their account, and so do retired members unless **Block sign-in when a
+member retires** is turned on in the integration's settings (it works as the
+Google Workspace setting does). An account that was already
 blocked when the member left stays blocked when they return.
 
 **Accounts synced from on-premises Active Directory** cannot be blocked from

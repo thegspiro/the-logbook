@@ -143,12 +143,21 @@ integration itself uses the standard `/api/v1/integrations/{id}/…` routes.
 
 ## When a Member Leaves or Returns
 
-| What happens in The Logbook                                      | Google account                                 |
-| ---------------------------------------------------------------- | ---------------------------------------------- |
-| Status changed to dropped (voluntary or involuntary)             | Suspended                                      |
-| Member deleted (soft or permanent)                               | Suspended                                      |
-| Drop undone, rejoin from dropped, or archived member reactivated | Unsuspended — only if The Logbook suspended it |
-| Retired, on leave, inactive, suspended in The Logbook            | Unchanged                                      |
+| What happens in The Logbook                                      | Google account                                                                                                                            |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Status changed to dropped (voluntary or involuntary)             | Suspended                                                                                                                                 |
+| Member deleted (soft or permanent)                               | Suspended                                                                                                                                 |
+| Drop undone, rejoin from dropped, or archived member reactivated | Unsuspended — only if The Logbook suspended it                                                                                            |
+| Retired                                                          | Unchanged, unless the department turns on **Suspend the account when a member retires**: then suspended, and unsuspended when they return |
+| On leave, inactive, suspended in The Logbook                     | Unchanged                                                                                                                                 |
+
+**Suspend the account when a member retires** is in the integration's settings
+and is off by default. It applies to members who retire while it is on:
+turning it on does not suspend members already retired, and turning it off
+does not unsuspend any. A retired member who returns to active (or moves to
+inactive) gets their account back whatever the setting says by then, if The
+Logbook suspended it. While it is on, the daily departure check also covers
+retired members.
 
 Both accounts The Logbook created and existing accounts it linked to are
 suspended. If an account was already suspended in Google when the member left,

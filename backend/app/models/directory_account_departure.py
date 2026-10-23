@@ -18,9 +18,13 @@ sealer uses); the ``google_workspace_suspension_sync`` scheduled task is the
 backstop for anything that task did not finish and for retries. A rolled-back
 departure leaves nothing behind.
 
-Only the line crossing matters, never the route: retired, on leave, inactive
-and suspended-in-The-Logbook members keep their account (owner decision,
-2026-10-15).
+Only the line crossing matters, never the route. On leave, inactive and
+suspended-in-The-Logbook members keep their account (owner decision,
+2026-10-15). Retired members keep theirs too unless the department's directory
+integration has ``suspend_on_retirement`` on (owner decision, 2026-10-23). The
+switch applies to members who retire while it is on; turning it on or off does
+not reach back to members already retired. A retired member who returns gets
+their account back whatever the switch says now.
 """
 
 import asyncio
@@ -34,9 +38,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.directory_account import (
+    DIRECTORY_INTEGRATION_TYPES,
+    SUSPEND_ON_RETIREMENT_KEY,
     DirectoryAccountProvision,
     DirectoryAccountStatus,
 )
+from app.models.integration import Integration
 from app.models.user import User, UserStatus
 
 # A member in one of these, or deleted, has left the department.
@@ -58,13 +65,47 @@ _DETACHED = "directory_account_detached"
 _tasks: set["asyncio.Task[None]"] = set()
 
 
-def has_departed(status: Any, deleted_at: Optional[datetime]) -> bool:
+def has_departed(
+    status: Any, deleted_at: Optional[datetime], suspend_retired: bool
+) -> bool:
     if deleted_at is not None:
         return True
     try:
-        return UserStatus(status) in DEPARTED_STATUSES
+        member_status = UserStatus(status)
     except ValueError:
         return False
+    if member_status == UserStatus.RETIRED:
+        return suspend_retired
+    return member_status in DEPARTED_STATUSES
+
+
+def _is_retired(status: Any) -> bool:
+    try:
+        return UserStatus(status) == UserStatus.RETIRED
+    except ValueError:
+        return False
+
+
+def suspends_retired(config: Any) -> bool:
+    """Whether a directory integration's config opts retirement in."""
+    return isinstance(config, dict) and config.get(SUSPEND_ON_RETIREMENT_KEY) is True
+
+
+def _department_suspends_retired(session: Session, organization_id: str) -> bool:
+    configs = (
+        session.connection()
+        .execute(
+            select(Integration.config).where(
+                Integration.organization_id == organization_id,
+                Integration.integration_type.in_(DIRECTORY_INTEGRATION_TYPES),
+                Integration.enabled.is_(True),
+                Integration.status == "connected",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return any(suspends_retired(config) for config in configs)
 
 
 def _previous(user: User, attribute: str) -> Any:
@@ -74,14 +115,22 @@ def _previous(user: User, attribute: str) -> Any:
     return getattr(user, attribute)
 
 
-def _stage(session: Session, user: User, suspended: bool) -> None:
+def _stage(
+    session: Session, user: User, suspended: bool, *, only_a_change: bool = False
+) -> None:
     organization_id = str(user.organization_id)
     user_id = str(user.id)
     requested_at = datetime.now(timezone.utc)
-    still_to_do = not_(
-        and_(
-            DirectoryAccountProvision.suspension_wanted.is_(suspended),
-            DirectoryAccountProvision.suspension_settled.is_(True),
+    still_to_do = (
+        # Leaves a record already headed the same way alone, so its "waiting
+        # since" is not restarted by a status change that changes nothing.
+        DirectoryAccountProvision.suspension_wanted.isnot(suspended)
+        if only_a_change
+        else not_(
+            and_(
+                DirectoryAccountProvision.suspension_wanted.is_(suspended),
+                DirectoryAccountProvision.suspension_settled.is_(True),
+            )
         )
     )
     result = session.connection().execute(
@@ -149,8 +198,26 @@ def _detect_departures(session: Session, flush_context: Any, instances: Any) -> 
             or state.attrs.deleted_at.history.has_changes()
         ):
             continue
-        was_gone = has_departed(_previous(obj, "status"), _previous(obj, "deleted_at"))
-        is_gone = has_departed(obj.status, obj.deleted_at)
+        previous_status = _previous(obj, "status")
+        if _is_retired(previous_status) or _is_retired(obj.status):
+            # Whether a retirement suspended the account depends on the
+            # switch as it stood then, not now, so the record decides: stage
+            # what the member's status means today, wherever the record wants
+            # something else.
+            suspend_retired = _department_suspends_retired(
+                session, str(obj.organization_id)
+            )
+            _stage(
+                session,
+                obj,
+                suspended=has_departed(obj.status, obj.deleted_at, suspend_retired),
+                only_a_change=True,
+            )
+            continue
+        was_gone = has_departed(
+            previous_status, _previous(obj, "deleted_at"), suspend_retired=False
+        )
+        is_gone = has_departed(obj.status, obj.deleted_at, suspend_retired=False)
         if was_gone != is_gone:
             _stage(session, obj, suspended=is_gone)
     for obj in list(session.deleted):

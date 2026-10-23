@@ -317,6 +317,8 @@ class GoogleWorkspaceConfig(BaseModel):
     The service account acts as ``admin_email`` through domain-wide
     delegation; that admin needs the right to create users and, when
     ``group_emails`` is set, to manage group membership.
+    ``suspend_on_retirement`` makes retiring suspend the account too, as a
+    drop does; it applies to members who retire while it is on.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -326,6 +328,7 @@ class GoogleWorkspaceConfig(BaseModel):
     domain: str
     org_unit_path: str = "/"
     group_emails: List[str] = Field(default_factory=list)
+    suspend_on_retirement: bool = False
 
     @field_validator("service_account_key")
     @classmethod
@@ -403,6 +406,8 @@ class Microsoft365Config(BaseModel):
     stops every account change). Reading it from Graph would need
     Application.Read.All, which can read every app registration in the
     tenant, so an administrator types it in (owner decision, 2026-10-23).
+    ``suspend_on_retirement`` makes retiring block the account too, as a drop
+    does; it applies to members who retire while it is on.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -415,6 +420,7 @@ class Microsoft365Config(BaseModel):
     license_sku_id: str = ""
     groups: List[str] = Field(default_factory=list)
     client_secret_expires_on: str = ""
+    suspend_on_retirement: bool = False
 
     @field_validator("tenant_id")
     @classmethod
