@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (pending)** — Feature 11 (Inventory), pass 11, a watchdog pickup. PR
+**PR [#3580](https://github.com/thegspiro/the-logbook/pull/3580)** (branch
+`claude/security-review-inventory-p11`) — Feature 11 (Inventory), pass 11, a watchdog pickup. PR
 #3579 (Feature 10, Documents & legal, pass 11) had already merged, CI green.
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
 returned 0 before this iteration started; row 11 was confirmed the next
