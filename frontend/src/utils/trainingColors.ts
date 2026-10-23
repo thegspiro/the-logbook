@@ -29,6 +29,27 @@ export const getTrainingStatusColor = (status: string) => {
   }
 };
 
+const TRAINING_STATUS_LABELS: Record<string, string> = {
+  scheduled: 'Scheduled',
+  in_progress: 'In progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  failed: 'Failed',
+  active: 'Active',
+  [SubmissionStatus.PENDING_REVIEW]: 'Pending review',
+  [SubmissionStatus.APPROVED]: 'Approved',
+  [SubmissionStatus.REJECTED]: 'Rejected',
+  [SubmissionStatus.REVISION_REQUESTED]: 'Revision requested',
+};
+
+/**
+ * The words for a status the badge above colours. My Training printed the
+ * stored code ("completed", "in progress") with only its first underscore
+ * replaced (W79-5); an unknown status still reads as itself.
+ */
+export const getTrainingStatusLabel = (status: string): string =>
+  TRAINING_STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
+
 /**
  * Returns a Tailwind class for a progress bar based on completion state.
  *

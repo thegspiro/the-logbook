@@ -44,7 +44,12 @@ import { MySkillTestsList } from '../components/training/MySkillTestsList';
 import { useAuthStore } from '../stores/authStore';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../stores/practicalSkillsStore';
 import { buildUpcomingItems, UPCOMING_WINDOW_DAYS } from '../utils/trainingUpcoming';
-import { getProgressBarColor, getPercentageBarColor, getTrainingStatusColor } from '../utils/trainingColors';
+import {
+  getProgressBarColor,
+  getPercentageBarColor,
+  getTrainingStatusColor,
+  getTrainingStatusLabel,
+} from '../utils/trainingColors';
 
 // ==================== Helpers ====================
 
@@ -946,7 +951,7 @@ const MyTrainingPage: React.FC = () => {
                             </span>
                           ) : (
                             <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(r.status)}`}>
-                              {r.status.replace('_', ' ')}
+                              {getTrainingStatusLabel(r.status)}
                             </span>
                           )}
                         </td>
@@ -1036,7 +1041,7 @@ const MyTrainingPage: React.FC = () => {
                     )}
                     <div className="mb-2 flex items-center justify-between">
                       <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(e.status)}`}>
-                        {e.status.replace('_', ' ')}
+                        {getTrainingStatusLabel(e.status)}
                       </span>
                       <span className="text-theme-text-primary text-sm font-semibold">
                         {Math.round(e.progress_percentage)}%
@@ -1068,7 +1073,7 @@ const MyTrainingPage: React.FC = () => {
                               </span>
                             </div>
                             <span className={`rounded-sm px-1.5 py-0.5 ${getTrainingStatusColor(r.status)}`}>
-                              {r.status.replace('_', ' ')}
+                              {getTrainingStatusLabel(r.status)}
                             </span>
                           </div>
                         ))}
@@ -1207,7 +1212,7 @@ const MyTrainingPage: React.FC = () => {
                         <td className="px-4 py-2 whitespace-nowrap">{formatHours(s.hours_completed)}</td>
                         <td className="px-4 py-2">
                           <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(s.status)}`}>
-                            {s.status.replace('_', ' ')}
+                            {getTrainingStatusLabel(s.status)}
                           </span>
                         </td>
                         <td className="text-theme-text-muted px-4 py-2 text-xs whitespace-nowrap">

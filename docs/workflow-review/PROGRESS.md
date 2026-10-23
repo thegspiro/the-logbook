@@ -142,7 +142,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ✅     |
 | W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ✅     |
 | W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ✅     |
-| W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ⬜     |
+| W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ✅     |
 
 ---
 
@@ -167,10 +167,9 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   … Powered by The Logbook · End-to-end encrypted · Self-hosted ·
   HIPAA-aware") prints under the apparatus check-in sheet and the shift
   report (W37-3).
-- **W79** — tap targets under 44px on the onboarding Modules, Ranks &
-  Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
-  screen's "Forgot your password?", Privacy and Terms links (W02-5), and
-  "Back to Login" on the forgot-password page (36px, W03).
+- **A fresh install** — tap targets under 44px on the onboarding Modules,
+  Ranks & Positions and Apparatus steps at 390px wide (W01-13); setup cannot
+  be replayed on an installed department, so W79 could not drive it.
 - **Any run touching the app shell** — nothing keeps `TopNavigation` and
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
@@ -184,10 +183,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
   migrations.
-- **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
-  "Read this version" summary are 20px tall (W54-6).
-- **W79** — the checklist builder's header and chip controls are 30–40px tall
-  at 390×844, and its drag handles 20px (W46-18).
 - **W33 / W34** — the shift-assignment notice names the equipment checklists
   but opens the schedule rather than My Checklists, and prints the shift date
   as `2026-09-30` (W46-16).
@@ -233,7 +228,46 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   while the two charts and their totals are now whole local days; read from
   code (W78).
 
+- **Any screen printing a status** — ten screens still print a stored code
+  with `status.replace('_', ' ')`, which also replaces only the first
+  underscore: member list, applicant pipeline, action items, minutes, member
+  training history and profile, `MyTrainingHistory`, `MobileItemCard`. W79
+  fixed My Training only (W79-5).
+
 ## Log
+
+### W79 — Phone pass: W08, W19, W24, W33, W39 and W70 at 390×844 — 2026-10-23
+
+Driven as: anonymous, `admin`, `member`, `training_officer`,
+`scheduling_officer`, `quartermaster` and a newly added member, all at 390×844.
+
+Held:
+
+- all six flows complete on a phone, each double-click acting once;
+- every result was read back from the other role or after a reload.
+
+Fixed:
+
+- W79-2 (MED — Admin Hours management was 929px wide).
+- W79-3 (MED — Pending Review's actions were off-screen).
+- W79-9 (MED — the checklist builder's section heading was 18px wide;
+  W46-18's small controls).
+- W79-1 (LOW — sign-in, forgot-password and legal links; W02-5, W03, W54-6).
+- W79-4 (LOW — event page controls).
+- W79-5 (LOW — My Training status codes).
+- W79-6 (LOW — training review controls).
+- W79-7 (LOW — scheduling controls and names).
+- W79-8 (LOW — inventory links and the confirmation wording).
+
+Flagged: W79-10 (LOW — the inventory dashboard's attention tile and queue
+disagree).
+
+Still open: W08-6, now 25 refused requests; W01-13, not drivable.
+
+Gate: typecheck clean; lint clean with an 8 GB heap; 1,061 tests across the
+touched pages pass.
+
+Next: none. W79 was the last activity of the rotation.
 
 ### W78 — Platform administration — 2026-10-22
 

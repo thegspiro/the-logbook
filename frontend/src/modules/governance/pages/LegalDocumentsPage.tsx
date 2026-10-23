@@ -56,7 +56,9 @@ const RevisionCard: React.FC<{
       <p className="text-theme-text-muted text-xs">Effective date: {revision.effectiveDate}</p>
     ) : null}
     <details>
-      <summary className="text-theme-accent-red cursor-pointer text-sm font-medium">Read the proposed text</summary>
+      <summary className="text-theme-accent-red touch:py-3 cursor-pointer text-sm font-medium">
+        Read the proposed text
+      </summary>
       <pre className="text-theme-text-secondary bg-theme-surface-secondary mt-3 max-h-96 overflow-auto rounded-md p-3 text-xs leading-5 whitespace-pre-wrap">
         {revision.body}
       </pre>
@@ -314,7 +316,7 @@ const LegalDocumentsPage: React.FC = () => {
                 href={active.publicPath}
                 target="_blank"
                 rel="noreferrer"
-                className="text-theme-accent-red flex items-center gap-1 text-sm font-medium hover:underline"
+                className="text-theme-accent-red touch:min-h-11 flex items-center gap-1 text-sm font-medium hover:underline"
               >
                 Open {active.publicPath}
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -338,7 +340,7 @@ const LegalDocumentsPage: React.FC = () => {
                     : ' No effective date is shown to members.'}
                 </p>
                 <details>
-                  <summary className="text-theme-accent-red cursor-pointer text-sm font-medium">
+                  <summary className="text-theme-accent-red touch:py-3 cursor-pointer text-sm font-medium">
                     Read the published text
                   </summary>
                   <pre className="text-theme-text-secondary bg-theme-surface-secondary mt-3 max-h-96 overflow-auto rounded-md p-3 text-xs leading-5 whitespace-pre-wrap">
@@ -425,7 +427,7 @@ const LegalDocumentsPage: React.FC = () => {
                     </div>
                     <p className="text-theme-text-secondary text-sm leading-6">{revision.changeNote}</p>
                     <details>
-                      <summary className="text-theme-accent-red cursor-pointer text-sm font-medium">
+                      <summary className="text-theme-accent-red touch:py-3 cursor-pointer text-sm font-medium">
                         Read this version
                       </summary>
                       <pre className="text-theme-text-secondary bg-theme-surface mt-3 max-h-96 overflow-auto rounded-md p-3 text-xs leading-5 whitespace-pre-wrap">

@@ -80,13 +80,16 @@ const LegalPage: React.FC = () => {
     >
       <div className="mx-auto max-w-3xl">
         <nav aria-label="Legal pages">
-          <Link to="/login" className="text-theme-accent-red text-sm font-medium hover:underline">
+          <Link
+            to="/login"
+            className="text-theme-accent-red touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline"
+          >
             &larr; Back to sign in
           </Link>
           <span className="text-theme-text-muted mx-3">|</span>
           <Link
             to={isPrivacy ? '/terms' : '/privacy'}
-            className="text-theme-accent-red text-sm font-medium hover:underline"
+            className="text-theme-accent-red touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline"
           >
             {isPrivacy ? 'Terms of Service' : 'Privacy Policy'}
           </Link>

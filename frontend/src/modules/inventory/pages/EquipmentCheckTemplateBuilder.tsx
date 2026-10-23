@@ -4237,13 +4237,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           id={anchorId}
           ref={sortableRef}
           style={sortableStyle}
-          className={`bg-theme-surface-secondary border-theme-surface-border flex items-center gap-2.5 border-b px-4 py-2.5 ${
+          className={`bg-theme-surface-secondary border-theme-surface-border flex flex-wrap items-center gap-2.5 border-b px-4 py-2.5 ${
             isFlagged ? 'border-l-[3px] border-l-amber-500 bg-amber-500/[0.06]' : ''
           }`}
         >
           <button
             type="button"
-            className="text-theme-text-muted/70 hover:text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
+            className="text-theme-text-muted/70 hover:text-theme-text-muted touch-target-phone flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
             aria-label={comp.id ? 'Drag to reorder section among siblings' : 'Save before dragging this section'}
             disabled={!comp.id}
             title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling sections'}
@@ -4252,11 +4252,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <GripVertical className="h-4 w-4" />
           </button>
           <Type className="text-theme-text-muted h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          {/* The phone-wide `input { min-width: 0 }` in index.css overrides
+              min-w here, and the row squeezed this field to 18px (W79-9). A
+              flex basis is not overridden, so it holds and the row wraps. */}
           <input
             id={`comp-name-${key}`}
             type="text"
             aria-label="Section heading"
-            className="text-theme-text-secondary placeholder:text-theme-text-muted min-w-[140px] flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[11px] font-bold tracking-[0.1em] uppercase outline-none focus:border-blue-400"
+            className="text-theme-text-secondary placeholder:text-theme-text-muted touch:min-h-11 min-w-[140px] flex-[1_1_140px] rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[11px] font-bold tracking-[0.1em] uppercase outline-none focus:border-blue-400"
             placeholder="Section heading…"
             value={comp.name}
             onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
@@ -4331,7 +4334,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           )}
           <button
             type="button"
-            className="text-theme-text-muted/70 hover:text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
+            className="text-theme-text-muted/70 hover:text-theme-text-muted touch-target-phone flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
             aria-label={
               comp.id ? 'Drag to reorder compartment among siblings' : 'Save before dragging this compartment'
             }
@@ -5194,7 +5197,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     key={value}
                     type="button"
                     onClick={() => updateForm({ checkTiming: value })}
-                    className={`min-h-10 rounded-md px-2 text-[13px] transition-colors ${form.checkTiming === value ? 'bg-theme-surface text-theme-text-primary font-semibold shadow-sm ring-1 ring-blue-500/20' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                    className={`touch:min-h-11 min-h-10 rounded-md px-2 text-[13px] transition-colors ${form.checkTiming === value ? 'bg-theme-surface text-theme-text-primary font-semibold shadow-sm ring-1 ring-blue-500/20' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                     aria-pressed={form.checkTiming === value}
                   >
                     {label}
@@ -5230,7 +5233,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 {POSITIONS.map((pos) => (
                   <label
                     key={pos}
-                    className={`flex min-h-8.5 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors ${form.assignedPositions.includes(pos) ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'}`}
+                    className={`touch:min-h-11 flex min-h-8.5 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors ${form.assignedPositions.includes(pos) ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'}`}
                   >
                     <input
                       type="checkbox"
@@ -5298,14 +5301,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   type="button"
                   onClick={exportTemplateJson}
                   disabled={compartments.length === 0}
-                  className="btn-secondary flex min-h-9 items-center gap-1.5 px-3 text-[13px] disabled:opacity-40"
+                  className="btn-secondary touch:min-h-11 flex min-h-9 items-center gap-1.5 px-3 text-[13px] disabled:opacity-40"
                 >
                   <Download className="h-3.5 w-3.5" /> Export JSON
                 </button>
                 <button
                   type="button"
                   onClick={() => importFileRef.current?.click()}
-                  className="btn-secondary flex min-h-9 items-center gap-1.5 px-3 text-[13px]"
+                  className="btn-secondary touch:min-h-11 flex min-h-9 items-center gap-1.5 px-3 text-[13px]"
                 >
                   <Upload className="h-3.5 w-3.5" /> Import JSON
                 </button>
@@ -5313,7 +5316,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setCloneOpen(true)}
-                    className="btn-secondary flex min-h-9 items-center gap-1.5 px-3 text-[13px] disabled:opacity-50"
+                    className="btn-secondary touch:min-h-11 flex min-h-9 items-center gap-1.5 px-3 text-[13px] disabled:opacity-50"
                   >
                     <Copy className="h-3.5 w-3.5" /> Clone
                   </button>
@@ -5566,7 +5569,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     <button
       type="button"
       onClick={() => void handleLeave()}
-      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary flex-shrink-0 rounded-md p-2 transition-colors"
+      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary touch-target-phone flex-shrink-0 rounded-md p-2 transition-colors"
       title="Back to templates"
       aria-label="Back to templates"
     >
@@ -5578,7 +5581,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       type="text"
       aria-label="Template name"
       placeholder="e.g. Engine Daily Check"
-      className="text-theme-text-primary placeholder:text-theme-text-muted hover:border-theme-surface-border focus:bg-theme-input-bg min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-lg font-bold outline-none focus:border-blue-400 sm:max-w-[420px] sm:min-w-[200px] sm:text-xl"
+      className="text-theme-text-primary placeholder:text-theme-text-muted hover:border-theme-surface-border focus:bg-theme-input-bg touch:min-h-11 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-lg font-bold outline-none focus:border-blue-400 sm:max-w-[420px] sm:min-w-[200px] sm:text-xl"
       value={form.name}
       onChange={(e) => updateForm({ name: e.target.value })}
     />
@@ -5617,7 +5620,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       type="button"
       onClick={() => setDrawerOpen(true)}
       aria-label="Details"
-      className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+      className="btn-secondary touch:min-h-11 flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
     >
       <SlidersHorizontal className="h-4 w-4" />
       <span className="hidden sm:inline">Details</span>
@@ -5627,7 +5630,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     <details className="relative">
       <summary
         aria-label="Tools"
-        className="btn-secondary hover:bg-theme-surface-secondary flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium"
+        className="btn-secondary hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium"
       >
         <MoreHorizontal className="h-4 w-4" />
         <span className="hidden sm:inline">Tools</span>
@@ -5637,7 +5640,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => setCloneOpen(true)}
-            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
+            className="hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
           >
             <Copy className="h-4 w-4" /> Clone checklist
           </button>
@@ -5646,28 +5649,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           type="button"
           onClick={exportTemplateJson}
           disabled={compartments.length === 0}
-          className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
+          className="hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
         >
           <Download className="h-4 w-4" /> Export JSON
         </button>
         <button
           type="button"
           onClick={() => importFileRef.current?.click()}
-          className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+          className="hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
         >
           <Upload className="h-4 w-4" /> Import JSON
         </button>
         <button
           type="button"
           onClick={() => csvImportRef.current?.click()}
-          className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+          className="hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
         >
           <Upload className="h-4 w-4" /> Import spreadsheet
         </button>
         <a
           href={equipmentCheckService.getCsvSampleUrl()}
           download
-          className="hover:bg-theme-surface-secondary flex min-h-10 items-center gap-2 rounded-md px-3 text-sm"
+          className="hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 items-center gap-2 rounded-md px-3 text-sm"
         >
           <Download className="h-4 w-4" /> Download CSV sample
         </a>
@@ -5675,7 +5678,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowInventoryMatch(true)}
-            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+            className="hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
           >
             <Link2 className="h-4 w-4" /> Link to inventory ({coverage.linked}/{coverage.linkable})
           </button>
@@ -5687,7 +5690,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               setShowChangelog(true);
               void loadChangelog();
             }}
-            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+            className="hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
           >
             <Clock className="h-4 w-4" /> Change history
           </button>
@@ -5697,7 +5700,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={() => setShowPreview(true)}
             disabled={compartments.length === 0}
-            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
+            className="hover:bg-theme-surface-secondary touch:min-h-11 flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
           >
             <Eye className="h-4 w-4" /> Preview
           </button>
@@ -5714,7 +5717,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         onClick={() => void handleSave(false)}
         disabled={saving}
         aria-label={saving ? 'Saving draft' : 'Save draft'}
-        className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+        className="btn-secondary touch:min-h-11 flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save draft'}</span>
@@ -5752,7 +5755,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             const first = blockers[0];
             if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget, first.addKey);
           }}
-          className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-500/25 dark:text-amber-400"
+          className="touch:min-h-11 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-500/25 dark:text-amber-400"
         >
           {blockers.length} to fix
         </button>
@@ -5806,7 +5809,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           key={key}
           type="button"
           onClick={() => setDrawerOpen(true)}
-          className={`flex min-h-[30px] max-w-[280px] items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors ${
+          className={`touch:min-h-11 flex min-h-[30px] max-w-[280px] items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors ${
             set
               ? 'border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover font-medium'
               : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover border-dashed'
@@ -5898,7 +5901,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleSave(true)}
               disabled={saving || !publishReady}
-              className="btn-primary flex min-h-10 shrink-0 items-center gap-2 px-3.5 text-sm font-semibold"
+              className="btn-primary touch:min-h-11 flex min-h-10 shrink-0 items-center gap-2 px-3.5 text-sm font-semibold"
             >
               <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Publish now
             </button>
@@ -5924,7 +5927,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   onClick={
                     expandedCompartments.size === compartments.length ? collapseAllCompartments : expandAllCompartments
                   }
-                  className="btn-secondary flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium"
+                  className="btn-secondary touch:min-h-11 flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium"
                 >
                   <ChevronsUpDown className="h-3.5 w-3.5" />
                   {expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
@@ -5934,7 +5937,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPresetPicker(!showPresetPicker)}
-                  className="flex min-h-8 items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-2.5 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                  className="touch:min-h-11 flex min-h-8 items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-2.5 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
                 >
                   <Truck className="h-3.5 w-3.5" />
                   Vehicle preset
@@ -5944,7 +5947,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 disabled={addingSection}
                 onClick={() => void addSectionHeader()}
-                className="btn-secondary flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium disabled:opacity-50"
+                className="btn-secondary touch:min-h-11 flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium disabled:opacity-50"
               >
                 <Type className="h-3.5 w-3.5" />
                 Section
@@ -5953,7 +5956,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 disabled={addingCompartment}
                 onClick={() => void addCompartment()}
-                className="btn-secondary flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium disabled:opacity-50"
+                className="btn-secondary touch:min-h-11 flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium disabled:opacity-50"
               >
                 <Package className="h-3.5 w-3.5" />
                 Location
@@ -5961,7 +5964,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => csvImportRef.current?.click()}
-                className="btn-secondary flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium"
+                className="btn-secondary touch:min-h-11 flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium"
               >
                 <Upload className="h-3.5 w-3.5" />
                 Import
@@ -6094,7 +6097,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 disabled={addingCompartment}
                 onClick={() => void addCompartment()}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors disabled:opacity-50"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface touch:min-h-11 flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors disabled:opacity-50"
               >
                 <Package className="h-3.5 w-3.5" /> Add location
               </button>
@@ -6102,14 +6105,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 disabled={addingSection}
                 onClick={() => void addSectionHeader()}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors disabled:opacity-50"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface touch:min-h-11 flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors disabled:opacity-50"
               >
                 <Type className="h-3.5 w-3.5" /> Add section
               </button>
               <button
                 type="button"
                 onClick={() => csvImportRef.current?.click()}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface touch:min-h-11 flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors"
               >
                 <Upload className="h-3.5 w-3.5" /> Import spreadsheet
               </button>
@@ -6133,7 +6136,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   type="button"
                   onClick={() => setRail(value)}
                   aria-pressed={rail === value}
-                  className={`flex min-h-9 items-center justify-center gap-1.5 rounded-md text-[13px] font-semibold transition-colors ${
+                  className={`touch:min-h-11 flex min-h-9 items-center justify-center gap-1.5 rounded-md text-[13px] font-semibold transition-colors ${
                     rail === value
                       ? 'bg-theme-surface text-theme-text-primary shadow-sm'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -6242,7 +6245,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPreview(true)}
-                className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+                className="btn-secondary touch:min-h-11 flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
               >
                 <Smartphone className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">Crew view</span>
@@ -6250,7 +6253,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowBlockerSheet(true)}
-                className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+                className="btn-secondary touch:min-h-11 flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
               >
                 <AlertTriangle className="h-4 w-4" aria-hidden="true" />
                 {blockers.length === 0 ? 'Checks' : 'Review'}

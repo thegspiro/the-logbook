@@ -156,8 +156,13 @@ const ApplyToPipelinePicker: React.FC<{
   return (
     <div className="mb-3">
       {!alwaysOpen && (
-        <label className="text-theme-text-secondary inline-flex cursor-pointer items-center gap-2 text-xs">
-          <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} />
+        <label className="text-theme-text-secondary touch:min-h-11 inline-flex cursor-pointer items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={enabled}
+            onChange={(e) => toggle(e.target.checked)}
+          />
           <span>Apply this training toward a pipeline requirement</span>
         </label>
       )}
@@ -308,7 +313,7 @@ const ReviewPanel: React.FC<{
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
           onClick={() => setAction('approve')}
-          className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             action === 'approve'
               ? 'bg-green-700 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -322,7 +327,7 @@ const ReviewPanel: React.FC<{
         {!submission.crew_batch_id && (
           <button
             onClick={() => setAction(SubmissionStatus.REVISION_REQUESTED)}
-            className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               action === SubmissionStatus.REVISION_REQUESTED
                 ? 'bg-orange-700 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -334,7 +339,7 @@ const ReviewPanel: React.FC<{
         )}
         <button
           onClick={() => setAction('reject')}
-          className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             action === 'reject'
               ? 'bg-red-800 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -365,7 +370,7 @@ const ReviewPanel: React.FC<{
         <div className="mb-3">
           <button
             onClick={() => setShowOverrides(!showOverrides)}
-            className="text-theme-text-muted hover:text-theme-text-primary flex items-center space-x-1 text-xs"
+            className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 flex items-center space-x-1 text-xs"
           >
             <Settings className="h-3 w-3" />
             <span>Override values before approving</span>
