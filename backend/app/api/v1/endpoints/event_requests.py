@@ -89,6 +89,7 @@ from app.services.event_request_service import (
     sync_staffing_shift_date,
 )
 from app.services.forms_service import FormsService
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import format_in_org_timezone
 
@@ -1772,8 +1773,10 @@ async def update_email_template(
     if not template:
         raise HTTPException(status_code=404, detail="Email template not found")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(template, field, value)
+    try:
+        apply_updates(template, data.model_dump(exclude_unset=True))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     await db.commit()
     await db.refresh(template)
