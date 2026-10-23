@@ -11,10 +11,10 @@ string. A member who types ``{x}`` into a search box turns
 into a ``KeyError`` raised from the logging line, and the request fails on its
 way to recording what it was doing. CLAUDE.md Pitfall #33 states the rule.
 
-This sweep covers that one shape because it is the shape a static check can
-decide. The other half of Pitfall #33 — an f-string that splices user text
-carrying a newline into the text and file sinks — depends on where the value
-came from, which the AST does not say, so it remains review discipline.
+A forged line break is not this file's concern: the text and file sinks escape
+every message themselves (``escape_log_message`` in ``app/core/logging.py``,
+asserted by ``tests/test_logging.py``). A double format is the one failure the
+sink cannot reach, because it raises before the message is ever written.
 
 Matching is done on the AST, in the manner of ``test_csv_writer_sweep.py``, so
 a docstring or comment quoting the banned shape is not mistaken for one.

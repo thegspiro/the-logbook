@@ -151,7 +151,7 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **JSON column deep copy** — code modifying nested keys in JSON columns uses `copy.deepcopy()` or `flag_modified()`, never `dict()` shallow copy
 - [ ] **New route registered in all three registries** — `APPLICATION_PAGES.md`, `testingRegistry.ts` and `e2e/mobile-route-inventory.ts`, policed by three different CI jobs (see Pitfall #30a)
 - [ ] **DB-backed tests marked `integration`** — a `db_session` test under a module-level `pytest.mark.unit` runs in the no-database job and fails on the fixture (see Pitfall #30b)
-- [ ] **User text logged with `{!r}`** — never interpolated into a log message with an f-string, and never an f-string message combined with logger arguments (see Pitfall #33)
+- [ ] **Log messages formatted once** — never an f-string message combined with logger arguments; an id rather than user-supplied text where the id is enough (see Pitfall #33)
 - [ ] **New dependency verified** — name checked against the registry and the project's own docs, pinned like its neighbours, and named in the PR Summary (see Pitfall #34)
 - [ ] **Migration handles existing rows** — a tightened column, new unique or foreign key, or required column settles the rows already there, and a test proves it with rows present (see Pitfall #35)
 - [ ] **Safe to run twice** — a new webhook handler, scheduled task or retried write names the id that makes a second run a no-op, constrains it, and tests a double delivery (see Pitfall #36)
@@ -1631,61 +1631,49 @@ named in `ALLOWED` in `tests/test_account_status_gates.py` with that reason.
 That test sweeps `app/` and fails on any other literal `== ACTIVE` against
 `User.status`.
 
-### 33. A Value a User Typed Is Logged with `{!r}`, Never Interpolated Raw _(2026-10-23)_
+### 33. A Log Message Is Formatted Once, and Carries Ids Rather Than Free Text _(2026-10-23)_
 
-Two of the three Loguru sinks `app/core/logging.py` installs write the message
-exactly as rendered: the text stdout handler and `logs/app.log`. Only the JSON
-sink escapes, because `json.dumps` does. A newline in a logged value therefore
-starts a new line that is indistinguishable from one the application wrote:
+**Line forgery is handled at the sink, so do not hand-escape for it.** The text
+stdout sink and `logs/app.log` print every message through
+`escape_log_message` in `app/core/logging.py`, which renders `\n`, `\r`, other
+control characters and the Unicode line separators as visible escapes. A
+member who types `bob\nINFO | Admin login succeeded` into a search box gets
+one line with a literal `\n` in it, not a forged second record — whatever the
+call site does. The JSON sink escapes through `json.dumps`. Before that fix the
+two text sinks wrote messages raw, and log injection is the class Veracode's
+2025 GenAI code security report found generated code leaving open in 88% of the
+cases that called for a defence, so do not undo the escaping or add a text sink
+without it; `tests/test_logging.py` asserts both sinks carry it.
 
-```python
-v = "bob\nINFO | Admin login succeeded for chief"
-logger.info(f"Search by {v}")
-# INFO | Search by bob
-# INFO | Admin login succeeded for chief      <- forged, in the text and file logs
-```
-
-Those logs are what an incident is reconstructed from, so a member who can type
-into a search box, a name field or a header can plant entries in the record of
-their own activity. This is the most-missed class in Veracode's 2025 GenAI
-code security report — generated code left log injection open in 88% of the
-cases that called for a defence — and it looks entirely correct in review.
-
-There is a second failure, and it is a crash rather than a forgery. Loguru
-passes the message through `str.format` whenever positional or keyword
-arguments are supplied, so an f-string that interpolates user text **and** also
-passes arguments re-parses that text as a format string. A `{` in the value
-raises `KeyError` or `IndexError` at the call site, and the request fails on the
+**What the sink cannot fix is a message formatted twice.** Loguru passes the
+message through `str.format` whenever positional or keyword arguments are
+supplied, so an f-string that splices in user text **and** also passes
+arguments re-parses that text as a format string. A `{` in the value raises
+`KeyError` or `IndexError` at the call site, and the request fails on the
 logging line, not on anything it was doing.
 
 ```python
-# WRONG — raw newline reaches the text and file sinks
-logger.info(f"Search by {search_term}")
-
 # WRONG — user text is re-parsed as a format string; "{x}" raises KeyError
 logger.info(f"Search by {search_term} in {{}}", org_id)
 
-# CORRECT — repr() escapes \n, \r and other control characters
+# CORRECT — one formatting pass
 logger.info("Search by {!r} in {}", search_term, org_id)
 
 # BETTER, where it answers the question — an id instead of the free text
 logger.info("Search by user {} in {}", user_id, org_id)
 ```
 
-Logging the id is often the better choice anyway: free text is where PHI turns
-up, and a log line rarely needs it.
+`{!r}` is still worth using for free text: the quotes show where a value starts
+and ends, which a trailing space or an empty string otherwise hides.
 
-**Rule:** a value that came from a request, an import file, an email, or any
-column a user can write is passed to the logger as an argument formatted with
-`{!r}`, never interpolated into the message with an f-string, `%` or `+`. Never
-combine an f-string message with logger arguments. Values the code itself
-produced — ids, counts, enum values, status codes — may use `{}`.
+**Prefer the id to the text.** Free text is where PHI turns up, and a log line
+rarely needs it to answer the question it exists for.
 
-`tests/test_log_call_shape.py` enforces the second half: it sweeps `app/` and
-`scripts/` and fails on any log call that passes formatting arguments to an
-f-string message. The first half is not enforceable by the same means — whether
-a spliced value came from a user is not visible in the AST, and more than six
-hundred f-string log calls already exist — so it remains review discipline.
+**Rule:** never combine an f-string message with logger arguments — pass every
+value as an argument, or none. Log an id rather than user-supplied text where
+the id answers the question. `tests/test_log_call_shape.py` enforces the first
+half with an AST sweep over `app/` and `scripts/`; the second is review
+discipline.
 
 ### 34. A Dependency or API You Remember Is Checked Against the Real One First _(2026-10-23)_
 
