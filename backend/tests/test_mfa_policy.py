@@ -21,6 +21,8 @@ from app.core.error_codes import ErrorCode
 from app.services import mfa_policy
 from app.services.auth_service import AuthService
 
+pytestmark = pytest.mark.real_stepup
+
 NOW = datetime.now(timezone.utc)
 
 
@@ -425,3 +427,68 @@ def test_step_up_always_follows_the_permission_check():
 @pytest.mark.unit
 def test_dependencies_module_exposes_the_gate():
     assert dependencies.require_stepup is require_stepup
+
+
+@pytest.mark.unit
+class TestStepUpOverHttp:
+    """The dependency as FastAPI runs it, on a route shaped like the real ones."""
+
+    def _client(self, user):
+        from fastapi import Depends, FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.dependencies import get_current_user, require_permission
+        from app.core.database import get_db
+
+        app = FastAPI()
+
+        @app.post("/sensitive")
+        async def sensitive(
+            current_user=Depends(require_permission("settings.manage")),
+            _stepup=Depends(require_stepup),
+        ):
+            return {"ok": True}
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: MagicMock()
+        return AsyncClient(
+            transport=ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        )
+
+    async def test_refused_with_the_code_until_the_session_has_stepped_up(self):
+        user = _user({"settings.manage"})
+        async with self._client(user) as client:
+            with patch.object(
+                AuthService,
+                "get_session_for_token",
+                AsyncMock(return_value=_session(None)),
+            ):
+                refused = await client.post("/sensitive", cookies={"access_token": "t"})
+            with patch.object(
+                AuthService,
+                "get_session_for_token",
+                AsyncMock(return_value=_session(NOW)),
+            ):
+                allowed = await client.post("/sensitive", cookies={"access_token": "t"})
+
+        assert refused.status_code == 403
+        assert refused.json()["detail"] == "Please confirm your identity to continue."
+        assert refused.headers["x-stepup-required"] == "true"
+        assert allowed.status_code == 200
+
+    async def test_a_caller_without_the_permission_is_not_asked_to_step_up(self):
+        user = _user({"events.view"})
+        async with self._client(user) as client:
+            with patch.object(
+                AuthService,
+                "get_session_for_token",
+                AsyncMock(return_value=_session(None)),
+            ):
+                response = await client.post(
+                    "/sensitive", cookies={"access_token": "t"}
+                )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Insufficient permissions"
+        assert "x-stepup-required" not in response.headers

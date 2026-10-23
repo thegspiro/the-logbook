@@ -448,6 +448,18 @@ class PermissionChecker:
         )
 
 
+async def _stepup_is_fresh(db: AsyncSession, token: str | None) -> bool:
+    """Whether the session behind ``token`` re-verified within the step-up window."""
+    session = await AuthService(db).get_session_for_token(token) if token else None
+    verified = getattr(session, "stepup_verified_at", None)
+    if not isinstance(verified, datetime):
+        return False
+    if verified.tzinfo is None:
+        verified = verified.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - verified
+    return age.total_seconds() <= settings.STEPUP_WINDOW_MINUTES * 60
+
+
 async def require_stepup(
     authorization: str | None = Header(None),
     access_token: str | None = Cookie(None),
@@ -465,14 +477,8 @@ async def require_stepup(
     if not token and authorization:
         scheme, _, bearer = authorization.partition(" ")
         token = bearer if scheme.lower() == "bearer" and bearer else None
-    session = await AuthService(db).get_session_for_token(token) if token else None
-    verified = getattr(session, "stepup_verified_at", None)
-    if isinstance(verified, datetime):
-        if verified.tzinfo is None:
-            verified = verified.replace(tzinfo=timezone.utc)
-        age = datetime.now(timezone.utc) - verified
-        if age.total_seconds() <= settings.STEPUP_WINDOW_MINUTES * 60:
-            return current_user
+    if await _stepup_is_fresh(db, token):
+        return current_user
     raise CodedHTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Please confirm your identity to continue.",
