@@ -3221,6 +3221,8 @@ only bounds when automatic generation begins.
 
 ![New Pattern in Manual Setup, Weekly: Friday, Saturday and Sunday active, Separate day and night shifts ticked, Friday carrying only the night shift, Saturday both and Sunday only the day shift](./images/03-127-pattern-weekly-split.png)
 
+![The Weekend Duty Rotation weekly pattern in the pattern list, expanded: the sun and moon glyphs beside each covered weekday, and the weekly shifts listed as Sunday: Day, Friday: Night and Saturday: Day + Night](./images/03-128-pattern-list-glyphs.png)
+
 Select **Create Pattern** to save it.
 
 **A pattern needs a template.** Generating from a pattern with no template

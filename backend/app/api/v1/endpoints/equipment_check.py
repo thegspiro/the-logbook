@@ -799,6 +799,9 @@ async def update_item(
 
     service = EquipmentCheckService(db)
     changes = data.model_dump(exclude_unset=True)
+    # The change log is a JSON column, which cannot hold the `date` an
+    # expiration carries; the update itself keeps the typed values.
+    logged_changes = data.model_dump(mode="json", exclude_unset=True)
     try:
         item = await service.update_item(
             item_id,
@@ -823,7 +826,7 @@ async def update_item(
             entity_type="item",
             entity_id=item_id,
             entity_name=item.name,
-            changes=changes,
+            changes=logged_changes,
         )
         await db.commit()
     return item

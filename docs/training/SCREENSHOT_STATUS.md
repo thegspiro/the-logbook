@@ -9,16 +9,16 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**810 of 812 placeholders filled** (2 remaining).
+**812 of 814 placeholders filled** (2 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
 | [00-getting-started.md](./00-getting-started.md) | 26 | 0 |
 | [01-membership.md](./01-membership.md) | 42 | 0 |
 | [02-training.md](./02-training.md) | 93 | 0 |
-| [03-scheduling.md](./03-scheduling.md) | 112 | 0 |
+| [03-scheduling.md](./03-scheduling.md) | 113 | 0 |
 | [04-events-meetings.md](./04-events-meetings.md) | 79 | 0 |
-| [05-inventory.md](./05-inventory.md) | 111 | 2 |
+| [05-inventory.md](./05-inventory.md) | 112 | 2 |
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 31 | 0 |
 | [07-documents-forms.md](./07-documents-forms.md) | 39 | 0 |
 | [08-admin-reports.md](./08-admin-reports.md) | 98 | 0 |
@@ -32,5 +32,5 @@ regenerated wholesale, so that audit cannot live here.
 | [16-integrations.md](./16-integrations.md) | 16 | 0 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 7 | 0 |
 | [18-storefront.md](./18-storefront.md) | 7 | 0 |
-| **Total** | **810** | **2** |
+| **Total** | **812** | **2** |
 

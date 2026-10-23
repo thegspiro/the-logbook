@@ -1277,7 +1277,7 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
 | **Property return reminder** and **member dropped** notice | Two columns, **Item** and **Value**, with condition, serial number and asset tag as grey lines under the item. A missing value is left out          |
 | **Supplies to Replace** (weekly)                           | Supplies expiring on the apparatus, with a **Status** column. See [Shifts & Scheduling](./03-scheduling.md#alerts)                                  |
 
-![The weekly Supplies to Replace email at phone width: supplies on apparatus with replacement stock ready, the Status column showing a date with days left for an expiring supply and Restock reported with the crew's note, and the shelf lots expiring below](./images/05-136-supplies-to-replace-email-phone.png)
+![The weekly Supplies to Replace email at phone width: supplies on apparatus with replacement stock ready, the Status column showing a date with days left for an expiring supply, Restock reported with the crew's note, and Short with how many are aboard against the target, and the shelf lots expiring below](./images/05-136-supplies-to-replace-email-phone.png)
 
 ---
 
@@ -3039,6 +3039,8 @@ value is refused rather than guessed).
 ![Medical Supplies with a supply's shelf count followed by how many are on trucks, and a Next expiry that names the truck carrying the soonest-expiring lot](./images/05-133-medical-supplies-on-trucks.png)
 
 ![The medical supply form with Kept on apparatus only ticked and its explanation, for a supply that never goes through the stock room](./images/05-134-medical-supply-apparatus-only.png)
+
+![The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 1 shelf and 1 on trucks, and the list carrying a shelf lot beside the tourniquet carried on Rescue 7](./images/05-137-medical-expiring-split.png)
 
 ### Deleting a medical supply category
 
