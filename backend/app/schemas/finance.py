@@ -965,6 +965,34 @@ class ApprovalChainUpdate(BaseModel):
         return self
 
 
+class ApprovalRouteStepResponse(BaseModel):
+    """One step a request would wait on, as its timeline would describe it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    name: str
+    step_order: int
+    step_type: str
+    # Who the step waits on; null on a notification step, which waits on
+    # nobody.
+    assignee_label: Optional[str] = None
+    # The amount falls under the step's auto-approve limit.
+    auto_approved: bool = False
+
+
+class ApprovalRoutePreviewResponse(BaseModel):
+    """Who a request would wait on if it were submitted now."""
+
+    model_config = _RESPONSE_CONFIG
+
+    chain_name: Optional[str] = None
+    # No chain applies: a finance approver decides by hand.
+    manual: bool
+    steps: list[ApprovalRouteStepResponse] = []
+    # At or over the department's dual-approval threshold.
+    second_approver_required: bool = False
+
+
 class ApprovalChainResponse(UTCResponseBase):
     """Approval chain response"""
 
