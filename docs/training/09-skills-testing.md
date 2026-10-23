@@ -1360,6 +1360,11 @@ it open** leaves the test as it was.
 
 ![The Cancel unfinished test dialog, naming the candidate and the test and saying anything already scored is kept but no result is recorded, with an optional reason typed in and the Keep it open and Cancel test buttons](./images/09-30-cancel-unfinished-test-dialog.png)
 
+The two buttons at the foot are the whole decision. **Keep it open** closes the
+dialog and changes nothing, and **Cancel test** closes the test out.
+
+![The foot of the Cancel unfinished test dialog: the Keep it open button, which leaves the test as it was, beside the amber Cancel test button](./images/09-32-keep-it-open-button.png)
+
 A **draft** test, one that was set up but never started, has the same cancel
 icon and opens the same dialog. Nothing has been scored on it, so there is
 nothing to keep.
