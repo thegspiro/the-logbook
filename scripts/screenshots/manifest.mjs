@@ -22032,11 +22032,15 @@ export const SHOTS = [
   {
     id: "03-126-my-checklists-phone",
     doc: "03-scheduling.md",
-    line: 2370,
+    line: 2371,
     anchor: "My Checklists on a phone",
     alt: "My Checklists on a phone: day headings with the overdue marker, each row's Start or End badge, and the ⋯ menu open over Apparatus Inventory",
     route: "/inventory/checklists/my",
     viewport: "mobile",
+    // As the member: the seeder leaves the member's own unfiled checks on
+    // ended shifts, and an unenrolled administrator carries the two-factor
+    // grace banner on every page.
+    auth: "member",
     expect: "overdue",
     prepare: async (page) => {
       await page.waitForSelector("text=Engine Daily Check", {
