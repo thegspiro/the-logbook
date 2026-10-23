@@ -141,7 +141,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ✅     |
 | W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ✅     |
 | W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ✅     |
-| W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ⬜     |
+| W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ✅     |
 | W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ⬜     |
 
 ---
@@ -228,7 +228,36 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   of the W77 container and passed with `--max-old-space-size=8192`. CI's
   `ubuntu-latest` default is larger, but the margin is thin (W77).
 
+- **Platform analytics, a later pass** — the other "last 30 days" figures
+  (events, forms, documents, new users) are still a rolling `now - 30 days`,
+  while the two charts and their totals are now whole local days; read from
+  code (W78).
+
 ## Log
+
+### W78 — Platform administration — 2026-10-22
+
+Driven as: `admin` at 1280×900 and 390×844, and `member` for access.
+
+Held:
+
+- members are refused on the page and the API;
+- user, module and error totals match the data;
+- the export names the local date.
+
+Fixed:
+
+- W78-1 (MED — the trends ended on the previous UTC day and missed
+  everything since UTC midnight).
+- W78-2 (LOW — every module was badged Enabled).
+- W78-3 (MED — both charts drew 0px bars, and the counts were tooltip-only).
+
+Flagged: none.
+
+Gate: typecheck clean; lint clean with an 8 GB heap; 2 frontend and 26
+backend tests pass.
+
+Next: W79.
 
 ### W77 — The testing module and its printed report — 2026-10-22
 
