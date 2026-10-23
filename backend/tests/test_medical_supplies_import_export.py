@@ -686,6 +686,7 @@ class TestMedicalExports:
         today = date(2026, 10, 15)
         lot = SimpleNamespace(
             lot_number="L-1",
+            inventory_item_id="i-1",
             expiration_date=date(2026, 10, 20),
             quantity=4,
             received_date=None,
@@ -694,8 +695,16 @@ class TestMedicalExports:
             notes=None,
         )
         svc.get_lots_for_export = AsyncMock(return_value=[(lot, "Gauze", "Airway")])
+        svc.storage_paths_for = AsyncMock(
+            return_value={"i-1": "Supply Room › Cabinet B"}
+        )
+        svc.item_category_names = AsyncMock(return_value={})
+        checks = MagicMock()
+        checks.apparatus_expiring_stock = AsyncMock(return_value=[])
 
-        with patch.object(ms, "resolve_org_today", AsyncMock(return_value=today)):
+        with patch.object(
+            ms, "resolve_org_today", AsyncMock(return_value=today)
+        ), patch.object(ms, "EquipmentCheckService", return_value=checks):
             response = await ms.export_medical_lots_csv(
                 db=AsyncMock(), current_user=_user()
             )
@@ -707,6 +716,68 @@ class TestMedicalExports:
         assert record["Item"] == "Gauze"
         assert record["Days Until Expiration"] == "5"
         assert record["Quantity"] == "4"
+        assert record["Location"] == "In storage"
+        assert record["Where"] == "Supply Room › Cabinet B"
+
+    async def test_the_lot_export_lists_the_lots_aboard_the_trucks(self, svc):
+        """Shelf and truck lots in one list, soonest first, undated last."""
+        today = date(2026, 10, 15)
+        shelf = SimpleNamespace(
+            lot_number="GZ-1",
+            inventory_item_id="i-1",
+            expiration_date=date(2026, 12, 1),
+            quantity=6,
+            received_date=date(2026, 9, 1),
+            storage_location="Cabinet B",
+            unit_cost=None,
+            notes=None,
+        )
+        svc.get_lots_for_export = AsyncMock(return_value=[(shelf, "Gauze", "Airway")])
+        svc.storage_paths_for = AsyncMock(return_value={})
+        svc.item_category_names = AsyncMock(return_value={"i-2": "Airway"})
+        truck = {
+            "inventory_item_id": "i-2",
+            "item_name": "Cannula",
+            "lot_number": "NC-7",
+            "quantity": 3,
+            "where": "Medic 1 › Main Compartment › Jump Bag",
+        }
+        checks = MagicMock()
+        checks.apparatus_expiring_stock = AsyncMock(
+            return_value=[
+                {**truck, "expiration_date": date(2026, 11, 1)},
+                {**truck, "lot_number": "NC-8", "expiration_date": None},
+            ]
+        )
+
+        with patch.object(
+            ms, "resolve_org_today", AsyncMock(return_value=today)
+        ), patch.object(ms, "EquipmentCheckService", return_value=checks):
+            response = await ms.export_medical_lots_csv(
+                db=AsyncMock(), current_user=_user()
+            )
+            text = await _body(response)
+
+        kwargs = checks.apparatus_expiring_stock.await_args.kwargs
+        assert kwargs["days_ahead"] is None
+        assert kwargs["include_undated"] is True
+        rows = list(csv.reader(io.StringIO(text)))
+        # Appended: the existing columns keep their positions.
+        assert rows[0][-3:] == ["Notes", "Location", "Where"]
+        records = [dict(zip(rows[0], row)) for row in rows[1:]]
+        assert [(r["Lot Number"], r["Location"]) for r in records] == [
+            ("NC-7", "On apparatus"),
+            ("GZ-1", "In storage"),
+            ("NC-8", "On apparatus"),
+        ]
+        first = records[0]
+        assert first["Category"] == "Airway"
+        assert first["Days Until Expiration"] == "17"
+        assert first["Where"] == "Medic 1 › Main Compartment › Jump Bag"
+        # A shelf-only field is blank on a truck row, not invented.
+        assert first["Received Date"] == ""
+        assert records[1]["Where"] == "Cabinet B"
+        assert records[2]["Days Until Expiration"] == ""
 
     async def test_the_template_carries_only_medical_rows(self):
         response = await ms.download_medical_import_template(current_user=_user())
