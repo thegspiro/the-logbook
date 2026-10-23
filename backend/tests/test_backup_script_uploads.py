@@ -216,14 +216,20 @@ class TestBucketNotice:
         self._uploads(env)
         _install_bucket_check(
             env,
-            '[{"organization_id": "org-1", "bucket": "dept-files", "files": 3}]',
+            '[{"organization_id": "org-1", "platform": "s3", "bucket": "dept-files",'
+            ' "files": 3}, {"organization_id": "org-2", "platform": "googledrive",'
+            ' "bucket": "0ADrive1234567890", "files": 1}]',
         )
 
         result = _run(env, "backup_uploads")
 
         assert result.returncode == 0, result.stderr + result.stdout
         assert "NOT in this backup" in result.stdout
-        assert "dept-files: 3 file(s) of organization org-1" in result.stdout
+        assert "s3 dept-files: 3 file(s) of organization org-1" in result.stdout
+        assert (
+            "googledrive 0ADrive1234567890: 1 file(s) of organization org-2"
+            in result.stdout
+        )
         log = Path(env["STUB_LOG"]).read_text()
         assert "migrate_uploads_to_s3.py --buckets" in log
 

@@ -116,6 +116,7 @@ _LEGACY_EMAIL_OAUTH_FIELDS = frozenset(
 
 _FILE_STORAGE_SECRET_FIELDS = frozenset(
     {
+        "google_drive_service_account_key",
         "google_drive_client_secret",
         "onedrive_client_secret",
         "s3_secret_access_key",
@@ -412,15 +413,27 @@ class FileStorageSettings(BaseModel):
         default="local",
         description="File storage platform: googledrive, onedrive, s3, local, other",
     )
-    # Google Drive
-    google_drive_client_id: Optional[str] = Field(
-        None, description="Google Drive OAuth Client ID"
+    # Google Drive (decision 32): a service account writing to a Shared Drive.
+    google_drive_service_account_key: Optional[str] = Field(
+        None,
+        description=(
+            "The service account's JSON key, as Google downloads it; "
+            "encrypted at rest and never returned"
+        ),
     )
-    google_drive_client_secret: Optional[str] = Field(
-        None, description="Google Drive OAuth Client Secret"
+    google_drive_shared_drive_id: Optional[str] = Field(
+        None, description="The Shared Drive the service account was added to"
     )
     google_drive_folder_id: Optional[str] = Field(
-        None, description="Google Drive root folder ID"
+        None, description="A folder in that Shared Drive for new files (optional)"
+    )
+    # Read by nothing, and accepted only so a client written before the
+    # service-account change can still save the form.
+    google_drive_client_id: Optional[str] = Field(
+        None, description="Unused: Google Drive signs in with a service account"
+    )
+    google_drive_client_secret: Optional[str] = Field(
+        None, description="Unused: Google Drive signs in with a service account"
     )
     # OneDrive / SharePoint
     onedrive_tenant_id: Optional[str] = Field(
@@ -452,6 +465,9 @@ class FileStorageSettings(BaseModel):
         """Return a copy with secret fields replaced by redaction markers."""
         copied: FileStorageSettings = self.model_copy(
             update={
+                "google_drive_service_account_key": _redact(
+                    self.google_drive_service_account_key
+                ),
                 "google_drive_client_secret": _redact(self.google_drive_client_secret),
                 "onedrive_client_secret": _redact(self.onedrive_client_secret),
                 "s3_secret_access_key": _redact(self.s3_secret_access_key),
@@ -465,6 +481,7 @@ class FileStorageSettings(BaseModel):
             update=dict.fromkeys(
                 (
                     "google_drive_client_id",
+                    "google_drive_shared_drive_id",
                     "google_drive_folder_id",
                     "onedrive_tenant_id",
                     "onedrive_client_id",
@@ -497,6 +514,10 @@ class FileStorageStatusResponse(BaseModel):
     container: Optional[str] = Field(
         None,
         description="The bucket or drive the last passed connection test used",
+    )
+    available_platforms: List[str] = Field(
+        default_factory=list,
+        description="The platforms this installation can switch files to, by label",
     )
     platform_connectable: bool = Field(
         False,

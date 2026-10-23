@@ -68,7 +68,11 @@ def manifest_directory() -> str:
 class Copy:
     organization_id: str
     old_path: str
-    ref: str
+    #: The org-first key the file keeps in the store.
+    key: str
+    #: Assigned when the file is copied, not when it is planned: a platform
+    #: may reserve a reference at the store (Drive), and a dry run must not.
+    ref: str = ""
     sha256: str = ""
 
 
@@ -172,7 +176,7 @@ def plan(refs: list[Reference], buckets: dict[str, RemoteBackend]) -> MigrationR
         if not os.path.isfile(real):
             report.missing.append(real)
             continue
-        planned[real] = Copy(ref.organization_id, real, backend.ref_for(key))
+        planned[real] = Copy(ref.organization_id, real, key)
     report.copies = list(planned.values())
     return report
 
@@ -183,6 +187,8 @@ def _copy_verified(backend: RemoteBackend, copy: Copy) -> str:
     accepted, one with different contents is refused."""
     plaintext = file_encryption.read_plaintext(copy.old_path)
     expected = _sha256(plaintext)
+    if not copy.ref:
+        copy.ref = backend.ref_for(copy.key)
     if backend.exists(copy.ref):
         if _sha256(backend.read_bytes(copy.ref)) == expected:
             return expected

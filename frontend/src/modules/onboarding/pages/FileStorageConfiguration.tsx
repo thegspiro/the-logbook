@@ -19,8 +19,8 @@ const inputClass = 'form-input px-3';
 const labelClass = 'form-label-sm';
 
 interface FileStorageConfig {
-  googleDriveClientId?: string;
-  googleDriveClientSecret?: string;
+  googleDriveServiceAccountKey?: string;
+  googleDriveSharedDriveId?: string;
   googleDriveFolderId?: string;
 
   oneDriveTenantId?: string;
@@ -42,6 +42,8 @@ type FieldSpec = {
   label: string;
   placeholder?: string;
   secret?: boolean;
+  /** Pasted rather than typed (a JSON key file), so a text area. */
+  multiline?: boolean;
   required?: boolean;
   help?: string;
   fullWidth?: boolean;
@@ -55,12 +57,26 @@ const PLATFORM_FIELDS: Record<string, { title: string; fields: FieldSpec[] }> = 
   googledrive: {
     title: 'Google Drive',
     fields: [
-      { key: 'googleDriveClientId', label: 'OAuth Client ID', required: true, fullWidth: true },
-      { key: 'googleDriveClientSecret', label: 'OAuth Client Secret', secret: true, required: true, fullWidth: true },
+      {
+        key: 'googleDriveServiceAccountKey',
+        label: 'Service account key (JSON)',
+        secret: true,
+        multiline: true,
+        required: true,
+        fullWidth: true,
+        help: 'Paste the whole key file Google Cloud downloaded for the service account.',
+      },
+      {
+        key: 'googleDriveSharedDriveId',
+        label: 'Shared Drive ID',
+        required: true,
+        fullWidth: true,
+        help: 'From the drive’s address: drive.google.com/drive/folders/<ID>. Add the service account to it as a Content manager.',
+      },
       {
         key: 'googleDriveFolderId',
-        label: 'Root Folder ID',
-        help: 'The folder documents are stored under. Leave blank to use the drive root.',
+        label: 'Folder ID (optional)',
+        help: 'A folder in that Shared Drive for the department’s files. Leave blank to use the drive’s root.',
         fullWidth: true,
       },
     ],
@@ -250,15 +266,28 @@ const FileStorageConfiguration: React.FC = () => {
                     {field.label}
                     {field.required && <span className="text-red-500"> *</span>}
                   </label>
-                  <input
-                    id={field.key}
-                    type={field.secret ? 'password' : 'text'}
-                    autoComplete={field.secret ? 'new-password' : 'off'}
-                    className={inputClass}
-                    value={config[field.key] || ''}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                    {...(field.placeholder ? { placeholder: field.placeholder } : {})}
-                  />
+                  {field.multiline ? (
+                    <textarea
+                      id={field.key}
+                      rows={5}
+                      spellCheck={false}
+                      autoComplete="off"
+                      className={`${inputClass} font-mono text-xs`}
+                      value={config[field.key] || ''}
+                      onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      {...(field.placeholder ? { placeholder: field.placeholder } : {})}
+                    />
+                  ) : (
+                    <input
+                      id={field.key}
+                      type={field.secret ? 'password' : 'text'}
+                      autoComplete={field.secret ? 'new-password' : 'off'}
+                      className={inputClass}
+                      value={config[field.key] || ''}
+                      onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      {...(field.placeholder ? { placeholder: field.placeholder } : {})}
+                    />
+                  )}
                   {field.help && <p className="text-theme-text-muted mt-1 text-[11px]">{field.help}</p>}
                 </div>
               ))}

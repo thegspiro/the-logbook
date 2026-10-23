@@ -253,7 +253,8 @@ backup_uploads() {
     report_bucket_files
 }
 
-# A department that keeps its files in its own S3 bucket has them there, not
+# A department that keeps its files in its own remote store (an S3 bucket, a
+# Google Shared Drive) has them there, not
 # on the uploads volume, so this archive does not contain them. Say which,
 # so nobody takes the archive for every file; a bucket is backed up with its
 # provider's own tooling (docs/BACKUP.md). Best effort: the check needs the
@@ -265,20 +266,21 @@ report_bucket_files() {
     local inventory summary
     if ! inventory="$(docker exec "$UPLOADS_CONTAINER" \
         python "$BACKEND_SCRIPTS_PATH/migrate_uploads_to_s3.py" --buckets 2>/dev/null)"; then
-        print_info "Could not check for files kept in departments' own S3 buckets; see docs/BACKUP.md"
+        print_info "Could not check for files kept in departments' own storage (S3 buckets, Shared Drives); see docs/BACKUP.md"
         return 0
     fi
     if ! summary="$(printf '%s' "$inventory" | python3 -c '
 import json, sys
 rows = json.load(sys.stdin)
 for row in rows:
-    print("  %s: %s file(s) of organization %s" % (row["bucket"], row["files"], row["organization_id"]))
+    where = "%s %s" % (row.get("platform", "s3"), row["bucket"])
+    print("  %s: %s file(s) of organization %s" % (where, row["files"], row["organization_id"]))
 ' 2>/dev/null)"; then
-        print_info "Could not read the S3 bucket check; see docs/BACKUP.md"
+        print_info "Could not read the remote storage check; see docs/BACKUP.md"
         return 0
     fi
     if [[ -n "$summary" ]]; then
-        print_warning "These files are in departments' own S3 buckets and are NOT in this backup. Back the buckets up with the provider's tooling (docs/BACKUP.md):"
+        print_warning "These files are in departments' own storage (S3 buckets, Google Shared Drives) and are NOT in this backup. Back them up with the provider's tooling (docs/BACKUP.md):"
         printf '%s\n' "$summary"
     fi
 }

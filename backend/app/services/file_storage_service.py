@@ -699,12 +699,17 @@ async def write_file(
                 f"its store is unusable: {storage.problems.get(storage.writes_to)}"
             )
             raise _unavailable()
-        ref = writer.ref_for(remote_key(organization_id, area, record_id, name))
+        key = remote_key(organization_id, area, record_id, name)
+
+        def _store() -> str:
+            ref = writer.ref_for(key)
+            writer.put(ref, content)
+            return ref
+
         try:
-            await asyncio.to_thread(writer.put, ref, content)
+            return await asyncio.to_thread(_store)
         except RemoteStorageError:
             raise _unavailable()
-        return ref
 
     directory = area_directory(organization_id, area, record_id)
 
@@ -759,9 +764,10 @@ async def activate_remote(
 
     backend = platform.backend(config)
     probe = os.urandom(32)
-    ref = backend.ref_for(f"{org}/.storage-check/{uuid.uuid4().hex}.bin")
+    probe_key = f"{org}/.storage-check/{uuid.uuid4().hex}.bin"
 
     def _round_trip() -> None:
+        ref = backend.ref_for(probe_key)
         backend.put(ref, probe)
         try:
             if backend.read_bytes(ref) != probe:
