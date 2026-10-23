@@ -34,6 +34,14 @@ _response_config = ConfigDict(
 
 _request_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
+# GF-9: the largest amount a money field accepts on a write. A cap catches a
+# mistyped extra zero before it flows into every total and report; it is not
+# a statement of what a department may raise. Gifts (a donation, a pledge, a
+# ticket) are capped lower than awards, budgets and goals. Applied to request
+# schemas only: a response must still serialize a row written before the cap.
+MAX_GIFT_AMOUNT = Decimal("1000000")
+MAX_AMOUNT = Decimal("100000000")
+
 # ============================================
 # Enum Literal Types
 # Mirrors the SQLAlchemy enums in app.models.grant so that
@@ -237,6 +245,10 @@ class GrantOpportunityBase(BaseModel):
 class GrantOpportunityCreate(GrantOpportunityBase):
     """Schema for creating a new grant opportunity"""
 
+    # Request-only bounds (GF-9); the shared base stays loose for responses.
+    typical_award_min: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    typical_award_max: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+
 
 class GrantOpportunityUpdate(BaseModel):
     """Schema for updating a grant opportunity"""
@@ -247,8 +259,8 @@ class GrantOpportunityUpdate(BaseModel):
     agency: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     eligible_uses: Optional[str] = None
-    typical_award_min: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
-    typical_award_max: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    typical_award_min: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    typical_award_max: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     eligibility_criteria: Optional[str] = None
     application_url: Optional[str] = Field(None, max_length=500)
     program_url: Optional[str] = Field(None, max_length=500)
@@ -299,15 +311,15 @@ class GrantBudgetSummary(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    equipment: Optional[float] = Field(None, ge=0)
-    personnel: Optional[float] = Field(None, ge=0)
-    training: Optional[float] = Field(None, ge=0)
-    contractual: Optional[float] = Field(None, ge=0)
-    supplies: Optional[float] = Field(None, ge=0)
-    travel: Optional[float] = Field(None, ge=0)
-    construction: Optional[float] = Field(None, ge=0)
-    indirect: Optional[float] = Field(None, ge=0)
-    other: Optional[float] = Field(None, ge=0)
+    equipment: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    personnel: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    training: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    contractual: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    supplies: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    travel: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    construction: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    indirect: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    other: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
     notes: Optional[str] = Field(None, max_length=5000)
 
 
@@ -354,6 +366,10 @@ class GrantApplicationBase(BaseModel):
 class GrantApplicationCreate(GrantApplicationBase):
     """Schema for creating a new grant application"""
 
+    amount_requested: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    amount_awarded: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    match_amount: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+
     opportunity_id: Optional[UUID] = None
     assigned_to: Optional[UUID] = None
     # Declared on the request schemas, not the shared base, because the
@@ -370,9 +386,9 @@ class GrantApplicationUpdate(BaseModel):
     grant_program_name: Optional[str] = Field(None, max_length=255)
     grant_agency: Optional[str] = Field(None, max_length=255)
     application_status: Optional[ApplicationStatusLiteral] = None
-    amount_requested: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
-    amount_awarded: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
-    match_amount: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    amount_requested: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    amount_awarded: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    match_amount: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     match_source: Optional[str] = Field(None, max_length=255)
     application_deadline: Optional[date] = None
     submitted_date: Optional[date] = None
@@ -487,6 +503,10 @@ class GrantBudgetItemCreate(GrantBudgetItemBase):
     true of the expenditure, compliance task and note create schemas below.
     """
 
+    amount_budgeted: Decimal = Field(..., ge=0, le=MAX_AMOUNT)
+    federal_share: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    local_match: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+
 
 class GrantBudgetItemUpdate(BaseModel):
     """Schema for updating a grant budget item"""
@@ -495,9 +515,9 @@ class GrantBudgetItemUpdate(BaseModel):
 
     category: Optional[BudgetItemCategoryLiteral] = None
     description: Optional[str] = Field(None, max_length=500)
-    amount_budgeted: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
-    federal_share: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
-    local_match: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    amount_budgeted: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    federal_share: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    local_match: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     notes: Optional[str] = None
     sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
@@ -548,6 +568,8 @@ class GrantExpenditureBase(BaseModel):
 class GrantExpenditureCreate(GrantExpenditureBase):
     """Schema for creating a new grant expenditure"""
 
+    amount: Decimal = Field(..., ge=0, le=MAX_AMOUNT)
+
     budget_item_id: Optional[UUID] = None
 
 
@@ -557,7 +579,7 @@ class GrantExpenditureUpdate(BaseModel):
     model_config = _request_config
 
     description: Optional[str] = Field(None, min_length=1, max_length=500)
-    amount: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    amount: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     expenditure_date: Optional[date] = None
     vendor: Optional[str] = Field(None, max_length=255)
     invoice_number: Optional[str] = Field(None, max_length=100)
@@ -726,6 +748,9 @@ class CampaignBase(BaseModel):
 class CampaignCreate(CampaignBase):
     """Schema for creating a new fundraising campaign"""
 
+    goal_amount: Decimal = Field(..., ge=0, le=MAX_AMOUNT)
+    minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
+
     # W69: the form offers a starting status; without this field a campaign
     # created as Active was stored as Draft, and nothing could change it after.
     status: CampaignStatusLiteral = "draft"
@@ -745,7 +770,7 @@ class CampaignUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     campaign_type: Optional[CampaignTypeLiteral] = None
-    goal_amount: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    goal_amount: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     status: Optional[CampaignStatusLiteral] = None
@@ -756,7 +781,7 @@ class CampaignUpdate(BaseModel):
     )
     thank_you_message: Optional[str] = None
     allow_anonymous: Optional[bool] = None
-    minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
     suggested_amounts: Optional[List[Decimal]] = None
     is_restricted: Optional[bool] = None
     restriction_purpose: Optional[str] = Field(None, max_length=2000)
@@ -844,6 +869,9 @@ class DonorResponse(DonorBase):
     first_donation_date: Optional[date] = None
     last_donation_date: Optional[date] = None
     active: bool = True
+    # True when the caller holds only fundraising.view and the contact details
+    # were left out, so a screen can say why they are blank (GF-9).
+    contact_hidden: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -878,6 +906,8 @@ class DonationBase(BaseModel):
 class DonationCreate(DonationBase):
     """Schema for creating a new donation"""
 
+    amount: Decimal = Field(..., gt=0, le=MAX_GIFT_AMOUNT)
+
     campaign_id: Optional[UUID] = None
     donor_id: Optional[UUID] = None
 
@@ -887,7 +917,7 @@ class DonationUpdate(BaseModel):
 
     model_config = _request_config
 
-    amount: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    amount: Optional[Decimal] = Field(None, gt=0, le=MAX_GIFT_AMOUNT)
     donation_date: Optional[UTCDateTime] = None
     payment_method: Optional[PaymentMethodLiteral] = None
     payment_status: Optional[PaymentStatusLiteral] = None
@@ -945,6 +975,8 @@ class PledgeBase(BaseModel):
 class PledgeCreate(PledgeBase):
     """Schema for creating a new pledge"""
 
+    pledged_amount: Decimal = Field(..., gt=0, le=MAX_GIFT_AMOUNT)
+
     campaign_id: Optional[UUID] = None
     donor_id: Optional[UUID] = None
 
@@ -954,8 +986,8 @@ class PledgeUpdate(BaseModel):
 
     model_config = _request_config
 
-    pledged_amount: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
-    fulfilled_amount: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    pledged_amount: Optional[Decimal] = Field(None, gt=0, le=MAX_GIFT_AMOUNT)
+    fulfilled_amount: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
     pledge_date: Optional[date] = None
     due_date: Optional[date] = None
     status: Optional[PledgeStatusLiteral] = None
@@ -1012,6 +1044,9 @@ class FundraisingEventBase(BaseModel):
 class FundraisingEventCreate(FundraisingEventBase):
     """Schema for creating a new fundraising event"""
 
+    ticket_price: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
+    revenue_goal: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+
     campaign_id: Optional[UUID] = None
     event_id: Optional[UUID] = None
 
@@ -1026,9 +1061,9 @@ class FundraisingEventUpdate(BaseModel):
     event_type: Optional[FundraisingEventTypeLiteral] = None
     event_date: Optional[UTCDateTime] = None
     location: Optional[str] = Field(None, max_length=300)
-    ticket_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    ticket_price: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
     max_attendees: Optional[int] = Field(None, ge=0, le=INT32_MAX)
-    revenue_goal: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    revenue_goal: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     registration_url: Optional[str] = Field(None, max_length=500)
     _validate_registration_url = field_validator("registration_url", mode="before")(
         validate_external_http_url
@@ -1036,8 +1071,8 @@ class FundraisingEventUpdate(BaseModel):
     sponsors: Optional[List[Dict[str, Any]]] = None
     notes: Optional[str] = None
     status: Optional[FundraisingEventStatusLiteral] = None
-    actual_revenue: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
-    expenses: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    actual_revenue: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    expenses: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     current_attendees: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     campaign_id: Optional[UUID] = None
     event_id: Optional[UUID] = None

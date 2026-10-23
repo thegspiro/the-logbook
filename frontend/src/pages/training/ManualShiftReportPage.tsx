@@ -383,7 +383,7 @@ export const ManualShiftReportPage: React.FC = () => {
 
         {/* Calculated hours display */}
         {calculatedHours > 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-sm text-green-700 dark:text-green-400">
+          <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-sm text-green-800 dark:text-green-400">
             <FileText className="h-4 w-4 shrink-0" />
             <span className="font-medium">{calculatedHours}h</span> shift duration
             {calculatedHours > 24 && <span className="text-theme-text-muted text-xs">(multi-day shift)</span>}

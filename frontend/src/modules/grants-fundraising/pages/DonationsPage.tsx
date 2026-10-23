@@ -99,7 +99,7 @@ const DonationsPage: React.FC = () => {
       <div className="card p-4">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-green-100 p-2 dark:bg-green-500/20">
-            <DollarSign className="h-5 w-5 text-green-600" />
+            <DollarSign className="h-5 w-5 text-green-700 dark:text-green-600" />
           </div>
           <div>
             <p className="text-theme-text-secondary text-sm">
@@ -164,7 +164,7 @@ const DonationsPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Donations">
             <table className="w-full">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface border-b">
@@ -242,7 +242,7 @@ const DonationsPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {donation.receiptSent ? (
-                        <span className="flex items-center gap-1 text-xs text-green-600">
+                        <span className="flex items-center gap-1 text-xs text-green-700 dark:text-green-600">
                           <Receipt className="h-3 w-3" /> Sent
                         </span>
                       ) : (

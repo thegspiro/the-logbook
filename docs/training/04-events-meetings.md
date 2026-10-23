@@ -370,8 +370,7 @@ meant to be put up at the door. The optional RSVP button on an event that does
 not require a response reads **Going**. The attendee list is requested only when
 your department shares it.
 
-_[Screenshot to create: a member's event detail page with check-in open, showing
-Check In; and one after check-in showing You're checked in.]_
+<!-- Screenshot needed: a member's event detail page with check-in open, showing Check In; and one after check-in showing You're checked in. -->
 
 1. Scan the QR code with your phone's camera.
 2. Sign in if you are not already. The self check-in page opens.
@@ -1359,16 +1358,28 @@ cancelled.
 ### Deleting an event or a series
 
 1. On the event's page, select **More → Delete Event**.
-2. On a recurring event, choose **Delete only this event** or **Delete all
-   events in this series**.
+2. On a recurring event, choose **Delete only this event**, **Delete this
+   and future events in this series**, or **Delete all events in this
+   series**.
 3. The dialog reads "Permanently delete "…"? Its RSVPs and attendance records
    are deleted too. You can't undo this." Select **Delete Event** (or **Delete
    Entire Series**), or **Keep Event** to back out.
 
-> **What if I want to keep the history?** Deleting a series removes every
-> occurrence, past ones included — there is no "delete future occurrences
-> only". To keep the record, use **Cancel Entire Series** instead: cancelled
-> events stay on the calendar with their attendance.
+> **What if I want to keep the history?** **Delete all events** removes every
+> occurrence, past ones included. To keep the past, choose **Delete this and
+> future events in this series** from the first occurrence you want gone: earlier
+> events, with their attendance, stay, and the series is ended at its last
+> remaining occurrence with rolling extension off, so the deleted ones are not
+> created again. Only the occurrences being deleted are checked for finalized
+> attendance. To keep every event on the calendar, use **Cancel Entire Series**
+> instead.
+
+> **Deleting the first event of a series no longer loses the series.** The
+> earliest surviving occurrence takes over the recurrence settings, so a later
+> **Delete all events in this series** still removes every remaining occurrence.
+
+> **An approved meeting cannot be deleted.** Its attendance is part of the
+> membership record.
 
 > **What if the event has minutes?** An event with linked records, such as
 > meeting minutes, cannot be deleted: "Cannot delete event because it has
@@ -1565,9 +1576,7 @@ with no agenda items behaves as before.
   take this up**. It stays in the record and prints as _Not taken up_ instead of
   vanishing.
 
-_[Screenshots to create: the Agenda dialog on a meeting with three items, one
-with a prepared motion and a linked document; the Sync from the agenda dialog
-with one new and one changed item; a section marked Not taken up.]_
+<!-- Screenshot needed: the Agenda dialog on a meeting with three items, one with a prepared motion and a linked document; the Sync from the agenda dialog with one new and one changed item; a section marked Not taken up. -->
 
 **Linked events.** Minutes can be linked to an event, and **Unlink** removes
 the link for good.
@@ -1653,7 +1662,7 @@ selector that overrides the default for that one set of minutes (leave it on
 PDF, the library copy and the public copy; the public copy leaves out counts that
 are not listed rather than showing zero. Nothing changes until someone sets it.
 
-_[Screenshot to create: the roll panel's per-minutes selector on a draft.]_
+<!-- Screenshot needed: the roll panel's per-minutes selector on a draft. -->
 
 ### Publishing adopted minutes (library and public page)
 
@@ -1679,8 +1688,7 @@ for confirmation.
 
 ![Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches](./images/04-73-minutes-settings-publishing.png)
 
-_[Screenshot to create: the publishing status note on adopted minutes; the public
-minutes page at phone and desktop widths.]_
+<!-- Screenshot needed: the publishing status note on adopted minutes; the public minutes page at phone and desktop widths. -->
 
 ### Circulating and adopting minutes
 
@@ -1774,8 +1782,7 @@ is a place a password could be guessed from a signed-in session.
 
 ![Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes](./images/04-74-minutes-settings-signatures.png)
 
-_[Screenshots to create: the Sign dialog (name and password); the Signatures
-panel on adopted minutes with one slot signed and one open.]_
+<!-- Screenshot needed: the Sign dialog (name and password); the Signatures panel on adopted minutes with one slot signed and one open. -->
 
 **Outlines (the standard order of business).** **Minutes > Outlines**
 (`minutes.manage`) edits the department's standard sections for each meeting

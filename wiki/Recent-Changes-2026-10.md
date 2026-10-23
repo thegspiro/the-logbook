@@ -5,6 +5,27 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 21 – 22, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+
+- **Delete no longer destroys history.** Deleting a training requirement or pipeline,
+  budget category, shift template, basic vehicle or form that is in use deactivates
+  or archives it instead, and the message says which. Pipelines and basic vehicles
+  can be brought back with **Show inactive** then **Reactivate**.
+- **Gear kits follow the member's size.** A kit line names a product and uses the
+  member's recorded size; issuing shows the sizes for review first.
+- **Recurring events.** Delete this and future events in a series; deleting the first
+  event no longer loses the series. An approved meeting cannot be deleted.
+- **Members.** Permanently deleting a member keeps other members' records (shown as
+  "Former member") and returns gear they held. Leaving the active statuses takes a
+  member off upcoming shifts. Probationary membership type now sets a Probationary
+  account status. Roster names link to profiles.
+- **Training.** Matching a Target Solutions user imports their waiting records.
+- **Screenshots.** Nothing was re-captured by this pass; see
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 20 – 21, 2026
 
 The engineering audit is
@@ -37,6 +58,16 @@ The engineering audit is
   revised, and fills in the adoption form.
 - **Screenshots.** Nothing was re-captured. The gap report is in
   `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Also in this window:**
+
+- **Check your screening requirements.** If **Applies to Positions** has text in
+  it, that list now decides who is graded; blank means everyone, and a member with
+  nothing that applies reads **Not applicable**.
+- **The dashboard's overdue-dues number may drop.** Part-paid dues are Partial,
+  matching the dues page.
+- **iPad and iPhone:** date and time fields no longer overlap the field beside
+  them on Edit Member.
 
 ## Recent changes: October 18 – 19, 2026
 

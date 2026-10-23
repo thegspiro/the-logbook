@@ -29,6 +29,16 @@ from app.services.training_submission_service import TrainingSubmissionService
 
 
 @pytest.fixture(autouse=True)
+def _files_stay_on_disk(monkeypatch):
+    """No saved S3 settings, read without a database: these tests store
+    through stand-in sessions (or none), and every department keeps its
+    files on the uploads volume."""
+    monkeypatch.setattr(
+        file_storage_service, "_load_settings", AsyncMock(return_value={})
+    )
+
+
+@pytest.fixture(autouse=True)
 def _no_review_prompts(monkeypatch):
     """The session fakes here model only what these tests exercise. The in-app
     notifications are covered in test_training_submission_notifications.py

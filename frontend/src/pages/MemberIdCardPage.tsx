@@ -333,7 +333,7 @@ export const MemberIdCardPage: React.FC = () => {
                   {/* includeMargin adds the spec quiet zone — without it the
                       code is unreliable when scanned off one phone screen by
                       another device. */}
-                  <QRCodeSVG value={qrValue} size={200} level="M" includeMargin />
+                  <QRCodeSVG value={qrValue} size={200} level="M" includeMargin title="Member identification QR code" />
                 </div>
                 <p className="text-theme-text-muted mt-2 text-xs print:text-gray-400">Scan to identify member</p>
               </div>
@@ -345,7 +345,7 @@ export const MemberIdCardPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs print:text-gray-500">
               {org?.name ?? 'Organization'} &middot; Digital Member ID
             </p>
-            <p className="text-theme-text-muted/70 mt-0.5 text-[10px] print:text-gray-400">
+            <p className="text-theme-text-muted mt-0.5 text-[10px] print:text-gray-400">
               Generated {formatDate(new Date(), tz)}
             </p>
           </div>

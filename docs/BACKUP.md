@@ -8,11 +8,11 @@ from a total loss. Business-continuity alignment context (ISO 22301) lives in
 
 `scripts/backup.sh` produces a single timestamped archive containing:
 
-| Component        | Contents                                                                  | Notes                                                         |
-| ---------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `database.sql`   | Full `mysqldump` of the application database                              | `--single-transaction --quick`, safe against a running server |
-| `uploads.tar.gz` | Every uploaded file (documents, photos, attachments)                      | See where uploads are read from, below                        |
-| `config/`        | `.env.example`, `docker-compose.yml`, and a **sanitized** `.env` template | Values are stripped — see the warning below                   |
+| Component        | Contents                                                                   | Notes                                                         |
+| ---------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `database.sql`   | Full `mysqldump` of the application database                               | `--single-transaction --quick`, safe against a running server |
+| `uploads.tar.gz` | Every uploaded file on the uploads volume (documents, photos, attachments) | Not files in a department's own S3 bucket — see below         |
+| `config/`        | `.env.example`, `docker-compose.yml`, and a **sanitized** `.env` template  | Values are stripped — see the warning below                   |
 
 Uploads are read from `/app/uploads` inside the running backend container
 (`intranet-backend`, or `logbook-backend` on Unraid; set `BACKEND_CONTAINER`
@@ -39,6 +39,41 @@ Schedule it (02:00 daily shown; align frequency with your RPO, below):
 ```cron
 0 2 * * * /path/to/the-logbook/scripts/backup.sh
 ```
+
+## Files in a department's own S3 bucket
+
+A department that switched its storage to its own S3 or MinIO bucket
+(Organization Settings > Storage, "Test and switch to S3") keeps its files
+**there, not on the uploads volume**, so `uploads.tar.gz` does not contain
+them. The backup does not download buckets (owner decision, 2026-10-22): that
+would put every department's bucket credentials on the backup host and make
+each backup as large as every bucket. Back a bucket up with its provider's own
+tooling instead:
+
+- **AWS S3:** turn on bucket versioning, so an overwritten or deleted object
+  can be recovered, and Cross-Region (or Same-Region) Replication, so a copy
+  survives losing the bucket or its account access. AWS Backup can also take
+  scheduled S3 backups.
+- **MinIO:** `mc mirror --overwrite <alias>/<bucket> <destination>` on a
+  schedule, or site replication to a second MinIO.
+- **Other S3-compatible stores:** their own versioning and replication, or
+  `rclone sync` to a second store.
+
+Objects are encrypted before upload with the installation's file key (see the
+secrets section below), so a bucket copy is as unreadable without
+`ENCRYPTION_KEY` / `ENCRYPTION_SALT` as the uploads archive, and a restored
+copy needs the keys that were current when it was written.
+
+When the backend container is running, `scripts/backup.sh` asks it which
+departments keep files in which bucket and prints them under a warning, so a
+backup run says what it left out. To check by hand:
+
+```bash
+docker exec -it intranet-backend python scripts/migrate_uploads_to_s3.py --buckets
+```
+
+A restore drill for such a department also opens a recently uploaded file
+from its bucket. That checks the bucket is reachable and the keys are right.
 
 ## Automated: the backup sidecar (production compose)
 
@@ -164,6 +199,8 @@ Tighten them if the platform is used during activations.
 - [ ] `BACKUP_RETENTION_DAYS` set to your retention policy (≥30 recommended)
 - [ ] Secrets (`ENCRYPTION_KEY`, `ENCRYPTION_SALT`, `SECRET_KEY`, DB/Redis
       passwords) stored offline in at least two locations
+- [ ] Every department's own S3 bucket (`migrate_uploads_to_s3.py --buckets`)
+      versioned and replicated or mirrored with its provider's tooling
 - [ ] Quarterly restore drill scheduled, with results recorded
 - [ ] RTO/RPO targets written into department SOPs
 

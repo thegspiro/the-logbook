@@ -612,6 +612,11 @@ class RoleResponse(BaseModel):
     permissions: List[str] = []
     is_system: bool
     priority: int
+    # The seeded mirror of an operational rank (Chief, Captain, Firefighter,
+    # ...). Member pickers and roster chips leave these out; the Rank field
+    # is where a rank is set. Defaults False so a dict built without it is
+    # still a valid response.
+    mirrors_rank: bool = False
 
     @field_validator("permissions", mode="before")
     @classmethod

@@ -55,6 +55,11 @@ class RoleResponse(UTCResponseBase):
     permissions: List[str] = []
     is_system: bool
     priority: int
+    # The seeded mirror of an operational rank (Chief, Captain, Firefighter,
+    # ...). Member pickers and roster chips leave these out; the Rank field
+    # is where a rank is set. Defaults False so a dict built without it is
+    # still a valid response.
+    mirrors_rank: bool = False
     created_at: datetime
     updated_at: datetime
 

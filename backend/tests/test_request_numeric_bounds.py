@@ -35,7 +35,11 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from sqlalchemy import Float, Integer, Numeric
 
 from app.core.database import Base
-from tests.request_bound_columns import COLUMN_BACKED, NOT_COLUMN_BACKED
+from tests.request_bound_columns import (
+    COLUMN_BACKED,
+    NOT_COLUMN_BACKED,
+    POLICY_BOUNDED,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -358,13 +362,32 @@ class TestBoundsMatchTheColumn:
             adapter, high
         ), "the column's own maximum is refused, so the bound is tighter than the column"
 
+    @pytest.mark.parametrize("row", POLICY_BOUNDED, ids=lambda row: row.split(":")[1])
+    def test_a_policy_bound_sits_inside_the_column(self, row, orm_models):
+        module, cls, field, model, column = _split(row)
+        schema = getattr(importlib.import_module(module), cls)
+        _, high, above, below = _column_range(orm_models[model], column)
+        adapter = _validator(schema, field)
+
+        assert not _accepts(adapter, above), "one past the column's maximum is accepted"
+        assert not _accepts(adapter, below), "one past the column's minimum is accepted"
+        assert not _accepts(
+            adapter, high
+        ), "the column's own maximum is accepted, so this is a column bound, not a policy one"
+
     def test_no_row_is_listed_twice(self):
         counts = collections.Counter(row.split("=")[0] for row in COLUMN_BACKED)
         assert [key for key, n in counts.items() if n > 1] == []
 
     def test_a_row_is_not_also_an_exception(self):
-        listed = {row.split("=")[0] for row in COLUMN_BACKED}
+        listed = {row.split("=")[0] for row in COLUMN_BACKED + POLICY_BOUNDED}
         assert sorted(listed & set(NOT_COLUMN_BACKED)) == []
+
+    def test_a_field_is_column_backed_or_policy_bounded_not_both(self):
+        both = {r.split("=")[0] for r in COLUMN_BACKED} & {
+            r.split("=")[0] for r in POLICY_BOUNDED
+        }
+        assert sorted(both) == []
 
 
 # ============================================

@@ -509,6 +509,13 @@ export interface QRCheckInData {
   records_training?: boolean | undefined;
   /** Whether that credit waits for a training officer's approval. */
   training_requires_approval?: boolean | undefined;
+  /**
+   * The scanning member's own check-in and check-out times, so the page can
+   * offer check-out to someone already checked in. Null when they have not
+   * checked in; the check-out time stays null until they leave.
+   */
+  user_checked_in_at?: string | null | undefined;
+  user_checked_out_at?: string | null | undefined;
 }
 
 /** Public event detail shown on the unauthenticated guest sign-in page. */

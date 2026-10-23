@@ -263,7 +263,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
                 <tr key={item.id} className="bg-theme-surface hover:bg-theme-surface-hover transition-colors">
                   <td className="px-4 py-3">
                     {item.status === 'sent' ? (
-                      <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+                      <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
                         <CheckCircle2 className="h-4 w-4" />
                         <span className="text-xs">Sent</span>
                       </span>

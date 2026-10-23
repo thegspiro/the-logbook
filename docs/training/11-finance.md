@@ -339,23 +339,26 @@ Nobody else sees a restricted line in the request form's picker, and a request t
 - **A request already on a line stays editable** after the line is restricted; the rule applies to choosing the line.
 - **A budget owner needs no Treasurer for this.** On **Finance > My Budgets**, **Who can charge your lines** lists the categories you own (or that sit under one you own). **Edit** opens **Who can charge** _category_ with the same choices. The Treasurer sets any category from **Finance > Settings**.
 
-_[Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked.]_
+<!-- Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked. -->
 
-_[Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog.]_
+<!-- Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog. -->
 
 ### Retiring a Category
 
-There is no way to switch a category off on the settings screen, and deleting
-one destroys its history (see below). To retire a category, leave it in place
-and stop adding budget lines to it.
+To retire a category, delete it. A category that has budget lines, requests or
+approval chains is **deactivated** instead of deleted: its budget lines in every
+fiscal year are kept, and a category-specific approval chain stays specific
+rather than becoming a catch-all. The confirmation and the toast say which
+happened. A deactivated category is hidden from new-record pickers but still
+resolves on existing rows. A category nothing uses is deleted outright.
 
 ### Edge Cases
 
-| Scenario                                  | Behavior                                                                                                                                                                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deleting a category with existing budgets | Permitted, and destructive -- its budgets in every fiscal year are deleted with it, and requests charged to them are left with no budget. The confirmation says so. Leave the category in place to keep its history |
-| Category with no QuickBooks account       | The category can still be used for budgets; its export accounts can be set on **QuickBooks Export**                                                                                                                 |
-| A category as its own parent or ancestor  | Refused. Deleting a parent leaves its children as top-level categories                                                                                                                                              |
+| Scenario                                  | Behavior                                                                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deleting a category with existing budgets | The category is deactivated, not deleted. Its budgets, requests and approval chains are kept; it no longer appears when you add a budget line |
+| Category with no QuickBooks account       | The category can still be used for budgets; its export accounts can be set on **QuickBooks Export**                                           |
+| A category as its own parent or ancestor  | Refused. Deleting a parent leaves its children as top-level categories                                                                        |
 
 ---
 
@@ -1417,6 +1420,12 @@ After creating a schedule, you need to generate individual dues records for each
 | **Overdue** | The due date has passed with nothing paid (a daily check moves Pending to Overdue; Partial stays Partial) |
 | **Waived**  | The dues have been waived by an officer (e.g., financial hardship, service credit)                        |
 | **Exempt**  | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues)                 |
+
+_(2026-10-19)_ The **overdue dues** number on the dashboard's finance tile uses
+the same rule as this page: Overdue records, plus Pending records past their due
+date with nothing paid. A Partial record is not counted, because it shows as
+Partial here. Before, the tile counted part-paid records too and read higher than
+the list it links to.
 
 ### Recording Payments
 

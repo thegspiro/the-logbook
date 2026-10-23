@@ -60,7 +60,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
           }`}
         >
           {isClosed ? (
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-700 dark:text-green-400" />
           ) : (
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
           )}
@@ -85,7 +85,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
             configured before opening, on the election form. */}
         <div className="bg-theme-surface-secondary flex items-center gap-3 rounded-lg p-4">
           {isClosed || resultsPublished ? (
-            <Eye className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <Eye className="h-5 w-5 text-green-700 dark:text-green-400" />
           ) : (
             <EyeOff className="text-theme-text-muted h-5 w-5" />
           )}

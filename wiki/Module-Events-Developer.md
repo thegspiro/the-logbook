@@ -118,7 +118,7 @@ null.
 ### Check-in and attendance
 
 ```
-GET    /events/{id}/qr-check-in-data             # QR / self check-in payload (authenticated)
+GET    /events/{id}/qr-check-in-data             # QR / self check-in payload (authenticated; carries the caller's own check-in and check-out times)
 POST   /events/{id}/self-check-in                # Member self check-in / check-out
 POST   /events/{id}/check-in                     # Manager checks a member in (manage)
 GET    /events/{id}/check-in-monitoring          # Live monitoring (manage)

@@ -1,10 +1,11 @@
 """Stored files are read, checked, served and deleted only through
 ``file_storage_service``'s operations.
 
-A department's files will not always be on the local volume (the S3 backend
-is being built on this interface), so a caller that reaches for ``os`` on a
-resolved path would work today and break the day a department moves. The
-sweep below keeps them out; the rest checks the local backend itself.
+A department's files are not always on the local volume (a department may
+keep them in its own S3 bucket), so a caller that reaches for ``os`` on a
+resolved path works for one department and breaks for the next. The sweeps
+below keep callers off the filesystem and off the write helpers that bypass
+the department's choice; the rest checks the local backend itself.
 """
 
 import ast
@@ -20,8 +21,8 @@ pytestmark = pytest.mark.unit
 APP = Path(__file__).resolve().parents[1] / "app"
 
 # Calls that touch a file by path. Inside app/ only the storage layer itself,
-# the encryption and relocation tooling (which walk the local volume by
-# design), and files that never hold an upload may make them.
+# the encryption, relocation and bucket-migration tooling (which work on the
+# local volume by design), and files that never hold an upload may make them.
 FILESYSTEM_CALLS = {
     "os.remove",
     "os.unlink",
@@ -39,6 +40,7 @@ ALLOWED = {
     "core/file_encryption.py",
     "services/upload_encryption.py",
     "services/upload_relocation.py",
+    "services/s3_migration.py",
     # Not uploads: the log file, and a temporary PDF an election email is
     # built from and removes again.
     "core/logging.py",
@@ -66,6 +68,61 @@ def _offenders() -> list[str]:
 
 def test_no_caller_touches_a_stored_file_through_os():
     assert _offenders() == []
+
+
+# Writing straight to a directory skips the department's choice of storage:
+# new files must go through FileStorageService or file_storage.write_file.
+DIRECT_WRITES = {
+    "file_storage.write_atomically",
+    "file_storage.area_directory",
+    "file_storage_service.write_atomically",
+    "file_storage_service.area_directory",
+}
+# Relocation moves files that are already on the local volume, by design.
+DIRECT_WRITE_ALLOWED = {
+    "services/file_storage_service.py",
+    "services/upload_relocation.py",
+}
+
+
+def test_no_caller_writes_around_the_departments_storage_choice():
+    found = []
+    for path in APP.rglob("*.py"):
+        relative = path.relative_to(APP).as_posix()
+        if relative in DIRECT_WRITE_ALLOWED:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                dotted = ast.unparse(node.func)
+                if dotted in DIRECT_WRITES:
+                    found.append(f"{relative}:{node.lineno} {dotted}")
+            if isinstance(node, ast.ImportFrom) and node.module == (
+                "app.services.file_storage_service"
+            ):
+                for alias in node.names:
+                    if alias.name in ("write_atomically", "area_directory"):
+                        found.append(f"{relative}:{node.lineno} {alias.name}")
+    assert found == []
+
+
+def test_only_the_s3_backend_talks_to_a_bucket():
+    found = []
+    for path in APP.rglob("*.py"):
+        relative = path.relative_to(APP).as_posix()
+        if relative == "services/s3_storage.py":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            for name in names:
+                if name.split(".")[0] in ("boto3", "botocore"):
+                    found.append(f"{relative}:{node.lineno} {name}")
+    assert found == []
 
 
 @pytest.fixture

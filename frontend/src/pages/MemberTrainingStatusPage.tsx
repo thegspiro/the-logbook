@@ -46,11 +46,11 @@ type Mode = 'month' | 'range';
 const STATUS_META: Record<MemberComplianceStatusColor, { label: string; cls: string }> = {
   green: {
     label: 'Compliant',
-    cls: 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30',
+    cls: 'bg-green-500/15 text-green-800 dark:text-green-400 border-green-500/30',
   },
   yellow: {
     label: 'At Risk',
-    cls: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30',
+    cls: 'bg-yellow-500/15 text-yellow-800 dark:text-yellow-400 border-yellow-500/30',
   },
   red: {
     label: 'Behind',
@@ -222,13 +222,13 @@ const MemberTrainingStatusPage: React.FC = () => {
           <div className="border-theme-surface-border inline-flex overflow-hidden rounded-lg border">
             <button
               onClick={() => setMode('month')}
-              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'month' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'month' ? 'bg-red-600/20 text-red-800 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Month
             </button>
             <button
               onClick={() => setMode('range')}
-              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'range' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'range' ? 'bg-red-600/20 text-red-800 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Custom range
             </button>
@@ -308,46 +308,51 @@ const MemberTrainingStatusPage: React.FC = () => {
           <table className="min-w-full text-sm">
             <thead className="bg-theme-surface-secondary">
               <tr>
-                <SortableHeader
-                  label="Member"
-                  field="member_name"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
-                <SortableHeader
-                  label="Trainings"
-                  field="trainings_completed"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
-                <SortableHeader
-                  label="Hours"
-                  field="hours_completed"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
-                <SortableHeader
-                  label="Last activity"
-                  field="last_activity"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
-                <SortableHeader
-                  label="Status"
-                  field="compliance_status"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Member"
+                    field="member_name"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Trainings"
+                    field="trainings_completed"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Hours"
+                    field="hours_completed"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Last activity"
+                    field="last_activity"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Status"
+                    field="compliance_status"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
               </tr>
             </thead>
             <tbody>

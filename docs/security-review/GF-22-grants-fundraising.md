@@ -570,6 +570,22 @@ matches the data's sensitivity (money), no `.view` gate on a write.
   `apply_updates(instance, data, skip={"organization_id", "id"})`, confirmed
   unchanged from GF-16's fix.
 
+### GF-9 resolved (2026-10-21) — the other two thirds, by owner decision
+
+Not a rotation pass: the owner chose the answers `KNOWN_LIMITATIONS.md` was
+waiting on. **Money:** every money field on a request schema is bounded — a
+donation or pledge above $0 and at most $1,000,000; awards, budgets,
+expenditures, goals and the `GrantBudgetSummary` categories at most
+$100,000,000; $0 still valid where it means something. The bounds are on the
+request schemas only, so a response still serializes a row written before them
+(`tests/test_grant_money_bounds.py` asserts a $0 donation and an over-ceiling
+pledge read back). **Donor PII:** a view-only caller reads names, type, company,
+totals and dates; email, phone, address, notes, communication preferences and
+the linked user need `fundraising.manage`, a donation's `donor_email` follows,
+and view-only donor search no longer matches on email, so a typed address cannot
+be confirmed (`tests/test_donor_contact_privacy.py`). The split below is kept as
+the record of how the item stood.
+
 ### GF-9 split — the float-money third is fixed; the other two thirds are unchanged
 
 GF-9 was always one id covering three independent gaps (per

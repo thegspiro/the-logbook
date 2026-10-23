@@ -18,6 +18,10 @@ const { service, scanner, state } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../services/api', () => ({ inventoryService: service }));
+vi.mock('../../../components/KioskSessionCard', () => ({
+  KioskSessionCard: () => <div data-testid="kiosk-session-card" />,
+}));
+
 vi.mock('../../../components/ux', () => ({ Breadcrumbs: () => null }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../hooks/useInventoryNfcEnabled', () => ({
@@ -116,6 +120,11 @@ describe('InventoryKioskPage', () => {
     Object.assign(state, overrides);
     renderWithRouter(<InventoryKioskPage />);
     expect(await screen.findByText(new RegExp(`needs ${label} turned on`))).toBeInTheDocument();
+  });
+
+  it('offers the kiosk session switch', () => {
+    renderWithRouter(<InventoryKioskPage />);
+    expect(screen.getByTestId('kiosk-session-card')).toBeInTheDocument();
   });
 
   // Opening the kiosk takes inventory.kiosk; the switch takes the settings

@@ -111,6 +111,7 @@ class RoleManagementService:
                 "permissions": role.permissions or [],
                 "is_system": role.is_system,
                 "priority": role.priority,
+                "mirrors_rank": role.mirrors_rank,
                 "created_at": role.created_at,
                 "updated_at": role.updated_at,
             }

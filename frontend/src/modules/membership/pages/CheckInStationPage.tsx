@@ -58,6 +58,7 @@ import { signalUserActivity } from '../../../hooks/useIdleTimer';
 import { NfcCheckInDirection, NfcCheckInTarget } from '../../../constants/enums';
 import type { NfcStationCheckInResult } from '../types/idCard';
 import { Breadcrumbs } from '../../../components/ux';
+import { KioskSessionCard } from '../../../components/KioskSessionCard';
 import { BACKGROUND_REQUEST_CONFIG } from '../../../utils/backgroundRequest';
 
 interface TargetOption {
@@ -490,6 +491,8 @@ const CheckInStationPage: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-6 p-4">
       {header}
 
+      <KioskSessionCard />
+
       <div className="card space-y-4 p-4 sm:p-6">
         <div>
           <span className="form-label" id="station-target-type">
@@ -637,7 +640,7 @@ const CheckInStationPage: React.FC = () => {
             <div className="flex items-start gap-3">
               {tone === 'success' ? (
                 <CheckCircle2
-                  className="mt-0.5 h-8 w-8 shrink-0 text-green-600 dark:text-green-400"
+                  className="mt-0.5 h-8 w-8 shrink-0 text-green-700 dark:text-green-400"
                   aria-hidden="true"
                 />
               ) : tone === 'info' ? (

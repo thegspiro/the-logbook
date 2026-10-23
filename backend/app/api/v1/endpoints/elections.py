@@ -13,7 +13,6 @@ from uuid import UUID, uuid4
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Body,
     Depends,
     HTTPException,
@@ -41,6 +40,7 @@ from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.election import (
+    BallotSendJobKind,
     Candidate,
     Election,
     ElectionStatus,
@@ -128,17 +128,19 @@ from app.services.ballot_send_jobs import (
     PACKAGE_IN_PROGRESS_DETAIL,
     SEND_IN_PROGRESS_DETAIL,
     BallotSend,
+    NominationsAnnouncementSend,
     PackageSend,
     QueuedSend,
     ReminderSend,
-    announce_nominations_open,
     enqueue_send,
     ensure_election_open,
     find_active_job,
     get_job,
     job_response,
+    latest_job,
     perform_ballot_send,
     perform_reminder_send,
+    queue_automatic_send,
 )
 from app.services.election_service import (
     ElectionService,
@@ -278,6 +280,19 @@ async def _build_election_response(
         response.ballots_must_be_resent,
         response.ballots_resend_reason,
     ) = await ElectionService(db).ballot_resend_state(election)
+    # Nominations run between draft and voting, and closing them returns the
+    # election to draft, so the announcement means nothing once voting opens.
+    if election.status in (ElectionStatus.NOMINATIONS, ElectionStatus.DRAFT):
+        announcement = await latest_job(
+            db,
+            str(election.id),
+            str(election.organization_id),
+            kind=BallotSendJobKind.ANNOUNCEMENT.value,
+        )
+        if announcement is not None and (
+            viewer is None or user_has_permission(viewer, "elections.manage")
+        ):
+            response.nominations_announcement = job_response(announcement)
     if election.meeting:
         response.meeting_title = election.meeting.title
         response.meeting_type = (
@@ -1727,7 +1742,6 @@ async def close_election(
 @router.post("/{election_id}/open-nominations", response_model=ElectionResponse)
 async def open_nominations(
     election_id: UUID,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.manage")),
 ):
@@ -1755,12 +1769,15 @@ async def open_nominations(
             status_code=status_code, detail=error or "An unexpected error occurred"
         )
     # One message per member takes about a second each, so the announcement
-    # goes out after the response rather than holding the request open.
-    background_tasks.add_task(
-        announce_nominations_open,
+    # is queued as a background job rather than holding the request open; the
+    # election response carries the job for the page to follow. None means an
+    # announcement from an earlier opening is still going out.
+    await queue_automatic_send(
+        db,
         str(election.id),
         str(current_user.organization_id),
-        str(current_user.id),
+        requested_by=str(current_user.id),
+        send=NominationsAnnouncementSend(acting_user_id=str(current_user.id)),
     )
     return await _build_election_response(db, election)
 

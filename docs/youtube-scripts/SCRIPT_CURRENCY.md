@@ -1,5 +1,19 @@
 # Script currency
 
+## Flagged by the 2026-10-21 → 10-22 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                 | Beat                               | Was                                     | Now                                                                                                        |
+| ---------------------- | ---------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **05 / 09** (training) | Deleting a requirement or pipeline | Delete erases progress                  | An in-use one is deactivated; pipelines can be reactivated                                                 |
+| **05** (training)      | Target Solutions                   | Mapping matched future completions only | Mapping imports the member's waiting records; **Import matching pending records**                          |
+| **03** (IT)            | Member delete                      | Records by the member lose their link   | Others' records keep an empty owner shown as **Former member**; held gear returned; future shifts released |
+| **03**                 | Status                             | Type and status independent             | Probationary type sets Probationary status                                                                 |
+| **07** (secretary)     | Deleting events                    | Series delete removes everything        | **Delete this and future events**; an approved meeting cannot be deleted                                   |
+| **04** (finance)       | Budget categories                  | Delete cascades through budget lines    | In-use category is deactivated                                                                             |
+
 ## Flagged by the 2026-10-20 → 10-21 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
@@ -11,6 +25,20 @@ Rows are **Open**; nothing was re-recorded.
 | **06**             | My Training history   | Pending record under "Awaiting approval" | Undated records sit under **No completion date**; each row shows its own status                                                    |
 | **12** (elections) | Paper ballots         | Totals per candidate for every race      | Ranked-choice races are entered ballot by ballot, with a copy count                                                                |
 | **03** (IT)        | Sessions and security | —                                        | Idle refresh and an absolute session cap; a member manager cannot delete, archive or change the status of a more-privileged member |
+
+## Flagged by the 2026-10-19 → 10-20 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes: Settings page and search).
+
+| Script                                    | Beat                | Was                                                                     | Now                                                                                          |
+| ----------------------------------------- | ------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **07** (secretary)                        | Adopting minutes    | Separate **Publishing settings**, **Roll listing**, **Signers** buttons | One **Settings** button; sections Attendance, Signatures, Reminders, Publishing              |
+| **07**                                    | Finding old minutes | Search by meeting title                                                 | Search words inside minutes; every word must appear; quotes for a phrase; newest 500         |
+| Medical screening narration (if scripted) | Requirements        | Applies to Roles, not enforced                                          | **Applies to Positions** limits who is graded; blank means everyone; Not applicable for none |
+| **11**-related finance narration          | Dashboard tile      | Overdue dues included part-paid                                         | Overdue count matches the dues page; Partial not counted                                     |
 
 ## Flagged by the 2026-10-18 → 10-19 changes
 

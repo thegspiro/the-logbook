@@ -279,7 +279,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
                   {unavailable ? (
                     <Lock className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                   ) : inUse ? (
-                    <Check className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" aria-hidden="true" />
+                    <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400" aria-hidden="true" />
                   ) : (
                     <CircleDashed className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                   )}

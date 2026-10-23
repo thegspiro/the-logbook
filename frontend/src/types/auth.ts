@@ -87,3 +87,20 @@ export interface PasswordResetConfirm {
   token: string;
   new_password: string;
 }
+
+/** What `GET /auth/session-settings` reports about the current session. */
+export interface SessionSettings {
+  session_timeout_minutes?: number | undefined;
+  password_max_age_days?: number | undefined;
+  /** When the session's absolute lifetime ends; null when that cap is off. */
+  session_ends_at?: string | null | undefined;
+  is_kiosk?: boolean | undefined;
+  /** Whether the member holds `security.kiosk_session`. */
+  kiosk_available?: boolean | undefined;
+}
+
+export interface KioskSessionResult {
+  is_kiosk: boolean;
+  session_timeout_minutes: number;
+  session_ends_at: string | null;
+}

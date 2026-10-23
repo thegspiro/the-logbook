@@ -143,7 +143,7 @@ export const FinanceApprovalPage: React.FC = () => {
     return (
       <Shell>
         <div className="flex items-start gap-3">
-          <CheckCircle className="mt-0.5 h-6 w-6 flex-shrink-0 text-green-600" aria-hidden="true" />
+          <CheckCircle className="mt-0.5 h-6 w-6 flex-shrink-0 text-green-700 dark:text-green-600" aria-hidden="true" />
           <p className="text-theme-text-primary">{resultMessage}</p>
         </div>
       </Shell>

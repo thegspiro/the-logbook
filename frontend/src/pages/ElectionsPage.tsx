@@ -605,7 +605,7 @@ export const ElectionsPage: React.FC = () => {
 
                           <div className="flex shrink-0 flex-col items-end gap-1">
                             {timeRemaining && (
-                              <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-800 dark:text-green-400">
                                 <svg
                                   className="h-3 w-3"
                                   fill="none"

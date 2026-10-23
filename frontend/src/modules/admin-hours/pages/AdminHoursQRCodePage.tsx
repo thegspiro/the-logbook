@@ -108,7 +108,14 @@ const AdminHoursQRCodePage: React.FC = () => {
           {clockInUrl && (
             <div className="mb-6 flex justify-center">
               <div className="qr-container">
-                <QRCodeSVG value={clockInUrl} size={300} level="H" includeMargin={true} className="h-auto max-w-full" />
+                <QRCodeSVG
+                  value={clockInUrl}
+                  size={300}
+                  level="H"
+                  includeMargin={true}
+                  className="h-auto max-w-full"
+                  title={`Clock-in QR code for ${qrData.categoryName}`}
+                />
               </div>
             </div>
           )}
@@ -119,9 +126,7 @@ const AdminHoursQRCodePage: React.FC = () => {
             style={{ backgroundColor: (qrData.categoryColor ?? '#6B7280') + '20' }}
           >
             <div className="h-3 w-3 rounded-full" style={{ backgroundColor: qrData.categoryColor ?? '#6B7280' }} />
-            <span className="font-semibold" style={{ color: qrData.categoryColor ?? '#6B7280' }}>
-              {qrData.categoryName}
-            </span>
+            <span className="text-theme-text-primary font-semibold">{qrData.categoryName}</span>
           </div>
 
           {/* Instructions */}

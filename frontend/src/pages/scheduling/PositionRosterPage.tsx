@@ -82,12 +82,12 @@ const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string
   },
   qualification: {
     icon: BadgeCheck,
-    className: 'bg-teal-500/15 text-teal-700 dark:text-teal-400',
+    className: 'bg-teal-500/15 text-teal-800 dark:text-teal-400',
     reason: 'By qualification',
   },
   training: {
     icon: GraduationCap,
-    className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+    className: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-400',
     reason: 'By completed training',
   },
   open: { icon: Unlock, className: 'bg-sky-500/15 text-sky-700 dark:text-sky-400', reason: 'Open to everyone' },
@@ -156,7 +156,7 @@ const PositionRosterPage: React.FC = () => {
         const daysLeft = source.expires_on ? calendarDaysFromToday(source.expires_on, tz) : null;
         const expiringSoon = daysLeft !== null && daysLeft <= EXPIRING_SOON_DAYS;
         const className = expiringSoon
-          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+          ? 'bg-amber-500/15 text-amber-800 dark:text-amber-400'
           : (style?.className ?? '');
 
         return (
@@ -283,7 +283,7 @@ const PositionRosterPage: React.FC = () => {
                   )}
                 </p>
                 {isDrivingPosition && uncertifiedCount > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-400">
                     <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                     {uncertifiedCount} with no EVOC certification on file
                   </span>
@@ -316,7 +316,7 @@ const PositionRosterPage: React.FC = () => {
                     <div className="sm:w-72 sm:shrink-0">
                       {member.evoc_level_number !== null ? (
                         <p className="text-theme-text-secondary inline-flex items-center gap-1.5 text-xs font-medium">
-                          <Shield className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                          <Shield className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
                           EVOC {member.evoc_level_number}
                           {member.evoc_level_name ? ` · ${member.evoc_level_name}` : ''}
                         </p>
