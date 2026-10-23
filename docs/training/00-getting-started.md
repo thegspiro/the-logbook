@@ -442,6 +442,25 @@ your account safe even if someone learns your password. When you turn it on,
 you get a set of **recovery codes**. Each one works once, if you ever lose
 your phone. Save them somewhere safe and private.
 
+**Two-step sign-in is required if you hold an administrative role.** Whatever
+your department chose for everyone else, a member who can manage settings,
+security, integrations, members, positions, audit logs or health records (in the
+standard setup: the chiefs, president, secretary, membership coordinator and IT
+manager) must turn it on. After the department upgrades you have **14 days**: you
+get one email and a banner across the app counting the days down, and you can
+keep working. When the days run out you can reach only the setup screens until
+you enroll. The 14 days start again if you are later promoted into such a role.
+
+**Some actions ask you to prove it is you.** Exporting the audit or error log,
+changing roles, positions, security or integration settings, resetting another
+administrator's password or two-factor, and deleting or anonymizing a member
+open a small box asking for your **authenticator code** (or your password, if you
+do not use two-step sign-in). Enter it and the action carries on by itself. It
+stays proven for 10 minutes on that browser, so a second sensitive action right
+after does not ask again. If you sign in only through a provider such as Google
+and have no password or authenticator, the box tells you to set up two-step
+sign-in first.
+
 ![My Account, Security, right after Verify & enable: the Save your recovery codes panel with its grid of ten codes, Copy codes and Done. The codes are made up for the picture](./images/00-31-mfa-recovery-codes.png)
 
 > **Your privacy choices.** Privacy choices and the data download are on the
