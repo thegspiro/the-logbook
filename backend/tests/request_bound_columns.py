@@ -12,6 +12,12 @@ add a ``COLUMN_BACKED`` row. A field matched to its column by name alone, where 
 column of that name has the same type, is still a row; the model is one of them.
 
 Row format: ``schema module:Class.field=Model.column``.
+
+``POLICY_BOUNDED`` is the third list: a field a department's rules bound *below* the
+column, so a typo cannot flow into every total. Its bound is checked to sit inside the
+column's range (and to refuse a value past it), where ``COLUMN_BACKED`` asserts the two
+are equal. Request schemas only: the ``*Base`` a response inherits keeps the column's own
+range, so a row written before a policy bound still serializes.
 """
 
 COLUMN_BACKED = [
@@ -260,46 +266,28 @@ COLUMN_BACKED = [
     # app.schemas.grant
     "app.schemas.grant:CampaignBase.goal_amount=FundraisingCampaign.goal_amount",
     "app.schemas.grant:CampaignBase.minimum_donation=FundraisingCampaign.minimum_donation",
-    "app.schemas.grant:CampaignUpdate.goal_amount=FundraisingCampaign.goal_amount",
-    "app.schemas.grant:CampaignUpdate.minimum_donation=FundraisingCampaign.minimum_donation",
     "app.schemas.grant:DonationBase.amount=Donation.amount",
-    "app.schemas.grant:DonationUpdate.amount=Donation.amount",
     "app.schemas.grant:FundraisingEventBase.max_attendees=Event.max_attendees",
     "app.schemas.grant:FundraisingEventBase.revenue_goal=FundraisingEvent.revenue_goal",
     "app.schemas.grant:FundraisingEventBase.ticket_price=FundraisingEvent.ticket_price",
-    "app.schemas.grant:FundraisingEventUpdate.actual_revenue=FundraisingEvent.actual_revenue",
     "app.schemas.grant:FundraisingEventUpdate.current_attendees=FundraisingEvent.current_attendees",
-    "app.schemas.grant:FundraisingEventUpdate.expenses=FundraisingEvent.expenses",
     "app.schemas.grant:FundraisingEventUpdate.max_attendees=Event.max_attendees",
-    "app.schemas.grant:FundraisingEventUpdate.revenue_goal=FundraisingEvent.revenue_goal",
-    "app.schemas.grant:FundraisingEventUpdate.ticket_price=FundraisingEvent.ticket_price",
     "app.schemas.grant:GrantApplicationBase.amount_awarded=GrantApplication.amount_awarded",
     "app.schemas.grant:GrantApplicationBase.amount_requested=GrantApplication.amount_requested",
     "app.schemas.grant:GrantApplicationBase.match_amount=GrantApplication.match_amount",
     "app.schemas.grant:GrantApplicationBase.performance_period_months=GrantApplication.performance_period_months",
-    "app.schemas.grant:GrantApplicationUpdate.amount_awarded=GrantApplication.amount_awarded",
-    "app.schemas.grant:GrantApplicationUpdate.amount_requested=GrantApplication.amount_requested",
-    "app.schemas.grant:GrantApplicationUpdate.match_amount=GrantApplication.match_amount",
     "app.schemas.grant:GrantApplicationUpdate.performance_period_months=GrantApplication.performance_period_months",
     "app.schemas.grant:GrantBudgetItemBase.amount_budgeted=Budget.amount_budgeted",
     "app.schemas.grant:GrantBudgetItemBase.federal_share=GrantBudgetItem.federal_share",
     "app.schemas.grant:GrantBudgetItemBase.local_match=GrantBudgetItem.local_match",
     "app.schemas.grant:GrantBudgetItemBase.sort_order=AdminHoursCategory.sort_order",
-    "app.schemas.grant:GrantBudgetItemUpdate.amount_budgeted=Budget.amount_budgeted",
-    "app.schemas.grant:GrantBudgetItemUpdate.federal_share=GrantBudgetItem.federal_share",
-    "app.schemas.grant:GrantBudgetItemUpdate.local_match=GrantBudgetItem.local_match",
     "app.schemas.grant:GrantBudgetItemUpdate.sort_order=AdminHoursCategory.sort_order",
     "app.schemas.grant:GrantComplianceTaskBase.reminder_days_before=GrantComplianceTask.reminder_days_before",
     "app.schemas.grant:GrantComplianceTaskUpdate.reminder_days_before=GrantComplianceTask.reminder_days_before",
     "app.schemas.grant:GrantExpenditureBase.amount=GrantExpenditure.amount",
-    "app.schemas.grant:GrantExpenditureUpdate.amount=GrantExpenditure.amount",
     "app.schemas.grant:GrantOpportunityBase.typical_award_max=GrantOpportunity.typical_award_max",
     "app.schemas.grant:GrantOpportunityBase.typical_award_min=GrantOpportunity.typical_award_min",
-    "app.schemas.grant:GrantOpportunityUpdate.typical_award_max=GrantOpportunity.typical_award_max",
-    "app.schemas.grant:GrantOpportunityUpdate.typical_award_min=GrantOpportunity.typical_award_min",
     "app.schemas.grant:PledgeBase.pledged_amount=Pledge.pledged_amount",
-    "app.schemas.grant:PledgeUpdate.fulfilled_amount=Pledge.fulfilled_amount",
-    "app.schemas.grant:PledgeUpdate.pledged_amount=Pledge.pledged_amount",
     # app.schemas.inventory
     "app.schemas.inventory:BatchReturnItem.quantity=ItemIssuance.quantity_issued",
     "app.schemas.inventory:BatchScanItem.quantity=ItemIssuance.quantity_issued",
@@ -593,15 +581,6 @@ NOT_COLUMN_BACKED = {
     "app.schemas.event:RequestPipelineUpdate.public_daily_limit": _JSON,
     "app.schemas.grant:CampaignBase.suggested_amounts": _JSON,
     "app.schemas.grant:CampaignUpdate.suggested_amounts": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.construction": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.contractual": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.equipment": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.indirect": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.other": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.personnel": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.supplies": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.training": _JSON,
-    "app.schemas.grant:GrantBudgetSummary.travel": _JSON,
     "app.schemas.organization:EmailServiceSettings.smtp_port": _JSON,
     "app.schemas.organization:MembershipIdSettings.next_number": _JSON,
     "app.schemas.organization:MembershipIdSettings.start_number": _JSON,
@@ -630,3 +609,28 @@ NOT_COLUMN_BACKED = {
     "app.schemas.training_session:AttendeeApprovalData.calculated_duration_minutes": _JSON,
     "app.schemas.training_session:RecurringTrainingSessionCreate.recurrence_custom_days": _JSON,
 }
+
+
+# GF-9: grants and fundraising money, bounded below the column on the request
+# schemas (a donation or pledge above $0 and at most $1,000,000; everything else
+# at most $100,000,000). See app/schemas/grant.py, MAX_GIFT_AMOUNT / MAX_AMOUNT.
+POLICY_BOUNDED = [
+    "app.schemas.grant:CampaignUpdate.goal_amount=FundraisingCampaign.goal_amount",
+    "app.schemas.grant:CampaignUpdate.minimum_donation=FundraisingCampaign.minimum_donation",
+    "app.schemas.grant:DonationUpdate.amount=Donation.amount",
+    "app.schemas.grant:FundraisingEventUpdate.actual_revenue=FundraisingEvent.actual_revenue",
+    "app.schemas.grant:FundraisingEventUpdate.expenses=FundraisingEvent.expenses",
+    "app.schemas.grant:FundraisingEventUpdate.revenue_goal=FundraisingEvent.revenue_goal",
+    "app.schemas.grant:FundraisingEventUpdate.ticket_price=FundraisingEvent.ticket_price",
+    "app.schemas.grant:GrantApplicationUpdate.amount_awarded=GrantApplication.amount_awarded",
+    "app.schemas.grant:GrantApplicationUpdate.amount_requested=GrantApplication.amount_requested",
+    "app.schemas.grant:GrantApplicationUpdate.match_amount=GrantApplication.match_amount",
+    "app.schemas.grant:GrantBudgetItemUpdate.amount_budgeted=Budget.amount_budgeted",
+    "app.schemas.grant:GrantBudgetItemUpdate.federal_share=GrantBudgetItem.federal_share",
+    "app.schemas.grant:GrantBudgetItemUpdate.local_match=GrantBudgetItem.local_match",
+    "app.schemas.grant:GrantExpenditureUpdate.amount=GrantExpenditure.amount",
+    "app.schemas.grant:GrantOpportunityUpdate.typical_award_max=GrantOpportunity.typical_award_max",
+    "app.schemas.grant:GrantOpportunityUpdate.typical_award_min=GrantOpportunity.typical_award_min",
+    "app.schemas.grant:PledgeUpdate.fulfilled_amount=Pledge.fulfilled_amount",
+    "app.schemas.grant:PledgeUpdate.pledged_amount=Pledge.pledged_amount",
+]

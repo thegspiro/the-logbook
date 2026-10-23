@@ -528,6 +528,8 @@ export interface Donor {
   communicationPreferences: Record<string, unknown> | null;
   isAnonymous: boolean;
   active: boolean;
+  /** True when the caller may not see contact details (fundraising.manage), so a blank email is not missing data. */
+  contactHidden?: boolean;
   createdAt: string;
   updatedAt: string;
 }

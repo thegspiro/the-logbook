@@ -14,14 +14,15 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
-import { Loader2, UserCheck, ToggleRight, Send, ShieldCheck } from 'lucide-react';
+import { useSearchParams } from 'react-router';
+import { Loader2, Settings as SettingsIcon, UserCheck, ToggleRight, Send, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { ElectionSettings, ElectionListItem } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
+import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 
@@ -77,7 +78,6 @@ const ToggleRow: React.FC<ToggleRowProps> = ({ label, description, checked, onCh
 );
 
 export const ElectionsSettingsPage: React.FC = () => {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<ElectionSettings>({});
@@ -418,8 +418,15 @@ export const ElectionsSettingsPage: React.FC = () => {
       subtitle="Proxy voting, election features, and ballot integrity"
       saveState={saveState}
       onRetrySave={retry}
-      onBack={() => void navigate('/elections')}
-      backLabel="Back to elections"
+      pageHeader={(controls) => (
+        <GovernancePageHeader
+          icon={SettingsIcon}
+          title="Election Settings"
+          breadcrumbLabel="Settings"
+          subtitle="Proxy voting, election features, and ballot integrity"
+          actions={controls}
+        />
+      )}
     >
       {renderContent()}
     </SettingsLayout>

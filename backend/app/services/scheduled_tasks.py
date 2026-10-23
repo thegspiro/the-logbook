@@ -4921,6 +4921,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts to admins when inventory items drop below reorder point.
     Daily at 07:00.
     """
+    from app.core.config import settings
     from app.services.email_service import EmailService
     from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
@@ -5006,6 +5007,12 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                 continue
 
             table_html, any_from_lots, any_medical = _render(rows)
+            # Opens the Low stock tab, which lists exactly what the table
+            # above counts, so the purchaser lands on the reorder list rather
+            # than the page's default expiring-stock view. Offered only when
+            # medical rows are in this message: a gear-only email has no such
+            # page to point at.
+            low_stock_url = f"{settings.FRONTEND_URL}/medical-supplies?tab=low"
             html_body = wrap_email_body(
                 org,
                 "Low Stock Alert",
@@ -5028,6 +5035,12 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     if any_medical
                     else ""
                 )
+                + (
+                    f'<p><a href="{_html.escape(low_stock_url)}">'
+                    "View low-stock medical supplies</a></p>"
+                    if any_medical
+                    else ""
+                )
                 + "<p>Please review and reorder as needed.</p>",
                 header_color="#dc2626",
             )
@@ -5040,6 +5053,11 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                 text_body=(
                     f"{len(rows)} inventory items are at or below their "
                     f"reorder point. Please check the inventory dashboard."
+                    + (
+                        f" Low-stock medical supplies: {low_stock_url}"
+                        if any_medical
+                        else ""
+                    )
                 ),
             )
             if success_count > 0:

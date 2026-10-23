@@ -1176,6 +1176,11 @@ class Session(Base):
     last_activity: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # Set by the owner via POST /auth/session/kiosk. Only honoured while the
+    # user still holds security.kiosk_session; see session_end_reason.
+    is_kiosk: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     def __repr__(self):
         return f"<Session(user_id={self.user_id}, expires_at={self.expires_at})>"

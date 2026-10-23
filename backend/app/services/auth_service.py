@@ -152,13 +152,40 @@ def _as_utc(value: object) -> Optional[datetime]:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-def session_end_reason(session: UserSession, now: datetime) -> Optional[str]:
+def session_limits(kiosk: bool) -> Tuple[int, int]:
+    """``(idle_minutes, absolute_hours)`` for a standard or a kiosk session.
+
+    0 means the limit is off. Shared with ``GET /auth/session-settings`` so the
+    browser's timer and the server's enforcement read one definition.
+    """
+    if kiosk:
+        return (
+            settings.SESSION_KIOSK_IDLE_TIMEOUT_MINUTES,
+            settings.SESSION_KIOSK_ABSOLUTE_MAX_HOURS,
+        )
+    return settings.HIPAA_SESSION_TIMEOUT_MINUTES, settings.SESSION_ABSOLUTE_MAX_HOURS
+
+
+def session_ends_at(session: UserSession, kiosk: bool) -> Optional[datetime]:
+    """When the absolute lifetime ends, or ``None`` when that cap is off."""
+    _, absolute_limit = session_limits(kiosk)
+    started = _as_utc(session.created_at)
+    if absolute_limit <= 0 or started is None:
+        return None
+    return started + timedelta(hours=absolute_limit)
+
+
+def session_end_reason(
+    session: UserSession, now: datetime, kiosk: bool = False
+) -> Optional[str]:
     """Why a session must end now: ``"idle"``, ``"absolute"`` or ``None``.
 
     Both limits are measured server-side from stamps the server wrote, so a
     client cannot lengthen either by what it sends. A limit set to 0 is off.
+    ``kiosk`` selects the longer kiosk limits; the caller passes it only after
+    confirming the flag is set AND the user still holds the permission.
     """
-    idle_limit = settings.HIPAA_SESSION_TIMEOUT_MINUTES
+    idle_limit, absolute_limit = session_limits(kiosk)
     last_active = _as_utc(session.last_activity)
     if (
         idle_limit > 0
@@ -167,7 +194,6 @@ def session_end_reason(session: UserSession, now: datetime) -> Optional[str]:
     ):
         return "idle"
 
-    absolute_limit = settings.SESSION_ABSOLUTE_MAX_HOURS
     started = _as_utc(session.created_at)
     if (
         absolute_limit > 0
@@ -190,6 +216,34 @@ class AuthService:
         # Set by reset_password_with_token to the member whose password the
         # token reset, so the audit row names them.
         self.last_reset_user: Optional[User] = None
+
+    async def holds_kiosk_session(self, session: UserSession) -> bool:
+        """Whether ``session`` is a kiosk session the user may still run.
+
+        The flag is not trusted by itself: a member whose permission was
+        revoked after they enabled it drops back to the standard limits on
+        the next request. Only kiosk sessions pay for the extra query.
+        """
+        if not session.is_kiosk:
+            return False
+        # Imported here: api.dependencies imports this module.
+        from app.api.dependencies import user_has_permission
+
+        result = await self.db.execute(
+            select(User)
+            .where(User.id == str(session.user_id))
+            .where(User.deleted_at.is_(None))
+            .options(selectinload(User.roles))
+        )
+        user = result.scalar_one_or_none()
+        return user is not None and user_has_permission(user, "security.kiosk_session")
+
+    async def get_session_for_token(self, token: str) -> Optional[UserSession]:
+        """The session row an access token belongs to, if any."""
+        result = await self.db.execute(
+            select(UserSession).where(UserSession.token == token)
+        )
+        return result.scalar_one_or_none()
 
     async def authenticate_user(
         self, username: str, password: str
@@ -537,7 +591,11 @@ class AuthService:
             # is an ordinary "sign in again", not a replay: the row is found and
             # removed here, so the 401 it becomes never reaches the branch above
             # that revokes every session the member has.
-            ended = session_end_reason(session, datetime.now(timezone.utc))
+            ended = session_end_reason(
+                session,
+                datetime.now(timezone.utc),
+                kiosk=await self.holds_kiosk_session(session),
+            )
             if ended:
                 logger.info(
                     f"Refresh refused for user {user_id}: session {ended} limit reached"
@@ -973,7 +1031,11 @@ class AuthService:
             # token, and refresh needs to find the row to answer "sign in
             # again". Deleting it made that refresh look like a replayed token
             # and revoked every other session the member had.
-            ended = session_end_reason(session, datetime.now(timezone.utc))
+            ended = session_end_reason(
+                session,
+                datetime.now(timezone.utc),
+                kiosk=await self.holds_kiosk_session(session),
+            )
             if ended:
                 logger.info(f"Session {ended} limit reached; token rejected")
                 return None

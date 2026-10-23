@@ -17,6 +17,9 @@ import { useConfirm } from '../contexts/ConfirmContext';
  * 3. Displays success confirmation or error messages
  * 4. Validates the time window before allowing check-in
  */
+/** The three fields the screens read, so a record built from the QR data and a full RSVP are interchangeable. */
+type CheckInRecord = Pick<RSVP, 'checked_in_at' | 'checked_out_at' | 'attendance_duration_minutes'>;
+
 const EventSelfCheckInPage: React.FC = () => {
   const { confirm } = useConfirm();
   const { id: eventId } = useParams<{ id: string }>();
@@ -30,7 +33,7 @@ const EventSelfCheckInPage: React.FC = () => {
   const tz = qrData?.timezone || userTz;
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
-  const [checkInData, setCheckInData] = useState<RSVP | null>(null);
+  const [checkInData, setCheckInData] = useState<CheckInRecord | null>(null);
   const [showCheckOutPrompt, setShowCheckOutPrompt] = useState(false);
   // Non-blocking notice shown after an early check-in (window not yet open).
   const [notice, setNotice] = useState<string | null>(null);
@@ -48,6 +51,19 @@ const EventSelfCheckInPage: React.FC = () => {
       setError(null);
       const data = await eventService.getQRCheckInData(eventId);
       setQrData(data);
+
+      // A member who scans again after checking in is offered check-out, or
+      // told they already left, rather than a check-in button that would only
+      // repeat the first answer.
+      if (data.user_checked_in_at) {
+        if (data.user_checked_out_at) {
+          setCheckInData({ checked_in_at: data.user_checked_in_at, checked_out_at: data.user_checked_out_at });
+          setCheckedIn(true);
+        } else {
+          setCheckInData({ checked_in_at: data.user_checked_in_at });
+          setShowCheckOutPrompt(true);
+        }
+      }
     } catch (err: unknown) {
       const appError = toAppError(err);
       setError(appError.status ? appError.message : 'Failed to load event information');
