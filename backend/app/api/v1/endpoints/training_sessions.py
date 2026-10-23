@@ -201,7 +201,7 @@ async def create_recurring_training_session(
     return [_session_response(ts) for ts in training_sessions]
 
 
-@router.get("/by-event/{event_id}", response_model=TrainingSessionResponse)
+@router.get("/by-event/{event_id}", response_model=Optional[TrainingSessionResponse])
 async def get_training_session_by_event(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -214,6 +214,13 @@ async def get_training_session_by_event(
     requirement/program links). Read-only, so any authenticated member of the
     organization may call it.
 
+    Answers `200` with a `null` body when the event has no training session
+    (a plain event, or one made before sessions existed). The page asks this
+    question for every event it opens, so a `404` here put a red error line in
+    the browser console each time for an ordinary answer. An id that names no
+    event in the caller's organization gets the same `null`, as the `404` did
+    not tell the two cases apart either.
+
     **Authentication required**
     """
     service = TrainingSessionService(db)
@@ -223,10 +230,7 @@ async def get_training_session_by_event(
     )
 
     if not training_session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No training session found for this event",
-        )
+        return None
 
     return _session_response(training_session)
 

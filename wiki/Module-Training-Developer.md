@@ -310,7 +310,7 @@ category per section and links them; the result reports
 GET    /api/v1/training/sessions/calendar                  # Session calendar
 POST   /api/v1/training/sessions                           # Create session (events.manage)
 POST   /api/v1/training/sessions/recurring                 # Create a recurring series (events.manage)
-GET    /api/v1/training/sessions/by-event/{event_id}       # The session behind a Training event
+GET    /api/v1/training/sessions/by-event/{event_id}       # The session behind a Training event (200 with null when it has none)
 POST   /api/v1/training/sessions/by-event/{event_id}       # Attach training details to a Training event (events.manage)
 GET    /api/v1/training/sessions/by-event/{event_id}/approval  # Where the event's approval stands (events.manage or training.manage)
 PATCH  /api/v1/training/sessions/{id}                      # Relink course/program/requirement (events.manage; locked while attendance is finalized)
