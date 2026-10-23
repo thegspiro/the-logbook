@@ -225,8 +225,13 @@ def _live_column(table: str, column: str):
         op.get_bind()
         .execute(
             sa.text(
-                "SELECT column_type, is_nullable, character_set_name, "
-                "collation_name, column_comment "
+                # Aliased: MySQL 8 returns information_schema column names in
+                # upper case (COLUMN_TYPE), MariaDB as written, and the row is
+                # read by name below.
+                "SELECT column_type AS column_type, is_nullable AS is_nullable, "
+                "character_set_name AS character_set_name, "
+                "collation_name AS collation_name, "
+                "column_comment AS column_comment "
                 "FROM information_schema.columns "
                 "WHERE table_schema = DATABASE() "
                 "AND table_name = :table AND column_name = :column"
