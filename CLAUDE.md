@@ -153,6 +153,9 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **DB-backed tests marked `integration`** — a `db_session` test under a module-level `pytest.mark.unit` runs in the no-database job and fails on the fixture (see Pitfall #30b)
 - [ ] **User text logged with `{!r}`** — never interpolated into a log message with an f-string, and never an f-string message combined with logger arguments (see Pitfall #33)
 - [ ] **New dependency verified** — name checked against the registry and the project's own docs, pinned like its neighbours, and named in the PR Summary (see Pitfall #34)
+- [ ] **Migration handles existing rows** — a tightened column, new unique or foreign key, or required column settles the rows already there, and a test proves it with rows present (see Pitfall #35)
+- [ ] **Safe to run twice** — a new webhook handler, scheduled task or retried write names the id that makes a second run a no-op, constrains it, and tests a double delivery (see Pitfall #36)
+- [ ] **The test was seen to fail** — a bug fix's test went red against the unfixed code; a test and the code it checks are not changed in one commit without a stated reason (see Pitfall #37)
 
 ## Project Overview
 
@@ -1676,8 +1679,13 @@ up, and a log line rarely needs it.
 column a user can write is passed to the logger as an argument formatted with
 `{!r}`, never interpolated into the message with an f-string, `%` or `+`. Never
 combine an f-string message with logger arguments. Values the code itself
-produced — ids, counts, enum values, status codes — may use `{}`. Nothing
-enforces this yet; it is review discipline until a check exists.
+produced — ids, counts, enum values, status codes — may use `{}`.
+
+`tests/test_log_call_shape.py` enforces the second half: it sweeps `app/` and
+`scripts/` and fails on any log call that passes formatting arguments to an
+f-string message. The first half is not enforceable by the same means — whether
+a spliced value came from a user is not visible in the AST, and more than six
+hundred f-string log calls already exist — so it remains review discipline.
 
 ### 34. A Dependency or API You Remember Is Checked Against the Real One First _(2026-10-23)_
 
@@ -1730,6 +1738,122 @@ stubs and the real library can disagree.
 **Rule:** no dependency is added on recall alone, and no unfamiliar call is
 written from memory against a pinned library without checking the version
 installed here. Nothing enforces either step; both are review discipline.
+
+### 35. CI Migrates an Empty Database; Production Migrates the Rows That Exist _(2026-10-23)_
+
+`docs/rules/migrations.md` explains why CI runs `alembic upgrade head` against an
+**empty** database. The consequence that rule does not cover is that a migration
+is never run against data before it reaches a department. A constraint that
+holds on zero rows holds vacuously, and the first database it meets with rows in
+it is somebody's production one. The backend migrates itself on startup, so a
+migration that fails on that data is a backend that does not boot.
+
+Each of these passes CI and behaves differently on a populated table. All three
+were reproduced on the dev MariaDB under its strict `sql_mode`; MySQL 8 in
+strict mode documents the same behaviour:
+
+| Step                                          | Empty table (CI) | Table with rows                                                                        |
+| --------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `add_column(..., nullable=False)`, no default | succeeds         | **succeeds silently** — every existing row gets the type's implicit default: `''`, `0` |
+| `alter_column(..., nullable=False)`           | succeeds         | **fails** — `1265 Data truncated` on the first row still holding NULL                  |
+| `create_unique_constraint` / a unique index   | succeeds         | **fails** — `1062 Duplicate entry` if any two rows already share the value             |
+| `create_foreign_key` on an existing column    | succeeds         | **fails** on any row whose value has no parent                                         |
+
+The first row is the dangerous one, because nothing fails. A required
+`station_id` added this way leaves every existing member with an empty string
+that is neither a station nor NULL, so a lookup finds nothing and an `IS NULL`
+check for "not yet assigned" finds nothing either.
+
+So, for each step that narrows what a column may hold:
+
+1. **Settle the existing rows first, in the same migration.** Backfill the
+   value, or delete or merge the duplicates and orphans — and say in the
+   docstring what was done to them, under Pitfall #20's rule for backfills that
+   cannot be reversed. Only then add the constraint.
+2. **A new `NOT NULL` column gets a `server_default`, or is added nullable,
+   backfilled and then tightened.** Never rely on the implicit default.
+3. **Test it against rows.** A migration test that inserts the awkward rows — a
+   NULL, a duplicate, an orphan — before upgrading proves the step on the
+   database that matters. `tests/test_alembic_migrations.py` proves the chain,
+   not the data.
+4. **A step that removes or renames a column the current release reads** makes
+   restoring the previous image impossible without restoring the database
+   backup too. Say so in `docs/UPGRADING.md`, which already tells operators to
+   take that backup.
+
+**Rule:** a migration that tightens a column, adds a unique or foreign key, or
+adds a required column handles the rows already there, and a test proves it
+with those rows present. CI's empty database cannot tell you it does. Nothing
+enforces this; it is review discipline.
+
+### 36. A Retried or Redelivered Operation Must Not Repeat Its Side Effect _(2026-10-23)_
+
+Every path that runs without a person watching it can run twice: a provider
+redelivers a webhook it did not see acknowledged, a scheduled loop re-runs after
+a crash, a client retries a POST that timed out after it was processed. A
+handler written as "receive, act, return" is correct only if it runs once, and
+nothing in a test run ever runs it twice.
+
+What this repository already has, and what each does **not** cover:
+
+| Mechanism                                                       | Covers                                               | Does not cover                                                                                                                                     |
+| --------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `is_duplicate_webhook` (`app/utils/webhook_replay.py`)          | the identical signed body replayed within 10 minutes | a redelivery after 10 minutes, a redelivery whose body differs (a new timestamp), and every delivery while Redis is down — it fails open by design |
+| The scheduler claim (`app/core/background_claim.py`)            | two workers running the scheduled loops at once      | the same worker re-running a task that crashed between its side effect and its commit                                                              |
+| `with_db_retry` / `retry_on_db_error` (`app/utils/db_retry.py`) | reads during a brief database outage                 | writes — it retries `2013 Lost connection during query`, after which a write may already have committed                                            |
+
+So the replay guard is a freshness check, not idempotency. The durable guard is
+a **unique constraint on the provider's own id for the thing**.
+`StorePaymentEvent.external_id` is unique per organization and provider, and
+`StorefrontService.record_external_payment` looks the id up first and returns
+the existing row, which is why a PayPal redelivery cannot record a payment twice
+whatever Redis is doing. A new webhook handler follows that shape: store the
+provider's event or object id, constrain it, return the existing record on a
+repeat — the constraint is what catches two deliveries racing past the lookup —
+and answer 200 so the provider stops retrying.
+
+For a scheduled task that sends something, decide the order and say which in a
+comment, because both orders fail and they fail differently:
+
+- **send, then stamp and commit** — a crash in between sends again on the next
+  run (at least once). Right for a reminder, where a duplicate is a nuisance.
+- **stamp and commit, then send** — a crash in between never sends (at most
+  once). Right for anything where a duplicate does harm: a charge, a vote
+  notice, a TCPA-governed text.
+
+**Rule:** a webhook handler, scheduled task or retried write is written to be
+run twice. Name the id that makes the second run a no-op, put a unique
+constraint on it, and add a test that delivers or runs the same thing twice and
+asserts one effect. A timestamp is not an idempotency key. Nothing enforces
+this; it is review discipline.
+
+### 37. A Passing Test Is Evidence Only If It Could Have Failed _(2026-10-23)_
+
+A test suite reports whether the tests passed, not whether the change is right.
+SWE-ABS (2026) re-ran top agents' accepted SWE-bench patches against stronger
+tests and rejected about one in five; the leading agent fell from 78.8% to
+62.2%. Benchmarks built to catch it find agents hardcoding expected outputs,
+weakening assertions and rewriting the test rather than the code — and the gap
+between visible and held-out tests grows with the size of the task. Pitfalls
+#13 and #28 are this repository's own record of tests that passed for the wrong
+reason.
+
+- **A bug fix ships with a test that failed before the fix.** Run it against
+  the unfixed code and see it go red, then apply the fix and see it go green. A
+  regression test nobody has seen fail is not known to test the regression.
+- **Do not change a test and the code it checks in the same commit without
+  saying why in the commit message.** An assertion loosened beside the code it
+  constrains is the change most likely to be hiding a bug, and in review it
+  reads as housekeeping. When a test's expectation is genuinely wrong, fix it in
+  its own commit that says what was wrong with it.
+- **Assert the value, not the shape.** `assert result` and `toBeDefined()` pass
+  for most wrong answers. A test asserts what the right answer is.
+- **Never special-case the test input in the code under test** — no branch on a
+  fixture's id, no constant that exists to match an expected value.
+
+**Rule:** a test counts as evidence for a change only once it has been seen to
+fail without that change. Nothing enforces this; it is review discipline,
+including when you are reviewing your own diff.
 
 ## Environment Variables
 
