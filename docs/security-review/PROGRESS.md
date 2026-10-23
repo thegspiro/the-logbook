@@ -20653,7 +20653,7 @@ this iteration's commit" rule.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -36268,3 +36268,48 @@ run lint` clean.
 
 Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
 pipeline).
+
+### 2026-10-23 — Feature 08 (Membership pipeline, pass 12) — watchdog pickup, real delta (duplicate-applicant refusal, approver-role trimming, numeric bounds, storage-interface routing), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated security-review loop session was
+not reachable (`ListAgents`), and `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 both before this
+iteration started and immediately before branching. PR #3569 (Feature 07,
+pass 11) had already merged, docs-only (0 fixed, 0 new findings — only this
+row's clearing rides along here, per the "docs-only PR is not a recordable
+event" rule). Row 08 (Membership pipeline) was confirmed the next `⬜` by
+reading the rotation table directly.
+
+Baseline `3d6ecd20` (PR #3420's merge, pass 11). 15 non-merge commits touch
+this feature's declared files (2 of the 4 declared files are byte-identical
+to pass 11); 27 files, 800 insertions / 248 deletions, all read in full. The
+real delta: a staff-facing 409 refusal for a duplicate applicant (minimal
+exposure — name/pipeline/stage only, same org-scoped lookup pass 11 already
+verified); approver-role string trimming consolidated into one helper
+(correctness, not a permission change); `INT32`-range bounds added to two
+pipeline-step fields; interview timestamps now typed `UTCDateTime`; stage
+deletion now audited; and prospect-document file access rerouted through
+the shared `file_storage_service` interface (the department-S3-bucket
+feature, cross-cutting, reviewed only at this feature's one call site) in
+place of bare `os.remove`/`os.path.exists` — same org/area confinement,
+same ordering relative to the DB write. **MP-22** (the one standing
+flagged item) re-confirmed **OPEN**, unchanged — the storage-interface
+routing is a mechanical substitution that preserves the exact ordering
+MP-22 describes, not a fix for it. 53 routes re-enumerated, unchanged.
+
+Full writeup: `docs/security-review/MP-08-membership-pipeline.md`'s
+**Pass 12** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.3.0/26.5.1/9.0.1) on `app/ tests/ alembic/` all clean; `validate_
+migrations.py --strict` — 640 revisions, single head `cc8c16cb6d98`;
+`check_route_permissions.py --strict` — 273 routes, 0 errors/warnings;
+scoped backend tests (`-k "membership or prospect or pipeline or
+election"`) — 1,876 passed, 1 skipped (environment-only, `pywebpush`);
+frontend `npm run typecheck` clean; `npm run lint` clean; scoped frontend
+suite (`npx vitest run src/modules/prospective-members`) — 302 passed (35
+files).
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI) — re-check `search_pull_requests` fresh rather than
+trusting this note.
