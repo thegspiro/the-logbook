@@ -4598,6 +4598,76 @@ class EquipmentCheckService:
             for item_id, entry in found.items()
         }
 
+    async def position_places(
+        self, organization_id: str, template_item_ids: Iterable[str]
+    ) -> Dict[str, Dict[str, Optional[str]]]:
+        """``{position_id: {"apparatus_id", "where"}}`` for checklist positions.
+
+        ``where`` names the position as the checklist does ("Medic 1 › Main
+        Compartment › Jump Bag"), and ``apparatus_id`` is the vehicle when the
+        template names one, so a screen can link to that truck's inventory. A
+        template for an apparatus *type* has none. Org-scoped through the
+        template; a position on an inactive template is left out, as it is
+        from every truck figure.
+        """
+        ids = list({str(i) for i in template_item_ids})
+        if not ids:
+            return {}
+        rows = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem.id,
+                    CheckTemplateItem.compartment_id,
+                    EquipmentCheckTemplate.id,
+                    EquipmentCheckTemplate.name,
+                    EquipmentCheckTemplate.apparatus_id,
+                    EquipmentCheckTemplate.apparatus_type,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .where(
+                    CheckTemplateItem.id.in_(ids),
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.is_active.is_(True),
+                )
+            )
+        ).all()
+        if not rows:
+            return {}
+        paths = await self._compartment_paths({str(r[2]) for r in rows})
+        apparatus_ids = {r[4] for r in rows if r[4]}
+        names: Dict[str, str] = {}
+        if apparatus_ids:
+            named = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            names = {str(aid): n for aid, n in named.all() if n}
+
+        found: Dict[str, Dict[str, Optional[str]]] = {}
+        for position_id, compartment_id, _tmpl_id, tmpl_name, app_id, app_type in rows:
+            if app_id:
+                carrier = names.get(str(app_id)) or tmpl_name
+            elif app_type:
+                carrier = f"Any {app_type}"
+            else:
+                carrier = tmpl_name
+            found[str(position_id)] = {
+                "apparatus_id": str(app_id) if app_id else None,
+                "where": " › ".join(
+                    [carrier or "Checklist", *paths.get(str(compartment_id), [])]
+                ),
+            }
+        return found
+
     async def swap_item_lot(
         self,
         template_item_id: str,

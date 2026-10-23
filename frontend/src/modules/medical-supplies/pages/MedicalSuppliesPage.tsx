@@ -55,12 +55,13 @@ import type { MedicalExpiringStockRow, MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
-type Tab = 'expiring' | 'stock' | 'low';
+type Tab = 'expiring' | 'stock' | 'low' | 'uncounted';
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'expiring', label: 'Expiring stock' },
   { id: 'stock', label: 'All supplies' },
   { id: 'low', label: 'Low stock' },
+  { id: 'uncounted', label: 'Not yet counted' },
 ];
 
 /**
@@ -107,7 +108,20 @@ const PLACES_SHOWN = 2;
  * Main Compartment › Jump Bag"). Past the first few, the rest open the
  * supply's dialog, which lists them all with what is aboard.
  */
-const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ item, onOpen }) => {
+interface SupplyWhereProps {
+  item: InventoryItem;
+  onOpen: () => void;
+  /**
+   * List only the truck positions nobody has counted, each linked to its
+   * apparatus's inventory when `linkToApparatus` -- the Not yet counted view,
+   * where those are the places to go.
+   */
+  uncountedOnly?: boolean;
+  linkToApparatus?: boolean;
+}
+
+const SupplyWhere: React.FC<SupplyWhereProps> = ({ item, onOpen, uncountedOnly = false, linkToApparatus = false }) => {
+  if (uncountedOnly) return <UncountedPlaces item={item} linkToApparatus={linkToApparatus} />;
   // A supply kept on the apparatus only has no shelf, so a room or note left
   // over from before it was marked would point somewhere it is not.
   const shelved = !item.apparatus_only;
@@ -149,6 +163,38 @@ const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ it
 };
 
 /**
+ * The positions behind a supply's "uncounted" figure. A position whose
+ * checklist names a vehicle links to that vehicle's inventory, where the
+ * count is entered; one written for an apparatus type has no single truck to
+ * open, so it is named without a link.
+ */
+const UncountedPlaces: React.FC<{ item: InventoryItem; linkToApparatus: boolean }> = ({ item, linkToApparatus }) => {
+  const places = item.apparatus_uncounted_places ?? [];
+  if (places.length === 0) return <div>—</div>;
+  return (
+    <ul className="space-y-1 text-xs" aria-label={`Uncounted positions for ${supplyLabel(item)}`}>
+      {places.map((place) => (
+        <li key={place.template_item_id} className="text-theme-text-secondary">
+          <span className="flex items-start gap-1">
+            <Truck className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+            <span>{place.where}</span>
+          </span>
+          {linkToApparatus && place.apparatus_id && (
+            <Link
+              to={`/inventory/checklists/apparatus-inventory?apparatus=${encodeURIComponent(place.apparatus_id)}`}
+              className="touch-target-phone block font-medium underline"
+              aria-label={`Count ${supplyLabel(item)} at ${place.where}`}
+            >
+              Count it
+            </Link>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+/**
  * Identity of an item query: what the rendered rows are an answer to.
  *
  * NUL separator, because a plain space would let search "a b" with no category
@@ -159,7 +205,7 @@ function itemQueryKey(searchTerm: string, category: string, sort: string, pageIn
 }
 
 /** The columns the supplies table sorts by, as the API names them. */
-type SortField = 'name' | 'category' | 'on_hand' | 'reorder_point';
+type SortField = 'name' | 'category' | 'on_hand' | 'reorder_point' | 'next_expiry';
 
 type Section = 'summary' | 'items' | 'categories' | 'expiring';
 
@@ -273,6 +319,9 @@ const MedicalSuppliesPage: React.FC = () => {
   // The Low stock tab is the supply table with the server's low-stock filter
   // on, so it shares the search, category and location controls below.
   const lowStockOnly = tab === 'low';
+  // Likewise, with the server's filter for supplies on a truck position
+  // nobody has counted -- whose truck figure is therefore only the target.
+  const uncountedOnly = tab === 'uncounted';
   const showsSupplyTable = tab !== 'expiring';
   const [summary, setSummary] = useState<MedicalSupplySummary | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -308,7 +357,7 @@ const MedicalSuppliesPage: React.FC = () => {
   const [storageOptions, setStorageOptions] = useState<MedicalStorageOptions | null>(null);
   // Part of the query key, so turning a filter on or off is a new query:
   // it resets the page and the selection like any other filter.
-  const sortKey = `${sortField && sortDirection ? `${sortField}:${sortDirection}` : ''}${lowStockOnly ? '\u0000low' : ''}${storageFilter ? `\u0000${storageFilter}` : ''}`;
+  const sortKey = `${sortField && sortDirection ? `${sortField}:${sortDirection}` : ''}${lowStockOnly ? '\u0000low' : ''}${uncountedOnly ? '\u0000uncounted' : ''}${storageFilter ? `\u0000${storageFilter}` : ''}`;
   const [lotsItem, setLotsItem] = useState<InventoryItem | null>(null);
   // Ids, not rows: a refreshed page hands back new objects for the same items.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -411,6 +460,7 @@ const MedicalSuppliesPage: React.FC = () => {
               sort_by: (sortDirection && sortField) || undefined,
               sort_order: (sortField && sortDirection) || undefined,
               low_stock: lowStockOnly || undefined,
+              uncounted: uncountedOnly || undefined,
               ...storageQuery,
               skip: page * PAGE_SIZE,
               limit: PAGE_SIZE,
@@ -529,7 +579,17 @@ const MedicalSuppliesPage: React.FC = () => {
         })
       );
     },
-    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, lowStockOnly, storageQuery, page]
+    [
+      debouncedSearch,
+      categoryFilter,
+      sortField,
+      sortDirection,
+      sortKey,
+      lowStockOnly,
+      uncountedOnly,
+      storageQuery,
+      page,
+    ]
   );
 
   const loadSectionsRef = useRef(loadSections);
@@ -588,10 +648,11 @@ const MedicalSuppliesPage: React.FC = () => {
     void loadSectionsRef.current(['items']);
   }, [debouncedSearch, categoryFilter, sortKey, page]);
 
-  // Moving into or out of the low-stock view changes the query, so the page
-  // goes back to the first one; a tab change within the same query does not.
+  // Moving into or out of the low-stock or uncounted view changes the query,
+  // so the page goes back to the first one; a tab change within the same
+  // query does not.
   const selectTab = (next: Tab) => {
-    if ((next === 'low') !== lowStockOnly) setPage(0);
+    if ((next === 'low') !== lowStockOnly || (next === 'uncounted') !== uncountedOnly) setPage(0);
     setTab(next);
   };
 
@@ -957,7 +1018,19 @@ const MedicalSuppliesPage: React.FC = () => {
             )}
           </section>
         ) : (
-          <section aria-label={lowStockOnly ? 'Low stock supplies' : 'All supplies'} aria-busy={loading.items}>
+          <section
+            aria-label={
+              lowStockOnly ? 'Low stock supplies' : uncountedOnly ? 'Supplies not yet counted' : 'All supplies'
+            }
+            aria-busy={loading.items}
+          >
+            {uncountedOnly && (
+              <p className="text-theme-text-secondary mb-3 text-sm">
+                These supplies are carried on a truck position no crew has counted, so On hand includes that
+                position&apos;s target rather than what is really aboard. A count on the checklist or the
+                apparatus&apos;s inventory settles it.
+              </p>
+            )}
             <div className="mb-4 flex flex-wrap gap-2">
               <div className="relative min-w-[200px] flex-1">
                 <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -1052,7 +1125,13 @@ const MedicalSuppliesPage: React.FC = () => {
                   title="Nothing is low"
                   description="No supply is at or below its reorder point."
                 />
-              ) : debouncedSearch || categoryFilter || lowStockOnly || storageFilter ? (
+              ) : uncountedOnly && !debouncedSearch && !categoryFilter && !storageFilter ? (
+                <EmptyState
+                  icon={ClipboardList}
+                  title="Everything aboard has been counted"
+                  description="Every truck position carrying a medical supply has a count from a crew."
+                />
+              ) : debouncedSearch || categoryFilter || lowStockOnly || uncountedOnly || storageFilter ? (
                 <EmptyState
                   icon={Search}
                   title="No matching supplies"
@@ -1152,8 +1231,14 @@ const MedicalSuppliesPage: React.FC = () => {
                             onSort={handleSort}
                           />
                         </th>
-                        <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                          Next expiry
+                        <th className="px-4 py-3 text-left">
+                          <SortableHeader
+                            label="Next expiry"
+                            field="next_expiry"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
                         </th>
                         <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
                           Where
@@ -1270,7 +1355,12 @@ const MedicalSuppliesPage: React.FC = () => {
                               )}
                             </td>
                             <td data-label="Where" className="text-theme-text-muted px-4 py-3">
-                              <SupplyWhere item={item} onOpen={() => setLotsItem(item)} />
+                              <SupplyWhere
+                                item={item}
+                                onOpen={() => setLotsItem(item)}
+                                uncountedOnly={uncountedOnly}
+                                linkToApparatus={canOpenApparatusInventory}
+                              />
                             </td>
                             <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
                               {/* Lots for everyone who can see the list: a crew
@@ -1408,6 +1498,7 @@ const MedicalSuppliesPage: React.FC = () => {
             sort_by: (sortDirection && sortField) || undefined,
             sort_order: (sortField && sortDirection) || undefined,
             low_stock: lowStockOnly || undefined,
+            uncounted: uncountedOnly || undefined,
             ...storageQuery,
           }}
         />
