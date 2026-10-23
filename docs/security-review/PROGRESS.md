@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (pending)** — Feature 12 (Facilities), pass 11, a watchdog pickup. PR
+#3580 (Feature 11, Inventory, pass 11) had already merged, docs-only.
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 before this iteration started; row 12 was confirmed the next
+`⬜` by reading the rotation table directly. **0 fixed, 0 new findings** —
+real delta since pass 10's merge (`de27c25f`): 3 commits touching this
+feature's own scope files, plus 4 frontend-only contrast/header commits
+with zero security surface (grepped clean). `delete_room`'s linked
+`Location` now routes through the shared `LocationService.remove_location()`
+instead of a bare delete, and the endpoint catches the new
+`LocationInUseError` to answer 409 instead of a raised `IntegrityError`
+surfacing as a 500 — the `Location` handed in was already org-scoped
+before this commit, so no new by-id surface. A repo-wide numeric-bounds
+sweep added `ge`/`le` to every previously-unbounded field in
+`schemas/facilities.py` (purely additive). A repo-wide duplicate-FK/
+redundant-index fix dropped a redundant single-column index from
+`FacilityPhoto`/`FacilityDocument.organization_id`, already covered by a
+composite index — `nullable`/`ondelete` unaffected. No new route (100,
+unchanged from pass 10); `check_route_permissions.py --strict` — 273
+routes, 0 errors. FAC-30 (standing, owner-accepted) re-confirmed
+unchanged; FAC-13, FAC-41, FAC-44 re-confirmed closed/intact. See
+`FAC-12-facilities.md`'s **Pass 11** section. Row 12 → ✅ (pending this
+PR's merge); next is Feature 13 (Apparatus & NFC).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 11, PR #3580, merged), preserved for history</summary>
+
 **PR [#3580](https://github.com/thegspiro/the-logbook/pull/3580)** (branch
 `claude/security-review-inventory-p11`) — Feature 11 (Inventory), pass 11, a watchdog pickup. PR
 #3579 (Feature 10, Documents & legal, pass 11) had already merged, CI green.
@@ -36,6 +63,8 @@ across the schema. No migration in range touches this feature's tables.
 INV-22 (standing, owner-accepted) re-confirmed unchanged. See
 `INV-11-inventory.md`'s **Pass 11** section. Row 11 → ✅ (pending this PR's
 merge); next is Feature 12 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 11, PR #3579, merged), preserved for history</summary>
@@ -20750,7 +20779,7 @@ this iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -20780,6 +20809,69 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-23 — Feature 12 (Facilities, pass 11) — watchdog pickup, 0 fixed, 0 new findings; FAC-30 re-confirmed the only standing item
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session was not reachable (`ListAgents`). PR #3580
+(Feature 11, Inventory, pass 11) had already merged, docs-only. Rotation
+row 12 (Facilities) was confirmed the next `⬜` by reading the rotation
+table directly.
+
+**0 fixes applied, 0 new findings.** Baseline `de27c25f` (PR #3433's
+merge, pass 10). Of 589 commits repo-wide in this window, 3 touched this
+feature's declared scope files directly, all read in full via `git show`:
+
+- `92505187` — `delete_room`'s linked `Location` now routes through the
+  shared `LocationService.remove_location()` (deactivate-if-referenced,
+  delete otherwise) instead of a bare `self.db.delete(...)`, and
+  `delete_facility_room` catches the new `LocationInUseError` to answer
+  409 via `safe_error_detail()` instead of a raised `IntegrityError`
+  surfacing as a 500. The `Location` instance handed to the shared helper
+  was already resolved org-scoped by the pre-existing query, so no new
+  by-id surface. This closes a real pre-existing gap (a room delete
+  racing an event creation at that location 500'd) rather than opening
+  one.
+- `74638250` (repo-wide numeric-bounds sweep) — purely additive `ge`/`le`
+  bounds on every previously-unbounded field in `schemas/facilities.py`,
+  using the shared `INT32_MAX`/`MONEY_MAX`/`decimal_max()` helpers; no
+  field removed, widened, or made optional that was previously required.
+- `08fff804` (repo-wide duplicate-FK/redundant-index fix) — drops a
+  redundant single-column index from `FacilityPhoto`/
+  `FacilityDocument.organization_id`, already covered by a composite
+  index; `nullable=False`/`ondelete="CASCADE"` on both columns is
+  unaffected (Pitfall #2 only binds `SET NULL`).
+
+Four more commits touched only frontend presentation (contrast/a11y color
+fixes, a shared-header refactor) — grepped for `dangerouslySetInnerHTML`,
+`window.confirm`/`alert`/`prompt`, and a raw `axios`/`fetch` bypass: zero
+matches. No new route (100, unchanged from pass 10 — confirmed by diffing
+for added `@router.` lines: zero); `check_route_permissions.py --strict`
+(repo-wide): 273 routes, 0 errors, 0 warnings. `FACILITY_FOLDER_
+PERMISSIONS`/`FACILITY_ACCESS_PERMISSIONS`/`FACILITY_SENSITIVE_
+PERMISSIONS` and `core/permissions.py`'s chief-rank bundling are untouched
+this window. FAC-30 (P2, owner-accepted) re-confirmed unchanged; FAC-13,
+FAC-41, FAC-44 re-confirmed closed/intact.
+
+Full writeup: `docs/security-review/FAC-12-facilities.md`'s **Pass 11**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's
+pinned 7.3.0/26.5.1/9.0.1) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 640 revisions, single head
+`cc8c16cb6d98`; `check_route_permissions.py --strict` — 273 routes, 0
+errors/warnings; scoped backend tests (`-k "facilit"`) — 291 passed, 1
+pre-existing skip (`pywebpush`); tenancy/security guard tests (LIKE
+escaping, capacity locking, CSV sweep, org-scoping ratchet, account-status
+gates, numeric bounds, live schema drift) — 615 passed; frontend
+`npm run typecheck` clean; `npm run lint` clean; scoped frontend suite
+(`npx vitest run src/modules/facilities`) — 139 passed (19 files).
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-10-22 — Feature 06 (Elections & ballots, pass 11) — watchdog pickup, 0 fixed in code, 1 flagged (ELEC-49), 1 guard (ELEC-50)
 
