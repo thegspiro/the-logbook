@@ -26,14 +26,10 @@ pytestmark = pytest.mark.real_stepup
 NOW = datetime.now(timezone.utc)
 
 
-def _now():
-    """The time a step-up stamp is judged against.
-
-    ``require_stepup`` measures a stamp's age from the real clock, with a
-    ten-minute window, so a stamp built from the import-time ``NOW`` grows
-    stale while the suite runs: the unit job takes about eleven minutes, and a
-    "two minutes ago" stamp read near the end was twelve minutes old.
-    """
+def _now() -> datetime:
+    """The clock now, for stamps ``require_stepup`` measures against its own
+    clock. ``NOW`` is taken once at import, so in a long suite run it can be
+    older than the step-up window by the time these tests run."""
     return datetime.now(timezone.utc)
 
 

@@ -33,18 +33,19 @@ operations at the bottom of this module** (:func:`exists`, :func:`read_bytes`,
 :func:`plaintext_size`, :func:`delete` / :func:`delete_quietly`,
 :func:`file_response`), never
 through ``os`` on a resolved path. A stored reference is the string a row
-holds: a local path, or ``s3://<bucket>/<org>/<area>/…`` for a file in the
-department's own bucket (``app.services.s3_storage``). :func:`_backend_for`
-picks the backend from the reference, so a file is always read from where it
-was written whatever the department has chosen since.
+holds: a local path, or a remote platform's reference (``s3://<bucket>/<org>/
+<area>/…``) for a file in the department's own store
+(``app.services.remote_storage``). :func:`_backend_for` picks the backend from
+the reference, so a file is always read from where it was written whatever
+the department has chosen since.
 ``tests/test_storage_operations.py`` keeps callers off the filesystem.
 
 **Where new files go** is the department's choice, but only once proven: a
-department whose File Storage platform is S3 writes there only after
-:func:`activate_s3` has written, read back and removed a test object with
+department whose File Storage platform is a remote one writes there only after
+:func:`activate_remote` has written, read back and removed a test file with
 exactly the settings now saved (decision 31). Until then, and again after
 anyone edits those settings, new files go to the uploads volume. Once a
-department is on S3, a bucket that cannot be reached refuses the upload
+department is on a remote store, one that cannot be reached refuses the upload
 (``LB-UPLD-006``) rather than putting the file somewhere the department did
 not choose.
 """
@@ -72,8 +73,12 @@ from starlette.concurrency import iterate_in_threadpool
 
 from app.core import file_encryption
 from app.core.error_codes import CodedHTTPException, ErrorCode
-from app.services import s3_storage
-from app.services.s3_storage import S3Backend, S3Location, S3StorageError
+from app.services import remote_storage
+from app.services.remote_storage import (
+    RemoteBackend,
+    RemotePlatform,
+    RemoteStorageError,
+)
 from app.services.upload_scanning import reject_if_malicious
 from app.utils.mime_validation import detect_mime_type, extension_matches_mime
 from app.utils.upload_limits import read_upload_limited
@@ -206,8 +211,8 @@ def resolve(file_path: Any, organization_id: Any, *areas: StorageArea) -> Option
     org = _valid_segment(organization_id)
     if org is None:
         return None
-    if s3_storage.is_ref(file_path):
-        return _resolve_s3(file_path, org, areas)
+    if remote_storage.is_remote_ref(file_path):
+        return _resolve_remote(file_path, org, areas)
     if not os.path.isabs(file_path):
         # Only the pre-2026-10-08 email attachments were stored relative
         # (``storage/email_attachments/...``), resolved against APP_ROOT.
@@ -224,22 +229,24 @@ def resolve(file_path: Any, organization_id: Any, *areas: StorageArea) -> Option
     return None
 
 
-def _s3_key_parts(ref: str) -> Optional[list[str]]:
-    location = s3_storage.parse_ref(ref)
-    if location is None:
+def _remote_key_parts(ref: str) -> Optional[list[str]]:
+    parsed = remote_storage.parse_remote_ref(ref)
+    if parsed is None:
         return None
-    parts = location.key.split("/")
+    parts = parsed.key.split("/")
     if any(_valid_segment(part) != part for part in parts):
         return None
     return parts
 
 
-def _resolve_s3(ref: str, org: str, areas: tuple[StorageArea, ...]) -> Optional[str]:
-    """The bucket equivalent of the directory check: the key must begin
+def _resolve_remote(
+    ref: str, org: str, areas: tuple[StorageArea, ...]
+) -> Optional[str]:
+    """The remote equivalent of the directory check: the key must begin
     ``<org>/<area>/`` and contain no segment that could mean anything other
-    than itself. There is no symlink to follow in a bucket, so the reference
-    is its own canonical form."""
-    parts = _s3_key_parts(ref)
+    than itself. A remote store has no symlink to follow, so the reference is
+    its own canonical form."""
+    parts = _remote_key_parts(ref)
     if parts is None or len(parts) < 3 or parts[0] != org:
         return None
     if parts[1] not in {area.value for area in areas}:
@@ -496,8 +503,8 @@ class FileStorageService:
 # ----------------------------------------------------------------------------
 
 #: Key in ``organizations.settings`` recording a passed connection test. Not
-#: part of ``FileStorageSettings``: only :func:`activate_s3` writes it, and the
-#: settings update path refuses it from a client.
+#: part of ``FileStorageSettings``: only :func:`activate_remote` writes it, and
+#: the settings update path refuses it from a client.
 ACTIVATION_KEY = "file_storage_activation"
 
 # Settings are re-read at most this often per worker. Long enough that a
@@ -511,17 +518,24 @@ _ORG_STORAGE_MAX_ENTRIES = 256
 class OrgStorage:
     """What one department's settings decide about its files."""
 
-    #: Its bucket, when the settings name one with credentials and the
-    #: endpoint passes the address check.
-    s3: Optional[S3Backend]
-    #: Why the bucket is unusable although credentials are saved.
-    s3_problem: Optional[str]
-    #: New files go to the bucket: the platform is S3 and a connection test
-    #: passed with exactly these settings.
-    writes_to_s3: bool
+    #: The File Storage platform the department has saved.
+    platform: str
+    #: A store for every remote platform whose saved settings are complete and
+    #: pass the platform's checks. Kept for platforms no longer chosen too: a
+    #: file already there is read with them.
+    backends: Mapping[str, RemoteBackend]
+    #: Why a platform's store is unusable although its settings are saved.
+    problems: Mapping[str, str]
+    #: The remote platform new files go to: the saved one, when a connection
+    #: test passed with exactly these settings. None means the uploads volume.
+    writes_to: Optional[str]
     #: The settings were edited after the last passed test.
     changed_since_test: bool
     activation: Optional[Mapping[str, Any]]
+
+    @property
+    def writer(self) -> Optional[RemoteBackend]:
+        return self.backends.get(self.writes_to) if self.writes_to else None
 
 
 _org_storage_cache: "OrderedDict[str, tuple[float, OrgStorage]]" = OrderedDict()
@@ -556,7 +570,7 @@ async def _load_settings(
 
 
 def _org_storage_from(settings_dict: Mapping[str, Any]) -> OrgStorage:
-    """Blocking (endpoint DNS check): run through ``asyncio.to_thread``."""
+    """Blocking (endpoint DNS checks): run through ``asyncio.to_thread``."""
     from app.schemas.organization import decrypt_settings_secrets
 
     decrypted = decrypt_settings_secrets(dict(settings_dict))
@@ -566,32 +580,43 @@ def _org_storage_from(settings_dict: Mapping[str, Any]) -> OrgStorage:
     activation = decrypted.get(ACTIVATION_KEY)
     if not isinstance(activation, Mapping):
         activation = None
-    config = s3_storage.config_from_settings(file_storage)
+    chosen = str(file_storage.get("platform") or "local")
 
-    backend: Optional[S3Backend] = None
-    problem: Optional[str] = None
-    if config is not None:
+    backends: dict[str, RemoteBackend] = {}
+    problems: dict[str, str] = {}
+    fingerprints: dict[str, str] = {}
+    for name, platform in remote_storage.platforms().items():
+        config = platform.config_from_settings(file_storage)
+        if config is None:
+            continue
+        fingerprints[name] = config.fingerprint()
         try:
-            s3_storage.check_config(config)
-            backend = S3Backend(config)
+            platform.check_config(config)
+            backends[name] = platform.backend(config)
         except ValueError as exc:
-            problem = str(exc)
+            problems[name] = str(exc)
 
     tested = (
         activation is not None
-        and activation.get("platform") == "s3"
+        and activation.get("platform") in remote_storage.platforms()
         and isinstance(activation.get("fingerprint"), str)
     )
     matches = (
         tested
-        and config is not None
         and activation is not None
-        and activation.get("fingerprint") == config.fingerprint()
+        and activation.get("fingerprint")
+        == fingerprints.get(str(activation.get("platform")))
+    )
+    writes_to = (
+        str(activation.get("platform"))
+        if matches and activation is not None and activation.get("platform") == chosen
+        else None
     )
     return OrgStorage(
-        s3=backend,
-        s3_problem=problem,
-        writes_to_s3=bool(matches and file_storage.get("platform") == "s3"),
+        platform=chosen,
+        backends=backends,
+        problems=problems,
+        writes_to=writes_to,
         changed_since_test=bool(tested and not matches),
         activation=activation,
     )
@@ -629,7 +654,10 @@ def _unavailable() -> CodedHTTPException:
     )
 
 
-def _s3_key(organization_id: Any, area: StorageArea, record_id: Any, name: str) -> str:
+def remote_key(
+    organization_id: Any, area: StorageArea, record_id: Any, name: str
+) -> str:
+    """The org-first key a file has on any remote store."""
     org = _valid_segment(organization_id)
     if org is None:
         raise ValueError("A stored file needs an organization")
@@ -660,25 +688,23 @@ async def write_file(
     files; return the reference to save on the row.
 
     *local_mtime* sets the file's modification time on the uploads volume.
-    A bucket stamps its own upload time and offers no way to change it.
+    A remote store stamps its own upload time and offers no way to change it.
     """
     storage = await org_storage(organization_id, db)
-    if storage.writes_to_s3:
-        if storage.s3 is None:
+    if storage.writes_to:
+        writer = storage.writer
+        if writer is None:
             logger.error(
-                f"Organization {organization_id} is on S3 but its bucket is "
-                f"unusable: {storage.s3_problem}"
+                f"Organization {organization_id} is on {storage.writes_to} but "
+                f"its store is unusable: {storage.problems.get(storage.writes_to)}"
             )
             raise _unavailable()
-        location = S3Location(
-            storage.s3.config.bucket,
-            _s3_key(organization_id, area, record_id, name),
-        )
+        ref = writer.ref_for(remote_key(organization_id, area, record_id, name))
         try:
-            await asyncio.to_thread(storage.s3.put, location, content)
-        except S3StorageError:
+            await asyncio.to_thread(writer.put, ref, content)
+        except RemoteStorageError:
             raise _unavailable()
-        return s3_storage.make_ref(location.bucket, location.key)
+        return ref
 
     directory = area_directory(organization_id, area, record_id)
 
@@ -692,13 +718,28 @@ async def write_file(
     return await asyncio.to_thread(_write)
 
 
-async def activate_s3(
+def _chosen_remote(file_storage: Any) -> RemotePlatform:
+    platform = (
+        remote_storage.platforms().get(str(file_storage.get("platform")))
+        if isinstance(file_storage, Mapping)
+        else None
+    )
+    if platform is None:
+        names = " or ".join(remote_storage.labels().values())
+        raise ValueError(
+            f"Choose {names} as the storage platform and save it before "
+            "testing the connection."
+        )
+    return platform
+
+
+async def activate_remote(
     db: AsyncSession, organization_id: Any, user_id: Any
 ) -> OrgStorage:
-    """Prove the department's saved S3 settings work, then record that they
-    do, so new files go to its bucket.
+    """Prove the department's saved settings for its chosen remote platform
+    work, then record that they do, so new files go there.
 
-    Writes a small test object, reads it back, compares and removes it — the
+    Writes a small test file, reads it back, compares and removes it — the
     three things every upload, download and delete will do. Raises ValueError
     with a message for the administrator when anything is missing or fails,
     having changed nothing. Commits *db* on success.
@@ -709,67 +750,64 @@ async def activate_s3(
     if org is None:
         raise ValueError("A stored file needs an organization")
     raw = await _load_settings(org, db)
-    decrypted = decrypt_settings_secrets(raw)
-    file_storage = decrypted.get("file_storage")
-    if not isinstance(file_storage, Mapping) or file_storage.get("platform") != "s3":
-        raise ValueError(
-            "Choose Amazon S3 as the storage platform and save it before "
-            "testing the connection."
-        )
-    config = s3_storage.config_from_settings(file_storage)
+    file_storage = decrypt_settings_secrets(raw).get("file_storage")
+    platform = _chosen_remote(file_storage)
+    config = platform.config_from_settings(file_storage)
     if config is None:
-        raise ValueError(
-            "Save the bucket name, access key ID and secret access key "
-            "before testing the connection."
-        )
-    await asyncio.to_thread(s3_storage.check_config, config)
+        raise ValueError(f"{platform.incomplete_hint} Then test the connection.")
+    await asyncio.to_thread(platform.check_config, config)
 
-    backend = S3Backend(config)
+    backend = platform.backend(config)
     probe = os.urandom(32)
-    location = S3Location(config.bucket, f"{org}/.storage-check/{uuid.uuid4().hex}.bin")
+    ref = backend.ref_for(f"{org}/.storage-check/{uuid.uuid4().hex}.bin")
 
     def _round_trip() -> None:
-        backend.put(location, probe)
+        backend.put(ref, probe)
         try:
-            if backend.read_bytes(location) != probe:
-                raise S3StorageError("read back different bytes")
+            if backend.read_bytes(ref) != probe:
+                raise RemoteStorageError("read back different bytes")
         finally:
-            if not backend.delete(location):
-                raise S3StorageError("could not remove the test object")
+            if not backend.delete(ref):
+                raise RemoteStorageError("could not remove the test file")
 
     try:
         await asyncio.to_thread(_round_trip)
-    except (S3StorageError, FileNotFoundError, file_encryption.FileDecryptionError):
+    except (
+        RemoteStorageError,
+        FileNotFoundError,
+        file_encryption.FileDecryptionError,
+    ):
         raise ValueError(
-            "The connection test failed: the bucket could not be written, "
-            "read back and cleaned up with these settings. Check the bucket "
-            "name, region, endpoint and that the keys may put, get and delete "
-            "objects in it. Nothing was changed."
+            f"The connection test failed: {platform.label} could not be "
+            "written, read back and cleaned up with these settings. "
+            f"{platform.test_failure_hint} Nothing was changed."
         )
 
-    record = {
-        "platform": "s3",
+    record: dict[str, Any] = {
+        **config.describe(),
+        "container": config.container,
+        "platform": platform.name,
         "fingerprint": config.fingerprint(),
-        "bucket": config.bucket,
-        "endpoint_url": config.endpoint_url,
-        "region": config.region,
         "activated_at": datetime.now(timezone.utc).isoformat(),
         "activated_by": str(user_id) if user_id is not None else None,
     }
     # The settings are re-read under the row lock: if somebody saved
-    # different S3 settings while the test ran, the record would vouch for
-    # credentials nobody tested.
+    # different settings while the test ran, the record would vouch for a
+    # configuration nobody tested.
     organization = await _lock_organization(db, org)
-    current = s3_storage.config_from_settings(
-        decrypt_settings_secrets(copy.deepcopy(organization.settings or {})).get(
-            "file_storage"
-        )
+    current = decrypt_settings_secrets(copy.deepcopy(organization.settings or {}))
+    current_storage = current.get("file_storage")
+    current_config = (
+        platform.config_from_settings(current_storage)
+        if isinstance(current_storage, Mapping)
+        and current_storage.get("platform") == platform.name
+        else None
     )
-    if current is None or current.fingerprint() != record["fingerprint"]:
+    if current_config is None or current_config.fingerprint() != record["fingerprint"]:
         await db.rollback()
         raise ValueError(
-            "The S3 settings changed while the connection was being tested. "
-            "Test again."
+            "The storage settings changed while the connection was being "
+            "tested. Test again."
         )
     updated = copy.deepcopy(organization.settings or {})
     updated[ACTIVATION_KEY] = record
@@ -791,9 +829,9 @@ async def _lock_organization(db: AsyncSession, org: str) -> Any:
     return organization
 
 
-async def deactivate_s3(db: AsyncSession, organization_id: Any) -> OrgStorage:
+async def deactivate_remote(db: AsyncSession, organization_id: Any) -> OrgStorage:
     """Send new files back to the uploads volume. Files already in the
-    bucket stay there and are still served from it. Commits *db*."""
+    remote store stay there and are still served from it. Commits *db*."""
     org = _valid_segment(organization_id)
     if org is None:
         raise ValueError("A stored file needs an organization")
@@ -853,55 +891,48 @@ class _LocalBackend:
         )
 
 
-class _BucketBackend:
-    """Files in a department's bucket, through :class:`S3Backend`. A bucket
-    that cannot be reached is a 503, as on upload; a delete reports False."""
+class _RemoteFileBackend:
+    """Files in a department's remote store. A store that cannot be reached
+    is a 503, as on upload; a delete reports False."""
 
-    def __init__(self, s3: Optional[S3Backend]):
-        self._s3 = s3
+    def __init__(self, store: Optional[RemoteBackend]):
+        self._store = store
 
-    def _backend(self) -> S3Backend:
-        if self._s3 is None:
+    def _backend(self) -> RemoteBackend:
+        if self._store is None:
             raise _unavailable()
-        return self._s3
-
-    @staticmethod
-    def _location(ref: str) -> S3Location:
-        location = s3_storage.parse_ref(ref)
-        if location is None:
-            raise ValueError("Not an S3 reference")
-        return location
+        return self._store
 
     def exists(self, ref: str) -> bool:
         try:
-            return self._backend().exists(self._location(ref))
-        except S3StorageError:
+            return self._backend().exists(ref)
+        except RemoteStorageError:
             raise _unavailable()
 
     def read_bytes(self, ref: str) -> bytes:
         try:
-            return self._backend().read_bytes(self._location(ref))
-        except S3StorageError:
+            return self._backend().read_bytes(ref)
+        except RemoteStorageError:
             raise _unavailable()
 
     def plaintext_size(self, ref: str) -> int:
         try:
-            return self._backend().plaintext_size(self._location(ref))
-        except S3StorageError:
+            return self._backend().plaintext_size(ref)
+        except RemoteStorageError:
             raise _unavailable()
 
     def delete(self, ref: str) -> bool:
-        if self._s3 is None:
-            logger.warning(f"Could not remove {ref}: the bucket is not configured")
+        if self._store is None:
+            logger.warning(f"Could not remove {ref}: its store is not configured")
             return False
-        return self._s3.delete(self._location(ref))
+        return self._store.delete(ref)
 
     def response(
         self, ref: str, filename: str, media_type: str, content_disposition_type: str
     ) -> Response:
         try:
-            size, chunks = self._backend().open_plaintext(self._location(ref))
-        except S3StorageError:
+            size, chunks = self._backend().open_plaintext(ref)
+        except RemoteStorageError:
             raise _unavailable()
         return _streaming_response(
             size,
@@ -915,18 +946,28 @@ class _BucketBackend:
 _LOCAL = _LocalBackend()
 
 
-async def _backend_for(ref: str) -> Union[_LocalBackend, _BucketBackend]:
+async def remote_store_for(
+    ref: str, db: Optional[AsyncSession] = None
+) -> Optional[RemoteBackend]:
+    """The department's store that holds *ref*, from its saved settings;
+    None when those settings are missing or unusable."""
+    parsed = remote_storage.parse_remote_ref(ref)
+    parts = _remote_key_parts(ref)
+    if parsed is None or parts is None:
+        raise ValueError("Malformed remote reference")
+    storage = await org_storage(parts[0], db)
+    store = storage.backends.get(parsed.platform)
+    if store is None and parsed.platform in storage.problems:
+        logger.error(f"Cannot reach {ref}: {storage.problems[parsed.platform]}")
+    return store
+
+
+async def _backend_for(ref: str) -> Union[_LocalBackend, _RemoteFileBackend]:
     """The backend that holds *ref*: decided by the reference, never by what
     the department now writes to, so switching never strands a file."""
-    if not s3_storage.is_ref(ref):
+    if not remote_storage.is_remote_ref(ref):
         return _LOCAL
-    parts = _s3_key_parts(ref)
-    if parts is None:
-        raise ValueError("Malformed S3 reference")
-    storage = await org_storage(parts[0])
-    if storage.s3 is None and storage.s3_problem:
-        logger.error(f"Cannot reach {ref}: {storage.s3_problem}")
-    return _BucketBackend(storage.s3)
+    return _RemoteFileBackend(await remote_store_for(ref))
 
 
 async def exists(ref: Optional[str]) -> bool:

@@ -31,7 +31,7 @@ import type {
   TrainingCategory,
   TrainingType,
 } from '../types/training';
-import { Breadcrumbs } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { getErrorDetail } from '../utils/errorHandling';
 
 // ==================== Course Form Modal ====================
@@ -615,43 +615,41 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
     return map;
   }, [categories]);
 
+  const addCourseButton = canManage ? (
+    <button
+      onClick={() => {
+        setEditCourse(null);
+        setShowModal(true);
+      }}
+      className="btn-primary flex items-center space-x-2"
+    >
+      <Plus className="h-5 w-5" />
+      <span>Add Course</span>
+    </button>
+  ) : undefined;
+
   return (
     <div className={embedded ? '' : 'min-h-screen'}>
       <div data-page-main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
-        {/* Not when embedded: this also renders inside a Training Administration
-            tab, where a trail would sit within the very hub it points at. */}
-        {!embedded && <Breadcrumbs underHub="/training/admin" />}
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          {embedded ? (
+        {/* Embedded, this is a Training Administration tab under the hub's own
+            header, where a strip and trail would sit within the very hub the
+            trail points at. */}
+        {embedded ? (
+          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-theme-text-muted text-sm">
               Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
             </p>
-          ) : (
-            <div>
-              <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-                <BookOpen className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" />
-                <span>Course Library</span>
-              </h1>
-              <p className="text-theme-text-muted mt-1">
-                The classes your department runs or recognizes ({courses.length} course{courses.length !== 1 ? 's' : ''}
-                )
-              </p>
-            </div>
-          )}
-          {canManage && (
-            <button
-              onClick={() => {
-                setEditCourse(null);
-                setShowModal(true);
-              }}
-              className="btn-primary flex items-center space-x-2"
-            >
-              <Plus className="h-5 w-5" />
-              <span>Add Course</span>
-            </button>
-          )}
-        </div>
+            {addCourseButton}
+          </div>
+        ) : (
+          <TrainingPageHeader
+            icon={BookOpen}
+            title="Course Library"
+            subtitle={`The classes your department runs or recognizes (${courses.length} course${courses.length !== 1 ? 's' : ''})`}
+            underHub="/training/admin"
+            actions={addCourseButton}
+          />
+        )}
 
         {/* Search & Filters */}
         <div className="mb-6 space-y-3">

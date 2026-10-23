@@ -18,8 +18,8 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router';
-import { ArrowLeft, ClipboardCheck, Search, User, FileText, Play, Award, BookOpen, Info } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { ClipboardCheck, Search, User, FileText, Play, Award, BookOpen, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { useAuthStore } from '../stores/authStore';
@@ -29,6 +29,7 @@ import { formatMemberName } from '../utils/memberName';
 import { useMemberSearch } from '../hooks/useMemberSearch';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { skillsTestingService } from '../services/api';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { cacheSkillTemplates, listCachedSkillTemplates, listRecentCandidates } from '../utils/skillsTestOffline';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
 import { MEMBER_SEARCH_MAX_RESULTS, MEMBER_SEARCH_MIN_CHARS } from '../constants/config';
@@ -43,10 +44,7 @@ export const StartSkillTestPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const templateParam = searchParams.get('template') ?? '';
-  const backTo =
-    searchParams.get('from') === 'member'
-      ? '/training/skills-testing'
-      : '/training/admin?page=skills-testing&tab=tests';
+  const fromMemberPage = searchParams.get('from') === 'member';
   const { templates: loadedTemplates, templatesLoading, loadTemplates, createTest } = useSkillsTestingStore();
   const online = useOnlineStatus();
   // Published sheets and recently examined members kept on the device, so a
@@ -56,6 +54,9 @@ export const StartSkillTestPage: React.FC = () => {
   const templates = loadedTemplates.length > 0 ? loadedTemplates : offlineTemplates;
   const { user, checkPermission } = useAuthStore();
   const isOfficer = checkPermission('training.manage');
+  // Opened from the hub's test list, the trail leads back there, as the old
+  // back link did. Only an officer can follow it.
+  const fromHub = !fromMemberPage && isOfficer;
   // Search results only — the roster is never held client-side, because the
   // endpoint behind it will not return one.
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
@@ -315,23 +316,15 @@ export const StartSkillTestPage: React.FC = () => {
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
 
   return (
-    <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-2xl px-4 py-6 sm:py-8">
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            to={backTo}
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
-          >
-            <ArrowLeft className="mr-2 h-5 w-5" />
-            Back
-          </Link>
-          <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-            <ClipboardCheck className="h-7 w-7 text-red-700 sm:h-8 sm:w-8" />
-            <span>Start Skill Test</span>
-          </h1>
-        </div>
-
+    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={ClipboardCheck}
+        title="Start Skill Test"
+        underHub={fromHub ? '/training/admin' : undefined}
+        parentCrumbs={fromHub ? [{ label: 'Tests', path: '/training/admin?page=skills-testing&tab=tests' }] : undefined}
+      />
+      {/* The steps keep their reading width under the full-width strip. */}
+      <div className="mx-auto max-w-2xl">
         {/* Step 1: Select Template */}
         <div className="card mb-4 p-4 sm:p-6">
           <h2 className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold">

@@ -309,7 +309,7 @@ class TestWhereNewFilesGo:
         assert ref.startswith(str(root))
         assert bucket.list_objects_v2(Bucket=BUCKET).get("KeyCount") == 0
         view = await file_storage.org_storage(ORG)
-        assert view.writes_to_s3 is False
+        assert view.writes_to is None
         assert view.changed_since_test is False
 
     async def test_tested_settings_send_files_to_the_bucket(
@@ -363,7 +363,7 @@ class TestWhereNewFilesGo:
         )
         assert ref.startswith(str(root))
         view = await file_storage.org_storage(ORG)
-        assert view.writes_to_s3 is False
+        assert view.writes_to is None
         assert view.changed_since_test is True
 
     async def test_platform_switched_back_to_local_writes_locally(
@@ -413,9 +413,9 @@ class TestWhereNewFilesGo:
         ).fingerprint()
         _saved(monkeypatch, settings_dict)
         view = await file_storage.org_storage(ORG)
-        assert view.writes_to_s3 is True
-        assert view.s3 is None
-        assert "S3_ALLOW_PRIVATE_ENDPOINT" in (view.s3_problem or "")
+        assert view.writes_to == "s3"
+        assert view.writer is None
+        assert "S3_ALLOW_PRIVATE_ENDPOINT" in (view.problems.get("s3") or "")
         with pytest.raises(CodedHTTPException) as caught:
             await file_storage.write_file(
                 ORG, StorageArea.DOCUMENTS, "rec", "a.pdf", PDF
@@ -487,7 +487,7 @@ class TestActivate:
         organization = _locked_org(monkeypatch, saved)
         db = _Db()
 
-        await file_storage.activate_s3(db, ORG, "admin-id")
+        await file_storage.activate_remote(db, ORG, "admin-id")
 
         record = organization.settings[ACTIVATION_KEY]
         assert record["fingerprint"] == _config().fingerprint()
@@ -503,19 +503,19 @@ class TestActivate:
         monkeypatch.setattr(file_storage, "_lock_organization", lock)
         db = _Db()
         with pytest.raises(ValueError, match="connection test failed"):
-            await file_storage.activate_s3(db, ORG, "admin-id")
+            await file_storage.activate_remote(db, ORG, "admin-id")
         lock.assert_not_awaited()
         db.commit.assert_not_awaited()
 
     async def test_needs_s3_chosen_and_saved(self, monkeypatch):
         _saved(monkeypatch, _org_settings(activated=False, platform="local"))
         with pytest.raises(ValueError, match="Choose Amazon S3"):
-            await file_storage.activate_s3(_Db(), ORG, "admin-id")
+            await file_storage.activate_remote(_Db(), ORG, "admin-id")
 
     async def test_needs_credentials(self, monkeypatch):
         _saved(monkeypatch, {"file_storage": {"platform": "s3"}})
         with pytest.raises(ValueError, match="Save the bucket name"):
-            await file_storage.activate_s3(_Db(), ORG, "admin-id")
+            await file_storage.activate_remote(_Db(), ORG, "admin-id")
 
     async def test_settings_changed_during_the_test_are_not_vouched_for(
         self, bucket, monkeypatch
@@ -527,7 +527,7 @@ class TestActivate:
         )
         db = _Db()
         with pytest.raises(ValueError, match="changed while"):
-            await file_storage.activate_s3(db, ORG, "admin-id")
+            await file_storage.activate_remote(db, ORG, "admin-id")
         assert ACTIVATION_KEY not in organization.settings
         db.commit.assert_not_awaited()
 
@@ -536,9 +536,9 @@ class TestActivate:
         organization = _locked_org(monkeypatch, saved)
         _saved(monkeypatch, {})
         db = _Db()
-        view = await file_storage.deactivate_s3(db, ORG)
+        view = await file_storage.deactivate_remote(db, ORG)
         assert ACTIVATION_KEY not in organization.settings
-        assert view.writes_to_s3 is False
+        assert view.writes_to is None
         db.commit.assert_awaited_once()
 
 
@@ -613,7 +613,7 @@ class TestEndpoints:
         organizations, audit, user = wired
         monkeypatch.setattr(
             file_storage,
-            "activate_s3",
+            "activate_remote",
             AsyncMock(side_effect=ValueError("The connection test failed: x")),
         )
         with pytest.raises(HTTPException) as caught:
@@ -626,7 +626,11 @@ class TestEndpoints:
 
     async def test_activate_success_is_audited(self, wired, monkeypatch):
         organizations, audit, user = wired
-        monkeypatch.setattr(file_storage, "activate_s3", AsyncMock())
+        monkeypatch.setattr(
+            file_storage,
+            "activate_remote",
+            AsyncMock(return_value=SimpleNamespace(writes_to="s3")),
+        )
         _saved(monkeypatch, _org_settings(activated=True))
         status_view = await organizations.activate_s3_file_storage(
             db=MagicMock(), current_user=user, _rate_limited=None
@@ -637,10 +641,77 @@ class TestEndpoints:
 
     async def test_deactivate_is_audited(self, wired, monkeypatch):
         organizations, audit, user = wired
-        monkeypatch.setattr(file_storage, "deactivate_s3", AsyncMock())
+        monkeypatch.setattr(file_storage, "deactivate_remote", AsyncMock())
         _saved(monkeypatch, {"file_storage": {"platform": "s3"}})
         status_view = await organizations.deactivate_s3_file_storage(
             db=MagicMock(), current_user=user
         )
         assert status_view.new_files_go_to == "local"
         assert audit.await_args.kwargs["event_type"] == "file_storage_s3_deactivated"
+
+
+class TestPlatformNeutralEndpoints:
+    """The routes the Storage screen now calls; the S3-era ones above stay as
+    aliases of the same handlers."""
+
+    @pytest.fixture
+    def wired(self, monkeypatch):
+        from app.api.v1.endpoints import organizations
+
+        audit = AsyncMock()
+        monkeypatch.setattr(organizations, "log_audit_event", audit)
+        user = SimpleNamespace(id="admin-id", username="chief", organization_id=ORG)
+        return organizations, audit, user
+
+    async def test_status_names_the_platform_and_where_files_went(
+        self, wired, monkeypatch
+    ):
+        organizations, _audit, user = wired
+        _saved(monkeypatch, _org_settings(activated=True))
+        status_view = await organizations.get_file_storage_status(
+            db=MagicMock(), current_user=user
+        )
+        assert status_view.platform_label == "Amazon S3"
+        assert status_view.platform_connectable is True
+        assert status_view.new_files_go_to == "s3"
+        assert status_view.location["bucket"] == BUCKET
+        assert "fingerprint" not in status_view.location
+
+    async def test_a_platform_that_cannot_connect_says_so(self, wired, monkeypatch):
+        organizations, _audit, user = wired
+        _saved(monkeypatch, {"file_storage": {"platform": "onedrive"}})
+        status_view = await organizations.get_file_storage_status(
+            db=MagicMock(), current_user=user
+        )
+        assert status_view.platform_connectable is False
+        assert status_view.platform_label is None
+        assert status_view.new_files_go_to == "local"
+
+    async def test_generic_activate_and_deactivate(self, wired, monkeypatch):
+        organizations, audit, user = wired
+        monkeypatch.setattr(
+            file_storage,
+            "activate_remote",
+            AsyncMock(return_value=SimpleNamespace(writes_to="s3")),
+        )
+        _saved(monkeypatch, _org_settings(activated=True))
+        status_view = await organizations.activate_file_storage(
+            db=MagicMock(), current_user=user, _rate_limited=None
+        )
+        assert status_view.new_files_go_to == "s3"
+        assert audit.await_args.kwargs["event_type"] == "file_storage_s3_activated"
+
+        monkeypatch.setattr(file_storage, "deactivate_remote", AsyncMock())
+        file_storage.forget_org_storage()
+        await organizations.deactivate_file_storage(db=MagicMock(), current_user=user)
+        assert audit.await_args.kwargs["event_type"] == "file_storage_s3_deactivated"
+
+    async def test_the_platform_registry_resolves_s3_references(self):
+        from app.services import remote_storage
+
+        ref = _ref(f"{ORG}/documents/rec/a.pdf")
+        assert remote_storage.platform_for_ref(ref) is s3_storage.PLATFORM
+        assert remote_storage.parse_remote_ref(ref) == remote_storage.RemoteRef(
+            "s3", BUCKET, f"{ORG}/documents/rec/a.pdf"
+        )
+        assert remote_storage.platform_for_ref("/app/uploads/a.pdf") is None

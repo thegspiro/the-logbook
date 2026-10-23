@@ -10854,14 +10854,82 @@ class InventoryService:
                     allow_none=True,
                     label="category",
                 )
+            new_name = data.get("name")
+            if isinstance(new_name, str):
+                new_name = new_name.strip()
+                if not new_name:
+                    return None, "Group name is required"
+                data["name"] = new_name
+                renamed = await self._rename_variant_members(
+                    group, organization_id, new_name
+                )
+                if renamed:
+                    logger.info(
+                        f"Variant group {group.id} renamed; "
+                        f"{renamed} member item name(s) updated"
+                    )
             for key, value in data.items():
                 setattr(group, key, value)
             await self.db.flush()
             await self.db.refresh(group)
             return group, None
+        except ValueError as e:
+            return None, str(e)
         except Exception as e:
             logger.error(f"Error updating variant group: {e}")
             return None, str(e)
+
+    async def _rename_variant_members(
+        self,
+        group: ItemVariantGroup,
+        organization_id: UUID | str,
+        new_name: str,
+    ) -> int:
+        """Carry a group rename onto the product segment of its members' names.
+
+        The inventory list labels a folded product by the segment before the
+        first " — " of each member's own name, and ``create_size_variants``
+        finds the group to reuse by name while keying existing variants on that
+        same segment. Renaming only the group would leave the list showing the
+        old name and the next "add 3XL" run comparing against a product name
+        none of its sizes carry.
+
+        Only a member whose product segment matches the group's current name
+        (casefolded, as ``_find_variant_group_for_reuse`` matches) is touched.
+        A member added to the group under some other name was named on purpose,
+        and the size/colour/style tail is never rewritten.
+
+        Raises ``ValueError`` before mutating anything when a new name would
+        overflow the 255-character column, so the rename is all-or-nothing.
+        """
+        old_key = (group.name or "").strip().casefold()
+        # Queried rather than read off ``group.items``: that collection is
+        # whatever was loaded with the group, and a size generated earlier in
+        # the same session need not be in it.
+        members = (
+            await self.db.execute(
+                select(InventoryItem).where(
+                    InventoryItem.variant_group_id == str(group.id),
+                    InventoryItem.organization_id == str(organization_id),
+                )
+            )
+        ).scalars()
+        renames: List[Tuple[InventoryItem, str]] = []
+        for item in members:
+            name = item.name or ""
+            head, sep, tail = name.partition(" — ")
+            if head.strip().casefold() != old_key:
+                continue
+            renamed = f"{new_name}{sep}{tail}" if sep else new_name
+            if len(renamed) > 255:
+                raise ValueError(
+                    f"Renaming would make '{name}' longer than 255 characters"
+                )
+            if renamed != name:
+                renames.append((item, renamed))
+        for item, renamed in renames:
+            item.name = renamed
+        return len(renames)
 
     async def delete_variant_group(
         self, group_id: UUID, organization_id: UUID | str

@@ -8,6 +8,7 @@ import { BookOpenCheck, Clock, Loader2, Play } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { knowledgeTestService } from '../../services/knowledgeTestService';
 import { EmptyState } from '../../components/ux/EmptyState';
+import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -45,13 +46,12 @@ export const MyKnowledgeTestsPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
-      <div>
-        <h1 className="text-theme-text-primary text-xl font-semibold">Knowledge Tests</h1>
-        <p className="text-theme-text-secondary text-sm">
-          Written tests you can take here. They are graded as soon as you submit.
-        </p>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-4 px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={BookOpenCheck}
+        title="Knowledge Tests"
+        subtitle="Written tests you can take here. They are graded as soon as you submit."
+      />
       {loading ? (
         <div className="flex h-32 items-center justify-center" role="status">
           <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" aria-hidden="true" />

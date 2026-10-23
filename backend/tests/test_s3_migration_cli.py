@@ -1,4 +1,4 @@
-"""scripts/migrate_uploads_to_s3.py — the command line around s3_migration."""
+"""scripts/migrate_uploads_to_s3.py — the command line around remote_migration."""
 
 import importlib.util
 import os

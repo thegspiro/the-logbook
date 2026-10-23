@@ -15,7 +15,8 @@ import { useAuthStore } from '../stores/authStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
-import { Breadcrumbs, Pagination } from '../components/ux';
+import { Pagination } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
 import { attributionName } from '../utils/memberName';
 
@@ -187,18 +188,15 @@ export const SkillsTestingPage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs underHub="/training/admin" />
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-            <ClipboardCheck className="h-7 w-7 text-red-700 sm:h-8 sm:w-8" />
-            <span>Skills Testing</span>
-          </h1>
-          <p className="text-theme-text-muted mt-1">Start a skills test or review your results</p>
-        </div>
-
+    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={ClipboardCheck}
+        title="Skills Testing"
+        subtitle="Start a skills test or review your results"
+        underHub="/training/admin"
+      />
+      {/* The lists keep their reading width under the full-width strip. */}
+      <div className="mx-auto max-w-4xl">
         {/* Tab Navigation */}
         <div className="border-theme-surface-border mb-6 border-b">
           <nav className="hscroll flex gap-6" aria-label="Skills Testing Tabs">
