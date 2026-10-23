@@ -275,6 +275,12 @@ class Settings(BaseSettings):
     # security.kiosk_session permission). 0 disables the limit.
     SESSION_KIOSK_ABSOLUTE_MAX_HOURS: int = Field(default=168, ge=0)
     SESSION_KIOSK_IDLE_TIMEOUT_MINUTES: int = Field(default=720, ge=0)
+    # Days a privileged member who has not enrolled in MFA keeps working before
+    # the enrollment gate closes; 0 closes it at once.
+    MFA_GRACE_DAYS: int = Field(default=14, ge=0)
+    # Minutes a successful step-up (POST /auth/step-up) keeps sensitive actions
+    # open on that session.
+    STEPUP_WINDOW_MINUTES: int = Field(default=10, ge=1)
     HIPAA_PASSWORD_HISTORY_COUNT: int = (
         12  # Previous passwords remembered (§164.312(d))
     )

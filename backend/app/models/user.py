@@ -508,6 +508,11 @@ class User(Base):
     # A code whose step is <= this value is rejected as a replay, so a captured
     # or shoulder-surfed code cannot be reused within its ±30s validity window.
     mfa_last_timestep: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # When the server first saw this member privileged and un-enrolled; the
+    # MFA grace period is measured from it. See services/mfa_policy.py.
+    mfa_grace_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     @property
     def mfa_secret(self) -> str | None:
@@ -1180,6 +1185,11 @@ class Session(Base):
     # user still holds security.kiosk_session; see session_end_reason.
     is_kiosk: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Set by POST /auth/step-up. Server-side and per session, so a step-up on
+    # one device or tab never unlocks another.
+    stepup_verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     def __repr__(self):

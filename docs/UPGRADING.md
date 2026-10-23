@@ -565,6 +565,29 @@ What an operator needs to know:
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
 
+### Administrators must use two-factor authentication, and sensitive actions ask you to confirm (2026-10-23)
+
+Adds a migration (`users.mfa_grace_started_at`, `sessions.stepup_verified_at`, both
+nullable and applied by the normal startup). **Nothing is blocked on upgrade day.**
+
+- **Privileged members get 14 days.** A member holding administration or health-record
+  permissions (the fire, deputy and assistant chiefs, president, secretary, membership
+  coordinator and IT manager in the seeded positions; the full list is on the
+  Security-Authentication wiki page) has 14 days from the first request after the
+  upgrade to enroll in two-factor authentication. They are emailed once and see a
+  banner. After that they can reach only the setup screens. Change the period with
+  `MFA_GRACE_DAYS` (`0` closes it at once). **Make sure the IT manager has saved their
+  recovery codes first**: they hold `*`, and recovery codes are their only way back
+  from a lost authenticator.
+- **Sensitive actions ask for a code (or password).** Exports of the audit and error
+  logs, security and role changes, positions assignment, IP and integration changes,
+  administrator password/MFA resets and deleting or anonymizing a member now need a
+  re-verification within the last 10 minutes (`STEPUP_WINDOW_MINUTES`). The app
+  prompts and repeats the action. **Scripts calling these endpoints directly** must
+  `POST /auth/step-up` first on the same session, or they receive `403 LB-AUTH-013`.
+- **Single-sign-on-only accounts without MFA cannot step up** and are told to enroll
+  in MFA; they must anyway once their grace period ends.
+
 ### Station kiosks can stay signed in for a week (2026-10-21)
 
 Adds a migration (`sessions.is_kiosk`, additive, applied by the normal startup) and one

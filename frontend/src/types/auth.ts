@@ -53,6 +53,8 @@ export interface CurrentUser {
   email_verified: boolean;
   mfa_enabled: boolean;
   mfa_enrollment_required?: boolean;
+  /** Privileged and not yet enrolled: when the grace period ends, then enrollment is forced. */
+  mfa_grace_ends_at?: string | null;
   password_expired: boolean;
   must_change_password: boolean;
   /**

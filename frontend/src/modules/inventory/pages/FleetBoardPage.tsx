@@ -55,14 +55,20 @@ import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 import { Modal } from '../../../components/Modal';
 
-/** How late a checklist is, as a phrase rather than a signed number. */
-const lateness = (days: number | null): { label: string; overdue: boolean } => {
-  if (days === null) return { label: '', overdue: false };
-  if (days === 0) return { label: 'due today', overdue: false };
-  if (days === 1) return { label: 'due tomorrow', overdue: false };
-  if (days > 1) return { label: `due in ${days} days`, overdue: false };
-  if (days === -1) return { label: '1 day overdue', overdue: true };
-  return { label: `${Math.abs(days)} days overdue`, overdue: true };
+/** How late a checklist is, as a phrase rather than a signed number. Whether it
+ *  is overdue comes from the server (its shift has ended); the day count only
+ *  says by how much. A shift dated yesterday that is still running is due, not
+ *  late. */
+const lateness = (days: number | null, overdue: boolean): string => {
+  if (overdue) {
+    if (days !== null && days < -1) return `${Math.abs(days)} days overdue`;
+    return days === -1 ? '1 day overdue' : 'overdue';
+  }
+  if (days === null) return '';
+  if (days < 0) return 'due now';
+  if (days === 0) return 'due today';
+  if (days === 1) return 'due tomorrow';
+  return `due in ${days} days`;
 };
 
 /** A summary chip narrows the board to one readiness, or to rigs carrying expiring stock. */
@@ -123,10 +129,10 @@ export const FleetBoardPage: React.FC = () => {
       .filter((c) => !isChecklistSubmitted(c.status))
       .map((c) => ({ checklist: c, days: calendarDaysFromToday(c.shiftDate, tz) }))
       .filter(({ days }) => days !== null && days <= 0)
-      .sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
+      .sort((a, b) => Number(b.checklist.isOverdue) - Number(a.checklist.isOverdue) || (a.days ?? 0) - (b.days ?? 0));
   }, [mine, tz]);
 
-  const overdueCount = owed.filter(({ days }) => (days ?? 0) < 0).length;
+  const overdueCount = owed.filter(({ checklist }) => checklist.isOverdue).length;
   const inProgress = mine.filter((c) => c.status === 'in_progress' || c.status === 'incomplete').length;
 
   if (loading) {
@@ -216,7 +222,7 @@ export const FleetBoardPage: React.FC = () => {
                 {owed
                   .slice(0, 3)
                   .map(({ checklist, days }) => {
-                    const { label } = lateness(days);
+                    const label = lateness(days, checklist.isOverdue);
                     return `${checklist.apparatusName} ${checklist.templateName} (${label})`;
                   })
                   .join(' · ')}

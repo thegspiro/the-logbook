@@ -67,6 +67,10 @@ export interface ActiveChecklistRecord {
   totalItems?: number;
   completedItems?: number;
   checkId?: string;
+  /** Unfiled and its shift has ended, as the server judged it. An overnight
+   *  shift dated yesterday is not overdue until it ends, so never derive this
+   *  from `shiftDate`. */
+  isOverdue: boolean;
 }
 
 // SEC: the shared axios factory, not a hand-rolled instance — it is what

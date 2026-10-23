@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**317 tables · 5242 columns · 1070 foreign keys**
+**317 tables · 5244 columns · 1070 foreign keys**
 
 ---
 
@@ -713,9 +713,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
 | [`positions`](#positions) | `Position` | 11 | Corporate Position model for permission-based access control. |
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
-| [`sessions`](#sessions) | `Session` | 11 | User session model for tracking active sessions |
+| [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 63 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 64 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -10922,6 +10922,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `last_activity` | DATETIME | yes |  | `now()` |  |
 | `is_kiosk` | BOOL | no |  | `0` |  |
+| `stepup_verified_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 
@@ -11004,6 +11005,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `mfa_secret` | VARCHAR(255) | yes |  |  |  |
 | `mfa_backup_codes` | JSON | yes |  |  |  |
 | `mfa_last_timestep` | INTEGER | yes |  |  |  |
+| `mfa_grace_started_at` | DATETIME | yes |  |  |  |
 | `password_changed_at` | DATETIME | yes |  |  |  |
 | `must_change_password` | BOOL | no |  | `0` |  |
 | `password_expiry_notified_at` | DATETIME | yes |  |  |  |

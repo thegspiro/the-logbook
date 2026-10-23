@@ -584,9 +584,9 @@ export const MyChecklistsPage: React.FC = () => {
           <div className="space-y-3">
             {dueDays.map((day) => {
               const days = calendarDaysFromToday(day.key, timezone);
-              // A past day still listed holds checks nobody filed, so the
-              // heading says so — the per-card "3 days ago" badge's job.
-              const overdue = days !== null && days < 0 && day.items.some((c) => !isChecklistSubmitted(c.status));
+              // The server marks a check overdue once its shift has ended
+              // unfiled, so an overnight shift still running is not flagged.
+              const overdue = day.items.some((c) => c.isOverdue);
               const label = dayHeading(day.key, timezone);
               return (
                 <section key={day.key} aria-label={label}>

@@ -2933,6 +2933,7 @@ class EquipmentCheckService:
         the compliance report still count them.
         """
         today = await resolve_org_today(self.db, organization_id)
+        now = datetime.now(timezone.utc)
         earliest = today - timedelta(days=MY_CHECKLISTS_OVERDUE_DAYS)
         # Get user's active shift assignments with shift data. Same status
         # filter as the submit guard in submit_check: a declined/cancelled
@@ -2989,15 +2990,33 @@ class EquipmentCheckService:
             )
             apparatus_name = apparatus_map.get(shift.apparatus_id or "", "")
             is_past = shift.shift_date < today
+            ended = self._shift_has_ended(shift, today, now)
             for cl in shift_checklists:
                 if is_past and cl["is_completed"]:
                     continue
+                cl["is_overdue"] = ended and not cl["is_completed"]
                 cl["shift_id"] = assignment.shift_id
                 cl["shift_date"] = shift.shift_date
                 cl["apparatus_name"] = apparatus_name
                 checklists.append(cl)
 
         return checklists
+
+    @staticmethod
+    def _shift_has_ended(shift: Shift, today: date, now: datetime) -> bool:
+        """Whether a shift is over, for marking its unfiled checks overdue.
+
+        Overdue is judged by the shift's end, not its date: an overnight shift
+        dated yesterday is still running at 2am, and its end-of-shift check is
+        not late yet. A shift with no recorded end falls back to its date, so it
+        turns overdue once its day has passed, as it did before.
+        """
+        if shift.end_time is None:
+            return shift.shift_date < today
+        end = shift.end_time
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        return end <= now
 
     async def get_my_checklist_history(
         self,

@@ -81,6 +81,15 @@ export const authService = {
     return response.data;
   },
 
+  /**
+   * Re-verify on this session so sensitive actions open for a few minutes.
+   * An authenticator code when MFA is enrolled, otherwise the password.
+   */
+  async stepUp(proof: { code?: string; password?: string }): Promise<{ verified: boolean; valid_for_minutes: number }> {
+    const response = await api.post<{ verified: boolean; valid_for_minutes: number }>('/auth/step-up', proof);
+    return response.data;
+  },
+
   /** Current user's MFA status. */
   async getMfaStatus(): Promise<{
     mfa_enabled: boolean;

@@ -2356,10 +2356,11 @@ You can also get there from your shift:
 Both take you to My Checklists with that shift's checks at the top.
 
 On a phone the list is compact: one row per checklist under a heading for each
-day (**Today**, **Tomorrow**, then the date). A day that has passed and still
-holds an unfiled check is marked overdue, and you can still start that check
-from it. A missed check stays on your list for seven days, which also keeps an
-overnight shift's end-of-shift check reachable after midnight; after that it
+day (**Today**, **Tomorrow**, then the date). A day is marked overdue once one
+of its shifts has ended with a check still unfiled, and you can still start
+that check from it. An overnight shift is not overdue at midnight: its
+end-of-shift check stays under the day the shift started, unmarked, until the
+shift ends. A missed check stays on your list for seven days; after that it
 drops off your list, though the fleet board and compliance report still count
 it. **Unscheduled checklist** sits beside
 the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
@@ -3220,6 +3221,8 @@ from it. Daily, weekly and custom-date patterns have no cycle, so for them the d
 only bounds when automatic generation begins.
 
 ![New Pattern in Manual Setup, Weekly: Friday, Saturday and Sunday active, Separate day and night shifts ticked, Friday carrying only the night shift, Saturday both and Sunday only the day shift](./images/03-127-pattern-weekly-split.png)
+
+![The Weekend Duty Rotation weekly pattern in the pattern list, expanded: the sun and moon glyphs beside each covered weekday, and the weekly shifts listed as Sunday: Day, Friday: Night and Saturday: Day + Night](./images/03-128-pattern-list-glyphs.png)
 
 Select **Create Pattern** to save it.
 

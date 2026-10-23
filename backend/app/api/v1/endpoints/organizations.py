@@ -19,6 +19,7 @@ from app.api.dependencies import (
     _has_permission,
     get_current_user,
     require_permission,
+    require_stepup,
 )
 from app.api.v1.email_test_helper import (
     test_cloudflare_email,
@@ -586,6 +587,7 @@ async def update_file_storage_settings(
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Update file storage settings
@@ -746,6 +748,7 @@ async def update_auth_settings(
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Update authentication settings

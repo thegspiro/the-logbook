@@ -127,6 +127,37 @@ _install_patch_leak_guard()
 
 
 @pytest.fixture(autouse=True)
+def _step_up_is_satisfied(request):
+    """Treat every session as freshly re-verified, except where a test says not.
+
+    The endpoints behind ``require_stepup`` are exercised by hundreds of tests
+    that build their own app and override ``get_current_user``; none of those
+    has a session row to stamp. They test what the endpoint does once the caller
+    is allowed in, so the gate is satisfied for them. The tests that are about
+    the gate carry ``@pytest.mark.real_stepup`` (tests/test_mfa_policy.py).
+
+    Deliberately not built on the ``monkeypatch`` fixture: requesting it here
+    would instantiate it before ``_fail_the_test_that_leaks_a_patch``, so its
+    undo would run after that guard's check and every test that monkeypatches a
+    module attribute itself would be reported as leaking it.
+    """
+    if request.node.get_closest_marker("real_stepup"):
+        yield
+        return
+    from app.api import dependencies
+
+    async def _fresh(db, token):
+        return True
+
+    original = dependencies._stepup_is_fresh
+    dependencies._stepup_is_fresh = _fresh
+    try:
+        yield
+    finally:
+        dependencies._stepup_is_fresh = original
+
+
+@pytest.fixture(autouse=True)
 def _fresh_file_storage_view():
     """Read each department's storage settings afresh in every test. The view
     is cached per process by organization id, and fixtures reuse ids, so a
