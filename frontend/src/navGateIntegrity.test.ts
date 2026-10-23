@@ -38,6 +38,7 @@ import { APPARATUS_ENTRY_PERMISSIONS } from './modules/apparatus/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from './modules/facilities/routes';
 import { QUICK_ADD_ACTIONS } from './components/layout/quickAddActions';
 import { governanceNavItems } from './components/layout/governanceNavigation';
+import { trainingNavItems } from './components/layout/trainingNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from './modules/governance/routes';
 import { barePath, routeGate, routeSources } from './test/routeGates';
 
@@ -115,6 +116,29 @@ describe('navigation gates match the routes they target', () => {
       );
     }
     expect(read('components/governance/GovernancePageHeader.tsx')).toContain('governanceNavItems(isModuleOn)');
+  });
+
+  it('draws the Training rows on both surfaces from the one shared list', () => {
+    for (const surface of NAV_SURFACES) {
+      expect(read(surface), `${surface}: Training rows are not the shared list`).toContain(
+        'subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod))'
+      );
+    }
+    expect(read('components/training/TrainingPageHeader.tsx')).toContain(
+      'trainingNavItems(offersSkillsTesting(practicalSkillsMethod))'
+    );
+  });
+
+  it('gates no Training row beyond the module its routes require', () => {
+    // Every Training section's route is gated on the training module alone,
+    // which the navigation applies to the group; a permission on a row would
+    // hide a page its route opens to every member.
+    const sources = routeSources();
+    for (const row of trainingNavItems(true)) {
+      expect(routeGate(sources, row.path), row.path).toEqual({ permissions: [], module: 'training', exists: true });
+      expect(row.permission, row.path).toBeUndefined();
+      expect(row.anyPermission, row.path).toBeUndefined();
+    }
   });
 
   it('offers Legal Documents on exactly the grants its route accepts, and the org chart to everyone', () => {

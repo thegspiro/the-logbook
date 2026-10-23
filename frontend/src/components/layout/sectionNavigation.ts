@@ -16,6 +16,12 @@ export interface SectionNavItem {
   icon: React.ElementType;
   permission?: string;
   anyPermission?: string[];
+  /**
+   * Other URLs that open this section's own page — `/training` renders My
+   * Training. Matched exactly, never as a prefix: as a prefix `/training` would
+   * claim every Training page that sits under no section of its own.
+   */
+  aliases?: string[];
 }
 
 /** The rows a viewer's grants open. */
@@ -34,6 +40,11 @@ function matchLength(pathname: string, prefix: string): number {
   return pathname === prefix || pathname.startsWith(`${prefix}/`) ? prefix.length : -1;
 }
 
+/** Whether `pathname` is the section's own page rather than one below it. */
+export function isSectionPage(item: SectionNavItem, pathname: string): boolean {
+  return pathname === item.path || (item.aliases?.includes(pathname) ?? false);
+}
+
 /**
  * The section a URL belongs to: the longest matching prefix, so
  * `/inventory/checklists/my` is My Checklists and not Fleet Readiness, and
@@ -44,7 +55,7 @@ export function activeSection<T extends SectionNavItem>(items: T[], pathname: st
   let best: T | undefined;
   let bestLength = -1;
   for (const item of items) {
-    const length = matchLength(pathname, item.path);
+    const length = item.aliases?.includes(pathname) ? pathname.length : matchLength(pathname, item.path);
     if (length > bestLength) {
       best = item;
       bestLength = length;

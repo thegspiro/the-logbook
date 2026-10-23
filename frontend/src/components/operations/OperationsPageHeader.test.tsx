@@ -90,7 +90,11 @@ describe('OperationsPageHeader', () => {
       );
 
       const crumbs = within(screen.getByRole('navigation', { name: /breadcrumb/i })).getAllByRole('link');
-      expect(crumbs.map((crumb) => crumb.textContent)).toContain('Inventory Administration');
+      // After, not before: Inventory Administration sits inside Inventory.
+      expect(crumbs.map((crumb) => crumb.textContent).filter(Boolean)).toEqual([
+        'Inventory',
+        'Inventory Administration',
+      ]);
       const hub = crumbs.find((crumb) => crumb.textContent === 'Inventory Administration');
       expect(hub).toHaveAttribute('href', '/inventory/admin');
     });

@@ -35,7 +35,7 @@ import { displayNameOf } from '../../utils/memberName';
 import { labelCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
 import { useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { StarRating } from '../../modules/scheduling/components/StarRating';
-import { Breadcrumbs } from '../../components/ux';
+import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
 import type { BatchShiftReportCreate, CrewMemberEvaluation, TrainingModuleConfig } from '../../types/training';
 import type { User } from '../../types/user';
 
@@ -274,360 +274,365 @@ export const ManualShiftReportPage: React.FC = () => {
   const includeTraining = config?.shift_reports_include_training ?? true;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
-      <Breadcrumbs />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-theme-text-primary text-xl font-bold">Log Shift Report</h1>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Manually log hours, calls, and evaluations for your crew.
-          </p>
-        </div>
-        <button
-          onClick={() => void navigate(-1)}
-          className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border rounded-lg border px-3 py-1.5 text-sm transition-colors"
-        >
-          Cancel
-        </button>
-      </div>
-
-      <div className="card space-y-5 p-5">
-        {/* Apparatus Selection */}
-        <div>
-          <label htmlFor="shift-apparatus" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-            Apparatus{config?.manual_entry_require_apparatus ? ' *' : ''}
-          </label>
-          {loadingApparatus ? (
-            <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading apparatus...
-            </div>
-          ) : availableApparatus.length === 0 ? (
-            <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
-              <AlertCircle className="h-4 w-4" />
-              No apparatus configured. Contact an administrator.
-            </div>
-          ) : (
-            <select
-              id="shift-apparatus"
-              value={apparatusId}
-              onChange={(e) => setApparatusId(e.target.value)}
-              className="form-input text-sm focus:ring-violet-500"
-            >
-              <option value="">Select apparatus...</option>
-              {availableApparatus.map((a) => (
-                <option key={a.id || a.name} value={a.id || a.name}>
-                  {a.name}
-                  {a.unit_number ? ` (${a.unit_number})` : ''} — {enumLabel(a.apparatus_type)}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {/* Date & Time */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div>
-            <label htmlFor="shift-start-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Start Date *
-            </label>
-            <input
-              id="shift-start-date"
-              type="date"
-              value={shiftDate}
-              onChange={(e) => {
-                setShiftDate(e.target.value);
-                if (!endDate || endDate < e.target.value) setEndDate(e.target.value);
-              }}
-              className="form-input text-sm focus:ring-violet-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="shift-start-time" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Start Time *
-            </label>
-            <input
-              id="shift-start-time"
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="form-input text-sm focus:ring-violet-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="shift-end-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              End Date *
-            </label>
-            <input
-              id="shift-end-date"
-              type="date"
-              value={endDate}
-              min={shiftDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="form-input text-sm focus:ring-violet-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="shift-end-time" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              End Time *
-            </label>
-            <input
-              id="shift-end-time"
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="form-input text-sm focus:ring-violet-500"
-            />
-          </div>
-        </div>
-
-        {/* Calculated hours display */}
-        {calculatedHours > 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-sm text-green-800 dark:text-green-400">
-            <FileText className="h-4 w-4 shrink-0" />
-            <span className="font-medium">{calculatedHours}h</span> shift duration
-            {calculatedHours > 24 && <span className="text-theme-text-muted text-xs">(multi-day shift)</span>}
-          </div>
-        )}
-
-        {/* Calls */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="shift-calls-responded" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Calls Responded
-            </label>
-            <input
-              id="shift-calls-responded"
-              type="number"
-              min="0"
-              value={callsResponded || 0}
-              onChange={(e) => setCallsResponded(parseInt(e.target.value) || 0)}
-              className="form-input text-sm focus:ring-violet-500"
-            />
-          </div>
-        </div>
-
-        {/* Call Types */}
-        {callTypeOptions.length > 0 && (
-          <div>
-            <label className="text-theme-text-secondary mb-1.5 block text-sm font-medium">Call Types</label>
-            <div className="flex flex-wrap gap-1.5">
-              {callTypeOptions.map((type: string) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => toggleCallType(setCallTypes, type)}
-                  aria-pressed={callTypes.includes(type)}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                    callTypes.includes(type)
-                      ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                      : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Narrative */}
-        <div>
-          <label
-            htmlFor="shift-overall-shift-narrative"
-            className="text-theme-text-secondary mb-1 block text-sm font-medium"
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* Opened from the hub's Shift Reports tab, which the trail leads back to. */}
+      <TrainingPageHeader
+        icon={FileText}
+        title="Log Shift Report"
+        subtitle="Manually log hours, calls, and evaluations for your crew."
+        underHub="/training/admin"
+        parentCrumbs={[{ label: 'Shift Reports', path: '/training/admin?page=records&tab=shift-reports' }]}
+        actions={
+          <button
+            onClick={() => void navigate(-1)}
+            className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border rounded-lg border px-3 py-1.5 text-sm transition-colors"
           >
-            Overall Shift Narrative
-          </label>
-          <textarea
-            id="shift-overall-shift-narrative"
-            rows={3}
-            value={narrative}
-            onChange={(e) => setNarrative(e.target.value)}
-            placeholder="General observations about the shift for leadership review..."
-            className="form-input resize-none text-sm focus:ring-violet-500"
-          />
-        </div>
-
-        {/* Crew Members */}
-        <div>
-          <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
-            Crew Members
-            {crew.length > 0 && (
-              <span className="text-theme-text-muted ml-2 text-xs font-normal">
-                ({selectedIds.size} of {crew.length} selected)
-              </span>
+            Cancel
+          </button>
+        }
+      />
+      {/* The form keeps its reading width under the full-width strip. */}
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div className="card space-y-5 p-5">
+          {/* Apparatus Selection */}
+          <div>
+            <label htmlFor="shift-apparatus" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Apparatus{config?.manual_entry_require_apparatus ? ' *' : ''}
+            </label>
+            {loadingApparatus ? (
+              <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading apparatus...
+              </div>
+            ) : availableApparatus.length === 0 ? (
+              <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                No apparatus configured. Contact an administrator.
+              </div>
+            ) : (
+              <select
+                id="shift-apparatus"
+                value={apparatusId}
+                onChange={(e) => setApparatusId(e.target.value)}
+                className="form-input text-sm focus:ring-violet-500"
+              >
+                <option value="">Select apparatus...</option>
+                {availableApparatus.map((a) => (
+                  <option key={a.id || a.name} value={a.id || a.name}>
+                    {a.name}
+                    {a.unit_number ? ` (${a.unit_number})` : ''} — {enumLabel(a.apparatus_type)}
+                  </option>
+                ))}
+              </select>
             )}
-          </label>
+          </div>
 
-          <div className="relative mb-3">
-            <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-            <input
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              type="text"
-              aria-label="Search members to add"
-              placeholder="Search members to add..."
-              value={memberSearch}
-              onChange={(e) => setMemberSearch(e.target.value)}
-              className="form-input pr-3 pl-9 text-sm focus:ring-violet-500"
+          {/* Date & Time */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <label htmlFor="shift-start-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Start Date *
+              </label>
+              <input
+                id="shift-start-date"
+                type="date"
+                value={shiftDate}
+                onChange={(e) => {
+                  setShiftDate(e.target.value);
+                  if (!endDate || endDate < e.target.value) setEndDate(e.target.value);
+                }}
+                className="form-input text-sm focus:ring-violet-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="shift-start-time" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Start Time *
+              </label>
+              <input
+                id="shift-start-time"
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="form-input text-sm focus:ring-violet-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="shift-end-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                End Date *
+              </label>
+              <input
+                id="shift-end-date"
+                type="date"
+                value={endDate}
+                min={shiftDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="form-input text-sm focus:ring-violet-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="shift-end-time" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                End Time *
+              </label>
+              <input
+                id="shift-end-time"
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="form-input text-sm focus:ring-violet-500"
+              />
+            </div>
+          </div>
+
+          {/* Calculated hours display */}
+          {calculatedHours > 0 && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-sm text-green-800 dark:text-green-400">
+              <FileText className="h-4 w-4 shrink-0" />
+              <span className="font-medium">{calculatedHours}h</span> shift duration
+              {calculatedHours > 24 && <span className="text-theme-text-muted text-xs">(multi-day shift)</span>}
+            </div>
+          )}
+
+          {/* Calls */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="shift-calls-responded"
+                className="text-theme-text-secondary mb-1 block text-sm font-medium"
+              >
+                Calls Responded
+              </label>
+              <input
+                id="shift-calls-responded"
+                type="number"
+                min="0"
+                value={callsResponded || 0}
+                onChange={(e) => setCallsResponded(parseInt(e.target.value) || 0)}
+                className="form-input text-sm focus:ring-violet-500"
+              />
+            </div>
+          </div>
+
+          {/* Call Types */}
+          {callTypeOptions.length > 0 && (
+            <div>
+              <label className="text-theme-text-secondary mb-1.5 block text-sm font-medium">Call Types</label>
+              <div className="flex flex-wrap gap-1.5">
+                {callTypeOptions.map((type: string) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => toggleCallType(setCallTypes, type)}
+                    aria-pressed={callTypes.includes(type)}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      callTypes.includes(type)
+                        ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                        : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Narrative */}
+          <div>
+            <label
+              htmlFor="shift-overall-shift-narrative"
+              className="text-theme-text-secondary mb-1 block text-sm font-medium"
+            >
+              Overall Shift Narrative
+            </label>
+            <textarea
+              id="shift-overall-shift-narrative"
+              rows={3}
+              value={narrative}
+              onChange={(e) => setNarrative(e.target.value)}
+              placeholder="General observations about the shift for leadership review..."
+              className="form-input resize-none text-sm focus:ring-violet-500"
             />
           </div>
 
-          {filteredMembers.length > 0 && (
-            <div className="card mb-3 max-h-40 overflow-y-auto">
-              {filteredMembers.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => addMember(m)}
-                  className="hover:bg-theme-surface-hover flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-                >
-                  <UserIcon className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
-                  <span>{displayNameOf(m)}</span>
-                  <span className="text-theme-text-muted text-xs">@{m.username}</span>
-                </button>
-              ))}
+          {/* Crew Members */}
+          <div>
+            <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+              Crew Members
+              {crew.length > 0 && (
+                <span className="text-theme-text-muted ml-2 text-xs font-normal">
+                  ({selectedIds.size} of {crew.length} selected)
+                </span>
+              )}
+            </label>
+
+            <div className="relative mb-3">
+              <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                type="text"
+                aria-label="Search members to add"
+                placeholder="Search members to add..."
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                className="form-input pr-3 pl-9 text-sm focus:ring-violet-500"
+              />
             </div>
-          )}
-          {memberSearch.trim().length >= 2 && filteredMembers.length === 0 && (
-            <p className="text-theme-text-muted border-theme-surface-border mb-3 rounded-lg border px-3 py-2 text-xs">
-              No matching members found.
-            </p>
-          )}
 
-          {crew.length === 0 ? (
-            <p className="text-theme-text-muted py-4 text-sm">Search and add members above.</p>
-          ) : (
-            <div className="space-y-2">
-              {crew.map((member) => {
-                const isSelected = selectedIds.has(member.user_id);
-                const isExpanded = expandedMemberId === member.user_id;
-                const eval_ = traineeEvals[member.user_id];
+            {filteredMembers.length > 0 && (
+              <div className="card mb-3 max-h-40 overflow-y-auto">
+                {filteredMembers.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => addMember(m)}
+                    className="hover:bg-theme-surface-hover flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
+                  >
+                    <UserIcon className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+                    <span>{displayNameOf(m)}</span>
+                    <span className="text-theme-text-muted text-xs">@{m.username}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {memberSearch.trim().length >= 2 && filteredMembers.length === 0 && (
+              <p className="text-theme-text-muted border-theme-surface-border mb-3 rounded-lg border px-3 py-2 text-xs">
+                No matching members found.
+              </p>
+            )}
 
-                return (
-                  <div key={member.user_id} className="border-theme-surface-border rounded-lg border">
-                    <div className="flex items-center gap-3 px-3 py-2.5">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleMember(member.user_id)}
-                        aria-label={`Include ${member.user_name} in the report`}
-                        className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
-                      />
-                      <span className="text-theme-text-primary flex-1 text-sm">{member.user_name}</span>
-                      {includeTraining && (
+            {crew.length === 0 ? (
+              <p className="text-theme-text-muted py-4 text-sm">Search and add members above.</p>
+            ) : (
+              <div className="space-y-2">
+                {crew.map((member) => {
+                  const isSelected = selectedIds.has(member.user_id);
+                  const isExpanded = expandedMemberId === member.user_id;
+                  const eval_ = traineeEvals[member.user_id];
+
+                  return (
+                    <div key={member.user_id} className="border-theme-surface-border rounded-lg border">
+                      <div className="flex items-center gap-3 px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleMember(member.user_id)}
+                          aria-label={`Include ${member.user_name} in the report`}
+                          className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
+                        />
+                        <span className="text-theme-text-primary flex-1 text-sm">{member.user_name}</span>
+                        {includeTraining && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedMemberId(isExpanded ? null : member.user_id)}
+                            className="inline-flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
+                          >
+                            {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            Evaluate
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => setExpandedMemberId(isExpanded ? null : member.user_id)}
-                          className="inline-flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
+                          onClick={() => removeMember(member.user_id)}
+                          className="text-theme-text-muted transition-colors hover:text-red-500"
+                          aria-label={`Remove ${member.user_name}`}
                         >
-                          {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                          Evaluate
+                          <X className="h-3.5 w-3.5" />
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeMember(member.user_id)}
-                        className="text-theme-text-muted transition-colors hover:text-red-500"
-                        aria-label={`Remove ${member.user_name}`}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="border-theme-surface-border space-y-3 border-t px-4 pt-1 pb-3">
-                        <div>
-                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
-                            Performance Rating
-                          </label>
-                          <StarRating
-                            value={eval_?.performance_rating || 0}
-                            onChange={(v) => updateEval(member.user_id, 'performance_rating', v)}
-                            size="sm"
-                          />
-                        </div>
-                        <div>
-                          <label
-                            htmlFor={`shift-strengths-${member.user_id}`}
-                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
-                          >
-                            Strengths
-                          </label>
-                          <input
-                            id={`shift-strengths-${member.user_id}`}
-                            type="text"
-                            value={eval_?.areas_of_strength || ''}
-                            onChange={(e) => updateEval(member.user_id, 'areas_of_strength', e.target.value)}
-                            className="form-input text-sm focus:ring-violet-500"
-                            placeholder="Areas of strength..."
-                          />
-                        </div>
-                        <div>
-                          <label
-                            htmlFor={`shift-areas-for-improvement-${member.user_id}`}
-                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
-                          >
-                            Areas for Improvement
-                          </label>
-                          <input
-                            id={`shift-areas-for-improvement-${member.user_id}`}
-                            type="text"
-                            value={eval_?.areas_for_improvement || ''}
-                            onChange={(e) => updateEval(member.user_id, 'areas_for_improvement', e.target.value)}
-                            className="form-input text-sm focus:ring-violet-500"
-                            placeholder="Areas to work on..."
-                          />
-                        </div>
-                        <div>
-                          <label
-                            htmlFor={`shift-remarks-${member.user_id}`}
-                            className="text-theme-text-secondary mb-1 block text-xs font-medium"
-                          >
-                            Remarks
-                          </label>
-                          <textarea
-                            id={`shift-remarks-${member.user_id}`}
-                            rows={2}
-                            value={eval_?.remarks || ''}
-                            onChange={(e) => updateEval(member.user_id, 'remarks', e.target.value)}
-                            className="form-input resize-none text-sm focus:ring-violet-500"
-                            placeholder="Additional notes..."
-                          />
-                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
 
-        {/* Submit */}
-        <div className="border-theme-surface-border flex flex-wrap items-center gap-3 border-t pt-2">
-          <button
-            onClick={() => {
-              void handleSubmit(true);
-            }}
-            disabled={savingDraft || submitting}
-            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save as Draft
-          </button>
-          <button
-            onClick={() => {
-              void handleSubmit(false);
-            }}
-            disabled={submitting || savingDraft}
-            className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
-          >
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-            Submit Report{selectedIds.size > 1 ? `s (${selectedIds.size})` : ''}
-          </button>
+                      {isExpanded && (
+                        <div className="border-theme-surface-border space-y-3 border-t px-4 pt-1 pb-3">
+                          <div>
+                            <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                              Performance Rating
+                            </label>
+                            <StarRating
+                              value={eval_?.performance_rating || 0}
+                              onChange={(v) => updateEval(member.user_id, 'performance_rating', v)}
+                              size="sm"
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor={`shift-strengths-${member.user_id}`}
+                              className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                            >
+                              Strengths
+                            </label>
+                            <input
+                              id={`shift-strengths-${member.user_id}`}
+                              type="text"
+                              value={eval_?.areas_of_strength || ''}
+                              onChange={(e) => updateEval(member.user_id, 'areas_of_strength', e.target.value)}
+                              className="form-input text-sm focus:ring-violet-500"
+                              placeholder="Areas of strength..."
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor={`shift-areas-for-improvement-${member.user_id}`}
+                              className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                            >
+                              Areas for Improvement
+                            </label>
+                            <input
+                              id={`shift-areas-for-improvement-${member.user_id}`}
+                              type="text"
+                              value={eval_?.areas_for_improvement || ''}
+                              onChange={(e) => updateEval(member.user_id, 'areas_for_improvement', e.target.value)}
+                              className="form-input text-sm focus:ring-violet-500"
+                              placeholder="Areas to work on..."
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor={`shift-remarks-${member.user_id}`}
+                              className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                            >
+                              Remarks
+                            </label>
+                            <textarea
+                              id={`shift-remarks-${member.user_id}`}
+                              rows={2}
+                              value={eval_?.remarks || ''}
+                              onChange={(e) => updateEval(member.user_id, 'remarks', e.target.value)}
+                              className="form-input resize-none text-sm focus:ring-violet-500"
+                              placeholder="Additional notes..."
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Submit */}
+          <div className="border-theme-surface-border flex flex-wrap items-center gap-3 border-t pt-2">
+            <button
+              onClick={() => {
+                void handleSubmit(true);
+              }}
+              disabled={savingDraft || submitting}
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save as Draft
+            </button>
+            <button
+              onClick={() => {
+                void handleSubmit(false);
+              }}
+              disabled={submitting || savingDraft}
+              className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Submit Report{selectedIds.size > 1 ? `s (${selectedIds.size})` : ''}
+            </button>
+          </div>
         </div>
       </div>
     </div>

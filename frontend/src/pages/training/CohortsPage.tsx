@@ -19,6 +19,7 @@ import { COHORT_STATUS_COLORS, COHORT_STATUS_LABELS } from '../../constants/enum
 import { getErrorMessage } from '../../utils/errorHandling';
 import type { CourseCohort } from '../../types/training';
 import { Breadcrumbs } from '../../components/ux';
+import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
 
 interface CohortsPageProps {
   embedded?: boolean;
@@ -64,27 +65,33 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
     );
   }
 
+  const newCohortButton = (
+    <button type="button" onClick={() => setShowWizard(true)} className="btn-primary flex items-center gap-2">
+      <Plus className="h-5 w-5" />
+      <span>New cohort</span>
+    </button>
+  );
+
   return (
     <div className={embedded ? '' : 'min-h-screen'}>
       <div data-page-main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
-        {/* Not when embedded: this also renders inside a Training Administration
-            tab, where a trail would sit within the very hub it points at. */}
-        {!embedded && <Breadcrumbs underHub="/training/admin" />}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            {!embedded && (
-              <h1 className="text-theme-text-primary flex items-center gap-3 text-3xl font-bold">
-                <GraduationCap className="h-8 w-8 text-red-700 dark:text-red-500" />
-                <span>Course Cohorts</span>
-              </h1>
-            )}
+        {/* Embedded, this is a Training Administration tab under the hub's own
+            header, where a strip and trail would sit within the very hub the
+            trail points at. */}
+        {embedded ? (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <p className="text-theme-text-muted text-sm">Scheduled runs of your multi-class courses</p>
+            {newCohortButton}
           </div>
-          <button type="button" onClick={() => setShowWizard(true)} className="btn-primary flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            <span>New cohort</span>
-          </button>
-        </div>
+        ) : (
+          <TrainingPageHeader
+            icon={GraduationCap}
+            title="Course Cohorts"
+            subtitle="Scheduled runs of your multi-class courses"
+            underHub="/training/admin"
+            actions={newCohortButton}
+          />
+        )}
 
         {loading ? (
           <SkeletonCardGrid count={3} />

@@ -105,10 +105,11 @@ sign-in page reports "clean".
 
 ## Observations, not defects
 
-- `GET /training/sessions/by-event/{id}` answers 404 for an event with no
-  training session, and the browser console logs a red line for each event
-  opened. The service maps 404 to "none" deliberately, so the page is correct;
-  an endpoint that answered 200 with `null` would stop the noise.
+- `GET /training/sessions/by-event/{id}` answered 404 for an event with no
+  training session, and the browser console logged a red line for each event
+  opened. **Fixed afterwards:** it now answers 200 with `null`, and the client
+  still reads a 404 as "none" so a frontend deployed ahead of the backend keeps
+  working. The sibling `GET …/by-event/{id}/approval` was changed the same way.
 - `GET /users` gives any member `hire_date`, `member_class` and
   `compliance_exempt` for every other member. That may be intended for a
   directory; it is worth a conscious yes.

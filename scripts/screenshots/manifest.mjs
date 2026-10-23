@@ -5323,7 +5323,7 @@ export const SHOTS = [
           `/api/v1/training/sessions/by-event/${event.id}/approval`,
           { credentials: "include" },
         );
-        return summary.ok ? (await summary.json()).token : null;
+        return summary.ok ? ((await summary.json())?.token ?? null) : null;
       });
       if (!token)
         throw new Error(
@@ -10205,6 +10205,53 @@ export const SHOTS = [
     },
     selector: "[role='dialog'] [data-testid='modal-footer']",
     expect: "Keep it open",
+  },
+  {
+    id: "09-33-cancel-test-button",
+    doc: "09-skills-testing.md",
+    line: 1367,
+    anchor:
+      'The amber "Cancel test" button in the Cancel unfinished test dialog',
+    alt: "The amber Cancel test button from the Cancel unfinished test dialog",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // The button alone: 09-32 is the footer with both choices. It is shown and
+    // never clicked, because pressing it would close out the one in-progress
+    // test the scoring-screen shots are taken from.
+    prepare: async (page) => {
+      const open = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          { credentials: "include" },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const found = rows.find((row) => row.status === "in_progress");
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!open) {
+        throw new Error("no in-progress test to cancel");
+      }
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: open.candidate })
+        .filter({ hasText: open.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${open.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      await page
+        .getByRole("button", { name: "Cancel test", exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] button:text-is('Cancel test')",
+    expect: "Cancel test",
   },
   {
     id: "09-09-member-skills-testing",
@@ -22188,11 +22235,15 @@ export const SHOTS = [
   {
     id: "03-126-my-checklists-phone",
     doc: "03-scheduling.md",
-    line: 2370,
+    line: 2371,
     anchor: "My Checklists on a phone",
     alt: "My Checklists on a phone: day headings with the overdue marker, each row's Start or End badge, and the ⋯ menu open over Apparatus Inventory",
     route: "/inventory/checklists/my",
     viewport: "mobile",
+    // As the member: the seeder leaves the member's own unfiled checks on
+    // ended shifts, and an unenrolled administrator carries the two-factor
+    // grace banner on every page.
+    auth: "member",
     expect: "overdue",
     prepare: async (page) => {
       await page.waitForSelector("text=Engine Daily Check", {

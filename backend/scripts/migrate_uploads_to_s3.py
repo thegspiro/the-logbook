@@ -4,7 +4,7 @@ Move a department's existing files from the uploads volume into its own bucket.
 
 Once a department's "Test and switch to S3" passes, its new uploads go to the
 bucket; files written before that stay on the volume, and keep working, until
-this moves them. See ``app/services/s3_migration.py`` for exactly what each
+this moves them. See ``app/services/remote_migration.py`` for exactly what each
 step does.
 
 Three steps, each safe to interrupt and re-run:
@@ -79,23 +79,23 @@ async def _run(args: argparse.Namespace) -> int:
     # Imported here, after the path insert above: the script runs from any
     # working directory, and the application package is found through it.
     from app.core.database import async_session_factory, database_manager
-    from app.services import s3_migration
+    from app.services import remote_migration
 
     await database_manager.connect()
     try:
         async with async_session_factory() as db:
             if args.buckets:
-                print(json.dumps(await s3_migration.bucket_inventory(db), indent=2))
+                print(json.dumps(await remote_migration.bucket_inventory(db), indent=2))
                 return 0
             if args.rollback:
-                result = await s3_migration.rollback(db, args.rollback)
+                result = await remote_migration.rollback(db, args.rollback)
                 print(json.dumps(result, indent=2))
                 return 1 if result["bucket_copies_kept"] else 0
             if args.finalize:
-                result = await s3_migration.finalize(db, args.finalize)
+                result = await remote_migration.finalize(db, args.finalize)
                 print(json.dumps(result, indent=2))
                 return 1 if result["kept_unverified"] else 0
-            report = await s3_migration.apply(
+            report = await remote_migration.apply(
                 db, organization_id=args.org, dry_run=not args.apply
             )
     finally:

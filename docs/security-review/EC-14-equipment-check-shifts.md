@@ -3,20 +3,181 @@
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
-2026-10-15 (pass 9), 2026-10-19 (pass 10) · **PR:**
+2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), pass 10 PR recorded in `PROGRESS.md`
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings)
 
-**Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, up from 52 at
-pass 9), `api/v1/endpoints/shift_completion.py` (21 routes),
-`services/equipment_check_service.py` (5,368 L),
-`services/shift_completion_service.py` (1,930 L)
+**Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged from
+pass 10), `api/v1/endpoints/shift_completion.py` (21 routes),
+`services/equipment_check_service.py` (6,934 L),
+`services/shift_completion_service.py` (2,134 L)
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration (no schema change to this feature's own
 tables)
+
+---
+
+## Pass 11 (2026-10-23) — real delta (16 commits touching the primary files; a presence check type, crew-dated replacements, inline checklist items, a nullable officer FK), 0 fixed, 0 new findings
+
+**Watchdog pickup.** Per Step 0, no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results). PR #3589
+(Feature 13, Apparatus & NFC, pass 18) had already merged, docs-only —
+not independently recordable per the "docs-only PR is not a recordable
+event" rule. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via `ListAgents`.
+Rotation row 14 (Equipment check & shifts) was confirmed the next `⬜` by
+reading the rotation table directly.
+
+**Shallow-clone check.** `git rev-parse --is-shallow-repository` → `false`
+after an earlier unshallow in this same session; no truncation risk.
+
+### Scope
+
+Baseline: pass 10's merge, `8192af4eb` (PR #3435). 607 non-merge commits
+landed repo-wide in the window; **16** touch this feature's declared
+primary files directly (`git log --no-merges` against the six backend
+files plus the four frontend pages), each read via `git show` in full.
+The real ones, grouped:
+
+- **`ddb189c1d`** (largest: 203 L service, 822 L builder, 31 L schema,
+  17 L PDF) — three features at once: a new `presence` (Present/Absent)
+  check type; a crew-entered replacement date/lot on a Date line with no
+  inventory link (the only way to clear an expired unit used to be an
+  admin editing the checklist); and `is_inline` headingless checklist
+  groups. Every write operates on a `CheckTemplateItem`/
+  `CheckTemplateCompartment` already resolved org-scoped via the
+  existing `_get_compartment(id, organization_id)` helper — no new
+  by-id or client-FK surface. The replacement-date path refuses a date
+  already in the past (`ValueError`, reproduced against the
+  unmodified service first, per CLAUDE.md's verification discipline for
+  this kind of check) and is attributed to the submitting member in the
+  checklist change log, never silent. `_accepts_replacement_date` gates
+  the feature to Date lines with no inventory link and no lots aboard, so
+  a linked line keeps using the existing stock-swap path untouched.
+- **`78a6a57eb`** — `shift_completion_reports.officer_id` (and the
+  unrelated `skill_tests.examiner_id`) move from `NOT NULL`/`CASCADE` to
+  `nullable=True`/`ondelete="SET NULL"` (migration `cbe0de50f202`, correct
+  Pitfall #2 pairing, confirmed on both the model and a fresh
+  `information_schema` read; idempotent and `create_all`-table-tolerant
+  per Pitfall #26). `shift_completion_service.py`'s `officer_id` threading
+  (32 L) is the mechanical follow-through: every caller now accepts
+  `Optional[str]` and a `None` evaluator is written through rather than
+  crashing on `UUID(None)`. The bulk of this commit
+  (`member_shift_release_service.py`, `user_deletion_service.py`) is
+  Users & Organizations' own rotation surface, not this feature's; only
+  the officer-FK nullability and its threading were reviewed here.
+- **`746382501`**, **`8e43a68e7`** (repo-wide numeric-bounds sweep, split
+  across two commits) — `schemas/shift_completion.py` (+4/−3) and
+  `schemas/equipment_check.py` (+29/−26) both confirmed purely additive:
+  every hunk adds `le=INT32_MAX`/`le=FLOAT32_MAX` to a field that had no
+  upper bound, never removes or loosens an existing one.
+- **`17bf89f76`**, **`3874f6a8a`** — `get_my_checklists` now reaches back
+  `MY_CHECKLISTS_OVERDUE_DAYS` (7) instead of today-only, and marks a line
+  overdue from the shift's actual end time rather than its date. Both
+  queries stay filtered on `ShiftAssignment.user_id == user_id` (the
+  caller's own shifts) and `Shift.organization_id == organization_id` —
+  widening the date window doesn't touch either filter, so this stays
+  self-scoped, not a new cross-tenant read.
+- **`c75e0cea9`** — new recall lot-search surface
+  (`apparatus_expiring_stock`'s `lot_number` parameter, called from
+  Medical Supplies' `GET /medical-supplies/lots/search`). The `.ilike()`
+  call goes through `like_pattern()` with `escape=LIKE_ESCAPE_CHAR`; the
+  deployed-lot subquery filters `CheckItemDeployedLot.organization_id ==
+organization_id` explicitly. The calling endpoint (reviewed as the
+  direct caller of this feature's function, though the endpoint file
+  itself is Medical Supplies' own scope) sources `org_id` from
+  `current_user.organization_id`, gated
+  `inventory.view_medical`/`inventory.view` — no client-supplied org.
+- **`6b952406e`** — 4-line additive `apparatus_id` field on a Medical
+  Supplies response row, read off an already-org-scoped join; no new
+  query.
+- **`098307238`** — frontend-only (`EquipmentCheckTemplateBuilder.tsx`,
+  +88 L): a client-side cleanup of emptied inline groups and a bulk
+  Present/Absent migration tool for legacy `present`-type lines. No API
+  or schema change, confirmed by the commit's own diff touching no
+  backend file.
+- **`65eb0e1c2`** (Operations shared-header rollout) — `CheckLogPage.tsx`/
+  `MyChecklistsPage.tsx` markup only; the existing permission-gated
+  actions are carried into the new header unchanged.
+- **`ef140b8e8`, `382758abc`, `755011342`, `e9212d588`, `381e6a5e0`** —
+  five AA/AAA-contrast class-string fixes touching
+  `EquipmentCheckTemplateBuilder.tsx`/`ShiftCheckInPage.tsx`/
+  `MyChecklistsPage.tsx`; each diff is a Tailwind color-shade swap only
+  (confirmed by reading every hunk), no markup or logic change.
+- **`f75785376`** — docs/training screenshot capture, no code.
+
+**Shared-dependency files** (`org_scoping.py`, `core/audit.py`,
+`utils/sql_search.py`, `core/dependencies.py`, `utils/csv_export.py`) —
+byte-identical to pass 10. Three did change: `core/permissions.py`
+(+34, a new `security.kiosk_session` permission seeded to no position —
+unrelated feature, no baseline-grant risk per Pitfall #23),
+`utils/model_updates.py` (+22, a new standalone
+`reject_null_for_required` helper alongside the unmodified `apply_updates`
+this feature's own update paths call), and `frontend/src/utils/apiCache.ts`
+(+2, two new cache-exclusion entries for unrelated endpoints). None
+touches this feature's own permission grants, update paths, or cached
+routes.
+
+**`scheduled_tasks.py`/`scheduling_service.py`** — grepped every commit in
+the window against the two functions this feature's lens covers
+(`run_end_of_shift_checklist_reminders`, `run_post_shift_validation`):
+zero matches. Every commit touching those files this window belongs to
+another feature's own rotation turn.
+
+### Re-verified: every prior fix and open item, read at its current location
+
+- **EC-16** (SAVEPOINT duplicate-report guard), **EC-6, EC-13** — intact;
+  `shift_completion_service.py`'s locking/guard code is untouched by
+  `78a6a57eb`'s officer_id threading.
+- **EC2-3/EC2-4** (dangling-FK-on-setattr-loop) — re-checked at
+  `update_item`: still `_validate_item_fks(data, organization_id)` before
+  `apply_updates`; not touched this window.
+- **EC-8** (by-id reads for changelog text only, no org filter, owner-
+  accepted harmless) and **`get_item_deployments` vs. its sibling
+  permission-gate discrepancy** (owner-decision, `KNOWN_LIMITATIONS.md`)
+  — both re-confirmed unchanged; neither route/function appears in this
+  window's diff (`get_item_deployments`'s decorator re-read directly,
+  still `require_permission("inventory.check_view", "inventory.view")`).
+- **`.ilike()` escaping**, **`SafeCsvWriter`** — intact; the one new search
+  path this window (`c75e0cea9`'s lot search) uses the same
+  `like_pattern()`/`escape=LIKE_ESCAPE_CHAR` idiom.
+- **Route inventory** — `equipment_check.py` **54**, `shift_completion.py`
+  **21** — both unchanged from pass 10 (re-counted via `grep -c
+"^@router\.(get|post|put|patch|delete)"`, not carried over). No new
+  route this window despite the real delta above.
+- **JSON mutation (Pitfall #12), SMS allowlist (Pitfall #18), unbounded
+  in-memory caches (Pitfall #9)** — no new nested-JSON write, no new
+  `SMSService` call, no new module-level tracker; grepped fresh against
+  all 16 commits' diffs.
+
+**No new finding.** Every real change either operates on an
+already-org-scoped object through this feature's existing resolution
+helpers, extends a correctly-scoped shared query (the Medical Supplies
+lot search), or is the mechanical follow-through of a nullable-FK
+migration whose own `ondelete`/`nullable` pairing was verified directly
+against the model and the database.
+
+### Completion gate (pass 11)
+
+| Check                                                                                                                                                             | Result                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI-pinned)                                                                                                                  | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/` (26.5.1, CI-pinned)                                                                                                          | ✅ clean, 2573 files unchanged                   |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned)                                                                                                      | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                 | ✅ single head (`f7535f478280`), 641 revisions   |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                             | ✅ 273 routes, 0 errors, 0 warnings              |
+| `pytest tests/ -q -k "equipment_check or shift_completion"` (Python 3.13)                                                                                         | ✅ 635 passed, 1 pre-existing skip (`pywebpush`) |
+| Tenancy/security guard tests (LIKE escaping, capacity locking, CSV sweep, org-scoping ratchet, account-status gates, numeric bounds, migration create-all tables) | ✅ 671 passed                                    |
+| `cd frontend && npm run typecheck`                                                                                                                                | ✅ clean                                         |
+| `cd frontend && npm run lint`                                                                                                                                     | ✅ clean, exit 0                                 |
+| `npx vitest run src/modules/inventory src/pages/scheduling/ShiftCheckInPage.test.tsx`                                                                             | ✅ 1,829 passed (123 files)                      |
+
+Rotation row 14 → ✅ (pending this PR's merge). Next: Feature 15
+(Scheduling) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 ---
 

@@ -40,6 +40,93 @@ Schedule it (02:00 daily shown; align frequency with your RPO, below):
 0 2 * * * /path/to/the-logbook/scripts/backup.sh
 ```
 
+## Encrypted backups
+
+Every backup holds every member's records and uploaded files. Since
+2026-10-23 they are encrypted before they reach the backups directory, once a
+key exists. Until you create one, backups keep running **unencrypted**, every
+run logs a warning, and administrators see a "Backups are not encrypted"
+notice.
+
+### Set it up (once)
+
+On the host, in the install directory:
+
+```bash
+./scripts/backup-keygen.sh
+```
+
+It writes two things to `backup-keys/` (on Unraid,
+`/mnt/user/appdata/the-logbook/backup-keys`) and mounts them read-only into the
+backup container:
+
+| File                   | Where it lives                                | What it does                                                                                                                                                                                |
+| ---------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backup-drill.key`     | The server, and a copy you store elsewhere    | Lets the nightly restore drill open the archive it just wrote. Anyone who controls the server can read backups with it.                                                                     |
+| `backup-recipient.pem` | The server (it is the **public** certificate) | Every archive is also encrypted to this. Its **private key** is printed once and never stored on the server: put it in a password manager or a safe, apart from the server and its backups. |
+
+The private key is what protects backups taken **before** a server
+compromise, and the only way back if the drill key is lost. **If both are
+lost, every encrypted backup is unrecoverable.** The script asks you to type
+`SAVED` before it keeps anything.
+
+Options: `--import-certificate FILE` to use a certificate whose private key
+you made elsewhere (recommended if you have an offline machine);
+`--private-key-out FILE` to write the private key to a path outside
+`backup-keys/` instead of printing it; `--drill-key-only` for no certificate
+(not recommended); `--force` to replace keys (archives made with the old keys
+need the old keys).
+
+### What a backup looks like
+
+Each backup is three files that must stay together:
+
+```
+logbook_backup_YYYYmmdd_HHMMSS.tar.gz.enc         the archive, AES-256
+logbook_backup_YYYYmmdd_HHMMSS.tar.gz.enc.key     the wrapped archive key
+logbook_backup_YYYYmmdd_HHMMSS.tar.gz.enc.sha256  checksum of the .enc
+```
+
+The `.enc.key` file is a small envelope holding that archive's random key and
+the SHA-256 of the `.enc`, encrypted to the certificate and the drill key.
+Either opens it. A corrupted, truncated or swapped `.enc` is refused before
+anything is decrypted. This detects damage; it does not prove who wrote the
+archive, because anyone holding the public certificate can build a valid pair.
+
+The plaintext archive is assembled in a temporary directory and never written
+to the backups directory once a key exists.
+
+### Existing plaintext backups
+
+The first backup after you create a key also converts the plaintext archives
+already in the backups directory. Each is encrypted, decrypted again with the
+drill key, compared byte for byte with the original, and only then removed
+(with its old checksum). Without a drill key nothing is deleted. Turn the
+conversion off with `BACKUP_ENCRYPT_EXISTING=false`, or run it by hand with
+`./scripts/backup.sh --encrypt-existing`.
+
+### Restoring and verifying an encrypted backup
+
+```bash
+# With the drill key still in backup-keys/ (the usual case):
+./scripts/backup.sh --restore backups/logbook_backup_X.tar.gz.enc
+
+# After losing the server: restore the certificate into backup-keys/, then
+./scripts/backup.sh --restore X.tar.gz.enc --private-key /path/to/private.pem
+./scripts/backup.sh --restore X.tar.gz.enc --drill-key /path/to/backup-drill.key
+
+# Prove an archive restores without touching production:
+./scripts/verify_backup.sh X.tar.gz.enc --private-key /path/to/private.pem
+```
+
+Plaintext archives restore as before.
+
+### Offsite copies
+
+`./scripts/backup.sh --destination s3|azure|gcs` uploads the `.enc`, `.enc.key`
+and `.sha256` files and **refuses to upload an unencrypted archive**. If you
+sync the backups directory with your own tooling, sync all three files.
+
 ## Files in a department's own S3 bucket
 
 A department that switched its storage to its own S3 or MinIO bucket
@@ -84,7 +171,8 @@ the database, uploads, and audit archives to the `backups` volume, pruning
 after `BACKUP_RETENTION_DAYS`.
 
 **It also drills itself:** every `VERIFY_EVERY_N_BACKUPS` runs (default 7),
-`scripts/verify_backup.sh` loads the fresh dump into a throwaway schema on
+`scripts/verify_backup.sh` decrypts the archive with the drill key, loads the
+fresh dump into a throwaway schema on
 the MySQL server, asserts the core tables and full schema came back, and
 drops it. A failed drill screams in the service logs on every subsequent
 nightly run until fixed — watch `docker compose logs backup`.
@@ -95,7 +183,7 @@ a recovery plan. You can also run a drill by hand against any archive:
 
 ```bash
 docker compose exec backup bash /scripts/verify_backup.sh \
-  /backups/logbook_backup_YYYYmmdd_HHMMSS.tar.gz
+  /backups/logbook_backup_YYYYmmdd_HHMMSS.tar.gz.enc
 ```
 
 ## ⚠️ Secrets are NOT in the backup — store them separately
@@ -116,7 +204,8 @@ safe, vault) of at minimum:
 - `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `REDIS_PASSWORD`
 
 Treat the key copy with the same care as the backups themselves — either one
-without the other is incomplete.
+without the other is incomplete. The same goes for the backup keys above
+(`backup-drill.key` and the certificate's private key).
 
 **Since 2026-10-09 the uploads are encrypted too.** Every file under
 `uploads/` is encrypted with a key derived from `ENCRYPTION_KEY` and
@@ -197,6 +286,8 @@ Tighten them if the platform is used during activations.
 
 - [ ] Nightly cron installed and writing to an **offsite** destination
 - [ ] `BACKUP_RETENTION_DAYS` set to your retention policy (≥30 recommended)
+- [ ] Backup keys created (`scripts/backup-keygen.sh`), the private key and a
+      copy of `backup-drill.key` stored away from the server
 - [ ] Secrets (`ENCRYPTION_KEY`, `ENCRYPTION_SALT`, `SECRET_KEY`, DB/Redis
       passwords) stored offline in at least two locations
 - [ ] Every department's own S3 bucket (`migrate_uploads_to_s3.py --buckets`)

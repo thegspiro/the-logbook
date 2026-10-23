@@ -1045,3 +1045,83 @@ class TestUncountedPositions:
 
         row = next(i for i in result.items if str(i.id) == rope)
         assert row.apparatus_uncounted_places == []
+
+
+class TestEveryLotAboardForTheExport:
+    """``include_undated``: every lot on the trucks, dated or not."""
+
+    async def _rows(self, db_session, org_id, dept):
+        return await EquipmentCheckService(db_session).apparatus_expiring_stock(
+            org_id,
+            list(MEDICAL_ITEM_TYPES),
+            days_ahead=None,
+            today=dept.today,
+            include_undated=True,
+        )
+
+    async def _number_medic2(self, db_session, dept, **values):
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.medic2)
+            .values(**values)
+        )
+        await db_session.commit()
+
+    async def test_an_undated_lot_on_a_position_is_listed(self, db_session, dept):
+        await self._number_medic2(db_session, dept, lot_number="M2-LOT")
+
+        rows = await self._rows(db_session, dept.org_id, dept)
+
+        assert [(r["lot_number"], r["quantity"]) for r in rows] == [
+            ("L4", 4),
+            ("L3", 3),
+            ("M2-LOT", 5),
+        ]
+
+    async def test_a_position_with_no_lot_and_no_date_is_not(self, db_session, dept):
+        rows = await self._rows(db_session, dept.org_id, dept)
+
+        # Medic 2 and Medic 3 record no lot: nothing to list.
+        assert {r["lot_number"] for r in rows} == {"L3", "L4"}
+
+    async def test_an_empty_position_is_not(self, db_session, dept):
+        await self._number_medic2(
+            db_session, dept, lot_number="M2-LOT", quantity_on_truck=0
+        )
+
+        rows = await self._rows(db_session, dept.org_id, dept)
+
+        assert "M2-LOT" not in {r["lot_number"] for r in rows}
+
+    async def test_ignores_another_departments_trucks(self, db_session, dept):
+        assert await self._rows(db_session, _uid(), dept) == []
+
+    async def test_category_names_are_org_scoped(self, db_session, dept):
+        service = InventoryService(db_session)
+
+        assert await service.item_category_names(dept.org_id, [dept.gauze]) == {
+            dept.gauze: "Airway"
+        }
+        assert await service.item_category_names(_uid(), [dept.gauze]) == {}
+
+    async def test_the_export_lists_shelf_and_truck_lots(self, db_session, dept):
+        response = await ms.export_medical_lots_csv(
+            db=db_session,
+            current_user=SimpleNamespace(id=dept.user_id, organization_id=dept.org_id),
+        )
+        text = "".join(
+            [
+                c if isinstance(c, str) else c.decode()
+                async for c in response.body_iterator
+            ]
+        )
+
+        rows = [line.split(",") for line in text.strip().splitlines()]
+        header, body = rows[0], rows[1:]
+        where = header.index("Location")
+        # Medic 1's expired 4 (-2d), the shelf's 2 (+5d), Medic 1's 3 (+10d).
+        assert [(r[header.index("Quantity")], r[where]) for r in body] == [
+            ("4", "On apparatus"),
+            ("2", "In storage"),
+            ("3", "On apparatus"),
+        ]

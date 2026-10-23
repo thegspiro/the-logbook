@@ -15,7 +15,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle,
-  ArrowLeft,
+  GraduationCap,
   CalendarClock,
   CalendarRange,
   CheckCircle2,
@@ -29,6 +29,7 @@ import {
 import { courseCohortService } from '../../services/api';
 import { SkeletonPage } from '../../components/ux/Skeleton';
 import { Breadcrumbs } from '../../components/ux/Breadcrumbs';
+import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
 import { EmptyState } from '../../components/ux/EmptyState';
 import { ConfirmDialog } from '../../components/ux/ConfirmDialog';
 import { MemberPickerModal } from '../../components/MemberPickerModal';
@@ -257,60 +258,51 @@ export const CohortDetailPage: React.FC = () => {
   const missingEvents = cohort.classes.filter((c) => !c.event_id && c.status !== CohortClassStatus.CANCELLED).length;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <Breadcrumbs items={trail} />
-
-      <button
-        type="button"
-        onClick={() => {
-          void navigate('/training/cohorts');
-        }}
-        className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        <span>All cohorts</span>
-      </button>
-
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-theme-text-primary text-2xl font-bold">{cohort.name}</h1>
-            <span className={`badge ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={GraduationCap}
+        title={cohort.name}
+        subtitle={
+          <>
+            {/* Beside the line, not in the heading the route announcer reads
+                aloud as the page's name. */}
+            <span className={`badge mr-2 ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
               {COHORT_STATUS_LABELS[cohort.status] ?? cohort.status}
             </span>
-          </div>
-          <p className="text-theme-text-muted mt-1 text-sm">
             {cohort.course_name} · starts {formatDate(cohort.start_date, tz)}
             {cohort.program_name ? ` · ${cohort.program_name}` : ''}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowShift((s) => !s)}
-            disabled={busy}
-            className="btn-icon border-theme-surface-border flex items-center gap-2 border px-3 text-sm"
-          >
-            <CalendarClock className="h-4 w-4" />
-            <span>Shift remaining</span>
-          </button>
-          {missingEvents > 0 && (
+          </>
+        }
+        underHub="/training/admin"
+        parentCrumbs={[{ label: 'Cohorts', path: '/training/cohorts' }]}
+        actions={
+          <>
             <button
               type="button"
-              onClick={() => void handleRegenerate()}
+              onClick={() => setShowShift((s) => !s)}
               disabled={busy}
-              className="btn-icon flex items-center gap-2 border border-amber-500/40 px-3 text-sm text-amber-700 dark:text-amber-400"
+              className="btn-icon border-theme-surface-border flex items-center gap-2 border px-3 text-sm"
             >
-              <RefreshCw className="h-4 w-4" />
-              <span>
-                Create {missingEvents} missing event
-                {missingEvents === 1 ? '' : 's'}
-              </span>
+              <CalendarClock className="h-4 w-4" />
+              <span>Shift remaining</span>
             </button>
-          )}
-        </div>
-      </div>
+            {missingEvents > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleRegenerate()}
+                disabled={busy}
+                className="btn-icon flex items-center gap-2 border border-amber-500/40 px-3 text-sm text-amber-700 dark:text-amber-400"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>
+                  Create {missingEvents} missing event
+                  {missingEvents === 1 ? '' : 's'}
+                </span>
+              </button>
+            )}
+          </>
+        }
+      />
 
       {showShift && (
         <div className="card-secondary mb-6 flex flex-wrap items-end gap-3 p-4">

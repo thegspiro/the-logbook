@@ -590,6 +590,45 @@ What an operator needs to know:
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
 
+### Backups can be encrypted (2026-10-23)
+
+Backups were plaintext. They can now be encrypted, and **nothing changes until
+you create a key**: with no key the nightly backup runs as before, logs a
+warning every run, and administrators see a critical "Backups are not
+encrypted" notice. No migration; no restart is needed to keep working.
+
+To turn it on, on the host in the install directory:
+
+1. `./scripts/backup-keygen.sh`. It writes `backup-keys/` (Unraid:
+   `/mnt/user/appdata/the-logbook/backup-keys`), prints a private key **once**
+   and asks you to confirm you stored it away from the server. **Store the
+   private key and a copy of `backup-keys/backup-drill.key` somewhere other
+   than this server and its backups. With both lost, encrypted backups cannot
+   be recovered.**
+2. Production compose only: `docker compose ... up -d backup backend` so the
+   sidecar mounts `./backup-keys` and the backend can read the sidecar's status
+   (the backend now mounts the `backups` volume read-only). Unraid users
+   re-apply the compose file (the key directory and `BACKUP_ENCRYPT_EXISTING`
+   are new).
+3. The next nightly run writes `.tar.gz.enc` + `.enc.key` + `.sha256` instead
+   of `.tar.gz`, and then **encrypts the plaintext archives already in the
+   backups directory and deletes the plaintext** after decrypting each copy and
+   comparing it with the original. Set `BACKUP_ENCRYPT_EXISTING=false` to keep
+   them.
+
+Things that change once a key exists:
+
+- **Backup files are three files, not one.** Anything that copies the backups
+  directory offsite must copy the `.enc`, `.enc.key` and `.sha256`.
+- **`backup.sh --destination s3|azure|gcs` now refuses to upload an
+  unencrypted archive** (before, it uploaded whatever it made). Create a key
+  first, or the offsite step fails.
+- Restoring an encrypted archive needs the drill key or the offline private key
+  (`backup.sh --restore FILE.enc [--drill-key F | --private-key F]`). Plaintext
+  archives restore as before.
+
+Full details: [BACKUP.md](./BACKUP.md#encrypted-backups).
+
 ### Administrators must use two-factor authentication, and sensitive actions ask you to confirm (2026-10-23)
 
 Adds a migration (`users.mfa_grace_started_at`, `sessions.stepup_verified_at`, both
