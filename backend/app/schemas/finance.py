@@ -1523,6 +1523,26 @@ class ExpenseLineItemCreate(BaseModel):
     )
 
 
+class ExpenseLineItemUpdate(BaseModel):
+    """Edit a line on a draft expense report. Omitted fields are left alone;
+    null clears an optional one (description, amount, date and type cannot be
+    cleared)."""
+
+    model_config = _REQUEST_CONFIG
+
+    _check_expense_type = field_validator("expense_type", mode="before")(
+        _enum_check(_EXPENSE_TYPES, "expense_type")
+    )
+
+    budget_id: Optional[str] = None
+    fund_campaign_id: Optional[str] = None
+    description: Optional[str] = Field(None, min_length=1, max_length=500)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
+    date_incurred: Optional[datetime] = None
+    expense_type: Optional[ExpenseType] = None
+    merchant: Optional[str] = Field(None, max_length=300)
+
+
 class ExpenseLineItemResponse(UTCResponseBase):
     """Expense line item response"""
 

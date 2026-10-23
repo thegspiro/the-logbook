@@ -1151,6 +1151,24 @@ Each line item on an expense report has an expense type that classifies the spen
 | **Equipment Purchase**     | Equipment purchased by the member for department use        |
 | **Other**                  | Expenses that do not fit other categories                   |
 
+### Correcting or Withdrawing a Draft Report
+
+While an expense report is a **Draft**, its detail page lets you fix it before
+anyone is asked to approve it:
+
+- **Add line** adds another expense, with its own receipt.
+- The **pencil** beside a line edits it (description, amount, date, type,
+  merchant and fund); the **bin** removes it. The total is recalculated.
+- **Withdraw Report** closes the draft for good. Use it for a report started by
+  mistake; a reimbursement claimed from a purchase request can then be claimed
+  again with the right amount.
+
+Once submitted, the report cannot be changed or withdrawn by its member. The
+finance office can **Cancel Report** while it is submitted, awaiting approval or
+approved but not yet paid; any approval still outstanding is withdrawn. A
+report a check is already paying is cancelled by first cancelling or voiding
+that check.
+
 ### Submitting an Expense Report
 
 Only **Draft** reports can be submitted. The total must be more than zero (at least one line with an amount), and **every line must have a receipt** — otherwise it is refused, naming the lines missing one. A member can still replace a receipt while the report is only submitted; once it is in approval, only the finance office can, and a replaced receipt stays on record. The approval chain is chosen by the request type, the total and the budget category of its lines.
@@ -1300,6 +1318,13 @@ After a check request is approved:
 The system records the check number and the issuance date. The check amount is added to the linked budget's spent total.
 
 ![Check request detail with payee, amount and approval status](./images/11-16-check-request-detail.png)
+
+### Withdrawing or Cancelling a Check Request
+
+A member can **Withdraw Request** while their check request is a draft. After it
+is submitted, the finance office can **Cancel Request** at any point before the
+check is issued; nothing has been paid, so nothing is reversed. An issued check
+is **voided** instead (below).
 
 ### Voiding an Issued Check
 
