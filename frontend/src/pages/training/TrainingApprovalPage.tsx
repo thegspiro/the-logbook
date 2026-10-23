@@ -330,15 +330,17 @@ export const TrainingApprovalPage: React.FC = () => {
       <TrainingPageHeader
         icon={ClipboardCheck}
         title={
-          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 break-words">
-            <Link to={`/events/${data.event_id}`} className="underline-offset-2 hover:underline">
-              {data.event_title}
-            </Link>
-            <span
-              className={`badge ${STATUS_BADGES[data.status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}
-            >
-              {statusLabel(data.status)}
-            </span>
+          <Link to={`/events/${data.event_id}`} className="break-words underline-offset-2 hover:underline">
+            {data.event_title}
+          </Link>
+        }
+        // Beside the heading, not in it: the route announcer reads the h1
+        // aloud, and the status is not part of the page's name.
+        actions={
+          <span
+            className={`badge ${STATUS_BADGES[data.status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}
+          >
+            {statusLabel(data.status)}
           </span>
         }
         breadcrumbLabel="Approve training credit"

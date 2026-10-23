@@ -1660,25 +1660,22 @@ const PipelineDetailPage: React.FC = () => {
             follow it. */}
         <TrainingPageHeader
           icon={Layers}
-          title={
-            <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span>{program.name}</span>
-              {program.is_template && (
-                <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
-                  Template
-                </span>
-              )}
-              {!program.active && <span className="badge bg-theme-surface text-theme-text-secondary">Inactive</span>}
-            </span>
-          }
-          breadcrumbLabel={program.name}
+          title={program.name}
           underHub="/training/admin"
           subtitle={
             <>
               {program.description && (
                 <p className="text-theme-text-muted mb-3 max-w-2xl text-sm">{program.description}</p>
               )}
+              {/* The status badges sit here rather than in the heading, which the
+                  route announcer reads aloud as the page's name. */}
               <div className="flex flex-wrap items-center gap-2">
+                {program.is_template && (
+                  <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                    Template
+                  </span>
+                )}
+                {!program.active && <span className="badge bg-theme-surface text-theme-text-secondary">Inactive</span>}
                 {program.code && (
                   <span className="bg-theme-surface text-theme-text-secondary rounded-sm px-2 py-0.5 font-mono text-xs">
                     {program.code}

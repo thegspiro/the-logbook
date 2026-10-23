@@ -261,17 +261,14 @@ export const CohortDetailPage: React.FC = () => {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <TrainingPageHeader
         icon={GraduationCap}
-        title={
-          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>{cohort.name}</span>
-            <span className={`badge ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
-              {COHORT_STATUS_LABELS[cohort.status] ?? cohort.status}
-            </span>
-          </span>
-        }
-        breadcrumbLabel={cohort.name}
+        title={cohort.name}
         subtitle={
           <>
+            {/* Beside the line, not in the heading the route announcer reads
+                aloud as the page's name. */}
+            <span className={`badge mr-2 ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
+              {COHORT_STATUS_LABELS[cohort.status] ?? cohort.status}
+            </span>
             {cohort.course_name} · starts {formatDate(cohort.start_date, tz)}
             {cohort.program_name ? ` · ${cohort.program_name}` : ''}
           </>
