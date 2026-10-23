@@ -16,19 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3574 (Feature 08, Membership pipeline, pass 12) merged
-docs-only — nothing to record per this tracker's own rule that a docs-only
-merge is not a recordable event. (PR #3575, a watchdog-forked duplicate of
-#3574 opened 11 minutes apart, was closed as superseded before merge, per
-the rotation's fork-handling rule — also not a recordable event.)
-`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
-returned 0 before this iteration started. Rows 07 and 08 stay ✅. This
-iteration reviewed Feature 09 (Medical screening, PHI), the next `⬜`: **0
-fixed, 0 new findings** — real delta (9 files, 302 insertions / 39
-deletions since pass 10's merge): `applies_to_roles` is now wired to grade
-only members holding a named position (an application commit, closing half
-of MS-16), a `MissingGreenlet` refresh-after-flush fix on both update
-paths (W71), `INT32` bounds on two numeric fields, and seven frontend-only
+**PR [#3578](https://github.com/thegspiro/the-logbook/pull/3578)** (branch
+`claude/security-review-medical-screening-p11`) — Feature 09 (Medical
+screening, PHI), pass 11. PR #3574 (Feature 08, Membership pipeline, pass 12) had already merged docs-only — nothing to record per this tracker's
+own rule that a docs-only merge is not a recordable event. (PR #3575, a
+watchdog-forked duplicate of #3574 opened 11 minutes apart, was closed as
+superseded before merge, per the rotation's fork-handling rule — also not
+a recordable event.) `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 before this
+iteration started. Rows 07 and 08 stay ✅. This iteration reviewed Feature
+09 (Medical screening, PHI), the next `⬜`: **0 fixed, 0 new findings** —
+real delta (9 files, 302 insertions / 39 deletions since pass 10's merge):
+`applies_to_roles` is now wired to grade only members holding a named
+position (an application commit, closing half of MS-16), a
+`MissingGreenlet` refresh-after-flush fix on both update paths (W71),
+`INT32` bounds on two numeric fields, and seven frontend-only
 date-formatting/contrast/touch fixes — all reviewed end to end. All 16
 routes re-enumerated, unchanged (zero diff on the endpoints file itself).
 MS-14, MS-15 and MS-17 (standing, owner-accepted) re-confirmed
