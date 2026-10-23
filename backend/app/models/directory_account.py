@@ -128,6 +128,11 @@ class DirectoryAccountProvision(Base):
     suspension_requested_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # The member's name changed and the account (one The Logbook created) has
+    # not been given it yet. Set with the rename; the sweep retries it.
+    name_pending: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     # When the daily departure check, listing the directory, first found this
     # departed member's account still there more than 90 days after it was
     # suspended -- still holding its license. Cleared when the account is

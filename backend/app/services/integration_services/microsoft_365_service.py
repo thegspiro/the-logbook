@@ -522,6 +522,23 @@ class Microsoft365Directory:
         except Microsoft365AccountExistsError:
             return
 
+    async def update_name(
+        self, user_key: str, given_name: str, family_name: str
+    ) -> None:
+        """Give the account the member's name -- display name included, as at
+        creation. The sign-in name and address are not changed."""
+        await self._request(
+            "PATCH",
+            f"{GRAPH_BASE}/users/{quote(user_key, safe='')}",
+            "account rename",
+            json={
+                "displayName": f"{given_name} {family_name}".strip(),
+                "givenName": given_name,
+                "surname": family_name,
+            },
+            user_scoped=True,
+        )
+
     async def remove_from_group(self, group: str, user_key: str) -> bool:
         """Take a member out of a group; not being in it counts as done.
 

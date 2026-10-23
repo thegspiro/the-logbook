@@ -18,6 +18,11 @@ sealer uses); the ``google_workspace_suspension_sync`` scheduled task is the
 backstop for anything that task did not finish and for retries. A rolled-back
 departure leaves nothing behind.
 
+A member's name change reaches an account The Logbook created the same way:
+recorded in the transaction (``name_pending``), sent after the commit, and
+retried by the same sweep. The address is never changed, and an existing
+account The Logbook only linked to is never renamed.
+
 Only the line crossing matters, never the route. On leave, inactive and
 suspended-in-The-Logbook members keep their account (owner decision,
 2026-10-15). Retired members keep theirs too unless the department's directory
@@ -61,6 +66,7 @@ SUSPENDABLE_STATUSES = (
 _RECONCILE = "directory_account_reconcile"  # {(organization_id, user_id)}
 # [(organization_id, provider, account_ref)]
 _DETACHED = "directory_account_detached"
+_RENAME = "directory_account_rename"  # {(organization_id, user_id)}
 
 _tasks: set["asyncio.Task[None]"] = set()
 
@@ -161,6 +167,26 @@ def _stage(
     session.info.setdefault(_RECONCILE, set()).add((organization_id, user_id))
 
 
+def _stage_rename(session: Session, user: User) -> None:
+    organization_id = str(user.organization_id)
+    user_id = str(user.id)
+    result = session.connection().execute(
+        update(DirectoryAccountProvision)
+        .where(
+            DirectoryAccountProvision.user_id == user_id,
+            DirectoryAccountProvision.organization_id == organization_id,
+            DirectoryAccountProvision.status == DirectoryAccountStatus.CREATED.value,
+        )
+        .values(name_pending=True)
+    )
+    if not result.rowcount:
+        return
+    for loaded in list(session.identity_map.values()):
+        if isinstance(loaded, DirectoryAccountProvision) and loaded.user_id == user_id:
+            set_committed_value(loaded, "name_pending", True)
+    session.info.setdefault(_RENAME, set()).add((organization_id, user_id))
+
+
 def _capture_before_hard_delete(session: Session, user: User) -> None:
     """The account record goes with the member (ON DELETE CASCADE), so the
     account is captured now and suspended once the delete has committed."""
@@ -193,6 +219,11 @@ def _detect_departures(session: Session, flush_context: Any, instances: Any) -> 
         if not isinstance(obj, User):
             continue
         state = inspect(obj)
+        if (
+            state.attrs.first_name.history.has_changes()
+            or state.attrs.last_name.history.has_changes()
+        ):
+            _stage_rename(session, obj)
         if not (
             state.attrs.status.history.has_changes()
             or state.attrs.deleted_at.history.has_changes()
@@ -229,7 +260,8 @@ def _detect_departures(session: Session, flush_context: Any, instances: Any) -> 
 def _sync_after_commit(session: Session) -> None:
     reconcile = session.info.pop(_RECONCILE, None)
     detached = session.info.pop(_DETACHED, None)
-    if not reconcile and not detached:
+    rename = session.info.pop(_RENAME, None)
+    if not reconcile and not detached and not rename:
         return
     # A session bound to a Connection someone else began a transaction on
     # (the test fixture's outer transaction, a migration) has only released a
@@ -237,13 +269,16 @@ def _sync_after_commit(session: Session) -> None:
     if isinstance(session.bind, Connection):
         session.info[_RECONCILE] = reconcile or set()
         session.info[_DETACHED] = detached or []
+        session.info[_RENAME] = rename or set()
         return
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return  # no event loop (a sync script): the scheduled task catches up
     task = loop.create_task(
-        _run_after_commit(sorted(reconcile or ()), list(detached or ()))
+        _run_after_commit(
+            sorted(reconcile or ()), list(detached or ()), sorted(rename or ())
+        )
     )
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
@@ -254,10 +289,13 @@ def _forget_on_rollback(session: Session, previous_transaction: Any) -> None:
     if previous_transaction.parent is None and not previous_transaction.nested:
         session.info.pop(_RECONCILE, None)
         session.info.pop(_DETACHED, None)
+        session.info.pop(_RENAME, None)
 
 
 async def _run_after_commit(
-    reconcile: list[tuple[str, str]], detached: list[tuple[str, str, str]]
+    reconcile: list[tuple[str, str]],
+    detached: list[tuple[str, str, str]],
+    rename: list[tuple[str, str]],
 ) -> None:
     from app.core.database import async_session_factory
     from app.services.directory_account_service import DirectoryAccountService
@@ -271,6 +309,8 @@ async def _run_after_commit(
                 await service.suspend_detached(
                     organization_id, provider, account_ref, actor_id=None
                 )
+            for organization_id, user_id in rename:
+                await service.sync_name(user_id, organization_id)
     except Exception:
         # The scheduled google_workspace_suspension_sync task is the backstop
         # for every staged row; a detached account it cannot see is in the
@@ -291,6 +331,7 @@ async def run_staged_now(session: Any) -> None:
     )
     reconcile = sorted(info.pop(_RECONCILE, None) or ())
     detached = list(info.pop(_DETACHED, None) or ())
+    rename = sorted(info.pop(_RENAME, None) or ())
     service = DirectoryAccountService(session)
     for organization_id, user_id in reconcile:
         await service.reconcile_suspension(user_id, organization_id)
@@ -298,3 +339,5 @@ async def run_staged_now(session: Any) -> None:
         await service.suspend_detached(
             organization_id, provider, account_ref, actor_id=None
         )
+    for organization_id, user_id in rename:
+        await service.sync_name(user_id, organization_id)

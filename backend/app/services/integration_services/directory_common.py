@@ -95,6 +95,11 @@ class DirectoryClient(Protocol):
     async def add_to_group(self, group: str, member_email: str) -> None:
         """Add the account to *group*; already a member counts as success."""
 
+    async def update_name(
+        self, user_key: str, given_name: str, family_name: str
+    ) -> None:
+        """Give the account the member's name. The address is not changed."""
+
     async def remove_from_group(self, group: str, user_key: str) -> bool:
         """Take the account out of *group*; not being in it counts as done.
 

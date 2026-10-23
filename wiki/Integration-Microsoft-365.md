@@ -96,8 +96,10 @@ active sessions); undoing the drop, a rejoin or a reactivation unblocks an
 account The Logbook blocked. On-leave, inactive and Logbook-suspended members
 keep their account, and so do retired members unless **Block sign-in when a
 member retires** is turned on in the integration's settings (it works as the
-Google Workspace setting does). A departure also takes an account The Logbook
-created out of the configured groups and a return puts it back, as on Google
+Google Workspace setting does). A member's name change renames an account The Logbook
+created (display name included; never the sign-in name or address), as on
+Google Workspace; one synced from Active Directory is renamed there. A
+departure also takes an account The Logbook created out of the configured groups and a return puts it back, as on Google
 Workspace, except that **a group that assigns licenses is never touched**:
 removing the member would take the license, and Microsoft deletes an
 unlicensed mailbox after its grace period. A group whose licenses Graph does

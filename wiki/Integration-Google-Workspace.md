@@ -159,6 +159,12 @@ inactive) gets their account back whatever the setting says by then, if The
 Logbook suspended it. While it is on, the daily departure check also covers
 retired members.
 
+**Name changes.** When a member's first or last name changes, an account The
+Logbook created is renamed to match, right after the change is saved (the
+15-minute sweep retries a failure). The address is never changed, an existing
+account The Logbook only linked to is never renamed, and a departed member's
+account keeps its name until they return.
+
 **Groups.** When the departure suspends an account The Logbook created, it is
 also taken out of the groups configured under **Add new members to these
 groups**, so a suspended mailbox stops receiving the department's mail. When

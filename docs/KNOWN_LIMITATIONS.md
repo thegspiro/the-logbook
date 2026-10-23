@@ -226,7 +226,13 @@ choice an owner may want to revisit:
 - **A permanent delete cannot be retried.** The account record goes with the
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
-- **No rename.** A member's name change in The Logbook does not reach Google.
+- **A rename changes the name, never the address.** A member's first or last
+  name change reaches an account The Logbook created (given and family name;
+  Microsoft 365's display name too), but the email address and sign-in name
+  stay as they were. An existing account The Logbook only linked to is never
+  renamed, a Microsoft 365 account synced from Active Directory is renamed
+  there, and a departed member's account keeps its name until they return.
+  Names changed before this was added are not sent.
 - **Groups follow the configuration, not history.** A departure takes an
   account The Logbook created out of the groups configured _now_, and a return
   puts it back in them; the record does not keep which groups the account

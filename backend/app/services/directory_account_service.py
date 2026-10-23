@@ -695,6 +695,10 @@ class DirectoryAccountService:
                 f"Directory account suspension sync crashed for user {user_id}"
             )
             await self.db.rollback()
+            return
+        # A rename made while the member was away was held back; a return
+        # (sync_name checks it is one) sends it now.
+        await self.sync_name(user_id, organization_id)
 
     async def _reconcile_suspension(
         self,
@@ -832,6 +836,77 @@ class DirectoryAccountService:
             if not removed:
                 logger.info(f"Left user {row.user_id} in a group that assigns licenses")
         row.pending_group_removals = remaining or None
+
+    async def sync_name(self, user_id: str, organization_id: str) -> None:
+        """Give an account The Logbook created its member's current name.
+
+        Never raises. A failure leaves ``name_pending`` set for the sweep; an
+        account gone from the directory, or one only Active Directory can
+        change, is let go, since no retry from here can rename it. While the
+        member is away the rename waits: a departed member's suspended
+        account keeps the name an administrator knows it by (anonymizing a
+        former member renames them), and a return sends it.
+        """
+        from app.core.audit import log_audit_event
+
+        try:
+            row = await self._load(organization_id, user_id=user_id, lock=True)
+            if row is None or not row.name_pending or row.suspension_wanted:
+                await self.db.commit()
+                return
+            info = provider_info(row.provider)
+            integration = await self._active_integration(organization_id, info)
+            member = await self._load_member(user_id, organization_id)
+            if integration is None or member is None:
+                await self.db.commit()
+                return
+            given = (member.first_name or "").strip() or "Member"
+            family = (member.last_name or "").strip() or "Member"
+            outcome = "renamed"
+            try:
+                await directory_for(integration).update_name(
+                    _account_key(row), given, family
+                )
+                row.name_pending = False
+            except DirectoryAccountNotFoundError:
+                row.name_pending = False
+                outcome = "missing"
+            except DirectoryAccountManagedElsewhereError:
+                row.name_pending = False
+                outcome = "managed_on_premises"
+            except DirectoryError:
+                outcome = "failed"
+            await self.db.commit()
+            await log_audit_event(
+                self.db,
+                f"{info.audit_prefix}.account_rename",
+                "integrations",
+                "warning" if outcome == "failed" else "info",
+                {"target_user_id": user_id, "outcome": outcome},
+                organization_id=str(organization_id),
+            )
+            await self.db.commit()
+        except Exception:
+            logger.exception(f"Directory account rename crashed for user {user_id}")
+            await self.db.rollback()
+
+    async def sync_pending_names(self) -> int:
+        """Retry every rename a name change left unsent. Returns the records
+        attempted."""
+        rows = (
+            await self.db.execute(
+                select(
+                    DirectoryAccountProvision.user_id,
+                    DirectoryAccountProvision.organization_id,
+                ).where(
+                    DirectoryAccountProvision.name_pending.is_(True),
+                    DirectoryAccountProvision.suspension_wanted.is_(False),
+                )
+            )
+        ).all()
+        for user_id, organization_id in rows:
+            await self.sync_name(user_id, organization_id)
+        return len(rows)
 
     async def retry_group_removals(self) -> int:
         """Retry the group removals departures left unfinished. Returns the

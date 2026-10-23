@@ -93,6 +93,7 @@ class FakeDirectory:
         self.keys = []
         self.member_ids: list[str] = []
         self.left = []
+        self.renamed = []
         self.domain_users: list[dict] = []
         self.licensed: list[str] = []
 
@@ -107,6 +108,15 @@ class FakeDirectory:
         if self.group_error:
             raise self.group_error
         self.groups.append((group, email))
+
+    # ``rename_error`` fails a rename; ``renamed`` records the ones made.
+    rename_error: Optional[Exception] = None
+    renamed: list[tuple[str, str, str]]
+
+    async def update_name(self, key, given, family):
+        if self.rename_error:
+            raise self.rename_error
+        self.renamed.append((key, given, family))
 
     # ``remove_error`` fails a removal; ``left`` records the ones made.
     remove_error: Optional[Exception] = None
@@ -1445,8 +1455,20 @@ class TestAfterCommit:
             hook._sync_after_commit(session)
             assert hook._tasks
             await asyncio.gather(*list(hook._tasks))
-        run.assert_awaited_once_with([("org-1", "u-1")], [])
+        run.assert_awaited_once_with([("org-1", "u-1")], [], [])
         assert hook._RECONCILE not in session.info
+
+    async def test_a_rename_alone_starts_the_sync(self):
+        from app.models import directory_account_departure as hook
+
+        session = SimpleNamespace(
+            bind=object(), info={hook._RENAME: {("org-1", "u-1")}}
+        )
+        with patch.object(hook, "_run_after_commit", AsyncMock()) as run:
+            hook._sync_after_commit(session)
+            await asyncio.gather(*list(hook._tasks))
+        run.assert_awaited_once_with([], [], [("org-1", "u-1")])
+        assert hook._RENAME not in session.info
 
     def test_nothing_staged_starts_nothing(self):
         from app.models import directory_account_departure as hook

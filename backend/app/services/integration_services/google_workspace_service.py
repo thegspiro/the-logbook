@@ -309,6 +309,17 @@ class GoogleWorkspaceDirectory:
         except GoogleAccountExistsError:
             return
 
+    async def update_name(
+        self, user_key: str, given_name: str, family_name: str
+    ) -> None:
+        """Give the account the member's name. The address is not changed."""
+        body = {"name": {"givenName": given_name, "familyName": family_name}}
+
+        def call() -> Any:
+            return self._service().users().patch(userKey=user_key, body=body).execute()
+
+        await self._run("account rename", call, user_scoped=True)
+
     async def remove_from_group(self, group: str, user_key: str) -> bool:
         """Take a member out of a group; not being in it counts as done."""
 
