@@ -487,7 +487,11 @@ const ExpenseReportDetailPage: React.FC = () => {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-theme-text-primary text-lg font-semibold">Line Items</h2>
             {canEditLines && (
-              <button type="button" className="btn-secondary" onClick={() => setEditingLine('new')}>
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2"
+                onClick={() => setEditingLine('new')}
+              >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add line
               </button>
