@@ -610,15 +610,7 @@ describe('clearing a field on an edit sends null', () => {
     const user = userEvent.setup();
     renderWithRouter(<EditProgramModal program={filled} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-    for (const label of [
-      /^Description/,
-      /^Code/,
-      /^Target position/,
-      /^Time limit/,
-      /^First warning/,
-      /^Cycle length/,
-      /^Reset day/,
-    ]) {
+    for (const label of [/^Description/, /^Code/, /^Target position/, /^Time limit/, /^Cycle length/, /^Reset day/]) {
       await user.clear(screen.getByLabelText(label));
     }
     await user.selectOptions(screen.getByLabelText(/^Reset month/), '');
@@ -632,7 +624,7 @@ describe('clearing a field on an edit sends null', () => {
           code: null,
           target_position: null,
           time_limit_days: null,
-          warning_days_before: null,
+          warning_days_before: 30,
           recert_enabled: true,
           recert_interval_months: null,
           recert_anchor_month: null,
@@ -640,6 +632,19 @@ describe('clearing a field on an edit sends null', () => {
         })
       );
     });
+  });
+
+  it('refuses a blank first warning instead of sending a null the server cannot store', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EditProgramModal program={{ ...program, warning_days_before: 30 }} onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+
+    await user.clear(screen.getByLabelText(/^First warning/));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mockUpdateProgram).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith('First warning is required');
   });
 
   it('leaves the recert schedule untouched while recert is off', async () => {
