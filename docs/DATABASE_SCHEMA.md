@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**317 tables · 5244 columns · 1070 foreign keys**
+**317 tables · 5247 columns · 1072 foreign keys**
 
 ---
 
@@ -269,11 +269,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`budget_category_charge_positions`](#budget_category_charge_positions) | `BudgetCategoryChargePosition` | 5 | A position named as able to charge a restricted category's lines. |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
-| [`check_requests`](#check_requests) | `CheckRequest` | 32 | Request to cut a check for payment |
+| [`check_requests`](#check_requests) | `CheckRequest` | 34 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 13 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 17 | Schedule for dues collection |
 | [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 14 | Individual line item within an expense report |
-| [`expense_reports`](#expense_reports) | `ExpenseReport` | 26 | Expense report submitted by a member for reimbursement |
+| [`expense_reports`](#expense_reports) | `ExpenseReport` | 27 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 14 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`finance_qb_chart_accounts`](#finance_qb_chart_accounts) | `QuickBooksChartAccount` | 6 | One account of the department's QuickBooks chart of accounts, as the |
@@ -4036,6 +4036,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
 | `fund_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
 | `is_advance` | BOOL | no |  | `0` |  |
+| `expense_report_id` | VARCHAR(36) | yes | FK, IDX |  | → `expense_reports.id` ON DELETE SET NULL |
 | `payee_name` | VARCHAR(300) | no |  |  |  |
 | `payee_address` | TEXT | yes |  |  |  |
 | `amount` | NUMERIC(12, 2) | no |  |  |  |
@@ -4054,6 +4055,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `qb_export_account` | VARCHAR(200) | yes |  |  |  |
 | `qb_export_offset_account` | VARCHAR(200) | yes |  |  |  |
+| `qb_export_entry` | JSON | yes |  |  |  |
 | `qb_void_exported_at` | DATETIME | yes |  |  |  |
 | `qb_void_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `notes` | TEXT | yes |  |  |  |
@@ -4062,6 +4064,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_check_requests_expense_report_id` (`expense_report_id`)
 - `ix_check_requests_fund_campaign_id` (`fund_campaign_id`)
 - `ix_check_requests_org_status` (`organization_id`, `status`)
 
@@ -4183,6 +4186,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `paid_at` | DATETIME | yes |  |  |  |
 | `advance_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_requests.id` ON DELETE SET NULL |
 | `advance_applied` | NUMERIC(12, 2) | yes |  |  |  |
+| `purchase_request_id` | VARCHAR(36) | yes | FK, IDX |  | → `purchase_requests.id` ON DELETE SET NULL |
 | `submitted_at` | DATETIME | yes |  |  |  |
 | `late_acknowledged_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `late_acknowledged_at` | DATETIME | yes |  |  |  |
@@ -4197,6 +4201,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_expense_reports_advance_id` (`advance_id`)
 - `ix_expense_reports_org_status` (`organization_id`, `status`)
+- `ix_expense_reports_purchase_request_id` (`purchase_request_id`)
 
 **Constraints**
 
@@ -4358,7 +4363,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `vendor` | VARCHAR(300) | yes |  |  |  |
 | `estimated_amount` | NUMERIC(12, 2) | no |  |  |  |
 | `actual_amount` | NUMERIC(12, 2) | yes |  |  |  |
-| `status` | ENUM(`draft`, `submitted`, `pending_approval`, `approved`, `denied`, `ordered`, `received`, `paid`, `cancelled`) | no |  | `'draft'` |  |
+| `status` | ENUM(`draft`, `submitted`, `pending_approval`, `approved`, `denied`, `ordered`, `received`, `paid`, `reimbursed`, `cancelled`) | no |  | `'draft'` |  |
 | `priority` | ENUM(`low`, `medium`, `high`, `urgent`) | no |  | `'medium'` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `approved_at` | DATETIME | yes |  |  |  |
@@ -12342,6 +12347,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus` | `required_evoc_level_id` | SET NULL | yes |
 | `apparatus_operators` | `evoc_level_id` | SET NULL | yes |
 
+### → `expense_reports` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_requests` | `expense_report_id` | SET NULL | yes |
+| `expense_line_items` | `expense_report_id` | CASCADE | no |
+
 ### → `facility_rooms` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -12488,12 +12500,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `events` | `template_id` | RESTRICT | yes |
-
-### → `expense_reports` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `expense_line_items` | `expense_report_id` | CASCADE | no |
 
 ### → `external_agencies` (1 references)
 
@@ -12662,6 +12668,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `public_portal_access_log` | `api_key_id` | SET NULL | yes |
+
+### → `purchase_requests` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `expense_reports` | `purchase_request_id` | SET NULL | yes |
 
 ### → `recertification_pathways` (1 references)
 

@@ -1463,6 +1463,11 @@ class PurchaseRequestResponse(UTCResponseBase):
     receipt_file_url: Optional[str] = None
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
+    # The expense report claiming this purchase back for the requester, while
+    # one does (app/services/finance_reimbursement.py; detail responses).
+    reimbursement_report_id: Optional[str] = None
+    reimbursement_report_number: Optional[str] = None
+    reimbursement_report_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
@@ -1631,6 +1636,16 @@ class ExpenseReportResponse(UTCResponseBase):
     # have left, while it is not yet approved; null when it fits or charges
     # no fund (detail responses).
     fund_shortfall: Optional[Decimal] = None
+    # The purchase request this report claims back, and the check paying the
+    # member, while one does (app/services/finance_reimbursement.py; detail
+    # responses). ``amount_owed`` is what a check would pay: the total less
+    # what a cash advance already covered.
+    purchase_request_id: Optional[str] = None
+    purchase_request_number: Optional[str] = None
+    reimbursement_check_id: Optional[str] = None
+    reimbursement_check_number: Optional[str] = None
+    reimbursement_check_status: Optional[str] = None
+    amount_owed: Optional[Decimal] = None
     created_at: datetime
     updated_at: datetime
     line_items: list[ExpenseLineItemResponse] = []
@@ -1734,10 +1749,37 @@ class CheckRequestResponse(UTCResponseBase):
     qb_exported_at: Optional[datetime] = None
     # When the reversing entry for a void went to QuickBooks.
     qb_void_exported_at: Optional[datetime] = None
+    # The expense report this check reimburses the member for; the number is
+    # set on detail responses (app/services/finance_reimbursement.py).
+    expense_report_id: Optional[str] = None
+    expense_report_number: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+
+class ReimbursementReportCreate(BaseModel):
+    """Claim back an approved purchase the requester paid for themselves.
+
+    Each field defaults to the purchase request's own: its actual amount
+    (else its estimate), the day it was received or ordered, its vendor.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
+    date_incurred: Optional[UTCDateTime] = None
+    merchant: Optional[str] = Field(None, max_length=300)
+
+
+class ReimbursementCheckCreate(BaseModel):
+    """Pay an approved expense report by check, to the member who filed it."""
+
+    model_config = _REQUEST_CONFIG
+
+    payee_address: Optional[str] = Field(None, max_length=1000)
+    memo: Optional[str] = Field(None, max_length=500)
 
 
 # ============================================
