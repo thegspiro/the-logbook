@@ -105,6 +105,32 @@ was found; confirm it.
 Screenshots: nothing captured. The gap report is the top section of
 [`SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-19--20-documentation-pass).
 
+### Upgrade-visible behaviour in this window
+
+Added by the second pass of the same day, after the training audit above.
+
+- **Screening requirements now honour Applies to Positions.** The field was
+  stored and read by nothing, so every active requirement graded every member. A
+  requirement that lists positions now grades only members holding one; blank still
+  means everyone; prospects are graded on all. A member left with nothing that
+  applies reads **Not applicable**. A department that typed a list into the field
+  while it did nothing will see rosters change. No migration. Recorded in
+  `KNOWN_LIMITATIONS.md`.
+- **Dashboard overdue dues** follows `dues_overdue_clause`: part-paid records are
+  Partial and no longer counted. `training/11-finance.md` now says so (this
+  corrects the disposition in the table above, which found nothing to change).
+- **Layout:** date and time `form-input` fields are pinned inside their grid
+  column so iOS WebKit cannot overflow them (Edit Member Date of Birth).
+- **Security review:** meetings-minutes pass 8 fixed MM-18 (a stale prepared
+  motion could still appear in a PUT response; the cause of a flaky test) and
+  flagged MM-19/MM-20 (lock-free find-or-create races); admin-hours flagged AH-18;
+  grants-fundraising GF-9 extended. Other passes found nothing new.
+- **Screenshots:** besides the queue in `SCREENSHOT_CURRENCY.md`, replace
+  `04-14-meeting-minutes.png` (one Settings button; action buttons wrap under
+  the title) and the Edit Member shot showing Date of Birth.
+- **Scripts:** `docs/youtube-scripts/SCRIPT_CURRENCY.md` queues script 07
+  (Settings page, search) and one-line edits for screening and finance narration.
+
 ## Change audit: October 18 – 19, 2026
 
 Net changes merged to `main` from the close of the

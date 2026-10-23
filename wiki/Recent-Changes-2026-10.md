@@ -59,6 +59,16 @@ The engineering audit is
 - **Screenshots.** Nothing was re-captured. The gap report is in
   `docs/training/SCREENSHOT_CURRENCY.md`.
 
+**Also in this window:**
+
+- **Check your screening requirements.** If **Applies to Positions** has text in
+  it, that list now decides who is graded; blank means everyone, and a member with
+  nothing that applies reads **Not applicable**.
+- **The dashboard's overdue-dues number may drop.** Part-paid dues are Partial,
+  matching the dues page.
+- **iPad and iPhone:** date and time fields no longer overlap the field beside
+  them on Edit Member.
+
 ## Recent changes: October 18 – 19, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering
