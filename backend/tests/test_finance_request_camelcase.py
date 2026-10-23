@@ -63,6 +63,8 @@ from app.schemas.finance import (
     MemberDuesWaive,
     PurchaseRequestCreate,
     PurchaseRequestUpdate,
+    ReimbursementCheckCreate,
+    ReimbursementReportCreate,
 )
 
 _STEP = {
@@ -254,6 +256,15 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "memo": "m",
         "purpose": "p",
         "notes": "n",
+    },
+    ReimbursementReportCreate: {
+        "amount": "185.25",
+        "date_incurred": "2026-04-01T00:00:00Z",
+        "merchant": "Fire Supply Co",
+    },
+    ReimbursementCheckCreate: {
+        "payee_address": "1 Main St",
+        "memo": "m",
     },
     CheckRequestUpdate: {
         "budget_id": "budget-1",

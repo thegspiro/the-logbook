@@ -132,7 +132,11 @@ const CheckRequestDetailPage: React.FC = () => {
     // spending, so it is not left to a single stray tap.
     const ok = await confirm({
       title: 'Void this check?',
-      message: `${cr.requestNumber}, ${formatCurrency(cr.amount)} to ${cr.payeeName}, will be marked as voided and its amount taken off the budget line's spending. This cannot be undone.`,
+      // A reimbursement check charges no budget line itself: voiding it puts
+      // its expense report back to approved, so another check can be cut.
+      message: cr.expenseReportId
+        ? `${cr.requestNumber}, ${formatCurrency(cr.amount)} to ${cr.payeeName}, will be marked as voided. Expense report ${cr.expenseReportNumber ?? ''} goes back to approved and unpaid, its spending is taken off its budget lines, and the finance office can pay it again. This cannot be undone.`
+        : `${cr.requestNumber}, ${formatCurrency(cr.amount)} to ${cr.payeeName}, will be marked as voided and its amount taken off the budget line's spending. This cannot be undone.`,
       confirmLabel: 'Void check',
       cancelLabel: 'Keep it',
       variant: 'danger',
@@ -292,9 +296,22 @@ const CheckRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(cr.checkDate, tz)}</p>
             </div>
           )}
-          {/* An advance charges no budget line or fund; the expense reports that
-              account for it are classified instead. */}
-          {!cr.isAdvance && (
+          {cr.expenseReportId && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Reimburses</p>
+              <p className="text-theme-text-primary text-sm">
+                <Link
+                  to={`/finance/expenses/${cr.expenseReportId}`}
+                  className="font-medium text-red-700 hover:underline dark:text-red-400"
+                >
+                  {cr.expenseReportNumber ?? 'Expense report'}
+                </Link>
+              </p>
+            </div>
+          )}
+          {/* An advance or a reimbursement charges no budget line or fund; the
+              expense reports behind them are classified instead. */}
+          {!cr.isAdvance && !cr.expenseReportId && (
             <FunctionalClassControl
               value={cr.functionalClass}
               effective={cr.effectiveFunctionalClass}

@@ -185,6 +185,25 @@ describe('MedicalSuppliesPage', () => {
       expect(await screen.findByText('Oxygen Mask, Non-Rebreather — Pediatric')).toBeInTheDocument();
     });
 
+    it('shows how many supplies wait on a count on the tab itself', async () => {
+      mockGetSummary.mockResolvedValue({ ...summary, uncounted_on_apparatus: 3 });
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      expect(await screen.findByRole('tab', { name: 'Not yet counted (3)' })).toBeInTheDocument();
+    });
+
+    it('widens the expiring window for the list and the tiles together', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await screen.findByRole('button', { name: 'Show 3 lots expiring within 30 days' });
+      mockGetSummary.mockResolvedValue({ ...summary, expiring_within_days: 90 });
+
+      await userEvent.selectOptions(screen.getByLabelText('Look ahead'), '90');
+
+      await waitFor(() => expect(mockGetExpiringStock).toHaveBeenLastCalledWith(90, undefined));
+      expect(mockGetSummary).toHaveBeenLastCalledWith(90, undefined);
+      expect(await screen.findByText('Expiring within 90 days')).toBeInTheDocument();
+    });
+
     describe('the Not yet counted view', () => {
       const uncountedRow = item({
         name: 'Gauze',

@@ -124,6 +124,8 @@ from app.schemas.finance import (
     PurchaseRequestResponse,
     PurchaseRequestUpdate,
     QuickBooksChartResponse,
+    ReimbursementCheckCreate,
+    ReimbursementReportCreate,
     StartFromLastYearResponse,
     UnroutedApprovalResponse,
 )
@@ -162,6 +164,9 @@ from app.services.finance_service import (
 )
 from app.services.functional_expenses import FunctionalClassifier
 from app.services.restricted_funds import (
+    KIND_CHECK,
+    KIND_EXPENSE,
+    KIND_PURCHASE,
     charges_of,
     fund_balances,
     fund_names,
@@ -2683,6 +2688,13 @@ async def set_check_request_functional_class(
                 "accounts for it"
             ),
         )
+    if cr.expense_report_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A reimbursement check is classified by the expense report it pays"
+            ),
+        )
     await _set_functional_class(
         db, cr, data.functional_class, current_user, "check_request"
     )
@@ -3009,6 +3021,18 @@ async def deny_step(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+async def _with_reimbursement_links(
+    service: FinanceService, payload, kind: str, entity, org_id: str
+):
+    """The response, with the other records on its reimbursement path
+    (app/services/finance_reimbursement.py)."""
+    for field, value in (
+        await service.reimbursement_links(kind, entity, org_id)
+    ).items():
+        setattr(payload, field, value)
+    return payload
+
+
 # ============================================
 # Purchase Requests
 # ============================================
@@ -3192,13 +3216,16 @@ async def get_purchase_request(
     )
     if not pr:
         raise HTTPException(status_code=404, detail="Purchase request not found")
-    return await _with_approval_steps(
+    payload = await _with_approval_steps(
         service,
         PurchaseRequestResponse.model_validate(pr),
         ApprovalEntityType.PURCHASE_REQUEST,
         pr.id,
         str(current_user.organization_id),
         current_user,
+    )
+    return await _with_reimbursement_links(
+        service, payload, KIND_PURCHASE, pr, str(current_user.organization_id)
     )
 
 
@@ -3271,13 +3298,16 @@ async def submit_purchase_request(
         # With its steps, as the detail endpoint returns it: the screen shows
         # this response as the request, and without them its Approval Timeline
         # read "This request has no approval steps" until a reload.
-        return await _with_approval_steps(
+        payload = await _with_approval_steps(
             service,
             PurchaseRequestResponse.model_validate(pr),
             ApprovalEntityType.PURCHASE_REQUEST,
             pr.id,
             str(current_user.organization_id),
             current_user,
+        )
+        return await _with_reimbursement_links(
+            service, payload, KIND_PURCHASE, pr, str(current_user.organization_id)
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -3397,6 +3427,62 @@ async def cancel_purchase_request(
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/purchase-requests/{pr_id}/reimbursement-report",
+    response_model=ExpenseReportResponse,
+    status_code=201,
+)
+async def create_reimbursement_report(
+    pr_id: str,
+    data: ReimbursementReportCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Claim back an approved purchase the requester paid for themselves.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Raises a draft expense report linked to the request, with one line copied
+    from it, for the requester to attach a receipt to and submit. Only the
+    member who raised the request may; another member's request is a 404 to a
+    caller without the manage grant.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        er = await service.create_reimbursement_report(
+            pr_id,
+            org_id,
+            str(current_user.id),
+            requester_scope=_requester_scope(current_user),
+            **data.model_dump(exclude_unset=True),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.reimbursement_report_created",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "report_number": er.report_number,
+                "purchase_request_id": pr_id,
+                "amount": str(er.total_amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return await _with_reimbursement_links(
+            service, ExpenseReportResponse.model_validate(er), KIND_EXPENSE, er, org_id
+        )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -3524,13 +3610,16 @@ async def get_expense_report(
     """
     service = FinanceService(db)
     er = await _readable_expense_report(service, er_id, current_user)
-    return await _with_approval_steps(
+    payload = await _with_approval_steps(
         service,
         ExpenseReportResponse.model_validate(er),
         ApprovalEntityType.EXPENSE_REPORT,
         er.id,
         str(current_user.organization_id),
         current_user,
+    )
+    return await _with_reimbursement_links(
+        service, payload, KIND_EXPENSE, er, str(current_user.organization_id)
     )
 
 
@@ -3629,13 +3718,16 @@ async def submit_expense_report(
             requester_id=_requester_scope(current_user),
         )
         # With its steps, for the reason given in submit_purchase_request.
-        return await _with_approval_steps(
+        payload = await _with_approval_steps(
             service,
             ExpenseReportResponse.model_validate(er),
             ApprovalEntityType.EXPENSE_REPORT,
             er.id,
             str(current_user.organization_id),
             current_user,
+        )
+        return await _with_reimbursement_links(
+            service, payload, KIND_EXPENSE, er, str(current_user.organization_id)
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -3678,6 +3770,61 @@ async def mark_expense_paid(
             username=current_user.username,
         )
         return er
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/expense-reports/{er_id}/reimbursement-check",
+    response_model=CheckRequestResponse,
+    status_code=201,
+)
+async def request_reimbursement_check(
+    er_id: str,
+    data: ReimbursementCheckCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Pay an approved expense report by check.
+
+    **Requires permission: finance.manage**
+
+    Raises a check request payable to the member for what the report still
+    owes them, in the member's name, and submits it through the check-request
+    approval chain. Issuing that check marks the report paid.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        cr = await service.request_reimbursement_check(
+            er_id, org_id, **data.model_dump(exclude_unset=True)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.reimbursement_check_requested",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "request_number": cr.request_number,
+                "expense_report_id": er_id,
+                "amount": str(cr.amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        payload = await _with_approval_steps(
+            service,
+            CheckRequestResponse.model_validate(cr),
+            ApprovalEntityType.CHECK_REQUEST,
+            cr.id,
+            org_id,
+            current_user,
+        )
+        return await _with_reimbursement_links(service, payload, KIND_CHECK, cr, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -3771,13 +3918,16 @@ async def get_check_request(
     )
     if not cr:
         raise HTTPException(status_code=404, detail="Check request not found")
-    return await _with_approval_steps(
+    payload = await _with_approval_steps(
         service,
         CheckRequestResponse.model_validate(cr),
         ApprovalEntityType.CHECK_REQUEST,
         cr.id,
         str(current_user.organization_id),
         current_user,
+    )
+    return await _with_reimbursement_links(
+        service, payload, KIND_CHECK, cr, str(current_user.organization_id)
     )
 
 
@@ -3839,13 +3989,16 @@ async def submit_check_request(
             requester_id=_requester_scope(current_user),
         )
         # With its steps, for the reason given in submit_purchase_request.
-        return await _with_approval_steps(
+        payload = await _with_approval_steps(
             service,
             CheckRequestResponse.model_validate(cr),
             ApprovalEntityType.CHECK_REQUEST,
             cr.id,
             str(current_user.organization_id),
             current_user,
+        )
+        return await _with_reimbursement_links(
+            service, payload, KIND_CHECK, cr, str(current_user.organization_id)
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -4765,7 +4918,10 @@ async def get_dashboard(
 # A requester may still attach while the purchase has not been settled; a
 # finance manager may until the request is closed out.
 _PR_RECEIPT_CLOSED = {PurchaseRequestStatus.DENIED, PurchaseRequestStatus.CANCELLED}
-_PR_RECEIPT_CLOSED_TO_REQUESTER = _PR_RECEIPT_CLOSED | {PurchaseRequestStatus.PAID}
+_PR_RECEIPT_CLOSED_TO_REQUESTER = _PR_RECEIPT_CLOSED | {
+    PurchaseRequestStatus.PAID,
+    PurchaseRequestStatus.REIMBURSED,
+}
 # Line-item receipts are the evidence an approver reviews, so a requester may
 # change them only while the report itself is still editable.
 _ER_RECEIPT_CLOSED = {ExpenseReportStatus.DENIED, ExpenseReportStatus.CANCELLED}

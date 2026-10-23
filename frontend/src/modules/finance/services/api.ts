@@ -76,6 +76,8 @@ import type {
   PendingApproval,
   PurchaseRequest,
   MonetaryAmount,
+  ReimbursementCheckPayload,
+  ReimbursementReportPayload,
   StartFromLastYearResult,
   UnroutedApproval,
   FinanceSettings,
@@ -757,6 +759,12 @@ export const purchaseRequestService = {
   downloadReceipt(id: string): Promise<DownloadedFile> {
     return fetchFile(api, `/finance/purchase-requests/${id}/receipt`, 'receipt');
   },
+
+  /** Claim back an approved purchase the requester paid for: raises a draft expense report linked to it. */
+  async claimReimbursement(id: string, data: ReimbursementReportPayload): Promise<ExpenseReport> {
+    const response = await api.post<ExpenseReport>(`/finance/purchase-requests/${id}/reimbursement-report`, data);
+    return response.data;
+  },
 };
 
 // =============================================================================
@@ -811,6 +819,12 @@ export const expenseReportService = {
     const response = await api.post<ExpenseReport>(`/finance/expense-reports/${id}/mark-paid`, undefined, {
       params: { payment_method: paymentMethod },
     });
+    return response.data;
+  },
+
+  /** Pay an approved report by check: raises the member's check request and submits it for approval. */
+  async payByCheck(id: string, data: ReimbursementCheckPayload): Promise<CheckRequest> {
+    const response = await api.post<CheckRequest>(`/finance/expense-reports/${id}/reimbursement-check`, data);
     return response.data;
   },
 };

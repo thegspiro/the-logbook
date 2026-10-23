@@ -1634,7 +1634,9 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     const preview = screen.getByLabelText('Mobile checklist preview');
     expect(preview).toHaveClass('bg-theme-bg', 'text-theme-text-primary');
     expect(within(preview).getAllByText('Engine check').length).toBeGreaterThan(0);
-    expect(preview.querySelectorAll('.bg-theme-bg').length).toBeGreaterThanOrEqual(3);
+    // The screen and the home-indicator strip. The status bar above them is
+    // deliberately slate-900, to join the sweep's own dark header.
+    expect(preview.querySelectorAll('.bg-theme-bg').length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -2240,6 +2242,20 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
     expect(preview().queryByRole('button', { name: 'First item works' })).not.toBeInTheDocument();
     expect(preview().getByRole('button', { name: 'Second item works' })).toHaveAttribute('aria-pressed', 'false');
   }, 15_000);
+
+  it('opens the crew view full size from the rail and closes it on Escape', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+    await user.click(screen.getByRole('button', { name: 'Crew view' }));
+
+    expect(screen.queryByLabelText('Mobile checklist preview')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Open crew view full size' }));
+    expect(screen.getByRole('dialog', { name: 'Crew view, full size' })).toBeVisible();
+    expect(screen.getByLabelText('Mobile checklist preview')).toBeVisible();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByLabelText('Mobile checklist preview')).not.toBeInTheDocument());
+  });
 
   it('anchors the crew preview so the sweep fills the phone rather than the page', async () => {
     // The sweep renders `absolute inset-0` under previewMode. With no

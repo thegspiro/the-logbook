@@ -39,6 +39,13 @@ export type {
 export const EXPIRY_WINDOW_DAYS = 30;
 
 /**
+ * The windows an officer can widen the page to. Longer than 30 days is for a
+ * department ordering on a long lead time, which needs to see what lapses
+ * after the next delivery rather than before it.
+ */
+export const EXPIRY_WINDOW_OPTIONS: readonly number[] = [30, 60, 90];
+
+/**
  * A supply's name with its size, for anywhere one has to be told from
  * another: "Oxygen Mask, Non-Rebreather" is two different supplies in
  * Adult and Pediatric, and the name alone reads as a duplicate.

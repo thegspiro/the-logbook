@@ -32,6 +32,7 @@ const STATUS_TABS: { value: string; label: string }[] = [
   { value: PurchaseRequestStatus.ORDERED, label: 'Ordered' },
   { value: PurchaseRequestStatus.RECEIVED, label: 'Received' },
   { value: PurchaseRequestStatus.PAID, label: 'Paid' },
+  { value: PurchaseRequestStatus.REIMBURSED, label: 'Reimbursed' },
   { value: PurchaseRequestStatus.CANCELLED, label: 'Cancelled' },
 ];
 
