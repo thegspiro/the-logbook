@@ -109,8 +109,7 @@ sign-in page reports "clean".
   training session, and the browser console logged a red line for each event
   opened. **Fixed afterwards:** it now answers 200 with `null`, and the client
   still reads a 404 as "none" so a frontend deployed ahead of the backend keeps
-  working. The sibling `GET …/by-event/{id}/approval` still answers 404 for an
-  event with no approval.
+  working. The sibling `GET …/by-event/{id}/approval` was changed the same way.
 - `GET /users` gives any member `hire_date`, `member_class` and
   `compliance_exempt` for every other member. That may be intended for a
   directory; it is worth a conscious yes.

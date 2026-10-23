@@ -287,7 +287,10 @@ async def attach_training_details(
     return _session_response(training_session)
 
 
-@router.get("/by-event/{event_id}/approval", response_model=TrainingApprovalSummary)
+@router.get(
+    "/by-event/{event_id}/approval",
+    response_model=Optional[TrainingApprovalSummary],
+)
 async def get_event_training_approval(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -301,7 +304,9 @@ async def get_event_training_approval(
     For the event page: whether finalized credit is waiting on a training
     officer, and — only for a caller who can approve it (training.manage) and
     only while it is pending — the approval link's token, so they can go
-    straight to the review. 404 when the event has no approval.
+    straight to the review. Answers `200` with a `null` body when the event has
+    no approval (most events have none, and the event page asks for every one;
+    a `404` put a red console error on each).
 
     **Authentication required**
     **Requires permission: events.manage or training.manage**
@@ -312,10 +317,7 @@ async def get_event_training_approval(
         include_token=user_has_permission(current_user, "training.manage"),
     )
     if summary is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No training approval for this event",
-        )
+        return None
     return TrainingApprovalSummary(**summary)
 
 

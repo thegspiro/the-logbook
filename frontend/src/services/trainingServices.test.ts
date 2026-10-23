@@ -421,3 +421,32 @@ describe('trainingSessionService.getSessionByEvent', () => {
     await expect(trainingSessionService.getSessionByEvent('e1')).rejects.toBeDefined();
   });
 });
+
+describe('trainingSessionService.getApprovalSummary', () => {
+  const summary = { approval_id: 'a1', status: 'pending', attendee_count: 4, expired: false };
+
+  it('returns the approval summary', async () => {
+    mockGet.mockResolvedValueOnce({ data: summary });
+
+    await expect(trainingSessionService.getApprovalSummary('e1')).resolves.toEqual(summary);
+    expect(mockGet).toHaveBeenCalledWith('/training/sessions/by-event/e1/approval');
+  });
+
+  it('reads a 200 with a null body as "no approval"', async () => {
+    mockGet.mockResolvedValueOnce({ data: null });
+
+    await expect(trainingSessionService.getApprovalSummary('e1')).resolves.toBeNull();
+  });
+
+  it('still reads a 404 from a backend that has not been updated as "none"', async () => {
+    mockGet.mockRejectedValueOnce({ response: { status: 404, data: { detail: 'No training approval' } } });
+
+    await expect(trainingSessionService.getApprovalSummary('e1')).resolves.toBeNull();
+  });
+
+  it('does not swallow a permission or server failure', async () => {
+    mockGet.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'Forbidden' } } });
+
+    await expect(trainingSessionService.getApprovalSummary('e1')).rejects.toBeDefined();
+  });
+});
