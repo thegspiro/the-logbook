@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** (branch `claude/security-review-apparatus-p18`) — Feature 13
+**PR [#3590](https://github.com/thegspiro/the-logbook/pull/3590)** (branch `claude/security-review-apparatus-p18`) — Feature 13
 (Apparatus & NFC), pass 18, a watchdog pickup. PR #3585 (Feature 12,
 Facilities, pass 11) had already merged, docs-only. `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`) returned 0 before this
