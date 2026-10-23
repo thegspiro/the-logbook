@@ -1055,7 +1055,9 @@ export const EventDetailPage: React.FC = () => {
           }
           actions={
             event.is_cancelled ? undefined : (
-              <div className="flex flex-wrap gap-2 sm:gap-3">
+              // Capped so the actions wrap onto a second row rather than
+              // squeezing the event's name into a narrow column beside them.
+              <div className="flex flex-wrap gap-2 sm:max-w-xl sm:justify-end sm:gap-3">
                 {/* Primary actions — always visible */}
                 {event.is_draft && canManage && (
                   <button
