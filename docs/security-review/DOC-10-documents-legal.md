@@ -1,6 +1,115 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), (this PR) (pass 10)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), (this PR) (pass 11)
+
+---
+
+## Pass 11 (2026-10-23)
+
+**Watchdog pickup.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 open PRs and the dedicated `/loop 30m /security-review` session was
+not reachable (`ListAgents`). PR #3577 (Feature 09, Medical screening, pass 11)
+had already merged, docs-only — not independently recordable. Rotation row 10
+was the next `⬜`.
+
+**Baseline** `f3f0829d` (PR #3431's merge, pass 10). Delta by `git diff
+--numstat` against it, across the full declared scope plus backing services —
+only three files carry a real change; `station_documents.py`, `legal_documents.py`,
+`legal_service.py`, `models/legal.py`, `schemas/legal.py`, `models/document.py`,
+`schemas/documents.py` and `admin_only_folder_digest.py` are byte-identical to
+pass 10:
+
+| File                                   | +/−     | What changed                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `endpoints/documents.py`               | +4/−7   | `download_document`/`upload_document` moved from `os`/`asyncio.to_thread` + `stored_file_response` onto the shared async `file_storage_service` interface (the cross-cutting storage-backend abstraction, reviewed elsewhere per-feature; checked only at this feature's two call sites)                                                                                                   |
+| `services/documents_service.py`        | +94/−14 | New `_release_document_references`: a document delete now refuses (`ValueError` → 400) when it is the receipt on a non-draft purchase request or expense report, instead of silently `SET NULL`-ing the reference; still clears a minutes row's `published_document_id` unconditionally. Backing-file removal also moved onto `file_storage_service`                                       |
+| `services/document_service.py`         | +11/−9  | Minutes→document HTML rendering: motions now filtered through `recorded_motions()` (Minutes-owned; reviewed only for this library-facing render) and a new `acceptance_label` appended (escaped); an action item's `due_date` is now read as a stored calendar day (`stored_calendar_day`) rather than converted through the org timezone, for a due-by date that is a day, not an instant |
+| `frontend/src/pages/DocumentsPage.tsx` | +4/−4   | Delete-document failure now surfaces the backend's `detail` message (`getErrorDetail`) instead of a fixed string — this is what makes the new refusal above legible to the caller; one contrast-only amber shade bump                                                                                                                                                                      |
+
+No new/changed routes (still 24; `check_route_permissions.py --strict` — 273
+total, 0 errors, 0 warnings) and no new migration.
+
+### Reviewed in full
+
+- **File-storage-interface swap in `documents.py` (`download_document`,
+  `upload_document`).** `file_storage.exists`/`file_storage.file_response`/
+  `file_storage.delete_quietly` are called with the _same_ `resolved_path` the
+  pre-existing `file_storage.resolve(document.file_path, organization_id,
+StorageArea.DOCUMENTS)` confinement check already produced (DOC-24) — the
+  confinement check itself is untouched by this diff, so the path-traversal
+  guard still runs before any of the new calls. `file_response` is passed the
+  same `media_type`/`filename` arguments as the old `stored_file_response`
+  call. No behavior change; verified by reading `file_storage_service.py`'s
+  `exists`/`delete`/`delete_quietly`/`file_response` (lines 932–985), each a
+  thin `asyncio.to_thread` wrapper around the resolved backend, same as the
+  one-call-site version this replaces.
+- **`_release_document_references` (new).** Runs inside `delete_document` and
+  the folder-cascade `delete_folder`, in both cases on a `document_ids` set
+  already resolved against the caller's `organization_id` — the single-delete
+  path via `get_document_by_id(document_id, organization_id, for_update=True)`,
+  the cascade path via `_lock_subtree_documents(subtree_ids, organization_id)`
+  — so both of its own queries (`PurchaseRequest`/`ExpenseReport` lookups,
+  each additionally filtered on `organization_id` directly) are reachable only
+  for already-org-scoped ids (XC-3). It runs, and can raise, strictly before
+  `_delete_facility_document_references` and the row delete/commit — both
+  endpoints wrap the call in `handle_service_errors(...)` (`documents.py:404`,
+  `:823`), so the `ValueError` becomes a safe 400 via `safe_error_detail()`,
+  and nothing has been written when it raises. The `MeetingMinutes.
+published_document_id` clear is an unconditional `UPDATE ... WHERE
+organization_id == org_id`, also org-scoped.
+- **Minutes-rendering delta (`document_service.py`), library-facing part
+  only.** `recorded_motions()`/`acceptance_label()` are Feature 24's own
+  helpers; the output reaching this feature's published-document HTML is
+  still run through `escape()` before being appended (consistent with every
+  other field in this render — no new unescaped user text). `stored_calendar_day`
+  is a plain date read, not a security-relevant change.
+- **`getErrorDetail` usage (frontend).** Reads `response.data.detail`, which
+  for this call is exactly the `safe_error_detail()`-sanitized `ValueError`
+  message set above — not a new information-disclosure surface, since every
+  message `_release_document_references` raises is already written to name
+  only the request/report number (no PII, no path, no SQL).
+
+### DOC-31 — LOW — FLAGGED — `_release_document_references`'s refusal check is a read, not a locking read
+
+`_release_document_references` selects `PurchaseRequest`/`ExpenseReport` rows
+by status with a plain `SELECT`, not `.with_for_update()`. A purchase request
+sitting in `DRAFT` passes the check and the document delete proceeds; if
+another transaction concurrently submits that same request past `DRAFT`
+between this `SELECT` and the deleting transaction's commit, the request can
+still end up referencing a document that no longer exists — the exact silent
+loss this pass's fix exists to prevent, reached through a race instead of
+through the missing check. The window is narrow (one request/response's own
+transaction) and the outcome is never worse than the pre-pass-11 behavior
+(a `SET NULL`'d or dangling receipt reference), so this is not a regression,
+only an unclosed gap in the new guard.
+
+Not fixed here: a correct fix means locking `PurchaseRequest`/`ExpenseReport`
+rows for update inside a document-delete transaction, which introduces a new
+cross-feature lock-ordering question against Finance's own locking
+conventions (Pitfall #27) that this pass should not decide unilaterally.
+Mirrored to `KNOWN_LIMITATIONS.md`.
+
+**0 fixes applied this pass, 1 new finding flagged (DOC-31, LOW).** No standing
+OPEN finding carried from pass 10 (pass 10 closed with none).
+
+## Completion gate
+
+| Check                                                                                                 | Result                                                                                                  |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Code changes this pass                                                                                | none — review only; the reviewed delta had already landed from owner-direct work before this pass began |
+| `flake8 app/ tests/ alembic/` (pinned 7.3.0)                                                          | clean                                                                                                   |
+| `black --check app/ tests/ alembic/` (pinned 26.5.1)                                                  | clean, 2567 files unchanged                                                                             |
+| `isort --check-only app/ tests/ alembic/` (pinned 9.0.1)                                              | clean                                                                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                                     | 640 revisions, single head `cc8c16cb6d98`                                                               |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                     | 273 routes, 0 errors, 0 warnings                                                                        |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only"` | 642 passed, 1 pre-existing skip (`py_vapid`)                                                            |
+| `cd frontend && npm run typecheck`                                                                    | clean                                                                                                   |
+| `cd frontend && npm run lint`                                                                         | clean                                                                                                   |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/components/documents`                            | 51 passed (3 files)                                                                                     |
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
