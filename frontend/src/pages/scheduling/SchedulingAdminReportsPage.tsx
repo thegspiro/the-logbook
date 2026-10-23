@@ -6,9 +6,9 @@
  */
 
 import React, { Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, BarChart3 } from 'lucide-react';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
-import SchedulingHeader from './SchedulingHeader';
+import { SchedulingPageHeader } from '../../components/scheduling/SchedulingPageHeader';
 
 const SchedulingReportsPage = lazyWithRetry(() => import('../SchedulingReportsPage'));
 
@@ -16,11 +16,11 @@ const SchedulingAdminReportsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingHeader
+        <SchedulingPageHeader
+          icon={BarChart3}
           title="Scheduling Reports"
-          backTo="/scheduling/admin"
-          backLabel="Back to scheduling administration"
-          description="Review staffing, coverage, and member hours"
+          subtitle="Review staffing, coverage, and member hours"
+          underHub="/scheduling/admin"
         />
         <Suspense
           fallback={

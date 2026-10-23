@@ -7139,15 +7139,36 @@ async def update_variant_group(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
+    updates = data.model_dump(exclude_unset=True)
     group, error = await service.update_variant_group(
         group_id,
         current_user.organization_id,
-        data.model_dump(exclude_unset=True),
+        updates,
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or group is None:
+        raise HTTPException(
+            status_code=400,
+            detail=sanitize_error_message(error or "Variant group not found"),
+        )
     await db.commit()
     await db.refresh(group)
+    if "name" in updates:
+        # A rename also rewrites the product segment of every member item's
+        # name, so it is recorded and broadcast like any other item edit.
+        await log_audit_event(
+            db=db,
+            event_type="inventory_variant_group_renamed",
+            event_category="inventory",
+            severity="info",
+            event_data={"variant_group_id": str(group.id), "name": group.name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "variant_group_renamed",
+            {"variant_group_id": str(group.id)},
+        )
     return ItemVariantGroupResponse.model_validate(group)
 
 

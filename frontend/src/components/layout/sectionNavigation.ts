@@ -22,6 +22,12 @@ export interface SectionNavItem {
    * claim every Training page that sits under no section of its own.
    */
   aliases?: string[];
+  /**
+   * Replace the history entry rather than push one. For sections that are
+   * views of one page (`/scheduling?tab=…`), where moving between them has
+   * never been a step the Back button retraces.
+   */
+  replace?: boolean;
 }
 
 /** The rows a viewer's grants open. */
@@ -42,7 +48,10 @@ function matchLength(pathname: string, prefix: string): number {
 
 /** Whether `pathname` is the section's own page rather than one below it. */
 export function isSectionPage(item: SectionNavItem, pathname: string): boolean {
-  return pathname === item.path || (item.aliases?.includes(pathname) ?? false);
+  // A section addressed by a query (`/scheduling?tab=my-shifts`) is still its
+  // page's own section, never a page below it.
+  const ownPath = item.path.split('?')[0] ?? item.path;
+  return pathname === ownPath || (item.aliases?.includes(pathname) ?? false);
 }
 
 /**

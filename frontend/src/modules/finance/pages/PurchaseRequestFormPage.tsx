@@ -18,9 +18,10 @@ import { purchaseRequestService } from '../services/api';
 import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { PurchaseRequestPriority, PurchaseRequestStatus } from '../types';
+import { ApprovalEntityType, PurchaseRequestPriority, PurchaseRequestStatus } from '../types';
 import { getSaveFailureMessage } from '@/utils/errorHandling';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useTimezone } from '@/hooks/useTimezone';
@@ -432,6 +433,14 @@ const PurchaseRequestFormPage: React.FC = () => {
               amount={watch('estimatedAmount') || 0}
               funds={funds}
               mode={fundMode}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <ApprovalRoutePreview
+              entityType={ApprovalEntityType.PURCHASE_REQUEST}
+              amount={watch('estimatedAmount') || 0}
+              budgetId={watch('budgetId') || undefined}
             />
           </div>
         </div>

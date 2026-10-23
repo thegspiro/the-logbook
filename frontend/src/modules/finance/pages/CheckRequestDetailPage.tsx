@@ -16,6 +16,7 @@ import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNotice';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { AdvancePanel } from '../components/AdvancePanel';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { PromptDialog } from '@/components/ux/PromptDialog';
@@ -388,6 +389,16 @@ const CheckRequestDetailPage: React.FC = () => {
         requesterId={cr.requestedBy}
         onDecided={() => void fetchCheckRequest(cr.id)}
       />
+
+      {cr.status === CheckRequestStatus.DRAFT && (
+        <div className="card p-6">
+          <ApprovalRoutePreview
+            entityType={ApprovalEntityType.CHECK_REQUEST}
+            amount={Number(cr.amount)}
+            budgetId={cr.budgetId ?? undefined}
+          />
+        </div>
+      )}
 
       {cr.approvalSteps.length > 0 && (
         <div className="card p-6">
