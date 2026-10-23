@@ -50,7 +50,7 @@ import { MedicalItemLotsModal } from '../components/MedicalItemLotsModal';
 import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
 import { LotRecallSearch } from '../components/LotRecallSearch';
 import { StockRowsTable } from '../components/StockRowsTable';
-import { EXPIRY_WINDOW_DAYS, expiryLabel, expiryTone, storageNote, supplyLabel } from '../types';
+import { EXPIRY_WINDOW_DAYS, EXPIRY_WINDOW_OPTIONS, expiryLabel, expiryTone, storageNote, supplyLabel } from '../types';
 import type { MedicalExpiringStockRow, MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
@@ -79,10 +79,10 @@ const PAGE_SIZE = 200;
  * Colour for a supply's next expiry. Beyond the expiring window a date is just
  * a date; colour is kept for the ones that need action.
  */
-function nextExpiryTone(item: InventoryItem): string {
+function nextExpiryTone(item: InventoryItem, windowDays: number): string {
   const days = item.days_until_next_expiration;
   if (!item.next_expiration_date || days == null) return 'text-theme-text-muted';
-  if (days > EXPIRY_WINDOW_DAYS) return 'text-theme-text-secondary';
+  if (days > windowDays) return 'text-theme-text-secondary';
   return expiryTone(days);
 }
 
@@ -323,6 +323,9 @@ const MedicalSuppliesPage: React.FC = () => {
   // nobody has counted -- whose truck figure is therefore only the target.
   const uncountedOnly = tab === 'uncounted';
   const showsSupplyTable = tab !== 'expiring';
+  // How far ahead the Expiring tab and its tiles look. Not mirrored into the
+  // URL, for the reason `tab` is not.
+  const [expiryWindow, setExpiryWindow] = useState(EXPIRY_WINDOW_DAYS);
   const [summary, setSummary] = useState<MedicalSupplySummary | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -451,7 +454,7 @@ const MedicalSuppliesPage: React.FC = () => {
       // passes no options should reach the service the same way it always did.
       const base = bypassCache ? { bypassCache: true } : undefined;
       const requests: Record<Section, () => Promise<unknown>> = {
-        summary: () => medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS, base),
+        summary: () => medicalSuppliesService.getSummary(expiryWindow, base),
         items: () =>
           medicalSuppliesService.getItems(
             {
@@ -468,7 +471,7 @@ const MedicalSuppliesPage: React.FC = () => {
             { ...base, ...(controller ? { signal: controller.signal } : {}) }
           ),
         categories: () => medicalSuppliesService.getCategories(true, base),
-        expiring: () => medicalSuppliesService.getExpiringStock(EXPIRY_WINDOW_DAYS, base),
+        expiring: () => medicalSuppliesService.getExpiringStock(expiryWindow, base),
       };
 
       // Settled per section, not through one Promise.all or allSettled. Those
@@ -589,6 +592,7 @@ const MedicalSuppliesPage: React.FC = () => {
       uncountedOnly,
       storageQuery,
       page,
+      expiryWindow,
     ]
   );
 
@@ -647,6 +651,15 @@ const MedicalSuppliesPage: React.FC = () => {
     setSelectedIds(new Set());
     void loadSectionsRef.current(['items']);
   }, [debouncedSearch, categoryFilter, sortKey, page]);
+
+  // The two sections that depend on the window, and only on a change: the
+  // mount effect above has already asked for the first one.
+  const lastExpiryWindow = useRef(EXPIRY_WINDOW_DAYS);
+  useEffect(() => {
+    if (lastExpiryWindow.current === expiryWindow) return;
+    lastExpiryWindow.current = expiryWindow;
+    void loadSectionsRef.current(['summary', 'expiring']);
+  }, [expiryWindow]);
 
   // Moving into or out of the low-stock or uncounted view changes the query,
   // so the page goes back to the first one; a tab change within the same
@@ -757,6 +770,9 @@ const MedicalSuppliesPage: React.FC = () => {
   const expiringTotal = (summary?.expiring_soon ?? 0) + (summary?.expiring_soon_on_apparatus ?? 0);
   const expiredTotal = (summary?.expired ?? 0) + (summary?.expired_on_apparatus ?? 0);
   const noSuppliesYet = loaded.summary && summary?.total_items === 0;
+  // On the tab rather than as a fifth tile: the tile row is full, and the tab
+  // is where the list behind the number lives.
+  const uncountedCount = summary?.uncounted_on_apparatus ?? 0;
   const emptyCatalogHint = !canManage
     ? 'Nothing has been added to the medical catalog yet.'
     : categories.length === 0
@@ -962,6 +978,7 @@ const MedicalSuppliesPage: React.FC = () => {
             }`}
           >
             {label}
+            {id === 'uncounted' && uncountedCount > 0 && ` (${formatNumber(uncountedCount)})`}
           </button>
         ))}
       </div>
@@ -1002,6 +1019,23 @@ const MedicalSuppliesPage: React.FC = () => {
         ) : tab === 'expiring' ? (
           <section aria-label="Expiring stock">
             {!noSuppliesYet && <LotRecallSearch linkToApparatus={canOpenApparatusInventory} />}
+            <div className="mb-3 flex items-center gap-2">
+              <label htmlFor="medical-expiry-window" className="text-theme-text-secondary text-sm">
+                Look ahead
+              </label>
+              <select
+                id="medical-expiry-window"
+                className="form-input w-auto"
+                value={expiryWindow}
+                onChange={(e) => setExpiryWindow(Number(e.target.value))}
+              >
+                {EXPIRY_WINDOW_OPTIONS.map((days) => (
+                  <option key={days} value={days}>
+                    {days} days
+                  </option>
+                ))}
+              </select>
+            </div>
             {loaded.expiring && expiring.length === 0 && noSuppliesYet ? (
               // "Nothing expiring" over an empty catalog reads as an all-clear
               // for stock nobody has entered (CLAUDE.md pitfall #29: an empty set
@@ -1011,7 +1045,7 @@ const MedicalSuppliesPage: React.FC = () => {
               <EmptyState
                 icon={CalendarClock}
                 title="Nothing expiring"
-                description={`Nothing on the shelves or the apparatus expires within ${EXPIRY_WINDOW_DAYS} days.`}
+                description={`Nothing on the shelves or the apparatus expires within ${expiryWindow} days.`}
               />
             ) : (
               <StockRowsTable rows={expiring} linkToApparatus={canOpenApparatusInventory} />
@@ -1327,7 +1361,7 @@ const MedicalSuppliesPage: React.FC = () => {
                             >
                               {item.reorder_point == null ? '—' : formatNumber(item.reorder_point)}
                             </td>
-                            <td data-label="Next expiry" className={`px-4 py-3 ${nextExpiryTone(item)}`}>
+                            <td data-label="Next expiry" className={`px-4 py-3 ${nextExpiryTone(item, expiryWindow)}`}>
                               {item.next_expiration_date ? (
                                 <>
                                   {formatDate(item.next_expiration_date, tz)}

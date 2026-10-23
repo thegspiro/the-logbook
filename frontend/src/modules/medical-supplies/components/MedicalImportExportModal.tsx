@@ -3,7 +3,7 @@
  *
  * Export comes in two files because an officer reaches for them for different
  * jobs: the supply list (one row per item, with reorder points and ready-lot
- * totals) for ordering, and the lot list (one row per dated lot) for an expiry
+ * totals) for ordering, and the lot list (one row per lot, shelf and truck) for an expiry
  * audit. Import creates supplies and records stock lots; it never edits a
  * supply already on file, only adds lots to one.
  *
@@ -143,7 +143,7 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
           <p className="text-theme-text-muted text-sm">
             {filtered
               ? 'The supply list uses the filters on the page, with what the trucks carry and each next expiry.'
-              : 'The supply list has one row per item, with what the trucks carry and each next expiry. The lot list has one row per dated lot, soonest expiry first.'}
+              : 'The supply list has one row per item, with what the trucks carry and each next expiry. The lot list has one row per lot, on the shelves and the apparatus, soonest expiry first.'}
           </p>
           <div className="flex flex-wrap gap-2">
             <button

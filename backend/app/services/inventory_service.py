@@ -9939,6 +9939,32 @@ class InventoryService:
         )
         return {str(item_id): size for item_id, size in result.all()}
 
+    async def item_category_names(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, Optional[str]]:
+        """``{item_id: category name}`` for these items, org-scoped, in one query.
+
+        An uncategorized item maps to None.
+        """
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryCategory.name)
+            .outerjoin(
+                InventoryCategory,
+                and_(
+                    InventoryCategory.id == InventoryItem.category_id,
+                    InventoryCategory.organization_id == str(organization_id),
+                ),
+            )
+            .where(
+                InventoryItem.id.in_(ids),
+                InventoryItem.organization_id == str(organization_id),
+            )
+        )
+        return {str(item_id): name for item_id, name in result.all()}
+
     async def storage_area_index(
         self, organization_id: str
     ) -> Dict[str, Dict[str, Any]]:
