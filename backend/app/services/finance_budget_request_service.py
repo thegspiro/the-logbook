@@ -39,6 +39,7 @@ from app.models.finance import (
     FiscalYearStatus,
 )
 from app.models.user import Position, User
+from app.services.finance_budget_access import load_category_tree
 from app.services.finance_budget_ownership import (
     held_positions_query,
     owned_budgets_query,
@@ -222,8 +223,9 @@ class FinanceBudgetRequestService:
         edits. Spent and encumbered start at zero; amendments stay with the
         source line. A category and station that already have a line in the
         draft are skipped, so running it twice creates nothing the second
-        time. A line whose own category has been retired (``is_active`` off)
-        is not carried into the new year, and is counted as ``retired``.
+        time. A line whose category has been retired -- it or any category
+        above it is inactive (``CategoryTree.inactive_source``) -- is not
+        carried into the new year, and is counted as ``retired``.
         Raises ``FinanceEntityNotFoundError`` for a year that is not the org's.
         """
         # The draft year's row lock serializes two runs, so both cannot read
@@ -248,8 +250,9 @@ class FinanceBudgetRequestService:
         )
         taken = {(row.category_id, row.station_id) for row in existing.all()}
 
+        tree = await load_category_tree(self.db, org_id)
         source_lines = await self.db.execute(
-            select(Budget, BudgetCategory.is_active)
+            select(Budget)
             .join(
                 BudgetCategory,
                 and_(
@@ -264,12 +267,12 @@ class FinanceBudgetRequestService:
             .order_by(Budget.created_at, Budget.id)
         )
         created = skipped = retired = 0
-        for line, category_active in source_lines.all():
+        for line in source_lines.scalars().all():
             # A retired category is one the department stopped budgeting for;
-            # copying its line would bring it back into the new year. Only the
-            # line's own category is consulted: a sub-category can stay in use
-            # under a parent that is no longer budgeted for directly.
-            if not category_active:
+            # copying its line would bring it back into the new year. Owner
+            # decision (2026-10-23): retiring a parent retires the
+            # sub-categories beneath it as well.
+            if not tree.is_effectively_active(str(line.category_id)):
                 retired += 1
                 continue
             key = (line.category_id, line.station_id)
@@ -535,13 +538,9 @@ class FinanceBudgetRequestService:
             await assert_in_org(
                 self.db, BudgetCategory, category_id, org_id, label="Budget category"
             )
-            proposed = await self.finance.get_budget_category(category_id, org_id)
-            if proposed is not None and not proposed.is_active:
-                # Kept, not deleted, because existing lines use it; it is no
-                # longer offered for new ones (proposal_options filters it).
-                raise ValueError(
-                    "That budget category is inactive. Choose an active category."
-                )
+            # Kept, not deleted, because existing lines use it; neither it nor
+            # a category beneath it is offered for new ones (proposal_options).
+            await self.finance.assert_category_takes_new_lines(org_id, category_id)
             if station_id:
                 await assert_in_org(
                     self.db, Facility, station_id, org_id, label="Station"
@@ -1110,15 +1109,19 @@ class FinanceBudgetRequestService:
             return {"positions": [], "categories": [], "stations": []}
         categories = await self.db.execute(
             select(BudgetCategory.id, BudgetCategory.name)
-            .where(
-                BudgetCategory.organization_id == org_id,
-                BudgetCategory.is_active.is_(True),
-            )
+            .where(BudgetCategory.organization_id == org_id)
             .order_by(BudgetCategory.sort_order, BudgetCategory.name)
         )
+        # A category under an inactive parent is closed too
+        # (CategoryTree.inactive_source), so it is not offered either.
+        tree = await load_category_tree(self.db, org_id)
         return {
             "positions": held,
-            "categories": [{"id": r.id, "name": r.name} for r in categories.all()],
+            "categories": [
+                {"id": r.id, "name": r.name}
+                for r in categories.all()
+                if tree.is_effectively_active(str(r.id))
+            ],
             "stations": await self.finance.list_station_options(org_id),
         }
 

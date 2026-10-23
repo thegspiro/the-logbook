@@ -354,7 +354,11 @@ resolves on existing rows. Its budget lines also **take no new charges**: a new
 purchase request, check request or expense line on one is refused, and so is
 moving a request onto one or submitting a draft that is on one. Requests already
 submitted or approved finish normally, and their spending still shows in
-reports. A category nothing uses is deleted outright.
+reports. Deactivating a parent closes everything beneath it the same way: its
+sub-categories are listed as **Inactive through** the parent, their lines take
+no new charges, no new budget line or proposal can name them, and **Start from
+last year** leaves their lines behind. Reactivating the parent reopens them. A
+category nothing uses is deleted outright.
 
 ### Edge Cases
 

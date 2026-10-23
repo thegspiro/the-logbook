@@ -292,6 +292,9 @@ class BudgetCategoryResponse(UTCResponseBase):
     charge_position_ids: list[str] = Field(default_factory=list)
     # Names from the top-level category down to this one.
     path: list[str] = Field(default_factory=list)
+    # The inactive ancestor that closes this category to new charges, lines
+    # and proposals while it is itself active; null otherwise.
+    inactive_through: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
