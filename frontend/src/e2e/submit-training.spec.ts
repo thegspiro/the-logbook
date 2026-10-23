@@ -123,6 +123,19 @@ async function gotoSubmit(page: Page, submissions: unknown[] = []): Promise<Capt
 /** The nav carries its own "Submit Training" button; scope to the form. */
 const form = (page: Page) => page.locator('#main-content');
 
+/**
+ * The submit control is "Submit Training" in the desktop form footer and plain
+ * "Submit" in the sticky bar a phone pins above the tab bar; only one of the
+ * two is on screen at a time. The desktop name is looked up inside the form
+ * because the navigation carries a "Submit Training" button of its own.
+ */
+const submitButton = (page: Page) =>
+  form(page)
+    .getByRole('button', { name: /Submit Training/ })
+    .or(page.getByRole('button', { name: 'Submit', exact: true }))
+    .locator('visible=true')
+    .first();
+
 test.describe('Submit External Training', () => {
   test('derives the hours from a start time and a stepped duration', async ({ page }) => {
     await gotoSubmit(page);
@@ -149,9 +162,7 @@ test.describe('Submit External Training', () => {
       mimeType: 'application/pdf',
       buffer: Buffer.from('%PDF-1.4\n'),
     });
-    await form(page)
-      .getByRole('button', { name: /Submit Training/ })
-      .click();
+    await submitButton(page).click();
 
     await expect(page.getByText('Training Submitted')).toBeVisible();
     await expect(page.getByText('certificate.pdf')).toBeVisible();

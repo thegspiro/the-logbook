@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-import { TEST_USER, gotoDashboard, navItem, signIn, signOut } from './helpers';
+import { TEST_USER, gotoDashboard, navItem, openNavigation, signIn, signOut } from './helpers';
 
 /**
  * Navigation E2E Tests
@@ -65,12 +65,14 @@ test.describe('Navigation', () => {
     });
 
     test('should navigate to the Members section', async ({ page }) => {
+      await openNavigation(page);
       await navItem(page, 'Members').click();
 
       await expect(page).toHaveURL(/\/members/, { timeout: 10000 });
     });
 
     test('should navigate to the Events section', async ({ page }) => {
+      await openNavigation(page);
       await navItem(page, 'Events').click();
 
       await expect(page).toHaveURL(/\/events/, { timeout: 10000 });
@@ -89,6 +91,7 @@ test.describe('Navigation', () => {
       // label is not "Inventory": that word covers gear and medical supplies
       // both, which are separate pages under separate permissions, so the nav
       // names the one this route actually opens.
+      await openNavigation(page);
       await navItem(page, 'Operations').click();
       await navItem(page, 'Inventory').click();
 
@@ -98,6 +101,7 @@ test.describe('Navigation', () => {
     test('should navigate to the Training section', async ({ page }) => {
       // "Training" is a collapsible group (its own path is "#"), so clicking it
       // expands the group rather than navigating.
+      await openNavigation(page);
       await navItem(page, 'Training').click();
       await navItem(page, 'My Training').click();
 

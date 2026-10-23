@@ -869,3 +869,24 @@ export function visibleText(page: Page, text: string) {
 export function navItem(page: Page, name: RegExp | string) {
   return page.locator('aside, nav').getByRole('button', { name }).first();
 }
+
+/**
+ * Make the full navigation reachable at the current viewport.
+ *
+ * A desktop shows the side navigation permanently. A phone shows a bottom bar
+ * with a few tabs and keeps everything else — the grouped sections and Logout —
+ * in a drawer opened by "More". Opening it only when the bar is on screen keeps
+ * one spec valid at both widths instead of one per layout.
+ */
+export async function openNavigation(page: Page) {
+  const more = page.getByRole('button', { name: /^More/ });
+  const navigation = page.locator('aside, nav').getByRole('button');
+
+  // The layout mounts after the session resolves, so neither control is on
+  // screen the instant the page loads; deciding on an instant check skips the
+  // drawer on a phone whenever the bar is a moment late.
+  await more.or(navigation).first().waitFor({ state: 'visible' });
+  if (await more.isVisible()) {
+    await more.click();
+  }
+}
