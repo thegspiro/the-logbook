@@ -304,6 +304,7 @@ class TestMyChecklistsMissedDays:
 
         with patch.object(svc, "_checklists_for_shift", side_effect=one_checklist):
             rows = await svc.get_my_checklists(user_id, org_id)
+        self.rows = rows
         return [str(r["shift_id"]) for r in rows]
 
     async def test_a_recent_unfiled_check_is_listed(self, db_session, org_and_member):
@@ -452,3 +453,61 @@ class TestIncompleteCheckResume:
             submitter_user_id=user_id,
         )
         assert loaded is None
+
+
+class TestMyChecklistsOverdueAtShiftEnd:
+    """Overdue is decided by when the shift ends, not by midnight on its date,
+    and is sent as ``is_overdue`` so My Checklists and the fleet board agree."""
+
+    async def _overdue(self, db_session, org_id, user_id, shift, filed=False):
+        feed = TestMyChecklistsMissedDays()
+        await feed._feed(db_session, org_id, user_id, [(shift, filed)])
+        assert len(feed.rows) == 1
+        return feed.rows[0]["is_overdue"]
+
+    async def test_a_shift_that_ended_today_is_overdue(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        shift = _shift(org_id, days_ahead=0)
+        shift.end_time = datetime.now(timezone.utc) - timedelta(hours=1)
+
+        assert await self._overdue(db_session, org_id, user_id, shift) is True
+
+    async def test_an_overnight_shift_still_running_is_not_overdue(
+        self, db_session, org_and_member
+    ):
+        """Dated yesterday, ending this morning in an hour: at 2am its
+        end-of-shift check is not late yet."""
+        org_id, user_id = org_and_member
+        shift = _shift(org_id, days_ahead=-1)
+        shift.end_time = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        assert await self._overdue(db_session, org_id, user_id, shift) is False
+
+    async def test_a_filed_check_on_an_ended_shift_is_not_overdue(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        shift = _shift(org_id, days_ahead=1)
+        shift.end_time = datetime.now(timezone.utc) - timedelta(hours=1)
+
+        assert (
+            await self._overdue(db_session, org_id, user_id, shift, filed=True) is False
+        )
+
+    async def test_no_recorded_end_on_a_passed_day_is_overdue(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        past = _shift(org_id, days_ahead=-3)
+
+        assert await self._overdue(db_session, org_id, user_id, past) is True
+
+    async def test_no_recorded_end_on_a_coming_day_is_not_overdue(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        upcoming = _shift(org_id, days_ahead=2)
+
+        assert await self._overdue(db_session, org_id, user_id, upcoming) is False

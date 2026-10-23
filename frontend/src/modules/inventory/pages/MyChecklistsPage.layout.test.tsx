@@ -40,6 +40,7 @@ function makeChecklist(overrides: Partial<ActiveChecklistRecord> = {}): ActiveCh
     status: 'not_started',
     totalItems: 24,
     completedItems: 0,
+    isOverdue: false,
     ...overrides,
   };
 }
@@ -110,9 +111,9 @@ describe('MyChecklistsPage — phone layout', () => {
     ).toEqual([expect.stringContaining('Engine Daily Check'), expect.stringContaining('Engine Evening')]);
   });
 
-  it('marks a past day that still holds an unfiled check as overdue', async () => {
+  it('marks a day overdue when the server says one of its checks is', async () => {
     mockGetMyChecklists.mockResolvedValue([
-      makeChecklist({ shiftId: 's-0', shiftDate: '2026-10-14' }),
+      makeChecklist({ shiftId: 's-0', shiftDate: '2026-10-14', isOverdue: true }),
       makeChecklist({ shiftId: 's-x', shiftDate: '2026-10-15', status: 'pass', completedItems: 24 }),
     ]);
     renderWithRouter(<MyChecklistsPage />);
@@ -121,6 +122,18 @@ describe('MyChecklistsPage — phone layout', () => {
     expect(screen.getByRole('region', { name: 'Wed, Oct 14' })).toHaveTextContent('overdue');
     // Everything on that day was filed, so nothing is overdue.
     expect(screen.getByRole('region', { name: 'Yesterday' })).not.toHaveTextContent('overdue');
+  });
+
+  it('does not mark an overnight shift that is still running as overdue', async () => {
+    // Dated yesterday and unfiled, but the shift has not ended: the page used
+    // to call it overdue from the date alone at midnight.
+    mockGetMyChecklists.mockResolvedValue([
+      makeChecklist({ shiftId: 's-n', shiftDate: '2026-10-15', checkTiming: 'end_of_shift', isOverdue: false }),
+    ]);
+    renderWithRouter(<MyChecklistsPage />);
+
+    const yesterday = await screen.findByRole('region', { name: 'Yesterday' });
+    expect(yesterday).not.toHaveTextContent('overdue');
   });
 
   it('brings the day of a shift opened from the drawer to the top', async () => {

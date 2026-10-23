@@ -1201,6 +1201,9 @@ async def get_my_checklists(
                 "templateName": tmpl.name,
                 "checkTiming": tmpl.check_timing,
                 "status": status,
+                # Decided by the service from the shift's end time; both member
+                # screens show it rather than re-deriving it from shiftDate.
+                "isOverdue": bool(cl.get("is_overdue")),
                 "totalItems": (
                     check.total_items
                     if check

@@ -53,6 +53,7 @@ function makeChecklist(overrides: Partial<ActiveChecklistRecord> = {}): ActiveCh
     status: 'not_started',
     totalItems: 4,
     completedItems: 0,
+    isOverdue: false,
     ...overrides,
   };
 }

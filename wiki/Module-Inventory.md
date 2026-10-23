@@ -471,8 +471,11 @@ resolves by apparatus.
   **Check log**; a member's log links back to My Checklists.
 - **Missed checks.** My Checklists also lists a shift from the last seven
   days while one of its checks is unfiled (`MY_CHECKLISTS_OVERDUE_DAYS`), so
-  the day is marked overdue and the check can still be filed; older misses
-  leave the member's list but stay on the fleet board and in the report.
+  the check can still be filed; older misses leave the member's list but stay
+  on the fleet board and in the report. A check is **overdue** once its shift
+  has ended unfiled (`isOverdue` on `/my-checklists`, falling back to the
+  shift's date when it has no end time), so an overnight shift is not flagged
+  at midnight. My Checklists and the fleet board both show that flag.
 - **Early checks.** My Checklists offers shifts from today onward. The fleet
   board and check log also read a shift up to seven days ahead when a check
   has already been filed against it, so its findings count on the board at
