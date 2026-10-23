@@ -79,6 +79,12 @@ class DirectoryAccountProvision(Base):
     )
     # Group addresses the member still has to be added to.
     pending_groups: Mapped[Optional[list[Any]]] = mapped_column(JSON, nullable=True)
+    # Groups a departed member's account still has to be taken out of: the
+    # integration's configured groups when the departure was recorded, less
+    # any it has left. The sweep retries what is listed; a return clears it.
+    pending_group_removals: Mapped[Optional[list[Any]]] = mapped_column(
+        JSON, nullable=True
+    )
     # The configured license could not be assigned yet (Microsoft 365, which
     # gives an account no mailbox until it is licensed). A retry assigns it.
     license_pending: Mapped[bool] = mapped_column(

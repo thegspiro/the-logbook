@@ -159,6 +159,16 @@ inactive) gets their account back whatever the setting says by then, if The
 Logbook suspended it. While it is on, the daily departure check also covers
 retired members.
 
+**Groups.** When the departure suspends an account The Logbook created, it is
+also taken out of the groups configured under **Add new members to these
+groups**, so a suspended mailbox stops receiving the department's mail. When
+the member returns it is put back in them. A group it could not be taken out
+of stays on its record: the 15-minute sweep retries it, the member's **Retry**
+does too, and after a day it is listed under **N need attention** as "Left, but
+still in a group". The groups are the ones configured now; The Logbook does
+not record which groups an account joined when it was created. An existing
+account The Logbook only linked to keeps its groups.
+
 Both accounts The Logbook created and existing accounts it linked to are
 suspended. If an account was already suspended in Google when the member left,
 The Logbook records that and never lifts it. Suspending keeps the mailbox and

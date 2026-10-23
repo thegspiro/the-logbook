@@ -95,6 +95,13 @@ class DirectoryClient(Protocol):
     async def add_to_group(self, group: str, member_email: str) -> None:
         """Add the account to *group*; already a member counts as success."""
 
+    async def remove_from_group(self, group: str, user_key: str) -> bool:
+        """Take the account out of *group*; not being in it counts as done.
+
+        False when the group was deliberately left alone (a Microsoft 365
+        group that assigns licenses); raises when the removal failed.
+        """
+
     async def ensure_licensed(self, user_key: str) -> None:
         """Give the account the license the integration is configured with,
         if it lacks it. A directory that licenses on creation does nothing."""

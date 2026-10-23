@@ -309,6 +309,25 @@ class GoogleWorkspaceDirectory:
         except GoogleAccountExistsError:
             return
 
+    async def remove_from_group(self, group: str, user_key: str) -> bool:
+        """Take a member out of a group; not being in it counts as done."""
+
+        def call() -> Any:
+            return (
+                self._service()
+                .members()
+                .delete(groupKey=group, memberKey=user_key)
+                .execute()
+            )
+
+        try:
+            # Scoped as a user lookup so a 404 -- the member is not in the
+            # group, or the group is gone -- reads as "nothing to remove".
+            await self._run("group membership removal", call, user_scoped=True)
+        except GoogleAccountNotFoundError:
+            pass
+        return True
+
     async def ensure_licensed(self, user_key: str) -> None:
         """Google licenses an account when it is created; nothing to do."""
 

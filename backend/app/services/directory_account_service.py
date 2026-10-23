@@ -102,15 +102,18 @@ class AttentionIssue:
     NOT_UNSUSPENDED = "not_unsuspended"
     NOT_CREATED = "not_created"
     SETUP_UNFINISHED = "setup_unfinished"
+    GROUPS_NOT_LEFT = "groups_not_left"
 
 
 # The one wording of each issue: the list's response carries it, and the
-# email reads it from there, so the screen and the email cannot disagree.
+# email reads it from there, so the screen and the email cannot disagree. The
+# order here is the list's order, most urgent first.
 ATTENTION_LABELS = {
     AttentionIssue.NOT_SUSPENDED: "Left, but the account is not suspended",
     AttentionIssue.NOT_UNSUSPENDED: "Returned, but the account is still suspended",
     AttentionIssue.NOT_CREATED: "Account not created",
     AttentionIssue.SETUP_UNFINISHED: "Account setup unfinished",
+    AttentionIssue.GROUPS_NOT_LEFT: "Left, but still in a group",
 }
 
 
@@ -249,6 +252,13 @@ def _is_duplicate_key(exc: IntegrityError) -> bool:
     """MySQL/MariaDB error 1062: a unique index refused the row."""
     args: tuple[object, ...] = tuple(getattr(exc.orig, "args", None) or ())
     return len(args) > 0 and args[0] == 1062
+
+
+def _configured_groups(
+    integration: Integration, info: DirectoryProviderInfo
+) -> list[str]:
+    groups = (integration.config or {}).get(info.groups_key) or []
+    return [str(g) for g in groups if g]
 
 
 def _account_key(row: DirectoryAccountProvision) -> str:
@@ -728,6 +738,7 @@ class DirectoryAccountService:
             row.suspension_settled = True
             row.suspension_error = None
             row.managed_on_premises = False
+            await self._follow_groups(row, integration, info, directory, outcome)
         except DirectoryAccountNotFoundError as exc:
             # Deleted in the directory: nothing left to suspend or restore.
             row.suspended_by_logbook = False
@@ -762,6 +773,95 @@ class DirectoryAccountService:
         )
         await self.db.commit()
         logger.info(f"{info.product} suspension for user {row.user_id}: {outcome}")
+
+    async def _follow_groups(
+        self,
+        row: DirectoryAccountProvision,
+        integration: Integration,
+        info: DirectoryProviderInfo,
+        directory: DirectoryClient,
+        outcome: str,
+    ) -> None:
+        """Take a departed member's account out of the configured groups, and
+        put a returning member's back.
+
+        Only an account The Logbook created: a linked existing account is only
+        ever suspended or unsuspended, and the groups were never ours to give.
+        The groups are the integration's as configured now -- the record does
+        not keep which ones the account joined at creation. Group failures
+        never unsettle the suspension; they stay on the record for the sweep.
+        """
+        if row.status != DirectoryAccountStatus.CREATED.value:
+            return
+        if row.suspension_wanted:
+            if outcome in ("suspended", "already_suspended"):
+                row.pending_group_removals = (
+                    _configured_groups(integration, info) or None
+                )
+            await self._leave_groups(row, directory)
+            return
+        row.pending_group_removals = None
+        rejoin = _configured_groups(integration, info)
+        if rejoin:
+            row.pending_groups = rejoin
+            await self._finish_setup(row, integration)
+
+    async def _leave_groups(
+        self, row: DirectoryAccountProvision, directory: DirectoryClient
+    ) -> None:
+        remaining: list[str] = []
+        for group in list(row.pending_group_removals or []):
+            try:
+                removed = await directory.remove_from_group(
+                    str(group), _account_key(row)
+                )
+            except DirectoryError:
+                remaining.append(str(group))
+                continue
+            if not removed:
+                logger.info(f"Left user {row.user_id} in a group that assigns licenses")
+        row.pending_group_removals = remaining or None
+
+    async def retry_group_removals(self) -> int:
+        """Retry the group removals departures left unfinished. Returns the
+        records attempted."""
+        candidates = (
+            await self.db.execute(
+                select(
+                    DirectoryAccountProvision.user_id,
+                    DirectoryAccountProvision.organization_id,
+                    DirectoryAccountProvision.pending_group_removals,
+                ).where(
+                    DirectoryAccountProvision.status
+                    == DirectoryAccountStatus.CREATED.value,
+                    DirectoryAccountProvision.suspension_wanted.is_(True),
+                    DirectoryAccountProvision.suspension_settled.is_(True),
+                )
+            )
+        ).all()
+        # Filtered here rather than in SQL: an emptied JSON column can hold a
+        # JSON null, which IS NULL does not match.
+        waiting = [(u, o) for u, o, groups in candidates if groups]
+        for user_id, organization_id in waiting:
+            await self._retry_group_removal(user_id, organization_id)
+        return len(waiting)
+
+    async def _retry_group_removal(self, user_id: str, organization_id: str) -> None:
+        try:
+            row = await self._load(organization_id, user_id=user_id, lock=True)
+            if row is None or not row.pending_group_removals:
+                await self.db.commit()
+                return
+            info = provider_info(row.provider)
+            integration = await self._active_integration(organization_id, info)
+            if integration is None:
+                await self.db.commit()
+                return
+            await self._leave_groups(row, directory_for(integration))
+            await self.db.commit()
+        except Exception:
+            logger.exception(f"Directory group removal crashed for user {user_id}")
+            await self.db.rollback()
 
     async def link_existing_members(
         self,
@@ -1158,12 +1258,7 @@ class DirectoryAccountService:
                     and now - since >= ATTENTION_OVERDUE_AFTER,
                 )
             )
-        order = [
-            AttentionIssue.NOT_SUSPENDED,
-            AttentionIssue.NOT_UNSUSPENDED,
-            AttentionIssue.NOT_CREATED,
-            AttentionIssue.SETUP_UNFINISHED,
-        ]
+        order = list(ATTENTION_LABELS)
         oldest = datetime.min.replace(tzinfo=timezone.utc)
         items.sort(key=lambda i: (order.index(i.issue), i.since or oldest))
         return items
@@ -1302,6 +1397,12 @@ class DirectoryAccountService:
             await self.reconcile_suspension(user_id, organization_id, stamp=False)
             return await self._reloaded(row.id, organization_id)
 
+        if row.suspension_wanted and row.pending_group_removals:
+            await self._begin_attempt(row)
+            await self._leave_groups(row, directory_for(integration))
+            await self.db.commit()
+            return await self._reloaded(row.id, organization_id)
+
         if row.status == DirectoryAccountStatus.LINKED_EXISTING.value:
             raise ProvisionRetryError(linked_existing_message(info))
         nothing_to_do = (
@@ -1389,6 +1490,13 @@ def _attention_issue(
             issue,
             row.suspension_error,
             row.suspension_requested_at or row.updated_at,
+        )
+    if row.suspension_wanted and row.pending_group_removals:
+        groups = ", ".join(str(g) for g in row.pending_group_removals)
+        return (
+            AttentionIssue.GROUPS_NOT_LEFT,
+            f"The account is suspended, but it could not be removed from: {groups}",
+            row.suspended_at or row.suspension_requested_at or row.updated_at,
         )
     # Waiting is measured from the record's creation, never from the latest
     # attempt: a Retry that fails again must not restart the clock.

@@ -221,6 +221,12 @@ choice an owner may want to revisit:
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
 - **No rename.** A member's name change in The Logbook does not reach Google.
+- **Groups follow the configuration, not history.** A departure takes an
+  account The Logbook created out of the groups configured _now_, and a return
+  puts it back in them; the record does not keep which groups the account
+  joined at creation. A Microsoft 365 group that assigns licenses is never
+  touched (owner decision, 2026-10-23), nor is one whose licenses Graph does
+  not report. Members who left before this was added keep their groups.
 - **A departed member's account cannot be kept on.** The daily departure check
   (owner decision, 2026-10-20) suspends again any departed member's account
   found active in the directory, every morning, with no exemption: an

@@ -70,7 +70,9 @@ USER_FIELDS = (
     "id,userPrincipalName,mail,accountEnabled,onPremisesSyncEnabled,"
     "onPremisesExtensionAttributes"
 )
-GROUP_FIELDS = "id,displayName,mail,groupTypes,mailEnabled,securityEnabled"
+GROUP_FIELDS = (
+    "id,displayName,mail,groupTypes,mailEnabled,securityEnabled,assignedLicenses"
+)
 _GUID = re.compile(r"\A[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 # A mailNickname may not contain these, among others; anything outside the
 # safe set is dropped rather than risk Graph refusing the whole account.
@@ -519,6 +521,32 @@ class Microsoft365Directory:
             )
         except Microsoft365AccountExistsError:
             return
+
+    async def remove_from_group(self, group: str, user_key: str) -> bool:
+        """Take a member out of a group; not being in it counts as done.
+
+        A group that assigns licenses is left alone (False): removing the
+        member would take the license, and a mailbox without one is deleted
+        after Microsoft's grace period (owner decision, 2026-10-23). So is a
+        group whose licenses Graph did not report, rather than guessed at.
+        """
+        found = await self._group(group)
+        licenses = found.get("assignedLicenses")
+        if not isinstance(licenses, list) or licenses:
+            return False
+        group_id = str(found.get("id") or "")
+        try:
+            account = await self.get_user(user_key)
+            await self._request(
+                "DELETE",
+                f"{GRAPH_BASE}/groups/{quote(group_id, safe='')}/members/"
+                f"{quote(account.id, safe='')}/$ref",
+                "group membership removal",
+                user_scoped=True,
+            )
+        except Microsoft365AccountNotFoundError:
+            pass
+        return True
 
     async def test_connection(
         self, domain: str, groups: Sequence[str], license_sku_id: Optional[str]

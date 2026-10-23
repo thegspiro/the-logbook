@@ -92,6 +92,7 @@ class FakeDirectory:
         self.suspend_calls = []
         self.keys = []
         self.member_ids: list[str] = []
+        self.left = []
         self.domain_users: list[dict] = []
         self.licensed: list[str] = []
 
@@ -106,6 +107,16 @@ class FakeDirectory:
         if self.group_error:
             raise self.group_error
         self.groups.append((group, email))
+
+    # ``remove_error`` fails a removal; ``left`` records the ones made.
+    remove_error: Optional[Exception] = None
+    left: list[tuple[str, str]]
+
+    async def remove_from_group(self, group, key):
+        if self.remove_error:
+            raise self.remove_error
+        self.left.append((group, key))
+        return True
 
     async def ensure_licensed(self, key):
         # Google licenses on creation; a Microsoft-style fake overrides this.
