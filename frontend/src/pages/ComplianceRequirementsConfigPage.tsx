@@ -51,6 +51,7 @@ import type {
 } from '../types/training';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { Breadcrumbs } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 
 // Shared form input classes
 const inputClass = 'form-input';
@@ -498,20 +499,13 @@ export default function ComplianceRequirementsConfigPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <Breadcrumbs underHub="/training/admin" />
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Shield className="h-8 w-8 text-blue-600" />
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Compliance Requirements Configuration</h1>
-            <p className="text-theme-text-secondary text-sm">
-              Define what makes members compliant, configure profiles, and schedule reports
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={Shield}
+        title="Compliance Requirements Configuration"
+        subtitle="Define what makes members compliant, configure profiles, and schedule reports"
+        underHub="/training/admin"
+      />
 
       {/* Tabs */}
       {/* Scrolls sideways on a phone: four labelled tabs do not fit 320px. */}

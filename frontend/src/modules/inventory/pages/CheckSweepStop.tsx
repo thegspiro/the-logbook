@@ -126,11 +126,20 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="border-theme-surface-border overflow-hidden rounded-lg border">
-        <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex items-center gap-2 border-b px-3 py-2 text-[11px] font-bold tracking-[.06em] uppercase">
-          <span className="flex-1">Item</span>
-          <span className="w-10 text-center">Par</span>
-          <span className="w-[132px] text-center">Found</span>
+      {/* The layout keys off this table's own width, not the window's. The
+          controls are 190px wide (three 44px targets, a 40px value, gaps), so
+          beside a name they need a ~420px table; under that the row stacks and
+          the controls drop below the name. A window breakpoint cannot say
+          this — the builder previews the same screen in a 256px frame inside a
+          1440px window. */}
+      <div
+        data-testid="tally-table"
+        className="border-theme-surface-border @container overflow-hidden rounded-lg border"
+      >
+        <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted hidden grid-cols-[minmax(0,1fr)_2.5rem_190px] items-center gap-2 border-b px-3 py-2 text-[11px] font-bold tracking-[.06em] uppercase @[26rem]:grid">
+          <span>Item</span>
+          <span className="text-center">Par</span>
+          <span className="text-center">Found</span>
         </div>
         {items.map((item) => {
           const par = item.expectedQuantity ?? null;
@@ -164,11 +173,11 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               // severity on the ground and the border and keeps text white — so a
               // colour-only distinction between "at par" and "short" disappears
               // exactly where legibility matters most.
-              className={`border-theme-surface-border flex items-center gap-2 border-b px-3 py-2 last:border-b-0 ${
+              className={`border-theme-surface-border grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 border-b px-3 py-2 last:border-b-0 @[26rem]:grid-cols-[minmax(0,1fr)_2.5rem_190px] ${
                 failing && !carried ? 'bg-theme-alert-danger-bg' : short && !carried ? 'bg-theme-alert-warning-bg' : ''
               }`}
             >
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0">
                 <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
                 {item.countUnit && <p className="text-theme-text-muted text-[12px]">counted in {item.countUnit}</p>}
                 {failing && !carried && (
@@ -177,10 +186,11 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
                   </p>
                 )}
               </div>
-              <span className="text-theme-text-secondary w-10 text-center font-mono text-[16px] tabular-nums">
+              <span className="text-theme-text-secondary text-right font-mono text-[16px] tabular-nums @[26rem]:text-center">
+                <span className="text-theme-text-muted font-sans text-[12px] @[26rem]:hidden">par </span>
                 {par ?? '—'}
               </span>
-              <div className="flex w-[132px] items-center justify-end gap-1.5">
+              <div className="col-span-2 flex items-center justify-end gap-1.5 @[26rem]:col-span-1">
                 <button
                   type="button"
                   disabled={disabled || notOnTruck}
@@ -192,7 +202,7 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
                 </button>
                 <span
                   data-testid={`tally-value-${item.id}`}
-                  className={`w-10 text-center font-mono text-[19px] font-bold tabular-nums ${
+                  className={`w-10 shrink-0 text-center font-mono text-[19px] font-bold tabular-nums ${
                     found === undefined || carried
                       ? 'text-theme-text-muted'
                       : failing

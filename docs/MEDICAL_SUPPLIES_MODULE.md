@@ -412,6 +412,21 @@ takes Low from the server (`is_low_stock`).
   it" link to the apparatus's inventory, under the same gate as "Swap or
   restock". One rule decides "uncounted" for every reader:
   `InventoryService._ready_positions`.
+- **Truck lots in the lot export** _(2026-10-23)_: `GET /lots/export` lists the
+  lots aboard the apparatus beside the shelf lots, in one list soonest first and
+  undated last. Two columns are appended after "Notes": "Location" ("In storage"
+  or "On apparatus") and "Where" (the storage path, or the apparatus and
+  compartment). A truck unit is listed by its deployed lot, or by the position's
+  own lot number and date when no lot is recorded; a position with neither, or
+  holding nothing, has no lot to list (`apparatus_expiring_stock(...,
+include_undated=True)`). Shelf-only columns (Received Date, Storage Location,
+  Unit Cost, Notes) are blank on a truck row.
+- **Not yet counted count** _(2026-10-23)_: the tab reads "Not yet counted (N)"
+  from the summary's `uncounted_on_apparatus`.
+- **Look-ahead window** _(2026-10-23)_: the Expiring tab offers 30, 60 or 90
+  days. The tiles, the Expiring list, its empty state and the Next expiry
+  colouring all follow the choice; it is not saved between visits, and the
+  weekly email keeps its 30 days.
 
 ## Alerts
 

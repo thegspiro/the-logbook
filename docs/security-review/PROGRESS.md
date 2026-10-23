@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3602](https://github.com/thegspiro/the-logbook/pull/3602)** (branch
+`claude/security-review-equipment-check-p10`) —
+Feature 14 (Equipment check & shifts), pass 11, a watchdog pickup. PR
+#3589 (Feature 13, Apparatus & NFC, pass 18) had already merged,
+docs-only. `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 before this iteration started; row 14 was confirmed the next
+`⬜` by reading the rotation table directly. **0 fixed, 0 new findings** —
+real delta since pass 10's merge (`8192af4eb`): 16 commits touching the
+primary files. The largest (`ddb189c1d`) adds a Present/Absent check type,
+a crew-entered replacement date/lot on an unlinked Date line, and
+headingless inline checklist groups — every write resolves its target
+through the existing org-scoped compartment/item lookup, no new by-id or
+client-FK surface. `78a6a57eb` moves `shift_completion_reports.officer_id`
+to `nullable=True`/`ondelete="SET NULL"` (Pitfall #2 pairing confirmed on
+the model and the live schema) so permanently deleting a training officer
+no longer cascades away other members' reports. A new recall lot-search
+path (`c75e0cea9`) uses `like_pattern()`/`escape=LIKE_ESCAPE_CHAR` and
+filters `organization_id` explicitly. Two repo-wide numeric-bounds
+commits on this feature's schemas are purely additive. No new route (54 +
+21, unchanged from pass 10); `check_route_permissions.py --strict` — 273
+routes, 0 errors. EC-8 and the `get_item_deployments` gate discrepancy
+(both owner-accepted, `KNOWN_LIMITATIONS.md`) re-confirmed unchanged. See
+`EC-14-equipment-check-shifts.md`'s **Pass 11** section. Row 14 → ✅
+(pending this PR's merge); next is Feature 15 (Scheduling) — re-check
+`search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 18, PR #3589, merged), preserved for history</summary>
+
 **PR [#3589](https://github.com/thegspiro/the-logbook/pull/3589)** (branch
 `claude/security-review-apparatus-nfc`) — Feature 13 (Apparatus & NFC), pass 18, a watchdog
 pickup. PR #3585 (Feature 12, Facilities, pass 11) had already merged,
@@ -38,6 +67,8 @@ unchanged from pass 17); `check_route_permissions.py --strict` — 273
 routes, 0 errors. AP2-4 (standing, owner-accepted) re-confirmed unchanged.
 See `AP-13-apparatus-nfc.md`'s **Pass 18** section. Row 13 → ✅ (pending
 this PR's merge); next is Feature 14 (Equipment check & shifts).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 11, PR #3585, merged), preserved for history</summary>
@@ -20810,7 +20841,7 @@ this iteration's commit" rule.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -20838,6 +20869,76 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-23 — Feature 14 (Equipment check & shifts, pass 11) — watchdog pickup, real delta (16 commits), 0 fixed, 0 new findings
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3589 (Feature 13, Apparatus & NFC, pass 18)
+had already merged, docs-only — not independently recordable. Row 14
+(Equipment check & shifts) was confirmed the next `⬜` by reading the
+rotation table directly.
+
+Baseline `8192af4eb` (PR #3435's merge, pass 10). 607 commits landed
+repo-wide in this window; 16 touch this feature's declared primary files
+directly, all read in full via `git show`. The largest
+(`ddb189c1d`) adds three things at once: a `presence` (Present/Absent)
+check type; a crew-entered replacement date/lot on a Date line with no
+inventory link, so clearing an expired unit's date no longer requires an
+admin editing the checklist; and `is_inline` headingless checklist
+groups. Every new write path resolves its target compartment/item
+through the feature's existing org-scoped lookup helper — no new by-id
+or client-supplied-FK surface, and the replacement-date refusal (a past
+date is rejected) was reproduced against the unmodified service before
+trusting the fix. `78a6a57eb` moves `shift_completion_reports.officer_id`
+(and the unrelated `skill_tests.examiner_id`) from `NOT NULL`/`CASCADE`
+to `nullable=True`/`ondelete="SET NULL"` via migration `cbe0de50f202` —
+confirmed the correct Pitfall #2 pairing on both the model and a live
+`information_schema` read — so permanently deleting a training officer
+no longer cascades away the reports/evaluations they filed on other
+members; the service-layer threading of `Optional[officer_id]` is purely
+mechanical follow-through. A new Medical Supplies recall lot-search path
+(`c75e0cea9`) calls into this feature's `apparatus_expiring_stock` with a
+`lot_number` filter built through `like_pattern()`/
+`escape=LIKE_ESCAPE_CHAR`, with an explicit `organization_id` filter on
+the new subquery; its calling endpoint sources `org_id` from
+`current_user`, never the client. Two repo-wide numeric-bounds commits on
+`schemas/equipment_check.py`/`schemas/shift_completion.py` are purely
+additive. The remaining commits are frontend-only (a shared checklist-
+builder cleanup tool, the Operations header rollout, five AA/AAA-contrast
+class-string fixes) — grepped/read clean, no permission gate touched.
+
+No new route (`equipment_check.py` 54, `shift_completion.py` 21,
+unchanged from pass 10 — re-counted fresh, not carried over);
+`check_route_permissions.py --strict` (repo-wide): 273 routes, 0 errors,
+0 warnings. `scheduled_tasks.py`/`scheduling_service.py` — grepped every
+commit in the window against the two functions this feature's lens
+covers (`run_end_of_shift_checklist_reminders`, `run_post_shift_validation`):
+zero matches, so none of this window's scheduling-adjacent work touches
+this feature's own surface. EC-8 and the `get_item_deployments`
+permission-gate discrepancy (both owner-accepted,
+`KNOWN_LIMITATIONS.md`) re-confirmed unchanged.
+
+Full writeup: `docs/security-review/EC-14-equipment-check-shifts.md`'s
+**Pass 11** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's
+pinned 7.3.0/26.5.1/9.0.1) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 641 revisions, single head
+`f7535f478280`; `check_route_permissions.py --strict` — 273 routes, 0
+errors/warnings; scoped backend tests (`-k "equipment_check or
+shift_completion"`, Python 3.13) — 635 passed, 1 pre-existing skip
+(`pywebpush`); tenancy/security guard tests (LIKE escaping, capacity
+locking, CSV sweep, org-scoping ratchet, account-status gates, numeric
+bounds, migration create-all tables) — 671 passed; frontend `npm run
+typecheck` clean; `npm run lint` clean; scoped frontend suite (`npx
+vitest run src/modules/inventory src/pages/scheduling/ShiftCheckInPage.test.tsx`)
+— 1,829 passed (123 files).
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-23 — Feature 13 (Apparatus & NFC, pass 18) — watchdog pickup, 0 fixed, 0 new findings; AP2-4 re-confirmed the only standing item
 

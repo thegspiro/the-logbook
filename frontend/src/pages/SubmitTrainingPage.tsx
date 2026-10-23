@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Info, Paperclip, Pencil, Send, Trash2, Users, X } from 'lucide-react';
+import { ClipboardList, Info, Paperclip, Pencil, Send, Trash2, Users, X } from 'lucide-react';
 import { Breadcrumbs } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import {
   AttachmentField,
   Checklist,
@@ -1063,7 +1064,6 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 // ==================== Main Page ====================
 
 const SubmitTrainingPage: React.FC = () => {
-  const navigate = useNavigate();
   const { confirm } = useConfirm();
   const [config, setConfig] = useState<SelfReportConfig | null>(null);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
@@ -1178,24 +1178,14 @@ const SubmitTrainingPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-4xl px-4 py-8 pb-40 sm:px-6 lg:px-8 lg:pb-8">
-        <Breadcrumbs />
-
-        <div className="mb-6 flex items-start gap-3.5">
-          <button
-            onClick={() => void navigate('/training')}
-            aria-label="Back to training"
-            className="touch:mobile-touch-target text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg p-2"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className="text-theme-text-primary text-2xl leading-8 font-bold">Submit External Training</h1>
-            <p className="text-theme-text-muted text-sm">Report training you completed outside the department.</p>
-          </div>
-        </div>
-
+    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 pb-40 sm:px-6 lg:px-8 lg:pb-8">
+      <TrainingPageHeader
+        icon={ClipboardList}
+        title="Submit External Training"
+        subtitle="Report training you completed outside the department."
+      />
+      {/* The form keeps its reading width under the full-width strip. */}
+      <div className="mx-auto max-w-4xl">
         {canRecordCrew && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
             <p className="text-sm text-blue-800 dark:text-blue-300">

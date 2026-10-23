@@ -14,6 +14,7 @@ interface DialogPanelProps {
   ref?: React.Ref<HTMLDivElement>;
   id?: string;
   role?: string;
+  'aria-modal'?: boolean | 'true' | 'false';
   'aria-label'?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;

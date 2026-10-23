@@ -4339,6 +4339,7 @@ class EquipmentCheckService:
         today: date,
         item_ids: Optional[Iterable[str]] = None,
         lot_number: Optional[str] = None,
+        include_undated: bool = False,
     ) -> List[Dict[str, Any]]:
         """Stock on the trucks that expires within ``days_ahead``, or has.
 
@@ -4350,6 +4351,12 @@ class EquipmentCheckService:
         whose lot number contains it (case-insensitive), dated or not and
         whatever ``days_ahead`` says, since a recalled lot has to be found
         wherever it is. Positions holding nothing are left out.
+
+        ``include_undated`` (with ``days_ahead=None``) also returns undated
+        units that carry a lot number, and leaves out positions holding
+        nothing, as the recall lookup does: every lot aboard, for the lot
+        export. A position with neither a lot number nor a date is still left
+        out, since it records no lot to list.
 
         One row per dated lot aboard a position (a position carrying three
         boxes from two lots expires twice), and one per position with no lot
@@ -4394,6 +4401,8 @@ class EquipmentCheckService:
         def _wanted(when: Optional[date], number: Optional[str]) -> bool:
             if needle is not None:
                 return bool(number) and needle in str(number).casefold()
+            if include_undated and when is None:
+                return bool(number)
             return when is not None and (horizon is None or when <= horizon)
 
         positions = (
@@ -4494,7 +4503,7 @@ class EquipmentCheckService:
             if not _wanted(when, item.lot_number):
                 continue
             held = self._on_truck(item) or 0
-            if needle is not None and held <= 0:
+            if (needle is not None or include_undated) and held <= 0:
                 continue
             rows.append(
                 {

@@ -736,6 +736,11 @@ _MEDICAL_LOT_EXPORT_COLUMNS = [
     "Storage Location",
     "Unit Cost",
     "Notes",
+    # Appended, so the columns above keep their positions. "Location" is
+    # "In storage" or "On apparatus"; "Where" is the storage path, or the
+    # apparatus and compartment as the checklist names them.
+    "Location",
+    "Where",
 ]
 
 # Read on import only. A row carrying any of them records a stock lot of the
@@ -1077,7 +1082,12 @@ async def export_medical_lots_csv(
     ),
 ):
     """
-    Export every stocked medical lot as CSV, soonest expiry first
+    Export every stocked medical lot as CSV, on the shelves and the apparatus
+
+    Soonest expiry first, undated last. A unit aboard a truck is listed by its
+    deployed lot, or by the position's own lot number and date when no lot is
+    recorded; a position recording neither, or holding nothing, has no lot to
+    list.
 
     **Authentication required**
     **Requires permission: inventory.manage_medical or inventory.manage**
@@ -1087,26 +1097,77 @@ async def export_medical_lots_csv(
     # The department's date, not the server's: a lot expiring "today" in the
     # department's timezone must not read as tomorrow's problem.
     today = await resolve_org_today(db, org_id)
-    rows = await service.get_lots_for_export(org_id, MEDICAL_ITEM_TYPES)
+    shelf = await service.get_lots_for_export(org_id, MEDICAL_ITEM_TYPES)
+    paths = await service.storage_paths_for(
+        org_id, {str(lot.inventory_item_id) for lot, _name, _cat in shelf}
+    )
+    aboard = await EquipmentCheckService(db).apparatus_expiring_stock(
+        org_id,
+        list(MEDICAL_ITEM_TYPES),
+        days_ahead=None,
+        today=today,
+        include_undated=True,
+    )
+    categories = await service.item_category_names(
+        org_id, {row["inventory_item_id"] for row in aboard}
+    )
+
+    def days(when: Optional[date]) -> Any:
+        return (when - today).days if when else ""
+
+    rows: List[Tuple[Optional[date], str, List[Any]]] = []
+    for lot, item_name, category_name in shelf:
+        rows.append(
+            (
+                lot.expiration_date,
+                item_name or "",
+                [
+                    item_name,
+                    category_name or "",
+                    lot.lot_number or "",
+                    str(lot.expiration_date) if lot.expiration_date else "",
+                    days(lot.expiration_date),
+                    lot.quantity,
+                    str(lot.received_date) if lot.received_date else "",
+                    lot.storage_location or "",
+                    str(lot.unit_cost) if lot.unit_cost is not None else "",
+                    lot.notes or "",
+                    "In storage",
+                    lot.storage_location or paths.get(str(lot.inventory_item_id)) or "",
+                ],
+            )
+        )
+    for row in aboard:
+        when = row["expiration_date"]
+        rows.append(
+            (
+                when,
+                row["item_name"] or "",
+                [
+                    row["item_name"] or "",
+                    categories.get(row["inventory_item_id"]) or "",
+                    row["lot_number"] or "",
+                    str(when) if when else "",
+                    days(when),
+                    row["quantity"],
+                    "",
+                    "",
+                    "",
+                    "",
+                    "On apparatus",
+                    row["where"],
+                ],
+            )
+        )
+    # The same order get_lots_for_export gives the shelf alone: dated first,
+    # soonest first, then by name; shelf before truck on a tie.
+    rows.sort(key=lambda r: (r[0] is None, r[0] or date.max, r[1].lower()))
 
     output = io.StringIO()
     writer = SafeCsvWriter(output)
     writer.writerow(_MEDICAL_LOT_EXPORT_COLUMNS)
-    for lot, item_name, category_name in rows:
-        writer.writerow(
-            [
-                item_name,
-                category_name or "",
-                lot.lot_number or "",
-                str(lot.expiration_date) if lot.expiration_date else "",
-                ((lot.expiration_date - today).days if lot.expiration_date else ""),
-                lot.quantity,
-                str(lot.received_date) if lot.received_date else "",
-                lot.storage_location or "",
-                str(lot.unit_cost) if lot.unit_cost is not None else "",
-                lot.notes or "",
-            ]
-        )
+    for _when, _name, cells in rows:
+        writer.writerow(cells)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",

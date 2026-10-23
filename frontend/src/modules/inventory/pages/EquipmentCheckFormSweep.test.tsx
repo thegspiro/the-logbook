@@ -163,6 +163,22 @@ describe('EquipmentCheckForm in sweep mode', () => {
     expect(await screen.findByTestId('tally-value-gauze')).toHaveTextContent('12');
   });
 
+  it('sizes the count controls to what they hold, and stacks them when the table is narrow', async () => {
+    // jsdom does no layout, so the container query itself cannot be exercised.
+    // What can regress silently is the bug it replaced: a fixed 132px column
+    // around controls that are 190px wide, which bled into the par column and
+    // the item name on every phone.
+    mockGetLastCheckResults.mockResolvedValue({ gauze: { status: 'pass', quantity_found: 12 } });
+    const user = userEvent.setup();
+    renderSweep();
+    await user.click(await screen.findByRole('button', { name: /^Next ·/ }));
+    const row = await screen.findByTestId('tally-row-gauze');
+    expect(row.className).toContain('@[26rem]:grid-cols-[minmax(0,1fr)_2.5rem_190px]');
+    expect(row.className).not.toContain('132px');
+    for (const table of screen.getAllByTestId('tally-table')) expect(table).toHaveClass('@container');
+    expect(screen.getByTestId('tally-value-gauze')).toHaveClass('shrink-0');
+  });
+
   it('submits through the same path the accordion uses', async () => {
     const user = userEvent.setup();
     renderSweep();
