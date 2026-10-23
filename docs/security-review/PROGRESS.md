@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)** (branch
+`claude/security-review-membership-pipeline-p12`) — Feature 08 (Membership
+pipeline), pass 12. PR #3569 (Feature 07, pass 11) had already merged
+cleanly into `main`; `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results before
+this iteration started, independently confirming no security-review PR was
+open. Rotation row 07 stays ✅. This iteration reviewed Feature 08
+(Membership pipeline), pass 12: **0 fixed, 0 new findings** — real delta (15
+non-merge commits since pass 11's merge, 27 files, 800 insertions / 248
+deletions): a staff-side duplicate-applicant refusal (409 instead of a
+silent no-op success), multi-approval role trimming/labeling, a repo-wide
+file-storage interface migration (4 call sites in this feature), numeric
+request-field bounds, UTC interview timestamps, and an ACTIVE_ACCOUNT_STATUSES
+correctness fix for approver lookups — all reviewed end to end and found
+already correctly guarded. MP-10 (listing half) and MP-22 (standing,
+owner-accepted) re-confirmed OPEN/unchanged. See
+`MP-08-membership-pipeline.md`'s **Pass 12** section. Row 08 → ✅ (pending
+this PR's merge); next is Feature 09 (Medical screening, PHI).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 11, PR #3569, merged), preserved for history</summary>
+
 **PR [#3569](https://github.com/thegspiro/the-logbook/pull/3569)** (branch
 `claude/security-review-users-organizations`) — Feature 07 (Users &
 organizations), pass 11. `search_pull_requests` for
@@ -30,6 +52,8 @@ all reviewed end to end and found already correctly guarded. USR-5/USR-8
 (standing, owner-accepted) re-confirmed unchanged. See
 `USR-07-users-organizations.md`'s **Pass 11** section. Row 07 → ✅
 (pending this PR's merge); next is Feature 08 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 11, PR #3564, merged), preserved for history</summary>
@@ -20653,7 +20677,7 @@ this iteration's commit" rule.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -36268,3 +36292,64 @@ run lint` clean.
 
 Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
 pipeline).
+
+### 2026-10-23 — Feature 08 (Membership pipeline, pass 12) — real delta (staff duplicate-applicant refusal, approver-role trimming/labeling, file-storage interface migration, numeric bounds, UTC interview times), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN
+
+`search_pull_requests` for `is:pr is:open head:claude/security-review-`
+returned 0 — PR #3569 (Feature 07, pass 11) had already merged cleanly. Row
+08 was confirmed the first `⬜` in the rotation table.
+
+**Baseline:** `3d6ecd20` (PR #3420's merge, pass 11). **Head:** current
+`main`. 15 non-merge commits touch this feature's declared scope (backend +
+`frontend/src/modules/prospective-members/`), 27 files, 800 insertions / 248
+deletions, all read in full rather than diffed-and-trusted. The real delta:
+a staff-side duplicate-applicant refusal — `create_prospect
+(reject_duplicate=True)` now raises `DuplicateApplicantError` instead of
+silently returning the existing row and reporting success for a record it
+did not create; the endpoint maps it to a 409 naming the applicant (name,
+pipeline, stage), writes no audit entry, and sends no email, while the
+public/guest-check-in/forms-service callers keep the original
+silent-dedup-and-notify behavior (`reject_duplicate` defaults to `False`
+and only `POST /prospects` passes `True`) — traced end to end to confirm no
+insert/email/audit precedes the refusal on either the initial or the
+lock-protected race-check path. Also reviewed: multi-approval role
+trimming/labeling (`_required_approver_roles()` is now the one place every
+approval check reads a stage's `required_approvers` through, fixing a
+padded stored value permanently blocking a stage; `office_label()`/the new
+`approver_labels` computed field read the same `OFFICE_CATALOG` that
+decides who may sign, no second copy); a repo-wide file-storage interface
+migration landing on this feature's four document call sites (`os.remove`/
+`os.path.exists` → `file_storage.delete`/`exists`/`file_response`) —
+re-confirmed each call site still resolves the stored path through
+`prospect_document_path(..., organization_id)` first and a real deletion
+failure still raises rather than being swallowed; numeric request-field
+bounds (`sort_order`/`inactivity_timeout_days` capped at `INT32_MAX`/
+`INT32_MIN`) and UTC-typed interview timestamps, both pure correctness
+fixes; and an `ACTIVE_ACCOUNT_STATUSES` correctness fix (CLAUDE.md Pitfall
+#32) in two approver lookups — widens who can approve to match every other
+status gate, not a new grant. All 53 routes re-enumerated by AST walk
+(unchanged from pass 11); no permission string changed; router-wide
+`block_self_prospect_access` and MP-31's target-role ceiling both confirmed
+untouched by this window's diff; no new unescaped LIKE, raw `csv.writer`,
+or `window.confirm`/`alert`/`prompt`. **MP-10** (the listing half —
+`list_election_packages` still has no `.limit()`/`.offset()`) and **MP-22**
+(a document delete can still lose the file on disk if the commit fails
+after a successful removal), both standing flagged/accepted items,
+re-confirmed OPEN/unchanged — re-derived from current code, not copied from
+the prior write-up. See `MP-08-membership-pipeline.md`'s **Pass 12** section
+for the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+`flake8==7.3.0`/`black==26.5.1`/`isort==9.0.1`, installed into this
+session's Python 3.13 interpreter since the sandbox's bare `python3`
+resolves to 3.11) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` passed (640 revisions, single head `cc8c16cb6d98`, no migration
+this pass); `check_route_permissions.py --strict` 273 routes, 0
+errors/warnings; scoped backend tests (`-k "membership or prospect or
+pipeline or election"`) 1,876 passed, 1 pre-existing skip (`py_vapid`);
+frontend `npm run typecheck` clean; `npm run lint` clean; scoped frontend
+suite (`npx vitest run src/modules/prospective-members`) 302 passed (35
+files).
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI).
