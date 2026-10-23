@@ -116,11 +116,38 @@ OFFICER_PROGRESS_NOTE_KEYS = (
 # the day an annual requirement's window rolled over.
 _LIVE_ENROLLMENT_STATUSES = (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
 
-# Recorded on enrollments still in progress when their program is deactivated
-# in place of a delete (see delete_training_program).
+# Recorded on enrollments still in progress when their program is deactivated,
+# whether in place of a delete or from the edit form (see
+# _withdraw_in_progress_enrollments).
 PROGRAM_DEACTIVATED_WITHDRAWAL_REASON = (
     "Withdrawn automatically: the pipeline was deactivated."
 )
+
+
+def link_counts_toward_completion(link: Any) -> bool:
+    """Whether one program↔requirement link counts toward completion.
+
+    The in-memory projection of ``get_required_requirement_ids`` — required,
+    and the requirement active — for callers that already hold the links with
+    their requirements loaded (the program detail's "required" total). Keep
+    the two in step.
+    """
+    requirement = getattr(link, "requirement", None)
+    return (
+        getattr(link, "is_required", False) is True
+        and requirement is not None
+        and getattr(requirement, "active", None) is True
+    )
+
+
+def _counts_as_prerequisite(program_active: Optional[bool]) -> bool:
+    """Whether a prerequisite program with this ``active`` value is enforced.
+
+    ``IS TRUE`` like the program lists: a NULL flag hides a program from every
+    list, so it cannot be something a member is told to complete first.
+    """
+    return program_active is True
+
 
 LINKED_PROGRESS_REFUSAL = (
     "This requirement is the department's own and reads the member's "
@@ -609,20 +636,31 @@ class TrainingProgramService:
             for program in programs
             for pid in (program.prerequisite_program_ids or [])
         }
-        names: Dict[str, str] = {}
+        found: Dict[str, Tuple[str, bool]] = {}
         if wanted:
             rows = await self.db.execute(
-                select(TrainingProgram.id, TrainingProgram.name).where(
+                select(
+                    TrainingProgram.id, TrainingProgram.name, TrainingProgram.active
+                ).where(
                     TrainingProgram.id.in_(wanted),
                     TrainingProgram.organization_id == str(organization_id),
                 )
             )
-            names = {str(row_id): row_name for row_id, row_name in rows.all()}
+            found = {
+                str(row_id): (row_name, _counts_as_prerequisite(row_active))
+                for row_id, row_name, row_active in rows.all()
+            }
         for program in programs:
+            # An inactive prerequisite is listed, flagged, rather than hidden:
+            # it is still stored and applies again the day it is reactivated.
             program.prerequisite_programs = [
-                {"id": str(pid), "name": names[str(pid)]}
+                {
+                    "id": str(pid),
+                    "name": found[str(pid)][0],
+                    "active": found[str(pid)][1],
+                }
                 for pid in (program.prerequisite_program_ids or [])
-                if str(pid) in names
+                if str(pid) in found
             ]
 
     async def _validate_required_courses(
@@ -872,6 +910,11 @@ class TrainingProgramService:
             for field, value in updates.items()
             if field in target_fields
         )
+        # Deactivating or reactivating changes whether the requirement counts
+        # toward pipeline completion (get_required_requirement_ids).
+        active_changed = updates.get("active") is not None and (
+            updates["active"] is True
+        ) != (requirement.active is True)
 
         # `updates` is built with exclude_unset, so a None here was sent
         # deliberately: the officer cleared the field. That applies to every
@@ -887,6 +930,10 @@ class TrainingProgramService:
         # left stale against the new target.
         if target_changed:
             await self._recompute_progress_for_requirement(requirement)
+        if active_changed:
+            await self.recalculate_enrollments_for_requirement(
+                requirement.id, organization_id
+            )
 
         return requirement, None
 
@@ -1333,13 +1380,49 @@ class TrainingProgramService:
                 "the same time"
             )
 
+        # Deactivating from the edit form does what deactivating in place of
+        # a delete does: nobody can finish a pipeline that has left every
+        # list, so its in-progress members are withdrawn. Only a real
+        # transition — resending ``active: false`` on an inactive program
+        # withdraws nothing new.
+        deactivating = data.get("active") is False and program.active is True
+
         for field, value in data.items():
             setattr(program, field, value)
+
+        if deactivating:
+            await self._withdraw_in_progress_enrollments(program.id)
 
         await self.db.commit()
         await self.db.refresh(program)
         await self.attach_prerequisite_summaries([program], organization_id)
         return program, None
+
+    async def _withdraw_in_progress_enrollments(self, program_id: UUID | str) -> int:
+        """Withdraw a deactivated program's ACTIVE / ON_HOLD enrollments.
+
+        The same fields ``withdraw_enrollment`` sets — status WITHDRAWN, record
+        kept — with ``PROGRAM_DEACTIVATED_WITHDRAWAL_REASON``. Completed,
+        failed, expired and already-withdrawn enrollments are left alone:
+        they are the history the deactivation exists to keep. Reactivating
+        the program does not undo this. No commit; returns the count.
+
+        ``program_id`` must come from an org-scoped read of the program.
+        """
+        result = await self.db.execute(
+            update(ProgramEnrollment)
+            .where(
+                ProgramEnrollment.program_id == str(program_id),
+                ProgramEnrollment.status.in_(_LIVE_ENROLLMENT_STATUSES),
+            )
+            .values(
+                status=EnrollmentStatus.WITHDRAWN,
+                withdrawn_at=datetime.now(timezone.utc),
+                withdrawal_reason=PROGRAM_DEACTIVATED_WITHDRAWAL_REASON,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
 
     async def delete_training_program(
         self,
@@ -1384,19 +1467,7 @@ class TrainingProgramService:
         )
         if graduated.scalar_one_or_none() is not None:
             program.active = False
-            await self.db.execute(
-                update(ProgramEnrollment)
-                .where(
-                    ProgramEnrollment.program_id == pid,
-                    ProgramEnrollment.status.in_(_LIVE_ENROLLMENT_STATUSES),
-                )
-                .values(
-                    status=EnrollmentStatus.WITHDRAWN,
-                    withdrawn_at=datetime.now(timezone.utc),
-                    withdrawal_reason=PROGRAM_DEACTIVATED_WITHDRAWAL_REASON,
-                )
-                .execution_options(synchronize_session=False)
-            )
+            await self._withdraw_in_progress_enrollments(pid)
             await self.db.commit()
             return "deactivated", None
 
@@ -1640,6 +1711,42 @@ class TrainingProgramService:
             for eid in affected_enrollment_ids:
                 await self._recalculate_enrollment_progress(UUID(str(eid)))
                 await self._maybe_auto_advance_phase(UUID(str(eid)))
+
+    async def recalculate_enrollments_for_requirement(
+        self, requirement_id: UUID | str, organization_id: UUID | str
+    ) -> int:
+        """Re-roll every in-progress enrollment whose program links this
+        requirement, after something changed whether it counts — its
+        ``active`` flag. Returns the number of enrollments recalculated.
+
+        The same scope and steps as toggling a link's ``is_required``:
+        ACTIVE / ON_HOLD enrollments only, each recalculated and re-checked
+        for phase advancement. So an ACTIVE member who had finished
+        everything else completes the program here, through
+        ``_recalculate_enrollment_progress`` — the one place any completion
+        happens, with its completion notice and EVOC operator side effects.
+        A COMPLETED enrollment is never reopened by a reactivation: it is not
+        in scope, as it is not for the ``is_required`` toggle.
+        """
+        rows = await self.db.execute(
+            select(ProgramEnrollment.id)
+            .join(TrainingProgram, TrainingProgram.id == ProgramEnrollment.program_id)
+            .join(
+                ProgramRequirement,
+                ProgramRequirement.program_id == ProgramEnrollment.program_id,
+            )
+            .where(
+                ProgramRequirement.requirement_id == str(requirement_id),
+                TrainingProgram.organization_id == str(organization_id),
+                ProgramEnrollment.status.in_(_LIVE_ENROLLMENT_STATUSES),
+            )
+            .distinct()
+        )
+        enrollment_ids = [str(row[0]) for row in rows.all()]
+        for eid in enrollment_ids:
+            await self._recalculate_enrollment_progress(UUID(eid))
+            await self._maybe_auto_advance_phase(UUID(eid))
+        return len(enrollment_ids)
 
     async def _validate_phase_prerequisites(
         self,
@@ -2634,8 +2741,15 @@ class TrainingProgramService:
         names no program in this department (a stale clone or import) can never
         be completed and is reported as "a prerequisite program".
 
-        The one definition behind the enroll picker, bulk enrollment and cohort
-        roster sync, so the three cannot disagree about who is eligible.
+        A prerequisite program that is currently inactive is skipped: the
+        department decided a deactivated pipeline blocks nobody. It is skipped
+        here, at check time, rather than pruned from the stored list, so
+        reactivating it makes it a requirement again.
+
+        The one definition behind every enrollment path (``enroll_member``,
+        which single, bulk and cohort enrollment all end in), the enroll
+        picker's eligibility and cohort roster sync, so they cannot disagree
+        about who is eligible.
         """
         prereq_ids = [str(p) for p in (prerequisite_program_ids or [])]
         user_id_strs = [str(u) for u in user_ids]
@@ -2643,12 +2757,23 @@ class TrainingProgramService:
             return {}
 
         name_rows = await self.db.execute(
-            select(TrainingProgram.id, TrainingProgram.name).where(
+            select(
+                TrainingProgram.id, TrainingProgram.name, TrainingProgram.active
+            ).where(
                 TrainingProgram.id.in_(prereq_ids),
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
+        prereq_names: Dict[str, str] = {}
+        inactive: set[str] = set()
+        for row_id, row_name, row_active in name_rows.all():
+            if _counts_as_prerequisite(row_active):
+                prereq_names[str(row_id)] = row_name
+            else:
+                inactive.add(str(row_id))
+        prereq_ids = [pid for pid in prereq_ids if pid not in inactive]
+        if not prereq_ids:
+            return {}
         completed_pairs: set[tuple[str, str]] = set()
         if prereq_names:
             completed_result = await self.db.execute(
@@ -4850,15 +4975,32 @@ class TrainingProgramService:
         program_id: Optional[Any] = None,
         phase_id: Optional[Any] = None,
     ) -> List[str]:
-        """The distinct requirement ids marked *required* in a program (or in one
-        phase of it).
+        """The distinct requirement ids that count toward completing a program
+        (or one phase of it): linked as *required*, and the requirement itself
+        active.
+
+        A deactivated requirement is not required while it stays inactive —
+        the same rule compliance grading applies — so it drops out of the
+        enrollment percentage, phase completion and advancement, and the
+        "N of M" count, all of which read this set. Members' recorded progress
+        on it is kept, and it counts again once reactivated.
+        ``link_counts_toward_completion`` is the per-link projection of this
+        query for callers that already hold the links.
 
         Progress rows key off ``requirement_id``, and there is no foreign key
         between ``requirement_progress`` and ``program_requirements`` to join on,
         so callers resolve the id set first and filter progress by it.
         """
-        query = select(ProgramRequirement.requirement_id).where(
-            ProgramRequirement.is_required.is_(True)
+        query = (
+            select(ProgramRequirement.requirement_id)
+            .join(
+                TrainingRequirement,
+                TrainingRequirement.id == ProgramRequirement.requirement_id,
+            )
+            .where(
+                ProgramRequirement.is_required.is_(True),
+                TrainingRequirement.active.is_(True),
+            )
         )
         if program_id is not None:
             query = query.where(ProgramRequirement.program_id == str(program_id))

@@ -85,7 +85,7 @@ class TestCreateAndBuildPersist:
         assert body["prerequisite_program_ids"] == [recruit.id]
         assert body["allows_concurrent_enrollment"] is False
         assert body["prerequisite_programs"] == [
-            {"id": recruit.id, "name": "Recruit School"}
+            {"id": recruit.id, "name": "Recruit School", "active": True}
         ]
 
     async def test_create_defaults_concurrency_to_allowed(
@@ -123,7 +123,7 @@ class TestCreateAndBuildPersist:
         assert stored.prerequisite_program_ids == [recruit.id]
         assert stored.allows_concurrent_enrollment is False
         assert program.prerequisite_programs == [
-            {"id": recruit.id, "name": "Recruit School"}
+            {"id": recruit.id, "name": "Recruit School", "active": True}
         ]
 
     async def test_build_rejects_another_orgs_program(
@@ -182,7 +182,7 @@ class TestUpdate:
         assert stored.prerequisite_program_ids == [recruit.id]
         assert stored.allows_concurrent_enrollment is False
         assert program.prerequisite_programs == [
-            {"id": recruit.id, "name": "Recruit School"}
+            {"id": recruit.id, "name": "Recruit School", "active": True}
         ]
 
     async def test_omitted_leaves_both_alone(self, db_session, setup_org_and_admin):

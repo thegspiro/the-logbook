@@ -65,7 +65,10 @@ from app.services.sample_program_templates import (
     SAMPLE_TEMPLATES,
     list_sample_template_summaries,
 )
-from app.services.training_program_service import TrainingProgramService
+from app.services.training_program_service import (
+    TrainingProgramService,
+    link_counts_toward_completion,
+)
 from app.utils.org_timezone import (
     local_date,
     resolve_scheduling_timezone,
@@ -787,7 +790,11 @@ async def get_training_program(
         requirements=visible_requirements,
         milestones=milestones,
         total_requirements=len(requirements),
-        total_required=sum(1 for pr in program_requirements if pr.is_required),
+        # Required *and active*: a deactivated requirement is not required
+        # while inactive, the same rule the member percentages use.
+        total_required=sum(
+            1 for pr in program_requirements if link_counts_toward_completion(pr)
+        ),
     )
 
 
@@ -806,6 +813,11 @@ async def update_training_program(
     audited as ``program_reactivated``. It restores the program to the lists
     and nothing else: enrollments withdrawn when it was deactivated stay
     withdrawn.
+
+    ``active: false`` on an active program deactivates it the way deleting a
+    program with graduates does: enrollments still in progress (active or on
+    hold) are withdrawn, completed and other closed ones are kept, and it is
+    audited as ``program_deactivated``.
 
     **Authentication required**
     **Requires permission: training.manage**
@@ -829,14 +841,22 @@ async def update_training_program(
         )
         raise HTTPException(status_code=code, detail=error)
     reactivated = was_active is not True and updates.active is True
+    deactivated = was_active is True and updates.active is False
+    if deactivated:
+        action = "program_deactivated"
+    elif reactivated:
+        action = "program_reactivated"
+    else:
+        action = "program_updated"
     await log_audit_event(
         db=db,
         event_type="training_program_updated",
         event_category="training",
-        severity="info",
+        # Deactivating withdraws members, as the delete path's does.
+        severity="warning" if deactivated else "info",
         event_data={
             "program_id": str(program_id),
-            "action": "program_reactivated" if reactivated else "program_updated",
+            "action": action,
         },
         user_id=str(current_user.id),
         username=current_user.username,

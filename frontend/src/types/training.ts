@@ -991,6 +991,12 @@ export interface ReminderConditions {
 export interface PrerequisiteProgramSummary {
   id: string;
   name: string;
+  /**
+   * False while the prerequisite pipeline is deactivated: still stored, but not
+   * enforced until it is reactivated. Absent on summaries built client-side
+   * from the active program list.
+   */
+  active?: boolean | undefined;
 }
 
 // Training Program

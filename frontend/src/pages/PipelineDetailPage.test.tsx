@@ -876,6 +876,48 @@ describe('PipelineDetailPage — requirements outside any phase', () => {
   });
 });
 
+describe('PipelineDetailPage — an inactive requirement', () => {
+  const link = (id: string, name: string, active: boolean) => ({
+    id: `pr-${id}`,
+    program_id: 'prog-1',
+    phase_id: null,
+    requirement_id: id,
+    is_required: true,
+    is_prerequisite: false,
+    sort_order: 0,
+    owns_requirement: true,
+    created_at: '2026-01-01T00:00:00Z',
+    requirement: { id, name, requirement_type: 'hours', required_hours: 4, active },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue({ ...program, structure_type: 'flexible' });
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([
+      link('req-live', 'Hazmat Awareness', true),
+      link('req-retired', 'Legacy Decon Drill', false),
+    ]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([]);
+  });
+
+  it('is listed as not currently required and left out of the required count', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
+    expect(screen.getByText('Hazmat Awareness')).toBeInTheDocument();
+    // One of the two is inactive, so exactly one is labelled, and only the
+    // active one counts as required.
+    expect(screen.getAllByText('Inactive — not currently required')).toHaveLength(1);
+    expect(screen.getByText('1 required')).toBeInTheDocument();
+  });
+});
+
 describe('PipelineDetailPage — checklist sign-off and expiry', () => {
   const checklistProgress = {
     id: 'rp-check',
@@ -1001,6 +1043,24 @@ describe('PipelineDetailPage — enrollment rules', () => {
 
     expect(await screen.findByText('Recruit School, Hazmat Operations')).toBeInTheDocument();
     expect(screen.getByText('Not allowed — flagged when enrolling')).toBeInTheDocument();
+  });
+
+  it('labels an inactive prerequisite as not currently required rather than hiding it', async () => {
+    mockGetProgram.mockResolvedValue({
+      ...program,
+      prerequisite_program_ids: ['prog-a', 'prog-b'],
+      prerequisite_programs: [
+        { id: 'prog-a', name: 'Recruit School', active: false },
+        { id: 'prog-b', name: 'Hazmat Operations', active: true },
+      ],
+    });
+    renderWithRouter(<PipelineDetailPage />);
+
+    // The listing, in order, with the label right after the inactive one.
+    expect(await screen.findByText(/Recruit School/)).toHaveTextContent(
+      'Recruit School Inactive — not currently required, Hazmat Operations'
+    );
+    expect(screen.getAllByText('Inactive — not currently required')).toHaveLength(1);
   });
 
   it('says there are none and that concurrency is allowed', async () => {

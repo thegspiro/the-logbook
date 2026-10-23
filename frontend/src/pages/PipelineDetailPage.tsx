@@ -39,6 +39,7 @@ import { useAuthStore } from '../stores/authStore';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { RequirementDueDate } from '../components/training/RequirementDueDate';
+import { InactiveNotRequiredBadge } from '../components/training/InactiveNotRequiredBadge';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
 import { enumLabel } from '../utils/displayValue';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
@@ -210,6 +211,7 @@ const RequirementList: React.FC<{
                     {pr.requirement?.name || `Requirement ${pr.requirement_id.slice(0, 8)}`}
                   </span>
                   {pr.requirement?.requirement_type && <ReqTypeBadge type={pr.requirement.requirement_type} />}
+                  {pr.requirement?.active === false && <InactiveNotRequiredBadge />}
                   {canManage ? (
                     <button
                       type="button"
@@ -1650,7 +1652,9 @@ const PipelineDetailPage: React.FC = () => {
   if (!program) return null;
 
   const totalReqs = programReqs.length;
-  const requiredReqs = programReqs.filter((r) => r.is_required).length;
+  // Required *and active*: the backend does not count a deactivated
+  // requirement toward finishing the pipeline while it stays inactive.
+  const requiredReqs = programReqs.filter((r) => r.is_required && r.requirement?.active !== false).length;
 
   return (
     <div className="min-h-screen">
@@ -1705,8 +1709,22 @@ const PipelineDetailPage: React.FC = () => {
                 <div className="flex flex-wrap gap-x-1">
                   <dt className="text-theme-text-muted">Prerequisite programs:</dt>
                   <dd>
+                    {/* An inactive prerequisite is listed, flagged: it is
+                        skipped while inactive and applies again if the
+                        pipeline is reactivated. */}
                     {program.prerequisite_programs?.length
-                      ? program.prerequisite_programs.map((p) => p.name).join(', ')
+                      ? program.prerequisite_programs.map((p, i) => (
+                          <React.Fragment key={p.id}>
+                            {i > 0 && ', '}
+                            {p.name}
+                            {p.active === false && (
+                              <>
+                                {' '}
+                                <InactiveNotRequiredBadge />
+                              </>
+                            )}
+                          </React.Fragment>
+                        ))
                       : 'None'}
                   </dd>
                 </div>

@@ -27,6 +27,7 @@ import { trainingProgramService } from '../services/api';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { RequirementDueDate } from '../components/training/RequirementDueDate';
+import { InactiveNotRequiredBadge } from '../components/training/InactiveNotRequiredBadge';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
@@ -96,6 +97,7 @@ const RequirementRow: React.FC<{
           {description && <p className="text-theme-text-secondary mt-0.5 text-xs">{description}</p>}
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
             <span className={meta.className}>{meta.label}</span>
+            {record.requirement?.active === false && <InactiveNotRequiredBadge />}
             <RequirementDueDate dueDate={record.due_date} isOverdue={record.is_overdue} done={done} />
             {target && <span className="text-theme-text-secondary font-medium tabular-nums">· {target}</span>}
             {typeof score === 'number' && <span className="text-theme-text-muted">· score {score}%</span>}

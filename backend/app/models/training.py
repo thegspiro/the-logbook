@@ -1660,15 +1660,16 @@ class TrainingProgram(Base):
         Index("idx_program_position", "target_position"),
     )
 
-    # Not a column: the service stamps resolved {id, name} pairs here
-    # (attach_prerequisite_summaries) so responses can show names. A program
-    # nobody stamped reads as an empty list, matching the response default.
+    # Not a column: the service stamps resolved {id, name, active} entries
+    # here (attach_prerequisite_summaries) so responses can show names and
+    # flag an inactive prerequisite. A program nobody stamped reads as an
+    # empty list, matching the response default.
     @property
-    def prerequisite_programs(self) -> list[dict[str, str]]:
+    def prerequisite_programs(self) -> list[dict[str, Any]]:
         return getattr(self, "_prerequisite_programs", [])
 
     @prerequisite_programs.setter
-    def prerequisite_programs(self, value: list[dict[str, str]]) -> None:
+    def prerequisite_programs(self, value: list[dict[str, Any]]) -> None:
         self._prerequisite_programs = value
 
     def __repr__(self):

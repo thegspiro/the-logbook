@@ -485,10 +485,18 @@ async def send_requirement_deadline_notices(
             ProgramEnrollment,
             RequirementProgress.enrollment_id == ProgramEnrollment.id,
         )
+        # A deactivated requirement is not owed while inactive — pipeline
+        # completion skips it (get_required_requirement_ids) — so it earns no
+        # due-date warning or overdue notice either.
+        .join(
+            TrainingRequirement,
+            TrainingRequirement.id == RequirementProgress.requirement_id,
+        )
         .where(
             ProgramEnrollment.organization_id == org_id,
             ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
             ProgramEnrollment.program_id.in_(program_ids),
+            TrainingRequirement.active.is_(True),
             or_(
                 RequirementProgress.status.is_(None),
                 RequirementProgress.status.notin_(list(SATISFIED_STATUSES)),

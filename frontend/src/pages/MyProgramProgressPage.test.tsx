@@ -478,3 +478,52 @@ describe('MyProgramProgressPage — due dates and the program’s own wording', 
     expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
   });
 });
+
+describe('MyProgramProgressPage — an inactive requirement', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: {
+        id: 'enr-1',
+        current_phase_id: null,
+        progress_percentage: 100,
+        enrolled_at: '2026-02-01T00:00:00Z',
+        status: 'active',
+      },
+      program: { id: 'prog-1', name: 'Hazmat Ops' },
+      requirement_progress: [
+        {
+          id: 'rp-live',
+          requirement_id: 'req-live',
+          status: 'completed',
+          progress_percentage: 100,
+          requirement: { id: 'req-live', name: 'Hazmat Awareness', active: true },
+        },
+        {
+          id: 'rp-retired',
+          requirement_id: 'req-retired',
+          status: 'in_progress',
+          progress_percentage: 50,
+          requirement: { id: 'req-retired', name: 'Legacy Decon Drill', active: false },
+        },
+      ],
+      completed_requirements: 1,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+      locked_requirements: {},
+    });
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+  });
+
+  it('keeps it listed, marked as not currently required', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
+    expect(screen.getAllByText('Inactive — not currently required')).toHaveLength(1);
+  });
+});

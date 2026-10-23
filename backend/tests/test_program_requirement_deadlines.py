@@ -461,6 +461,19 @@ class TestReminders:
         assert await dept.sweep() == {"warnings_sent": 0, "overdue_sent": 0}
         assert mailer.to(dept.member.email) == []
 
+    async def test_a_deactivated_requirement_is_not_reminded(self, db_session, mailer):
+        # Not required while inactive, so nothing about it is owed either.
+        dept = await _Dept(db_session).build(deadline_days=30, enrolled_days_ago=45)
+        dept.cpr.active = False
+        await db_session.flush()
+
+        assert await dept.sweep() == {"warnings_sent": 0, "overdue_sent": 0}
+        assert mailer.to(dept.member.email) == []
+
+        dept.cpr.active = True
+        await db_session.flush()
+        assert (await dept.sweep())["overdue_sent"] == 1
+
     async def test_already_overdue_gets_one_notice_not_the_ramp(
         self, db_session, mailer
     ):

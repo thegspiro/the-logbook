@@ -256,6 +256,9 @@ class PrerequisiteProgramSummary(BaseModel):
 
     id: str
     name: str
+    # False while the prerequisite program is deactivated: it is still stored
+    # but not enforced, and applies again if the program is reactivated.
+    active: bool = True
 
 
 class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
