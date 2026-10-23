@@ -509,6 +509,56 @@ class TestGuardOverHttp:
         assert await svc.get_prospect(unnamed.id, org_id) is None
         assert await svc.get_prospect(mine.id, org_id) is not None
 
+    async def test_duplicate_email_check_does_not_describe_own_application(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        """MP-34: typing their own email into the Add Applicant form must not
+        show a coordinator the pipeline and stage of their own application,
+        before submit or in the refusal. Another applicant's is still named."""
+        org_id, viewer = org_and_viewer
+        await self._grant_manage(db_session, org_id, viewer)
+        svc = MembershipPipelineService(db_session)
+        pipeline = await svc.create_pipeline(
+            organization_id=org_id, name="Probationary Intake"
+        )
+        await svc.add_step(pipeline.id, org_id, {"name": "Chief Interview"})
+        await _make_prospect(svc, org_id, email=viewer.email, pipeline_id=pipeline.id)
+        theirs = await _make_prospect(svc, org_id, pipeline_id=pipeline.id)
+        body = {
+            "first_name": "Dana",
+            "last_name": "Reyes",
+            "pipeline_id": pipeline.id,
+        }
+
+        async with await self._client(db_session, viewer) as client:
+            own_check = await client.post(
+                "/prospective-members/prospects/check-existing",
+                params={"email": viewer.email},
+            )
+            other_check = await client.post(
+                "/prospective-members/prospects/check-existing",
+                params={"email": theirs.email},
+            )
+            own_create = await client.post(
+                "/prospective-members/prospects",
+                json={**body, "email": viewer.email},
+            )
+            other_create = await client.post(
+                "/prospective-members/prospects",
+                json={**body, "email": theirs.email},
+            )
+
+        assert own_check.status_code == 200
+        assert own_check.json()["existing_applicant"] is None
+        assert other_check.json()["existing_applicant"]["prospect_id"] == theirs.id
+
+        assert own_create.status_code == 409
+        detail = own_create.json()["detail"]
+        assert "Probationary Intake" not in detail
+        assert "Chief Interview" not in detail
+        assert other_create.status_code == 409
+        assert "Probationary Intake" in other_create.json()["detail"]
+
     async def test_mutations_on_own_record_are_refused(
         self, db_session: AsyncSession, org_and_viewer
     ):
