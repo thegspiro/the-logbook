@@ -1421,3 +1421,70 @@ describe('PipelineDetailPage — mark pipeline complete', () => {
     expect(screen.getByRole('dialog', { name: 'Mark pipeline complete?' })).toBeInTheDocument();
   });
 });
+
+describe('PipelineDetailPage — progress dialog actions need training.manage', () => {
+  // Advance, start-new-cycle and reopen all require training.manage on the
+  // server, so a viewer who can open the dialog is not offered them.
+  const progressFor = (status: string) => ({
+    enrollment: { ...enrollment, status },
+    program,
+    requirement_progress: [certProgress],
+    completed_requirements: 0,
+    total_requirements: 1,
+    next_milestones: [],
+    is_behind_schedule: false,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockPermissions = null;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue(program);
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([enrollment]);
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor('active'));
+  });
+
+  afterEach(() => {
+    mockPermissions = null;
+  });
+
+  const openDialog = async () => {
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('CPR Certification');
+    return dialog;
+  };
+
+  it('offers an officer the cycle reset', async () => {
+    const dialog = await openDialog();
+    expect(within(dialog).getByRole('button', { name: /Start new cycle/i })).toBeInTheDocument();
+  });
+
+  it('offers a viewer none of the officer actions', async () => {
+    mockPermissions = ['training.view_all'];
+    const dialog = await openDialog();
+
+    expect(within(dialog).queryByRole('button', { name: /Start new cycle/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Advance to next phase/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Mark pipeline complete/i })).not.toBeInTheDocument();
+  });
+
+  it('tells a viewer an enrollment expired without offering to reopen it', async () => {
+    mockPermissions = ['training.view_all'];
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor('expired'));
+    const dialog = await openDialog();
+
+    expect(within(dialog).getByText(/Deadline passed/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Reopen enrollment/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/New deadline/i)).not.toBeInTheDocument();
+  });
+});

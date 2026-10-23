@@ -1167,74 +1167,82 @@ const EnrollmentProgressModal: React.FC<{
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   Deadline passed — this enrollment expired at {overall}% complete.
                 </p>
-                <p className="text-theme-text-secondary mt-1 text-xs">
-                  Reopening keeps everything {memberName} has already finished. Give them a new deadline, or reopen on
-                  the old one.
-                </p>
-                <div className="mt-2 flex flex-wrap items-end gap-2">
-                  <div>
-                    <label htmlFor="reopen-deadline" className="text-theme-text-muted mb-1 block text-xs">
-                      New deadline (optional)
-                    </label>
-                    <input
-                      id="reopen-deadline"
-                      type="date"
-                      value={newDeadline}
-                      onChange={(e) => setNewDeadline(e.target.value)}
-                      className="form-input-sm"
-                    />
+                {canManage && (
+                  <p className="text-theme-text-secondary mt-1 text-xs">
+                    Reopening keeps everything {memberName} has already finished. Give them a new deadline, or reopen on
+                    the old one.
+                  </p>
+                )}
+                {canManage && (
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <div>
+                      <label htmlFor="reopen-deadline" className="text-theme-text-muted mb-1 block text-xs">
+                        New deadline (optional)
+                      </label>
+                      <input
+                        id="reopen-deadline"
+                        type="date"
+                        value={newDeadline}
+                        onChange={(e) => setNewDeadline(e.target.value)}
+                        className="form-input-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleReopen();
+                      }}
+                      disabled={reopening}
+                      className="btn-primary px-3 text-xs disabled:opacity-50"
+                    >
+                      {reopening ? 'Reopening...' : 'Reopen enrollment'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleReopen();
-                    }}
-                    disabled={reopening}
-                    className="btn-primary px-3 text-xs disabled:opacity-50"
-                  >
-                    {reopening ? 'Reopening...' : 'Reopen enrollment'}
-                  </button>
-                </div>
+                )}
               </div>
             )}
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              {phased && (
+            {/* Advance, reset and reopen all require training.manage on the server;
+              a member who can only view progress is not offered them. */}
+            {canManage && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {phased && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleAdvance();
+                    }}
+                    disabled={!data || !hasNextPhase || advancing}
+                    className="btn-primary flex items-center gap-1 px-3 text-xs disabled:opacity-50"
+                  >
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                    {advancing ? 'Advancing...' : hasNextPhase ? 'Advance to next phase' : 'Final phase reached'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
-                    void handleAdvance();
+                    void handleResetCycle();
                   }}
-                  disabled={!data || !hasNextPhase || advancing}
-                  className="btn-primary flex items-center gap-1 px-3 text-xs disabled:opacity-50"
+                  disabled={!data || resettingCycle}
+                  title="Reset every requirement and return to the first phase — for a new recert cycle"
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg border px-3 py-2 text-xs disabled:opacity-50"
                 >
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                  {advancing ? 'Advancing...' : hasNextPhase ? 'Advance to next phase' : 'Final phase reached'}
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  {resettingCycle ? 'Resetting...' : 'Start new cycle'}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  void handleResetCycle();
-                }}
-                disabled={!data || resettingCycle}
-                title="Reset every requirement and return to the first phase — for a new recert cycle"
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg border px-3 py-2 text-xs disabled:opacity-50"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                {resettingCycle ? 'Resetting...' : 'Start new cycle'}
-              </button>
-              {canManage && canMarkPipelineComplete(data?.enrollment.status) && (
-                <button
-                  type="button"
-                  onClick={() => setCompleting(true)}
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg border px-3 py-2 text-xs"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {MARK_PIPELINE_COMPLETE_LABEL}
-                </button>
-              )}
-            </div>
+                {canMarkPipelineComplete(data?.enrollment.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setCompleting(true)}
+                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg border px-3 py-2 text-xs"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {MARK_PIPELINE_COMPLETE_LABEL}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-4 overflow-y-auto p-6">
