@@ -4937,6 +4937,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         items_html = ""
         any_from_lots = False
         any_medical = False
+        any_gear = False
         for item, on_hand, from_lots in rows:
             cat_name = item.category.name if item.category else "Uncategorized"
             any_from_lots = any_from_lots or from_lots
@@ -4947,6 +4948,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             # (InventoryService.stock_breakdown), and says so.
             medical = _row_domain(item) == DOMAIN_MEDICAL
             any_medical = any_medical or medical
+            any_gear = any_gear or not medical
             source = (
                 "shelf + apparatus"
                 if medical
@@ -4977,7 +4979,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
-        return table_html, any_from_lots, any_medical
+        return table_html, any_from_lots, any_medical, any_gear
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         from app.services.email_service import wrap_email_body
@@ -5006,13 +5008,17 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not rows or not emails:
                 continue
 
-            table_html, any_from_lots, any_medical = _render(rows)
-            # Opens the Low stock tab, which lists exactly what the table
-            # above counts, so the purchaser lands on the reorder list rather
-            # than the page's default expiring-stock view. Offered only when
-            # medical rows are in this message: a gear-only email has no such
-            # page to point at.
+            table_html, any_from_lots, any_medical, any_gear = _render(rows)
+            # Each link opens the list that holds exactly the rows of its
+            # domain in the table above, so the purchaser lands on the reorder
+            # list rather than a page's default view. A link is offered only
+            # when its domain has rows in this message: the audience split
+            # means a medical-only officer never receives gear rows, and the
+            # gear page needs a permission they may not hold.
             low_stock_url = f"{settings.FRONTEND_URL}/medical-supplies?tab=low"
+            gear_low_stock_url = (
+                f"{settings.FRONTEND_URL}/inventory/admin/items?low_stock=true"
+            )
             html_body = wrap_email_body(
                 org,
                 "Low Stock Alert",
@@ -5041,6 +5047,12 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     if any_medical
                     else ""
                 )
+                + (
+                    f'<p><a href="{_html.escape(gear_low_stock_url)}">'
+                    "View low-stock gear and uniforms</a></p>"
+                    if any_gear
+                    else ""
+                )
                 + "<p>Please review and reorder as needed.</p>",
                 header_color="#dc2626",
             )
@@ -5056,6 +5068,11 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     + (
                         f" Low-stock medical supplies: {low_stock_url}"
                         if any_medical
+                        else ""
+                    )
+                    + (
+                        f" Low-stock gear and uniforms: {gear_low_stock_url}"
+                        if any_gear
                         else ""
                     )
                 ),
