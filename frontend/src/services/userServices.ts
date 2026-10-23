@@ -590,18 +590,18 @@ export const organizationService = {
   },
 
   /**
-   * Test the saved S3 settings; on success new files go to the bucket
+   * Test the saved settings for the chosen platform; on success new files go there
    */
-  async activateS3Storage(): Promise<FileStorageStatus> {
-    const response = await api.post<FileStorageStatus>('/organization/settings/file-storage/s3/activate');
+  async activateRemoteStorage(): Promise<FileStorageStatus> {
+    const response = await api.post<FileStorageStatus>('/organization/settings/file-storage/activate');
     return response.data;
   },
 
   /**
    * Store new files on the server's disk again
    */
-  async deactivateS3Storage(): Promise<FileStorageStatus> {
-    const response = await api.post<FileStorageStatus>('/organization/settings/file-storage/s3/deactivate');
+  async deactivateRemoteStorage(): Promise<FileStorageStatus> {
+    const response = await api.post<FileStorageStatus>('/organization/settings/file-storage/deactivate');
     return response.data;
   },
 

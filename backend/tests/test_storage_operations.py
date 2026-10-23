@@ -40,7 +40,7 @@ ALLOWED = {
     "core/file_encryption.py",
     "services/upload_encryption.py",
     "services/upload_relocation.py",
-    "services/s3_migration.py",
+    "services/remote_migration.py",
     # Not uploads: the log file, and a temporary PDF an election email is
     # built from and removes again.
     "core/logging.py",

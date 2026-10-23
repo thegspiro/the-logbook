@@ -977,7 +977,9 @@ the Storage screen reports where new files go whatever platform is picked.
 Still open:
 
 - **Google Drive, OneDrive / SharePoint and "Other" are still unread.** The
-  screen now says files stay on the server for them.
+  screen now says files stay on the server for them. **In progress
+  (2026-10-23): Google Drive** (decision 32), through a service account and a
+  Shared Drive; step 1 made the storage machinery platform-neutral.
 - **Resolved 2026-10-22: existing files move with
   `scripts/migrate_uploads_to_s3.py`** (apply, rollback, finalize), and
   `scripts/encrypt_uploads.py --rewrap` reaches bucket objects. Every object
