@@ -2075,8 +2075,9 @@ shows one URL with a copy button and a **Reset link** control
 (`/api/public/v1/calendar/org/{token}.ics`). The integration's stored
 `included_event_types` narrows that feed by event type, but no screen sets it,
 so in practice the card's link carries every published event. There is no
-training-only feed and no per-filter list of URLs. `ICalConfig.include_shifts`
-is accepted and stored but read by nothing; no screen offers it.
+training-only feed and no per-filter list of URLs. The department feed carries
+no shifts; an `include_shifts` setting that was accepted and stored but read by
+nothing was removed on 2026-10-23.
 
 The guide-03 subscribe card is deliberately not captured because expanding it
 exposes the calendar feed's bearer credential; the same applies to a connected
