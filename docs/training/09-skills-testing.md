@@ -1348,6 +1348,13 @@ is at least 10 characters, and the member can read what you write.
 > **Cancel is not void.** An unscored test has no result to withdraw and
 > nothing to give back, so it needs neither.
 
+The cancel icon on an unfinished test's row in **Skill Test Records** opens a
+dialog that names the candidate and the test and says what will happen: anything
+already scored is kept, and no result is recorded. The reason is optional. **Keep
+it open** leaves the test as it was.
+
+![The Cancel unfinished test dialog, naming the candidate and the test and saying anything already scored is kept but no result is recorded, with an optional reason typed in and the Keep it open and Cancel test buttons](./images/09-30-cancel-unfinished-test-dialog.png)
+
 **Send back to examiner** is the fourth option, for a result still awaiting
 validation that needs correcting. See
 [If you are a training officer](#if-you-are-a-training-officer).
