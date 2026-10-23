@@ -1793,6 +1793,21 @@ def label_for(code: str, organization_type: str | None, default: str) -> str:
     return LABELS_BY_ORG_TYPE.get(organization_type or "", {}).get(code, default)
 
 
+def is_built_in_rank_code(rank_code: str | None) -> bool:
+    """Whether ``rank_code`` is one of the registry's own ranks.
+
+    The registry is keyed by code, and so is everything a built-in rank
+    carries beyond its row -- its default permissions, the system position
+    that mirrors it, the shift-eligibility fallback. That is why a built-in
+    rank's code cannot change (``OperationalRankService.update_rank``) while
+    its display name can. Membership of the code is the test, not a flag on
+    the row: there is no such flag, and a rank a department deleted and then
+    re-created under the same code is keyed into the registry exactly as the
+    seeded one was.
+    """
+    return bool(rank_code) and rank_code in OPERATIONAL_RANKS
+
+
 def get_rank_default_permissions(rank: str) -> list[str]:
     """
     Get the default permissions for an operational rank.

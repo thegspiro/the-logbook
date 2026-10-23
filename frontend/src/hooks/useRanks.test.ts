@@ -31,6 +31,7 @@ const rank = (code: string, organizationId = 'org-1'): OperationalRankResponse =
   is_active: true,
   eligible_positions: null,
   default_permission_count: 0,
+  is_built_in: false,
   created_at: '',
   updated_at: '',
 });

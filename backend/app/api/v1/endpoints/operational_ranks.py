@@ -29,7 +29,10 @@ from app.schemas.operational_rank import (
     RankUpdate,
     RankValidationResponse,
 )
-from app.services.operational_rank_service import OperationalRankService
+from app.services.operational_rank_service import (
+    OperationalRankService,
+    assert_rank_code_may_change,
+)
 
 router = APIRouter()
 
@@ -249,6 +252,12 @@ async def update_rank(
             await service.get_rank(rank_id, current_user.organization_id), "Rank"
         )
         if update_data["rank_code"] != existing.rank_code:
+            # Ahead of the ceiling: a built-in code is refused for everyone,
+            # and saying so beats a 403 that implies more authority would do.
+            async with handle_service_errors("Failed to update rank"):
+                assert_rank_code_may_change(
+                    existing.rank_code, update_data["rank_code"]
+                )
             await _enforce_rank_grant_ceiling(
                 current_user, existing.rank_code, db, get_client_ip(request)
             )

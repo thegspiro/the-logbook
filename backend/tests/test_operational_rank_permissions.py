@@ -364,14 +364,18 @@ class TestRenameCeiling:
         # The mirror image of escalation, and the one a destination-only check
         # misses: an unrecognized destination grants nothing, so it clears the
         # ceiling trivially -- and update_rank then rewrites `rank` on every
-        # member holding fire_chief, stripping each of them.
+        # member holding fire_chief, stripping each of them. Only the
+        # registry's built-in ranks confer anything by code, and since
+        # 2026-10-22 their codes are locked for every caller, so this is now
+        # refused as a 400 (the lock) before the ceiling's 403 is reached.
         updated = AsyncMock()
         with pytest.raises(HTTPException) as exc:
             await self._rename(
                 _caller(["members.manage"]), "fire_chief", "retired_rung", updated
             )
 
-        assert exc.value.status_code == 403
+        assert exc.value.status_code == 400
+        assert "built-in rank" in exc.value.detail
         updated.assert_not_awaited()
 
     async def test_cannot_rename_into_a_rank_that_grants_more_than_the_caller(self):

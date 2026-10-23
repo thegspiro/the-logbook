@@ -8,9 +8,9 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from app.core.permissions import get_rank_default_permissions
+from app.core.permissions import get_rank_default_permissions, is_built_in_rank_code
 from app.schemas.base import UTCResponseBase
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
@@ -88,6 +88,15 @@ class RankResponse(UTCResponseBase):
         cannot see anything.
         """
         return len(get_rank_default_permissions(self.rank_code))
+
+    # A registry rank: its display name may change, its code may not. Always
+    # derived from rank_code; whatever a caller passes is overwritten.
+    is_built_in: bool = False
+
+    @model_validator(mode="after")
+    def _derive_is_built_in(self) -> "RankResponse":
+        self.is_built_in = is_built_in_rank_code(self.rank_code)
+        return self
 
 
 class RankReorderItem(BaseModel):
