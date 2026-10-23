@@ -130,7 +130,8 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     db.scalar.side_effect = [1, 0, 0, 0, 0, 0, 0]
     org = MagicMock()
     org.scalar_one_or_none.return_value = SimpleNamespace(timezone="UTC")
-    db.execute.side_effect = [org, purchases]
+    # The reimbursement checks in the period and their voids come first.
+    db.execute.side_effect = [empty, empty, org, purchases]
 
     service = FinanceService(db)
     # Account resolution has its own database-backed tests.

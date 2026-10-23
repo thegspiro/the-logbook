@@ -1038,10 +1038,24 @@ Once approved, officers can progress the request through the fulfillment stages:
 
 > **Hint:** If the actual amount differs from the estimated amount, the budget adjusts automatically. For example, if $500 was encumbered but the actual payment was $475, only $475 moves to "spent" and the full $500 encumbrance is released (the $25 difference returns to the available balance). Payment can also be recorded directly from the Approved or Ordered status -- the Received step is optional.
 
+### Paying Yourself Back for a Purchase
+
+If you bought an approved item with your own money, claim it back from the request rather than starting an expense report from scratch:
+
+1. Open your purchase request. It must be **Approved**, **Ordered** or **Received**.
+2. Select **Request Reimbursement**.
+3. Enter what you actually paid, the day you paid it, and where. Each field starts from the request's own figures.
+4. Select **Start expense report**. A draft expense report opens, charged to the same budget line and carrying the request's receipt.
+5. Check the line and its receipt, then select **Submit for Approval**.
+
+The request now links to the report, and the report links back. Once the report is approved, the finance office pays you, usually by check (see [Paying a Report by Check](#paying-a-report-by-check)). When the report is paid, the request reads **Reimbursed**.
+
+> **Hint:** Only the member who raised the request can claim it back, because the report pays whoever submits it. While a submitted report claims a purchase, the finance office cannot also mark it paid or cancel it. A denied claim frees the purchase, so you can start another.
+
 ### Editing and Cancelling
 
 - **Editing:** A purchase request can only be edited while in **Draft** or **Submitted** status. Once it reaches Pending Approval, it cannot be modified.
-- **Cancelling:** A request can be cancelled from any status except **Paid**. If an approved, ordered, or received request is cancelled, the encumbrance is released back to the budget.
+- **Cancelling:** A request can be cancelled from any status except **Paid** or **Reimbursed**. If an approved, ordered, or received request is cancelled, the encumbrance is released back to the budget.
 
 ### Edge Cases
 
@@ -1169,6 +1183,22 @@ Each line's amount is recorded as spent against the budget that line names.
 
 > **Hint:** Receipts are required on every line, which is what an IRS accountable plan expects of a reimbursement.
 
+### Paying a Report by Check
+
+**Required Permission:** finance manager
+
+To send the member a check rather than recording a payment made some other way:
+
+1. Open the approved expense report.
+2. Select **Pay by Check**.
+3. Optionally enter a mailing address and a memo, then select **Request check**.
+
+This creates a check request made out to the member's legal name, for what the report still owes them (the total, less anything a cash advance already covered). It goes through the department's check-request approval chain like any other check. Once it is approved, [issue it](#issuing-a-check) as usual; issuing it marks the report **Paid** with the check's number and date, and closes the purchase request the report claims back, if any.
+
+While a check is paying a report, neither **Pay by Check** nor **Mark as Paid** is offered. If the check is denied, the report waits for payment again.
+
+> **Hint:** A reimbursement check is not charged to a budget line itself; the report's lines are. In the payments register and the QuickBooks export, the report appears once, dated by the check and showing its number.
+
 ### The Deadline for Claiming Expenses
 
 An accountable plan also expects expenses to be claimed promptly. The IRS treats **60 days** after the expense as a reasonable time; a reimbursement for an expense claimed later may have to be reported as taxable pay. Your department chooses what happens to a late line:
@@ -1272,6 +1302,8 @@ The system records the check number and the issuance date. The check amount is a
 ![Check request detail with payee, amount and approval status](./images/11-16-check-request-detail.png)
 
 ### Voiding an Issued Check
+
+> **Voiding a reimbursement check** puts its expense report back to **Approved**, takes its spending off the budget lines, and reopens the purchase request it claimed back, so the finance office can send another check. If the check had already gone to QuickBooks, the next export reverses exactly the entry it sent.
 
 If a check needs to be voided after issuance (e.g., lost in the mail, payment cancelled):
 

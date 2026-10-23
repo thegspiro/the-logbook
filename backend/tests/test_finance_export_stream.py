@@ -75,7 +75,12 @@ def _db(counts, results, tz="America/New_York"):
     settling reports, new advances) answer zero."""
     db = Mock()
     db.scalar = AsyncMock(side_effect=list(counts) + [0, 0, 0])
-    db.execute = AsyncMock(side_effect=[_OrgResult(tz)] + [_Result(r) for r in results])
+    # The two empty results are the reimbursement checks in the period and
+    # their voids, which the export loads before it starts streaming.
+    db.execute = AsyncMock(
+        side_effect=[_Result([]), _Result([]), _OrgResult(tz)]
+        + [_Result(r) for r in results]
+    )
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     db.add = Mock()
@@ -170,9 +175,10 @@ async def test_stream_is_batched_stable_safe_and_logged_successfully():
     assert rows[1][2] == 'one, "quoted"'
     log = service.log
     assert (log.status, log.record_count, log.error_message) == ("successful", 3, None)
-    # The timezone lookup, then one batch per purchase and one for the check:
-    # each type stops at its own count rather than asking for an empty batch.
-    assert db.execute.await_count == 4
+    # The two reimbursement lookups, the timezone lookup, then one batch per
+    # purchase and one for the check: each type stops at its own count rather
+    # than asking for an empty batch.
+    assert db.execute.await_count == 6
     # Stamped only after the whole file, with what it carried.
     service._stamp_exported.assert_awaited_once()
     kwargs = service._stamp_exported.await_args.kwargs
@@ -221,7 +227,13 @@ async def test_row_limit_is_checked_before_log_or_stream_creation():
 async def test_generator_failure_marks_log_failed_and_cleans_up():
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
     db = _db([1, 0, 0, 0], [])
-    db.execute.side_effect = RuntimeError("database disappeared")
+    # The database goes once the stream has started, after the reimbursement
+    # lookups the export makes before it.
+    db.execute.side_effect = [
+        _Result([]),
+        _Result([]),
+        RuntimeError("database disappeared"),
+    ]
     service = _service(db)
     stream = await service.generate_export("org", "user", now, now)
     assert "Journal No" in await anext(stream)
