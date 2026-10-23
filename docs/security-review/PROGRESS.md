@@ -16,8 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (pending)** — Feature 10 (Documents & legal), pass 11, a watchdog
-pickup. PR #3577 (Feature 09, pass 11) had already merged. `search_pull_requests`
+**PR [#3579](https://github.com/thegspiro/the-logbook/pull/3579)** (branch
+`claude/security-review-documents-legal-p11`) — Feature 10 (Documents &
+legal), pass 11, a watchdog pickup. PR #3577 (Feature 09, pass 11) had
+already merged. `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`) returned 0 before this
 iteration started; row 10 was confirmed the next `⬜` by reading the
 rotation table directly. **0 fixed, 1 new finding flagged** (DOC-31, LOW) —
