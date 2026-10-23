@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (pending)** — Feature 11 (Inventory), pass 11, a watchdog pickup. PR
+#3579 (Feature 10, Documents & legal, pass 11) had already merged, CI green.
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 before this iteration started; row 11 was confirmed the next
+`⬜` by reading the rotation table directly. **0 fixed, 0 new findings** —
+real delta (29 commits since pass 10's merge, concentrated in `inventory.py`,
+`inventory_service.py`, `schemas/inventory.py`, `labels.py`): a kit line now
+names a product rather than one fixed row, with two new routes
+(`/kits/product-options`, `/kits/{kit_id}/issue-plan`) and a quartermaster
+size override on issue — the override is bounded to the chosen line's own
+product and the caller's organization before anything is issued (XC-1/XC-3
+sound), both new routes gated `inventory.manage`. Storage-area deactivation
+and lot deletion gained real refusal guards (409) against leaving a
+dangling reference; a category parent-cycle guard; identifier-uniqueness
+generalized from serial numbers to asset tags/barcodes; numeric bounds
+across the schema. No migration in range touches this feature's tables.
+INV-22 (standing, owner-accepted) re-confirmed unchanged. See
+`INV-11-inventory.md`'s **Pass 11** section. Row 11 → ✅ (pending this PR's
+merge); next is Feature 12 (Facilities).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 11, PR #3579, merged), preserved for history</summary>
+
 **PR [#3579](https://github.com/thegspiro/the-logbook/pull/3579)** (branch
 `claude/security-review-documents-legal-p11`) — Feature 10 (Documents &
 legal), pass 11, a watchdog pickup. PR #3577 (Feature 09, pass 11) had
@@ -32,6 +55,8 @@ Finance). The `documents.py` file-storage call sites and a minutes-render
 delta reaching this feature's published HTML were also reviewed, both
 clean. See `DOC-10-documents-legal.md`'s **Pass 11** section. Row 10 → ✅
 (pending this PR's merge); next is Feature 11 (Inventory).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, PHI, pass 11, PR #3577, merged), preserved for history</summary>
@@ -20723,7 +20748,7 @@ this iteration's commit" rule.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
@@ -36506,3 +36531,51 @@ section.
 
 Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) — re-check
 `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-23 — Feature 11 (Inventory, pass 11) — watchdog pickup, real delta (kit sizing + correctness fixes), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated security-review loop session was
+not reachable (`ListAgents`), and `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0. PR #3579
+(Feature 10, pass 11) had already merged, CI green on its head. Row 11
+(Inventory) was confirmed the next `⬜` by reading the rotation table
+directly.
+
+Baseline `63b3e867` (PR #3432's merge, pass 10). 29 non-merge commits touch
+this feature's declared scope since then; most are a11y/layout work or
+other rows' features that happen to touch a shared frontend file. The real
+delta is four backend files: a kit line now names a product rather than one
+fixed catalog row, with two new routes (`GET /kits/product-options`, `GET
+/kits/{kit_id}/issue-plan`) and a quartermaster size override on
+`POST /kits/{kit_id}/issue/{user_id}`. The override is bounded: a chosen
+item id is checked against the sibling rows of the _same line's own
+product_, itself resolved from an organization-scoped catalog query, before
+anything is issued — it can change the size, never redirect the issuance to
+an unrelated or cross-org item. Both new routes are gated
+`inventory.manage`. `delete_storage_area`/`delete_item_lot` gained real
+refusal guards (409) instead of silently leaving a dangling reference (an
+area deactivated out from under its stored items; a lot deleted out from
+under a reorder's receipt record); a category-parent-cycle guard; identifier
+uniqueness generalized from serial numbers to asset tags/barcodes, with
+blank values normalized to `None` first; and numeric bounds
+(`INT32_MAX`/`MONEY_MAX`/`FLOAT32_MAX`) added across the schema file. No
+migration in this window touches an inventory table (confirmed by grep over
+every migration added since pass 10). **INV-22** (standing, owner-accepted)
+re-confirmed OPEN/unchanged — neither of its two functions appears in this
+window's diff.
+
+Full writeup: `docs/security-review/INV-11-inventory.md`'s **Pass 11**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.3.0/26.5.1/9.0.1, installed into this session's interpreter since the
+sandbox's default `flake8` resolved to an unpinned 7.4.1) on `app/ tests/
+alembic/` all clean; `validate_migrations.py --strict` — 640 revisions,
+single head `cc8c16cb6d98`; `check_route_permissions.py --strict` — 273
+routes, 0 errors/warnings; scoped backend tests (`-k "inventory or label or
+nfc or kiosk"`) — 1,907 passed, 1 pre-existing skip (`pywebpush`); frontend
+`npm run typecheck` clean; `npm run lint` clean; scoped frontend suite
+(`npx vitest run src/modules/inventory`) — 1,816 passed (122 files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `search_pull_requests` fresh rather than trusting this note.
