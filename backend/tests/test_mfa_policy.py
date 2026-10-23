@@ -26,6 +26,17 @@ pytestmark = pytest.mark.real_stepup
 NOW = datetime.now(timezone.utc)
 
 
+def _now():
+    """The time a step-up stamp is judged against.
+
+    ``require_stepup`` measures a stamp's age from the real clock, with a
+    ten-minute window, so a stamp built from the import-time ``NOW`` grows
+    stale while the suite runs: the unit job takes about eleven minutes, and a
+    "two minutes ago" stamp read near the end was twelve minutes old.
+    """
+    return datetime.now(timezone.utc)
+
+
 def _user(permissions=(), grace=None):
     position = SimpleNamespace(permissions=list(permissions))
     return SimpleNamespace(
@@ -191,16 +202,16 @@ class TestRequireStepup:
         assert exc.value.headers == {"X-Stepup-Required": "true"}
 
     async def test_a_recent_verification_passes(self):
-        user = await self._call(_session(NOW - timedelta(minutes=2)))
+        user = await self._call(_session(_now() - timedelta(minutes=2)))
         assert user.username == "chief"
 
     async def test_a_stale_verification_is_refused(self):
-        stale = NOW - timedelta(minutes=settings.STEPUP_WINDOW_MINUTES + 1)
+        stale = _now() - timedelta(minutes=settings.STEPUP_WINDOW_MINUTES + 1)
         with pytest.raises(HTTPException):
             await self._call(_session(stale))
 
     async def test_a_naive_stamp_is_read_as_utc(self):
-        fresh = (NOW - timedelta(minutes=1)).replace(tzinfo=None)
+        fresh = (_now() - timedelta(minutes=1)).replace(tzinfo=None)
         assert await self._call(_session(fresh))
 
     async def test_no_session_is_refused(self):
@@ -211,7 +222,7 @@ class TestRequireStepup:
         with patch.object(
             AuthService,
             "get_session_for_token",
-            AsyncMock(return_value=_session(NOW)),
+            AsyncMock(return_value=_session(_now())),
         ) as lookup:
             await require_stepup(
                 authorization="Bearer abc",
@@ -454,6 +465,7 @@ class TestStepUpOverHttp:
         return AsyncClient(
             transport=ASGITransport(app=app, raise_app_exceptions=False),
             base_url="http://test",
+            cookies={"access_token": "t"},
         )
 
     async def test_refused_with_the_code_until_the_session_has_stepped_up(self):
@@ -464,13 +476,13 @@ class TestStepUpOverHttp:
                 "get_session_for_token",
                 AsyncMock(return_value=_session(None)),
             ):
-                refused = await client.post("/sensitive", cookies={"access_token": "t"})
+                refused = await client.post("/sensitive")
             with patch.object(
                 AuthService,
                 "get_session_for_token",
-                AsyncMock(return_value=_session(NOW)),
+                AsyncMock(return_value=_session(_now())),
             ):
-                allowed = await client.post("/sensitive", cookies={"access_token": "t"})
+                allowed = await client.post("/sensitive")
 
         assert refused.status_code == 403
         assert refused.json()["detail"] == "Please confirm your identity to continue."
@@ -485,9 +497,7 @@ class TestStepUpOverHttp:
                 "get_session_for_token",
                 AsyncMock(return_value=_session(None)),
             ):
-                response = await client.post(
-                    "/sensitive", cookies={"access_token": "t"}
-                )
+                response = await client.post("/sensitive")
 
         assert response.status_code == 403
         assert response.json()["detail"] == "Insufficient permissions"
