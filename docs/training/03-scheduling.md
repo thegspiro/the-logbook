@@ -3106,7 +3106,12 @@ or pattern, and a basic apparatus named by any template, shift, pre-work
 session, equipment check or call, is **deactivated** rather than deleted, so
 existing shifts keep their checklists and templates keep saving. Inactive
 records are hidden from pickers for new records. Unused ones are deleted. The
-confirmation and toast say which happened. On the basic apparatus list, anyone
+confirmation and toast say which happened. A pattern that uses an inactive
+template — as its own template, or as its day or night template — **stops
+generating shifts**: automatic generation skips it, **Generate shifts** is
+refused, and the pattern shows _Template inactive — this pattern is not
+generating shifts_. Shifts it already made stay. It resumes once the template is
+reactivated or the pattern is pointed at another template. On the basic apparatus list, anyone
 with scheduling manage rights can turn on **Show inactive** and select
 **Reactivate**; reactivating changes only the flag and re-adds nothing to
 shifts.

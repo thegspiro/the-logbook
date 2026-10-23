@@ -8,6 +8,7 @@ import { X } from 'lucide-react';
 import { Link } from 'react-router';
 import type { PatternFormData, ShiftTemplate } from './shiftTemplateTypes';
 import { PATTERN_TYPES, emptyPatternForm } from './shiftTemplateTypes';
+import PatternTemplateInactiveNotice from './PatternTemplateInactiveNotice';
 
 // Weekly and custom patterns are generated from schedule_config (weekdays, or
 // a list of dates), which this form has no fields for: saved from here they
@@ -45,6 +46,8 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
   const patternTypeChoices = PATTERN_TYPES.filter(
     (pt) => !CONFIG_DRIVEN_TYPES.has(pt.value) || pt.value === initialData?.pattern_type
   );
+
+  const selectedTemplate = templates.find((t) => t.id === formData.template_id);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,9 +185,17 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                 .map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
+                    {t.is_active === false ? ' (inactive)' : ''}
                   </option>
                 ))}
             </select>
+            {/* The server holds a pattern whose template is inactive; saving
+                another template here is how it resumes. */}
+            {selectedTemplate?.is_active === false && (
+              <div className="mt-2">
+                <PatternTemplateInactiveNotice names={[selectedTemplate.name]} />
+              </div>
+            )}
           </div>
 
           {(formData.pattern_type === 'platoon' || formData.pattern_type === 'custom') && (

@@ -7,6 +7,7 @@ import ShiftTemplatesPage from './ShiftTemplatesPage';
 
 const mockGetTemplates = vi.fn();
 const mockDeleteTemplate = vi.fn();
+const mockGetPatterns = vi.fn();
 
 vi.mock('../modules/scheduling/services/api', async () => {
   const actual = await vi.importActual<typeof import('../modules/scheduling/services/api')>(
@@ -17,7 +18,7 @@ vi.mock('../modules/scheduling/services/api', async () => {
     schedulingService: {
       getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
       deleteTemplate: (...args: unknown[]) => mockDeleteTemplate(...args) as unknown,
-      getPatterns: vi.fn().mockResolvedValue([]),
+      getPatterns: (...args: unknown[]) => mockGetPatterns(...args) as unknown,
       getApparatusOptions: vi.fn().mockResolvedValue({ options: [], source: 'default' }),
     },
   };
@@ -50,6 +51,13 @@ const buildTemplate = (positions: ShiftTemplateRecord['positions']): Record<stri
   is_active: true,
   created_at: '2026-08-01T00:00:00Z',
   updated_at: '2026-08-01T00:00:00Z',
+});
+
+// Every block starts from no patterns; a block that needs some sets its own
+// after this runs (CLAUDE.md pitfall #28).
+beforeEach(() => {
+  mockGetPatterns.mockReset();
+  mockGetPatterns.mockResolvedValue([]);
 });
 
 describe('ShiftTemplatesPage', () => {
@@ -113,6 +121,9 @@ describe('ShiftTemplatesPage template delete', () => {
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('it is deactivated instead of deleted');
     expect(dialog).toHaveTextContent('equipment checklists');
+    // Patterns no longer generate from a deactivated template.
+    expect(dialog).toHaveTextContent('its patterns stop generating new shifts until it is reactivated');
+    expect(dialog).not.toHaveTextContent('keep generating');
   });
 
   it('reports a deactivation as one', async () => {
@@ -172,5 +183,43 @@ describe('ShiftTemplatesPage template delete', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(mockDeleteTemplate).toHaveBeenCalledWith('tmpl-1'));
+  });
+});
+
+describe('ShiftTemplatesPage pattern held by an inactive template', () => {
+  const pattern = (overrides: Record<string, unknown>): Record<string, unknown> => ({
+    id: 'pat-1',
+    organization_id: 'org-1',
+    name: 'A-Shift',
+    pattern_type: 'daily',
+    template_id: 'tmpl-1',
+    start_date: '2026-10-01',
+    is_active: true,
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([{ ...buildTemplate(['officer']), is_active: false }]);
+    mockGetPatterns.mockReset();
+    mockGetPatterns.mockResolvedValue([
+      pattern({ inactive_templates: ['Day Shift'] }),
+      pattern({ id: 'pat-2', name: 'B-Shift', inactive_templates: [] }),
+    ]);
+  });
+
+  it('warns on that pattern only, and in its edit form', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('tab', { name: /Patterns/ }));
+    const notices = await screen.findAllByText(/Template inactive — this pattern is not generating shifts/);
+    expect(notices).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Edit A-Shift' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Template inactive — this pattern is not generating shifts');
   });
 });

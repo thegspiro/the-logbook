@@ -34,6 +34,7 @@ import { formatDateCustom, formatTimeOfDay } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type { PresetPatternDef, CycleEntry, WeekdayShiftType } from './shiftPatternPresets';
 import { PlatoonSelector } from './PlatoonSelector';
+import PatternTemplateInactiveNotice from '../../modules/scheduling/components/PatternTemplateInactiveNotice';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
@@ -1014,6 +1015,8 @@ export const PatternsTab: React.FC = () => {
             const isExpanded = expandedId === pattern.id;
             const isGenerating = generatingFor === pattern.id;
             const templateName = templates.find((t) => t.id === pattern.template_id)?.name;
+            // The server decides whether the pattern is held (Pitfall #29).
+            const heldBy = pattern.inactive_templates ?? [];
             const config: Record<string, unknown> = pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
             const weekdayShifts = readWeekdayShifts(config);
@@ -1146,6 +1149,14 @@ export const PatternsTab: React.FC = () => {
                     <span className="sm:hidden">Generate</span>
                   </button>
                 </div>
+
+                {/* Outside the row toggle: a status region does not belong
+                    inside a button. */}
+                {heldBy.length > 0 && (
+                  <div className="px-4 pb-4 sm:px-5">
+                    <PatternTemplateInactiveNotice names={heldBy} />
+                  </div>
+                )}
 
                 {/* Expanded details */}
                 {isExpanded && (
