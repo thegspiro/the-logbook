@@ -10160,6 +10160,53 @@ export const SHOTS = [
     expect: { selector: "#cancel-reason" },
   },
   {
+    id: "09-32-keep-it-open-button",
+    doc: "09-skills-testing.md",
+    line: 1368,
+    anchor:
+      'The "Keep it open" and "Cancel test" buttons at the foot of the Cancel unfinished test dialog',
+    alt: "The foot of the Cancel unfinished test dialog: the Keep it open button, which leaves the test as it was, beside the amber Cancel test button",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // The dialog's own footer rather than the whole dialog: the full dialog is
+    // already 09-30, and the buttons are what this one is about. Nothing is
+    // clicked, so the seeded in-progress test survives for the scoring shots.
+    prepare: async (page) => {
+      const open = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          { credentials: "include" },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const found = rows.find((row) => row.status === "in_progress");
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!open) {
+        throw new Error("no in-progress test to cancel");
+      }
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: open.candidate })
+        .filter({ hasText: open.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${open.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      await page
+        .getByRole("button", { name: "Keep it open", exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-footer']",
+    expect: "Keep it open",
+  },
+  {
     id: "09-09-member-skills-testing",
     doc: "09-skills-testing.md",
     line: 187,
