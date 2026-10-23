@@ -392,6 +392,26 @@ takes Low from the server (`is_low_stock`).
   restores them. CSV carries "Kept on Apparatus Only" (Yes/No); an unreadable
   value is refused, an apparatus-only row may carry Quantity 0, and lot columns
   on such a row are refused.
+- **Sort by Next expiry** _(2026-10-23)_: `GET /items?sort_by=next_expiry` (and
+  the export) orders by the Next expiry each row shows. The figure spans shelf
+  lots and truck positions and is worked out in Python (`_next_expiries`, the one
+  definition behind the column, the sort and the export), over the whole
+  filtered set rather than one page, then handed to `get_items` as
+  `sort_values`, which orders by it in SQL so paging still works. Supplies with
+  nothing dated come last in either direction, then by name.
+- **Truck stock in the CSV export** _(2026-10-23)_: the supply export appends
+  "On Apparatus", "Uncounted Positions", "Next Expiry" and "Next Expiry Where"
+  after "Notes", so the columns the import reads keep their positions. The
+  import ignores all four, and the template leaves them out.
+- **Not yet counted** _(2026-10-23)_: `GET /items?uncounted=true` (and the
+  export) narrows to supplies carried on a truck position no crew has counted —
+  the positions On hand counts at their target. The summary adds
+  `uncounted_on_apparatus` (supplies, not positions). Each list row carries
+  `apparatus_uncounted_places` (`template_item_id`, `apparatus_id`, `where`).
+  The page's "Not yet counted" tab (`?tab=uncounted`) lists them with a "Count
+  it" link to the apparatus's inventory, under the same gate as "Swap or
+  restock". One rule decides "uncounted" for every reader:
+  `InventoryService._ready_positions`.
 
 ## Alerts
 

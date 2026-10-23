@@ -62,6 +62,8 @@ export interface MedicalSupplySummary {
    */
   expiring_soon_on_apparatus?: number;
   expired_on_apparatus?: number;
+  /** Supplies carried on a truck position nobody has counted, so counted at its target. */
+  uncounted_on_apparatus?: number;
 }
 
 /**
@@ -194,6 +196,8 @@ export interface MedicalItemFilters {
   low_stock?: boolean | undefined;
   /** Leave out supplies kept on the apparatus only — they have no shelf to receive a delivery into. */
   exclude_apparatus_only?: boolean | undefined;
+  /** Only supplies carried on a truck position no crew has counted — the summary's `uncounted_on_apparatus`. */
+  uncounted?: boolean | undefined;
   active_only?: boolean | undefined;
   sort_by?: string | undefined;
   sort_order?: 'asc' | 'desc' | undefined;
