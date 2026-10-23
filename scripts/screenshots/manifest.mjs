@@ -10022,6 +10022,59 @@ export const SHOTS = [
     expect: { selector: "#void-reason-detail" },
   },
   {
+    id: "09-30-cancel-unfinished-test-dialog",
+    doc: "09-skills-testing.md",
+    line: 1352,
+    anchor:
+      'The "Cancel unfinished test" dialog opened from the cancel icon on an in-progress Skill Test Records row',
+    alt: "The Cancel unfinished test dialog, naming the candidate and the test and saying anything already scored is kept but no result is recorded, with an optional reason typed in and the Keep it open and Cancel test buttons",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // Opened and never confirmed: the one in-progress test is also the subject
+    // of the scoring-screen shots, and cancelling it would take them out of the
+    // seeded data. Its candidate is not known until run time, so it is looked
+    // up rather than named. The icon is matched exactly because the row is
+    // itself a role="button" whose name contains the icon's label.
+    prepare: async (page) => {
+      const open = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          {
+            credentials: "include",
+          },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const found = rows.find((row) => row.status === "in_progress");
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!open) {
+        throw new Error("no in-progress test to cancel");
+      }
+      // Drafts can be cancelled too, and one candidate can hold both, so the
+      // row is picked by its template as well as its candidate.
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: open.candidate })
+        .filter({ hasText: open.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${open.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      const reason = page.locator("#cancel-reason");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Drill called off for a run");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#cancel-reason" },
+  },
+  {
     id: "09-29-void-dialog-test-records",
     doc: "09-skills-testing.md",
     line: 1344,
@@ -10049,6 +10102,109 @@ export const SHOTS = [
     },
     selector: "[role='dialog'] [data-testid='modal-panel']",
     expect: { selector: "#void-reason" },
+  },
+  {
+    id: "09-31-cancel-draft-test-dialog",
+    doc: "09-skills-testing.md",
+    line: 1362,
+    anchor:
+      'The "Cancel unfinished test" dialog opened from the cancel icon on a draft Skill Test Records row',
+    alt: "The Cancel unfinished test dialog opened for a test that was set up but never started, naming the candidate and the test, with an optional reason typed in and the Keep it open and Cancel test buttons",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // A draft is a test set up but never started, so nothing has been scored
+    // and the dialog's "anything already scored is kept" has nothing to keep.
+    // Opened and never confirmed. The draft is one whose candidate holds no
+    // other unfinished test, so the icon's label names exactly one row.
+    prepare: async (page) => {
+      const draft = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          { credentials: "include" },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const unfinished = rows.filter(
+          (row) => row.status === "draft" || row.status === "in_progress",
+        );
+        const found = unfinished.find(
+          (row) =>
+            row.status === "draft" &&
+            unfinished.filter((r) => r.candidate_name === row.candidate_name)
+              .length === 1,
+        );
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!draft) {
+        throw new Error("no draft test to cancel");
+      }
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: draft.candidate })
+        .filter({ hasText: draft.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${draft.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      const reason = page.locator("#cancel-reason");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Candidate transferred to another shift");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#cancel-reason" },
+  },
+  {
+    id: "09-32-keep-it-open-button",
+    doc: "09-skills-testing.md",
+    line: 1368,
+    anchor:
+      'The "Keep it open" and "Cancel test" buttons at the foot of the Cancel unfinished test dialog',
+    alt: "The foot of the Cancel unfinished test dialog: the Keep it open button, which leaves the test as it was, beside the amber Cancel test button",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // The dialog's own footer rather than the whole dialog: the full dialog is
+    // already 09-30, and the buttons are what this one is about. Nothing is
+    // clicked, so the seeded in-progress test survives for the scoring shots.
+    prepare: async (page) => {
+      const open = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=100",
+          { credentials: "include" },
+        );
+        const body = response.ok ? await response.json() : null;
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        const found = rows.find((row) => row.status === "in_progress");
+        return found
+          ? { candidate: found.candidate_name, template: found.template_name }
+          : null;
+      });
+      if (!open) {
+        throw new Error("no in-progress test to cancel");
+      }
+      const cancel = page
+        .locator("div[role='button']")
+        .filter({ hasText: open.candidate })
+        .filter({ hasText: open.template })
+        .getByRole("button", {
+          name: `Cancel unfinished test for ${open.candidate}`,
+          exact: true,
+        });
+      await cancel.waitFor({ state: "visible", timeout: 15_000 });
+      await cancel.click();
+      await page
+        .getByRole("button", { name: "Keep it open", exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-footer']",
+    expect: "Keep it open",
   },
   {
     id: "09-09-member-skills-testing",

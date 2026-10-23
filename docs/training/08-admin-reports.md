@@ -260,6 +260,17 @@ The screen has these sections: **General** (Profile, Contact, Addresses),
 **Modules**, **Email**, **Department Email**, **Storage**, **Label Printers**
 and **Authentication** (Sign-in, MFA Policy).
 
+> **MFA Policy is a floor, not the whole rule.** Members holding administration
+> or health-record permissions must use two-step sign-in even when the policy is
+> off for everyone else, with a 14-day grace period that starts the first time
+> the server sees them without it (`MFA_GRACE_DAYS`). Before upgrading, make sure
+> the IT manager has saved their recovery codes. Sensitive actions (log exports,
+> role and position changes, security and integration settings, administrator
+> resets, deleting a member) also ask for a fresh authenticator code, valid 10
+> minutes (`STEPUP_WINDOW_MINUTES`). Anything calling those endpoints directly
+> must `POST /auth/step-up` first or receives `403 LB-AUTH-013`. Details:
+> [`UPGRADING.md`](../UPGRADING.md) and the Security-Authentication wiki page.
+
 ### How settings screens are laid out
 
 Every settings screen — Organization, Events, Scheduling, Elections, My

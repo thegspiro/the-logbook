@@ -5,7 +5,32 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
-## Change audit: October 23, 2026
+## Change audit: October 22 – 23, 2026
+
+Merged to `main` since `68c22b0f` (2026-10-22 12:53 UTC) through `b92a4add`
+(2026-10-23 12:31 UTC). Security-review passes (facilities, inventory,
+documents-legal, medical-screening, membership-pipeline, users-organizations,
+elections; all "0 fixed" except DOC-31, LOW, flagged) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                         | Guide                     | Disposition                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- | -------------------------------------------------------------------------------------- |
+| Privileged members must use MFA (14-day grace, banner, email); step-up code before sensitive actions; `403 LB-AUTH-013`; migration `f7535f478280`                              | 00, 08, YouTube 03 and 06 | Added to the guides; UPGRADING and the Security-Authentication wiki already carried it |
+| Gear low-stock email links to `/inventory/admin/items?low_stock=true`, with a dismissible notice                                                                               | 05                        | Added                                                                                  |
+| Checklist overdue at shift end, not midnight                                                                                                                                   | 03                        | Written with the change                                                                |
+| Historical import refuses undated rows; required columns bold, not red                                                                                                         | 02                        | Written with the change; styling note added                                            |
+| Election and Minutes settings use the shared section header                                                                                                                    | 04, 14                    | Screenshot re-check queued                                                             |
+| Event page check-in/out controls in the Learning Center                                                                                                                        | Learning Center           | Written with the change                                                                |
+| Storage: own bucket (step 2) and moving files into it (step 3)                                                                                                                 | operator docs             | Written with the change (`BACKUP`, `KEY_ROTATION`, `UPGRADING`)                        |
+| iCal `include_shifts` removed                                                                                                                                                  | KNOWN_LIMITATIONS         | Written with the change                                                                |
+| Medical Supplies **Low stock** tab, station kiosk week-long session, grants/fundraising money bounds and donor-contact permission, null on required event fields no longer 500 | various                   | Already covered by the Oct 21 – 22 pass or written with the change                     |
+
+**Screenshots to create:** the MFA grace banner, the step-up box (code and
+password variants), and the filtered Inventory Items list. Re-check My Checklists,
+Election/Minutes settings and the Historical Import page. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Change audit: October 23, 2026 (screenshot pass)
 
 Screenshot pass only; no guide wording changed beyond removing placeholders.
 
