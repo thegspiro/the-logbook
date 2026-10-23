@@ -13,7 +13,8 @@ fixed, 1 new scope-boundary item),
 addendum, SCH-18 fixed, SCH-19 flagged),
 [#3436](https://github.com/thegspiro/the-logbook/pull/3436) (pass 9, 0
 fixed, 0 new findings, SCH-19 re-confirmed OPEN),
-PR pending (pass 10, 0 fixed, 1 new route, 0 new findings)
+[#3617](https://github.com/thegspiro/the-logbook/pull/3617) (pass 10, 0
+fixed, 1 new route, 0 new findings)
 
 **Backend:** `api/v1/endpoints/scheduling.py` (4,476 L, 108 routes, up from
 107), `api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),

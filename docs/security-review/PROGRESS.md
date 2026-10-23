@@ -16,7 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** (branch `claude/security-review-scheduling`) — Feature 15
+**PR [#3617](https://github.com/thegspiro/the-logbook/pull/3617)** (branch
+`claude/security-review-scheduling-p10` — **note:** pass 9's own branch,
+`claude/security-review-scheduling`, had already merged (PR #3436), so
+per CLAUDE.md Pitfall #24 this pass uses the `-p10` suffix, the same way
+pass 8 used `-p8` after the bare name's first collision) — Feature 15
 (Scheduling), pass 10, a watchdog pickup. PR #3602 (Feature 14, Equipment
 check & shifts, pass 11) had already merged, docs-only.
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
