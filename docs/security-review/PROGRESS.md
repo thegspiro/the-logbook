@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (pending)** — Feature 13 (Apparatus & NFC), pass 18, a watchdog
+pickup. PR #3585 (Feature 12, Facilities, pass 11) had already merged,
+docs-only. `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 before this iteration started; row 13 was confirmed the next
+`⬜` by reading the rotation table directly. **0 fixed, 0 new findings** —
+real delta since pass 17's merge (PR #3434, `1460531f`): 8 commits. The
+one behavior change, `delete_apparatus_status` refusing (409) a custom
+status still referenced by `ApparatusStatusHistory` instead of hitting the
+`RESTRICT` FK constraint as a 500, traced safe: the unfiltered history
+count is reachable only for a status already resolved in-org (system
+statuses are rejected one line above, and every non-system status is
+always org-stamped on create). A repo-wide numeric-bounds sweep
+(`schemas/apparatus.py`) and a UTC-normalization sweep
+(`fuel_date`/`taken_at`) are purely additive/correctness fixes with no
+auth/tenancy surface. 5 more commits are frontend-only (shared
+Operations/Governance header refactor, a11y contrast/touch-target fixes)
+— grepped clean, no permission gate touched. No new route (94 + 5,
+unchanged from pass 17); `check_route_permissions.py --strict` — 273
+routes, 0 errors. AP2-4 (standing, owner-accepted) re-confirmed unchanged.
+See `AP-13-apparatus-nfc.md`'s **Pass 18** section. Row 13 → ✅ (pending
+this PR's merge); next is Feature 14 (Equipment check & shifts).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 11, PR #3585, merged), preserved for history</summary>
+
 **PR [#3585](https://github.com/thegspiro/the-logbook/pull/3585)** (branch
 `claude/security-review-facilities`) — Feature 12 (Facilities), pass 11, a watchdog pickup. PR
 #3580 (Feature 11, Inventory, pass 11) had already merged, docs-only.
@@ -40,6 +65,8 @@ routes, 0 errors. FAC-30 (standing, owner-accepted) re-confirmed
 unchanged; FAC-13, FAC-41, FAC-44 re-confirmed closed/intact. See
 `FAC-12-facilities.md`'s **Pass 11** section. Row 12 → ✅ (pending this
 PR's merge); next is Feature 13 (Apparatus & NFC).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 11, PR #3580, merged), preserved for history</summary>
@@ -20781,7 +20808,7 @@ this iteration's commit" rule.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
@@ -20810,6 +20837,71 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-23 — Feature 13 (Apparatus & NFC, pass 18) — watchdog pickup, 0 fixed, 0 new findings; AP2-4 re-confirmed the only standing item
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session was not reachable (`ListAgents`). PR #3585
+(Feature 12, Facilities, pass 11) had already merged, docs-only. Rotation
+row 13 (Apparatus & NFC) was confirmed the next `⬜` by reading the
+rotation table directly.
+
+**0 fixes applied, 0 new findings.** Baseline `1460531f` (PR #3434's
+merge, pass 17). `git log 1460531f..HEAD --no-merges` against every
+declared scope file plus `frontend/src/modules/apparatus` returned 8
+non-merge commits, all read via `git show`:
+
+- `92505187` — `delete_apparatus_status` gained a second refusal check: a
+  custom status still referenced by `ApparatusStatusHistory` now answers
+  409 instead of hitting the `RESTRICT` FK constraint as a 500. The
+  unfiltered history-count query is safe only because the status was
+  already resolved in-org (or rejected as `is_system`) one line above —
+  traced `get_apparatus_status`'s org-or-NULL resolution and
+  `create_apparatus_status`'s always-org-stamped write path to confirm
+  every non-system status row carries a single real `organization_id`,
+  so no cross-org count is reachable. Same shape as the Facilities/
+  Documents `*InUseError` 409 fixes from earlier rotation turns — not a
+  new finding.
+- `74638250` (repo-wide numeric-bounds sweep) — purely additive `ge`/`le`
+  bounds on `schemas/apparatus.py`'s previously-unbounded fields.
+- `7197f577` (repo-wide UTC-normalization sweep) —
+  `ApparatusFuelLogBase.fuel_date` and `ApparatusPhotoBase.taken_at`
+  annotated `UTCDateTime` in place of a bare `datetime`; no auth/tenancy
+  surface.
+- 5 more commits touched only frontend presentation (the shared
+  Operations/Governance page-header refactor reaching
+  `ApparatusDetailPage.tsx`/`ApparatusFormPage.tsx`, a 44px touch-target
+  fix, an AA-contrast badge fix, matching test updates) — confirmed the
+  existing `canManage`-gated controls are preserved unchanged, not
+  reviewed further.
+
+No commit in this window touches `evoc_level_service.py`, `nfc_tags.py`,
+`nfc_tag_service.py`, `driver_exception_service.py`,
+`external_apparatus_service.py`, or `mcp/tools/apparatus.py`. No new
+route (94 + 5, unchanged from pass 17). AP2-4 (standing, owner-accepted —
+the EVOC gate fails open on a deleted-apparatus `shifts.apparatus_id`, no
+FK) re-confirmed unchanged; AP-19 (fixed pass 15) re-confirmed intact.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's
+pinned 7.3.0/26.5.1/9.0.1) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 641 revisions, single head
+`f7535f478280`; `check_route_permissions.py --strict` — 273 routes, 0
+errors/warnings; scoped backend tests (`-k "apparatus or nfc or evoc or
+driver_exception"`) — 1258 passed, 1 pre-existing skip (`pywebpush`);
+tenancy/security guard tests (LIKE escaping, capacity locking, CSV sweep,
+org-scoping ratchet, account-status gates) — 99 passed, 1 pre-existing
+skip; frontend `npm run typecheck` clean; `npm run lint` clean; scoped
+frontend suite (`npx vitest run src/modules/apparatus`) — 114 passed (15
+files, up from 113/14 at pass 17).
+
+Full writeup: `docs/security-review/AP-13-apparatus-nfc.md`'s **Pass 18**
+section.
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
+& shifts) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-10-23 — Feature 12 (Facilities, pass 11) — watchdog pickup, 0 fixed, 0 new findings; FAC-30 re-confirmed the only standing item
 
