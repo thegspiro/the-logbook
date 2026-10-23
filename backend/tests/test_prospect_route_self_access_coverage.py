@@ -54,14 +54,6 @@ EXEMPT: dict[tuple[str, str], str] = {
     ("DELETE", "/pipelines/{pipeline_id}/steps/{step_id}"): (
         "deletes a step definition"
     ),
-    ("POST", "/prospects"): (
-        "creates a record; the duplicate-email 409 names an existing applicant "
-        "for the email the caller typed (flagged in KNOWN_LIMITATIONS.md)"
-    ),
-    ("POST", "/prospects/check-existing"): (
-        "names an existing applicant for the email the caller typed "
-        "(flagged in KNOWN_LIMITATIONS.md)"
-    ),
     ("POST", "/prospects/process-inactivity"): (
         "the scheduled org-wide inactivity sweep run on demand; returns counts "
         "only, and changes nothing the scheduled run would not"
@@ -124,4 +116,6 @@ class TestEveryRouteWithoutProspectIdIsCovered:
             ("GET", "/my-sign-offs"),
             ("POST", "/pipelines/{pipeline_id}/purge-inactive"),
             ("POST", "/prospects/bulk-advance"),
+            ("POST", "/prospects/check-existing"),
+            ("POST", "/prospects"),
         } <= filtered

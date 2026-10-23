@@ -4,7 +4,7 @@
 
 ---
 
-## Follow-up (2026-10-23) — route-coverage guard for the MP-32 class; MP-33 fixed, MP-34 flagged
+## Follow-up (2026-10-23) — route-coverage guard for the MP-32 class; MP-33 and MP-34 fixed
 
 Pass 8 missed `GET /my-sign-offs` because it reviewed changed files only and
 did not re-list the routes. Two changes so that miss cannot recur unnoticed:
@@ -41,13 +41,25 @@ The scheduled auto-purge passes nothing and is unchanged.
 covers both the named-id and the whole-tab paths. It fails with the fix
 stashed and passes with it.
 
-### MP-34 — LOW — the duplicate-email check names the caller's own application — FLAGGED
+### MP-34 — LOW — the duplicate-email check names the caller's own application — ✅ FIXED
 
 `POST /prospects/check-existing` and the `POST /prospects` 409 both name the
 active applicant for an email the caller types, so a caller can type their
-own email and see their own application's pipeline and stage. Flagged for an
-owner decision. See `docs/KNOWN_LIMITATIONS.md`, "Typing Your Own Email Into
-the Duplicate Check Names Your Own Application".
+own email and see their own application's pipeline and stage. Flagged at
+first, then fixed the same day on the owner's decision to hide the match.
+
+**Fix:** both routes depend on `get_hidden_prospect_ids`. `check-existing`
+nulls `existing_applicant` when it is the caller's own record, and the
+`POST /prospects` 409 for that record carries only the generic
+`DuplicateApplicantError` message. Both left `EXEMPT` in the guard test.
+The frontend needed no change: a null `existing_applicant` falls through to
+the create call, whose 409 detail is shown as a toast.
+
+**Test:**
+`test_prospect_self_access.py::TestGuardOverHttp::test_duplicate_email_check_does_not_describe_own_application`
+runs through the real dependency stack. It checks that another applicant is
+still named while the caller's own application is not, and it fails with
+the endpoint change stashed.
 
 ## Pass 12 (2026-10-23) — real delta (staff duplicate-applicant refusal, approver-role trimming/labeling, file-storage interface migration, numeric bounds, UTC interview times), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
 

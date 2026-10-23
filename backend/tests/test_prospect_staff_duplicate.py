@@ -97,6 +97,7 @@ async def _check(db, officer, email):
         last_name=None,
         db=db,
         current_user=officer,
+        hidden_prospect_ids=set(),
     )
 
 
@@ -112,6 +113,7 @@ async def _staff_create(db, officer, email, pipeline_id):
         request=_request(),
         db=db,
         current_user=officer,
+        hidden_prospect_ids=set(),
     )
 
 

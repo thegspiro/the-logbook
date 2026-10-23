@@ -1090,6 +1090,7 @@ async def check_existing_members_for_prospect(
     current_user: User = Depends(
         require_permission("members.create", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Check if a prospective member matches any existing users in the organization.
@@ -1103,6 +1104,8 @@ async def check_existing_members_for_prospect(
     email (name, pipeline, stage), or is null. It is reported separately from
     ``matches`` because it is not a judgement call: ``POST /prospects``
     refuses that email with a 409, so the form can say so before submitting.
+    It is null when the applicant is the caller: typing their own email must
+    not show them the pipeline and stage of their own application.
 
     **Requires permission: members.create or prospective_members.manage**
     """
@@ -1126,6 +1129,8 @@ async def check_existing_members_for_prospect(
     existing_applicant = await service.find_existing_applicant(
         organization_id=current_user.organization_id, email=email
     )
+    if existing_applicant and existing_applicant["prospect_id"] in hidden_prospect_ids:
+        existing_applicant = None
     return {
         "has_matches": len(matches) > 0,
         "match_count": len(matches),
@@ -1173,6 +1178,7 @@ async def create_prospect(
     current_user: User = Depends(
         require_permission("members.create", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Add a new prospective member manually.
@@ -1185,6 +1191,8 @@ async def create_prospect(
     (name, pipeline, stage) and nothing is created or audited. The public
     application form returns the existing applicant instead; this form must
     not report "added" for a record it did not create.
+    When that applicant is the caller, the 409 says only that an active
+    application uses the email, without naming its pipeline or stage.
 
     **Requires permission: members.create or prospective_members.manage**
     """
@@ -1231,10 +1239,14 @@ async def create_prospect(
             reject_duplicate=True,
         )
     except DuplicateApplicantError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=duplicate_applicant_message(describe_existing_applicant(e.existing)),
+        # The caller's own application is refused without being described:
+        # naming its pipeline and stage would show them their own file.
+        detail = (
+            str(e)
+            if str(e.existing.id) in hidden_prospect_ids
+            else duplicate_applicant_message(describe_existing_applicant(e.existing))
         )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     except ValueError as e:
         # Rejected foreign keys (pipeline, referring member) are client errors.
         # Without this they reached the catch-all handler as a 500.
