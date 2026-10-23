@@ -5323,7 +5323,7 @@ export const SHOTS = [
           `/api/v1/training/sessions/by-event/${event.id}/approval`,
           { credentials: "include" },
         );
-        return summary.ok ? (await summary.json()).token : null;
+        return summary.ok ? ((await summary.json())?.token ?? null) : null;
       });
       if (!token)
         throw new Error(

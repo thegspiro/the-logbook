@@ -16461,8 +16461,12 @@ class Seeder:
             if pick(event, "title") != self.GUIDE02_SESSION_TITLE:
                 continue
             try:
-                summary = self.api.get(
-                    f"/training/sessions/by-event/{pick(event, 'id')}/approval"
+                # null (no approval) on the current backend, a 404 on an older one.
+                summary = (
+                    self.api.get(
+                        f"/training/sessions/by-event/{pick(event, 'id')}/approval"
+                    )
+                    or {}
                 )
             except ApiError as exc:
                 if exc.code != 404:
