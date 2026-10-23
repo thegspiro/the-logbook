@@ -7,12 +7,13 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router';
-import { BarChart3, Calendar, CheckCircle, Clock, TrendingUp, Users, ArrowLeft } from 'lucide-react';
+import { BarChart3, Calendar, CheckCircle, Clock, TrendingUp, Users } from 'lucide-react';
 import { eventService } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { DateRangePicker } from '../components/ux';
 
 // ----------------------------------------------------------------
@@ -239,36 +240,23 @@ export const EventAnalyticsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs underHub="/events/admin" />
-
-        {/* Header */}
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/events"
-              className="text-theme-text-secondary hover:text-theme-text-primary"
-              title="Back to Events"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-            <div>
-              <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold sm:text-3xl">
-                <BarChart3 className="h-7 w-7" />
-                Attendance Trends
-              </h1>
-              <p className="text-theme-text-secondary mt-1 text-sm">Attendance and check-in rates across your events</p>
-            </div>
-          </div>
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onChange={(s, e) => {
-              setStartDate(s);
-              setEndDate(e);
-            }}
-            label="Period"
-          />
-        </div>
+        <EventsPageHeader
+          icon={BarChart3}
+          title="Attendance Trends"
+          subtitle="Attendance and check-in rates across your events"
+          underHub="/events/admin"
+          actions={
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(s, e) => {
+                setStartDate(s);
+                setEndDate(e);
+              }}
+              label="Period"
+            />
+          }
+        />
 
         {/* Summary Cards */}
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
