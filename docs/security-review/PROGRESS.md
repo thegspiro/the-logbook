@@ -16,6 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3579](https://github.com/thegspiro/the-logbook/pull/3579)** (branch
+`claude/security-review-documents-legal-p11`) — Feature 10 (Documents &
+legal), pass 11, a watchdog pickup. PR #3577 (Feature 09, pass 11) had
+already merged. `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 before this
+iteration started; row 10 was confirmed the next `⬜` by reading the
+rotation table directly. **0 fixed, 1 new finding flagged** (DOC-31, LOW) —
+real delta (3 files since pass 10's merge): a document delete now refuses
+when it is the receipt on a non-draft purchase request/expense report
+(`_release_document_references`), instead of silently losing the reference
+to `SET NULL`; the new check's own read is unlocked, a narrow TOCTOU this
+pass flagged rather than fixed (cross-feature lock-ordering decision with
+Finance). The `documents.py` file-storage call sites and a minutes-render
+delta reaching this feature's published HTML were also reviewed, both
+clean. See `DOC-10-documents-legal.md`'s **Pass 11** section. Row 10 → ✅
+(pending this PR's merge); next is Feature 11 (Inventory).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, PHI, pass 11, PR #3577, merged), preserved for history</summary>
+
 **PR (pending)** — Feature 09 (Medical screening, PHI), pass 11, a watchdog
 pickup. PR #3574 (Feature 08, pass 12) had already merged. `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`) returned 0 before this
@@ -31,6 +51,8 @@ bounds and one contrast-only a11y fix round out the window. MS-14/MS-15
 (standing, owner-accepted) re-confirmed unchanged. See
 `MS-09-medical-screening.md`'s **Pass 11** section. Row 09 → ✅ (pending
 this PR's merge); next is Feature 10 (Documents & legal).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 12, PR #3574, merged), preserved for history</summary>
@@ -20700,7 +20722,7 @@ this iteration's commit" rule.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -36418,3 +36440,69 @@ src/modules/medical-screening`) — 59 passed (10 files).
 Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
 legal) — re-check `search_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-10-23 — Feature 10 (Documents & legal, pass 11) — watchdog pickup, 0 fixed, 1 flagged (DOC-31, LOW)
+
+Watchdog pickup: `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 before this iteration started, and the dedicated `/loop 30m
+/security-review` session was not reachable (`ListAgents`). PR #3577
+(Feature 09, Medical screening, pass 11) had already merged, docs-only — not
+independently recordable. Row 10 (Documents & legal) was confirmed the next
+`⬜` by reading the rotation table directly.
+
+Baseline `f3f0829d` (PR #3431's merge, pass 10). Real delta is 3 files —
+`station_documents.py`, `legal_documents.py`, `legal_service.py`,
+`models/legal.py`, `schemas/legal.py`, `models/document.py`,
+`schemas/documents.py` and `admin_only_folder_digest.py` are all
+byte-identical to pass 10:
+
+- `endpoints/documents.py`'s `download_document`/`upload_document` moved
+  onto the shared async `file_storage_service` interface in place of bare
+  `os`/`asyncio.to_thread` calls and `stored_file_response` — read in full;
+  the pre-existing path-traversal confinement check (DOC-24) is untouched
+  and still runs before every new call, so this is a mechanical swap, not a
+  behavior change.
+- `documents_service.py` gained `_release_document_references`: deleting a
+  document now **refuses** (400, naming the record) when it is the receipt
+  on a purchase request or expense report that has left `DRAFT`, instead of
+  silently losing the reference to the existing `SET NULL` foreign key.
+  Org-scoped on both new queries, runs before any destructive write on both
+  the single-delete and folder-cascade paths, and both call sites already
+  wrap it in `handle_service_errors`. **DOC-31 (LOW, flagged):** the new
+  check reads those rows with a plain `SELECT`, not `.with_for_update()`, so
+  a request that is concurrently submitted past `DRAFT` between the read
+  and the deleting transaction's commit can still end up referencing a
+  deleted document — the original gap, reached by a race instead of the
+  missing check. Not fixed: correctly closing it needs a lock-ordering
+  decision against Finance's own locking conventions (Pitfall #27) that
+  this pass should not make unilaterally. Mirrored to
+  `KNOWN_LIMITATIONS.md`.
+- `document_service.py`'s minutes→document HTML render picked up Feature
+  24's `recorded_motions()`/`acceptance_label()` and a calendar-day fix for
+  an action item's due date; reviewed only for the library-facing surface
+  this feature owns — every appended field is still `escape()`d, no new
+  unescaped user text.
+- `DocumentsPage.tsx` now surfaces the backend's actual refusal message on a
+  failed delete (`getErrorDetail`) instead of a fixed string — this is what
+  makes the new DOC-31-adjacent refusal above legible to the caller.
+
+No route or migration changed (24 routes, confirmed unchanged by the diff
+itself). No standing OPEN finding carried from pass 10 (pass 10 closed with
+none).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.3.0/26.5.1/9.0.1) on `app/ tests/ alembic/` all clean; `validate_
+migrations.py --strict` — 640 revisions, single head `cc8c16cb6d98`;
+`check_route_permissions.py --strict` — 273 routes, 0 errors/warnings;
+scoped backend tests (`-k "document or legal or station_document or
+facility_folder or folder or admin_only"`) — 642 passed, 1 skipped
+(environment-only, `pywebpush`); frontend `npm run typecheck` clean; `npm
+run lint` clean; scoped frontend suite (`npx vitest run
+src/pages/DocumentsPage.test.tsx src/components/documents`) — 51 passed (3
+files).
+
+Full writeup: `docs/security-review/DOC-10-documents-legal.md`'s **Pass 11**
+section.
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) — re-check
+`search_pull_requests` fresh rather than trusting this note.

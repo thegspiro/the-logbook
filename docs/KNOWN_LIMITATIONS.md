@@ -6956,6 +6956,34 @@ like `training_programs.py`'s own enrollment logic) — and give it a first
 full pass before Feature 17 is next due in the rotation, rather than let it
 ride uncovered through another full cycle under Feature 17's existing ✅.
 
+## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)
+
+Found by security review DOC-10 pass 11
+(`docs/security-review/DOC-10-documents-legal.md`, pass 11, DOC-31). An
+owner-direct change landed between pass 10 and pass 11 that makes
+`DocumentsService.delete_document`/`delete_folder` refuse to delete a
+document that is the receipt on a purchase request or expense report once
+that record has left `DRAFT` — closing a prior silent-data-loss gap where the
+`SET NULL` foreign key let the receipt reference disappear with no trace.
+
+The new check (`_release_document_references`) reads the referencing
+`PurchaseRequest`/`ExpenseReport` rows with a plain `SELECT`, not
+`.with_for_update()`. If another transaction submits that same request past
+`DRAFT` between this read and the deleting transaction's commit, the delete
+can still proceed and the request ends up referencing a document that no
+longer exists — the original failure mode, reached through a race instead of
+through the missing check. The window is one request's own transaction, and
+the worst case is no worse than the pre-pass-11 behavior; this is an unclosed
+gap in the new guard, not a regression.
+
+**Not fixed.** Closing it means taking a locking read
+(`.with_for_update()`) on the referencing `PurchaseRequest`/`ExpenseReport`
+rows inside a document-delete transaction, which raises a lock-ordering
+question against Finance's own locking conventions (Pitfall #27) that a
+documents-feature review pass should not decide unilaterally — Finance and
+Documents would need to agree on one order before this can lock safely
+without risking a new cross-feature deadlock.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module
