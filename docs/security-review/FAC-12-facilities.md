@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail), [#2621](https://github.com/thegspiro/the-logbook/pull/2621) (pass 6, watchdog re-verification, 0 fixed, 0 new findings), [#2968](https://github.com/thegspiro/the-logbook/pull/2968) (pass 7, 0 fixed, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact), [#3169](https://github.com/thegspiro/the-logbook/pull/3169) (pass 8, watchdog pickup, 0 new application findings, FAC-13 re-verified already fixed by owner-direct work, 1 cross-cutting migration-head conflict fixed), [#3288](https://github.com/thegspiro/the-logbook/pull/3288) (pass 9, watchdog pickup, 0 fixes, 0 new findings, FAC-30 re-confirmed the only standing item), pass 10 PR recorded in `PROGRESS.md`
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail), [#2621](https://github.com/thegspiro/the-logbook/pull/2621) (pass 6, watchdog re-verification, 0 fixed, 0 new findings), [#2968](https://github.com/thegspiro/the-logbook/pull/2968) (pass 7, 0 fixed, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact), [#3169](https://github.com/thegspiro/the-logbook/pull/3169) (pass 8, watchdog pickup, 0 new application findings, FAC-13 re-verified already fixed by owner-direct work, 1 cross-cutting migration-head conflict fixed), [#3288](https://github.com/thegspiro/the-logbook/pull/3288) (pass 9, watchdog pickup, 0 fixes, 0 new findings, FAC-30 re-confirmed the only standing item), pass 10 ([#3433](https://github.com/thegspiro/the-logbook/pull/3433), merged), pass 11 (this PR)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes, 4051 L),
 `services/facilities_service.py` (3453 L), `services/documents_service.py`
@@ -11,6 +11,82 @@ schemas `app/schemas/facilities.py` (1422 L), `app/mcp/tools/facilities.py`
 **Migrations:** none touching this module's own tables this pass.
 
 ---
+
+## Pass 11 (2026-10-23) — watchdog pickup; 0 fixes, 0 new findings; FAC-30 re-confirmed the only standing item
+
+**Scoping.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0. PRs #3569 (Feature 07) and #3580 (Feature 11) had merged,
+docs-only, so nothing to record. Row 12 was the first `⬜` row on `main`.
+
+**Baseline and delta.** Pass 10 merged as `7de26bcbb` (PR #3433). Since then
+3 commits touched this feature's backend scope: `925051877` (operations
+deletes), `08fff8048` (upgraded-vs-fresh schema drift) and `746382501`
+(numeric request bounds). Each was read as a diff in full. The 100 routes in
+`facilities.py` were enumerated mechanically; every one carries
+`require_permission` and the count is unchanged from the baseline.
+`check_route_permissions.py --strict`: 0 errors, 0 warnings.
+
+**Verified good (mechanisms).**
+
+- **`delete_room` now defers to `LocationService.remove_location`**
+  (`facilities_service.py`, `facilities.py` `delete_facility_room`). The room
+  is fetched through `get_room(room_id, organization_id)` and the linked
+  Location through a query filtered on both `facility_room_id` and
+  `organization_id`, so the reference count only ever runs on a row already in
+  the caller's org. `location_reference_count` is deliberately not
+  org-filtered (a RESTRICT foreign key ignores tenancy), which is the safe
+  direction. The only foreign keys into `facility_rooms` are
+  `parent_room_id` and `locations.facility_room_id`, both `SET NULL`
+  (read from `Base.metadata`), so an `IntegrityError` on the flush can only
+  be the Location's RESTRICT references; mapping it to `LocationInUseError`
+  (409, via `safe_error_detail`) is therefore accurate, and the rollback
+  discards the re-parenting done earlier in the same uncommitted
+  transaction.
+- **Deactivate-instead-of-delete** keeps events, templates and apparatus
+  pointing at a real place rather than a dangling or nulled one. The
+  `locations.facility_room_id` unique constraint is freed when the room goes
+  (`SET NULL`), so recreating a room with the same name is not blocked.
+  `tests/test_delete_reference_guards.py` covers the delete, deactivate and
+  mid-delete-conflict paths (18 passed).
+- **Numeric bounds** (`schemas/facilities.py`): every new `le=` mirrors its
+  column's range (`INT32_MAX`, `MONEY_MAX`, `decimal_max(10, 7)` for
+  coordinates), turning a driver-level out-of-range error (a 500) into a 422.
+  Strictly tightening; no field widened.
+- **Dropped single-column `organization_id` indexes** on `facility_photos`
+  and `facility_documents` (migration `1eb43da769b2`) do not reopen
+  FAC-41/FAC-44. The composite `idx_facility_photos_org_document` and
+  `idx_facility_documents_org_document` both lead with `organization_id`
+  (read from the live metadata), so the org-scoped reference lookups they
+  were added for stay indexed. The migration checks table and index
+  existence in both directions.
+- **Frontend delta** (`modules/facilities`, 19 files): no
+  `dangerouslySetInnerHTML`, `innerHTML`, `window.confirm`/`alert`/`prompt`,
+  `localStorage`, raw `axios`/`fetch` or locale-method additions in the added
+  lines (grep on the diff, 0 matches).
+- **Shared `documents_service.py`** gained reference release on document
+  delete and routes file removal through `file_storage.delete`; it is
+  Documents-owned (Feature 10, reviewed in its own pass), noted here only
+  because facility photos and documents are rows it deletes.
+
+**Observation, not a finding.** `latitude` and `longitude` are bounded to the
+column range (about ±999.99), not to ±90 / ±180. A department can store an
+impossible coordinate but nothing breaks and no other tenant is affected.
+
+**Standing:** FAC-30 (P2, owner-accepted "leave as is") unchanged: none of this
+window's commits touch it.
+
+### Completion gate (pass 11)
+
+| Check                                                 | Result                                              |
+| ----------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations (7.3.0 + flake8-pytest-style 2.2.0) |
+| `black --check app/ tests/ alembic/`                  | ✅ 2569 files unchanged (26.5.1)                    |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean (9.0.1)                                    |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ single head `cc8c16cb6d98`                       |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 0 errors, 0 warnings                             |
+| `pytest tests/test_delete_reference_guards.py`        | ✅ 18 passed                                        |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors                                         |
+| `cd frontend && npm run lint`                         | recorded in the PR body once the run finishes       |
 
 ## Pass 10 (2026-10-19) — watchdog pickup; 0 application fixes needed, 0 new findings; FAC-30 re-confirmed the only standing item
 

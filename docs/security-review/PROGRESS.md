@@ -20750,7 +20750,7 @@ this iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -20780,6 +20780,10 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-23 — Feature 12 (Facilities, pass 11) — watchdog pickup, 0 fixed, 0 new findings; FAC-30 re-confirmed open
+
+PRs #3569 and #3580 merged docs-only, so only their rows were cleared. Delta since pass 10 (#3433): `delete_room` now defers to `LocationService.remove_location` (deactivate when referenced, 409 on a mid-delete conflict), numeric request bounds, and a dropped redundant `organization_id` index whose composite still leads with it. All sound. See `FAC-12-facilities.md`'s **Pass 11** section.
 
 ### 2026-10-22 — Feature 06 (Elections & ballots, pass 11) — watchdog pickup, 0 fixed in code, 1 flagged (ELEC-49), 1 guard (ELEC-50)
 
