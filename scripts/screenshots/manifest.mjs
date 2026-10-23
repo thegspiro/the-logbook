@@ -10022,6 +10022,35 @@ export const SHOTS = [
     expect: { selector: "#void-reason-detail" },
   },
   {
+    id: "09-29-void-dialog-test-records",
+    doc: "09-skills-testing.md",
+    line: 1344,
+    anchor:
+      'The "Void test result" dialog opened from the void icon on a Skill Test Records row',
+    alt: "The Void test result dialog opened from a Skill Test Records row, naming the candidate and the test, with an example reason typed in and the amber Void result button enabled",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // The reason is typed but the dialog is never confirmed: the held result is
+    // shared with the release shots, and voiding it would take them out of the
+    // seeded data.
+    // exact: the row is itself a role="button" whose name contains the icon's
+    // label, so a substring match resolves to the row and opens the result page.
+    prepare: async (page) => {
+      const { candidateName } = await findHeldResult(page);
+      const open = page.getByRole("button", {
+        name: `Void test for ${candidateName}`,
+        exact: true,
+      });
+      await open.waitFor({ state: "visible", timeout: 15_000 });
+      await open.click();
+      const reason = page.locator("#void-reason");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Scored against the wrong candidate");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#void-reason" },
+  },
+  {
     id: "09-09-member-skills-testing",
     doc: "09-skills-testing.md",
     line: 187,

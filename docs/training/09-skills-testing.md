@@ -1341,6 +1341,11 @@ is at least 10 characters, and the member can read what you write.
 
 ![The Void test result dialog, saying the record stays in the member's history marked as voided, with an example reason typed in and the amber Void result button enabled](./images/09-28-void-result-dialog.png)
 
+The void icon on a row in **Skill Test Records** opens the same dialog, so you
+can withdraw a result without opening it first.
+
+![The Void test result dialog opened from a Skill Test Records row, naming the candidate and the test, with an example reason typed in and the amber Void result button enabled](./images/09-29-void-dialog-test-records.png)
+
 > **An official result cannot be deleted.** A scored evaluation is a record of
 > what an examiner saw. It is withdrawn, not erased. Void is the action, and
 > the reason and the officer are part of the record.
