@@ -11,8 +11,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import { ArrowLeft, CheckCircle2, Search, Users } from 'lucide-react';
-import { Breadcrumbs, EmptyState } from '../components/ux';
+import { CheckCircle2, Search, Users } from 'lucide-react';
+import { EmptyState } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { trainingProgramService, trainingService, trainingSubmissionService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
@@ -191,50 +192,44 @@ const RecordCrewTrainingPage: React.FC = () => {
     }
   };
 
+  // Part of Submit Training: a shift officer reaches it from that page, and
+  // the URL does not sit under it.
   const header = (
-    <div className="mb-6 flex items-start gap-3.5">
-      <button
-        type="button"
-        onClick={() => void navigate('/training/submit')}
-        aria-label="Back to log training"
-        className="touch:mobile-touch-target text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg p-2"
-      >
-        <ArrowLeft className="h-5 w-5" />
-      </button>
-      <div>
-        <h1 className="text-theme-text-primary text-2xl leading-8 font-bold">Record Crew Training</h1>
-        <p className="text-theme-text-muted text-sm">
-          Record a drill once for everyone who was there. The training officer reviews it before anyone is credited.
-        </p>
-      </div>
-    </div>
+    <TrainingPageHeader
+      icon={Users}
+      title="Record Crew Training"
+      subtitle="Record a drill once for everyone who was there. The training officer reviews it before anyone is credited."
+      section="/training/submit"
+    />
   );
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-        <Breadcrumbs />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {header}
-        <p className="text-theme-text-muted py-12 text-center">Loading…</p>
+        <div className="mx-auto max-w-3xl">
+          <p className="text-theme-text-muted py-12 text-center">Loading…</p>
+        </div>
       </div>
     );
   }
 
   if (!canRecord) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-        <Breadcrumbs />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {header}
-        <div className="card">
-          <EmptyState
-            icon={Users}
-            title="Shift officers only"
-            description={
-              error ||
-              'Crew training is recorded by members who can serve as a shift officer. Log your own training instead.'
-            }
-            actions={[{ label: 'Log my training', onClick: () => void navigate('/training/submit') }]}
-          />
+        <div className="mx-auto max-w-3xl">
+          <div className="card">
+            <EmptyState
+              icon={Users}
+              title="Shift officers only"
+              description={
+                error ||
+                'Crew training is recorded by members who can serve as a shift officer. Log your own training instead.'
+              }
+              actions={[{ label: 'Log my training', onClick: () => void navigate('/training/submit') }]}
+            />
+          </div>
         </div>
       </div>
     );
@@ -242,33 +237,34 @@ const RecordCrewTrainingPage: React.FC = () => {
 
   if (recordedCount !== null) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-        <Breadcrumbs />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {header}
-        <div className="card p-6 text-center" role="status">
-          <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-green-700 dark:text-green-400" />
-          <h2 className="text-theme-text-primary text-lg font-semibold">Sent for review</h2>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            {courseName.trim()} ({formatHours(hours)}h) was recorded for {recordedCount}{' '}
-            {recordedCount === 1 ? 'member' : 'members'}. It will count once the training officer approves it.
-          </p>
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Link to="/training/submit" className="btn-secondary touch:min-h-11 text-sm">
-              Done
-            </Link>
-            <button
-              type="button"
-              className="btn-primary touch:min-h-11 text-sm"
-              onClick={() => {
-                setRecordedCount(null);
-                setCourseName('');
-                setDescription('');
-                setShiftId('');
-                setPresent(new Set(currentUserId ? [currentUserId] : []));
-              }}
-            >
-              Record another
-            </button>
+        <div className="mx-auto max-w-3xl">
+          <div className="card p-6 text-center" role="status">
+            <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-green-700 dark:text-green-400" />
+            <h2 className="text-theme-text-primary text-lg font-semibold">Sent for review</h2>
+            <p className="text-theme-text-muted mt-1 text-sm">
+              {courseName.trim()} ({formatHours(hours)}h) was recorded for {recordedCount}{' '}
+              {recordedCount === 1 ? 'member' : 'members'}. It will count once the training officer approves it.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Link to="/training/submit" className="btn-secondary touch:min-h-11 text-sm">
+                Done
+              </Link>
+              <button
+                type="button"
+                className="btn-primary touch:min-h-11 text-sm"
+                onClick={() => {
+                  setRecordedCount(null);
+                  setCourseName('');
+                  setDescription('');
+                  setShiftId('');
+                  setPresent(new Set(currentUserId ? [currentUserId] : []));
+                }}
+              >
+                Record another
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -276,11 +272,10 @@ const RecordCrewTrainingPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-        <Breadcrumbs />
-        {header}
-
+    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {header}
+      {/* The form keeps its reading width under the full-width strip. */}
+      <div className="mx-auto max-w-3xl">
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6" noValidate>
           <section className="card space-y-4 p-4">
             <h2 className="text-theme-text-primary font-semibold">What was the training?</h2>

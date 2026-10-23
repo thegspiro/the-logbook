@@ -1149,7 +1149,8 @@ describe('PipelineDetailPage — reactivating an inactive pipeline', () => {
 
     mockHasPermission = true;
     renderWithRouter(<PipelineDetailPage />);
-    expect(await screen.findByText('Recruit Pipeline')).toBeInTheDocument();
+    // The name is in the trail as well as the heading, so ask for the heading.
+    expect(await screen.findByRole('heading', { level: 1, name: /Recruit Pipeline/ })).toBeInTheDocument();
     expect(screen.queryByText('Inactive')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reactivate' })).not.toBeInTheDocument();
   });

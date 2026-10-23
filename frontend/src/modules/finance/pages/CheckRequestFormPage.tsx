@@ -21,8 +21,9 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
-import { ADVANCE_RETURN_DAYS, type CheckRequest } from '../types';
+import { ADVANCE_RETURN_DAYS, ApprovalEntityType, type CheckRequest } from '../types';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 
@@ -244,6 +245,13 @@ const CheckRequestFormPage: React.FC = () => {
               />
             </>
           )}
+
+          <ApprovalRoutePreview
+            entityType={ApprovalEntityType.CHECK_REQUEST}
+            amount={watch('amount') || 0}
+            // An advance charges no budget line, so none picks its chain.
+            budgetId={isAdvance ? undefined : watch('budgetId') || undefined}
+          />
 
           <div>
             <label htmlFor="purpose" className={labelClass}>

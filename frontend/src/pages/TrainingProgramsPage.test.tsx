@@ -167,17 +167,19 @@ describe('TrainingProgramsPage', () => {
       'href',
       '/training/admin'
     );
-    expect(within(nav).getByRole('link', { name: 'Training' })).toHaveAttribute('href', '/training');
-    expect(within(nav).getByText('Programs')).toBeInTheDocument();
+    expect(nav).toHaveTextContent('Training Programs');
   });
 
-  it('omits the hub breadcrumb for members without training.manage', async () => {
+  it('gives a member the section strip and no trail', async () => {
     window.history.replaceState({}, '', '/training/programs');
     renderWithRouter(<TrainingProgramsPage />);
 
-    const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
-    expect(within(nav).queryByRole('link', { name: 'Training Administration' })).not.toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: 'Training' })).toHaveAttribute('href', '/training');
+    // On a section's own page the strip says where the member is; the only
+    // crumb a trail could add is the hub, which their grants do not open.
+    const strip = await screen.findByRole('navigation', { name: 'Training sections' });
+    expect(within(strip).getByRole('link', { name: 'Programs' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('navigation', { name: /breadcrumb/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Training Administration' })).not.toBeInTheDocument();
   });
 
   it('loads programs on mount', async () => {

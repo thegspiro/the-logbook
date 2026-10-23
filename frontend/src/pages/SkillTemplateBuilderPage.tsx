@@ -6,9 +6,8 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams, Link } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import {
-  ArrowLeft,
   Plus,
   Trash2,
   GripVertical,
@@ -25,6 +24,7 @@ import { trainingProgramService, trainingModuleConfigService, roleService } from
 import type { TrainingRequirementEnhanced, TrainingModuleConfig as TMConfig } from '../types/training';
 import type { Role } from '../types/role';
 import { ConfirmDialog } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { blankToNull } from '../utils/formValues';
 import { CriterionScoreMode, SCORE_MODE_TYPES } from '../types/skillsTesting';
 import type {
@@ -943,22 +943,16 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Link
-            to="/training/admin?page=skills-testing&tab=templates"
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
-          >
-            <ArrowLeft className="mr-2 h-5 w-5" />
-            Back to Templates
-          </Link>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-              <ClipboardCheck className="h-8 w-8 shrink-0 text-red-700" />
-              <span>{isEditing ? 'Edit Template' : 'New Template'}</span>
-            </h1>
-            <div className="flex gap-2">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Templates are kept on the hub's Skills Testing page, which is where
+            the old back link went; the crumb keeps that destination. */}
+        <TrainingPageHeader
+          icon={ClipboardCheck}
+          title={isEditing ? 'Edit Template' : 'New Template'}
+          underHub="/training/admin"
+          parentCrumbs={[{ label: 'Templates', path: '/training/admin?page=skills-testing&tab=templates' }]}
+          actions={
+            <>
               <button
                 onClick={() => void handleSave()}
                 disabled={isSaving}
@@ -973,9 +967,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                   Publish
                 </button>
               )}
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Validation Errors */}
         {validationErrors.length > 0 && (

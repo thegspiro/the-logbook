@@ -127,7 +127,9 @@ async function renderLoaded() {
   window.history.pushState({}, '', '/training/compliance-config');
   renderWithRouter(<ComplianceRequirementsConfigPage />);
   await waitFor(() => {
-    expect(screen.getByText('Compliance Requirements Configuration')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Compliance Requirements Configuration' })
+    ).toBeInTheDocument();
   });
 }
 

@@ -16,9 +16,9 @@
 
 import React, { Suspense, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { ExternalLink, Loader2, CalendarRange } from 'lucide-react';
 import { lazyWithRetry } from '../../../../utils/lazyWithRetry';
-import SchedulingHeader from '../../SchedulingHeader';
+import { SchedulingPageHeader } from '../../../../components/scheduling/SchedulingPageHeader';
 import { PLANNING_SECTIONS, planningPathFor, type PlanningSection } from './planningSections';
 import PlanningSettingsSummary from './PlanningSettingsSummary';
 
@@ -52,11 +52,11 @@ const SchedulingPlanningPage: React.FC<SchedulingPlanningPageProps> = ({ section
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingHeader
+        <SchedulingPageHeader
+          icon={CalendarRange}
           title="Shift Planning"
-          backTo="/scheduling/admin"
-          backLabel="Back to scheduling administration"
-          description={active?.description ?? ''}
+          subtitle={active?.description}
+          underHub="/scheduling/admin"
         />
 
         {/* Scrolls sideways below md rather than wrapping, and says so, so its

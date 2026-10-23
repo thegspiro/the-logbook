@@ -61,7 +61,7 @@ async function renderLoaded() {
   // tests, so a tab one test opened would otherwise be the next one's start.
   window.history.pushState({}, '', '/training/compliance-config');
   renderWithRouter(<ComplianceRequirementsConfigPage />);
-  await screen.findByText('Compliance Requirements Configuration');
+  await screen.findByRole('heading', { level: 1, name: 'Compliance Requirements Configuration' });
 }
 
 describe('ComplianceRequirementsConfigPage — a response that is not its declared shape', () => {

@@ -47,7 +47,7 @@ from app.models.minute import MinutesAttachment
 from app.models.suggestion import SuggestionAttachment
 from app.models.training import TrainingRecord, TrainingSubmission
 from app.services import file_storage_service as file_storage
-from app.services import s3_storage
+from app.services import remote_storage
 from app.services.file_storage_service import StorageArea
 
 MANIFEST_VERSION = 1
@@ -188,7 +188,7 @@ async def collect_references(
     db: AsyncSession, organization_id: Optional[str]
 ) -> list[Reference]:
     """Every stored file reference, in every table that holds one. Also the
-    list ``s3_migration`` moves into a department's bucket."""
+    list ``remote_migration`` moves into a department's bucket."""
     refs: list[Reference] = []
 
     def scoped(query, column):
@@ -393,8 +393,8 @@ def plan(refs: list[Reference]) -> RelocationReport:
     report = RelocationReport()
     planned: dict[str, Move] = {}
     for ref in refs:
-        if s3_storage.is_ref(ref.path):
-            # In the department's bucket: written under the org-first layout,
+        if remote_storage.is_remote_ref(ref.path):
+            # In the department's remote store: written under the org-first layout,
             # so there is nothing to relocate.
             report.already_current += 1
             continue

@@ -29,6 +29,7 @@ import {
   CalendarClock,
 } from 'lucide-react';
 import { skillsTestingService, trainingModuleConfigService } from '../services/api';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementMonthlyHours } from '../components/training/RequirementMonthlyHours';
 import { countingWindowLabel } from '../utils/requirementMonths';
@@ -666,30 +667,20 @@ const MyTrainingPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-              <GraduationCap className="h-8 w-8 shrink-0 text-red-500" />
-              <span>My Training</span>
-            </h1>
-            <p className="text-theme-text-muted mt-1">
-              Every class, certification and training hour the department has on record for you, and how you are doing
-              against the training you are required to complete.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center space-x-3">
-            <button
-              onClick={() => void navigate('/training/submit')}
-              className="btn-primary flex items-center space-x-2 text-sm font-medium whitespace-nowrap"
-            >
-              <Send className="h-4 w-4 shrink-0" />
-              <span>Submit Training</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <TrainingPageHeader
+        icon={GraduationCap}
+        title="My Training"
+        subtitle="Every class, certification and training hour the department has on record for you, and how you are doing against the training you are required to complete."
+        actions={
+          <button
+            onClick={() => void navigate('/training/submit')}
+            className="btn-primary flex items-center space-x-2 text-sm font-medium whitespace-nowrap"
+          >
+            <Send className="h-4 w-4 shrink-0" />
+            <span>Submit Training</span>
+          </button>
+        }
+      />
 
       {/* Tabs: History for anyone the department lets see it, settings only
           for those who may edit them. A lone "My Training" tab is not drawn. */}
