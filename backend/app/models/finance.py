@@ -1410,10 +1410,13 @@ class CheckRequest(Base):
     # The approved expense report this check reimburses the member for. Like
     # an advance it charges no budget line or fund -- the report's lines do --
     # and issuing it is what pays the report. Fixed at creation
-    # (app/services/finance_reimbursement.py).
+    # (app/services/finance_reimbursement.py). ``use_alter``: with
+    # ``ExpenseReport.advance_id`` pointing back here the two tables reference
+    # each other, so this key is added after both exist and left out of
+    # metadata's table ordering, which the member-deletion sweep relies on.
     expense_report_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey("expense_reports.id", ondelete="SET NULL"),
+        ForeignKey("expense_reports.id", ondelete="SET NULL", use_alter=True),
         nullable=True,
         index=True,
     )

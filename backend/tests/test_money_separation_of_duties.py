@@ -44,6 +44,8 @@ class TestFinanceDisbursementSoD:
     async def test_requester_cannot_issue_own_check(self):
         db = MagicMock()
         db.execute = AsyncMock(return_value=_one(SimpleNamespace(requested_by="u1")))
+        # Not a reimbursement check: no expense report to lock before it.
+        db.scalar = AsyncMock(return_value=None)
         svc = FinanceService(db)
         with pytest.raises(ValueError, match="cannot issue your own check request"):
             await svc.issue_check("cr1", "org1", "1001", acted_by="u1")

@@ -24,7 +24,7 @@ request is corrected by hand. Which report and check each payment came through
 is lost with the columns.
 
 Revision ID: 4250eb8b8378
-Revises: f7535f478280
+Revises: f938324f8081
 Create Date: 2026-10-23 14:38:27.000000
 
 """
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "4250eb8b8378"
-down_revision: Union[str, None] = "f7535f478280"
+down_revision: Union[str, None] = "f938324f8081"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
