@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR pending** (branch `claude/security-review-scheduling`) — Feature 15
+(Scheduling), pass 10, a watchdog pickup. PR #3602 (Feature 14, Equipment
+check & shifts, pass 11) had already merged, docs-only.
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 before this iteration started; row 15 was confirmed the next
+`⬜` by reading the rotation table directly. **0 fixed, 1 new route, 0 new
+findings** — real delta since pass 9's merge (`764c733e`): 8 commits, real
+content in 5 of 13 declared files. A shift that has started, or a call on
+a finalized shift, can no longer be deleted; an in-use shift template or
+basic apparatus is deactivated instead of deleted (new reactivate route,
+`scheduling.manage`, org-scoped, audited — the one new route this pass);
+the MCP `list_open_shifts` tool now shares one candidate-criteria method
+with the Open Shifts board, closing a gap where it kept offering shifts
+that had already ended; week boundaries now agree with the shift board's
+Sunday start; a numeric-bounds sweep is purely additive. One shared
+migration (`cbe0de50f202`, already reviewed by Feature 14 pass 11)
+re-confirmed as the correct Pitfall #2/#26 pairing.
+`member_shift_release_service.py` (new, Users-owned, reviewed
+opportunistically) is org-scoped throughout. No new route beyond the one
+reactivate endpoint (`check_route_permissions.py --strict` — 273 routes,
+0 errors). SCH-9/10/13/15/16/17/18 re-confirmed unchanged; SCH-19
+(owner-decision, `KNOWN_LIMITATIONS.md`) re-confirmed OPEN. See
+`SCH-15-scheduling.md`'s **Pass 10** section. Row 15 → ✅ (pending this
+PR's merge); next is Feature 16 (Events & requests) — re-check
+`search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 11, PR #3602, merged), preserved for history</summary>
+
 **PR [#3602](https://github.com/thegspiro/the-logbook/pull/3602)** (branch
 `claude/security-review-equipment-check-p10`) —
 Feature 14 (Equipment check & shifts), pass 11, a watchdog pickup. PR
@@ -41,6 +70,8 @@ routes, 0 errors. EC-8 and the `get_item_deployments` gate discrepancy
 `EC-14-equipment-check-shifts.md`'s **Pass 11** section. Row 14 → ✅
 (pending this PR's merge); next is Feature 15 (Scheduling) — re-check
 `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 18, PR #3589, merged), preserved for history</summary>
@@ -20842,7 +20873,7 @@ this iteration's commit" rule.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -20869,6 +20900,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-23 — Feature 15 (Scheduling, pass 10) — watchdog pickup, real delta (8 commits), 1 new route, 0 fixed, 0 new findings
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results). PR #3602
+(Feature 14, Equipment check & shifts, pass 11) had already merged. Row 15
+(Scheduling) was confirmed the next `⬜` by reading the rotation table
+directly.
+
+Baseline `764c733e` (PR #3436's merge, pass 9). 8 non-merge commits touch
+this feature's 13 declared files; real content changed in 5
+(`scheduling.py`, `scheduling_service.py`, `schemas/scheduling.py`,
+`shift_completion_service.py`, `mcp/tools/scheduling.py`). Every behavior
+change narrows or leaves unchanged what an already-authorized,
+already-org-scoped caller can do: a shift that has started or a call on a
+finalized shift can no longer be deleted; an in-use shift template or
+basic apparatus is deactivated instead of deleted (`X-Delete-Outcome`
+header), with its own new reactivate route
+(`POST /scheduling/apparatus/{id}/reactivate`, `scheduling.manage`,
+org-scoped lookup, audited); the MCP `list_open_shifts` tool and the Open
+Shifts board now share one candidate-criteria method, closing a gap where
+the tool kept offering shifts that had already ended; "shifts this week"
+and the call-volume report's weekly buckets now agree with the shift
+board's Sunday-start week. A repo-wide numeric-bounds sweep added
+`ge`/`le` to six scheduling schema fields, purely additive. One migration
+landed in this window (`cbe0de50f202`, `shift_completion_reports.officer_id`
+→ nullable/SET NULL) — shared with, and already reviewed by, Feature 14's
+pass 11; re-confirmed here as the correct Pitfall #2/#26 pairing.
+`member_shift_release_service.py` (new, Users-owned, releases a
+deactivated member's future shift seats) was reviewed opportunistically —
+every query org-scoped, locks claim rows before ending them (Pitfall #27),
+delegates seat removal to an already-reviewed method.
+
+1 new route (`check_route_permissions.py --strict`: 273 routes repo-wide,
+up from 272, 0 errors). SCH-9/10/13/15/16/17/18 re-confirmed unchanged;
+SCH-19 (no length cap on `reported_call_types`/`member_call_counts`,
+owner-decision) re-confirmed OPEN, already in `KNOWN_LIMITATIONS.md`.
+
+Full writeup: `docs/security-review/SCH-15-scheduling.md`'s **Pass 10**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's
+pinned 7.3.0/26.5.1/9.0.1) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 643 revisions, single head
+`4250eb8b8378`; `check_route_permissions.py --strict` — 273 routes, 0
+errors/warnings; scoped backend tests — 2567 passed, 1 pre-existing skip
+(`pywebpush`); tenancy/security guard tests (LIKE escaping, capacity
+locking, CSV sweep, org-scoping ratchet, account-status gates, numeric
+bounds, migration create-all tables) — 671 passed; frontend `npm run
+typecheck` clean; `npm run lint` clean; scoped frontend suite (`npx vitest
+run src/modules/scheduling src/pages/scheduling`) — 989 passed (69
+files).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests).
 
 ### 2026-10-23 — Feature 14 (Equipment check & shifts, pass 11) — watchdog pickup, real delta (16 commits), 0 fixed, 0 new findings
 
