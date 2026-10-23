@@ -26,6 +26,17 @@ pytestmark = pytest.mark.real_stepup
 NOW = datetime.now(timezone.utc)
 
 
+def _now() -> datetime:
+    """The time of the call, for step-up stamps.
+
+    require_stepup measures recency against the real clock, so a stamp built
+    from the import-time NOW goes stale in a full run that reaches these tests
+    more than STEPUP_WINDOW_MINUTES after import. The grace-period tests pass
+    NOW in explicitly and keep it.
+    """
+    return datetime.now(timezone.utc)
+
+
 def _user(permissions=(), grace=None):
     position = SimpleNamespace(permissions=list(permissions))
     return SimpleNamespace(
@@ -191,16 +202,16 @@ class TestRequireStepup:
         assert exc.value.headers == {"X-Stepup-Required": "true"}
 
     async def test_a_recent_verification_passes(self):
-        user = await self._call(_session(NOW - timedelta(minutes=2)))
+        user = await self._call(_session(_now() - timedelta(minutes=2)))
         assert user.username == "chief"
 
     async def test_a_stale_verification_is_refused(self):
-        stale = NOW - timedelta(minutes=settings.STEPUP_WINDOW_MINUTES + 1)
+        stale = _now() - timedelta(minutes=settings.STEPUP_WINDOW_MINUTES + 1)
         with pytest.raises(HTTPException):
             await self._call(_session(stale))
 
     async def test_a_naive_stamp_is_read_as_utc(self):
-        fresh = (NOW - timedelta(minutes=1)).replace(tzinfo=None)
+        fresh = (_now() - timedelta(minutes=1)).replace(tzinfo=None)
         assert await self._call(_session(fresh))
 
     async def test_no_session_is_refused(self):
@@ -211,7 +222,7 @@ class TestRequireStepup:
         with patch.object(
             AuthService,
             "get_session_for_token",
-            AsyncMock(return_value=_session(NOW)),
+            AsyncMock(return_value=_session(_now())),
         ) as lookup:
             await require_stepup(
                 authorization="Bearer abc",
@@ -468,7 +479,7 @@ class TestStepUpOverHttp:
             with patch.object(
                 AuthService,
                 "get_session_for_token",
-                AsyncMock(return_value=_session(NOW)),
+                AsyncMock(return_value=_session(_now())),
             ):
                 allowed = await client.post("/sensitive", cookies={"access_token": "t"})
 
