@@ -11,6 +11,11 @@
 #   ./backup.sh --destination s3 # Backup to S3
 #   ./backup.sh --restore FILE   # Restore from backup
 #   ./backup.sh --list           # List available backups
+#   ./backup.sh --encrypt-existing  # Encrypt plaintext archives (needs a key)
+#
+# Encryption: with a certificate and/or drill key in BACKUP_KEYS_DIR
+# (default ./backup-keys, created by scripts/backup-keygen.sh) every archive is
+# written as FILE.tar.gz.enc + FILE.tar.gz.enc.key. See docs/BACKUP.md.
 #
 # Automated Backups:
 #   Add to crontab: 0 2 * * * /path/to/backup.sh
@@ -45,7 +50,8 @@ env_file_get() {
 
 if [[ -f "$ENV_FILE" ]]; then
     for _key in DB_HOST DB_USER DB_PASSWORD DB_NAME DB_CONTAINER BACKEND_CONTAINER \
-        BACKUP_LOCATION BACKUP_RETENTION_DAYS VERSION ENVIRONMENT \
+        BACKUP_LOCATION BACKUP_RETENTION_DAYS BACKUP_KEYS_DIR \
+        BACKUP_ENCRYPT_EXISTING VERSION ENVIRONMENT \
         AWS_S3_BUCKET AZURE_STORAGE_ACCOUNT AZURE_STORAGE_CONTAINER \
         GCS_BUCKET; do
         _val="$(env_file_get "$_key")"
@@ -76,6 +82,13 @@ BACKUP_DIR="${BACKUP_LOCATION:-$PROJECT_DIR/backups}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_NAME="logbook_backup_${TIMESTAMP}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
+export BACKUP_KEYS_DIR="${BACKUP_KEYS_DIR:-$PROJECT_DIR/backup-keys}"
+# Set by compress_backup: the file that was published, and whether it is encrypted.
+ARCHIVE_PATH=""
+ARCHIVE_ENCRYPTED=false
+
+# shellcheck source=backup_crypto.sh
+source "$SCRIPT_DIR/backup_crypto.sh"
 
 # Colors
 RED='\033[0;31m'
@@ -313,15 +326,31 @@ EOF
 compress_backup() {
     print_info "Compressing backup archive..."
 
-    cd /tmp
-    tar -czf "$BACKUP_DIR/$BACKUP_NAME.tar.gz" "$BACKUP_NAME"
+    # Built outside $BACKUP_DIR so that, once a key exists, the plaintext
+    # archive never lands on the backups share.
+    local plain="/tmp/$BACKUP_NAME.tar.gz"
+    (cd /tmp && tar -czf "$plain" "$BACKUP_NAME")
+
+    if bk_encryption_configured; then
+        ARCHIVE_PATH="$BACKUP_DIR/$BACKUP_NAME.tar.gz.enc"
+        if ! bk_encrypt_file "$plain" "$ARCHIVE_PATH"; then
+            rm -f "$plain" "$ARCHIVE_PATH" "$ARCHIVE_PATH.key"
+            print_error "Encrypting the backup failed; nothing was published"
+            return 1
+        fi
+        ARCHIVE_ENCRYPTED=true
+        rm -f "$plain"
+    else
+        print_warning "No backup key in $BACKUP_KEYS_DIR: this backup is NOT encrypted. Run scripts/backup-keygen.sh (docs/BACKUP.md)"
+        ARCHIVE_PATH="$BACKUP_DIR/$BACKUP_NAME.tar.gz"
+        mv "$plain" "$ARCHIVE_PATH"
+    fi
 
     # Calculate checksum
-    cd "$BACKUP_DIR"
-    sha256sum "$BACKUP_NAME.tar.gz" > "$BACKUP_NAME.tar.gz.sha256"
+    (cd "$BACKUP_DIR" && sha256sum "$(basename "$ARCHIVE_PATH")" > "$(basename "$ARCHIVE_PATH").sha256")
 
-    print_success "Backup compressed: $BACKUP_DIR/$BACKUP_NAME.tar.gz"
-    print_success "Size: $(du -h "$BACKUP_DIR/$BACKUP_NAME.tar.gz" | cut -f1)"
+    print_success "Backup compressed: $ARCHIVE_PATH"
+    print_success "Size: $(du -h "$ARCHIVE_PATH" | cut -f1)"
 }
 
 cleanup_temp() {
@@ -333,10 +362,23 @@ cleanup_temp() {
 cleanup_old_backups() {
     print_info "Cleaning up old backups (older than $RETENTION_DAYS days)..."
 
-    find "$BACKUP_DIR" -name "logbook_backup_*.tar.gz" -type f -mtime +"$RETENTION_DAYS" -delete
-    find "$BACKUP_DIR" -name "logbook_backup_*.tar.gz.sha256" -type f -mtime +"$RETENTION_DAYS" -delete
+    find "$BACKUP_DIR" -name "logbook_backup_*.tar.gz*" -type f -mtime +"$RETENTION_DAYS" -delete
 
     print_success "Old backups removed"
+}
+
+# Offsite copies carry ciphertext only. A plaintext archive holds every
+# member's records, so it is never sent anywhere a provider could read it.
+require_encrypted_for_offsite() {
+    if [[ "$ARCHIVE_ENCRYPTED" != "true" ]]; then
+        print_error "Refusing to upload an unencrypted backup. Create a key with scripts/backup-keygen.sh, then back up again"
+        return 1
+    fi
+}
+
+# The files that make up the published backup, one per line.
+offsite_files() {
+    printf '%s\n' "$ARCHIVE_PATH" "$ARCHIVE_PATH.key" "$ARCHIVE_PATH.sha256"
 }
 
 upload_to_s3() {
@@ -344,17 +386,14 @@ upload_to_s3() {
         print_error "AWS_S3_BUCKET not configured"
         return 1
     fi
+    require_encrypted_for_offsite || return 1
 
     print_info "Uploading backup to S3..."
 
-    aws s3 cp \
-        "$BACKUP_DIR/$BACKUP_NAME.tar.gz" \
-        "s3://$AWS_S3_BUCKET/backups/" \
-        --storage-class STANDARD_IA
-
-    aws s3 cp \
-        "$BACKUP_DIR/$BACKUP_NAME.tar.gz.sha256" \
-        "s3://$AWS_S3_BUCKET/backups/"
+    local f
+    while IFS= read -r f; do
+        aws s3 cp "$f" "s3://$AWS_S3_BUCKET/backups/" --storage-class STANDARD_IA
+    done < <(offsite_files)
 
     print_success "Backup uploaded to S3"
 }
@@ -364,14 +403,18 @@ upload_to_azure() {
         print_error "AZURE_STORAGE_CONTAINER not configured"
         return 1
     fi
+    require_encrypted_for_offsite || return 1
 
     print_info "Uploading backup to Azure..."
 
-    az storage blob upload \
-        --account-name "$AZURE_STORAGE_ACCOUNT" \
-        --container-name "$AZURE_STORAGE_CONTAINER" \
-        --name "backups/$BACKUP_NAME.tar.gz" \
-        --file "$BACKUP_DIR/$BACKUP_NAME.tar.gz"
+    local f
+    while IFS= read -r f; do
+        az storage blob upload \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "backups/$(basename "$f")" \
+            --file "$f"
+    done < <(offsite_files)
 
     print_success "Backup uploaded to Azure"
 }
@@ -381,12 +424,14 @@ upload_to_gcs() {
         print_error "GCS_BUCKET not configured"
         return 1
     fi
+    require_encrypted_for_offsite || return 1
 
     print_info "Uploading backup to Google Cloud Storage..."
 
-    gsutil cp \
-        "$BACKUP_DIR/$BACKUP_NAME.tar.gz" \
-        "gs://$GCS_BUCKET/backups/"
+    local f
+    while IFS= read -r f; do
+        gsutil cp "$f" "gs://$GCS_BUCKET/backups/"
+    done < <(offsite_files)
 
     print_success "Backup uploaded to GCS"
 }
@@ -396,7 +441,7 @@ upload_to_gcs() {
 # ============================================
 
 restore_backup() {
-    local backup_file="$1"
+    local backup_file="$1" drill_key_file="${2:-}" private_key_file="${3:-}"
 
     if [[ ! -f "$backup_file" ]]; then
         print_error "Backup file not found: $backup_file"
@@ -427,7 +472,22 @@ restore_backup() {
     print_info "Extracting backup..."
     RESTORE_DIR="/tmp/logbook_restore_$(date +%s)"
     mkdir -p "$RESTORE_DIR"
-    python3 "$SCRIPT_DIR/safe_extract_tar.py" "$backup_file" "$RESTORE_DIR"
+    local extract_from="$backup_file" decrypted_dir
+    if bk_is_encrypted_archive "$backup_file"; then
+        # Decrypted into its own directory so the extraction below still sees
+        # exactly one top-level directory in RESTORE_DIR.
+        decrypted_dir="$(mktemp -d "/tmp/logbook_decrypt_XXXXXX")"
+        extract_from="$decrypted_dir/archive.tar.gz"
+        print_info "Decrypting backup..."
+        if ! bk_decrypt_file "$backup_file" "$extract_from" "$drill_key_file" "$private_key_file"; then
+            rm -rf "$decrypted_dir" "$RESTORE_DIR"
+            print_error "Could not decrypt the backup. Use --drill-key FILE (the key from $BACKUP_KEYS_DIR) or --private-key FILE (the offline key)"
+            exit 1
+        fi
+        print_success "Backup decrypted"
+    fi
+    python3 "$SCRIPT_DIR/safe_extract_tar.py" "$extract_from" "$RESTORE_DIR"
+    [[ -n "${decrypted_dir:-}" ]] && rm -rf "$decrypted_dir"
 
     # Find the backup directory (it will be the only directory in RESTORE_DIR)
     mapfile -t extracted_dirs < <(find "$RESTORE_DIR" -mindepth 1 -maxdepth 1 -type d)
@@ -501,14 +561,17 @@ list_backups() {
     print_info "Available backups in $BACKUP_DIR:"
     echo ""
 
-    if [[ ! -d "$BACKUP_DIR" ]] || [[ -z "$(ls -A "$BACKUP_DIR"/*.tar.gz 2>/dev/null)" ]]; then
+    if [[ ! -d "$BACKUP_DIR" ]] || [[ -z "$(ls -A "$BACKUP_DIR"/*.tar.gz "$BACKUP_DIR"/*.tar.gz.enc 2>/dev/null)" ]]; then
         print_warning "No backups found"
         return
     fi
 
     local f
-    for f in "$BACKUP_DIR"/*.tar.gz; do
-        printf '%-50s %10s %s\n' "$f" "$(du -h "$f" | cut -f1)" "$(date -r "$f" '+%Y-%m-%d %H:%M')"
+    for f in "$BACKUP_DIR"/*.tar.gz "$BACKUP_DIR"/*.tar.gz.enc; do
+        [[ -f "$f" ]] || continue
+        printf '%-56s %10s %s %s\n' "$f" "$(du -h "$f" | cut -f1)" \
+            "$(date -r "$f" '+%Y-%m-%d %H:%M')" \
+            "$(bk_is_encrypted_archive "$f" && echo encrypted || echo PLAINTEXT)"
     done
 }
 
@@ -526,6 +589,7 @@ run_backup() {
     create_backup_metadata
     compress_backup
     cleanup_temp
+    bk_encrypt_existing "$BACKUP_DIR" || print_warning "Some existing archives could not be encrypted"
     cleanup_old_backups
 
     # Upload to cloud if specified
@@ -547,19 +611,39 @@ run_backup() {
             ;;
     esac
 
+    bk_write_status "$BACKUP_DIR" true "$ARCHIVE_ENCRYPTED" || true
     print_success "Backup completed successfully!"
-    print_info "Backup location: $BACKUP_DIR/$BACKUP_NAME.tar.gz"
+    print_info "Backup location: $ARCHIVE_PATH"
 }
 
 main() {
+    local backup_to_restore=""
     case "${1:-}" in
         --restore)
             if [[ -z "${2:-}" ]]; then
                 print_error "Backup file required"
-                echo "Usage: $0 --restore /path/to/backup.tar.gz"
+                echo "Usage: $0 --restore /path/to/backup.tar.gz[.enc] [--drill-key FILE | --private-key FILE]"
                 exit 1
             fi
-            restore_backup "$2"
+            backup_to_restore="$2"
+            shift 2
+            local drill_key_file="" private_key_file=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --drill-key) drill_key_file="${2:-}"; shift 2 ;;
+                    --private-key) private_key_file="${2:-}"; shift 2 ;;
+                    *) print_error "Unknown restore option: $1"; exit 1 ;;
+                esac
+            done
+            restore_backup "$backup_to_restore" "$drill_key_file" "$private_key_file"
+            ;;
+        --encrypt-existing)
+            if ! bk_encryption_configured; then
+                print_error "No backup key in $BACKUP_KEYS_DIR; run scripts/backup-keygen.sh first"
+                exit 1
+            fi
+            rm -f "$BACKUP_DIR/.encrypted_existing_done"
+            bk_encrypt_existing "$BACKUP_DIR"
             ;;
         --list)
             list_backups
@@ -577,7 +661,10 @@ Usage:
 
 Options:
     --destination DEST   Backup destination: local, s3, azure, gcs (default: local)
-    --restore FILE       Restore from backup file
+    --restore FILE       Restore from backup file (an .enc archive also needs
+                         --drill-key FILE or --private-key FILE, unless the
+                         drill key is already in the keys directory)
+    --encrypt-existing   Encrypt plaintext archives in the backups directory
     --list               List available backups
     --help               Show this help
 
