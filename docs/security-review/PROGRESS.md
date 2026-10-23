@@ -16,8 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None, as of this commit.** PR #3569 (Feature 07, Users & organizations,
-pass 11) merged cleanly into `main`; `search_pull_requests`
+**PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)** (branch
+`claude/security-review-membership-pipeline-p12`) — Feature 08 (Membership
+pipeline), pass 12. PR #3569 (Feature 07, pass 11) had already merged
+cleanly into `main`; `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`) returned 0 results before
 this iteration started, independently confirming no security-review PR was
 open. Rotation row 07 stays ✅. This iteration reviewed Feature 08
