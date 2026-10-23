@@ -6,7 +6,7 @@ morning email warns once at 30 days, once at 7 and once on the day.
 """
 
 import copy
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -97,17 +97,18 @@ def _integration(integration_type: str, **config) -> Integration:
 @pytest.mark.unit
 class TestTheIntegrationCard:
     def test_microsoft_reports_days_left_and_whether_to_warn(self):
-        soon = (datetime.now(timezone.utc).date() + timedelta(days=5)).isoformat()
-        later = (datetime.now(timezone.utc).date() + timedelta(days=90)).isoformat()
+        today = date(2027, 6, 1)
 
         near = _integration_to_dict(
-            _integration("microsoft-365", client_secret_expires_on=soon)
+            _integration("microsoft-365", client_secret_expires_on="2027-06-06"),
+            today=today,
         )
         assert near["credential_days_left"] == 5
         assert near["credential_expiring"] is True
 
         far = _integration_to_dict(
-            _integration("microsoft-365", client_secret_expires_on=later)
+            _integration("microsoft-365", client_secret_expires_on="2027-08-30"),
+            today=today,
         )
         assert far["credential_days_left"] == 90
         assert far["credential_expiring"] is False
@@ -117,9 +118,15 @@ class TestTheIntegrationCard:
             _integration("microsoft-365"),
             _integration("google-workspace", client_secret_expires_on="2027-01-01"),
         ):
-            result = _integration_to_dict(integration)
+            result = _integration_to_dict(integration, today=date(2026, 12, 1))
             assert result["credential_days_left"] is None
             assert result["credential_expiring"] is False
+
+    def test_nothing_is_reported_without_the_departments_date(self):
+        result = _integration_to_dict(
+            _integration("microsoft-365", client_secret_expires_on="2027-01-01")
+        )
+        assert result["credential_days_left"] is None
 
 
 @pytest.fixture
