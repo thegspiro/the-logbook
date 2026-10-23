@@ -17,6 +17,15 @@ import { ApprovalStepType, type ApprovalEntityType, type ApprovalRoutePreview as
 /** Long enough that typing an amount asks once, not once per keystroke. */
 const DEBOUNCE_MS = 400;
 
+/** The panel sits inside request forms, so an answer that is not a route
+ * (a proxy's error page, an older server) must read as "could not be loaded"
+ * rather than throw and take the member's half-filled form down with it. */
+const isRoute = (value: unknown): value is RoutePreview =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as RoutePreview).manual === 'boolean' &&
+  Array.isArray((value as RoutePreview).steps);
+
 interface ApprovalRoutePreviewProps {
   entityType: ApprovalEntityType;
   amount: number;
@@ -39,13 +48,17 @@ export const ApprovalRoutePreview: React.FC<ApprovalRoutePreviewProps> = ({ enti
     const timer = setTimeout(() => {
       approvalChainService
         .routePreview({ entityType, amount: amount.toFixed(2), budgetId })
-        .then((next) => {
+        .then((next: unknown) => {
           if (!current) return;
+          if (!isRoute(next)) throw new Error('Not an approval route');
           setRoute(next);
           setFailed(false);
         })
         .catch(() => {
-          if (current) setFailed(true);
+          if (!current) return;
+          // A route shown for an earlier amount is not this amount's route.
+          setRoute(null);
+          setFailed(true);
         });
     }, DEBOUNCE_MS);
     return () => {
@@ -66,7 +79,7 @@ export const ApprovalRoutePreview: React.FC<ApprovalRoutePreviewProps> = ({ enti
         <Route className="h-4 w-4" aria-hidden="true" />
         Who will approve this
       </h3>
-      {failed && !route ? (
+      {failed ? (
         <p className="text-theme-text-secondary mt-2 text-sm">
           The approval route could not be loaded. It is decided when you submit.
         </p>

@@ -113,6 +113,27 @@ describe('ApprovalRoutePreview', () => {
     expect(screen.getByText(/could not be loaded/)).toBeInTheDocument();
   });
 
+  it('reads an answer that is not a route as a failure instead of throwing', async () => {
+    mockRoutePreview.mockResolvedValue({});
+    render(<ApprovalRoutePreview entityType="purchase_request" amount={750} />);
+    await settle();
+
+    expect(screen.getByText(/could not be loaded/)).toBeInTheDocument();
+  });
+
+  it("does not keep an earlier amount's route once a later one fails", async () => {
+    mockRoutePreview.mockResolvedValueOnce(route()).mockRejectedValueOnce(new Error('offline'));
+    const { rerender } = render(<ApprovalRoutePreview entityType="purchase_request" amount={750} />);
+    await settle();
+    expect(screen.getByText('Purchases over $500')).toBeInTheDocument();
+
+    rerender(<ApprovalRoutePreview entityType="purchase_request" amount={9000} />);
+    await settle();
+
+    expect(screen.queryByText('Purchases over $500')).not.toBeInTheDocument();
+    expect(screen.getByText(/could not be loaded/)).toBeInTheDocument();
+  });
+
   it('keeps the answer for the latest amount when an earlier one arrives late', async () => {
     let answerEarlier: (value: RoutePreview) => void = () => undefined;
     mockRoutePreview
