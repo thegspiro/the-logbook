@@ -2001,13 +2001,34 @@ them), or leave them as harmless empty tables.
 **Upgraded databases are stricter than the models.** About 100 columns are
 `NOT NULL` on an upgraded database and nullable in the models, and about 177
 carry a server default that a fresh install lacks. They are mostly booleans,
-sort orders and timestamps. The
-application supplies every one of these values on insert, so ordinary use does
-not reach the gap. It shows up when code writes an explicit `null` to one of
-these columns: `apply_updates` reads nullability from the models, so it passes
-the write, and an upgraded database then rejects it at flush time with a 500
-instead of a 400. Closing it means choosing, per column, which side is right.
-That makes it a sweep with its own review, not a mechanical migration.
+sort orders and timestamps. It shows up when code writes an explicit `null` to
+one of these columns: `apply_updates` reads nullability from the models, so it
+passes the write, and an upgraded database then rejects it at flush time with
+MySQL 1048, returned as a 500 or as a generic 400.
+
+_Traced 2026-10-22._ One column was reached by ordinary requests:
+`training_waivers.end_date`, where a NULL means a permanent waiver. It was
+relaxed by `f938324f8081`, because there the model is right. Every other path
+needs a request that carries an explicit `null` for an on/off or count setting.
+This pass traced the backend only and did not check whether any frontend form
+sends one. About 45 such paths were found, for example:
+
+- training module configuration (25 display switches)
+- self-report and shift-report settings, and shift templates
+- inventory categories, items, variant groups, kits, maintenance records and
+  NFPA compliance, plus `quantity` on `POST /inventory/items/bulk`
+- membership pipelines and steps, and department messages
+
+For these the upgraded database is the one that is right. The fix is a sweep:
+
+- declare the columns `NOT NULL` with their defaults in the models, so
+  `apply_updates` returns a 400;
+- add the same null check to the hand-written update loops that bypass
+  `apply_updates`;
+- add a migration that settles any NULLs already stored on fresh installs.
+
+**Open decision:** that sweep is a schema change across those columns and
+waits on an owner's go-ahead.
 
 **One unused index on upgraded databases.** `20260808_0003` dropped the
 foreign key on `shift_equipment_checks.apparatus_id`, and MySQL kept the index
