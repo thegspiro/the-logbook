@@ -23,13 +23,13 @@ from app.services.auth_service import AuthService
 
 pytestmark = pytest.mark.real_stepup
 
-# Fixed at import, which is fine for the day-scale grace tests. A step-up
-# stamp is measured against a window of minutes by a clock read at call time,
-# and a full suite runs longer than that window, so those stamps use _now().
 NOW = datetime.now(timezone.utc)
 
 
-def _now():
+def _now() -> datetime:
+    """The clock now, for stamps ``require_stepup`` measures against its own
+    clock. ``NOW`` is taken once at import, so in a long suite run it can be
+    older than the step-up window by the time these tests run."""
     return datetime.now(timezone.utc)
 
 
@@ -461,6 +461,7 @@ class TestStepUpOverHttp:
         return AsyncClient(
             transport=ASGITransport(app=app, raise_app_exceptions=False),
             base_url="http://test",
+            cookies={"access_token": "t"},
         )
 
     async def test_refused_with_the_code_until_the_session_has_stepped_up(self):
@@ -471,13 +472,13 @@ class TestStepUpOverHttp:
                 "get_session_for_token",
                 AsyncMock(return_value=_session(None)),
             ):
-                refused = await client.post("/sensitive", cookies={"access_token": "t"})
+                refused = await client.post("/sensitive")
             with patch.object(
                 AuthService,
                 "get_session_for_token",
                 AsyncMock(return_value=_session(_now())),
             ):
-                allowed = await client.post("/sensitive", cookies={"access_token": "t"})
+                allowed = await client.post("/sensitive")
 
         assert refused.status_code == 403
         assert refused.json()["detail"] == "Please confirm your identity to continue."
@@ -492,9 +493,7 @@ class TestStepUpOverHttp:
                 "get_session_for_token",
                 AsyncMock(return_value=_session(None)),
             ):
-                response = await client.post(
-                    "/sensitive", cookies={"access_token": "t"}
-                )
+                response = await client.post("/sensitive")
 
         assert response.status_code == 403
         assert response.json()["detail"] == "Insufficient permissions"

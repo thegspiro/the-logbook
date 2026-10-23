@@ -148,6 +148,27 @@ export const ApprovalEntityType = {
 } as const;
 export type ApprovalEntityType = (typeof ApprovalEntityType)[keyof typeof ApprovalEntityType];
 
+/** One step a request would wait on, named as its timeline would name it. */
+export interface ApprovalRouteStep {
+  name: string;
+  stepOrder: number;
+  stepType: ApprovalStepType;
+  /** Who the step waits on; null on a notification step. */
+  assigneeLabel?: string | null;
+  /** The amount falls under the step's auto-approve limit. */
+  autoApproved: boolean;
+}
+
+/** Who a request would wait on if it were submitted now (`GET /finance/approval-chains/route-preview`). */
+export interface ApprovalRoutePreview {
+  chainName?: string | null;
+  /** No chain applies: a finance approver decides by hand. */
+  manual: boolean;
+  steps: ApprovalRouteStep[];
+  /** At or over the department's dual-approval threshold. */
+  secondApproverRequired: boolean;
+}
+
 // =============================================================================
 // Status Badge Color Mappings (Tailwind classes)
 // =============================================================================

@@ -20,10 +20,11 @@ import { useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { ExpenseType } from '../types';
+import { ApprovalEntityType, ExpenseType } from '../types';
 import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 
 // =============================================================================
 // Validation Schema
@@ -342,6 +343,9 @@ const ExpenseReportFormPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* A report is routed on its total alone; its lines may charge several budget lines. */}
+          <ApprovalRoutePreview entityType={ApprovalEntityType.EXPENSE_REPORT} amount={totalAmount} />
         </div>
 
         {/* Line Items */}

@@ -4193,6 +4193,84 @@ class FinanceService:
             raise ValueError(f"Invalid entity type: {entity_type}")
         return await self.resolve_approval_chain(org_id, et, amount, category_id)
 
+    async def _request_chain(
+        self,
+        org_id: str,
+        entity_type: ApprovalEntityType,
+        amount: Decimal,
+        budget_id: Optional[str],
+    ) -> Optional[ApprovalChain]:
+        """The chain a request of this type, amount and budget line goes to.
+
+        Submission and the route preview both ask this, so the preview cannot
+        promise a route that submitting would not take (CLAUDE.md pitfall
+        #29). A purchase or check request is matched on its budget line's
+        category; an expense report on its total alone, since its lines can
+        charge several lines.
+        """
+        category_id = None
+        if budget_id and entity_type != ApprovalEntityType.EXPENSE_REPORT:
+            budget = await self.get_budget(budget_id, org_id)
+            if budget:
+                category_id = budget.category_id
+        return await self.resolve_approval_chain(
+            org_id, entity_type, amount, category_id
+        )
+
+    async def preview_request_route(
+        self,
+        org_id: str,
+        entity_type: str,
+        amount: Decimal,
+        budget_id: Optional[str] = None,
+    ) -> dict:
+        """Who a request would wait on if submitted now, for the member
+        raising it.
+
+        Steps are described as the request's own timeline describes them
+        (``describe_assignee``), never by the chain's raw approver values, so
+        the member learns nothing a submitted request would not show them.
+        A step the amount falls under auto-approves; with no chain, or one
+        with no steps, a finance approver decides by hand. Requests at or over
+        the dual-approval threshold also need a second, different approver.
+        """
+        try:
+            et = ApprovalEntityType(entity_type)
+        except ValueError:
+            raise ValueError(f"Invalid entity type: {entity_type}")
+        chain = await self._request_chain(org_id, et, amount, budget_id)
+        threshold = (
+            await load_finance_settings(self.db, org_id)
+        ).dual_approval_threshold
+        route: dict[str, Any] = {
+            "chain_name": None,
+            "manual": True,
+            "steps": [],
+            "second_approver_required": threshold is not None and amount >= threshold,
+        }
+        if chain is None or not chain.steps:
+            return route
+        directory = ApproverDirectory(self.db, org_id)
+        steps = []
+        for step in sorted(chain.steps, key=lambda s: (s.step_order, s.id)):
+            approval = step.step_type == ApprovalStepType.APPROVAL
+            steps.append(
+                {
+                    "name": step.name,
+                    "step_order": step.step_order,
+                    "step_type": step.step_type.value,
+                    # A notification step waits on nobody.
+                    "assignee_label": (
+                        await describe_assignee(step, directory) if approval else None
+                    ),
+                    "auto_approved": approval
+                    and step.auto_approve_under is not None
+                    and amount < step.auto_approve_under,
+                }
+            )
+        route.update(chain_name=chain.name, manual=False, steps=steps)
+        return route
+
     async def _advance_reachable_steps(
         self,
         entity_type: ApprovalEntityType,
@@ -4882,18 +4960,11 @@ class FinanceService:
 
         pr.status = PurchaseRequestStatus.SUBMITTED
 
-        # Resolve and create approval chain
-        budget_category_id = None
-        if pr.budget_id:
-            budget = await self.get_budget(pr.budget_id, org_id)
-            if budget:
-                budget_category_id = budget.category_id
-
-        chain = await self.resolve_approval_chain(
+        chain = await self._request_chain(
             org_id,
             ApprovalEntityType.PURCHASE_REQUEST,
             pr.estimated_amount,
-            budget_category_id,
+            pr.budget_id,
         )
 
         if chain and chain.steps:
@@ -5456,10 +5527,8 @@ class FinanceService:
 
         er.status = ExpenseReportStatus.SUBMITTED
 
-        chain = await self.resolve_approval_chain(
-            org_id,
-            ApprovalEntityType.EXPENSE_REPORT,
-            er.total_amount,
+        chain = await self._request_chain(
+            org_id, ApprovalEntityType.EXPENSE_REPORT, er.total_amount, None
         )
 
         if chain and chain.steps:
@@ -6017,17 +6086,8 @@ class FinanceService:
         """Submit a check request into its approval chain."""
         cr.status = CheckRequestStatus.SUBMITTED
 
-        budget_category_id = None
-        if cr.budget_id:
-            budget = await self.get_budget(cr.budget_id, org_id)
-            if budget:
-                budget_category_id = budget.category_id
-
-        chain = await self.resolve_approval_chain(
-            org_id,
-            ApprovalEntityType.CHECK_REQUEST,
-            cr.amount,
-            budget_category_id,
+        chain = await self._request_chain(
+            org_id, ApprovalEntityType.CHECK_REQUEST, cr.amount, cr.budget_id
         )
 
         if chain and chain.steps:

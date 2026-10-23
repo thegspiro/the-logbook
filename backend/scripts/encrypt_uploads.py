@@ -84,12 +84,12 @@ async def _rewrap_buckets(*, dry_run: bool) -> dict:
     """Objects in departments' own buckets are found through the rows that
     reference them, so this part needs the database."""
     from app.core.database import async_session_factory, database_manager
-    from app.services import s3_migration
+    from app.services import remote_migration
 
     await database_manager.connect()
     try:
         async with async_session_factory() as db:
-            return await s3_migration.rewrap_bucket_objects(db, dry_run=dry_run)
+            return await remote_migration.rewrap_bucket_objects(db, dry_run=dry_run)
     finally:
         await database_manager.disconnect()
 

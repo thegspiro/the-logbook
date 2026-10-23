@@ -18,6 +18,7 @@ import type {
   ApprovalChainCreatePayload,
   ApprovalChainStep,
   ApprovalChainStepCreatePayload,
+  ApprovalRoutePreview,
   ApprovalChainStepUpdatePayload,
   ApprovalChainUpdatePayload,
   ApprovalEntityType,
@@ -484,6 +485,22 @@ export const approvalChainService = {
   async getApproverCoverage(): Promise<ApproverCoverageRow[]> {
     const response = await api.get<ApproverCoverageRow[]>('/finance/approval-chains/approver-coverage');
     return asArray(response.data);
+  },
+
+  /** Who a request would wait on if submitted now, for the member raising it. */
+  async routePreview(params: {
+    entityType: ApprovalEntityType;
+    amount: MonetaryAmount;
+    budgetId?: string | undefined;
+  }): Promise<ApprovalRoutePreview> {
+    const response = await api.get<ApprovalRoutePreview>('/finance/approval-chains/route-preview', {
+      params: {
+        entity_type: params.entityType,
+        amount: params.amount,
+        budget_id: params.budgetId || undefined,
+      },
+    });
+    return response.data;
   },
 
   async preview(params: { entityType: string; amount: MonetaryAmount; categoryId?: string }): Promise<ApprovalChain> {

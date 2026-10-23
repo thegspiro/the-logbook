@@ -10,10 +10,10 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Download, FileSpreadsheet, Trash2, Upload } from 'lucide-react';
+import { Download, FileSpreadsheet, Trash2, Upload, History } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import SchedulingHeader from '../../SchedulingHeader';
+import { SchedulingPageHeader } from '../../../../components/scheduling/SchedulingPageHeader';
 import { EmptyState, FileDropzone, SkeletonPage } from '../../../../components/ux';
 import { useConfirm } from '../../../../contexts/ConfirmContext';
 import { HISTORY_IMPORT_STATUS_COLORS } from '../../../../constants/enums';
@@ -101,11 +101,11 @@ const ShiftHistoryImportPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingHeader
+        <SchedulingPageHeader
+          icon={History}
           title="Shift History Import"
-          backTo="/scheduling/admin"
-          backLabel="Back to scheduling administration"
-          description="Bring in shifts worked before the department used this system"
+          subtitle="Bring in shifts worked before the department used this system"
+          underHub="/scheduling/admin"
         />
 
         <div className="space-y-6">

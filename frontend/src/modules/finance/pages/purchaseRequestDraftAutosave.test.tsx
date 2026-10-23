@@ -34,6 +34,10 @@ vi.mock('../services/api', () => ({
     cancel: (...args: unknown[]) => cancelRequest(...args) as unknown,
   },
   fundService: { list: () => Promise.resolve([]) },
+  // The form shows who would approve the request; not what these tests are about.
+  approvalChainService: {
+    routePreview: () => Promise.resolve({ manual: true, steps: [], secondApproverRequired: false }),
+  },
   financeSettingsService: {
     get: () =>
       Promise.resolve({
