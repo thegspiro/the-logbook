@@ -335,7 +335,13 @@ from app.models.minute import (
     Motion,
     MotionStatus,
 )
-from app.models.nfc_tag import NfcCredentialType, NfcTag, NfcTagStatus
+from app.models.nfc_tag import (
+    NfcCardTap,
+    NfcCredentialType,
+    NfcTag,
+    NfcTagStatus,
+    NfcTapSource,
+)
 from app.models.notification import (
     DepartmentMessage,
     DepartmentMessageDelivery,
@@ -874,8 +880,10 @@ __all__ = [
     "UserConsent",
     # NFC tag (member ID card) models
     "NfcCredentialType",
+    "NfcCardTap",
     "NfcTag",
     "NfcTagStatus",
+    "NfcTapSource",
     # Legal document models
     "LegalDocumentRevision",
     "LegalDocumentType",

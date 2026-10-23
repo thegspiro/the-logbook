@@ -238,6 +238,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/members/admin/edit/:userId', label: 'Edit member (admin)', permission: 'members.manage' },
       { path: '/members/admin/history/:userId', label: 'Member audit history', permission: 'members.manage' },
       { path: '/members/admin/waivers', label: 'Waiver management', permission: 'members.manage' },
+      { path: '/members/admin/id-cards', label: 'Member ID cards', permission: 'members.manage_id_cards' },
       {
         path: '/members/admin/settings',
         label: 'Members settings — ?tab= redirect',

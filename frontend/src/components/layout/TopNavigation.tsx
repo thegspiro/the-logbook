@@ -278,7 +278,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               // backend serves to users.view or members.manage holders.
               { label: 'Scan Member ID', path: '/members/scan', anyPermission: ['users.view', 'members.manage'] },
               ...(isNfcCardsOn
-                ? [{ label: 'Check-In Station', path: '/members/check-in-station', permission: 'members.check_in' }]
+                ? [
+                    { label: 'Check-In Station', path: '/members/check-in-station', permission: 'members.check_in' },
+                    { label: 'ID Cards', path: '/members/admin/id-cards', permission: 'members.manage_id_cards' },
+                  ]
                 : []),
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,

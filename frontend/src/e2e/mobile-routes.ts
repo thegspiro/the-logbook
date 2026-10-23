@@ -245,6 +245,7 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['members.manage', 'apparatus.manage'],
   },
   { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.check_in'] },
+  { path: '/members/admin/id-cards', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage_id_cards'] },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, permissions: ['audit.view'] },
