@@ -48,6 +48,7 @@ from app.schemas.finance import (
     ApprovalChainStepResponse,
     ApprovalChainStepUpdate,
     ApprovalChainUpdate,
+    ApprovalRoutePreviewResponse,
     ApprovalStepRecordResponse,
     ApproverCoverageResponse,
     BudgetAmendmentCreate,
@@ -1825,6 +1826,43 @@ async def preview_approval_chain(
             detail="No matching approval chain found",
         )
     return chain
+
+
+@router.get(
+    "/approval-chains/route-preview", response_model=ApprovalRoutePreviewResponse
+)
+async def preview_request_route(
+    entity_type: str = Query(...),
+    amount: Decimal = Query(..., ge=0, max_digits=12, decimal_places=2),
+    budget_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
+):
+    """
+    Who a request would wait on if it were submitted now
+
+    For the member raising a purchase request, expense report or check
+    request: the chain it would go to, each step's approver as the request's
+    own timeline would name them, which steps the amount auto-approves, and
+    whether the dual-approval threshold applies. With no chain, a finance
+    approver decides by hand. Unlike ``/approval-chains/preview`` it returns
+    no approver configuration. Registered before ``/approval-chains/{chain_id}``
+    for the reason given on that route.
+
+    **Authentication required**
+    **Requires permission: finance.request, finance.view or finance.manage**
+    """
+    service = FinanceService(db)
+    try:
+        return await service.preview_request_route(
+            str(current_user.organization_id), entity_type, amount, budget_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.get(
