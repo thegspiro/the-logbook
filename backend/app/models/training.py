@@ -1940,6 +1940,11 @@ class ProgramEnrollment(Base):
         index=True,
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Why an officer completed the enrollment by hand
+    # (TrainingProgramService.complete_enrollment_manually); NULL for an
+    # automatic completion. Cleared on every move out of COMPLETED, so a reason
+    # never outlives the completion it explains. Also kept in the audit log.
+    completion_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     withdrawn_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     withdrawal_reason: Mapped[Optional[str]] = mapped_column(Text)
 

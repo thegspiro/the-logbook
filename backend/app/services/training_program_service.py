@@ -525,9 +525,15 @@ class TrainingProgramService:
         self,
         enrollment_id: UUID | str,
         from_statuses: Sequence[EnrollmentStatus],
+        completion_reason: Optional[str] = None,
     ) -> bool:
         """Move an enrollment to COMPLETED if it is still in one of
         ``from_statuses``; True when this call made the change.
+
+        ``completion_reason`` is an officer's reason for a manual completion,
+        written by the same conditional UPDATE so that a call which loses the
+        race cannot put its reason on someone else's completion. None for an
+        automatic completion, which stores NULL.
 
         A compare-and-set rather than a read then a write: the status check is
         in the UPDATE's own WHERE clause, which InnoDB evaluates against the
@@ -546,6 +552,7 @@ class TrainingProgramService:
             .values(
                 status=EnrollmentStatus.COMPLETED,
                 completed_at=now,
+                completion_reason=completion_reason,
                 updated_at=now,
             )
             .execution_options(synchronize_session=False)
@@ -4808,6 +4815,7 @@ class TrainingProgramService:
         enrollment.status = EnrollmentStatus.ACTIVE
         enrollment.progress_percentage = 0.0
         enrollment.completed_at = None
+        enrollment.completion_reason = None
         enrollment.current_phase_id = first_phase_id
         # Anchor pace/behind-schedule heuristics to the fresh cycle and clear the
         # prior deadline-warning bookkeeping so warnings can fire for the new one.
@@ -4938,6 +4946,9 @@ class TrainingProgramService:
         else:
             enrollment.status = EnrollmentStatus.WITHDRAWN
             enrollment.withdrawn_at = withdrawn_at
+            # An officer may withdraw a completed enrollment; the reason it
+            # was completed no longer describes it (the audit log keeps it).
+            enrollment.completion_reason = None
             if reason:
                 enrollment.withdrawal_reason = reason
 
@@ -4950,6 +4961,7 @@ class TrainingProgramService:
         self,
         enrollment_id: UUID | str,
         organization_id: UUID | str,
+        reason: str,
     ) -> Tuple[Optional[ProgramEnrollment], Optional[str], int]:
         """An officer marks a member's whole enrollment complete by hand.
 
@@ -4969,7 +4981,9 @@ class TrainingProgramService:
         Completion goes through ``_claim_completion`` and
         ``_after_enrollment_completed`` — the same write and the same side
         effects as an automatic completion. Requirement progress is untouched:
-        what the member had not met stays unmet on record.
+        what the member had not met stays unmet on record. The trimmed
+        ``reason`` is stored on the enrollment (``completion_reason``) by the
+        claim itself; the endpoint audits it as well.
         """
         # Locked so two officers, or an officer and the rollup, serialize on
         # the row (pitfall #27); the claim re-checks the status in its own
@@ -5003,7 +5017,9 @@ class TrainingProgramService:
         unmet = await self._unmet_required_count(enrollment.id, enrollment.program_id)
 
         if not await self._claim_completion(
-            enrollment.id, MANUALLY_COMPLETABLE_STATUSES
+            enrollment.id,
+            MANUALLY_COMPLETABLE_STATUSES,
+            completion_reason=reason.strip(),
         ):
             return None, "This enrollment is already complete", 0
 
@@ -5169,6 +5185,10 @@ class TrainingProgramService:
             enrollment.target_completion_date = target_completion_date
 
         enrollment.status = EnrollmentStatus.ACTIVE
+        # Only an EXPIRED enrollment reaches here, and none should carry a
+        # reason; cleared anyway because a reason must never sit on an active
+        # enrollment, whatever path left it there.
+        enrollment.completion_reason = None
         # Let the warning sweep speak again on the new deadline.
         enrollment.deadline_warning_sent = False
         enrollment.deadline_warning_sent_at = None
@@ -5412,6 +5432,7 @@ class TrainingProgramService:
                 .values(
                     status=EnrollmentStatus.ACTIVE,
                     completed_at=None,
+                    completion_reason=None,
                 )
             )
 

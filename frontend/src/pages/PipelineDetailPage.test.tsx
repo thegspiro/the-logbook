@@ -1488,3 +1488,98 @@ describe('PipelineDetailPage — progress dialog actions need training.manage', 
     expect(within(dialog).queryByLabelText(/New deadline/i)).not.toBeInTheDocument();
   });
 });
+
+describe('PipelineDetailPage — a pipeline completed by hand', () => {
+  // The officer's reason is an officer note: shown to training.manage on a
+  // completed enrollment that carries one, and to nobody else.
+  const byHand = {
+    ...enrollment,
+    id: 'enr-4',
+    user_name: 'Chris ByHand',
+    status: 'completed',
+    progress_percentage: 50,
+    completion_reason: "Chief's call after the live burn",
+  };
+  const automatic = {
+    ...enrollment,
+    id: 'enr-5',
+    user_name: 'Alex Automatic',
+    status: 'completed',
+    progress_percentage: 100,
+    completion_reason: null,
+  };
+  const NOTE = "Completed by hand: Chief's call after the live burn";
+  const progressFor = (e: typeof byHand | typeof automatic) => ({
+    enrollment: e,
+    program,
+    requirement_progress: [certProgress],
+    completed_requirements: 0,
+    total_requirements: 1,
+    next_milestones: [],
+    is_behind_schedule: false,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockPermissions = null;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue(program);
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([byHand, automatic]);
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor(byHand));
+  });
+
+  afterEach(() => {
+    mockPermissions = null;
+  });
+
+  const openEnrollments = async () => {
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await screen.findByRole('button', { name: /Manage progress for Chris ByHand/i });
+  };
+
+  const openDialogFor = async (name: string) => {
+    await openEnrollments();
+    await userEvent.click(screen.getByRole('button', { name: `Manage progress for ${name}` }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('CPR Certification');
+    return dialog;
+  };
+
+  it('shows an officer the reason in the enrollment list, only on the by-hand row', async () => {
+    await openEnrollments();
+
+    const byHandRow = screen.getByRole('button', { name: 'Manage progress for Chris ByHand' });
+    expect(within(byHandRow).getByText(NOTE)).toBeInTheDocument();
+    const automaticRow = screen.getByRole('button', { name: 'Manage progress for Alex Automatic' });
+    expect(within(automaticRow).queryByText(/Completed by hand/)).not.toBeInTheDocument();
+  });
+
+  it('shows an officer the reason in the progress dialog header', async () => {
+    const dialog = await openDialogFor('Chris ByHand');
+
+    expect(within(dialog).getByText(NOTE)).toBeInTheDocument();
+  });
+
+  it('shows nothing in the dialog for an automatic completion', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor(automatic));
+    const dialog = await openDialogFor('Alex Automatic');
+
+    expect(within(dialog).queryByText(/Completed by hand/)).not.toBeInTheDocument();
+  });
+
+  it('shows a viewer without training.manage no reason, in the list or the dialog', async () => {
+    mockPermissions = ['training.view_all'];
+    const dialog = await openDialogFor('Chris ByHand');
+
+    expect(screen.queryAllByText(/Completed by hand/)).toHaveLength(0);
+    expect(within(dialog).queryByText(/Completed by hand/)).not.toBeInTheDocument();
+  });
+});

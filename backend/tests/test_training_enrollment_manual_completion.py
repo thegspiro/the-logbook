@@ -11,6 +11,7 @@ uses real connections rather than ``db_session``: it needs two transactions.
 
 import asyncio
 import uuid
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -36,7 +37,9 @@ from app.models.training import (
     TrainingRequirement,
 )
 from app.schemas.training_program import (
+    MemberProgramProgress,
     ProgramEnrollmentComplete,
+    ProgramEnrollmentResponse,
     RequirementProgressUpdate,
 )
 from app.services.training_program_service import TrainingProgramService
@@ -430,7 +433,7 @@ async def test_two_concurrent_completions_complete_once(monkeypatch):
 
     monkeypatch.setattr(TrainingProgramService, "_unmet_required_count", hold_the_first)
 
-    async def complete(after_event=None):
+    async def complete(reason, after_event=None):
         if after_event is not None:
             await after_event.wait()
         async with database_manager.engine.connect() as conn:
@@ -438,21 +441,29 @@ async def test_two_concurrent_completions_complete_once(monkeypatch):
             try:
                 _, error, _ = await TrainingProgramService(
                     session
-                ).complete_enrollment_manually(uuid.UUID(enrollment_id), org_id)
+                ).complete_enrollment_manually(
+                    uuid.UUID(enrollment_id), org_id, reason=reason
+                )
                 await session.commit()
                 return error or "completed"
             finally:
                 await session.close()
 
     try:
-        results = await asyncio.gather(complete(), complete(after_event=locked))
+        results = await asyncio.gather(
+            complete("First officer's reason"),
+            complete("Second officer's reason", after_event=locked),
+        )
         async with database_manager.engine.connect() as conn:
-            stored = (
+            stored, stored_reason = (
                 await conn.execute(
-                    text("SELECT status FROM program_enrollments WHERE id = :e"),
+                    text(
+                        "SELECT status, completion_reason FROM program_enrollments "
+                        "WHERE id = :e"
+                    ),
                     {"e": enrollment_id},
                 )
-            ).scalar()
+            ).one()
     finally:
         await _cleanup_race(org_id)
 
@@ -461,7 +472,265 @@ async def test_two_concurrent_completions_complete_once(monkeypatch):
         "This enrollment is already complete",
     ], f"two concurrent completions returned {results}"
     assert stored == "completed"
+    # The losing call's reason never reaches the winner's completion.
+    assert stored_reason == "First officer's reason"
     after.assert_awaited_once()
     # The second caller waited on the row lock and then saw the completion,
     # rather than reaching the count (and the claim) on a stale read.
     assert len(counted) == 1
+
+
+# ---------------------------------------------------------------------------
+# The stored reason: written by the claim, cleared whenever the enrollment
+# stops being COMPLETED, and kept from the member's own view
+# ---------------------------------------------------------------------------
+
+
+async def _with_reason(db, org_id, member_id, status, reason="Stale reason"):
+    """An enrollment in ``status`` already carrying a completion reason."""
+    program, enrollment, unmet_row = await _half_done(
+        db, org_id, member_id, status=status
+    )
+    enrollment.completion_reason = reason
+    await db.flush()
+    return program, enrollment, unmet_row
+
+
+class TestCompletionReasonIsStored:
+    async def test_manual_completion_stores_the_trimmed_reason(
+        self, db_session, setup_org_and_admin, side_effects
+    ):
+        org_id, member_id = setup_org_and_admin
+        _, enrollment, _ = await _half_done(db_session, org_id, member_id)
+
+        returned = await _complete(
+            db_session, enrollment.id, org_id, reason="  Chief's call  "
+        )
+
+        now = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        assert now.completion_reason == "Chief's call"
+        # And the audit event still carries it.
+        data = side_effects.audit.await_args.kwargs["event_data"]
+        assert data["reason"] == "Chief's call"
+        # The endpoint's response includes it.
+        response = ProgramEnrollmentResponse.model_validate(returned)
+        assert response.completion_reason == "Chief's call"
+
+    async def test_automatic_completion_stores_null(
+        self, db_session, setup_org_and_admin, monkeypatch
+    ):
+        org_id, member_id = setup_org_and_admin
+        # A reason on an active row should never exist; seeded here so the
+        # test proves the automatic claim writes NULL rather than leaving
+        # whatever the row held.
+        _, enrollment, unmet_row = await _with_reason(
+            db_session, org_id, member_id, EnrollmentStatus.ACTIVE
+        )
+        monkeypatch.setattr(
+            TrainingProgramService, "_after_enrollment_completed", AsyncMock()
+        )
+        unmet_row.progress_percentage = 100.0
+        await db_session.flush()
+
+        await TrainingProgramService(db_session)._recalculate_enrollment_progress(
+            enrollment.id
+        )
+
+        now = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        assert now.status == EnrollmentStatus.COMPLETED
+        assert now.completion_reason is None
+
+    async def test_a_lost_claim_does_not_write_its_reason(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, member_id = setup_org_and_admin
+        _, enrollment, _ = await _with_reason(
+            db_session,
+            org_id,
+            member_id,
+            EnrollmentStatus.COMPLETED,
+            reason="The winner's reason",
+        )
+
+        claimed = await TrainingProgramService(db_session)._claim_completion(
+            enrollment.id,
+            (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD),
+            completion_reason="The loser's reason",
+        )
+
+        assert claimed is False
+        now = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        assert now.completion_reason == "The winner's reason"
+
+
+class TestCompletionReasonIsCleared:
+    async def test_reopening_when_progress_falls_clears_it(
+        self, db_session, setup_org_and_admin, side_effects
+    ):
+        org_id, member_id = setup_org_and_admin
+        # Every item met, but paused: the rollup would not complete it, so an
+        # officer does, at 100%.
+        _, enrollment, unmet_row = await _half_done(
+            db_session, org_id, member_id, status=EnrollmentStatus.ON_HOLD
+        )
+        unmet_row.progress_percentage = 100.0
+        unmet_row.progress_value = 4.0
+        unmet_row.status = RequirementProgressStatus.COMPLETED
+        enrollment.progress_percentage = 100.0
+        await db_session.flush()
+        await _complete(db_session, enrollment.id, org_id)
+        assert (
+            await _reload(db_session, ProgramEnrollment, enrollment.id)
+        ).completion_reason == "Signed off by the chief"
+
+        _, error = await TrainingProgramService(db_session).update_requirement_progress(
+            uuid.UUID(unmet_row.id),
+            org_id,
+            RequirementProgressUpdate(progress_value=1.0),
+        )
+        assert error is None, error
+
+        now = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        assert now.status == EnrollmentStatus.ACTIVE
+        assert now.completion_reason is None
+
+    async def test_starting_a_new_cycle_clears_it(
+        self, db_session, setup_org_and_admin, side_effects
+    ):
+        org_id, member_id = setup_org_and_admin
+        _, enrollment, _ = await _half_done(db_session, org_id, member_id)
+        await _complete(db_session, enrollment.id, org_id)
+
+        returned = await training_programs.reset_enrollment_progress(
+            enrollment_id=uuid.UUID(enrollment.id),
+            db=db_session,
+            current_user=_officer(org_id),
+        )
+
+        now = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        assert now.status == EnrollmentStatus.ACTIVE
+        assert now.completion_reason is None
+        assert returned.completion_reason is None
+
+    async def test_a_recert_reset_clears_it(
+        self, db_session, setup_org_and_admin, side_effects, monkeypatch
+    ):
+        org_id, member_id = setup_org_and_admin
+        program, enrollment, _ = await _half_done(db_session, org_id, member_id)
+        await _complete(db_session, enrollment.id, org_id)
+        program.recert_enabled = True
+        enrollment = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        enrollment.next_recert_reset_at = date(2020, 1, 1)
+        await db_session.flush()
+        monkeypatch.setattr(
+            TrainingProgramService, "_safe_notify_recert_reset", AsyncMock()
+        )
+
+        reset = await TrainingProgramService(db_session).auto_reset_if_due(
+            enrollment, today=date(2026, 10, 23)
+        )
+
+        assert reset is True
+        now = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        assert now.status == EnrollmentStatus.ACTIVE
+        assert now.completion_reason is None
+
+    async def test_the_reopen_endpoint_clears_it(
+        self, db_session, setup_org_and_admin, side_effects
+    ):
+        org_id, member_id = setup_org_and_admin
+        # Only an expired enrollment can be reopened, and none should carry a
+        # reason; a stale one must still not survive onto the active row.
+        _, enrollment, _ = await _with_reason(
+            db_session, org_id, member_id, EnrollmentStatus.EXPIRED
+        )
+
+        returned = await training_programs.reopen_enrollment(
+            enrollment_id=uuid.UUID(enrollment.id),
+            payload=None,
+            db=db_session,
+            current_user=_officer(org_id),
+        )
+
+        now = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        assert now.status == EnrollmentStatus.ACTIVE
+        assert now.completion_reason is None
+        assert returned.completion_reason is None
+
+    async def test_an_officer_withdrawing_a_completed_enrollment_clears_it(
+        self, db_session, setup_org_and_admin, side_effects
+    ):
+        org_id, member_id = setup_org_and_admin
+        _, enrollment, _ = await _half_done(db_session, org_id, member_id)
+        await _complete(db_session, enrollment.id, org_id)
+
+        withdrawn, error = await TrainingProgramService(db_session).withdraw_enrollment(
+            uuid.UUID(enrollment.id),
+            org_id,
+            acting_user_id=_uid(),
+            can_manage=True,
+            reason="Left the department",
+        )
+
+        assert error is None, error
+        now = await _reload(db_session, ProgramEnrollment, enrollment.id)
+        assert now.status == EnrollmentStatus.WITHDRAWN
+        assert now.completion_reason is None
+
+
+class TestCompletionReasonVisibility:
+    """The reason is an officer's note: a member reading their own enrollment
+    does not get it; an officer reading it does."""
+
+    async def _completed(self, db, org_id, member_id):
+        _, enrollment, _ = await _half_done(db, org_id, member_id)
+        await _complete(db, enrollment.id, org_id)
+        return enrollment
+
+    @pytest.mark.parametrize("officer", [True, False])
+    async def test_my_enrollments(
+        self, db_session, setup_org_and_admin, side_effects, monkeypatch, officer
+    ):
+        org_id, member_id = setup_org_and_admin
+        await self._completed(db_session, org_id, member_id)
+        monkeypatch.setattr(
+            training_programs,
+            "can_view_officer_training_data",
+            lambda user: officer,
+        )
+
+        rows = await training_programs.get_my_enrollments(
+            status=None,
+            db=db_session,
+            current_user=SimpleNamespace(id=member_id, organization_id=org_id),
+        )
+
+        reasons = [
+            ProgramEnrollmentResponse.model_validate(r).completion_reason for r in rows
+        ]
+        expected = "Signed off by the chief" if officer else None
+        assert reasons == [expected]
+
+    @pytest.mark.parametrize("officer", [True, False])
+    async def test_enrollment_progress(
+        self, db_session, setup_org_and_admin, side_effects, monkeypatch, officer
+    ):
+        org_id, member_id = setup_org_and_admin
+        enrollment = await self._completed(db_session, org_id, member_id)
+        monkeypatch.setattr(
+            training_programs,
+            "can_view_officer_training_data",
+            lambda user: officer,
+        )
+
+        progress = await training_programs.get_enrollment_progress(
+            enrollment_id=uuid.UUID(enrollment.id),
+            db=db_session,
+            # The member themself, so the view_all check is not reached.
+            current_user=SimpleNamespace(id=member_id, organization_id=org_id),
+        )
+
+        body = MemberProgramProgress.model_validate(progress)
+        expected = "Signed off by the chief" if officer else None
+        assert body.enrollment.completion_reason == expected
+        assert body.enrollment.status == "completed"

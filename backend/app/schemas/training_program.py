@@ -590,6 +590,12 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase, UTCResponseBase):
     progress_percentage: float
     status: EnrollmentStatusStr
     completed_at: Optional[datetime] = None
+    # An officer's reason for completing the enrollment by hand; None for an
+    # automatic completion and on any enrollment that is not COMPLETED. Output
+    # only: written by the complete endpoint alone, never by a create or
+    # update payload. An officer note, so the member-facing reads blank it for
+    # a caller without officer training access (_member_enrollment).
+    completion_reason: Optional[str] = None
     deadline_warning_sent: bool
     next_recert_reset_at: Optional[date] = None
     last_recert_reset_at: Optional[datetime] = None

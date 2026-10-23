@@ -45,7 +45,11 @@ import {
   NoActiveRequirementsNotice,
 } from '../components/training/NoActiveRequirementsNotice';
 import { MarkPipelineCompleteDialog } from '../components/training/MarkPipelineCompleteDialog';
-import { MARK_PIPELINE_COMPLETE_LABEL, canMarkPipelineComplete } from '../components/training/markPipelineComplete';
+import {
+  MARK_PIPELINE_COMPLETE_LABEL,
+  canMarkPipelineComplete,
+  completedByHandNote,
+} from '../components/training/markPipelineComplete';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
 import { enumLabel } from '../utils/displayValue';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
@@ -1100,6 +1104,8 @@ const EnrollmentProgressModal: React.FC<{
   // No current phase (idx -1) but phases exist → the first phase is still "next".
   const hasNextPhase = orderedPhases.length > 0 && currentIdx < orderedPhases.length - 1;
 
+  const byHandNote = completedByHandNote(data?.enrollment, canManage);
+
   const groups = data && phased ? groupRecordsByPhase(data.requirement_progress, phases, programReqs) : [];
 
   // A sibling of the panel, not a child: a portal still bubbles React key
@@ -1129,6 +1135,7 @@ const EnrollmentProgressModal: React.FC<{
                       : `${data.completed_requirements}/${data.total_requirements} requirements · ${overall}% overall`}
                   </p>
                 )}
+                {byHandNote && <p className="text-theme-text-muted mt-1 text-xs break-words">{byHandNote}</p>}
                 {phased && data?.current_phase && (
                   <p className="text-theme-text-muted mt-1 text-xs">
                     Current phase: <span className="text-theme-text-secondary">{data.current_phase.name}</span>
@@ -2255,6 +2262,7 @@ const PipelineDetailPage: React.FC = () => {
                   // running one has nothing left to measure progress against.
                   const unmeasured =
                     noActiveRequirements && (enrollment.status === 'active' || enrollment.status === 'on_hold');
+                  const byHandNote = completedByHandNote(enrollment, canManage);
                   return (
                     <div
                       key={enrollment.id}
@@ -2266,7 +2274,7 @@ const PipelineDetailPage: React.FC = () => {
                         className="hover:bg-theme-surface-hover flex w-full min-w-0 flex-1 items-center justify-between p-4 text-left transition-colors"
                         aria-label={`Manage progress for ${enrollment.user_name}`}
                       >
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
                           <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                             <span>Status: {enumLabel(enrollment.status)}</span>
@@ -2276,6 +2284,7 @@ const PipelineDetailPage: React.FC = () => {
                                 : `${Math.round(enrollment.progress_percentage)}% complete`}
                             </span>
                           </div>
+                          {byHandNote && <p className="text-theme-text-muted mt-1 text-xs break-words">{byHandNote}</p>}
                         </div>
                         {!unmeasured && (
                           <div className="bg-theme-surface-secondary h-2 w-32 rounded-full">

@@ -171,6 +171,23 @@ def _member_progress(progress) -> RequirementProgressResponse:
     return member_view
 
 
+def _member_enrollment(enrollment) -> ProgramEnrollmentResponse:
+    """Return an enrollment without the officer's manual-completion reason.
+
+    ``completion_reason`` is the note an officer wrote when completing the
+    pipeline by hand — for the department's record and the audit log, not a
+    message to the member, who may read it as a verdict on the items they had
+    not met. The member still sees that the enrollment is complete and when.
+    """
+    response: ProgramEnrollmentResponse = ProgramEnrollmentResponse.model_validate(
+        enrollment
+    )
+    member_view: ProgramEnrollmentResponse = response.model_copy(
+        update={"completion_reason": None}
+    )
+    return member_view
+
+
 def _member_program_requirement(program_requirement) -> ProgramRequirementResponse:
     """Return a program-requirement link without officer-only checklist steps."""
     response: ProgramRequirementResponse = ProgramRequirementResponse.model_validate(
@@ -1499,7 +1516,9 @@ async def get_my_enrollments(
             status=status,
         )
 
-    return enrollments
+    if can_view_officer_training_data(current_user):
+        return enrollments
+    return [_member_enrollment(enrollment) for enrollment in enrollments]
 
 
 @router.get(
@@ -1681,7 +1700,9 @@ async def get_enrollment_progress(
     )
 
     return MemberProgramProgress(
-        enrollment=enrollment,
+        enrollment=(
+            enrollment if can_view_officer_data else _member_enrollment(enrollment)
+        ),
         program=enrollment.program,
         current_phase=enrollment.current_phase,
         requirement_progress=visible_progress,
@@ -2006,6 +2027,7 @@ async def complete_enrollment(
     enrollment, error, unmet = await service.complete_enrollment_manually(
         enrollment_id=enrollment_id,
         organization_id=current_user.organization_id,
+        reason=payload.reason,
     )
     if error == "Enrollment not found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)

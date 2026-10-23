@@ -1216,6 +1216,12 @@ export interface ProgramEnrollment {
   progress_percentage: number;
   status: EnrollmentStatus;
   completed_at?: string;
+  /**
+   * An officer's reason for completing the enrollment by hand; null for an
+   * automatic completion. The API blanks it for a member reading their own
+   * enrollment, and the UI shows it only to training.manage holders.
+   */
+  completion_reason?: string | null;
   deadline_warning_sent: boolean;
   next_recert_reset_at?: string;
   last_recert_reset_at?: string;
