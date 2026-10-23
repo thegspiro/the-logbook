@@ -6,7 +6,7 @@ import { ScrollCueRow } from '../ux/ScrollCueRow';
 import { BREADCRUMB_ROUTES, canLinkCrumb } from '../ux/breadcrumbRoutes';
 import { useAuthStore } from '../../stores/authStore';
 import type { SectionNavItem } from './sectionNavigation';
-import { activeSection, visibleSectionNavItems } from './sectionNavigation';
+import { activeSection, isSectionPage, visibleSectionNavItems } from './sectionNavigation';
 
 const DENY_ALL = (): boolean => false;
 
@@ -104,6 +104,14 @@ export interface PageHeaderProps {
    * prove every such card names its hub.
    */
   underHub?: string | undefined;
+  /**
+   * The section this page belongs to when its URL does not sit under it —
+   * `/training/record-crew` is part of Submit Training, and a member's own
+   * program progress is part of My Training. A path from the group's list;
+   * the strip marks it and the trail starts from it. Ignored when the viewer
+   * cannot open that section.
+   */
+  section?: string | undefined;
 }
 
 interface SectionPageHeaderProps extends PageHeaderProps {
@@ -136,19 +144,24 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   breadcrumbLabel,
   parentCrumbs,
   underHub,
+  section,
 }) => {
   const { pathname } = useLocation();
   const checkPermission = useSectionPermission();
   const items = visibleSectionNavItems(sections, checkPermission);
-  const active = activeSection(items, pathname);
+  const active = items.find((item) => item.path === section) ?? activeSection(items, pathname);
   const pageLabel = breadcrumbLabel ?? (typeof title === 'string' ? title : undefined);
   const hub = underHub && canLinkCrumb(underHub, checkPermission) ? BREADCRUMB_ROUTES[underHub] : undefined;
   // The hub crumb stands on its own: an officer who opens the hub but not the
   // section (a storefront manager on Storage Areas) still gets a way back.
-  const leading: BreadcrumbItem[] = [
-    ...(active && pathname !== active.path ? [{ label: active.label, path: active.path }] : []),
-    ...(hub && underHub ? [{ label: hub.label ?? 'Administration', path: underHub }] : []),
-  ];
+  const sectionCrumbs: BreadcrumbItem[] =
+    active && !isSectionPage(active, pathname) ? [{ label: active.label, path: active.path }] : [];
+  const hubCrumbs: BreadcrumbItem[] = hub && underHub ? [{ label: hub.label ?? 'Administration', path: underHub }] : [];
+  // A hub inside the section follows it — Inventory › Inventory
+  // Administration. One beside it comes first: Training Administration is
+  // where an officer opened Programs from, not a page within Programs.
+  const hubInsideSection = Boolean(active && underHub?.startsWith(`${active.path}/`));
+  const leading = hubInsideSection ? [...sectionCrumbs, ...hubCrumbs] : [...hubCrumbs, ...sectionCrumbs];
   const trail: BreadcrumbItem[] =
     leading.length > 0 ? [...leading, ...(parentCrumbs ?? []), ...(pageLabel ? [{ label: pageLabel }] : [])] : [];
 

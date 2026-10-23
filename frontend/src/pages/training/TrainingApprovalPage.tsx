@@ -19,10 +19,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import toast from 'react-hot-toast';
-import { AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, ShieldAlert } from 'lucide-react';
 import { trainingSessionService } from '../../services/api';
 import type { TrainingApprovalAttendee, TrainingApprovalData } from '../../services/api';
 import { Breadcrumbs } from '../../components/ux/Breadcrumbs';
+import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
 import { SkeletonCard, SkeletonRow } from '../../components/ux/Skeleton';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -325,26 +326,28 @@ export const TrainingApprovalPage: React.FC = () => {
   const count = data.attendees.length;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <Breadcrumbs items={TRAIL} />
-
-      <header className="card mb-6 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-theme-text-muted text-sm font-medium">Approve training credit</p>
-            <h1 className="text-theme-text-primary text-2xl font-bold break-words">
-              <Link to={`/events/${data.event_id}`} className="underline-offset-2 hover:underline">
-                {data.event_title}
-              </Link>
-            </h1>
-          </div>
-          <span
-            className={`badge ${STATUS_BADGES[data.status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}
-          >
-            {statusLabel(data.status)}
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={ClipboardCheck}
+        title={
+          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 break-words">
+            <Link to={`/events/${data.event_id}`} className="underline-offset-2 hover:underline">
+              {data.event_title}
+            </Link>
+            <span
+              className={`badge ${STATUS_BADGES[data.status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}
+            >
+              {statusLabel(data.status)}
+            </span>
           </span>
-        </div>
-        <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+        }
+        breadcrumbLabel="Approve training credit"
+        subtitle="Approve training credit"
+        underHub="/training/admin"
+      />
+
+      <div className="card mb-6 p-5">
+        <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-theme-text-muted">Course</dt>
             <dd className="text-theme-text-primary font-medium">{data.course_name || data.event_title}</dd>
@@ -358,7 +361,7 @@ export const TrainingApprovalPage: React.FC = () => {
             <dd className="text-theme-text-primary font-medium">{formatDateTime(data.approval_deadline, tz)}</dd>
           </div>
         </dl>
-      </header>
+      </div>
 
       {pending ? (
         <p className="text-theme-text-secondary mb-4 text-sm">
