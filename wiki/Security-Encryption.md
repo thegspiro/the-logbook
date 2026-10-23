@@ -113,6 +113,18 @@ of a rotation safe: nothing breaks the moment you deploy the new key.
 4. When a `--commit` run reports zero rotated and zero unreadable values,
    remove the drained key from `ENCRYPTION_KEYS_LEGACY` and restart.
 
+### Encrypted backups
+
+Backups are encrypted once `scripts/backup-keygen.sh` has created a key
+(until then they stay plaintext, log a warning each run, and administrators
+see a critical notice). Each archive is AES-256 encrypted with its own random
+key, and that key is wrapped to two recipients: a **drill key** on the server,
+so the nightly restore drill can open what it wrote, and a **certificate**
+whose private key you keep offline. Only the offline key protects backups
+taken before a server compromise. If both are lost the backups cannot be
+recovered. Offsite uploads carry ciphertext only and refuse a plaintext
+archive. Setup, restore and key custody: [`docs/BACKUP.md`](../docs/BACKUP.md#encrypted-backups).
+
 > ⚠️ **A database backup without its era's `ENCRYPTION_KEY`/`ENCRYPTION_SALT`
 > cannot decrypt sensitive fields.** Keep retired keys archived alongside the
 > backups they match. Full runbook: [`docs/KEY_ROTATION.md`](../docs/KEY_ROTATION.md).
