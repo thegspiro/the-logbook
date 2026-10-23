@@ -288,6 +288,7 @@ describe('RanksSettingsSection — editing a rank code', () => {
       <RanksSettingsSection
         ranks={[editing]}
         ranksLoading={false}
+        canReorder
         editingRank={editing}
         addingRank={false}
         rankForm={{ rank_code: editing.rank_code, display_name: editing.display_name }}
