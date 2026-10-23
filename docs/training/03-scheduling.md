@@ -109,7 +109,7 @@ _(2026-10-18)_ An empty week or month looks up the first shift after it and offe
 Monday is scheduled. An officer's button reads **Create a shift** once any shift
 exists, and creating one moves the board to that shift's date.
 
-<!-- Screenshot needed: an empty week showing Go to the next shift. -->
+![The Schedule tab on an empty week: Nothing is scheduled for this week yet, the date of the next shift on the schedule, and the Go to the next shift button beside the officer's Create a shift button](./images/03-124-empty-week-next-shift.png)
 
 If you refresh the page, or send someone a copied link, it opens on the same
 week or month you were looking at, not on today.
@@ -2367,7 +2367,7 @@ the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
 by the day checked. The **All / Start / End** filter is gone; every row carries
 its own **Start** or **End** badge. On a laptop the cards below are unchanged.
 
-<!-- Screenshot needed: My Checklists on a phone, showing day headings, the overdue marker and the ⋯ menu. -->
+![My Checklists on a phone: day headings with the overdue marker, each row's Start or End badge, and the ⋯ menu open over Apparatus Inventory](./images/03-126-my-checklists-phone.png)
 
 Each card shows:
 
@@ -2703,7 +2703,7 @@ nothing matching drops out. There is **no Save button**: every tap already
 saves on its own, and a line under the list reads **Saving…**, then **All
 changes saved**, or **Last change didn't save** if it failed (tap again).
 
-<!-- Screenshot needed: Apparatus Inventory on a phone with a filter chip selected and the pinned location heading; REPLACE `03-95-apparatus-inventory.png`. -->
+![Apparatus Inventory on a phone with the need restock chip selected: the chip row under the header, and the location heading pinned under the app header above only the items that need restock](./images/03-125-apparatus-inventory-filtered.png)
 
 The lot number shown is **the lot the date belongs to** — the one expiring
 soonest — not the last one put aboard.
@@ -3219,7 +3219,7 @@ details list the shifts per weekday.
 from it. Daily, weekly and custom-date patterns have no cycle, so for them the date
 only bounds when automatic generation begins.
 
-<!-- Screenshot needed: Manual Setup, Weekly, with Separate day and night shifts ticked and Saturday set to both; and the pattern list showing the glyphs. -->
+![New Pattern in Manual Setup, Weekly: Friday, Saturday and Sunday active, Separate day and night shifts ticked, Friday carrying only the night shift, Saturday both and Sunday only the day shift](./images/03-127-pattern-weekly-split.png)
 
 Select **Create Pattern** to save it.
 
@@ -3486,9 +3486,7 @@ pattern, a shift on the calendar). The guide disappears when the two required
 steps are done; the optional pattern does not keep it open. The **×** hides it
 on that browser.
 
-<!-- Screenshot needed:
-_[Scheduling Admin hub on a fresh department with no templates → the "Set up scheduling for your department" card reading "0 of 2 required steps done", its three numbered steps with their links, and the × in the corner.]_
--->
+![The Scheduling Administration hub for a department with nothing set up: the Set up scheduling for your department card reading 0 of 2 required steps done, its three numbered steps with their links, and the close button in the corner](./images/03-123-scheduling-setup-guide.png)
 
 **Empty screens say so.** On a department with no shifts yet:
 

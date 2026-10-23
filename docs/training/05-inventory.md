@@ -1277,9 +1277,7 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
 | **Property return reminder** and **member dropped** notice | Two columns, **Item** and **Value**, with condition, serial number and asset tag as grey lines under the item. A missing value is left out          |
 | **Supplies to Replace** (weekly)                           | Supplies expiring on the apparatus, with a **Status** column. See [Shifts & Scheduling](./03-scheduling.md#alerts)                                  |
 
-<!-- Screenshot needed:
-_[A test send, at phone width (390px), of the Supplies to Replace email from the email template editor preview: the Status column with one expiring row, one "Restock reported" row and one "Short — 2 of 4 aboard" row.]_
--->
+![The weekly Supplies to Replace email at phone width: supplies on apparatus with replacement stock ready, the Status column showing a date with days left for an expiring supply and Restock reported with the crew's note, and the shelf lots expiring below](./images/05-136-supplies-to-replace-email-phone.png)
 
 ---
 
@@ -1834,9 +1832,7 @@ and use **Download CSV** for the full list.
 
 This report works whether or not NFC tags are turned on.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/not-seen: default 180 days, All categories, with at least one "Never" row and one dated row showing its source (e.g. "Returned · 212 days ago"), and Download CSV enabled. NFC may be off, which shows the report needs no tags.]_
--->
+![Items Not Seen at its default of 180 days and All categories: items never handled listed first as Never, then two items last seen on a date with Returned or Assigned and the days ago, and Download CSV enabled](./images/05-127-items-not-seen.png)
 
 ---
 
@@ -2343,9 +2339,7 @@ The **property return report** created when a member is dropped is a separate
 document. See
 [Membership > Member Status Management](./01-membership.md#member-status-management).
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin: crop to the Needs attention card showing an "Unresolved departure clearance · <demo member> · 1 outstanding · Due <date> · Review" row. Requires a demo member dropped while holding an item.]_
--->
+![The Needs attention card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button](./images/05-132-departure-clearance-needs-attention.png)
 
 ### Creating a Clearance
 
@@ -2745,7 +2739,7 @@ allow. On a page below a section, such as one apparatus, the strip shows a trail
 in Operations' terms. The side and top navigation draw from the same list, so
 the three can no longer offer different sections.
 
-<!-- Screenshot needed: the Operations section strip under the page title, on Fleet Readiness at 1280px, with the current section marked. Replaces the old per-page headers wherever a guide 05 or 06 image shows the page title. -->
+![Fleet Readiness at laptop width: the Operations sections strip with Fleet Readiness marked as the current section, and under it the page title row with its description and actions](./images/05-128-operations-section-strip.png)
 
 ### Phone layouts for the apparatus screens
 
@@ -2762,7 +2756,11 @@ the three can no longer offer different sections.
   apparatus** puts a heading per rig. **Add stock** opens a sheet with Quantity
   and Lot side by side and the amount on the truck now above them.
 
-<!-- Screenshot needed: at 390px: the apparatus detail header and pinned tabs; the supply worklist with its count chips; the Add stock sheet. None exist. -->
+![One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header](./images/05-129-apparatus-detail-phone.png)
+
+![The Expiring on Apparatus worklist on a phone with its count chips, each item showing its rig, compartment, expiry and lot, and full-size Add and Manage buttons](./images/05-130-supply-worklist-phone.png)
+
+![The Add stock sheet on a phone: the amount on the truck now above Quantity and Lot side by side](./images/05-131-add-stock-sheet-phone.png)
 
 ### Where checklists live
 
@@ -3038,7 +3036,9 @@ and tiles, not deleted; unticking brings them back. The CSV import and export
 carry the setting as a **Kept on Apparatus Only** column (Yes or No; any other
 value is refused rather than guessed).
 
-<!-- Screenshot needed: the Medical Supplies list showing "+12 on trucks" and a Next expiry that names a truck; the supply form with Kept on apparatus only ticked; the Expiring tab with the shelf/truck split on its tiles. -->
+![Medical Supplies with a supply's shelf count followed by how many are on trucks, and a Next expiry that names the truck carrying the soonest-expiring lot](./images/05-133-medical-supplies-on-trucks.png)
+
+![The medical supply form with Kept on apparatus only ticked and its explanation, for a supply that never goes through the stock room](./images/05-134-medical-supply-apparatus-only.png)
 
 ### Deleting a medical supply category
 

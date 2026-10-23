@@ -5,6 +5,18 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 23, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
+
+The training guides gained 45 screenshots: the setup guides for a department
+that has nothing configured yet, the Agenda and Sync from the agenda dialogs,
+publishing and signing of adopted minutes, the ranked-choice paper ballot
+dialog, the departure clearance row on the inventory hub, and the phone layouts
+for My Checklists, Apparatus Inventory and the Suggestions review. Opening a
+departure clearance no longer reports an error after it has saved.
+
 ## Recent changes: October 21 – 22, 2026
 
 The engineering audit is
