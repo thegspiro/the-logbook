@@ -86,6 +86,30 @@ export interface MedicalExpiringStockRow {
   days_until_expiration?: number | null;
   quantity: number;
   where?: string | null;
+  /** Under an active recall of its lot number: pull it, whatever its date. */
+  recalled?: boolean;
+}
+
+/** A manufacturer's recall of one lot number of one supply. */
+export interface MedicalLotRecall {
+  id: string;
+  inventory_item_id: string;
+  item_name?: string | null;
+  item_size?: string | null;
+  lot_number: string;
+  reason?: string | null;
+  recalled_at?: string | null;
+  lifted_at?: string | null;
+  lift_note?: string | null;
+  /** Units still carrying the number, in the stock room and aboard trucks. */
+  units_on_shelf: number;
+  units_aboard: number;
+}
+
+export interface MedicalLotRecallCreate {
+  inventory_item_id: string;
+  lot_number: string;
+  reason?: string | undefined;
 }
 
 /**
@@ -408,6 +432,27 @@ export const medicalSuppliesService = {
    * Read past the cache: after a recall the officer pulls units and searches
    * again, and a 30-second-old answer would still list the ones just pulled.
    */
+  async getRecalls(includeLifted = false, options?: MedicalReadOptions): Promise<MedicalLotRecall[]> {
+    const response = await api.get<MedicalLotRecall[]>('/medical-supplies/recalls', {
+      params: { include_lifted: includeLifted },
+      ...readConfig(options),
+    });
+    return response.data;
+  },
+
+  async recordRecall(data: MedicalLotRecallCreate): Promise<MedicalLotRecall> {
+    const response = await api.post<MedicalLotRecall>('/medical-supplies/recalls', data);
+    return response.data;
+  },
+
+  async liftRecall(recallId: string, note: string): Promise<MedicalLotRecall> {
+    const response = await api.post<MedicalLotRecall>(
+      `/medical-supplies/recalls/${encodeURIComponent(recallId)}/lift`,
+      { note }
+    );
+    return response.data;
+  },
+
   async searchLots(lotNumber: string): Promise<MedicalExpiringStockRow[]> {
     const response = await api.get<MedicalExpiringStockRow[]>('/medical-supplies/lots/search', {
       params: { lot_number: lotNumber },

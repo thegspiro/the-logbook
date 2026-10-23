@@ -34,7 +34,12 @@ from app.models.apparatus import (
     EquipmentCheckTemplate,
     TemplateChangeLog,
 )
-from app.models.inventory import InventoryCategory, InventoryItem, InventoryLot
+from app.models.inventory import (
+    InventoryCategory,
+    InventoryItem,
+    InventoryLot,
+    lot_key,
+)
 from app.models.training import (
     AssignmentStatus,
     Shift,
@@ -4340,6 +4345,7 @@ class EquipmentCheckService:
         item_ids: Optional[Iterable[str]] = None,
         lot_number: Optional[str] = None,
         include_undated: bool = False,
+        include_recalled: bool = False,
     ) -> List[Dict[str, Any]]:
         """Stock on the trucks that expires within ``days_ahead``, or has.
 
@@ -4357,6 +4363,10 @@ class EquipmentCheckService:
         nothing, as the recall lookup does: every lot aboard, for the lot
         export. A position with neither a lot number nor a date is still left
         out, since it records no lot to list.
+
+        ``include_recalled`` also returns every unit under an active recall,
+        whatever its date, so the Expiring list shows what has to be pulled.
+        Every row carries ``recalled``.
 
         One row per dated lot aboard a position (a position carrying three
         boxes from two lots expires twice), and one per position with no lot
@@ -4398,7 +4408,11 @@ class EquipmentCheckService:
                 )
             )
 
-        def _wanted(when: Optional[date], number: Optional[str]) -> bool:
+        def _wanted(
+            when: Optional[date], number: Optional[str], is_recalled: bool
+        ) -> bool:
+            if include_recalled and is_recalled:
+                return True
             if needle is not None:
                 return bool(number) and needle in str(number).casefold()
             if include_undated and when is None:
@@ -4437,6 +4451,9 @@ class EquipmentCheckService:
         ).all()
         if not positions:
             return []
+        recalled = await InventoryService(self.db).recalled_lot_keys(
+            organization_id, {str(r[0].inventory_item_id) for r in positions}
+        )
         paths = await self._compartment_paths({str(r[3]) for r in positions})
         apparatus_ids = {r[5] for r in positions if r[5]}
         names: Dict[str, str] = {}
@@ -4484,12 +4501,17 @@ class EquipmentCheckService:
             if lots:
                 for lot in lots:
                     when = lot.expiration_date
-                    if not _wanted(when, lot.lot_number):
+                    is_recalled = (
+                        base["inventory_item_id"],
+                        lot_key(lot.lot_number),
+                    ) in recalled
+                    if not _wanted(when, lot.lot_number, is_recalled):
                         continue
                     rows.append(
                         {
                             **base,
                             "key": f"deployed:{lot.id}",
+                            "recalled": is_recalled,
                             "lot_number": lot.lot_number,
                             "expiration_date": when,
                             "quantity": lot.quantity,
@@ -4500,15 +4522,20 @@ class EquipmentCheckService:
                     )
                 continue
             when = item.expiration_date if item.has_expiration else None
-            if not _wanted(when, item.lot_number):
+            is_recalled = (
+                base["inventory_item_id"],
+                lot_key(item.lot_number),
+            ) in recalled
+            if not _wanted(when, item.lot_number, is_recalled):
                 continue
             held = self._on_truck(item) or 0
-            if (needle is not None or include_undated) and held <= 0:
+            if (needle is not None or include_undated or is_recalled) and held <= 0:
                 continue
             rows.append(
                 {
                     **base,
                     "key": f"position:{item.id}",
+                    "recalled": is_recalled,
                     "lot_number": item.lot_number,
                     "expiration_date": when,
                     "quantity": held,
@@ -4821,6 +4848,15 @@ class EquipmentCheckService:
             # Deploying expired stock would fail the item on the next check and
             # put expired supplies in service; refuse rather than record it.
             raise ValueError("This stock lot has expired and cannot be deployed")
+        if (
+            str(lot.inventory_item_id),
+            lot_key(lot.lot_number),
+        ) in await InventoryService(self.db).recalled_lot_keys(
+            organization_id, [str(lot.inventory_item_id)]
+        ):
+            # A recalled lot is pulled, not deployed: putting it on a truck is
+            # exactly what recording the recall exists to stop.
+            raise ValueError("This stock lot is recalled and cannot be deployed")
 
         lot_id_value = str(lot.id)
         previous = {

@@ -13,6 +13,7 @@ const mockGetItemLots = vi.fn();
 const mockGetStorageOptions = vi.fn();
 const mockGetItemPlacements = vi.fn();
 const mockCheckPermission = vi.fn();
+const mockGetRecalls = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
   medicalSuppliesService: {
@@ -25,6 +26,7 @@ vi.mock('../../../services/medicalSuppliesService', () => ({
     getItemLots: (...args: unknown[]) => mockGetItemLots(...args) as unknown,
     getStorageOptions: (...args: unknown[]) => mockGetStorageOptions(...args) as unknown,
     getItemPlacements: (...args: unknown[]) => mockGetItemPlacements(...args) as unknown,
+    getRecalls: (...args: unknown[]) => mockGetRecalls(...args) as unknown,
   },
 }));
 
@@ -140,7 +142,9 @@ describe('MedicalSuppliesPage', () => {
       mockGetStorageOptions,
       mockGetItemPlacements,
       mockIsModuleOn,
+      mockGetRecalls,
     ].forEach((mock) => mock.mockReset());
+    mockGetRecalls.mockResolvedValue([]);
     mockCheckPermission.mockReturnValue(false);
     mockIsModuleOn.mockReturnValue(true);
     mockGetSummary.mockResolvedValue(summary);
@@ -183,6 +187,27 @@ describe('MedicalSuppliesPage', () => {
       renderWithRouter(<MedicalSuppliesPage />);
 
       expect(await screen.findByText('Oxygen Mask, Non-Rebreather — Pediatric')).toBeInTheDocument();
+    });
+
+    it('lists the lots under recall on the Expiring tab', async () => {
+      mockGetRecalls.mockResolvedValue([
+        {
+          id: 'r-1',
+          inventory_item_id: 'item-1',
+          item_name: '4x4 Gauze',
+          lot_number: 'GZ-24117',
+          reason: 'Sterility breach',
+          recalled_at: '2026-10-20T12:00:00Z',
+          units_on_shelf: 6,
+          units_aboard: 3,
+        },
+      ]);
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      const panel = await screen.findByRole('region', { name: 'Recalled lots' });
+      expect(within(panel).getByRole('row', { name: /GZ-24117/ })).toHaveTextContent('6 shelf · 3 on trucks');
+      // Read past the cache: a recall just recorded must show at once.
+      expect(mockGetRecalls).toHaveBeenCalledWith(false, { bypassCache: true });
     });
 
     it('shows how many supplies wait on a count on the tab itself', async () => {

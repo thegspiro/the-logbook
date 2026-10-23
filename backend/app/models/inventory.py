@@ -920,6 +920,81 @@ class InventoryLot(Base):
         )
 
 
+def lot_key(lot_number: Optional[str]) -> str:
+    """A lot number as recalls compare it: trimmed and lowercased.
+
+    The Python twin of ``lower(trim(lot_number))`` in
+    ``InventoryService._lot_not_recalled``; the two must agree, or a lot would
+    read as recalled in one figure and not another.
+    """
+    return (lot_number or "").strip().lower()
+
+
+class InventoryLotRecall(Base):
+    """A manufacturer's recall of one lot number of one supply.
+
+    Recorded against the supply and the lot number rather than a single lot
+    row, so it reaches every unit carrying that number: the shelf lots, the
+    units already deployed on an apparatus (which keep only a snapshot of the
+    number, see ``CheckItemDeployedLot``), and a later delivery of the same
+    lot. While active (``lifted_at`` is NULL) those units are not stock:
+    they do not count as on hand and cannot be swapped onto a truck.
+
+    ``lot_number_key`` is the number trimmed and lowercased, the form every
+    reader compares on, because a notice and a label rarely agree on case.
+    ``lot_number`` keeps it as entered, for display. A lifted recall stays as
+    the record of what was done and why.
+    """
+
+    __tablename__ = "inventory_lot_recalls"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    inventory_item_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    lot_number: Mapped[str] = mapped_column(String(100), nullable=False)
+    lot_number_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    recalled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    recalled_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    lifted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    lifted_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    lift_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        # Serves the per-row "is this lot recalled" lookup, which always
+        # names the org and the supply and compares the key.
+        Index(
+            "idx_lot_recalls_org_item_key",
+            "organization_id",
+            "inventory_item_id",
+            "lot_number_key",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<InventoryLotRecall(item_id={self.inventory_item_id}, "
+            f"lot={self.lot_number}, lifted={self.lifted_at is not None})>"
+        )
+
+
 class ItemAssignment(Base):
     """
     Item Assignment model

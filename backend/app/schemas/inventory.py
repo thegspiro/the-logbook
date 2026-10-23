@@ -536,6 +536,53 @@ class MedicalExpiringStockRow(BaseModel):
     days_until_expiration: Optional[int] = None
     quantity: int = 0
     where: Optional[str] = None
+    # Under an active recall of its lot number: pull it, whatever its date.
+    recalled: bool = False
+
+
+class LotRecallCreate(BaseModel):
+    """Record a manufacturer's recall of one lot number of one supply."""
+
+    inventory_item_id: str = Field(..., min_length=1, max_length=36)
+    lot_number: str = Field(..., min_length=1, max_length=100)
+    reason: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("lot_number")
+    @classmethod
+    def _lot_number_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Enter the recalled lot number")
+        return value.strip()
+
+
+class LotRecallLift(BaseModel):
+    """Why a recall no longer applies (entered in error, or cleared)."""
+
+    note: str = Field(..., min_length=1, max_length=1000)
+
+    @field_validator("note")
+    @classmethod
+    def _note_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Say why the recall is lifted")
+        return value.strip()
+
+
+class LotRecallResponse(BaseModel):
+    """A recall, with what of the lot is still to be pulled."""
+
+    id: str
+    inventory_item_id: str
+    item_name: Optional[str] = None
+    item_size: Optional[str] = None
+    lot_number: str
+    reason: Optional[str] = None
+    recalled_at: Optional[datetime] = None
+    lifted_at: Optional[datetime] = None
+    lift_note: Optional[str] = None
+    # Units still carrying the number: in the stock room, and aboard trucks.
+    units_on_shelf: int = 0
+    units_aboard: int = 0
 
 
 class MedicalStorageRoom(BaseModel):

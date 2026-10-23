@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**317 tables · 5247 columns · 1072 foreign keys**
+**318 tables · 5258 columns · 1076 foreign keys**
 
 ---
 
@@ -348,6 +348,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_item_pins`](#inventory_item_pins) | `InventoryItemPin` | 7 | A member's own shortlist of items, hoisted to the top of the items list. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 56 | Inventory Item model |
 | [`inventory_label_prints`](#inventory_label_prints) | `InventoryLabelPrint` | 6 | One confirmed label print for an item: who confirmed it, and when. |
+| [`inventory_lot_recalls`](#inventory_lot_recalls) | `InventoryLotRecall` | 11 | A manufacturer's recall of one lot number of one supply. |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_nfc_audit_digests`](#inventory_nfc_audit_digests) | `InventoryNfcAuditDigest` | 5 | One "shelf audits overdue" digest sent to an organization. |
 | [`inventory_nfc_audit_items`](#inventory_nfc_audit_items) | `InventoryNfcAuditItem` | 10 | One item's line in a shelf audit. |
@@ -5521,6 +5522,30 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_label_prints_item_printed` (`item_id`, `printed_at`)
 - `idx_label_prints_org` (`organization_id`)
+
+### `inventory_lot_recalls`
+
+**InventoryLotRecall** · `app/models/inventory.py`
+
+> A manufacturer's recall of one lot number of one supply. Recorded against the supply and the lot number rather than a single lot row, so it reaches every unit carrying that number: the shelf lots, the units already deployed on an apparatus (which keep only a snapshot of the number, see ``CheckItemDeployedLot``), and a later delivery of the same lot. While active (``lifted_at`` is NULL) those units are not stock: they do not count as on hand and cannot be swapped onto a truck. ``lot_number_key`` is the number trimmed and lowercased, the form every reader compares on, because a notice and a label rarely agree on case. ``lot_number`` keeps it as entered, for display. A lifted recall stays as the record of what was done and why.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `inventory_item_id` | VARCHAR(36) | no | FK |  | → `inventory_items.id` ON DELETE CASCADE |
+| `lot_number` | VARCHAR(100) | no |  |  |  |
+| `lot_number_key` | VARCHAR(100) | no |  |  |  |
+| `reason` | TEXT | yes |  |  |  |
+| `recalled_at` | DATETIME | yes |  | `now()` |  |
+| `recalled_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `lifted_at` | DATETIME | yes |  |  |  |
+| `lifted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `lift_note` | TEXT | yes |  |  |  |
+
+**Indexes**
+
+- `idx_lot_recalls_org_item_key` (`organization_id`, `inventory_item_id`, `lot_number_key`)
 
 ### `inventory_lots`
 
@@ -11048,7 +11073,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (393 references)
+### → `users` (395 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11230,6 +11255,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_items` | `created_by` | RESTRICT | yes |
 | `inventory_items` | `label_printed_by` | SET NULL | yes |
 | `inventory_label_prints` | `printed_by` | SET NULL | yes |
+| `inventory_lot_recalls` | `lifted_by` | SET NULL | yes |
+| `inventory_lot_recalls` | `recalled_by` | SET NULL | yes |
 | `inventory_lots` | `created_by` | SET NULL | yes |
 | `inventory_nfc_audits` | `applied_by` | SET NULL | yes |
 | `inventory_nfc_audits` | `audited_by` | SET NULL | yes |
@@ -11446,7 +11473,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (260 references)
+### → `organizations` (261 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11569,6 +11596,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_item_pins` | `organization_id` | CASCADE | no |
 | `inventory_items` | `organization_id` | CASCADE | no |
 | `inventory_label_prints` | `organization_id` | CASCADE | no |
+| `inventory_lot_recalls` | `organization_id` | CASCADE | no |
 | `inventory_lots` | `organization_id` | CASCADE | no |
 | `inventory_nfc_audit_digests` | `organization_id` | CASCADE | no |
 | `inventory_nfc_audit_items` | `organization_id` | CASCADE | no |
@@ -11711,7 +11739,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
 
-### → `inventory_items` (21 references)
+### → `inventory_items` (22 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11722,6 +11750,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_requests` | `item_id` | SET NULL | yes |
 | `inventory_item_pins` | `item_id` | CASCADE | no |
 | `inventory_label_prints` | `item_id` | CASCADE | no |
+| `inventory_lot_recalls` | `inventory_item_id` | CASCADE | no |
 | `inventory_lots` | `inventory_item_id` | CASCADE | no |
 | `inventory_nfc_audit_items` | `item_id` | SET NULL | yes |
 | `inventory_nfc_scans` | `item_id` | CASCADE | no |

@@ -428,6 +428,43 @@ include_undated=True)`). Shelf-only columns (Received Date, Storage Location,
   colouring all follow the choice; it is not saved between visits, and the
   weekly email keeps its 30 days.
 
+## Recalls _(2026-10-23)_
+
+A manufacturer's recall names a lot number, so a recall is recorded against a
+**supply and a lot number** (`inventory_lot_recalls`, migration
+`3d67883cd461`, guarded, downgrade drops the table) rather than one lot row. It
+reaches every unit carrying that number: shelf lots, units already deployed on
+an apparatus (which keep only a snapshot of the number), and any later delivery
+of the same lot. Numbers are compared trimmed and lowercased (`lot_key`, and
+`lower(trim(...))` in SQL); a lot with no number cannot be recalled.
+
+While a recall is active (`lifted_at` NULL):
+
+- **The units are not stock.** `InventoryService._usable_lot` (in date and not
+  recalled) is the one filter behind on hand, Low stock, the low-stock email,
+  automatic reorder, category totals, the on-hand sort and issuing; truck
+  figures (`_ready_positions`) leave recalled deployed lots, and a position
+  whose own lot number is recalled, out the same way. A recall can therefore
+  drop a supply into Low stock and start a reorder, which is the intent.
+- **They cannot be deployed.** `swap_item_lot` refuses a recalled lot, and
+  `get_lots_for_items` no longer offers one as replacement stock.
+- **They are listed to pull.** The Expiring tab lists every recalled unit,
+  shelf and truck, first and whatever its date, marked "Recalled"; the lot
+  lookup marks them too.
+
+Recording one: the lot lookup offers "Recall lot … of …" for each supply and
+lot it found (manage permission), with an optional reason. Ending one: the
+"Recalled lots" panel on the Expiring tab lists active recalls with what is
+still on the shelf and the trucks, and **Lift** asks why. A lifted recall stays
+on record (`GET /recalls?include_lifted=true`). Recording and lifting are both
+audit-logged (`medical_lot_recalled`, `medical_lot_recall_lifted`). A second
+active recall of the same supply and number is refused (409), under a lock on
+the supply row so two officers cannot both record one.
+
+Not yet shown on the Inventory module's Apparatus Inventory page: a recalled
+unit there reads as it did, though its swap is refused and the Medical Supplies
+page lists it.
+
 ## Alerts
 
 Low-stock and expiring-supply alerts reach both domains; **NFPA retirement
@@ -543,6 +580,9 @@ permission **or** the broad equivalent.
 | `PATCH`  | `/lots/{lot_id}`            | manage     |
 | `DELETE` | `/lots/{lot_id}`            | manage     |
 | `GET`    | `/lots/expiring`            | view       |
+| `GET`    | `/recalls`                  | view       |
+| `POST`   | `/recalls`                  | manage     |
+| `POST`   | `/recalls/{recall_id}/lift` | manage     |
 | `GET`    | `/summary`                  | view       |
 
 `/summary` reports counts for the landing page. **Low stock is judged against
