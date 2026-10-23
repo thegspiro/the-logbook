@@ -228,14 +228,13 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
-      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      const reportsTab = within(tabBar).getByRole('tab', { name: /Shift Reports/i });
-      await user.click(reportsTab);
+      const strip = await screen.findByRole('navigation', { name: 'Scheduling views' });
+      await user.click(within(strip).getByRole('link', { name: /Shift Reports/i }));
 
       // Assert on the tab's body, not its label: the labels stay in the DOM
       // either way, which is what let the snap-back through before.
       expect(await screen.findByTestId('shift-reports-tab')).toBeInTheDocument();
-      expect(reportsTab).toHaveAttribute('aria-selected', 'true');
+      expect(within(strip).getByRole('link', { name: /Shift Reports/i })).toHaveAttribute('aria-current', 'page');
       expect(window.location.search).toContain('tab=shift-reports');
     });
 
@@ -243,31 +242,31 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
-      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      const reportsTab = within(tabBar).getByRole('tab', { name: /Shift Reports/i });
-      await user.click(reportsTab);
+      const strip = await screen.findByRole('navigation', { name: 'Scheduling views' });
+      await user.click(within(strip).getByRole('link', { name: /Shift Reports/i }));
       await screen.findByTestId('shift-reports-tab');
 
-      const scheduleTab = within(tabBar).getByRole('tab', { name: 'Schedule' });
-      await user.click(scheduleTab);
+      // The Schedule link is the bare /scheduling: a missing ?tab= has to
+      // select Schedule, or the link would leave the last view on screen.
+      await user.click(within(strip).getByRole('link', { name: 'Schedule' }));
 
       await waitFor(() => expect(screen.queryByTestId('shift-reports-tab')).not.toBeInTheDocument());
-      expect(scheduleTab).toHaveAttribute('aria-selected', 'true');
+      expect(within(strip).getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
       expect(window.location.search).not.toContain('tab=');
     });
 
-    it('supports arrow-key navigation between scheduling views', async () => {
+    it('keeps the calendar on the same date after visiting another view', async () => {
+      window.history.replaceState({}, '', '/scheduling?view=month&date=2026-08-13');
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
-      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      const scheduleTab = within(tabBar).getByRole('tab', { name: 'Schedule' });
-      scheduleTab.focus();
-      await user.keyboard('{ArrowRight}');
+      const strip = await screen.findByRole('navigation', { name: 'Scheduling views' });
+      await user.click(within(strip).getByRole('link', { name: 'My Shifts' }));
+      await waitFor(() => expect(window.location.search).toContain('tab=my-shifts'));
+      await user.click(within(strip).getByRole('link', { name: 'Schedule' }));
 
-      const myShiftsTab = within(tabBar).getByRole('tab', { name: 'My Shifts' });
-      expect(myShiftsTab).toHaveAttribute('aria-selected', 'true');
-      expect(window.location.search).toContain('tab=my-shifts');
+      expect(await screen.findByRole('heading', { name: 'August 2026' })).toBeInTheDocument();
+      expect(window.location.search).toContain('date=2026-08-13');
     });
 
     it('should honour a ?tab= deep link on first render', async () => {
@@ -286,9 +285,9 @@ describe('SchedulingPage', () => {
 
       renderWithRouter(<SchedulingPage />);
 
-      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      expect(within(tabBar).getByRole('tab', { name: 'Schedule' })).toHaveAttribute('aria-selected', 'true');
-      expect(within(tabBar).queryByRole('tab', { name: /Equipment Checks/i })).not.toBeInTheDocument();
+      const strip = await screen.findByRole('navigation', { name: 'Scheduling views' });
+      expect(within(strip).getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
+      expect(within(strip).queryByRole('link', { name: /Equipment Checks/i })).not.toBeInTheDocument();
     });
 
     it('restores and preserves the selected calendar view and date in the URL', async () => {
