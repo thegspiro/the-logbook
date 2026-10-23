@@ -1,6 +1,130 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427) — also missing from this line until now), 2026-10-23 (pass 11) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10), (this PR) (pass 11)
+
+---
+
+## Pass 11 (2026-10-23) — watchdog pickup: real delta (positions-scoped grading wired, W71 refresh-after-flush fix, numeric bounds, a11y contrast, calendar-date formatting), 0 code fixes needed, 0 new findings
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 after the parent watchdog session merged PR #3574 (Feature 08,
+Membership pipeline, pass 12) — clean, CI green on all three required
+workflows, no conflicts, no blocking review comments. Rotation row 09
+(Medical screening, PHI) was the next `⬜`.
+
+**Scope.** Baseline `0509503e1` (PR #3427's merge, pass 10). Diffed the tree
+directly (`git diff <baseline> origin/main -- <declared files>`) rather than
+trusting `git log --no-merges`, because the log traversal surfaced a
+same-named-but-irrelevant full-file "addition" from an unrelated branch
+history quirk; the tree diff is the ground truth and shows the real delta:
+**9 files, 302 insertions / 39 deletions** — `schemas/medical_screening.py`,
+`services/medical_screening_service.py`, and seven files under
+`frontend/src/modules/medical-screening/`. No new migration (no migration
+body references `medical_screening`/`screening_requirement`/
+`screening_record`). All 16 routes in `endpoints/medical_screening.py`
+re-enumerated — the file itself has **zero** diff since baseline, so every
+`Depends`/`require_permission` argument is unchanged, including the one
+`get_current_user`-only self-service route (`/compliance/me`) and the 15
+`medical_screening.view`/`.manage`-gated ones.
+
+**What changed, read in full:**
+
+- **`applies_to_roles` is now wired** (`70c2845c`, 2026-10-19 — an
+  application commit, not this rotation's own, but squarely in this
+  feature's scope and PHI-adjacent, so reviewed end to end). A screening
+  requirement listing positions now grades only members holding one of them
+  (`_role_key`/`_requirement_roles`/`_applicable_requirements` in
+  `medical_screening_service.py`); a blank list still applies to everyone,
+  and a prospect — who holds no positions — is still graded on every
+  requirement, both confirmed by reading `_applicable_requirements` and its
+  test file directly rather than taking the docstring's word. The new
+  `_position_keys` helper joins `user_positions` to `Position` filtered on
+  **`Position.organization_id == organization_id`** — the correct side to
+  scope on, since `user_positions` itself carries no organization column —
+  so a `user_id` belonging to another org simply resolves no positions
+  rather than leaking one. This closes half of **MS-16** (`applies_to_roles`
+  was stored and read by nothing); `grace_period_days` and
+  `frequency_months`'s _reading_ half remain open, matching
+  `KNOWN_LIMITATIONS.md`'s own already-updated MS-16 entry (the commit that
+  wired the field also corrected that entry — verified by reading it, not
+  assumed). The commit's own test file
+  (`tests/test_medical_screening_requirement_positions.py`, 373 lines) covers
+  name/slug matching, case and separator insensitivity, the blank-list and
+  prospect defaults, and the `not_applicable`-not-`compliant` roster
+  outcome; `tests/test_medical_screening_requirement_fields_are_unwired.py`
+  was correctly narrowed to `grace_period_days` only, with its own docstring
+  explaining the split — both read in full, not sampled.
+- **A `MissingGreenlet` fix on the update paths** (`add780b8`, W71):
+  `update_requirement` and `update_record` now `await self.db.refresh(...)`
+  after `flush()`, because `onupdate` expires `updated_at` at the flush and
+  the response model's lazy read of it was raising — the officer saw a 500
+  after the write had already committed. Availability/correctness fix, no
+  auth or tenancy surface touched.
+- **`frequency_months`/`grace_period_days` gained `INT32_MIN`/`MAX` bounds**
+  (`74638250`, a repo-wide sweep unrelated to this feature specifically) —
+  closes a MySQL error-1264-as-generic-500 on overflow; no reader added, so
+  **MS-16**'s still-open half is unaffected.
+- **Seven frontend-only changes**: `formatCalendarDate()` in place of raw
+  ISO strings on the dashboard/page screening dates (banned-API compliance,
+  CLAUDE.md's date-formatting rule — confirmed these are new call sites, not
+  a previously-missed one); a `suggestExpiration()` helper that pre-fills a
+  record's expiration date from the requirement's frequency without
+  overwriting a date the officer already typed or edited (tracked via a
+  `suggestedExpiration` sentinel, read in full — it only ever _suggests_,
+  never forces, the value the backend ultimately stores); `touch-target-phone`
+  added to two icon-only edit/delete buttons; edit/delete `aria-label`s now
+  name the member, not just the record type; and three `text-X-600` →
+  `-700` contrast fixes (AA, per CLAUDE.md's palette rule). None of these
+  touch an API call's permission header, payload shape beyond the bound
+  fields above, or PHI display scope.
+
+**Standing findings, re-verified against current code, not copied from
+pass 10's account:**
+
+- **MS-14** (`medical_screening.view` grants full narrative PHI with no
+  finer-grained read tier, LOW, owner-accepted) — unchanged; no new read
+  tier introduced by this window's delta.
+- **MS-15** (compliance roster loads every screening record in the
+  organization, unbounded, LOW, owner-accepted) — unchanged;
+  `get_compliance_roster`'s `list_records(organization_id)` call (no
+  pagination) is untouched by this window's delta, confirmed by its absence
+  from the tree diff.
+- **MS-16** (`grace_period_days`/`applies_to_roles`/`frequency_months`
+  unread) — **`applies_to_roles` half closed this window** (an application
+  commit, not this PR — see above); `grace_period_days` and
+  `frequency_months` remain open, exactly as `KNOWN_LIMITATIONS.md`'s own
+  entry already states.
+- **MS-17** (`GET /medical-screening/compliance/{user_id}` returns 200 for a
+  nonexistent subject, no validation that `user_id` is a real in-org
+  member) — unchanged; the route and `get_compliance_status`'s subject
+  resolution are untouched by this window's delta.
+
+**Tenant isolation and PHI encryption, re-confirmed present by direct read**
+(the five declared backend files carry a combined 1-file, 133-line diff, so
+this was a full re-read, not a skim): every by-id getter still filters
+`organization_id` in the same `and_()`; `create_record`'s three
+client-supplied FKs (`user_id`, `prospect_id`, `requirement_id`) still route
+through `assert_in_org(..., allow_none=True)`; `provider_name`/
+`result_summary`/`notes` are still `EncryptedText`, `result_data` still
+`EncryptedJSON` (per SEC-00's own round-4 sweep, re-checked here rather than
+assumed). The new `_position_keys` query is the only new SQL this window
+introduces and is org-scoped as described above.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.**
+
+### Completion gate (pass 11)
+
+| Check                                                             | Result                                                   |
+| ----------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                     | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/`                              | ✅ 2567 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/`                         | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ single head, 640 revisions, head `cc8c16cb6d98`       |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 273 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -q -k "medical_screening or screening"`            | ✅ 147 passed, 1 skipped (environment-only, `pywebpush`) |
+| `frontend: npm run typecheck`                                     | ✅ clean                                                 |
+| `frontend: npm run lint`                                          | ✅ clean, 0 warnings                                     |
+| `npx vitest run src/modules/medical-screening`                    | ✅ 59 passed (10 files)                                  |
 
 ---
 

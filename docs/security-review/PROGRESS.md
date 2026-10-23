@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3574 (Feature 08, Membership pipeline, pass 12) merged
+docs-only — nothing to record per this tracker's own rule that a docs-only
+merge is not a recordable event. (PR #3575, a watchdog-forked duplicate of
+#3574 opened 11 minutes apart, was closed as superseded before merge, per
+the rotation's fork-handling rule — also not a recordable event.)
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 before this iteration started. Rows 07 and 08 stay ✅. This
+iteration reviewed Feature 09 (Medical screening, PHI), the next `⬜`: **0
+fixed, 0 new findings** — real delta (9 files, 302 insertions / 39
+deletions since pass 10's merge): `applies_to_roles` is now wired to grade
+only members holding a named position (an application commit, closing half
+of MS-16), a `MissingGreenlet` refresh-after-flush fix on both update
+paths (W71), `INT32` bounds on two numeric fields, and seven frontend-only
+date-formatting/contrast/touch fixes — all reviewed end to end. All 16
+routes re-enumerated, unchanged (zero diff on the endpoints file itself).
+MS-14, MS-15 and MS-17 (standing, owner-accepted) re-confirmed
+OPEN/unchanged. See `MS-09-medical-screening.md`'s **Pass 11** section.
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 12, PR #3574, merged docs-only), preserved for history</summary>
+
 **PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)** (branch
 `claude/security-review-membership-pipeline-p12`) — Feature 08 (Membership
 pipeline), pass 12. PR #3569 (Feature 07, pass 11) had already merged
@@ -34,6 +57,8 @@ already correctly guarded. MP-10 (listing half) and MP-22 (standing,
 owner-accepted) re-confirmed OPEN/unchanged. See
 `MP-08-membership-pipeline.md`'s **Pass 12** section. Row 08 → ✅ (pending
 this PR's merge); next is Feature 09 (Medical screening, PHI).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 11, PR #3569, merged), preserved for history</summary>
@@ -20678,7 +20703,7 @@ this iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -20711,6 +20736,22 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-23 — Feature 09 (Medical screening, PHI, pass 11) — watchdog pickup, real delta, 0 fixed, 0 new findings; MS-14/MS-15/MS-17 re-confirmed open, MS-16 half-closed by an application commit
+
+PR #3574 (Feature 08, Membership pipeline, pass 12) merged docs-only — Open
+PR row cleared, nothing to record. Reviewed the tree diff since pass 10's
+baseline (302 insertions/39 deletions, 9 files): `applies_to_roles` is now
+wired to grade only members holding a named position (an application
+commit, `70c2845c`, closing half of MS-16); a `MissingGreenlet`
+refresh-after-flush fix on the two update paths (W71); `INT32` bounds on
+two numeric fields; seven frontend-only date-formatting/contrast/touch
+fixes. All 16 routes re-enumerated, unchanged (the endpoints file has zero
+diff since baseline). Tenant isolation and PHI-at-rest encryption
+re-confirmed present by direct read. MS-14 (no finer-grained PHI read
+tier), MS-15 (unbounded compliance roster), and MS-17 (`/compliance/{id}`
+200s for a nonexistent subject) all re-confirmed open and unchanged,
+owner-accepted. See `MS-09-medical-screening.md`'s **Pass 11** section.
 
 ### 2026-10-22 — Feature 06 (Elections & ballots, pass 11) — watchdog pickup, 0 fixed in code, 1 flagged (ELEC-49), 1 guard (ELEC-50)
 
