@@ -22,10 +22,22 @@ function useSectionPermission(): (permission: string) => boolean {
   return typeof storePredicate === 'function' ? (storePredicate as (permission: string) => boolean) : DENY_ALL;
 }
 
+/**
+ * The strip's accent. Red is the house colour; Scheduling keeps the violet it
+ * has always used for its own views.
+ */
+export type SectionAccent = 'red' | 'violet';
+
+const ACTIVE_CLASSES: Record<SectionAccent, string> = {
+  red: 'text-theme-text-primary border-red-800',
+  violet: 'border-violet-600 text-violet-700 dark:text-violet-400',
+};
+
 interface SectionNavProps {
   items: SectionNavItem[];
   active: SectionNavItem | undefined;
   label: string;
+  accent: SectionAccent;
 }
 
 /**
@@ -35,7 +47,7 @@ interface SectionNavProps {
  * marking the open section with `aria-current="page"`, and a section can be
  * bookmarked, refreshed into and reached with the back button.
  */
-const SectionNav: React.FC<SectionNavProps> = ({ items, active, label }) => {
+const SectionNav: React.FC<SectionNavProps> = ({ items, active, label, accent }) => {
   const labelId = useId();
   // One section is no navigation: the strip would be a single selected link
   // to the page already open.
@@ -64,10 +76,11 @@ const SectionNav: React.FC<SectionNavProps> = ({ items, active, label }) => {
               <Link
                 key={item.path}
                 to={item.path}
+                replace={item.replace ?? false}
                 aria-current={isActive ? 'page' : undefined}
                 className={`focus:ring-theme-focus-ring touch:min-h-11 -mb-px flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
                   isActive
-                    ? 'text-theme-text-primary border-red-800'
+                    ? ACTIVE_CLASSES[accent]
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
                 }`}
               >
@@ -119,6 +132,7 @@ interface SectionPageHeaderProps extends PageHeaderProps {
   sections: SectionNavItem[];
   /** The strip's accessible name, e.g. "Operations sections". */
   stripLabel: string;
+  accent?: SectionAccent;
 }
 
 /**
@@ -137,6 +151,7 @@ interface SectionPageHeaderProps extends PageHeaderProps {
 export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   sections,
   stripLabel,
+  accent = 'red',
   icon: Icon,
   title,
   subtitle,
@@ -167,7 +182,7 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
 
   return (
     <div>
-      <SectionNav items={items} active={active} label={stripLabel} />
+      <SectionNav items={items} active={active} label={stripLabel} accent={accent} />
       {trail.length > 0 && <Breadcrumbs items={trail} />}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 sm:flex-[1_1_16rem]">

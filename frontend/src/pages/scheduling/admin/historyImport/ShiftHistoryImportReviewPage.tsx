@@ -12,10 +12,10 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, FileWarning } from 'lucide-react';
+import { CheckCircle2, FileWarning, History } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router';
 import toast from 'react-hot-toast';
-import SchedulingHeader from '../../SchedulingHeader';
+import { SchedulingPageHeader } from '../../../../components/scheduling/SchedulingPageHeader';
 import { EmptyState, SkeletonPage } from '../../../../components/ux';
 import { useConfirm } from '../../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../../hooks/useTimezone';
@@ -225,11 +225,12 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
   };
 
   const header = (
-    <SchedulingHeader
+    <SchedulingPageHeader
+      icon={History}
       title="Review Shift History Import"
-      backTo="/scheduling/admin/history-import"
-      backLabel="Back to shift history imports"
-      description={detail ? detail.import.source_filename : 'Loading…'}
+      subtitle={detail ? detail.import.source_filename : 'Loading…'}
+      underHub="/scheduling/admin"
+      parentCrumbs={[{ label: 'Shift History Import', path: '/scheduling/admin/history-import' }]}
     />
   );
 
