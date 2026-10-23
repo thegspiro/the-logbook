@@ -357,9 +357,7 @@ your department uses.
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 
-<!-- Screenshot needed:
-_[Fire Chief (or another officer holding a role named on a Multi-Signer Approval stage, with an applicant waiting at that stage) at /dashboard: clip to the Needs you panel showing "<Name> is waiting on your sign-off" with the stage name beneath and the Review button. Use a demo applicant, not a real person.]_
--->
+![The Needs you panel on the Dashboard for an officer in the Chief position: an applicant is waiting on your sign-off, the stage named beneath it, and the Review button](./images/00-32-dashboard-needs-you-sign-off.png)
 
 > **Why does Training Compliance say 0%?** This card shows how many active
 > members have finished **every** active training requirement. It does not

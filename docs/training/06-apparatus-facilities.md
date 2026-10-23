@@ -103,9 +103,7 @@ Found** instead.
 
 ![The Add Apparatus form: the intro line, the identification and status fields, CNG chosen as the fuel type, and the NFPA compliance tracking help text](./images/06-29-add-apparatus-form.png)
 
-<!-- Screenshot needed: the empty fleet list (**No apparatus yet**). See
-`SCREENSHOT_CURRENCY.md`, _Queued by the October 7 – 8 documentation pass_.
--->
+![The Apparatus page for a department that has added no vehicles: No apparatus yet, the sentence about what a record keeps, and the Add Apparatus button](./images/06-33-empty-fleet.png)
 
 > **Hint:** If your department does not use the full Apparatus module, you
 > see a simpler **Apparatus & Vehicles** page instead. It is a short list of
@@ -219,9 +217,7 @@ a rig keeps it. A shift with no rig gets no equipment checklist.
 
 ![The Create Shift dialog with its Apparatus picker set to an Apparatus-module vehicle](./images/06-31-create-shift-apparatus.png)
 
-<!-- Screenshot needed:
-_[A vehicle page showing the Deficiency explanation and the **See what was found →** link to the failures in Check Reports.]_
--->
+![A vehicle page under its header: the sentence that an equipment check found a problem on a date, that the Deficiency badge clears when the next check passes and that logging a repair does not clear it, and the See what was found link](./images/06-34-apparatus-deficiency-note.png)
 
 ---
 
@@ -510,9 +506,7 @@ Add Facility to add one."
 > simpler **Locations** page instead. It holds stations and rooms for events
 > and meetings.
 
-<!-- Screenshot needed:
-_[Plain member (no locations.\* or settings permissions), /locations, department with at least one station holding a room. Stations and rooms listed, with no QR toggle, kiosk URL, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control. Do not capture a kiosk URL or display code.]_
--->
+![The Locations page as an ordinary member: stations and the rooms inside them listed for reference, with no QR toggle, kiosk link, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control](./images/06-35-locations-member.png)
 
 ### Printing Facility Labels
 
@@ -854,8 +848,6 @@ If a save is refused, the message gives the reason.
 ![New facility maintenance record form with its facility, type, date, vendor and cost fields](./images/06-15-facility-maintenance-form.png)
 
 ![Facility maintenance view with upcoming items and completed history](./images/06-13-facility-maintenance.png)
-
-<!-- Screenshot needed: the New Record dialog on a facility page with Maintenance Type marked required; and the maintenance list with Overdue · due and Completed rows. REPLACE the maintenance shots in this section. -->
 
 ---
 

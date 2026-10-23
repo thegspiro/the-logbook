@@ -817,15 +817,6 @@ requires cannot be made optional. Each change is recorded in the audit log.
 
 ![My Account, Notifications tab, as a member: Email Notifications on, Event reminders switched off in the Emails you can turn off list, and Always emailed to you below it](./images/07-32-member-notification-preferences.png)
 
-<!-- Screenshot needed:
-_[Administrator with `settings.manage` at `/communications/member-emails`:
-the full page with **Always sent**, **Members can turn off** and **Text
-messages** all visible. Before capturing, switch on **Require for every
-member** for one optional email (e.g. **Quartermaster duties**) so its card
-shows **Required by your department** beside cards reading **On unless turned
-off**; switch it back off afterwards.]_
--->
-
 ### What if …?
 
 | What happened                                    | What it means                                                                                            |
@@ -1003,13 +994,6 @@ shows the same history when you open it with its follow-up key.
 
 ![Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name](./images/07-15-suggestion-submit-anonymous.png)
 
-<!-- Screenshot needed:
-_[Ordinary member at `/suggestions`, **Submit** tab, with the **Compliance**
-box chosen: its description ("Report a compliance concern … Reviewed by the
-Compliance Officer."), the anonymity hint and the follow-up hint visible.
-Nothing typed or submitted.]_
--->
-
 ### What "anonymous" means here
 
 It is built into what is saved, not just hidden on screen:
@@ -1140,11 +1124,7 @@ by side. Tap a submission and the page scrolls to it; scroll back up for the
 list. Two tabs take shorter names — **Mine** for My submissions and **Follow
 up** for Follow up with a key — so they usually all fit.
 
-<!-- Screenshot needed:
-_[Suggestions → **Review** on a phone, a submission open: its title and
-details at the top of the screen, then the **Disposition** and **Internal
-note**, with the mobile bottom navigation below.]_
--->
+![Suggestions → Review on a phone with a submission open: its title and details at the top of the screen, then the Disposition and Internal note, with the mobile bottom navigation below](./images/07-39-suggestion-review-phone.png)
 
 ### What if …?
 

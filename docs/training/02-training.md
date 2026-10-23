@@ -158,9 +158,7 @@ training record yet" it lists the three ways training reaches the page:
 It also offers **Submit External Training** and a link to the Learning Center's
 training walkthrough.
 
-<!-- Screenshot needed:
-_[My Training → as a brand-new member with no records and no requirements: the **Required Training** card reading **None assigned**, and the "Nothing is on your training record yet" panel with its three numbered ways, **Submit External Training** and **Take the short walkthrough in the Learning Center**.]_
--->
+![My Training for a brand-new member: Required Training reading None assigned with the line that nothing is asked of them yet, and the Nothing is on your training record yet panel with its three numbered ways, Submit External Training and the Learning Center walkthrough link](./images/02-123-my-training-new-member.png)
 
 > **What if a requirement says "Due by" a date instead of overdue?** Your
 > department added the requirement after you joined and gave existing members
@@ -240,9 +238,7 @@ filtered on screen. That is what an outside audit or a new employer wants.
 
 ![The History tab on My Training: all-time totals, the course search and Type filter, this year's records open and earlier years closed with their counts and hours](./images/02-107-my-training-history-tab.png)
 
-<!-- Screenshot needed:
-_[My Training → the Upcoming Expirations & Due Dates list with one row of each kind, including an hours requirement reading "52.5 hrs to go".]_
--->
+![My Training's Upcoming Expirations & Due Dates list, soonest first, with a row for each kind of item, including an hours requirement reading hours to go](./images/02-124-my-training-upcoming.png)
 
 ![Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave marked and left out of the average](./images/02-108-monthly-hours-leave.png)
 
@@ -1561,9 +1557,7 @@ three required steps are done — the optional program step never keeps it open 
 or when an officer selects the **×** (**Hide the setup guide**). Hiding is
 remembered in that browser only.
 
-<!-- Screenshot needed:
-_[Training Admin → Dashboard → Overview on a fresh department with one course and nothing else: the **Set up training for your department** guide reading "1 of 3 steps done", step 1 ticked, steps 2–4 with their links, and the **Department Compliance** widget reading **Not set up**.]_
--->
+![Training Admin Overview for a department that has set up one course: the Set up training for your department guide reading 1 of 3 steps done with step 1 ticked and steps 2 to 4 linked, and the Department Compliance widget reading Not set up](./images/02-122-training-setup-guide.png)
 
 **No requirements means "Not set up", not 100%.** With no requirements, the
 **Department Compliance** card reads **Not set up** ("No training requirements
@@ -1848,9 +1842,7 @@ the same rules, so their figures agree:
   requirements, but only for records completed before the requirement was
   upgraded. Link the course on any requirement you rely on.
 
-<!-- Screenshot needed:
-_[Training officer under Training Admin > Compliance Matrix in a demo department with one member no requirement applies to: the rail with the Not applicable group beneath Compliant, and that member's detail panel. Demo data only.]_
--->
+![The Compliance Matrix triage rail with a Not applicable group beneath Compliant holding the one member no requirement asks anything of, and that member's detail panel saying nothing grades them](./images/02-125-compliance-matrix-not-applicable.png)
 
 ![The Training dashboard Overview: the Compliance figure in the header and the Department Compliance card both read 91%, with the Compliance Matrix tab beside the Dashboard tab](./images/02-118-compliance-card-and-matrix.png)
 
