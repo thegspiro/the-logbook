@@ -1365,6 +1365,12 @@ dialog and changes nothing, and **Cancel test** closes the test out.
 
 ![The foot of the Cancel unfinished test dialog: the Keep it open button, which leaves the test as it was, beside the amber Cancel test button](./images/09-32-keep-it-open-button.png)
 
+**Cancel test** is the amber button. It closes the test out straight away, with
+no further confirmation, so check the candidate and the sheet named above it
+first.
+
+![The amber Cancel test button from the Cancel unfinished test dialog](./images/09-33-cancel-test-button.png)
+
 A **draft** test, one that was set up but never started, has the same cancel
 icon and opens the same dialog. Nothing has been scored on it, so there is
 nothing to keep.
