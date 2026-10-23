@@ -165,6 +165,24 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
       anonymous suggestion screenshots go to the bucket too, accepting that
       the bucket records their exact upload time.
 
+32. **Google Drive next, through one interface for every remote platform**
+    (2026-10-23, owner decisions).
+    - Google Drive is built before OneDrive / SharePoint.
+    - The server signs in with a **service account** and stores files in a
+      **Shared Drive** the department adds that account to, the same
+      service-account approach as the Google Workspace integration. Files
+      belong to the department's drive, not to a person whose access can
+      lapse. It needs Google Workspace. The never-read OAuth client ID and
+      secret fields give way to a service-account key.
+    - The S3 pattern applies unchanged: Test and switch before any upload
+      goes there, an unreachable store refuses the upload, files are
+      encrypted before upload, and existing files move with the migration
+      command (apply, rollback, finalize).
+    - Built in three steps: (1) the connection test, status, migration and
+      rewrap made platform-neutral, S3 behaviour unchanged; (2) the Google
+      Drive backend and its settings; (3) migration, rewrap and backup
+      notice for Drive.
+
 ## Phases
 
 | Phase | Scope                                                                                                                                           | Status       |
@@ -176,7 +194,8 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | done         |
 | 6     | A department's own S3 / MinIO bucket (decision 31), step 1 of 3: one storage interface every caller uses                                        | done (#3537) |
 | 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | done (#3561) |
-| 8     | Decision 31, step 3 of 3: moving existing files into a bucket, rewrap on S3, backup notice                                                      | this change  |
+| 8     | Decision 31, step 3 of 3: moving existing files into a bucket, rewrap on S3, backup notice                                                      | done (#3567) |
+| 9     | Decision 32, step 1 of 3: the connection test, status, migration and rewrap made platform-neutral (S3 unchanged)                                | this change  |
 
 ### Phase 1 — what changed
 
@@ -380,7 +399,7 @@ and encryption keep theirs; and backups **stay with the bucket's own tooling**
 
 | Piece        | Where                                                                                                                                                    |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The move     | `app/services/s3_migration.py`, driven by `scripts/migrate_uploads_to_s3.py`: apply (copy, read back, compare SHA-256, repoint), rollback, finalize      |
+| The move     | `app/services/remote_migration.py`, driven by `scripts/migrate_uploads_to_s3.py`: apply (copy, read back, compare SHA-256, repoint), rollback, finalize  |
 | Which rows   | `upload_relocation.collect_references`, now including minutes attachments; one file shared by several rows moves once                                    |
 | Which files  | Only files in the org-first layout, for departments that passed the connection test; a legacy-layout file is reported for `relocate_uploads.py` first    |
 | Manifest     | `/app/uploads/.s3-migration/`, written before any row changes                                                                                            |
@@ -390,6 +409,30 @@ and encryption keep theirs; and backups **stay with the bucket's own tooling**
 A moved anonymous screenshot's bucket copy carries the migration's time, not
 the submission's. Relocation now counts an `s3://` reference as already in the
 new layout; before this it reported one as missing on disk.
+
+### Phase 9 — one interface for every remote platform (2026-10-23)
+
+`app/services/remote_storage.py` defines what a remote platform provides:
+references by scheme carrying the org-first key, a configuration with a keyed
+fingerprint, a check, and a backend that encrypts on `put` and decrypts on
+every read. `remote_storage.platforms()` lists the platforms this
+installation can connect to; S3 is the only one so far (`S3Platform` in
+`s3_storage`).
+
+| Was (S3 only)                                        | Now                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `OrgStorage.s3`, `.s3_problem`, `.writes_to_s3`      | `.backends`, `.problems` (by platform), `.writes_to` (the platform name, or None)     |
+| `activate_s3` / `deactivate_s3`                      | `activate_remote` / `deactivate_remote`, for whichever platform is saved              |
+| `POST …/file-storage/s3/activate`, `…/s3/deactivate` | `POST …/file-storage/activate`, `…/deactivate`; the S3 routes stay as aliases         |
+| `app/services/s3_migration.py`                       | `app/services/remote_migration.py`, through the interface; manifests keep their names |
+| The Storage panel's S3 wording                       | Names, nouns and the container come from the status response                          |
+
+The status response gains `platform_label`, `platform_short_label`,
+`container_noun`, `container`, `platform_connectable`, `location` and
+`problem`; `bucket` and `s3_problem` stay for clients written against them.
+The activation record also stores `container`; one written earlier is read
+through its `bucket`. Existing activation records still match, because the S3
+fingerprint did not change.
 
 ### Found in passing, not in this change
 

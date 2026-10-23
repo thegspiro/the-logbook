@@ -42,6 +42,13 @@ from loguru import logger
 
 from app.core import file_encryption
 from app.core.config import settings
+from app.services.remote_storage import (
+    RemoteBackend,
+    RemoteConfig,
+    RemotePlatform,
+    RemoteRef,
+    RemoteStorageError,
+)
 from app.utils.url_validator import BLOCKED_HOSTNAMES, assert_outbound_url_safe
 
 SCHEME = "s3://"
@@ -66,7 +73,7 @@ _CLIENT_CONFIG = BotoConfig(
 _MISSING_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 
 
-class S3StorageError(Exception):
+class S3StorageError(RemoteStorageError):
     """The bucket could not be reached, or refused the request."""
 
 
@@ -95,7 +102,7 @@ def make_ref(bucket: str, key: str) -> str:
 
 
 @dataclass(frozen=True)
-class S3Config:
+class S3Config(RemoteConfig):
     """What one department's settings say about its bucket."""
 
     bucket: str
@@ -103,6 +110,17 @@ class S3Config:
     secret_access_key: str
     region: Optional[str] = None
     endpoint_url: Optional[str] = None
+
+    @property
+    def container(self) -> str:
+        return self.bucket
+
+    def describe(self) -> Mapping[str, Any]:
+        return {
+            "bucket": self.bucket,
+            "endpoint_url": self.endpoint_url,
+            "region": self.region,
+        }
 
     def fingerprint(self) -> str:
         """A keyed digest of everything that decides where files go and who
@@ -339,3 +357,84 @@ class S3Backend:
             )
             return False
         return True
+
+
+# ----------------------------------------------------------------------------
+# The platform, as file_storage_service sees it
+# ----------------------------------------------------------------------------
+
+
+class S3Store(RemoteBackend):
+    """:class:`S3Backend` addressed by stored reference."""
+
+    def __init__(self, backend: S3Backend):
+        self.backend = backend
+        self.config = backend.config
+
+    @staticmethod
+    def _location(ref: str) -> S3Location:
+        location = parse_ref(ref)
+        if location is None:
+            raise ValueError("Not an S3 reference")
+        return location
+
+    def ref_for(self, key: str) -> str:
+        return make_ref(self.backend.config.bucket, key)
+
+    def put(self, ref: str, plaintext: bytes) -> None:
+        self.backend.put(self._location(ref), plaintext)
+
+    def exists(self, ref: str) -> bool:
+        return self.backend.exists(self._location(ref))
+
+    def read_bytes(self, ref: str) -> bytes:
+        return self.backend.read_bytes(self._location(ref))
+
+    def plaintext_size(self, ref: str) -> int:
+        return self.backend.plaintext_size(self._location(ref))
+
+    def open_plaintext(self, ref: str) -> tuple[int, Iterator[bytes]]:
+        return self.backend.open_plaintext(self._location(ref))
+
+    def delete(self, ref: str) -> bool:
+        return self.backend.delete(self._location(ref))
+
+    def key_id(self, ref: str) -> Optional[bytes]:
+        return self.backend.key_id(self._location(ref))
+
+
+class S3Platform(RemotePlatform):
+    name = "s3"
+    label = "Amazon S3"
+    short_label = "S3"
+    container_noun = "bucket"
+    scheme = SCHEME
+    test_failure_hint = (
+        "Check the bucket name, region, endpoint and that the keys may put, "
+        "get and delete objects in it."
+    )
+    incomplete_hint = "Save the bucket name, access key ID and secret access key first."
+
+    def parse_ref(self, ref: Any) -> Optional[RemoteRef]:
+        location = parse_ref(ref)
+        if location is None:
+            return None
+        return RemoteRef(self.name, location.bucket, location.key)
+
+    def config_from_settings(
+        self, file_storage: Optional[Mapping[str, Any]]
+    ) -> Optional[RemoteConfig]:
+        return config_from_settings(file_storage)
+
+    def check_config(self, config: RemoteConfig) -> None:
+        if not isinstance(config, S3Config):
+            raise TypeError("Not an S3 configuration")
+        check_config(config)
+
+    def backend(self, config: RemoteConfig) -> RemoteBackend:
+        if not isinstance(config, S3Config):
+            raise TypeError("Not an S3 configuration")
+        return S3Store(S3Backend(config))
+
+
+PLATFORM = S3Platform()

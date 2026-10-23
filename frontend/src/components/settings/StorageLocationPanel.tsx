@@ -15,10 +15,12 @@ interface StorageLocationPanelProps {
 }
 
 /**
- * Where new files actually go, as the server decided it. Saving S3 settings is
- * not enough on its own: a connection test has to pass with exactly what is
- * saved before uploads move to the bucket, so this panel reports the server's
- * answer rather than the platform picked in the form.
+ * Where new files actually go, as the server decided it. Saving a remote
+ * platform's settings is not enough on its own: a connection test has to pass
+ * with exactly what is saved before uploads move there, so this panel reports
+ * the server's answer rather than the platform picked in the form. Every name
+ * it shows for the platform comes from the server, so a new platform needs no
+ * change here.
  */
 const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStorage }) => {
   const tz = useTimezone();
@@ -41,13 +43,16 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
     if (!savingStorage) void load();
   }, [savingStorage, load]);
 
+  const short = status?.platform_short_label ?? 'remote storage';
+  const noun = status?.container_noun ?? 'store';
+
   const handleTest = async () => {
     setBusy('test');
     setTestError(null);
     try {
-      const next = await organizationService.activateS3Storage();
+      const next = await organizationService.activateRemoteStorage();
       setStatus(next);
-      toast.success('Connection test passed. New files now go to your S3 bucket.');
+      toast.success(`Connection test passed. New files now go to your ${short} ${noun}.`);
     } catch (err: unknown) {
       setTestError(getErrorMessage(err, 'The connection test failed. Nothing was changed.'));
     } finally {
@@ -58,16 +63,15 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
   const handleUseLocal = async () => {
     const ok = await confirm({
       title: 'Store new files on this server?',
-      message:
-        'Uploads from now on are saved on this server’s disk. Files already in your S3 bucket stay there and keep working.',
+      message: `Uploads from now on are saved on this server’s disk. Files already in your ${short} ${noun} stay there and keep working.`,
       confirmLabel: 'Store on this server',
-      cancelLabel: 'Keep using S3',
+      cancelLabel: `Keep using ${short}`,
       variant: 'warning',
     });
     if (!ok) return;
     setBusy('local');
     try {
-      setStatus(await organizationService.deactivateS3Storage());
+      setStatus(await organizationService.deactivateRemoteStorage());
       toast.success('New files are stored on this server again');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not change where files are stored.'));
@@ -87,8 +91,9 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
     return <Skeleton className="h-20 w-full" />;
   }
 
-  const onS3 = status.new_files_go_to === 's3';
-  const unconnected = status.platform !== 's3' && status.platform !== 'local';
+  const onRemote = status.new_files_go_to !== 'local';
+  const unconnected = !status.platform_connectable && status.platform !== 'local';
+  const connectable = status.platform_connectable;
 
   return (
     <section
@@ -96,22 +101,22 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
       className="border-theme-surface-border bg-theme-surface-secondary space-y-3 rounded-lg border p-4"
     >
       <div className="flex items-start gap-3">
-        {onS3 ? (
+        {onRemote ? (
           <Database className="text-theme-accent-blue mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         ) : (
           <HardDrive className="text-theme-text-secondary mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         )}
         <div className="min-w-0 space-y-1">
           <p className="text-theme-text-primary text-sm font-medium">
-            {onS3 ? (
+            {onRemote ? (
               <>
-                New files go to your S3 bucket <code className="break-all">{status.bucket}</code>
+                New files go to your {short} {noun} <code className="break-all">{status.container}</code>
               </>
             ) : (
               'New files are stored on this server’s disk'
             )}
           </p>
-          {onS3 && status.activated_at && (
+          {onRemote && status.activated_at && (
             <p className="text-theme-text-muted text-xs">
               Connection tested {formatDateTime(status.activated_at, tz)}
               {status.endpoint_url ? ` via ${status.endpoint_url}` : ''}
@@ -130,19 +135,19 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
         </p>
       )}
 
-      {status.platform === 's3' && status.changed_since_test && (
+      {connectable && status.changed_since_test && (
         <div className="alert-warning text-theme-text-primary flex items-start gap-2 text-sm" role="status">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
-            The S3 settings changed after the last successful test, so new files are going to this server’s disk. Test
-            the connection again to send them to the bucket.
+            The {short} settings changed after the last successful test, so new files are going to this server’s disk.
+            Test the connection again to send them to the {noun}.
           </span>
         </div>
       )}
 
-      {status.platform === 's3' && status.s3_problem && (
+      {connectable && status.problem && (
         <div className="alert-danger text-theme-text-primary text-sm" role="alert">
-          {status.s3_problem}
+          {status.problem}
         </div>
       )}
 
@@ -153,7 +158,7 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {status.platform === 's3' && !onS3 && (
+        {connectable && !onRemote && (
           <>
             <button
               type="button"
@@ -164,14 +169,14 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
               className="btn-info inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy === 'test' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {busy === 'test' ? 'Testing…' : 'Test and switch to S3'}
+              {busy === 'test' ? 'Testing…' : `Test and switch to ${short}`}
             </button>
             <p className="text-theme-text-muted text-xs">
-              Save the settings first. The test writes, reads back and deletes a small file in the bucket.
+              Save the settings first. The test writes, reads back and deletes a small file in the {noun}.
             </p>
           </>
         )}
-        {onS3 && (
+        {onRemote && (
           <button
             type="button"
             onClick={() => {

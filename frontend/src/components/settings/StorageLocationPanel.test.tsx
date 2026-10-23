@@ -8,8 +8,8 @@ const mockDeactivate = vi.fn();
 vi.mock('../../services/userServices', () => ({
   organizationService: {
     getFileStorageStatus: (...args: unknown[]) => mockGetStatus(...args) as unknown,
-    activateS3Storage: (...args: unknown[]) => mockActivate(...args) as unknown,
-    deactivateS3Storage: (...args: unknown[]) => mockDeactivate(...args) as unknown,
+    activateRemoteStorage: (...args: unknown[]) => mockActivate(...args) as unknown,
+    deactivateRemoteStorage: (...args: unknown[]) => mockDeactivate(...args) as unknown,
   },
 }));
 
@@ -21,11 +21,18 @@ import type { FileStorageStatus } from '../../types/user';
 
 const status = (overrides: Partial<FileStorageStatus> = {}): FileStorageStatus => ({
   platform: 's3',
+  platform_label: 'Amazon S3',
+  platform_short_label: 'S3',
+  container_noun: 'bucket',
+  container: null,
+  platform_connectable: true,
   new_files_go_to: 'local',
+  location: {},
   bucket: null,
   endpoint_url: null,
   activated_at: null,
   changed_since_test: false,
+  problem: null,
   s3_problem: null,
   private_endpoints_allowed: false,
   ...overrides,
@@ -33,9 +40,17 @@ const status = (overrides: Partial<FileStorageStatus> = {}): FileStorageStatus =
 
 const onS3 = status({
   new_files_go_to: 's3',
+  container: 'dept-files',
   bucket: 'dept-files',
   activated_at: '2026-10-22T12:00:00+00:00',
 });
+
+const notConnectable = {
+  platform_label: null,
+  platform_short_label: null,
+  container_noun: null,
+  platform_connectable: false,
+};
 
 const renderPanel = (savingStorage = false) =>
   render(
@@ -85,7 +100,7 @@ describe('StorageLocationPanel', () => {
   });
 
   it('shows the server’s reason a saved endpoint cannot be used', async () => {
-    mockGetStatus.mockResolvedValue(status({ s3_problem: 'The S3 endpoint must use HTTPS.' }));
+    mockGetStatus.mockResolvedValue(status({ problem: 'The S3 endpoint must use HTTPS.' }));
     renderPanel();
     expect(await screen.findByRole('alert')).toHaveTextContent('The S3 endpoint must use HTTPS.');
   });
@@ -105,10 +120,26 @@ describe('StorageLocationPanel', () => {
   });
 
   it('says a platform that is not connected keeps files on the server', async () => {
-    mockGetStatus.mockResolvedValue(status({ platform: 'googledrive' }));
+    mockGetStatus.mockResolvedValue(status({ platform: 'googledrive', ...notConnectable }));
     renderPanel();
     expect(await screen.findByText(/This platform is not connected yet/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Test and switch to S3' })).not.toBeInTheDocument();
+  });
+
+  it('names the platform the server reports, not a hard-coded one', async () => {
+    mockGetStatus.mockResolvedValue(
+      status({
+        platform: 'example',
+        platform_label: 'Example Store',
+        platform_short_label: 'Example',
+        container_noun: 'vault',
+        new_files_go_to: 'example',
+        container: 'dept-vault',
+      })
+    );
+    renderPanel();
+    expect(await screen.findByText(/New files go to your Example vault/)).toBeInTheDocument();
+    expect(screen.getByText('dept-vault')).toBeInTheDocument();
   });
 
   it('re-reads the status once a save lands', async () => {
