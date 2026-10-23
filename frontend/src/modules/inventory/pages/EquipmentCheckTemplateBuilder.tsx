@@ -7239,6 +7239,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <DialogPanel
             onClose={() => setShowPreview(false)}
             role="dialog"
+            aria-modal="true"
             aria-label="Crew view, full size"
             className="modal-panel-scroll relative flex flex-col items-center gap-3 border-0 bg-transparent shadow-none"
           >
