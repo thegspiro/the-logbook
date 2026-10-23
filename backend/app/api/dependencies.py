@@ -8,6 +8,7 @@ Permission aggregation combines **position permissions** (from the
 (from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query, Request, status
@@ -16,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import HTTPConnection
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import (
@@ -25,6 +27,7 @@ from app.core.permissions import (
 )
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
+from app.services.mfa_policy import grace_ends_at, grace_expired, is_privileged
 from app.utils.db_retry import is_transient_db_error
 from app.utils.password_expiry import is_password_expired, is_past_grace
 
@@ -129,6 +132,70 @@ _MFA_ENROLL_ALLOWED_SUFFIXES = (
     "/auth/refresh",
     "/auth/session-settings",
 )
+
+
+@dataclass(frozen=True)
+class MfaRequirement:
+    """What an un-enrolled member owes, as decided for this request."""
+
+    #: The enrollment gate is closed for them now.
+    required: bool
+    #: A privileged member still inside the grace period: when it ends.
+    grace_ends_at: datetime | None = None
+
+
+async def evaluate_mfa_requirement(
+    db: AsyncSession, user: User, org_requires_mfa: bool
+) -> MfaRequirement:
+    """Decide whether ``user`` (not enrolled in MFA) is blocked, and for how long.
+
+    Starts the member's grace clock the first time they are seen privileged, and
+    clears it when they stop being so, so a later promotion gets a fresh period
+    instead of inheriting an expired one.
+    """
+    if org_requires_mfa:
+        return MfaRequirement(required=True)
+
+    now = datetime.now(timezone.utc)
+    privileged = is_privileged(_collect_user_permissions(user))
+    started = getattr(user, "mfa_grace_started_at", None)
+
+    if not privileged:
+        if started is not None:
+            user.mfa_grace_started_at = None
+            await db.flush()
+        return MfaRequirement(required=False)
+
+    if started is None:
+        user.mfa_grace_started_at = now
+        await db.flush()
+        started = now
+        await _announce_mfa_grace(db, user)
+
+    if grace_expired(started, now):
+        return MfaRequirement(required=True)
+    return MfaRequirement(required=False, grace_ends_at=grace_ends_at(started))
+
+
+async def _announce_mfa_grace(db: AsyncSession, user: User) -> None:
+    """Tell a member, once, that MFA is becoming mandatory for their access."""
+    # Imported here: security_notifications pulls in services that import this
+    # module.
+    from app.utils.security_notifications import notify_security_event
+
+    await notify_security_event(
+        db,
+        user,
+        subject="Two-factor authentication is required for your access",
+        message=(
+            "Your positions give you access to administration or health "
+            f"records, so two-factor authentication is now required. You have "
+            f"{settings.MFA_GRACE_DAYS} days to set it up under Profile > "
+            "Security; after that you will only be able to reach the setup "
+            "screens until it is done."
+        ),
+        action_url="/account",
+    )
 
 
 async def get_current_user(
@@ -256,15 +323,19 @@ async def get_current_user(
                     headers={"X-Password-Change-Required": "true"},
                 )
 
-    # Enforce an org-wide MFA requirement: an un-enrolled user in an org that
-    # requires MFA may only reach the enrollment/session paths until they set
-    # it up. The org lookup is skipped entirely for already-enrolled users.
+    # Enforce MFA: an un-enrolled user who must use it may only reach the
+    # enrollment/session paths until they set it up. "Must" is the org-wide
+    # switch, or holding a privileged permission once the grace period has run
+    # out. The org lookup is skipped entirely for already-enrolled users.
     if not getattr(user, "mfa_enabled", False):
         org_row = await db.execute(
             select(Organization.settings).where(Organization.id == user.organization_id)
         )
         org_settings = org_row.scalar_one_or_none() or {}
-        if (org_settings.get("security") or {}).get("mfa_required"):
+        requirement = await evaluate_mfa_requirement(
+            db, user, bool((org_settings.get("security") or {}).get("mfa_required"))
+        )
+        if requirement.required:
             path = request.url.path.rstrip("/")
             if not any(path.endswith(s) for s in _MFA_ENROLL_ALLOWED_SUFFIXES):
                 raise CodedHTTPException(
@@ -375,6 +446,45 @@ class PermissionChecker:
             detail="Insufficient permissions",
             error_code=ErrorCode.PERM_INSUFFICIENT,
         )
+
+
+async def _stepup_is_fresh(db: AsyncSession, token: str | None) -> bool:
+    """Whether the session behind ``token`` re-verified within the step-up window."""
+    session = await AuthService(db).get_session_for_token(token) if token else None
+    verified = getattr(session, "stepup_verified_at", None)
+    if not isinstance(verified, datetime):
+        return False
+    if verified.tzinfo is None:
+        verified = verified.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - verified
+    return age.total_seconds() <= settings.STEPUP_WINDOW_MINUTES * 60
+
+
+async def require_stepup(
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Require a recent re-verification on the caller's own session.
+
+    Add it as a parameter AFTER the route's permission dependency, so a caller
+    who lacks the permission is told that rather than asked to re-verify. The
+    stamp lives on the session row (``POST /auth/step-up`` writes it), so it is
+    server-side and never carries to another session of the same member.
+    """
+    token = access_token
+    if not token and authorization:
+        scheme, _, bearer = authorization.partition(" ")
+        token = bearer if scheme.lower() == "bearer" and bearer else None
+    if await _stepup_is_fresh(db, token):
+        return current_user
+    raise CodedHTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Please confirm your identity to continue.",
+        error_code=ErrorCode.AUTH_STEPUP_REQUIRED,
+        headers={"X-Stepup-Required": "true"},
+    )
 
 
 class AllPermissionChecker:

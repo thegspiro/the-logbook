@@ -79,6 +79,7 @@ _DELIBERATELY_KEPT: dict[str, frozenset[str]] = {
             "locked_until",
             "last_login_at",
             "mfa_last_timestep",
+            "mfa_grace_started_at",
         }
     ),
     # Carry nothing about the person.
