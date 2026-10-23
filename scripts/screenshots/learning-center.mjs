@@ -42,6 +42,56 @@ const installBanner = (page) =>
     .first()
     .locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]");
 
+/**
+ * An event the member has open, in the middle of its check-in window.
+ *
+ * The demo's running event goes stale as the days pass, so the real answer for
+ * one event is returned with its window moved around now. Everything else on the
+ * page is the live response.
+ */
+const liveEventPage = (id, attended) => ({
+  id,
+  route: "/events",
+  beforeNavigate: async (page) => {
+    const list = await (
+      await page.context().request.get(`${BASE_URL}/api/v1/events?limit=100`)
+    ).json();
+    const events = Array.isArray(list)
+      ? list
+      : (list.items ?? list.events ?? []);
+    const event =
+      events.find((e) => e.title === "Company Drill — In Progress") ??
+      events[0];
+    await page.route(
+      new RegExp(`/api/v1/events/${event.id}(\\?|$)`),
+      async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        const now = Date.now();
+        body.check_in_opens_at = new Date(now - 3_600_000).toISOString();
+        body.check_in_closes_at = new Date(now + 2 * 3_600_000).toISOString();
+        body.user_attended = attended;
+        body.is_cancelled = false;
+        body.is_draft = false;
+        body.attendance_finalized_at = null;
+        await route.fulfill({ response, json: body });
+      },
+    );
+    page.__eventId = event.id;
+  },
+  prepare: async (page) => {
+    await page.goto(`${BASE_URL}/events/${page.__eventId}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page
+      .getByText(attended ? /You.re checked in/ : "Check In", { exact: false })
+      .first()
+      .waitFor();
+  },
+  clip: (page) => page.locator("main").first(),
+  crop: { top: 0, height: 205 },
+});
+
 const onlyIndex = process.argv.indexOf("--only");
 const only = onlyIndex > -1 ? process.argv[onlyIndex + 1] : null;
 
@@ -316,6 +366,8 @@ const shots = [
         .getByRole("heading", { name: "Event Check-In" })
         .locator("xpath=ancestor::div[contains(@class,'shadow')][1]"),
   },
+  liveEventPage("events-page-check-in", false),
+  liveEventPage("events-page-checked-in", true),
   {
     id: "events-check-out",
     route: "/events",

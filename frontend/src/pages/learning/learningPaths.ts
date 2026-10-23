@@ -248,7 +248,7 @@ export const learningPaths: LearningPath[] = [
         how: [
           'Open the events list and find the next one in your calendar.',
           'Open it and read the description, time, and location.',
-          'Check whether attendance is required or optional.',
+          'Check whether attendance is required or optional, and read the Credit line: it says the most hours the event can earn you. What lands on your record is the time you actually attended.',
         ],
         success: 'You know the date, time, place, and whether your attendance is expected.',
       },
@@ -260,7 +260,7 @@ export const learningPaths: LearningPath[] = [
         how: [
           'Events waiting on your answer are gathered in the Needs You band at the top of the list. Answer from the event card with Going or Not Going.',
           'A full event offers Join Waitlist instead. You are moved to Going automatically if a seat opens.',
-          'For anything more — a guest count, a note, or Maybe where the organizer allows it — open the event and press RSVP Now (Update RSVP once you have answered), choose under Your Response, then Submit RSVP.',
+          'For anything more — a guest count, a note, or Maybe where the organizer allows it — open the event and press RSVP Now (Update RSVP once you have answered, or just Going on an event that does not need an RSVP), choose under Your Response, then Submit RSVP.',
           'Change it if your plans change; the officers see the current answer, not the first one.',
         ],
         screenshots: [
@@ -281,12 +281,12 @@ export const learningPaths: LearningPath[] = [
         path: '/events',
         why: 'RSVP says you meant to come; check-in proves you did. Attendance credit and any requirement tied to the event come from the check-in, not the RSVP.',
         how: [
-          'If the event is happening now, a green Check In button appears in the Needs You band at the top of the Events page. It opens the same check-in page the QR code does.',
-          'Otherwise, at the event, find the posted QR code and scan it with your phone camera. Sign in if you are asked to.',
+          'If the event is happening now, a green Check In button appears in the Needs You band at the top of the Events page, and on the event itself once check-in opens. Both open the same check-in page the QR code does.',
+          'Or, at the event, find the posted QR code and scan it with your phone camera. Sign in if you are asked to. The QR code is put up by whoever runs the event, so you will not find a View QR Code button on the event page.',
           'On the Event Check-In page, tap Check In to This Event. The confirmation reads You’re Checked In. If you never answered the RSVP, you are recorded as Going.',
           'When you leave, scan the code again. Because you are already checked in, the page opens on Already Checked In with a Check Out of This Event button; tap it and the page confirms You’re Checked Out.',
           'If there is no code, ask whoever is running the event to check you in.',
-          'Confirm the event shows you as attended afterwards. On a training event the hours reach your training record when the organizer finalizes attendance, not at the moment you check in.',
+          'Confirm the event page now shows You’re checked in. On a training event the hours reach your training record when the organizer finalizes attendance, not at the moment you check in.',
         ],
         screenshots: [
           {
@@ -300,6 +300,14 @@ export const learningPaths: LearningPath[] = [
           {
             file: 'events-check-out.png',
             alt: 'The check-in page for a member who is already checked in: Already Checked In, the event and the time they checked in, and a Check Out of This Event button.',
+          },
+          {
+            file: 'events-page-check-in.png',
+            alt: 'The top of an event page while check-in is open: the title and a green Check In button on the right.',
+          },
+          {
+            file: 'events-page-checked-in.png',
+            alt: 'The top of an event page after checking in: the title and a green You’re checked in badge on the right.',
           },
         ],
         success: 'The event lists you as checked in, not merely as having RSVPed.',
@@ -434,7 +442,7 @@ export const learningPaths: LearningPath[] = [
         screenshots: [
           {
             file: 'scheduling-open-shifts.png',
-            alt: 'Open Shifts: shifts with open seats grouped by day, each with a Sign Up button and a Details button.',
+            alt: 'Open Shifts: shifts with open seats grouped by day. A shift that has already started shows a note instead of a button; the others have a Sign Up button and a Details button.',
           },
           {
             file: 'scheduling-not-eligible.png',
