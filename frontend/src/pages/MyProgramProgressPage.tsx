@@ -28,6 +28,7 @@ import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { RequirementDueDate } from '../components/training/RequirementDueDate';
 import { InactiveNotRequiredBadge } from '../components/training/InactiveNotRequiredBadge';
+import { NoActiveRequirementsNotice } from '../components/training/NoActiveRequirementsNotice';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
@@ -288,6 +289,13 @@ const MyProgramProgressPage: React.FC = () => {
 
   const overall = Math.round(data.enrollment.progress_percentage);
   const currentPhaseId = data.enrollment.current_phase_id;
+  // The server's verdict: nothing counts toward finishing this pipeline, so the
+  // stored percentage, the "N of M" and the milestones measure nothing.
+  // A finished enrollment keeps the figure it finished with.
+  const noActiveRequirements =
+    data.no_active_requirements === true &&
+    (data.enrollment.status === 'active' || data.enrollment.status === 'on_hold');
+  const phasesWithoutActive = new Set(data.phases_without_active_requirements ?? []);
 
   return (
     <div className="min-h-screen">
@@ -327,15 +335,21 @@ const MyProgramProgressPage: React.FC = () => {
 
         {/* Overall progress */}
         <div className="bg-theme-surface mb-4 rounded-lg p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-theme-text-secondary text-sm">
-              {data.completed_requirements}/{data.total_requirements} requirements complete
-            </span>
-            <span className="text-theme-text-primary text-sm font-semibold">{overall}%</span>
-          </div>
-          <div className="bg-theme-surface-secondary h-2 w-full rounded-full">
-            <div className="h-2 rounded-full bg-red-500 transition-all" style={{ width: `${overall}%` }} />
-          </div>
+          {noActiveRequirements ? (
+            <NoActiveRequirementsNotice scope="pipeline" audience="member" />
+          ) : (
+            <>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-theme-text-secondary text-sm">
+                  {data.completed_requirements}/{data.total_requirements} requirements complete
+                </span>
+                <span className="text-theme-text-primary text-sm font-semibold">{overall}%</span>
+              </div>
+              <div className="bg-theme-surface-secondary h-2 w-full rounded-full">
+                <div className="h-2 rounded-full bg-red-500 transition-all" style={{ width: `${overall}%` }} />
+              </div>
+            </>
+          )}
           <div className="text-theme-text-muted mt-3 flex flex-wrap items-center gap-3 text-xs">
             <span>Enrolled: {formatDate(data.enrollment.enrolled_at, tz)}</span>
             {data.enrollment.target_completion_date && (
@@ -349,7 +363,7 @@ const MyProgramProgressPage: React.FC = () => {
                   : `${Math.abs(data.time_remaining_days)} days overdue`}
               </span>
             )}
-            {data.is_behind_schedule && (
+            {data.is_behind_schedule && !noActiveRequirements && (
               <span className="flex items-center gap-1 text-yellow-700 dark:text-yellow-400">
                 <AlertTriangle className="h-3.5 w-3.5" /> Behind schedule
               </span>
@@ -358,7 +372,7 @@ const MyProgramProgressPage: React.FC = () => {
         </div>
 
         {/* Next milestones */}
-        {data.next_milestones.length > 0 && (
+        {data.next_milestones.length > 0 && !noActiveRequirements && (
           <div className="bg-theme-surface mb-4 rounded-lg p-4">
             <h2 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
               <Flag className="h-4 w-4 text-yellow-700 dark:text-yellow-400" /> Next milestones
@@ -383,7 +397,8 @@ const MyProgramProgressPage: React.FC = () => {
           <div className="space-y-4">
             {groups.map((group) => {
               const isCurrent = !!group.phase && currentPhaseId === group.phase.id;
-              const complete = isPhaseGroupComplete(group.records, programReqs);
+              const phaseNoActive = !!group.phase && phasesWithoutActive.has(group.phase.id);
+              const complete = !phaseNoActive && isPhaseGroupComplete(group.records, programReqs);
               return (
                 <div key={group.phase?.id ?? 'program-level'} className="bg-theme-surface rounded-lg p-4">
                   <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -403,6 +418,11 @@ const MyProgramProgressPage: React.FC = () => {
                       />
                     )}
                   </div>
+                  {phaseNoActive && (
+                    <div className="mb-3">
+                      <NoActiveRequirementsNotice scope="phase" audience="member" />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {group.records.map((record) => (
                       <RequirementRow

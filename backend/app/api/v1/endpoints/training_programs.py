@@ -758,6 +758,12 @@ async def get_training_program(
 
     await service.attach_prerequisite_summaries([program], current_user.organization_id)
 
+    # Required *and active*: a deactivated requirement is not required while
+    # inactive, the same rule the member percentages use.
+    total_required = sum(
+        1 for pr in program_requirements if link_counts_toward_completion(pr)
+    )
+
     return ProgramWithPhasesAndRequirements(
         id=program.id,
         organization_id=program.organization_id,
@@ -790,10 +796,10 @@ async def get_training_program(
         requirements=visible_requirements,
         milestones=milestones,
         total_requirements=len(requirements),
-        # Required *and active*: a deactivated requirement is not required
-        # while inactive, the same rule the member percentages use.
-        total_required=sum(
-            1 for pr in program_requirements if link_counts_toward_completion(pr)
+        total_required=total_required,
+        no_active_requirements=total_required == 0,
+        phases_without_active_requirements=(
+            await service.phases_without_active_requirements(program.id)
         ),
     )
 
@@ -1685,6 +1691,11 @@ async def get_enrollment_progress(
         is_behind_schedule=is_behind_schedule,
         locked_requirements=await service.prerequisite_locks(
             enrollment.id, enrollment.program_id
+        ),
+        # The same empty required set the rollup refuses to complete on.
+        no_active_requirements=not required_ids,
+        phases_without_active_requirements=(
+            await service.phases_without_active_requirements(enrollment.program_id)
         ),
     )
 

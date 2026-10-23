@@ -2403,6 +2403,27 @@ async def enroll_member_in_program(
     if not program:
         raise HTTPException(status_code=404, detail="Training program not found")
 
+    # The prerequisite gate every other manual enrollment path applies
+    # through TrainingProgramService.enroll_member, with the same refusal.
+    # Not routed through enroll_member itself: that also seeds progress rows,
+    # a deadline and a first phase and notifies the member, which this
+    # endpoint has never done, and answers duplicates in different words.
+    from app.services.training_program_service import (
+        TrainingProgramService,
+        prerequisite_refusal,
+    )
+
+    missing = await TrainingProgramService(db).missing_prerequisites(
+        program.prerequisite_program_ids,
+        [user_id],
+        current_user.organization_id,
+    )
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=prerequisite_refusal(next(iter(missing.values()))),
+        )
+
     # Check for existing active enrollment
     existing = await db.execute(
         select(ProgramEnrollment).where(

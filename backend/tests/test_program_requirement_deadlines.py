@@ -415,9 +415,7 @@ class TestTheProgressPageShowsTheDueDate:
         assert row.due_date is not None
         assert row.is_overdue is False
 
-    async def test_an_inactive_requirement_has_no_due_or_overdue_date(
-        self, db_session
-    ):
+    async def test_an_inactive_requirement_has_no_due_or_overdue_date(self, db_session):
         # Not currently required, so not late either: the page shows only the
         # "Inactive — not currently required" badge. The officer's view of the
         # same enrollment reads this same response.

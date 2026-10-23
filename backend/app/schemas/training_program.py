@@ -905,6 +905,14 @@ class ProgramWithPhasesAndRequirements(TrainingProgramResponse):
     milestones: List[ProgramMilestoneResponse] = []
     total_requirements: int = 0
     total_required: int = 0
+    # True when nothing counts toward completing the pipeline — every required
+    # item is inactive, or none is required. Nobody completes it automatically
+    # then (an empty set is not a passing set); an officer completes members
+    # by hand or reactivates a requirement.
+    no_active_requirements: bool = False
+    # Phases whose required items are all inactive: none of them completes,
+    # so members do not advance out of one on their own.
+    phases_without_active_requirements: List[str] = []
 
 
 class MemberProgramProgress(BaseModel):
@@ -923,6 +931,12 @@ class MemberProgramProgress(BaseModel):
     # the member's page can grey a step out and say what unlocks it, instead of
     # offering work that the API will refuse.
     locked_requirements: Dict[str, List[str]] = {}
+    # Nothing counts toward completing this enrollment's pipeline (see
+    # ProgramWithPhasesAndRequirements). ``completed_requirements`` and
+    # ``total_requirements`` are then both 0 and the enrollment's stored
+    # ``progress_percentage`` is not a measure of anything: show this instead.
+    no_active_requirements: bool = False
+    phases_without_active_requirements: List[str] = []
 
 
 # Registry Import Schemas

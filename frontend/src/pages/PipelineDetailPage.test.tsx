@@ -1146,3 +1146,116 @@ describe('PipelineDetailPage — reactivating an inactive pipeline', () => {
     expect(screen.queryByRole('button', { name: 'Reactivate' })).not.toBeInTheDocument();
   });
 });
+
+describe('PipelineDetailPage — no active requirements', () => {
+  // Every required item in this pipeline is inactive. The server completes
+  // nobody for finishing an empty set, and the page says so rather than
+  // showing a percentage that measures nothing.
+  const phase1 = {
+    id: 'ph-1',
+    program_id: 'prog-1',
+    phase_number: 1,
+    name: 'Awareness',
+    requires_manual_advancement: false,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+  const phase2 = { ...phase1, id: 'ph-2', phase_number: 2, name: 'Operations' };
+  const retired = {
+    id: 'pr-retired',
+    program_id: 'prog-1',
+    phase_id: 'ph-1',
+    requirement_id: 'req-retired',
+    is_required: true,
+    is_prerequisite: false,
+    sort_order: 0,
+    owns_requirement: true,
+    created_at: '2026-01-01T00:00:00Z',
+    requirement: { id: 'req-retired', name: 'Legacy Decon Drill', requirement_type: 'certification', active: false },
+  };
+  const runningEnrollment = { ...enrollment, current_phase_id: 'ph-1', progress_percentage: 60 };
+  const progress = {
+    enrollment: runningEnrollment,
+    program,
+    current_phase: phase1,
+    requirement_progress: [
+      {
+        ...certProgress,
+        id: 'rp-retired',
+        requirement_id: 'req-retired',
+        status: 'in_progress',
+        progress_percentage: 60,
+        // The server sends no date for an inactive requirement.
+        due_date: null,
+        is_overdue: false,
+        requirement: retired.requirement,
+      },
+    ],
+    completed_requirements: 0,
+    total_requirements: 0,
+    next_milestones: [],
+    is_behind_schedule: false,
+    no_active_requirements: true,
+    phases_without_active_requirements: ['ph-1'],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue({ ...program, no_active_requirements: true });
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([phase1, phase2]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([retired]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([
+      runningEnrollment,
+      { ...enrollment, id: 'enr-2', user_name: 'Sam Graduate', status: 'completed', progress_percentage: 100 },
+    ]);
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue(progress);
+    mockAdvancePhase.mockReset();
+    mockAdvancePhase.mockResolvedValue({ ...runningEnrollment, current_phase_id: 'ph-2' });
+  });
+
+  it('tells the officer nobody completes it automatically, for the pipeline and the phase', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
+    expect(screen.getAllByText('No active requirements')).toHaveLength(2);
+    expect(screen.getByText(/no member is completed automatically/)).toBeInTheDocument();
+    expect(screen.getByText(/Advance members by hand, or reactivate a requirement/)).toBeInTheDocument();
+    expect(screen.getByText('0 required')).toBeInTheDocument();
+  });
+
+  it('lists a running member without a percentage, and a graduate with theirs', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    const running = await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i });
+    expect(within(running).getByText('No active requirements')).toBeInTheDocument();
+    expect(within(running).queryByText(/% complete/)).not.toBeInTheDocument();
+    const graduate = screen.getByRole('button', { name: /Manage progress for Sam Graduate/i });
+    expect(within(graduate).getByText('100% complete')).toBeInTheDocument();
+  });
+
+  it('says so in the member’s progress and advances them by hand out of the empty phase', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(await within(dialog).findByText(/Phase 1: Awareness/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/% overall/)).not.toBeInTheDocument();
+    expect(within(dialog).getAllByText('No active requirements').length).toBeGreaterThanOrEqual(2);
+    expect(within(dialog).queryByLabelText('Phase complete')).not.toBeInTheDocument();
+    // The inactive requirement carries the badge and no date.
+    expect(within(dialog).getByText('Inactive — not currently required')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Due |was due|Overdue/)).not.toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /Advance to next phase/i }));
+    await waitFor(() => expect(mockAdvancePhase).toHaveBeenCalledWith('enr-1', true));
+  });
+});

@@ -40,12 +40,22 @@ import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { RequirementDueDate } from '../components/training/RequirementDueDate';
 import { InactiveNotRequiredBadge } from '../components/training/InactiveNotRequiredBadge';
+import {
+  NO_ACTIVE_REQUIREMENTS_LABEL,
+  NoActiveRequirementsNotice,
+} from '../components/training/NoActiveRequirementsNotice';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
 import { enumLabel } from '../utils/displayValue';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { formatLegalName, formatMemberName } from '../utils/memberName';
-import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
+import {
+  STATUS_META,
+  countsTowardCompletion,
+  groupRecordsByPhase,
+  isPhaseGroupComplete,
+  phaseHasNoActiveRequirements,
+} from '../utils/pipelineProgress';
 import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ENROLLMENT_STATUSES } from '../types/training';
@@ -96,6 +106,8 @@ interface ProgramDetails extends TrainingProgram {
   milestones?: ProgramMilestone[];
   total_requirements?: number;
   total_required?: number;
+  no_active_requirements?: boolean;
+  phases_without_active_requirements?: string[];
 }
 
 type DetailTab = 'overview' | 'phases' | 'enrollments';
@@ -722,6 +734,7 @@ const RequirementProgressRow: React.FC<{
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
           <span className={statusMeta.className}>{statusMeta.label}</span>
+          {record.requirement?.active === false && <InactiveNotRequiredBadge />}
           <span className="text-theme-text-muted">· {Math.round(record.progress_percentage)}%</span>
           {target && (
             <span className="text-theme-text-muted">
@@ -979,11 +992,25 @@ const EnrollmentProgressModal: React.FC<{
     }
   };
 
+  // The server's verdicts (an empty required set completes nobody). A
+  // finished enrollment keeps the figure it finished with.
+  const noActiveRequirements =
+    data?.no_active_requirements === true &&
+    (data.enrollment.status === 'active' || data.enrollment.status === 'on_hold');
+  const phasesWithoutActive = new Set(data?.phases_without_active_requirements ?? []);
+  // A phase whose required items are all inactive never completes, so the
+  // advance-phase endpoint would refuse it; the officer's advance is the
+  // by-hand move the notice offers, sent as the endpoint's audited override.
+  const currentPhaseHasNoActive =
+    !!data?.enrollment.current_phase_id && phasesWithoutActive.has(data.enrollment.current_phase_id);
+
   const handleAdvance = async () => {
     if (!enrollmentId) return;
     setAdvancing(true);
     try {
-      await trainingProgramService.advancePhase(enrollmentId);
+      await (currentPhaseHasNoActive
+        ? trainingProgramService.advancePhase(enrollmentId, true)
+        : trainingProgramService.advancePhase(enrollmentId));
       toast.success('Advanced to the next phase');
       await load();
       onSaved();
@@ -1089,7 +1116,9 @@ const EnrollmentProgressModal: React.FC<{
               </h2>
               {data && (
                 <p className="text-theme-text-muted mt-1 text-sm">
-                  {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
+                  {noActiveRequirements
+                    ? NO_ACTIVE_REQUIREMENTS_LABEL
+                    : `${data.completed_requirements}/${data.total_requirements} requirements · ${overall}% overall`}
                 </p>
               )}
               {phased && data?.current_phase && (
@@ -1119,6 +1148,11 @@ const EnrollmentProgressModal: React.FC<{
           </div>
           {/* An expired enrollment is a dead end without a way back: the member
               cannot make progress and the officer has nothing to act on. */}
+          {noActiveRequirements && (
+            <div className="mt-3">
+              <NoActiveRequirementsNotice scope="pipeline" audience="officer" />
+            </div>
+          )}
           {data?.enrollment.status === 'expired' && (
             <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
               <p className="flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
@@ -1204,7 +1238,8 @@ const EnrollmentProgressModal: React.FC<{
           ) : phased ? (
             groups.map((group) => {
               const isCurrent = !!group.phase && data.enrollment.current_phase_id === group.phase.id;
-              const complete = isPhaseGroupComplete(group.records, programReqs);
+              const phaseNoActive = !!group.phase && phasesWithoutActive.has(group.phase.id);
+              const complete = !phaseNoActive && isPhaseGroupComplete(group.records, programReqs);
               return (
                 <div key={group.phase?.id ?? 'program-level'} className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -1228,6 +1263,7 @@ const EnrollmentProgressModal: React.FC<{
                       </span>
                     )}
                   </div>
+                  {phaseNoActive && <NoActiveRequirementsNotice scope="phase" audience="officer" />}
                   <div className="space-y-2">
                     {group.records.map((record) => (
                       <RequirementProgressRow
@@ -1654,7 +1690,10 @@ const PipelineDetailPage: React.FC = () => {
   const totalReqs = programReqs.length;
   // Required *and active*: the backend does not count a deactivated
   // requirement toward finishing the pipeline while it stays inactive.
-  const requiredReqs = programReqs.filter((r) => r.is_required && r.requirement?.active !== false).length;
+  const requiredReqs = programReqs.filter(countsTowardCompletion).length;
+  // The server's `no_active_requirements`, kept live as links are toggled
+  // here. A pipeline with nothing in it yet already says so in its own words.
+  const noActiveRequirements = totalReqs > 0 && requiredReqs === 0;
 
   return (
     <div className="min-h-screen">
@@ -1843,6 +1882,12 @@ const PipelineDetailPage: React.FC = () => {
           )}
         </div>
 
+        {noActiveRequirements && (
+          <div className="mb-6">
+            <NoActiveRequirementsNotice scope="pipeline" audience="officer" />
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1" role="tablist" {...tablist}>
           {[
@@ -1991,6 +2036,11 @@ const PipelineDetailPage: React.FC = () => {
                             </p>
                           )}
 
+                          {phaseHasNoActiveRequirements(phaseReqs) && (
+                            <div className="mb-4">
+                              <NoActiveRequirementsNotice scope="phase" audience="officer" />
+                            </div>
+                          )}
                           <RequirementList
                             links={phaseReqs}
                             emptyLabel="No requirements assigned to this phase."
@@ -2163,29 +2213,41 @@ const PipelineDetailPage: React.FC = () => {
                 <p className="text-theme-text-muted text-xs">
                   Select a member to view and update their requirement progress.
                 </p>
-                {enrollments.map((enrollment) => (
-                  <button
-                    key={enrollment.id}
-                    type="button"
-                    onClick={() => setProgressEnrollment(enrollment)}
-                    className="bg-theme-surface hover:bg-theme-surface-hover flex w-full items-center justify-between rounded-lg p-4 text-left transition-colors"
-                    aria-label={`Manage progress for ${enrollment.user_name}`}
-                  >
-                    <div>
-                      <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
-                      <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
-                        <span>Status: {enumLabel(enrollment.status)}</span>
-                        <span>{Math.round(enrollment.progress_percentage)}% complete</span>
+                {enrollments.map((enrollment) => {
+                  // A finished enrollment keeps the figure it finished with; a
+                  // running one has nothing left to measure progress against.
+                  const unmeasured =
+                    noActiveRequirements && (enrollment.status === 'active' || enrollment.status === 'on_hold');
+                  return (
+                    <button
+                      key={enrollment.id}
+                      type="button"
+                      onClick={() => setProgressEnrollment(enrollment)}
+                      className="bg-theme-surface hover:bg-theme-surface-hover flex w-full items-center justify-between rounded-lg p-4 text-left transition-colors"
+                      aria-label={`Manage progress for ${enrollment.user_name}`}
+                    >
+                      <div>
+                        <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
+                        <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
+                          <span>Status: {enumLabel(enrollment.status)}</span>
+                          <span>
+                            {unmeasured
+                              ? NO_ACTIVE_REQUIREMENTS_LABEL
+                              : `${Math.round(enrollment.progress_percentage)}% complete`}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="bg-theme-surface-secondary h-2 w-32 rounded-full">
-                      <div
-                        className="h-2 rounded-full bg-red-500 transition-all"
-                        style={{ width: `${enrollment.progress_percentage}%` }}
-                      />
-                    </div>
-                  </button>
-                ))}
+                      {!unmeasured && (
+                        <div className="bg-theme-surface-secondary h-2 w-32 rounded-full">
+                          <div
+                            className="h-2 rounded-full bg-red-500 transition-all"
+                            style={{ width: `${enrollment.progress_percentage}%` }}
+                          />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

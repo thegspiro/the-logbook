@@ -1326,6 +1326,14 @@ export interface MemberProgramProgress {
    * then refused by the API.
    */
   locked_requirements?: Record<string, string[]>;
+  /**
+   * Nothing counts toward completing this pipeline (every required item is
+   * inactive, or none is required). The server completes nobody then, so the
+   * enrollment's percentage and "N of M" mean nothing: show this instead.
+   */
+  no_active_requirements?: boolean;
+  /** Phases whose required items are all inactive: none of them completes. */
+  phases_without_active_requirements?: string[];
 }
 
 export interface RegistryImportResult {

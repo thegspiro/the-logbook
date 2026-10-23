@@ -493,3 +493,205 @@ class TestDeactivatingFromTheEditForm:
         assert error is None, error
         row = await _reload_enrollment(db_session, enrollment.id)
         assert row.status == EnrollmentStatus.ACTIVE
+
+
+# ---------------------------------------------------------------------------
+# 4. Nothing active left: an empty required set is not a passing set
+# ---------------------------------------------------------------------------
+
+
+async def _viewer(db_session, user_id):
+    """The fixture's member as the endpoints read them, permissions loaded up
+    front: a lazy load inside an async session raises."""
+    from sqlalchemy.orm import selectinload
+
+    from app.models.user import User
+
+    result = await db_session.execute(
+        select(User)
+        .options(selectinload(User.positions), selectinload(User.roles))
+        .where(User.id == user_id)
+        .execution_options(populate_existing=True)
+    )
+    return result.scalar_one()
+
+
+class TestNoActiveRequirementsCompletesNobody:
+    async def test_every_required_item_inactive_completes_nobody_and_says_so(
+        self, db_session, setup_org_and_admin, monkeypatch
+    ):
+        from app.api.v1.endpoints import training_programs
+
+        org_id, member_id = setup_org_and_admin
+        svc = TrainingProgramService(db_session)
+        completion_notice = AsyncMock()
+        monkeypatch.setattr(svc, "_notify_program_completion", completion_notice)
+        program, done, retiring, running, _ = await _flexible_program(
+            db_session, org_id, member_id
+        )
+        # Both items are recorded at 100% while both are deactivated, so the
+        # only thing standing between the member and an automatic completion
+        # is the rule itself.
+        for row in (
+            await db_session.execute(
+                select(RequirementProgress).where(
+                    RequirementProgress.enrollment_id == running.id
+                )
+            )
+        ).scalars():
+            row.progress_percentage = 100.0
+            row.status = RequirementProgressStatus.COMPLETED
+        done.active = False
+        retiring.active = False
+        await db_session.flush()
+
+        await svc.recalculate_enrollments_for_requirement(retiring.id, org_id)
+
+        now = await _reload_enrollment(db_session, running.id)
+        assert now.status == EnrollmentStatus.ACTIVE
+        assert now.completed_at is None
+        assert now.progress_percentage == 50.0
+        completion_notice.assert_not_awaited()
+
+        viewer = await _viewer(db_session, member_id)
+        progress = await training_programs.get_enrollment_progress(
+            enrollment_id=uuid.UUID(running.id), db=db_session, current_user=viewer
+        )
+        assert progress.no_active_requirements is True
+        assert progress.completed_requirements == 0
+        assert progress.total_requirements == 0
+        assert progress.enrollment.status == EnrollmentStatus.ACTIVE
+
+        detail = await training_programs.get_training_program(
+            program_id=uuid.UUID(program.id), db=db_session, current_user=viewer
+        )
+        assert detail.no_active_requirements is True
+        assert detail.total_required == 0
+
+        # One requirement back: the flag clears and the rollup resumes.
+        done.active = True
+        await db_session.flush()
+        await svc.recalculate_enrollments_for_requirement(done.id, org_id)
+        progress = await training_programs.get_enrollment_progress(
+            enrollment_id=uuid.UUID(running.id), db=db_session, current_user=viewer
+        )
+        assert progress.no_active_requirements is False
+        assert (await _reload_enrollment(db_session, running.id)).status == (
+            EnrollmentStatus.COMPLETED
+        )
+
+    async def test_a_phase_whose_required_items_are_all_inactive_is_not_complete(
+        self, db_session, setup_org_and_admin
+    ):
+        from app.api.v1.endpoints import training_programs
+
+        org_id, member_id = setup_org_and_admin
+        svc = TrainingProgramService(db_session)
+        program = TrainingProgram(
+            id=_uid(),
+            organization_id=org_id,
+            name="Recruit Academy",
+            structure_type=ProgramStructureType.PHASES,
+            active=True,
+        )
+        retired = _requirement(org_id, "Legacy Ladder Drill")
+        later = _requirement(org_id, "Live Burn")
+        db_session.add_all([program, retired, later])
+        await db_session.flush()
+        first = ProgramPhase(
+            id=_uid(), program_id=program.id, phase_number=1, name="Orientation"
+        )
+        second = ProgramPhase(
+            id=_uid(), program_id=program.id, phase_number=2, name="Fireground"
+        )
+        db_session.add_all([first, second])
+        await db_session.flush()
+        for phase, requirement in ((first, retired), (second, later)):
+            db_session.add(
+                ProgramRequirement(
+                    id=_uid(),
+                    program_id=program.id,
+                    phase_id=phase.id,
+                    requirement_id=requirement.id,
+                    is_required=True,
+                    sort_order=0,
+                )
+            )
+        enrollment = ProgramEnrollment(
+            id=_uid(),
+            organization_id=org_id,
+            user_id=member_id,
+            program_id=program.id,
+            status=EnrollmentStatus.ACTIVE,
+            current_phase_id=first.id,
+        )
+        db_session.add(enrollment)
+        await db_session.flush()
+        db_session.add_all(
+            [
+                _progress(enrollment.id, retired.id, 100.0),
+                _progress(enrollment.id, later.id, 0.0),
+            ]
+        )
+        retired.active = False
+        await db_session.flush()
+
+        await svc.recalculate_enrollments_for_requirement(retired.id, org_id)
+
+        assert not await svc._is_phase_complete(enrollment.id, uuid.UUID(first.id))
+        now = await _reload_enrollment(db_session, enrollment.id)
+        assert str(now.current_phase_id) == first.id
+        assert now.status == EnrollmentStatus.ACTIVE
+        assert await svc.phases_without_active_requirements(program.id) == [first.id]
+
+        viewer = await _viewer(db_session, member_id)
+        progress = await training_programs.get_enrollment_progress(
+            enrollment_id=uuid.UUID(enrollment.id),
+            db=db_session,
+            current_user=viewer,
+        )
+        assert progress.phases_without_active_requirements == [first.id]
+        # The pipeline as a whole still has an active requirement.
+        assert progress.no_active_requirements is False
+
+        # An officer can still move the member on by hand.
+        moved, error = await svc.advance_enrollment_phase(
+            uuid.UUID(enrollment.id), org_id, force=True
+        )
+        assert error is None, error
+        assert str(moved.current_phase_id) == second.id
+
+    async def test_a_phase_with_nothing_required_is_still_complete(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, member_id = setup_org_and_admin
+        svc = TrainingProgramService(db_session)
+        program = TrainingProgram(
+            id=_uid(),
+            organization_id=org_id,
+            name="Recruit Academy",
+            structure_type=ProgramStructureType.PHASES,
+            active=True,
+        )
+        optional = _requirement(org_id, "Station Tour")
+        db_session.add_all([program, optional])
+        await db_session.flush()
+        phase = ProgramPhase(
+            id=_uid(), program_id=program.id, phase_number=1, name="Welcome"
+        )
+        db_session.add(phase)
+        await db_session.flush()
+        db_session.add(
+            ProgramRequirement(
+                id=_uid(),
+                program_id=program.id,
+                phase_id=phase.id,
+                requirement_id=optional.id,
+                is_required=False,
+                sort_order=0,
+            )
+        )
+        await db_session.flush()
+
+        assert await svc._is_phase_complete(_uid(), uuid.UUID(phase.id))
+        assert await svc.phases_without_active_requirements(program.id) == []

@@ -140,6 +140,12 @@ def link_counts_toward_completion(link: Any) -> bool:
     )
 
 
+def prerequisite_refusal(missing_names: Sequence[str]) -> str:
+    """The refusal for a member missing these prerequisite pipelines — the
+    one wording every enrollment path and the eligibility picker give."""
+    return f"Must first complete: {', '.join(missing_names)}"
+
+
 def _counts_as_prerequisite(program_active: Optional[bool]) -> bool:
     """Whether a prerequisite program with this ``active`` value is enforced.
 
@@ -2630,8 +2636,7 @@ class TrainingProgramService:
             organization_id,
         )
         if missing:
-            names = ", ".join(next(iter(missing.values())))
-            return None, f"Must first complete: {names}"
+            return None, prerequisite_refusal(next(iter(missing.values())))
 
         # Check for existing active enrollment. A read-then-insert: two
         # concurrent enrollments of one member both passed a plain SELECT and
@@ -2796,6 +2801,93 @@ class TrainingProgramService:
                 missing[uid] = names
         return missing
 
+    async def notify_officers_enrollment_skipped(
+        self,
+        organization_id: UUID | str,
+        member_name: str,
+        program_id: UUID | str,
+        program_name: str,
+        missing_names: Sequence[str],
+    ) -> int:
+        """Email the training officers that a member was not enrolled in a
+        pipeline automatically because a prerequisite is unfinished.
+
+        Email only: an operational notice acted on in business hours, never a
+        text (pitfall #18). Recipients are the members holding
+        ``training.manage`` who take Training officer duties email — the same
+        resolver and email kind as the provider course-match notice. Returns
+        the number of emails sent. Never raises: the conversion that skipped
+        the enrollment is already done, and a mail failure must not undo it.
+        """
+        import html
+
+        from app.core.config import settings
+        from app.models.user import Organization
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            recipients_for,
+        )
+        from app.services.email_service import EmailService, wrap_email_body
+        from app.services.email_theme import ACCENT_AMBER, action
+        from app.services.external_course_mapping import training_officers
+
+        sent = 0
+        try:
+            org = await self.db.get(Organization, str(organization_id))
+            officers = recipients_for(
+                await training_officers(self.db, str(organization_id)),
+                EmailKind.TRAINING_DUTIES,
+                department_required_kinds(org),
+            )
+            if not officers:
+                return 0
+            missing = ", ".join(missing_names)
+            url = f"{settings.FRONTEND_URL.rstrip('/')}/training/programs/{program_id}"
+            lead = (
+                f"{member_name} was not enrolled in {program_name} automatically "
+                f"because they have not completed its prerequisite: {missing}."
+            )
+            follow_up = (
+                "Enroll them by hand once the prerequisite is complete, or "
+                "enroll them in the prerequisite first."
+            )
+            body = (
+                f"<p>{html.escape(lead)}</p><p>{html.escape(follow_up)}</p>"
+                + action(html.escape(url), "Open the pipeline")
+            )
+            html_body = wrap_email_body(
+                org,
+                "Automatic enrollment skipped",
+                body,
+                header_color=ACCENT_AMBER,
+                chip="Action required",
+            )
+            # A subject is a header: a line break in a name would end it.
+            subject = " ".join(
+                f"Not enrolled automatically: {member_name} - {program_name}".split()
+            )
+            email_service = EmailService(organization=org)
+            for officer in officers:
+                try:
+                    delivered, _ = await email_service.send_email(
+                        to_emails=[officer.email],
+                        subject=subject,
+                        html_body=html_body,
+                        text_body=f"{lead}\n\n{follow_up}\n\n{url}\n",
+                        db=self.db,
+                        template_type="auto_enrollment_prerequisite_skipped",
+                    )
+                    sent += 1 if delivered else 0
+                except Exception as exc:
+                    logger.error(
+                        f"Enrollment-skipped email to officer {officer.id} failed: "
+                        f"{exc}"
+                    )
+        except Exception as exc:
+            logger.error(f"Enrollment-skipped notice failed: {exc}")
+        return sent
+
     async def get_enrollment_eligibility(
         self,
         program_id: UUID,
@@ -2871,10 +2963,9 @@ class TrainingProgramService:
                     False,
                 )
             elif uid in missing_prereqs:
-                names = ", ".join(missing_prereqs[uid])
                 status, reason, eligible = (
                     "prerequisite",
-                    f"Must first complete: {names}",
+                    prerequisite_refusal(missing_prereqs[uid]),
                     False,
                 )
             elif uid in concurrent_ids:
@@ -5009,6 +5100,47 @@ class TrainingProgramService:
         result = await self.db.execute(query)
         return list({str(rid) for rid in result.scalars().all()})
 
+    async def _has_required_links(self, phase_id: Any) -> bool:
+        """Whether anything in a phase is linked as required, active or not —
+        what tells "nothing to do here" from "everything here is inactive"."""
+        result = await self.db.execute(
+            select(ProgramRequirement.id)
+            .where(
+                ProgramRequirement.phase_id == str(phase_id),
+                ProgramRequirement.is_required.is_(True),
+            )
+            .limit(1)
+        )
+        return result.first() is not None
+
+    async def phases_without_active_requirements(self, program_id: Any) -> List[str]:
+        """Ids of the phases whose required items are all inactive.
+
+        Such a phase is never complete (``_is_phase_complete``), so the
+        progress read names them and the page says why the phase is not
+        finishing rather than leaving the member stuck without a word. A phase
+        with nothing linked as required is not listed: it is complete.
+        ``program_id`` must come from an org-scoped read; ``program_requirements``
+        has no organization column (pitfall #14).
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement.phase_id, TrainingRequirement.active)
+            .join(
+                TrainingRequirement,
+                TrainingRequirement.id == ProgramRequirement.requirement_id,
+            )
+            .where(
+                ProgramRequirement.program_id == str(program_id),
+                ProgramRequirement.is_required.is_(True),
+                ProgramRequirement.phase_id.isnot(None),
+            )
+        )
+        has_active: Dict[str, bool] = {}
+        for phase_id, active in result.all():
+            key = str(phase_id)
+            has_active[key] = has_active.get(key, False) or active is True
+        return sorted(pid for pid, active in has_active.items() if not active)
+
     async def _recalculate_enrollment_progress(
         self,
         enrollment_id: UUID | str,
@@ -5042,6 +5174,14 @@ class TrainingProgramService:
             program_id=enrollment.program_id
         )
         if not required_ids:
+            # Nothing left counts toward completion — every required item is
+            # inactive, or none was ever marked required. Department rule
+            # (2026-10-23): an empty set is not a passing set (pitfall #29), so
+            # nobody is auto-completed for finishing nothing, the stored
+            # percentage is left as it was rather than rolled up to 100, and
+            # a completed enrollment is not reopened. The progress read says
+            # so instead (``no_active_requirements``); an officer completes a
+            # member by hand or reactivates a requirement, which recalculates.
             return
 
         result = await self.db.execute(
@@ -5252,8 +5392,12 @@ class TrainingProgramService:
         phase_id: UUID,
     ) -> bool:
         """Whether every *required* requirement in a phase is satisfied for
-        this enrollment. A phase with no required requirements is trivially
-        complete (there is nothing gating advancement out of it).
+        this enrollment. A phase with nothing linked as required is trivially
+        complete (there is nothing gating advancement out of it). A phase whose
+        required items are *all inactive* is not: that is an empty set, not a
+        passing one (pitfall #29), so it neither completes nor auto-advances,
+        and the progress read lists it in ``phases_without_active_requirements``.
+        An officer can still advance the member by hand.
 
         A required requirement with no progress row at all counts as *not*
         satisfied: an enrollment missing a row for it has not done it, and
@@ -5262,7 +5406,7 @@ class TrainingProgramService:
         """
         required_ids = await self.get_required_requirement_ids(phase_id=phase_id)
         if not required_ids:
-            return True
+            return not await self._has_required_links(phase_id=phase_id)
 
         result = await self.db.execute(
             select(RequirementProgress).where(
