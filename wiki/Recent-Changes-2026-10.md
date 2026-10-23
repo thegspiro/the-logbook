@@ -5,7 +5,26 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
-## Recent changes: October 23, 2026
+## Recent changes: October 22 – 23, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
+
+- **Administrators must use two-step sign-in.** Members with administration or
+  health-record permissions have 14 days after the upgrade to enroll, with an email
+  and a countdown banner. The IT manager should save recovery codes first.
+- **Sensitive actions ask for a code.** Log exports, role, position, security and
+  integration changes, administrator resets and deleting a member need a fresh
+  authenticator code (or password), good for 10 minutes.
+- **Low-stock gear email** now links to the Inventory Items list filtered to items
+  at or below their reorder point.
+- **Checklists** are marked overdue when their shift ends, so an overnight shift is
+  not overdue at midnight.
+- **Historical training import** refuses rows with no completion date.
+- Screenshots for the banner, the code box and the filtered list are queued in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Recent changes: October 23, 2026 (screenshots)
 
 The engineering audit is
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).

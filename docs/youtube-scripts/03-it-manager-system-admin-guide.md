@@ -397,6 +397,22 @@ tab.]**
 
 **[SCREEN: Show the 2FA policy settings]**
 
+> "One thing changed in October: you no longer have to remember to require it for
+> your officers. Anyone holding administration or health-record permissions — the
+> chiefs, president, secretary, membership coordinator and you — must turn on
+> two-factor, whatever this policy says. After an upgrade they get a 14-day grace
+> period, an email, and a countdown banner. Before you upgrade, save your own
+> recovery codes: with full permissions, they're your only way back from a lost
+> phone."
+
+**[SCREEN: Banner counting down the days left to enroll]**
+
+> "Sensitive actions — exporting the audit log, changing roles or positions,
+> security and integration settings, resetting an administrator, deleting a
+> member — now ask for a fresh authenticator code. It holds for ten minutes."
+
+**[SCREEN: The verification box that appears over a role change]**
+
 **[CALLOUT: "Best practice: require 2FA for all admin-level positions"]**
 
 > "Members use any TOTP-compatible authenticator app. The setup flow is simple —

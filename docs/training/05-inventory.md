@@ -1265,6 +1265,12 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
   manage gear; medical rows to those who manage medical supplies. Someone with
   both gets one complete email.
 - An officer who has turned off their quartermaster duty emails is left out.
+- When the email lists gear or uniform rows it ends with **View low-stock gear
+  and uniforms**. The link opens **Inventory Items** already narrowed to items at
+  or below their reorder point, with a notice **Showing only items at or below
+  their reorder point** and a **Show all items** button to lift it. Medical rows
+  link to the **Low stock** tab of Medical Supplies instead, and an officer who
+  sees only one kind gets only that link.
 - Low-stock alerts are **email only**. No text message is sent, because
   reordering is a business-hours decision made from an item table a text
   cannot hold.

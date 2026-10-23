@@ -1,5 +1,19 @@
 # Screenshot currency
 
+## Queued by the October 22 – 23 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 00 | The grace-period banner across the top of the app (days left to enroll in two-step sign-in) | Create |
+| 00 | The step-up box (**Authenticator code** field, and the **Password** variant) over a sensitive action such as a role change | Create |
+| 05 | Inventory Items opened from the low-stock email: the **Showing only items at or below their reorder point** notice with **Show all items** | Create |
+| 03 | My Checklists with a day marked overdue only after its shift has ended | Check `03-` My Checklists shots |
+| 14, 04 | Election Settings and Minutes Settings with the shared section header | Re-check any full-page shot (extends the Oct 21 – 22 row) |
+| 02 | Historical Import format list: required columns now bold primary text, not red | Re-check the import page shot |
+
 ## Queued by the October 21 – 22 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
