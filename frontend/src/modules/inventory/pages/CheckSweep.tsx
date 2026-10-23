@@ -448,7 +448,7 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
           type="button"
           disabled={disabled || blockedByGauges}
           onClick={advance}
-          className={`flex min-h-14 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-[17px] font-bold ${
+          className={`flex min-h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-[17px] font-bold ${
             blockedByGauges
               ? // Grey, not a dimmed primary: a faded red still reads as the
                 // action to take, and this one cannot be taken yet.

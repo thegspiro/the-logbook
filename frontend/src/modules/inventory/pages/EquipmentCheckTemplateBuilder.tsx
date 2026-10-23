@@ -50,8 +50,7 @@ import {
   Gauge,
   CalendarClock,
   Smartphone,
-  Signal,
-  BatteryFull,
+  Maximize2,
   Nfc,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -86,6 +85,7 @@ import { DialogPanel } from '@/components/ux/DialogPanel';
 import { Modal } from '@/components/Modal';
 import { NfcTagsCard } from '@/modules/inventory/components/NfcTagsCard';
 import { CloneChecklistDialog } from '@/modules/inventory/components/CloneChecklistDialog';
+import { CrewPreviewPhone } from '@/modules/inventory/components/CrewPreviewPhone';
 import { useInventoryNfcEnabled } from '@/modules/inventory/hooks/useInventoryNfcEnabled';
 import InventoryItemPicker from '@/modules/inventory/components/InventoryItemPicker';
 import CatalogQuickAdd from '@/modules/inventory/components/CatalogQuickAdd';
@@ -5568,6 +5568,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     </div>
   );
 
+  // The rail's phone and the full-size dialog render the same crew screen, so a
+  // change to what the crew sees cannot be made to one and forgotten in the other.
+  const renderCrewPreviewScreen = () =>
+    compartments.length === 0 ? (
+      <p className="text-theme-text-muted px-3 py-6 text-center text-xs">
+        Add a location to see what the crew will get.
+      </p>
+    ) : (
+      <EquipmentCheckForm
+        key={previewResetToken}
+        shiftId="preview"
+        template={buildPreviewTemplate()}
+        previewMode
+        experience="sweep"
+      />
+    );
+
   const renderDetailsDrawer = () => (
     <DialogPortal>
       <div
@@ -6641,44 +6658,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               renderBlockersPanel()
             ) : (
               <div className="card p-3.5">
-                <div className="mb-2.5 flex items-center justify-between">
-                  <h3 className="text-theme-text-primary text-sm font-bold">What the crew sees</h3>
-                  <span className="text-theme-text-muted text-[11px]">Updates as you edit</span>
+                <div className="mb-2.5 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-theme-text-primary text-sm font-bold">What the crew sees</h3>
+                    <span className="text-theme-text-muted text-[11px]">Updates as you edit</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(true)}
+                    aria-label="Open crew view full size"
+                    className="btn-icon text-theme-text-muted hover:text-theme-text-primary shrink-0"
+                  >
+                    <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </div>
-                <div className="bg-theme-bg mx-auto w-[268px] overflow-hidden rounded-[34px] border-[6px] border-gray-800 shadow-xl dark:border-gray-600">
-                  <div className="flex h-[22px] items-end justify-center bg-gray-800 dark:bg-gray-600">
-                    <div className="h-3.5 w-24 rounded-b-[14px] bg-gray-800 dark:bg-gray-600" />
-                  </div>
-                  <div className="text-theme-text-muted flex items-center justify-between px-4 py-0.5 text-[10px]">
-                    <span>9:41</span>
-                    <span className="flex items-center gap-1">
-                      <Signal className="h-2.5 w-2.5" aria-hidden="true" />
-                      <BatteryFull className="h-2.5 w-2.5" aria-hidden="true" />
-                    </span>
-                  </div>
-                  {/* Positioned, because the sweep experience renders
-                      `absolute inset-0` in preview mode. Without a containing
-                      block here it resolves against the sticky rail and covers
-                      the builder instead of filling the phone. */}
-                  <div className="bg-theme-bg relative h-[430px] overflow-y-auto px-1 pb-4" aria-label="Crew preview">
-                    {compartments.length === 0 ? (
-                      <p className="text-theme-text-muted px-3 py-6 text-center text-xs">
-                        Add a location to see what the crew will get.
-                      </p>
-                    ) : (
-                      <EquipmentCheckForm
-                        key={previewResetToken}
-                        shiftId="preview"
-                        template={buildPreviewTemplate()}
-                        previewMode
-                        experience="sweep"
-                      />
-                    )}
-                  </div>
-                  <div className="bg-theme-bg flex justify-center py-1.5">
-                    <div className="h-1 w-28 rounded-full bg-gray-800/25 dark:bg-gray-400/30" />
-                  </div>
-                </div>
+                {/* Tall enough to show a bag's pockets, short enough that the
+                    card still fits the rail without the rail itself scrolling. */}
+                <CrewPreviewPhone
+                  size="compact"
+                  label="Crew preview"
+                  screenHeight={`clamp(380px, calc(100dvh - ${String(topBarHeight + 250)}px), 560px)`}
+                >
+                  {renderCrewPreviewScreen()}
+                </CrewPreviewPhone>
               </div>
             )}
           </div>
@@ -7234,8 +7236,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Preview Modal — mobile device frame */}
       {showPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="modal-panel-scroll relative flex flex-col items-center gap-3">
-            {/* Close button remains fully inside the scroll clipping box */}
+          <DialogPanel
+            onClose={() => setShowPreview(false)}
+            role="dialog"
+            aria-label="Crew view, full size"
+            className="modal-panel-scroll relative flex flex-col items-center gap-3 border-0 bg-transparent shadow-none"
+          >
             <button
               type="button"
               onClick={() => setShowPreview(false)}
@@ -7245,55 +7251,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <X className="h-5 w-5" />
             </button>
 
-            {/* Phone frame */}
-            <div
-              className="bg-theme-bg text-theme-text-primary relative w-[375px] max-w-[90vw] overflow-hidden rounded-[2.5rem] border-[6px] border-gray-800 shadow-2xl dark:border-gray-600"
-              aria-label="Mobile checklist preview"
-            >
-              {/* Phone notch */}
-              <div className="relative flex h-7 items-end justify-center bg-gray-800 dark:bg-gray-600">
-                <div className="h-5 w-28 rounded-b-2xl bg-gray-800 dark:bg-gray-600" />
-              </div>
+            <CrewPreviewPhone size="expanded" label="Mobile checklist preview" screenHeight="min(72dvh, 720px)">
+              {renderCrewPreviewScreen()}
+            </CrewPreviewPhone>
 
-              {/* Phone status bar */}
-              <div className="bg-theme-bg text-theme-text-muted flex items-center justify-between px-6 py-1 text-[10px]">
-                <span>9:41</span>
-                <div className="flex items-center gap-1">
-                  <span>5G</span>
-                  <div className="border-theme-text-muted relative h-2.5 w-6 rounded-sm border">
-                    <div className="bg-theme-text-muted absolute inset-0.5 rounded-[1px]" style={{ width: '75%' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Scrollable content area */}
-              <div className="bg-theme-bg relative overflow-y-auto" style={{ height: 'min(70vh, 640px)' }}>
-                <div className="px-1 pb-4">
-                  <div className="mx-3 mt-2 mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
-                    <p className="text-[10px] text-blue-700 dark:text-blue-400">
-                      Preview — inputs are interactive but nothing will be submitted.
-                    </p>
-                  </div>
-                  <EquipmentCheckForm
-                    shiftId="preview"
-                    template={buildPreviewTemplate()}
-                    previewMode
-                    experience="sweep"
-                  />
-                </div>
-              </div>
-
-              {/* Phone home indicator bar */}
-              <div className="bg-theme-bg flex justify-center py-2">
-                <div className="h-1 w-32 rounded-full bg-gray-800/30 dark:bg-gray-400/30" />
-              </div>
-            </div>
-
-            {/* Label */}
             <p className="text-center text-xs text-gray-400">
-              Mobile preview — most members will complete checks on their phone
+              Mobile preview — inputs are interactive but nothing is submitted. Most members complete checks on their
+              phone.
             </p>
-          </div>
+          </DialogPanel>
         </div>
       )}
 
