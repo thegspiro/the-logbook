@@ -125,7 +125,7 @@ from app.utils.label_renderer import (
     sanitize_barcode_value,
 )
 from app.utils.member_names import format_display_name
-from app.utils.model_updates import apply_updates
+from app.utils.model_updates import apply_updates, reject_null_for_required
 from app.utils.name_matching import best_matches, normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.org_timezone import resolve_org_today, scheduling_timezone
@@ -5020,6 +5020,9 @@ class InventoryService:
                 for k, v in update_data.items()
                 if k in self._MAINTENANCE_ALLOWED_FIELDS
             }
+            # Refused before the completion logic reads it: bool(None) would
+            # skip the inspection checks and then write NULL to is_completed.
+            reject_null_for_required(record, safe_data)
             if self._retires_via_maintenance(safe_data):
                 return None, _RETIRE_VIA_RETIRE_ACTION
 
@@ -9571,6 +9574,12 @@ class InventoryService:
             # client on every row of the paste, not just the first.
             await self._assert_item_fks_in_org(data, organization_id)
 
+            # An explicit null would reach is_pool_without_stock as None < 1
+            # (a TypeError) or the constructor as a NULL count. Leaving the
+            # key out is how a row asks for the default count.
+            if "quantity" in data and data["quantity"] is None:
+                raise ValueError(f"{name}: quantity cannot be empty")
+
             if is_pool_without_stock(data):
                 raise ValueError(
                     f"{name}: pool items must have a quantity of 1 or more"
@@ -10828,6 +10837,7 @@ class InventoryService:
                     allow_none=True,
                     label="category",
                 )
+            reject_null_for_required(group, data)
             for key, value in data.items():
                 setattr(group, key, value)
             await self.db.flush()
@@ -10974,6 +10984,7 @@ class InventoryService:
             if not kit:
                 return None, "Equipment kit not found"
             line_items_data = data.pop("line_items", None)
+            reject_null_for_required(kit, data)
             for key, value in data.items():
                 setattr(kit, key, value)
             if line_items_data is not None:

@@ -26,6 +26,7 @@ from app.models.user import Role, User, UserStatus
 from app.services.message_delivery_service import THROTTLED_REASON
 from app.utils.member_names import format_display_name
 from app.utils.membership import MemberStatus
+from app.utils.model_updates import reject_null_for_required
 from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -399,6 +400,9 @@ class MessagingService:
                 "expires_at",
                 "scheduled_at",
             }
+            reject_null_for_required(
+                message, {k: v for k, v in updates.items() if k in allowed_fields}
+            )
             for key, value in updates.items():
                 if key in allowed_fields:
                     if key == "priority":

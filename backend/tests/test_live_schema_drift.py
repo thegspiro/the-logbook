@@ -13,10 +13,12 @@ CI's integration job builds its database the upgraded way (migrations, then
 The local suite's own ``intranet_test`` database is built by ``create_all`` and
 passes trivially; point ``DB_NAME`` at a migrated database to check one by hand.
 
-Only drift in a direction that has a fix is asserted. The differences recorded
-in ``docs/KNOWN_LIMITATIONS.md`` (leftover tables, stricter nullability and
-server defaults, the unused ``shift_equipment_checks.apparatus_id`` index) are
-deliberately not checked here.
+Only drift in a direction that has a fix is asserted. Nullability is now one
+of them: 6dce1364ff7e made 99 model columns NOT NULL to match the chain, so the
+two shapes must agree on every column. The differences still recorded in
+``docs/KNOWN_LIMITATIONS.md`` (leftover tables, server defaults on columns that
+are NOT NULL on both, the unused ``shift_equipment_checks.apparatus_id`` index)
+are deliberately not checked here.
 """
 
 import uuid
@@ -94,6 +96,35 @@ async def test_every_model_index_exists_in_the_database(db_session: AsyncSession
     assert not missing, "Model indexes absent from the database:\n" + "\n".join(
         sorted(missing)
     )
+
+
+async def test_every_model_column_has_the_databases_nullability(
+    db_session: AsyncSession,
+):
+    """A column the models call nullable must be nullable in the database too.
+
+    When they disagreed, ``apply_updates`` (which reads nullability from the
+    models) passed an explicit null that an upgraded database then refused at
+    flush with MySQL 1048.
+    """
+    rows = await db_session.execute(
+        text(
+            "SELECT table_name, column_name, is_nullable "
+            "FROM information_schema.columns WHERE table_schema = DATABASE()"
+        )
+    )
+    live = {(t, c): nullable == "YES" for t, c, nullable in rows}
+
+    disagree = sorted(
+        f"{table.name}.{column.name}: model "
+        f"{'NULL' if column.nullable else 'NOT NULL'}, database "
+        f"{'NULL' if live[(table.name, column.name)] else 'NOT NULL'}"
+        for table in Base.metadata.tables.values()
+        for column in table.columns
+        if (table.name, column.name) in live
+        and bool(column.nullable) != live[(table.name, column.name)]
+    )
+    assert not disagree, "Nullability differs from the models:\n" + "\n".join(disagree)
 
 
 async def test_member_who_logged_fuel_can_be_hard_deleted(db_session: AsyncSession):
