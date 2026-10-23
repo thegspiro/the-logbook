@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
@@ -45,5 +45,33 @@ describe('MemberTrainingStatusPage', () => {
 
     expect(await screen.findByText('No members to show')).toBeInTheDocument();
     expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  // Rendered bare inside the <tr>, the sort buttons all collapsed into one
+  // anonymous cell above the first columns, so no heading sat over its data.
+  it('renders one column header per data column', async () => {
+    getMemberPeriodStatus.mockResolvedValue({
+      members: [
+        {
+          user_id: 'u1',
+          member_name: 'Adams, Laura',
+          trainings_completed: 0,
+          hours_completed: 0,
+          last_activity: null,
+          compliance_status: 'red',
+          requirements_met: 0,
+          requirements_total: 2,
+        },
+      ],
+    });
+    renderWithRouter(<MemberTrainingStatusPage />);
+
+    await screen.findByText('Adams, Laura');
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.map((h) => h.textContent)).toEqual(['Member', 'Trainings', 'Hours', 'Last activity', 'Status']);
+    const firstRow = screen.getAllByRole('row')[1];
+    expect(firstRow).toBeDefined();
+    expect(within(firstRow as HTMLElement).getAllByRole('cell')).toHaveLength(headers.length);
+    expect(headers.every((h) => h.getAttribute('aria-sort') !== null)).toBe(true);
   });
 });

@@ -26,6 +26,20 @@ Rows are **Open**; nothing was re-recorded.
 | **12** (elections) | Paper ballots         | Totals per candidate for every race      | Ranked-choice races are entered ballot by ballot, with a copy count                                                                |
 | **03** (IT)        | Sessions and security | —                                        | Idle refresh and an absolute session cap; a member manager cannot delete, archive or change the status of a more-privileged member |
 
+## Flagged by the 2026-10-19 → 10-20 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes: Settings page and search).
+
+| Script                                    | Beat                | Was                                                                     | Now                                                                                          |
+| ----------------------------------------- | ------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **07** (secretary)                        | Adopting minutes    | Separate **Publishing settings**, **Roll listing**, **Signers** buttons | One **Settings** button; sections Attendance, Signatures, Reminders, Publishing              |
+| **07**                                    | Finding old minutes | Search by meeting title                                                 | Search words inside minutes; every word must appear; quotes for a phrase; newest 500         |
+| Medical screening narration (if scripted) | Requirements        | Applies to Roles, not enforced                                          | **Applies to Positions** limits who is graded; blank means everyone; Not applicable for none |
+| **11**-related finance narration          | Dashboard tile      | Overdue dues included part-paid                                         | Overdue count matches the dues page; Partial not counted                                     |
+
 ## Flagged by the 2026-10-18 → 10-19 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).

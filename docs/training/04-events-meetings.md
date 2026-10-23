@@ -370,7 +370,9 @@ meant to be put up at the door. The optional RSVP button on an event that does
 not require a response reads **Going**. The attendee list is requested only when
 your department shares it.
 
-<!-- Screenshot needed: a member's event detail page with check-in open, showing Check In; and one after check-in showing You're checked in. -->
+![A member's event detail page while check-in is open: the Check In button beside the event's details](./images/04-79-event-check-in-open.png)
+
+![The same event page after check-in: You're checked in in place of the Check In button, with the hours and category credited](./images/04-80-event-checked-in.png)
 
 1. Scan the QR code with your phone's camera.
 2. Sign in if you are not already. The self check-in page opens.
@@ -1576,7 +1578,11 @@ with no agenda items behaves as before.
   take this up**. It stays in the record and prints as _Not taken up_ instead of
   vanishing.
 
-<!-- Screenshot needed: the Agenda dialog on a meeting with three items, one with a prepared motion and a linked document; the Sync from the agenda dialog with one new and one changed item; a section marked Not taken up. -->
+![The Agenda dialog for the Station Operations Meeting: its items in order, one with a presenter and notes, a prepared motion and a linked document](./images/04-87-agenda-dialog.png)
+
+![The Sync from the agenda dialog on draft minutes: one new agenda item and one changed item, each with a box to tick before applying](./images/04-88-agenda-sync-dialog.png)
+
+![A section of draft minutes marked Not taken up: the badge beside its heading and the line that the meeting did not take it up](./images/04-89-section-not-taken-up.png)
 
 **Linked events.** Minutes can be linked to an event, and **Unlink** removes
 the link for good.
@@ -1662,7 +1668,7 @@ selector that overrides the default for that one set of minutes (leave it on
 PDF, the library copy and the public copy; the public copy leaves out counts that
 are not listed rather than showing zero. Nothing changes until someone sets it.
 
-<!-- Screenshot needed: the roll panel's per-minutes selector on a draft. -->
+![The roll panel on draft minutes with its own selector for which attendance statuses a reader sees, set to follow the department default](./images/04-81-minutes-roll-listing-selector.png)
 
 ### Publishing adopted minutes (library and public page)
 
@@ -1688,7 +1694,11 @@ for confirmation.
 
 ![Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches](./images/04-73-minutes-settings-publishing.png)
 
-<!-- Screenshot needed: the publishing status note on adopted minutes; the public minutes page at phone and desktop widths. -->
+![Adopted minutes with the publishing status note: filed in Documents with its version and date, and posted on the public minutes page](./images/04-82-minutes-publishing-note.png)
+
+![The public minutes page at desktop width: the meeting's minutes read without signing in, with attendance as counts and the officers present](./images/04-83-public-minutes-desktop.png)
+
+![The public minutes page at phone width](./images/04-84-public-minutes-phone.png)
 
 ### Circulating and adopting minutes
 
@@ -1782,7 +1792,9 @@ is a place a password could be guessed from a signed-in session.
 
 ![Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes](./images/04-74-minutes-settings-signatures.png)
 
-<!-- Screenshot needed: the Sign dialog (name and password); the Signatures panel on adopted minutes with one slot signed and one open. -->
+![The Signatures panel on adopted minutes: 1 of 2 signed, the Recording Secretary slot signed with the signer's name and date, and the Presiding Officer slot waiting with its Sign as Presiding Officer button](./images/04-85-minutes-signatures-panel.png)
+
+![The Sign dialog: the slot being signed, the name as it stands on the account and the password confirmation](./images/04-86-minutes-sign-dialog.png)
 
 **Outlines (the standard order of business).** **Minutes > Outlines**
 (`minutes.manage`) edits the department's standard sections for each meeting

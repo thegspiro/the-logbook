@@ -5,6 +5,35 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 23, 2026
+
+Screenshot pass only; no guide wording changed beyond removing placeholders.
+
+- **Placeholders filled.** 34 of the remaining 40 training-guide screenshot
+  placeholders were captured and applied (guides 00, 02, 03, 04, 05, 06, 07,
+  08, 11, 14). Four were stale duplicates of images already in the guide
+  (Compliance suggestion box, Member Emails required switch, Treasurer approvals
+  table, Chief sign-offs) and were removed rather than re-shot. The status
+  report now reads 810 captured, 2 remaining.
+- **Still open.** Two Android-only NFC captures in guide 05 (Web NFC does not
+  exist in the capture harness), and the weekly-pattern list with its sun and
+  moon glyphs, which the demo has no split pattern to show.
+- **Pictures that use a stand-in for state the seeder cannot make.** The
+  Items Not Seen report (two rows given a 212- and 301-day history), the empty
+  fleet and fresh-department guides (the summary answered as a new department's),
+  a vehicle with the Deficiency flag, the ranked-choice paper-ballot dialog,
+  the pre-meeting package send states and the not-applicable member in the
+  compliance matrix. Each is commented in `scripts/screenshots/manifest.mjs`
+  where the response is replaced; the screen, wording and controls are real.
+- **Bug found while seeding.** `POST /inventory/clearances` answered 500 after
+  saving the clearance, because its response listed line items that were never
+  loaded. Fixed in `DepartureClearanceService.initiate_clearance` with a test.
+- **Capture tooling.** `seed_demo_data.py` gains a published and signed July
+  minutes record, a meeting whose agenda moved on after its minutes, a
+  legacy-form station and room for the Locations page, an overdue facility
+  maintenance record and a departure clearance. New `wizard-extra.mjs`,
+  `render_supply_email.py` and `email-shots.mjs`.
+
 ## Change audit: October 21 – 22, 2026
 
 Merged to `main` since the [October 20 – 21 pass](#change-audit-october-20--21-2026)
@@ -104,6 +133,32 @@ was found; confirm it.
 
 Screenshots: nothing captured. The gap report is the top section of
 [`SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-19--20-documentation-pass).
+
+### Upgrade-visible behaviour in this window
+
+Added by the second pass of the same day, after the training audit above.
+
+- **Screening requirements now honour Applies to Positions.** The field was
+  stored and read by nothing, so every active requirement graded every member. A
+  requirement that lists positions now grades only members holding one; blank still
+  means everyone; prospects are graded on all. A member left with nothing that
+  applies reads **Not applicable**. A department that typed a list into the field
+  while it did nothing will see rosters change. No migration. Recorded in
+  `KNOWN_LIMITATIONS.md`.
+- **Dashboard overdue dues** follows `dues_overdue_clause`: part-paid records are
+  Partial and no longer counted. `training/11-finance.md` now says so (this
+  corrects the disposition in the table above, which found nothing to change).
+- **Layout:** date and time `form-input` fields are pinned inside their grid
+  column so iOS WebKit cannot overflow them (Edit Member Date of Birth).
+- **Security review:** meetings-minutes pass 8 fixed MM-18 (a stale prepared
+  motion could still appear in a PUT response; the cause of a flaky test) and
+  flagged MM-19/MM-20 (lock-free find-or-create races); admin-hours flagged AH-18;
+  grants-fundraising GF-9 extended. Other passes found nothing new.
+- **Screenshots:** besides the queue in `SCREENSHOT_CURRENCY.md`, replace
+  `04-14-meeting-minutes.png` (one Settings button; action buttons wrap under
+  the title) and the Edit Member shot showing Date of Birth.
+- **Scripts:** `docs/youtube-scripts/SCRIPT_CURRENCY.md` queues script 07
+  (Settings page, search) and one-line edits for screening and finance narration.
 
 ## Change audit: October 18 – 19, 2026
 

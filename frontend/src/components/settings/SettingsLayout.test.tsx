@@ -210,4 +210,44 @@ describe('SettingsLayout', () => {
     expect(screen.queryByRole('navigation', { name: 'Alerts pages' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('navigation')).toHaveLength(1);
   });
+
+  describe('pageHeader', () => {
+    const renderWithHeader = (aside?: React.ReactNode) =>
+      render(
+        <SettingsLayout<Key, Page>
+          sections={SECTIONS}
+          activeSection="alerts"
+          onSectionChange={vi.fn()}
+          navLabel="Test settings sections"
+          title="Test Settings"
+          onBack={vi.fn()}
+          backLabel="Back to tests"
+          pageHeader={(controls) => (
+            <header>
+              <h1>Group header</h1>
+              <div data-testid="group-actions">{controls}</div>
+            </header>
+          )}
+          {...(aside ? { headerAside: aside } : {})}
+        >
+          <p>Body</p>
+        </SettingsLayout>
+      );
+
+    it('replaces the shell title, subtitle and back button with the page header', () => {
+      renderWithHeader();
+
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      expect(screen.getByRole('heading', { level: 1, name: 'Group header' })).toBeInTheDocument();
+      expect(screen.queryByText('Who gets told')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back to tests' })).not.toBeInTheDocument();
+      expect(screen.getByRole('navigation', { name: 'Test settings sections' })).toBeInTheDocument();
+    });
+
+    it('hands its header controls to the page header to place among its actions', () => {
+      renderWithHeader(<button type="button">Help</button>);
+
+      expect(within(screen.getByTestId('group-actions')).getByRole('button', { name: 'Help' })).toBeInTheDocument();
+    });
+  });
 });

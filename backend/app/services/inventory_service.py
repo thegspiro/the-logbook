@@ -8692,6 +8692,7 @@ class InventoryService:
         self,
         organization_id: UUID | str,
         item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Tuple[InventoryItem, int, bool]]:
         """Items at or below their reorder point, as (item, on_hand, from_lots).
 
@@ -8709,6 +8710,12 @@ class InventoryService:
         ``from_lots`` tells the caller which ledger the number came from, so an
         alert can say so rather than appear to contradict the item's own
         quantity field.
+
+        ``exclude_item_types`` carves a domain out, for the gear list's low-stock
+        filter. It is applied to the loaded rows rather than in SQL: an
+        uncategorized item belongs to gear, and ``category_id NOT IN (...)``
+        drops a NULL category, so the SQL form would hide exactly the items
+        nobody filed.
 
         ``item_types`` narrows to one domain (e.g. the medical-supplies
         summary) — omitted, this scans the whole org, which is what the
@@ -8732,6 +8739,13 @@ class InventoryService:
             )
         result = await self.db.execute(query)
         candidates = list(result.scalars().all())
+        if exclude_item_types:
+            excluded = set(exclude_item_types)
+            candidates = [
+                item
+                for item in candidates
+                if getattr(item.category, "item_type", None) not in excluded
+            ]
         if not candidates:
             return []
 

@@ -60,6 +60,7 @@ from app.services.email_policy import (
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
 from app.utils.event_attachments import validate_attachments_for_org
+from app.utils.model_updates import apply_updates, reject_null_for_required
 from app.utils.org_timezone import (
     format_in_org_timezone,
     local_and_utc_dates,
@@ -1089,6 +1090,10 @@ class EventService:
                 event, update_data["custom_fields"]
             )
 
+        # Before the date arithmetic below: a null start or end would raise a
+        # TypeError there, and a null title or flag an IntegrityError at flush.
+        reject_null_for_required(event, update_data)
+
         # Validate dates if being updated
         start_dt = update_data.get("start_datetime", event.start_datetime)
         end_dt = update_data.get("end_datetime", event.end_datetime)
@@ -1247,6 +1252,8 @@ class EventService:
             "end_datetime" in timing and timing["end_datetime"] is None
         ):
             raise ValueError("An event's start and end cannot be cleared")
+        if future_events:
+            reject_null_for_required(future_events[0], update_data)
         times_change = False
         shift = length = timedelta(0)
         deadline_lead: Optional[timedelta] = None
@@ -5111,8 +5118,7 @@ class EventService:
                 update_data.get("default_location_id"), organization_id
             )
 
-        for field, value in update_data.items():
-            setattr(template, field, value)
+        apply_updates(template, update_data)
 
         if updated_by:
             template.updated_by = str(updated_by)

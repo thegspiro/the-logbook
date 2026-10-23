@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { configure, screen } from '@testing-library/react';
+import { configure, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { render } from '@testing-library/react';
@@ -12,7 +12,11 @@ vi.mock('../services/api', () => ({
   minutesService: { getReminderSettings: (...a: unknown[]) => mockGet(...a) as unknown },
 }));
 vi.mock('../../../services/api', () => ({
-  organizationService: { updateSettings: (...a: unknown[]) => mockUpdate(...a) as unknown },
+  organizationService: {
+    updateSettings: (...a: unknown[]) => mockUpdate(...a) as unknown,
+    // Read by the Governance section strip in the page header.
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   roleService: { getRoles: () => Promise.resolve([]) },
 }));
 vi.mock('../../../stores/authStore', () => ({
@@ -142,7 +146,10 @@ describe('MinutesSettingsPage', () => {
     const user = userEvent.setup();
     show();
 
-    await user.click(await screen.findByRole('button', { name: 'Back to Minutes' }));
+    // The trail is the way back now: the Governance header replaced the back
+    // button, and the strip carries a Minutes link of its own beside it.
+    const trail = await screen.findByRole('navigation', { name: /breadcrumb/i });
+    await user.click(within(trail).getByRole('link', { name: 'Minutes' }));
 
     expect(await screen.findByText('Minutes list')).toBeInTheDocument();
   });

@@ -308,46 +308,51 @@ const MemberTrainingStatusPage: React.FC = () => {
           <table className="min-w-full text-sm">
             <thead className="bg-theme-surface-secondary">
               <tr>
-                <SortableHeader
-                  label="Member"
-                  field="member_name"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
-                <SortableHeader
-                  label="Trainings"
-                  field="trainings_completed"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
-                <SortableHeader
-                  label="Hours"
-                  field="hours_completed"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
-                <SortableHeader
-                  label="Last activity"
-                  field="last_activity"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
-                <SortableHeader
-                  label="Status"
-                  field="compliance_status"
-                  currentSort={sortField}
-                  currentDirection={sortDir}
-                  onSort={handleSort}
-                  className="px-4 py-2 text-left"
-                />
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Member"
+                    field="member_name"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Trainings"
+                    field="trainings_completed"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Hours"
+                    field="hours_completed"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Last activity"
+                    field="last_activity"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <SortableHeader
+                    label="Status"
+                    field="compliance_status"
+                    currentSort={sortField}
+                    currentDirection={sortDir}
+                    onSort={handleSort}
+                  />
+                </th>
               </tr>
             </thead>
             <tbody>

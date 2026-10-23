@@ -1,6 +1,147 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10)
+
+---
+
+## Pass 11 (2026-10-23) — watchdog pickup: real delta (screening requirements now scoped to the positions they name), 0 fixed, 0 new findings; MS-14/MS-15 re-confirmed unchanged
+
+**Step 0.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results, checked before starting. `ListAgents` found no other
+reachable session. PR #3574 (Feature 08, Membership pipeline, pass 12) had
+already merged. Rotation row 09 (Medical screening, PHI) was confirmed the
+next `⬜` by reading `PROGRESS.md`'s table directly.
+
+**Scope.** Baseline `d22f8693` (PR #3427's merge, pass 10). `git log
+--no-merges d22f8693..HEAD` over the five declared files
+(`endpoints/medical_screening.py`, `services/medical_screening_service.py`,
+`models/medical_screening.py`, `schemas/medical_screening.py`,
+`mcp/tools/medical.py`) plus the full `frontend/src/modules/
+medical-screening/` directory: **5 non-merge commits**, all read in full.
+`endpoints/medical_screening.py`, `models/medical_screening.py`, and
+`mcp/tools/medical.py` are byte-identical to pass 10 — no route, no
+permission string, no model/column change. No medical-screening-table
+migration landed (scanned every new migration body in the window, not just
+by pathspec — none references `medical_screening`/`screening_requirement`/
+`screening_record`).
+
+**The real delta: `applies_to_roles` is now read, not just stored
+(`70c2845c`).** Before this commit the column existed and was writable from
+the requirement form, but nothing read it back — every active requirement
+graded every member, administrative staff included, regardless of what the
+form saved. Read in full, not taken on the commit message:
+
+- **`_requirement_roles()`** treats anything that is not a list of non-blank
+  strings as "not scoped" — the fail-open direction for a compliance check:
+  a malformed stored value (or the default empty list) grades the
+  requirement for everyone rather than silently dropping a screening a
+  member actually owes. `_role_key()` folds a position's name and its slug
+  to one comparable form (casefold, whitespace/hyphen/underscore
+  normalized), so "Safety Officer" and `safety_officer` match the same
+  stored entry.
+- **`_applicable_requirements()` is the single helper both compliance paths
+  call** — `get_compliance_status` (one subject) and `get_compliance_roster`
+  (the whole department) — so the two screens this feature's own Pitfall
+  #29 precedent (MS-29, cited in pass 9's history) exists to guard against
+  cannot drift: there is one definition of "applies to this person," not
+  two independently re-derived ones. Checked directly, not assumed from the
+  shared name.
+- **A prospect (no positions) is graded on every requirement** —
+  `_applicable_requirements` takes `held_positions: Optional[Set[str]]` and
+  returns the full list unfiltered when it is `None`, which is what a
+  prospect's lookup produces. This is the same fail-toward-more-screening
+  direction as the malformed-value case: a role-scoped requirement cannot
+  be shown not to apply to someone who holds no role yet, so the pipeline
+  gate that reads this compliance status never silently loses a screening
+  for an applicant.
+- **A member left with nothing that applies reads `not_applicable`, never
+  `compliant`** — the roster's `standing` computation was already guarded
+  against a department with zero active requirements reporting everyone
+  compliant (MS-26, pass 7); this commit extends the same `not applicable`
+  guard to the per-member case (zero _applicable_ requirements), confirmed
+  by reading the updated condition (`if not applicable` in place of
+  `if not requirements`) rather than trusting the docstring's claim.
+- **`_position_keys()` is org-scoped.** `Position.organization_id ==
+organization_id` is in the `WHERE` clause of the one query the whole
+  feature uses to resolve "which positions does this member hold" — a
+  position id from another organization (there is none here; positions are
+  joined by the org-scoped `Position` row, not trusted from a client-
+  supplied id) cannot leak another tenant's role assignments into the
+  calculation.
+- **No schema change.** `applies_to_roles` already existed (added before
+  pass 9, stored and validated, simply unread); this commit is a reader,
+  not a new column — confirmed `models/medical_screening.py` has zero diff
+  in this window.
+- **Frontend changes are display-only, not a second copy of the rule.**
+  `ComplianceDashboard.tsx`/`MedicalScreeningPage.tsx` route raw
+  `expiration_date`/`scheduled_date`/`completed_date` strings through the
+  existing `formatCalendarDate()` wrapper instead of interpolating them
+  directly (closes a W71 workflow-review finding: a raw `"2026-11-01"` in
+  running prose, not a security issue); `ScreeningRequirementForm.tsx`
+  relabels the field and drops a stale "Not enforced yet" notice now that
+  the backend reads it; `ScreeningRecordForm.tsx` adds a same-page
+  expiration-date _suggestion_ (editable, never silently substituted — the
+  suggestion only pre-fills a blank field or one still holding the form's
+  own prior suggestion, confirmed by reading the guard condition) derived
+  from the requirement's `frequency_months`, closing a W71 finding where a
+  record saved with no expiration graded as compliant indefinitely. None of
+  these five files re-implement `_applicable_requirements`'s rule
+  client-side; they only format or suggest values the backend already
+  computed or will validate.
+
+**Numeric bounds (`74638250`, cross-cutting)** add `INT32_MIN`/`INT32_MAX`
+caps to `frequency_months`/`grace_period_days` on both the base and update
+schemas — closes a 500 on MySQL `INT` overflow, no auth/tenancy change.
+**One `a11y` commit (`ef140b8e`)** retints two icon colors
+(green-600→green-700, amber-600→amber-700) for AA contrast in
+`SubjectCompliancePanel.tsx`/`MedicalScreeningPage.tsx` — styling only,
+touches no auth, permission, or data-fetching path.
+
+**All 16 routes re-enumerated** (unchanged from pass 10 — `endpoints/
+medical_screening.py` has zero diff in this window). No new unescaped
+`.ilike()`/`.like()`, raw `csv.writer`, or `window.confirm`/`alert`/
+`prompt`.
+
+**Tenant isolation and PHI encryption, re-confirmed present by direct read
+of the files this window's delta did not touch:** every by-id getter still
+filters `organization_id` in the same `and_()`; `create_record`'s three
+client-supplied FKs (`user_id`, `prospect_id`, `requirement_id`) still route
+through `assert_in_org(..., allow_none=True)`; `provider_name`/
+`result_summary`/`notes` are still `EncryptedText`, `result_data` still
+`EncryptedJSON`.
+
+**Standing items re-verified, unchanged (neither site touched by this
+window's delta):**
+
+- **MS-14** (`medical_screening.view` grants full narrative PHI with no
+  finer-grained read tier, FLAGGED, owner decision) — unchanged.
+- **MS-15** (the compliance roster loads every screening record in the
+  organization, unbounded, FLAGGED, same class as MS-6/FIN-9/ELEC-12/USR-5/
+  MP-10/DOC-9) — `get_compliance_roster` still calls `list_subjects`/
+  `list_records` with no `limit`/`offset`; this window's own change to that
+  function (the `_applicable_requirements` filter) narrows which
+  requirements a row is graded against, not how many subjects or records
+  are loaded. Unchanged.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.** This
+pass's own finding is that a real, substantial feature change — wiring a
+previously-dead column into every compliance calculation — was already
+implemented with the correct fail-open direction, org-scoping, and a single
+shared rule for both consuming screens.
+
+### Completion gate (pass 11)
+
+| Check                                                             | Result                                                   |
+| ----------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI-pinned 7.3.0)                   | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (CI-pinned 26.5.1)           | ✅ 2567 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)       | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 640 revisions, single head `cc8c16cb6d98`             |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 273 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -q -k "medical_screening or screening"`            | ✅ 147 passed, 1 skipped (environment-only, `pywebpush`) |
+| `frontend: npm run typecheck`                                     | ✅ clean                                                 |
+| `frontend: npm run lint`                                          | ✅ clean                                                 |
+| `npx vitest run src/modules/medical-screening`                    | ✅ 59 passed (10 files)                                  |
 
 ---
 

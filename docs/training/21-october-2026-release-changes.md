@@ -144,6 +144,23 @@ Screenshots to create or replace are in
 | Claude (MCP) member sign-in tool calls fixed                                                                | [16 — Integrations](./16-integrations.md)                                                               |
 | Plain-language rewrites of guides 02, 06–09, 11–15, 17                                                      | The guides themselves; moved screenshot notes are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) |
 
+# October 19–20, 2026 workflow updates
+
+Index for the eleventh window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                        | Now in                                                                                                         |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Minutes: one Settings page (Attendance, Signatures, Reminders, Publishing)   | [04 — Events & Meetings](./04-events-meetings.md#who-is-listed-on-the-roll-department-default-and-per-minutes) |
+| Minutes: search the words inside the archive                                 | [04 — Events & Meetings](./04-events-meetings.md)                                                              |
+| Screening requirements apply only to the positions they name                 | [13 — Medical Screening](./13-medical-screening.md)                                                            |
+| Dashboard overdue dues counted by the dues screen's rule                     | [11 — Finance](./11-finance.md)                                                                                |
+| Date and time fields no longer spill over their neighbour on iPad and iPhone | Layout only; the Edit Member screenshot is queued                                                              |
+
+---
+
 # October 18–19, 2026 workflow updates
 
 Index for the tenth window. Audit:

@@ -971,21 +971,23 @@ application server and has no indication of it — the step offers the options
 without saying they are not yet in effect (CLAUDE.md pitfall #19).
 
 **Partly resolved (2026-10-22): the S3 / MinIO option works** (decision 31,
-step 2, in `docs/FILE_STORAGE_HARDENING.md`). A department's uploads go to its
+steps 2 and 3, in `docs/FILE_STORAGE_HARDENING.md`). A department's uploads go to its
 own bucket once **Test and switch to S3** passes with its saved settings, and
 the Storage screen reports where new files go whatever platform is picked.
 Still open:
 
 - **Google Drive, OneDrive / SharePoint and "Other" are still unread.** The
   screen now says files stay on the server for them.
-- **Existing files stay where they were written** until step 3's migration
-  command moves them. Both are served, so nothing breaks.
-- **Key rotation and the plain-file notice cover the volume only.**
-  `scripts/encrypt_uploads.py`'s rewrap does not reach objects in a bucket,
-  so after a key rotation they stay under the old key, which must be kept
-  until step 3 rewraps them. Every object is written encrypted, so the
-  plain-file notice has nothing to find there.
-- **Backups:** `scripts/backup.sh` copies the volume, not a bucket.
+- **Resolved 2026-10-22: existing files move with
+  `scripts/migrate_uploads_to_s3.py`** (apply, rollback, finalize), and
+  `scripts/encrypt_uploads.py --rewrap` reaches bucket objects. Every object
+  is written encrypted, so the plain-file notice has nothing to find in a
+  bucket; until a migration is finalized, the disk copies it keeps are still
+  covered by the notice.
+- **Backups do not include buckets, by decision (2026-10-22).**
+  `scripts/backup.sh` names the buckets it left out; `docs/BACKUP.md` says how
+  to protect them with the provider's tooling. A department that skips that
+  has no second copy of its bucket.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.
@@ -2073,8 +2075,9 @@ shows one URL with a copy button and a **Reset link** control
 (`/api/public/v1/calendar/org/{token}.ics`). The integration's stored
 `included_event_types` narrows that feed by event type, but no screen sets it,
 so in practice the card's link carries every published event. There is no
-training-only feed and no per-filter list of URLs. `ICalConfig.include_shifts`
-is accepted and stored but read by nothing; no screen offers it.
+training-only feed and no per-filter list of URLs. The department feed carries
+no shifts; an `include_shifts` setting that was accepted and stored but read by
+nothing was removed on 2026-10-23.
 
 The guide-03 subscribe card is deliberately not captured because expanding it
 exposes the calendar feed's bearer credential; the same applies to a connected
@@ -6953,6 +6956,34 @@ declared scope — it is the closest sibling (a requirement-credit path,
 like `training_programs.py`'s own enrollment logic) — and give it a first
 full pass before Feature 17 is next due in the rotation, rather than let it
 ride uncovered through another full cycle under Feature 17's existing ✅.
+
+## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)
+
+Found by security review DOC-10 pass 11
+(`docs/security-review/DOC-10-documents-legal.md`, pass 11, DOC-31). An
+owner-direct change landed between pass 10 and pass 11 that makes
+`DocumentsService.delete_document`/`delete_folder` refuse to delete a
+document that is the receipt on a purchase request or expense report once
+that record has left `DRAFT` — closing a prior silent-data-loss gap where the
+`SET NULL` foreign key let the receipt reference disappear with no trace.
+
+The new check (`_release_document_references`) reads the referencing
+`PurchaseRequest`/`ExpenseReport` rows with a plain `SELECT`, not
+`.with_for_update()`. If another transaction submits that same request past
+`DRAFT` between this read and the deleting transaction's commit, the delete
+can still proceed and the request ends up referencing a document that no
+longer exists — the original failure mode, reached through a race instead of
+through the missing check. The window is one request's own transaction, and
+the worst case is no worse than the pre-pass-11 behavior; this is an unclosed
+gap in the new guard, not a regression.
+
+**Not fixed.** Closing it means taking a locking read
+(`.with_for_update()`) on the referencing `PurchaseRequest`/`ExpenseReport`
+rows inside a document-delete transaction, which raises a lock-ordering
+question against Finance's own locking conventions (Pitfall #27) that a
+documents-feature review pass should not decide unilaterally — Finance and
+Documents would need to agree on one order before this can lock safely
+without risking a new cross-feature deadlock.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be

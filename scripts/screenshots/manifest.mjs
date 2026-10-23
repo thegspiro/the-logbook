@@ -6287,7 +6287,13 @@ export const SHOTS = [
       "Screenshot of the New Maintenance Record form showing the facility",
     alt: "New facility maintenance record form with its facility, type, date, vendor and cost fields",
     route: "/facilities/maintenance",
-    prepare: clickByName(/^New Record$/),
+    prepare: async (page) => {
+      await clickByName(/^New Record$/)(page);
+      await page
+        .getByText("New Maintenance Record")
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+    },
     fullPage: false,
     expect: "New Maintenance Record",
   },
@@ -9392,6 +9398,11 @@ export const SHOTS = [
       "Screenshot of the facility maintenance tab showing upcoming maintenance items as cards",
     alt: "Facility maintenance view with upcoming items and completed history",
     route: "/facilities/maintenance",
+    expect: "Overdue",
+    prepare: async (page) => {
+      await page.getByText("Overdue").first().waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
   },
   {
     id: "06-14-facility-inspections",
@@ -14845,6 +14856,106 @@ export const SHOTS = [
     selector: 'div.rounded-lg:has(> [data-testid="ballot-receipts"])',
   },
   {
+    id: "14-28-paper-ballots-ranked",
+    doc: "14-elections.md",
+    line: 846,
+    anchor: "Record Paper Ballots on a ranked-choice race",
+    alt: "Record Paper Ballots on a ranked-choice race: one ballot already added with its choices in order, and the next ballot being entered with its 1st and 2nd choice menus and the Identical ballots count",
+    expect: "ranked choice",
+    route: "/elections",
+    viewport: { width: 1280, height: 1500 },
+    // Every seeded race is simple-majority, and a ranked one needs an election
+    // the department has not run. The detail read is answered with the Captain
+    // race marked ranked-choice; the dialog is filled in and never submitted.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/elections\/[0-9a-f-]{36}(\?.*)?$/,
+        async (route) => {
+          if (route.request().method() !== "GET") {
+            await route.continue();
+            return;
+          }
+          const response = await route.fetch();
+          const body = await response.json();
+          const election = body.election ?? body;
+          election.ballot_items = (election.ballot_items ?? []).map((item) =>
+            item.position === "Captain"
+              ? { ...item, voting_method: "ranked_choice" }
+              : item,
+          );
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(body),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) =>
+          (election.title ?? "") === "Line Officer Election — 2027 Term",
+      )(page);
+      await clickByName(/^Record Paper Ballots$/)(page);
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 20_000 });
+      const pick = async (slot, index) =>
+        dialog.locator("select[id^='rank-']").nth(slot).selectOption({ index });
+      await pick(0, 1);
+      await pick(1, 1);
+      await dialog.locator("input[id^='copies-']").fill("4");
+      await dialog.getByRole("button", { name: /^Add ballot/ }).click();
+      await pick(0, 2);
+      await pick(1, 1);
+      await dialog.locator("input[id^='copies-']").fill("3");
+      await hideScanNotice(page);
+      await page.waitForTimeout(500);
+    },
+    selector: "div[role='dialog']",
+  },
+  {
+    id: "14-29-package-sending",
+    doc: "14-elections.md",
+    line: 530,
+    anchor: "the Email Pre-Meeting Package window while the send runs",
+    alt: "The Email Pre-Meeting Package window while the send runs: the recipient list, the note that the package goes to each recipient separately and that a long list can take a few minutes, and the send button reading Sending",
+    route: "/elections",
+    viewport: { width: 1280, height: 1100 },
+    // The send is answered by a job that never finishes, so no email is
+    // attempted and the window stays in its sending state for the frame.
+    beforeNavigate: (page) => mockPackageSend(page, "running"),
+    prepare: async (page) => {
+      await openPackageAndSend(page);
+      await hideScanNotice(page);
+    },
+    selector: "div[role='dialog']",
+    expect: "Sending the package to each recipient separately",
+  },
+  {
+    id: "14-30-package-unreached",
+    doc: "14-elections.md",
+    line: 530,
+    anchor: "__paired-with-14-29__",
+    alt: "The message that stays on screen after a partly delivered pre-meeting package: how many recipients it reached and the addresses it could not be sent to",
+    route: "/elections",
+    viewport: { width: 1280, height: 700 },
+    // A job that finishes having missed two addresses, so the outcome the
+    // page shows is the one a partly delivered send produces.
+    beforeNavigate: (page) => mockPackageSend(page, "unreached"),
+    prepare: async (page) => {
+      await openPackageAndSend(page);
+      await page
+        .getByText(/Could not be sent to 2/)
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div[role='status']:has-text('Could not be sent to')",
+    expect: "Could not be sent to 2",
+  },
+  {
     id: "14-24-ballot-send-skipped",
     doc: "14-elections.md",
     line: 352,
@@ -16795,6 +16906,247 @@ export const SHOTS = [
     route: "/events/admin?tab=settings",
     prepare: clickByName(/^Public Form/),
     fullPage: true,
+  },
+  {
+    id: "04-79-event-check-in-open",
+    doc: "04-events-meetings.md",
+    line: 373,
+    anchor: "a member's event detail page with check-in open",
+    alt: "A member's event detail page while check-in is open: the Check In button beside the event's details",
+    route: "/events",
+    auth: "member",
+    expect: "Check In",
+    viewport: { width: 1280, height: 800 },
+    prepare: openEventForMember(false),
+    allowEmptyState: true,
+  },
+  {
+    id: "04-80-event-checked-in",
+    doc: "04-events-meetings.md",
+    line: 373,
+    anchor: "__paired-with-04-79__",
+    alt: "The same event page after check-in: You're checked in in place of the Check In button",
+    route: "/events",
+    auth: "member",
+    expect: "You're checked in",
+    viewport: { width: 1280, height: 800 },
+    prepare: openEventForMember(true),
+    allowEmptyState: true,
+  },
+  {
+    id: "04-81-minutes-roll-listing-selector",
+    doc: "04-events-meetings.md",
+    line: 1665,
+    anchor: "the roll panel's per-minutes selector on a draft",
+    alt: "The roll panel on draft minutes with its own selector for which attendance statuses a reader sees, set to follow the department default",
+    route: "/minutes",
+    expect: { selector: "#attendance-listing" },
+    viewport: { width: 1280, height: 900 },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Facilities Business Meeting",
+      )(page);
+      const select = page.locator("#attendance-listing");
+      await select.waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await select.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(500);
+    },
+    allowEmptyState: true,
+  },
+  {
+    id: "04-82-minutes-publishing-note",
+    doc: "04-events-meetings.md",
+    line: 1691,
+    anchor: "the publishing status note on adopted minutes",
+    alt: "Adopted minutes with the publishing status note: filed in Documents with its version and date, and posted on the public minutes page",
+    route: "/minutes",
+    expect: "Filed in Documents",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: July Business Meeting",
+      )(page);
+      await page.getByText("Filed in Documents").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "xpath=//p[contains(.,'Filed in Documents')]/..",
+    allowEmptyState: true,
+  },
+  {
+    id: "04-83-public-minutes-desktop",
+    doc: "04-events-meetings.md",
+    line: 1691,
+    anchor: "__paired-with-04-82__",
+    alt: "The public minutes page at desktop width: the meeting's minutes read without signing in, with attendance as counts and the officers present",
+    route: "/public/minutes",
+    auth: "anonymous",
+    expect: "Minutes",
+    viewport: { width: 1280, height: 1400 },
+    // Reads the posted copy, which exists once the seeder has published the
+    // July minutes with public posting on (it leaves the switch on).
+    prepare: async (page) => {
+      await page
+        .locator("a[href^='/public/minutes/']")
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(1200);
+    },
+    allowEmptyState: true,
+  },
+  {
+    id: "04-84-public-minutes-phone",
+    doc: "04-events-meetings.md",
+    line: 1691,
+    anchor: "__paired-with-04-82__",
+    alt: "The public minutes page at phone width",
+    route: "/public/minutes",
+    auth: "anonymous",
+    expect: "Minutes",
+    viewport: "mobile",
+    prepare: async (page) => {
+      await page
+        .locator("a[href^='/public/minutes/']")
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(1200);
+    },
+    allowEmptyState: true,
+  },
+  {
+    id: "04-85-minutes-signatures-panel",
+    doc: "04-events-meetings.md",
+    line: 1785,
+    anchor: "the Signatures panel on adopted minutes with one slot signed",
+    alt: "The Signatures panel on adopted minutes: 1 of 2 signed, the Recording Secretary slot signed with the signer's name and date, and the Presiding Officer slot waiting with its Sign as Presiding Officer button",
+    route: "/minutes",
+    expect: "Waiting for a signature",
+    viewport: { width: 1440, height: 900 },
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: July Business Meeting",
+      )(page);
+      await page
+        .getByRole("button", { name: /^Signatures/ })
+        .click({ timeout: 20_000 });
+      const waiting = page.getByText("Waiting for a signature");
+      await waiting.waitFor({ timeout: 20_000 });
+      await waiting.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "04-86-minutes-sign-dialog",
+    doc: "04-events-meetings.md",
+    line: 1785,
+    anchor: "__paired-with-04-85__",
+    alt: "The Sign dialog: the slot being signed, the name as it stands on the account and the password confirmation",
+    expect: "Sign as Presiding Officer",
+    route: "/minutes",
+    // The dialog over the Signatures panel it opened from, filled in and
+    // never submitted.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 900 },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: July Business Meeting",
+      )(page);
+      await page
+        .getByRole("button", { name: /^Signatures/ })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Sign as/ })
+        .first()
+        .click({ timeout: 20_000 });
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog.getByLabel(/name/i).first().fill("Dana Ruiz");
+      await dialog.getByLabel(/password/i).fill("example-password");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "04-87-agenda-dialog",
+    doc: "04-events-meetings.md",
+    line: 1579,
+    anchor: "the Agenda dialog on a meeting with three items",
+    alt: "The Agenda dialog for the Station Operations Meeting: its items in order, one with a presenter and notes, a prepared motion and a linked document",
+    route: "/minutes",
+    expect: "Agenda: Station Operations Meeting",
+    viewport: { width: 1280, height: 1500 },
+    // Opened and photographed; never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "Edit the agenda of Station Operations Meeting",
+        })
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("Agenda: Station Operations Meeting")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "04-88-agenda-sync-dialog",
+    doc: "04-events-meetings.md",
+    line: 1579,
+    anchor: "__paired-with-04-87__",
+    alt: "The Sync from the agenda dialog on draft minutes: one new agenda item and one changed item, each with a box to tick before applying",
+    route: "/minutes",
+    expect: "Sync from the agenda",
+    viewport: { width: 1280, height: 1100 },
+    // Opened and photographed; nothing is applied.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Station Operations Meeting",
+      )(page);
+      await page
+        .getByRole("button", { name: "Sync from agenda" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "04-89-section-not-taken-up",
+    doc: "04-events-meetings.md",
+    line: 1579,
+    anchor: "__paired-with-04-87__",
+    alt: "A section of draft minutes marked Not taken up: the badge beside its heading and the line that the meeting did not take it up",
+    route: "/minutes",
+    expect: "Not taken up",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Station Operations Meeting",
+      )(page);
+      await page.getByText("Not taken up").first().waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector:
+      "xpath=//h3[contains(.,'New station walkthrough')]/ancestor::*[contains(@class,'card')][1]",
+    allowEmptyState: true,
   },
   {
     // Signed-in member, not the guest kiosk -- the marker is explicit that a
@@ -21431,7 +21783,1030 @@ export const SHOTS = [
     // viewport frame scrolled to it cannot also hold the fixed dialog.
     selector: '[data-testid="modal-panel"]',
   },
+  {
+    id: "08-113-organization-timezone",
+    doc: "08-admin-reports.md",
+    line: 344,
+    anchor: "Settings → Organization → Profile at laptop width",
+    alt: "Settings → Organization → Profile at laptop width: the department name beside the Timezone select, focused on the department's zone",
+    route: "/settings",
+    expect: { selector: "#settings-timezone" },
+    viewport: { width: 1280, height: 900 },
+    // A native <select> list is drawn by the operating system, outside the
+    // page, so it cannot appear in a page screenshot. Focus puts the ring on
+    // the control and leaves the department's zone readable in it.
+    prepare: async (page) => {
+      const select = page.locator("#settings-timezone");
+      await select.waitFor({ timeout: 15_000 });
+      await select.scrollIntoViewIfNeeded();
+      await select.focus();
+    },
+    selector: "xpath=//*[@id='settings-timezone']/ancestor::div[4]",
+  },
+  {
+    id: "06-33-empty-fleet",
+    doc: "06-apparatus-facilities.md",
+    line: 106,
+    anchor: "the empty fleet list (**No apparatus yet**)",
+    alt: "The Apparatus page for a department that has added no vehicles: No apparatus yet, the sentence about what a record keeps, and the Add Apparatus button",
+    route: "/apparatus",
+    expect: "No apparatus yet",
+    // The demo department runs a full fleet and a screen of nothing is the
+    // whole picture, so the list read is answered empty. Every other request
+    // on the page is the real one.
+    beforeNavigate: async (page) => {
+      await page.route(/\/api\/v1\/apparatus(\?.*)?$/, async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            items: [],
+            total: 0,
+            page: 1,
+            pageSize: 25,
+            totalPages: 0,
+          }),
+        });
+      });
+    },
+    selector: 'div.card:has(h3:text-is("No apparatus yet"))',
+    allowEmptyState: true,
+  },
+  {
+    id: "02-122-training-setup-guide",
+    doc: "02-training.md",
+    line: 1564,
+    anchor:
+      "Training Admin → Dashboard → Overview on a fresh department with one course",
+    alt: "Training Admin Overview for a department that has set up one course: the Set up training for your department guide reading 1 of 3 steps done with step 1 ticked and steps 2 to 4 linked, and the Department Compliance widget reading Not set up",
+    route: "/training/admin?page=dashboard&tab=overview",
+    expect: "Set up training for your department",
+    viewport: { width: 1440, height: 1300 },
+    // The demo department has every requirement, session and program, which
+    // is exactly what hides the guide. The summary is answered with the
+    // counts of a department that has added one course and nothing else; the
+    // dismissal key is cleared so a hidden guide cannot hide the shot.
+    beforeNavigate: async (page) => {
+      await page.addInitScript(() => {
+        try {
+          localStorage.removeItem("training_setup_guide_hidden");
+        } catch {
+          // Storage unavailable: the guide is shown by default anyway.
+        }
+      });
+      await page.route(
+        /\/api\/v1\/training\/dashboard-summary(\?.*)?$/,
+        async (route) => {
+          const response = await route.fetch();
+          const body = await response.json();
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ...body,
+              stats: {
+                ...body.stats,
+                active_courses: 1,
+                active_requirements: 0,
+                training_sessions: 0,
+                active_programs: 0,
+                graded_members: 0,
+                not_applicable_members: 0,
+                compliant_members: 0,
+                compliance_percentage: null,
+                expiring_count: 0,
+                completions_last_30_days: 0,
+                total_hours_this_year: 0,
+                average_hours_per_member: 0,
+              },
+              expirations: [],
+              recent_completions: [],
+              requirements: [],
+              members_needing_intervention: [],
+              upcoming_session_capacity: [],
+              pending_validation: { count: 0 },
+              requirements_at_risk: [],
+            }),
+          });
+        },
+      );
+    },
+    selector:
+      "xpath=//section[@aria-labelledby='training-setup-guide-title']/..",
+    allowEmptyState: true,
+  },
+  {
+    id: "03-123-scheduling-setup-guide",
+    doc: "03-scheduling.md",
+    line: 3489,
+    anchor: "Scheduling Admin hub on a fresh department with no templates",
+    alt: "The Scheduling Administration hub for a department with nothing set up: the Set up scheduling for your department card reading 0 of 2 required steps done, its three numbered steps with their links, and the close button in the corner",
+    route: "/scheduling/admin",
+    expect: "Set up scheduling for your department",
+    viewport: { width: 1280, height: 900 },
+    selector: "section[aria-labelledby='scheduling-setup-guide-title']",
+    // The demo department has templates, patterns and shifts, which is what
+    // hides the guide. The counts are answered as a new department's.
+    beforeNavigate: async (page) => {
+      await page.addInitScript(() => {
+        try {
+          localStorage.removeItem("scheduling_setup_guide_hidden");
+        } catch {
+          // Storage unavailable: the guide is shown by default anyway.
+        }
+      });
+      await page.route(
+        /\/api\/v1\/scheduling\/summary(\?.*)?$/,
+        async (route) => {
+          const response = await route.fetch();
+          const body = await response.json();
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ...body,
+              active_templates: 0,
+              active_patterns: 0,
+              shifts_scheduled: 0,
+            }),
+          });
+        },
+      );
+    },
+  },
+  {
+    id: "03-124-empty-week-next-shift",
+    doc: "03-scheduling.md",
+    line: 112,
+    anchor: "an empty week showing Go to the next shift",
+    alt: "The Schedule tab on an empty week: Nothing is scheduled for this week yet, the date of the next shift on the schedule, and the Go to the next shift button beside the officer's Create a shift button",
+    route: "/scheduling",
+    expect: "Go to the next shift",
+    viewport: { width: 1280, height: 900 },
+    selector: "div.card:has-text('Nothing is scheduled for this week yet')",
+    // The week read is answered empty so the board shows its empty state;
+    // the lookup for the next shift is the real one, which is what puts the
+    // button on screen. It needs a shift after this week, which the seeder's
+    // rolling shifts provide.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/scheduling\/calendar\/week(\?.*)?$/,
+        async (route) => {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: "[]",
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Go to the next shift" })
+        .waitFor({ timeout: 15_000 });
+    },
+    allowEmptyState: true,
+  },
+  {
+    id: "03-125-apparatus-inventory-filtered",
+    doc: "03-scheduling.md",
+    line: 2706,
+    anchor: "Apparatus Inventory on a phone with a filter chip selected",
+    alt: "Apparatus Inventory on a phone with the need restock chip selected: the chip row under the header, and the location heading pinned under the app header above only the items that need restock",
+    auth: "member",
+    route: "/inventory/checklists/apparatus-inventory",
+    viewport: "mobile",
+    expect: "need restock",
+    prepare: async (page) => {
+      const select = page.locator("#apparatus-select");
+      await select.waitFor({ timeout: 20_000 });
+      const value = await page
+        .locator("#apparatus-select option")
+        .filter({ hasText: "M-3" })
+        .first()
+        .getAttribute("value");
+      if (!value) throw new Error("03-125: M-3 not in the apparatus picker");
+      await select.selectOption(value);
+      await page
+        .getByRole("button", { name: /need restock/ })
+        .click({ timeout: 20_000 });
+      // The heading only pins once its section has scrolled under the header.
+      await page.evaluate(() => window.scrollBy(0, 330));
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-126-my-checklists-phone",
+    doc: "03-scheduling.md",
+    line: 2370,
+    anchor: "My Checklists on a phone",
+    alt: "My Checklists on a phone: day headings with the overdue marker, each row's Start or End badge, and the ⋯ menu open over Apparatus Inventory",
+    route: "/inventory/checklists/my",
+    viewport: "mobile",
+    expect: "overdue",
+    prepare: async (page) => {
+      await page.waitForSelector("text=Engine Daily Check", {
+        timeout: 20_000,
+      });
+      await page
+        .locator("summary[aria-label='More checklist pages']")
+        .click({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(600);
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-127-pattern-weekly-split",
+    doc: "03-scheduling.md",
+    line: 3222,
+    anchor: "Manual Setup, Weekly, with Separate day and night shifts ticked",
+    alt: "New Pattern in Manual Setup, Weekly: Friday, Saturday and Sunday active, Separate day and night shifts ticked, Friday carrying only the night shift, Saturday both and Sunday only the day shift",
+    route: "/scheduling/admin/planning/patterns",
+    expect: "Separate day and night shifts",
+    viewport: { width: 1280, height: 1000 },
+    // Nothing is saved: the form is only filled in.
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /New Pattern/ }).click();
+      await page.getByRole("button", { name: "Manual Setup" }).click();
+      await page.locator("#pattern-type").selectOption("weekly");
+      // The weekdays Monday to Friday start selected: Monday to Thursday are
+      // taken off, Friday kept, and the weekend added.
+      for (const day of ["Mon", "Tue", "Wed", "Thu", "Sat", "Sun"]) {
+        await page
+          .getByRole("group", { name: "Active Days" })
+          .getByRole("button", { name: day, exact: true })
+          .click();
+      }
+      await page.getByLabel("Separate day and night shifts").check();
+      await page
+        .getByRole("group", { name: "Fri shifts" })
+        .getByRole("button", { name: "Day" })
+        .click();
+      await page
+        .getByRole("group", { name: "Sun shifts" })
+        .getByRole("button", { name: "Night" })
+        .click();
+      await hideScanNotice(page);
+      await page
+        .locator("#pattern-type")
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "06-34-apparatus-deficiency-note",
+    doc: "06-apparatus-facilities.md",
+    line: 222,
+    anchor: "A vehicle page showing the Deficiency explanation",
+    alt: "A vehicle page under its header: the sentence that an equipment check found a problem on a date, that the Deficiency badge clears when the next check passes and that logging a repair does not clear it, and the See what was found link",
+    route: "/apparatus",
+    expect: "See what was found",
+    viewport: { width: 1280, height: 700 },
+    // Nothing in the demo department has failed a check, and failing one for
+    // real would leave the Deficiency badge on a rig that other shots show
+    // clean. The vehicle read is answered with the flag a failed check sets;
+    // the link it offers goes to the real failures list.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/apparatus\/[0-9a-f-]{36}(\?.*)?$/,
+        async (route) => {
+          if (route.request().method() !== "GET") {
+            await route.continue();
+            return;
+          }
+          const response = await route.fetch();
+          const body = await response.json();
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ...body,
+              hasDeficiency: true,
+              deficiencySince: new Date(
+                Date.now() - 3 * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+            }),
+          });
+        },
+      );
+    },
+    // The malware-scanning notice a stack without ClamAV puts above every
+    // administrator page is the stack's, not the page's, so it is hidden.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}`,
+        "apparatus",
+        (rig) => (rig.unitNumber ?? rig.unit_number) === "E-1",
+      )(page);
+      await page.getByText("See what was found").waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "06-35-locations-member",
+    doc: "06-apparatus-facilities.md",
+    line: 513,
+    anchor: "Plain member (no locations.\\* or settings permissions)",
+    alt: "The Locations page as an ordinary member: stations and the rooms inside them listed for reference, with no QR toggle, kiosk link, Add Station, Add Room, edit, delete, Change or Run Setup Wizard control",
+    route: "/locations",
+    auth: "member",
+    expect: "Station 3 - Eastside",
+    viewport: { width: 1280, height: 900 },
+  },
+  {
+    id: "05-127-items-not-seen",
+    doc: "05-inventory.md",
+    line: 1837,
+    anchor: "Quartermaster at /inventory/admin/not-seen",
+    alt: "Items Not Seen at its default of 180 days and All categories: items never handled listed first as Never, then two items last seen on a date with Returned or Assigned and the days ago, and Download CSV enabled",
+    route: "/inventory/admin/not-seen",
+    expect: "Never",
+    viewport: { width: 1280, height: 900 },
+    // The seeder can only create records as of today, so no item is 212 days
+    // stale. The report is answered with three of its own never-handled items
+    // and two given the history an item handled the previous winter would
+    // have; the screen, its filters and its wording are the real ones.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/inventory\/not-seen(\?.*)?$/,
+        async (route) => {
+          const response = await route.fetch();
+          const body = await response.json();
+          const never = (body.items ?? [])
+            .filter((row) => row.last_seen_at === null)
+            .slice(0, 5);
+          const history = [
+            { days: 212, source: "return" },
+            { days: 301, source: "assignment" },
+          ];
+          const dated = never.slice(-2).map((row, index) => ({
+            ...row,
+            last_seen_at: new Date(
+              Date.now() - history[index].days * 24 * 60 * 60 * 1000,
+            ).toISOString(),
+            last_seen_source: history[index].source,
+            days_since_seen: history[index].days,
+          }));
+          const items = [
+            ...never.slice(0, 3),
+            ...dated.sort((a, b) => a.days_since_seen - b.days_since_seen),
+          ];
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ ...body, items, total: items.length }),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await page.getByText("Never").first().waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "05-128-operations-section-strip",
+    doc: "05-inventory.md",
+    line: 2748,
+    anchor: "the Operations section strip under the page title",
+    alt: "Fleet Readiness at laptop width: the Operations sections strip with Fleet Readiness marked as the current section, and under it the page title row with its description and actions",
+    route: "/inventory/checklists",
+    expect: "Operations sections",
+    allowEmptyState:
+      '"no checks yet" is the Fleet Readiness board under the strip, which is out of frame.',
+    viewport: { width: 1280, height: 330 },
+    // The top of the page only. The administrator's session carries a
+    // malware-scanning notice above the strip on a stack with scanning off,
+    // which is hidden: it is the stack's, not the screen's.
+    prepare: async (page) => {
+      await page
+        .locator("nav:has(span.sr-only:text-is('Operations sections'))")
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "05-129-apparatus-detail-phone",
+    doc: "05-inventory.md",
+    line: 2765,
+    anchor: "at 390px: the apparatus detail header and pinned tabs",
+    alt: "One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header",
+    expect: "Medic 3",
+    route: "/apparatus",
+    viewport: "mobile",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}`,
+        "apparatus",
+        (rig) => (rig.unitNumber ?? rig.unit_number) === "M-3",
+      )(page);
+      await page.getByText("Vehicle Details").waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-130-supply-worklist-phone",
+    doc: "05-inventory.md",
+    line: 2765,
+    anchor: "__paired-with-05-129__",
+    alt: "The Expiring on Apparatus worklist on a phone with its count chips, each item showing its rig, compartment, expiry and lot, and full-size Add and Manage buttons",
+    route: "/inventory/admin/checklists/supply",
+    viewport: "mobile",
+    expect: "Add stock",
+    prepare: hideScanNotice,
+    fullPage: false,
+  },
+  {
+    id: "05-131-add-stock-sheet-phone",
+    doc: "05-inventory.md",
+    line: 2765,
+    anchor: "__paired-with-05-129__",
+    alt: "The Add stock sheet on a phone: the amount on the truck now above Quantity and Lot side by side",
+    route: "/inventory/admin/checklists/supply",
+    viewport: "mobile",
+    expect: "Quantity",
+    // Opened and photographed; nothing is added.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Add stock/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+      await hideScanNotice(page);
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-132-departure-clearance-needs-attention",
+    doc: "05-inventory.md",
+    line: 2346,
+    anchor:
+      "Quartermaster at /inventory/admin: crop to the Needs attention card",
+    alt: "The Needs attention card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button",
+    route: "/inventory/admin",
+    expect: "Unresolved departure clearance",
+    viewport: { width: 1280, height: 1000 },
+    selector: "section[aria-labelledby='inventory-needs-attention']",
+  },
+  {
+    id: "05-133-medical-supplies-on-trucks",
+    doc: "05-inventory.md",
+    line: 3041,
+    anchor: 'the Medical Supplies list showing "+12 on trucks"',
+    alt: "Medical Supplies with a supply's shelf count followed by how many are on trucks, and a Next expiry that names the truck carrying the soonest-expiring lot",
+    route: "/medical-supplies",
+    expect: "on trucks",
+    viewport: { width: 1440, height: 1100 },
+    fullPage: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: "All supplies" })
+        .click({ timeout: 15_000 });
+      await page.getByText("on trucks").first().waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "05-134-medical-supply-apparatus-only",
+    doc: "05-inventory.md",
+    line: 3041,
+    anchor: "__paired-with-05-133__",
+    alt: "The medical supply form with Kept on apparatus only ticked and its explanation, for a supply that never goes through the stock room",
+    route: "/medical-supplies",
+    expect: "Kept on apparatus only",
+    allowEmptyState:
+      '"No room" is the Room picker\'s blank option, not an empty form.',
+    viewport: { width: 1440, height: 1500 },
+    selector: '[data-testid="modal-panel"]',
+    // Ticked in the form and never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: "All supplies" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Edit Bag Valve Mask" })
+        .click({ timeout: 15_000 });
+      const panel = page.locator('[data-testid="modal-panel"]');
+      await panel
+        .getByText("Kept on apparatus only")
+        .waitFor({ timeout: 15_000 });
+      await panel
+        .getByRole("checkbox", { name: /Kept on apparatus only/ })
+        .check();
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "02-123-my-training-new-member",
+    doc: "02-training.md",
+    line: 161,
+    anchor: "My Training → as a brand-new member with no records",
+    alt: "My Training for a brand-new member: Required Training reading None assigned with the line that nothing is asked of them yet, and the Nothing is on your training record yet panel with its three numbered ways, Submit External Training and the Learning Center walkthrough link",
+    route: "/training/my-training",
+    auth: "member",
+    expect: "Nothing is on your training record yet",
+    viewport: { width: 1280, height: 1100 },
+    // Every demo member has records and a requirement, and a fresh account
+    // has neither. The summary is answered as a new member's would be.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/training\/module-config\/my-training(\?.*)?$/,
+        async (route) => {
+          const response = await route.fetch();
+          const body = await response.json();
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ...body,
+              requirements_detail: [],
+              requirements_summary: {
+                total_requirements: 0,
+                met_requirements: 0,
+                avg_compliance: null,
+              },
+              training_records: [],
+              enrollments: [],
+              shift_reports: [],
+              submissions: [],
+              certifications: [],
+              skill_test_expirations: [],
+              shift_stats: {
+                shifts_completed: 0,
+                hours_reported: 0,
+                total_calls: 0,
+                avg_rating: null,
+              },
+              hours_summary: {
+                ...(body.hours_summary ?? {}),
+                total_records: 0,
+                total_hours: 0,
+                year_to_date_hours: 0,
+                completed_courses: 0,
+                year_to_date_courses: 0,
+              },
+            }),
+          });
+        },
+      );
+    },
+    allowEmptyState: true,
+  },
+  {
+    id: "02-124-my-training-upcoming",
+    doc: "02-training.md",
+    line: 243,
+    anchor: "My Training → the Upcoming Expirations & Due Dates list",
+    alt: "My Training's Upcoming Expirations & Due Dates list, soonest first, with a row for each kind of item, including an hours requirement reading hours to go",
+    route: "/training/my-training",
+    auth: "member",
+    expect: "Upcoming Expirations & Due Dates",
+    viewport: { width: 1280, height: 1100 },
+    selector:
+      "xpath=//*[self::h2 or self::h3][contains(.,'Upcoming Expirations')]/ancestor::*[contains(@class,'card')][1]",
+  },
+  {
+    id: "11-24-category-charge-access",
+    doc: "11-finance.md",
+    line: 342,
+    anchor: "the category settings dialog with Who can charge these lines",
+    alt: "The category settings dialog for Officer brass with Who can charge these lines set to Only the owner and the positions chosen below, and the positions ticked under Also allow these positions",
+    route: "/finance/settings",
+    expect: "Also allow these positions",
+    viewport: { width: 1280, height: 1300 },
+    // Opened and photographed; never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Officer brass" })
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("Also allow these positions")
+        .waitFor({ timeout: 15_000 });
+      for (const position of ["Apparatus Officer", "Assistant Chief"]) {
+        await page.getByLabel(position, { exact: true }).check();
+      }
+      await hideScanNotice(page);
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "11-25-my-budgets-charge-access",
+    doc: "11-finance.md",
+    line: 344,
+    anchor: "My Budgets with the Who can charge your lines card",
+    alt: "My Budgets with the Who can charge your lines card: each category the budget owner holds with a one-line summary of its rule and a pencil button to change it",
+    route: "/finance/my-budgets",
+    expect: "Who can charge your lines",
+    viewport: { width: 1280, height: 1100 },
+    prepare: async (page) => {
+      await holdQuartermaster(page);
+      await page
+        .getByText("Who can charge your lines")
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+    cleanup: releaseQuartermaster,
+  },
+  {
+    id: "11-26-my-budgets-charge-dialog",
+    doc: "11-finance.md",
+    line: 344,
+    anchor: "__paired-with-11-25__",
+    alt: "The Who can charge dialog for a category opened from My Budgets, with the same choices and the positions list as the Treasurer's category settings",
+    route: "/finance/my-budgets",
+    expect: "Who can charge these lines",
+    viewport: { width: 1280, height: 1100 },
+    // Opened and photographed; never saved.
+    cleanup: releaseQuartermaster,
+    prepare: async (page) => {
+      await holdQuartermaster(page);
+      await page
+        .getByRole("button", { name: /^Change who can charge/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("Who can charge these lines")
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page
+        .getByLabel("Captain", { exact: true })
+        .scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "00-32-dashboard-needs-you-sign-off",
+    doc: "00-getting-started.md",
+    line: 360,
+    anchor:
+      "Fire Chief (or another officer holding a role named on a Multi-Signer",
+    alt: "The Needs you panel on the Dashboard for an officer in the Chief position: an applicant is waiting on your sign-off, the stage named beneath it, and the Review button",
+    route: "/dashboard",
+    expect: "is waiting on your sign-off",
+    viewport: { width: 1440, height: 1100 },
+    // Seated in the Chief position for the shot and released after: held
+    // permanently it would put this row on every later dashboard capture.
+    prepare: async (page) => {
+      const { userId, roleId } = await adminAndChiefIds(page);
+      const granted = await apiFromPage(
+        page,
+        "POST",
+        `/users/${userId}/roles/${roleId}`,
+        {},
+      );
+      if (granted.status !== 200 && granted.status !== 400) {
+        throw new Error(
+          `granting the Chief position returned ${granted.status}`,
+        );
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText("is waiting on your sign-off")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: releaseChiefPosition,
+    selector: "section[aria-labelledby='needs-you-heading']",
+  },
+  {
+    id: "08-114-security-report-fallback",
+    doc: "08-admin-reports.md",
+    line: 2137,
+    anchor: "Organization Settings → Authentication → Security Report",
+    alt: "Settings → Authentication → Security Report with the weekday and hour pickers, the recipient line naming administrators, the notice that no one holds the IT Manager position, and Last sent",
+    route: "/settings?tab=authentication&page=securityReport",
+    expect: "Weekly Security Report",
+    viewport: { width: 1280, height: 900 },
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await page
+        .getByText("Weekly Security Report")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "08-115-security-report-it-manager",
+    doc: "08-admin-reports.md",
+    line: 2137,
+    anchor: "__paired-with-08-114__",
+    alt: "The same Security Report settings once a member holds the IT Manager position: the recipient line names them and the administrator notice is gone",
+    route: "/settings?tab=authentication&page=securityReport",
+    expect: "holding the IT Manager position",
+    viewport: { width: 1280, height: 900 },
+    allowEmptyState: true,
+    // The position is held for the shot and released after, so the fallback
+    // shot above and every later run start from nobody holding it.
+    prepare: async (page) => {
+      const roles = await apiFromPage(page, "GET", "/roles");
+      const list = Array.isArray(roles.body)
+        ? roles.body
+        : (roles.body?.roles ?? roles.body?.items ?? []);
+      const itManager = list.find((role) => role.slug === "it_manager");
+      const users = await apiFromPage(page, "GET", "/users?limit=200");
+      const rows = Array.isArray(users.body)
+        ? users.body
+        : (users.body?.users ?? users.body?.items ?? []);
+      const holder = rows.find((user) => user.username === "tlindqvist");
+      if (!itManager?.id || !holder?.id) {
+        throw new Error(
+          "could not resolve the IT Manager position or a member",
+        );
+      }
+      itManagerHolder = { userId: holder.id, roleId: itManager.id, page };
+      const granted = await apiFromPage(
+        page,
+        "POST",
+        `/users/${holder.id}/roles/${itManager.id}`,
+        {},
+      );
+      if (granted.status !== 200 && granted.status !== 400) {
+        throw new Error(
+          `granting the IT Manager position returned ${granted.status}`,
+        );
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText("holding the IT Manager position")
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+    cleanup: async () => {
+      const held = itManagerHolder;
+      itManagerHolder = null;
+      if (!held) return;
+      const released = await apiFromPage(
+        held.page,
+        "DELETE",
+        `/users/${held.userId}/roles/${held.roleId}`,
+      );
+      if (released.status !== 200) {
+        throw new Error(
+          `releasing the IT Manager position returned ${released.status}`,
+        );
+      }
+    },
+  },
+  {
+    id: "02-125-compliance-matrix-not-applicable",
+    doc: "02-training.md",
+    line: 1851,
+    anchor:
+      "Training officer under Training Admin > Compliance Matrix in a demo department",
+    alt: "The Compliance Matrix triage rail with a Not applicable group beneath Compliant holding the one member no requirement asks anything of, and that member's detail panel saying nothing grades them",
+    route: "/training/admin?page=dashboard&tab=compliance",
+    selector: 'div.card:has(h2:text-is("Compliance"))',
+    expect: "Not applicable",
+    allowEmptyState: true,
+    // Every demo requirement applies to every member, and a member a
+    // requirement does not reach is simply absent from its row. One member's
+    // row is answered empty, which is how the server reports a member who
+    // joined after every requirement's cut-off; the rest of the matrix is real.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/training\/compliance-matrix(\?.*)?$/,
+        async (route) => {
+          const response = await route.fetch();
+          const body = await response.json();
+          const chosen = (body.members ?? []).find((m) =>
+            String(m.member_name).startsWith("Okonkwo"),
+          );
+          if (chosen) {
+            chosen.requirements = [];
+            chosen.standing = "not_applicable";
+            chosen.completion_pct = null;
+          }
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(body),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Okonkwo/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "07-39-suggestion-review-phone",
+    doc: "07-documents-forms.md",
+    line: 1143,
+    anchor: "Suggestions → **Review** on a phone, a submission open",
+    alt: "Suggestions → Review on a phone with a submission open: its title and details at the top of the screen, then the Disposition and Internal note, with the mobile bottom navigation below",
+    route: "/suggestions?tab=review",
+    auth: "secretary",
+    viewport: "mobile",
+    expect: "Disposition",
+    allowEmptyState: true,
+    // The reviewer is the Secretary position, which this account holds.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: /More hands-on SCBA time for probationary members/,
+        })
+        .first()
+        .click({ timeout: 20_000 });
+      const heading = page.locator("article h2", {
+        hasText: "More hands-on SCBA time for probationary members",
+      });
+      await heading.waitFor({ timeout: 20_000 });
+      await heading.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      // Clear the fixed header the heading would otherwise sit under.
+      await page.evaluate(() => window.scrollBy(0, -90));
+      await page.waitForTimeout(600);
+    },
+    fullPage: false,
+  },
 ];
+
+/**
+ * Opens an event whose check-in window is open now, as the signed-in member,
+ * choosing one the member has (or has not) already attended. Found from the
+ * list's own flags rather than by name so a re-seed that moves the dates does
+ * not move the shot.
+ */
+function openEventForMember(attended) {
+  return async (page) => {
+    const id = await page.evaluate(async (wantAttended) => {
+      const response = await fetch("/api/v1/events?limit=100", {
+        credentials: "include",
+      });
+      if (!response.ok) return null;
+      const body = await response.json();
+      const rows = Array.isArray(body) ? body : body.events || body.items || [];
+      const now = Date.now();
+      const found = rows.find((event) => {
+        const opens = event.check_in_opens_at ?? event.checkInOpensAt;
+        const end = event.end_datetime ?? event.endDatetime;
+        return (
+          opens &&
+          new Date(opens).getTime() <= now &&
+          (!end || new Date(end).getTime() >= now) &&
+          !event.is_cancelled &&
+          Boolean(event.user_attended ?? event.userAttended) === wantAttended
+        );
+      });
+      return found ? found.id : null;
+    }, attended);
+    if (!id) {
+      throw new Error(
+        `no event with check-in open that the member ${attended ? "has" : "has not"} attended`,
+      );
+    }
+    await page.goto(new URL(`/events/${id}`, page.url()).toString(), {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForTimeout(1200);
+  };
+}
+
+/**
+ * Hide the malware-scanning notice a stack without ClamAV shows administrators
+ * above every page. It belongs to the stack, not to the screen being pictured,
+ * and a deployment that scans never shows it.
+ */
+async function hideScanNotice(page) {
+  await page.evaluate(() => {
+    for (const el of document.querySelectorAll("[role='alert']")) {
+      if (el.textContent?.includes("not being scanned for malware")) {
+        el.style.display = "none";
+      }
+    }
+  });
+  await page.waitForTimeout(300);
+}
+
+let quartermasterHeld = null;
+
+/**
+ * Seat the administrator in the Quartermaster position, which owns the Officer
+ * brass budget line. "Who can charge your lines" lists the categories the
+ * signed-in member owns, and nobody in the demo holds that position. Released
+ * by `releaseQuartermaster`.
+ */
+async function holdQuartermaster(page) {
+  const roles = await apiFromPage(page, "GET", "/roles");
+  const list = Array.isArray(roles.body)
+    ? roles.body
+    : (roles.body?.roles ?? roles.body?.items ?? []);
+  const position = list.find((role) => role.slug === "quartermaster");
+  const me = await apiFromPage(page, "GET", "/auth/me");
+  if (!position?.id || !me.body?.id) {
+    throw new Error("could not resolve the Quartermaster position");
+  }
+  quartermasterHeld = { userId: me.body.id, roleId: position.id, page };
+  const granted = await apiFromPage(
+    page,
+    "POST",
+    `/users/${me.body.id}/roles/${position.id}`,
+    {},
+  );
+  if (granted.status !== 200 && granted.status !== 400) {
+    throw new Error(`granting Quartermaster returned ${granted.status}`);
+  }
+  await page.reload({ waitUntil: "domcontentloaded" });
+}
+
+async function releaseQuartermaster() {
+  const held = quartermasterHeld;
+  quartermasterHeld = null;
+  if (!held) return;
+  const released = await apiFromPage(
+    held.page,
+    "DELETE",
+    `/users/${held.userId}/roles/${held.roleId}`,
+  );
+  if (released.status !== 200) {
+    throw new Error(`releasing Quartermaster returned ${released.status}`);
+  }
+}
+
+let itManagerHolder = null;
+
+const PACKAGE_UNREACHED = ["pat.hale@example.org", "sam.ortiz@example.org"];
+
+/**
+ * Answers the pre-meeting package send with a job of the shape the server
+ * returns, so the page's real polling and messages run without any email.
+ * "running" never finishes; "unreached" completes having missed two
+ * addresses, which is what the page's lasting error message reports.
+ */
+async function mockPackageSend(page, outcome) {
+  const job = (status, result) => ({
+    id: "demo-package-job",
+    election_id: "demo",
+    kind: "package",
+    status,
+    created_at: new Date().toISOString(),
+    started_at: new Date().toISOString(),
+    finished_at: result ? new Date().toISOString() : null,
+    result,
+    error: null,
+  });
+  await page.route(/\/package-send-jobs$/, async (route) => {
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify(job("queued", null)),
+    });
+  });
+  await page.route(/\/ballot-send-jobs\/demo-package-job$/, async (route) => {
+    const body =
+      outcome === "running"
+        ? job("running", null)
+        : job("completed", {
+            success: false,
+            recipients_count: 4,
+            failed_count: PACKAGE_UNREACHED.length,
+            skipped_count: 0,
+            skipped_details: [],
+            message: `Pre-meeting package sent to 4 recipient(s). Could not be sent to ${PACKAGE_UNREACHED.length}: ${PACKAGE_UNREACHED.join(", ")}`,
+          });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+  });
+}
+
+async function openPackageAndSend(page) {
+  await openFirstFromApi(
+    "/elections?limit=50",
+    (id) => `/elections/${id}`,
+    "elections",
+    (election) => (election.title ?? "") === "Bylaw Amendment Vote",
+  )(page);
+  await page
+    .getByRole("button", { name: "Pre-Meeting Package" })
+    .click({ timeout: 20_000 });
+  const dialog = page.getByRole("dialog");
+  await dialog.waitFor({ timeout: 15_000 });
+  await dialog.getByRole("button", { name: "Leadership", exact: true }).click();
+  const send = dialog.getByRole("button", {
+    name: /^Send to \d+ recipients?$/,
+  });
+  await send.waitFor({ timeout: 15_000 });
+  await send.click();
+}
 
 /**
  * A shot flagged `mutatesSeedData` leaves the database changed for everything

@@ -339,9 +339,11 @@ Nobody else sees a restricted line in the request form's picker, and a request t
 - **A request already on a line stays editable** after the line is restricted; the rule applies to choosing the line.
 - **A budget owner needs no Treasurer for this.** On **Finance > My Budgets**, **Who can charge your lines** lists the categories you own (or that sit under one you own). **Edit** opens **Who can charge** _category_ with the same choices. The Treasurer sets any category from **Finance > Settings**.
 
-<!-- Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked. -->
+![The category settings dialog for Officer brass with Who can charge these lines set to Only the owner and the positions chosen below, and the positions ticked under Also allow these positions](./images/11-24-category-charge-access.png)
 
-<!-- Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog. -->
+![My Budgets with the Who can charge your lines card: each category the budget owner holds with a one-line summary of its rule and a pencil button to change it](./images/11-25-my-budgets-charge-access.png)
+
+![The Who can charge dialog for a category opened from My Budgets, with the same choices and the positions list as the Treasurer's category settings](./images/11-26-my-budgets-charge-dialog.png)
 
 ### Retiring a Category
 
@@ -884,10 +886,6 @@ separation-of-duties message (see [Separation of Duties](#separation-of-duties))
 
 ![The Approve as approvals admin dialog on a step assigned to the Captain position: the text naming who the step is assigned to, Notes, and the required Override reason box with its help text](./images/11-22-approvals-admin-override.png)
 
-<!-- Screenshot needed (replace):
-_[Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row.]_
--->
-
 ### On the request's own page
 
 Each purchase request, expense report and check request detail page shows,
@@ -1420,6 +1418,12 @@ After creating a schedule, you need to generate individual dues records for each
 | **Overdue** | The due date has passed with nothing paid (a daily check moves Pending to Overdue; Partial stays Partial) |
 | **Waived**  | The dues have been waived by an officer (e.g., financial hardship, service credit)                        |
 | **Exempt**  | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues)                 |
+
+_(2026-10-19)_ The **overdue dues** number on the dashboard's finance tile uses
+the same rule as this page: Overdue records, plus Pending records past their due
+date with nothing paid. A Partial record is not counted, because it shows as
+Partial here. Before, the tile counted part-paid records too and read higher than
+the list it links to.
 
 ### Recording Payments
 

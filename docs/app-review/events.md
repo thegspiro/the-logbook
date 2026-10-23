@@ -1,7 +1,8 @@
 # Application Review — Events (Tier B)
 
 **Prefix:** `EV2` · **Iteration:** B17 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-22 (pass 5)
 
 **Backend:** `endpoints/events.py` (2,931 L, 53 endpoints), `endpoints/event_requests.py`
 (1,658 L, 18), `services/event_service.py` (3,097 L), model `models/event.py`
@@ -10,6 +11,112 @@
 location), EV-2 (email XSS), EV-3 (org-scope oracle), EV-4 (dead code) fixed;
 EV-5 (public-intake opt-in), EV-6 (RSVP to draft/past), EV-7 (rate-limit +
 TypeError) left open.
+
+---
+
+## Pass 5 (2026-10-22) — a null on a required event field answered 500 in four update paths (4 fixed)
+
+Lens for this pass: the update-payload discipline of B4–B16 driven through the real
+handlers, and the flush-and-return `updated_at` shape B14 found (GF2-1). The events
+service is the one place in the rotation that still writes updates with a bare
+`setattr` loop rather than `apply_updates`, so the null probe had somewhere to land.
+Every `PATCH` in the module was inventoried (event, series, template, RSVP override,
+external attendee, event settings, and the six request-pipeline routes); the ones that
+take explicit parameters (`status`, `assign`, `schedule`, `postpone`, `tasks`) and the
+RSVP create-or-update (whose `status` and `guest_count` are non-Optional in the schema)
+cannot receive a null for a required column and were not changed.
+
+**The B14 shape is absent.** A real change through `PATCH /events/{id}`, the template
+and the request email template saves and answers 200: each commits and refreshes before
+it responds. `reload_updated_at` is not needed here.
+
+### EV2-3 — LOW/MED — a null on 13 required event fields answered 500 — ✅ FIXED
+
+`update_event` dumped the payload with `exclude_unset` and wrote it with
+`setattr(event, field, value)` for each key, with no check that the column accepts NULL.
+`EventUpdate` types every field `Optional`, so `null` validates. Reproduced over HTTP, a
+`PATCH` with one of `allow_guest_check_in`, `allow_guests`, `check_in_window_type`,
+`end_datetime`, `event_type`, `guest_check_in_creates_prospect`, `is_mandatory`,
+`reminder_target`, `require_checkout`, `requires_rsvp`, `send_reminders`, `start_datetime`
+or `title` as `null` answered **500** and the request's session rolled back. By the code path, the two times
+fail on a `TypeError` (the end-after-start comparison runs on `None`) and the rest on an
+`IntegrityError` at the flush; the status was observed, the exception types were read from
+the code, not captured. A fourteenth, `reminder_schedule`, answered **200**: it is a NOT NULL
+JSON column, and SQLAlchemy stores a Python `None` in a JSON column as the JSON literal
+`null`, which satisfies the constraint, so the event was left with a stored `null`
+where every reader expects a list of hours.
+
+**Fixed** with `reject_null_for_required(instance, updates)` in `utils/model_updates.py`,
+the refusal `apply_updates` already makes, made before the update reads its own payload.
+`update_event` calls it ahead of the date arithmetic and `update_future_events` calls it on
+the first occurrence (it already refused a null start and end by hand); both answer 400 with
+"Field 'x' cannot be cleared". The nullable fields (description, location, capacity,
+deadline, attendee visibility and the rest) still clear.
+
+### EV2-4 — LOW — a null on 10 required template fields answered 500 — ✅ FIXED
+
+`update_template` had the same `setattr` loop. `allow_guests`, `event_type`, `is_active`,
+`is_mandatory`, `name`, `reminder_schedule`, `reminder_target`, `require_checkout`,
+`requires_rsvp` and `send_reminders` as `null` all reached the flush and came back 500
+(the handler already turns a `ValueError` into a 400, so only the write needed to raise
+one). **Fixed** by writing through `apply_updates`.
+
+### EV2-5 — LOW — a null on a required request-pipeline email template field answered 500 — ✅ FIXED
+
+`PATCH /event-requests/email-templates/{id}` looped `setattr` inside the handler. `name`,
+`subject`, `body_html` and `is_active` are NOT NULL; each came back 500. **Fixed** with
+`apply_updates` and a `ValueError` → 400, the module's own pattern.
+
+### EV2-6 — LOW — a null `name` on an external attendee answered 500 — ✅ FIXED
+
+The attendee edit in `events.py` filtered the payload through an allowlist and then
+`setattr`-ed it. `name` is NOT NULL. **Fixed** the same way, keeping the allowlist.
+
+None of these is reachable from the app's own forms — the frontend `EventUpdate` type
+allows `null` only on the nullable fields — so each needs a direct client holding
+`events.manage`. The cost is a 500 where a 400 was meant, plus (for `reminder_schedule`) one
+stored `null` that the reminder sender then has to survive.
+
+Tests: `tests/test_events_update_endpoints_integration.py` (67) and five new cases in
+`tests/test_model_updates.py`. The null cases are derived from the update schemas and the
+models, so a new column becomes a new case: a NOT NULL column must answer exactly 400 or
+422 and keep its value, and a nullable one must be accepted. Four real-change tests assert
+200 **and** the value in the table afterwards, with a `get_db` that rolls back on an exception
+as `get_session` does. With the three source fixes stashed, 30 of the 67 fail (14 event, 10
+template, 4 email template, the series title, the attendee name); 37 pass either way; 0 are
+selected under the unit job's marker expression.
+
+### Verified good ✅ (this pass)
+
+- **Nothing unreferenced.** The AST scan (counting `tests/`, `scripts/`, `alembic/`) over
+  the three endpoint files, four services, two models and two schemas found no unused
+  module-level name or class method, and no `noqa` / `TODO`.
+- **Earlier findings still hold.** EV-1 (cross-org `location_id`), EV-8, EV-9 and EV-10 are
+  covered by their suites, which pass; EV-7's accepted residual (no IP throttle on the status
+  token lookup, a 256-bit token) is unchanged.
+- **Org scoping.** The event, template and attendee fetches all filter `organization_id`
+  (the attendee one on both the event and the attendee id); the org-scoping ratchet passes.
+
+### Not read (scope, stated plainly)
+
+The 6,176-line event service was read at its update, series and template paths and scanned
+for dead names; creation, recurrence expansion, waitlist promotion, finalization and training
+credit, the reminder tasks and the public request intake were left to their dedicated suites
+(818 tests across 28 files pass). The `modules/events` frontend was read only at its update
+payload type.
+
+### Completion gate (pass 5)
+
+| Check                                                           | Result                                                                                            |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/`                                            | ✅ exit 0, no output                                                                              |
+| `black --check app/ tests/`                                     | ✅ 1916 files unchanged                                                                           |
+| `isort --check` (changed files)                                 | ✅                                                                                                |
+| `mypy` (helper, service, both endpoint files)                   | ✅ no issues                                                                                      |
+| Related backend suites (28 files incl. the org-scoping ratchet) | ✅ 818 passed                                                                                     |
+| New tests                                                       | ✅ 72 pass; 30 of the 67 integration cases fail without the fixes; 0 under the unit job's markers |
+| `check_route_permissions.py --strict`                           | ✅ 0 errors, 0 warnings                                                                           |
+| Frontend                                                        | n/a — no frontend change                                                                          |
 
 ---
 

@@ -426,6 +426,35 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
     expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ item_type: undefined }));
   });
 
+  it('filters the query to low stock when the URL says so, and says so on screen', async () => {
+    renderAt('/inventory/admin/items?low_stock=true');
+    await screen.findByText(EMPTY_LIST);
+
+    expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ low_stock: true }));
+    expect(screen.getByText('Showing only items at or below their reorder point.')).toBeInTheDocument();
+  });
+
+  it('sends no low-stock filter for any value but true', async () => {
+    renderAt('/inventory/admin/items?low_stock=banana');
+    await screen.findByText(EMPTY_LIST);
+
+    expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ low_stock: undefined }));
+    expect(screen.queryByText(/Showing only items at or below/)).not.toBeInTheDocument();
+  });
+
+  it('drops the low-stock filter, and reloads, from Show all items', async () => {
+    const user = userEvent.setup();
+    renderAt('/inventory/admin/items?low_stock=true');
+    await screen.findByText(EMPTY_LIST);
+
+    await user.click(screen.getByRole('button', { name: 'Show all items' }));
+
+    await waitFor(() => expect(window.location.search).toBe(''));
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ low_stock: undefined }))
+    );
+  });
+
   it('writes the dropdown selection back to the URL', async () => {
     const user = userEvent.setup();
     renderAt('/inventory/admin/items');

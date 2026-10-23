@@ -14,10 +14,11 @@
  */
 
 import React from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
-import { Globe, PenLine, Bell, Users, Vote } from 'lucide-react';
+import { useSearchParams } from 'react-router';
+import { Globe, PenLine, Bell, Settings as SettingsIcon, Users, Vote } from 'lucide-react';
 import { SettingsLayout, type SettingsSection } from '../../../components/settings/SettingsLayout';
 import SettingsPanelHead from '../../../components/settings/SettingsPanelHead';
+import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 import { useAuthStore } from '../../../stores/authStore';
 import { AttendanceListingPanel } from '../components/AttendanceListingPanel';
 import { ElectionFilingPanel } from '../components/ElectionFilingPanel';
@@ -63,7 +64,6 @@ const isSectionKey = (value: string | null): value is SectionKey =>
   value !== null && SECTIONS.some((section) => section.key === value);
 
 export const MinutesSettingsPage: React.FC = () => {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canEdit = checkPermission('settings.manage') || checkPermission('organization.update_settings');
@@ -97,10 +97,15 @@ export const MinutesSettingsPage: React.FC = () => {
       onSectionChange={(key) => setSearchParams({ tab: key }, { replace: true })}
       navLabel="Minutes settings sections"
       title="Minutes Settings"
-      onBack={() => {
-        void navigate('/minutes');
-      }}
-      backLabel="Back to Minutes"
+      pageHeader={(controls) => (
+        <GovernancePageHeader
+          icon={SettingsIcon}
+          title="Minutes Settings"
+          breadcrumbLabel="Settings"
+          subtitle={SECTIONS.find((section) => section.key === active)?.description}
+          actions={controls}
+        />
+      )}
     >
       <SettingsPanelHead title={heading.title} description={heading.description} />
       {error && (
