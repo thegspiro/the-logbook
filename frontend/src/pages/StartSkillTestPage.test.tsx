@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { StartSkillTestPage } from './StartSkillTestPage';
@@ -229,20 +229,43 @@ describe('StartSkillTestPage', () => {
   });
 
   describe('Back navigation', () => {
+    const trail = () => screen.getByRole('navigation', { name: /breadcrumb/i });
+    // The trail is drawn from the URL's section, so render at the page's own.
+    beforeEach(() => {
+      window.history.replaceState({}, '', '/training/skills-testing/test/new');
+    });
+
     it('should return to the member list when launched from it', async () => {
       currentSearchParams = new URLSearchParams('template=tpl-1&from=member');
       renderWithRouter(<StartSkillTestPage />);
 
-      expect(await screen.findByRole('link', { name: /back/i })).toHaveAttribute('href', '/training/skills-testing');
+      expect(await within(trail()).findByRole('link', { name: 'Skills Testing' })).toHaveAttribute(
+        'href',
+        '/training/skills-testing'
+      );
+      expect(within(trail()).queryByRole('link', { name: 'Tests' })).not.toBeInTheDocument();
     });
 
-    it('should return to the admin hub by default', async () => {
+    it('should return an officer to the admin hub by default', async () => {
+      mockCheckPermission.mockImplementation((permission) => permission === 'training.manage');
       renderWithRouter(<StartSkillTestPage />);
 
-      expect(await screen.findByRole('link', { name: /back/i })).toHaveAttribute(
+      expect(await within(trail()).findByRole('link', { name: 'Tests' })).toHaveAttribute(
         'href',
         '/training/admin?page=skills-testing&tab=tests'
       );
+      expect(within(trail()).getByRole('link', { name: 'Training Administration' })).toHaveAttribute(
+        'href',
+        '/training/admin'
+      );
+    });
+
+    it('does not lead a member into a hub they cannot open', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      renderWithRouter(<StartSkillTestPage />);
+
+      expect(await within(trail()).findByRole('link', { name: 'Skills Testing' })).toBeInTheDocument();
+      expect(within(trail()).queryByRole('link', { name: 'Tests' })).not.toBeInTheDocument();
     });
   });
 

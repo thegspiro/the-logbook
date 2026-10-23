@@ -3,7 +3,6 @@ import { DialogPanel } from '../components/ux/DialogPanel';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
   Users,
   Layers,
   ListChecks,
@@ -36,7 +35,7 @@ import {
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
-import { Breadcrumbs } from '../components/ux/Breadcrumbs';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { RequirementDueDate } from '../components/training/RequirementDueDate';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
@@ -1654,40 +1653,29 @@ const PipelineDetailPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Matches TrainingProgramsPage: members without training.manage cannot
-            open /training/admin, so the Admin crumb only renders for users who
-            can actually follow it. */}
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* The hub is a sibling of this page, so `underHub` supplies it with the
-            registry's label and gate. The trail ends at Programs rather than
-            repeating the programme's name, which the <h1> below already
-            carries — the same shape /grants/applications/:id uses. */}
-        <Breadcrumbs underHub="/training/admin" />
-
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start space-x-4">
-            <button
-              onClick={() => void navigate('/training/programs')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mt-1 rounded-lg p-2"
-              aria-label="Back to programs"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <div>
-              <div className="mb-2 flex items-center space-x-3">
-                <h1 className="text-theme-text-primary text-2xl font-bold">{program.name}</h1>
+            registry's label and gate: members without training.manage cannot
+            open /training/admin, so the crumb only renders for users who can
+            follow it. */}
+        <TrainingPageHeader
+          icon={Layers}
+          title={program.name}
+          underHub="/training/admin"
+          subtitle={
+            <>
+              {program.description && (
+                <p className="text-theme-text-muted mb-3 max-w-2xl text-sm">{program.description}</p>
+              )}
+              {/* The status badges sit here rather than in the heading, which the
+                  route announcer reads aloud as the page's name. */}
+              <div className="flex flex-wrap items-center gap-2">
                 {program.is_template && (
                   <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                     Template
                   </span>
                 )}
                 {!program.active && <span className="badge bg-theme-surface text-theme-text-secondary">Inactive</span>}
-              </div>
-              {program.description && (
-                <p className="text-theme-text-muted mb-3 max-w-2xl text-sm">{program.description}</p>
-              )}
-              <div className="flex flex-wrap items-center gap-2">
                 {program.code && (
                   <span className="bg-theme-surface text-theme-text-secondary rounded-sm px-2 py-0.5 font-mono text-xs">
                     {program.code}
@@ -1719,74 +1707,75 @@ const PipelineDetailPage: React.FC = () => {
                   </dd>
                 </div>
               </dl>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => window.open(`/training/print/program?id=${programId}`, '_blank')}
-              className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm print:hidden"
-            >
-              <Printer className="h-4 w-4" />
-              <span>Print</span>
-            </button>
-            {canManage && !program.active && (
+            </>
+          }
+          actions={
+            <>
               <button
-                type="button"
-                onClick={() => void handleReactivateProgram()}
-                disabled={isReactivating}
-                className="btn-secondary btn-sm"
+                onClick={() => window.open(`/training/print/program?id=${programId}`, '_blank')}
+                className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm print:hidden"
               >
-                {isReactivating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
-                )}
-                <span>Reactivate</span>
+                <Printer className="h-4 w-4" />
+                <span>Print</span>
               </button>
-            )}
-            {canManage && (
-              <button
-                onClick={() => setShowEditProgram(true)}
-                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
-              >
-                <Pencil className="h-4 w-4" />
-                <span>Edit</span>
-              </button>
-            )}
-            {canManage && (
-              <button
-                onClick={() => setShowEnrollModal(true)}
-                className="btn-success flex items-center space-x-1 px-3 text-sm"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span>Enroll</span>
-              </button>
-            )}
-            {canManage && (
-              <button
-                onClick={() => {
-                  void handleDuplicate();
-                }}
-                disabled={isDuplicating}
-                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
-              >
-                <Copy className="h-4 w-4" />
-                <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
-              </button>
-            )}
-            {canManage && (
-              <button
-                onClick={() => void confirmDeleteProgram()}
-                title="Delete pipeline"
-                className="flex items-center space-x-1 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Delete</span>
-              </button>
-            )}
-          </div>
-        </div>
+              {canManage && !program.active && (
+                <button
+                  type="button"
+                  onClick={() => void handleReactivateProgram()}
+                  disabled={isReactivating}
+                  className="btn-secondary btn-sm"
+                >
+                  {isReactivating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  <span>Reactivate</span>
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => setShowEditProgram(true)}
+                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+                >
+                  <Pencil className="h-4 w-4" />
+                  <span>Edit</span>
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => setShowEnrollModal(true)}
+                  className="btn-success flex items-center space-x-1 px-3 text-sm"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  <span>Enroll</span>
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => {
+                    void handleDuplicate();
+                  }}
+                  disabled={isDuplicating}
+                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                >
+                  <Copy className="h-4 w-4" />
+                  <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => void confirmDeleteProgram()}
+                  title="Delete pipeline"
+                  className="flex items-center space-x-1 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Delete</span>
+                </button>
+              )}
+            </>
+          }
+        />
 
         {/* Stats Cards */}
         <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
