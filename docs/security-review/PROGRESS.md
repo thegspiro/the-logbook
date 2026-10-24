@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#TBD]** (branch `claude/security-review-reports-analytics-p11`) —
+Feature 29 (Reports & analytics), pass 11 (rotation lap 2). PR #3645
+(Feature 28, Security, audit & IP, pass 9) had already merged with no open
+rotation PR behind it — confirmed via `search_pull_requests`
+(`head:claude/security-review-`, state=open, 0 results) immediately before
+starting. Every row was ✅ as of `SEC-00-cross-cutting-baseline.md`'s pass
+11 reset note, so the table was reset to ⬜ for this lap and row 29 was
+the first ⬜ row, confirmed on a freshly fetched, unshallowed `main`
+(`597ad4f5`). **0 fixes to application code, 0 new security findings, 1
+documentation correction** — the real delta since pass 10 (five commits:
+an app-review analytics-metadata-bound fix, the repo-wide Pitfall #32
+probationary-status sweep, a soft-deleted-saved-report-can't-be-rerun fix,
+a numeric-bounds sweep, and one a11y contrast fix) was read in full and
+found clean/already-fixed-and-tested. Re-enumerated all 35 routes by AST
+and re-verified every standing item — in the course of which found that
+`RPT5-29-1`/`RPT5-29-5` had actually been fixed on 2026-10-11 (`28b65fb26`,
+inside pass 9's own review window) but this file's pass 9 and pass 10
+sections both mistakenly carried them forward as "still flagged,
+unchanged." Corrected in the findings file as `RPT6-29-2`; no code change
+needed (the fix already existed and `KNOWN_LIMITATIONS.md` was already
+accurate).
+
+Full writeup: `docs/security-review/RPT6-29-reports-analytics.md`'s
+**Pass 11** section.
+
+Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3645, Feature 28, Security, audit & IP, pass 9, merged), preserved for history</summary>
+
 **PR [#3645](https://github.com/thegspiro/the-logbook/pull/3645)** (branch
 `claude/security-review-security-audit-ip-p9`) —
 Feature 28 (Security, audit & IP), pass 9. PR #3641 (Feature 27,
@@ -37,6 +68,8 @@ Full writeup: `docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass
 Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
 analytics) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3641, Feature 27, Integrations, pass 9, merged, docs-only — nothing to record), preserved for history</summary>
@@ -21285,7 +21318,7 @@ this iteration's commit" rule.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
@@ -21298,6 +21331,72 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 29 (Reports & analytics, pass 11) — 0 fixes, 0 new findings, 1 documentation correction
+
+PR #3645 (Feature 28, Security, audit & IP, pass 9) had merged clean,
+confirmed via a fresh `search_pull_requests` (`head:claude/security-review-`,
+state=open) returning 0 immediately before starting. Row 29 (Reports &
+analytics) was confirmed the next `⬜` row on a freshly fetched, unshallowed
+`main` (`597ad4f5`).
+
+Baseline: pass 10's merge, `886e21faf` (the commit that landed
+`RPT6-29-reports-analytics.md`'s own "Pass 10" section). Diffed all ten
+backend scope files plus `frontend/src/modules/reports` directly
+(`git log --oneline 886e21fa..HEAD -- <scope>`, excluding merge commits):
+five real commits — an app-review fix bounding `/analytics/track`'s
+metadata and keying `/metrics`'s failure breakdown off a capped string
+(already fixed, re-tested), the repo-wide Pitfall #32 probationary-account
+sweep across `dashboard.py`/`attendance_dashboard_service.py`/
+`reports_service.py` (org-scoping untouched on every changed line, guard
+test re-run), a fix so a soft-deleted saved report can no longer be edited
+or re-run by id, the repo-wide numeric-bounds sweep on `labels.py`'s
+printer DPI and `schemas/reports.py`'s `schedule_day`, and one a11y
+contrast-only edit. All five read in full and already correct/tested — no
+new finding.
+
+Re-enumerated all 35 routes by AST (not from the prior pass's table) across
+`reports.py`/`analytics.py`/`platform_analytics.py`/`dashboard.py`/
+`labels.py`; every route still carries a recognized auth dependency, and
+the handful gated on authentication alone match the already-documented
+`_authorize_module`/LBL-29-2 design. Re-verified the printer-transport SSRF
+hardening, the `PII_REPORT_PERMISSIONS` set (8 entries, unchanged), the
+`MAX_LABELS_PER_JOB`/`MAX_ACTIVE_SAVED_REPORTS_PER_ORG`/export-limit caps,
+and the `SET NULL` nullability on `SavedReport.created_by`/
+`LabelPrinter.created_by_id`, all unchanged and correct.
+
+**One documentation correction (`RPT6-29-2`, LOW):** `RPT5-29-1`/
+`RPT5-29-5` (two reports re-deriving training compliance by different rules
+than the shared evaluator) were actually fixed on 2026-10-11
+(`28b65fb26`), inside security-review pass 9's own diffed window and
+touching `reports_service.py` directly — but pass 9's and pass 10's
+"still flagged" sections in `RPT6-29-reports-analytics.md` both carried
+them forward as unresolved, having missed that commit. Re-read the current
+code directly this pass: both reports are relabeled (per the finding's own
+"option 2") and `training_summary`'s `requirement_breakdown` now calls
+`requirement_applies_to_user`/`catch_up_deadline`, matching
+`compliance_status`. `docs/KNOWN_LIMITATIONS.md`'s entry was already
+accurate ("✅ Resolved 2026-10-11") the whole time, so no app-facing record
+was ever wrong — only this rotation's own intermediate "still flagged"
+bookkeeping was. No code change needed; corrected in the findings file.
+
+Full writeup: `docs/security-review/RPT6-29-reports-analytics.md`'s **Pass
+11** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 650
+revisions, single head `a8c3b50b6d9b`; `check_route_permissions.py
+--strict` (repo root) — 275 routes, 0 errors/warnings; scoped backend
+tests (`-k "reports or label or analytics or dashboard or
+attendance_dashboard or pipeline or prospect_privacy or
+membership_pipeline or dues_overdue or saved_report"`) — 921 passed, 1
+pre-existing skip (`pywebpush`); full backend unit suite — 17281 passed, 4
+skipped (env-only); frontend `npm run typecheck` clean; `npm run lint`
+clean (exit 0); `npx vitest run src/modules/reports` — 77 passed (9
+files).
+
+Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
+re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-24 — Feature 28 (Security, audit & IP, pass 9) — 0 fixed, 0 new findings
 
