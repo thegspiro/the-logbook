@@ -208,7 +208,8 @@ def _report_compose(path: str, settings) -> "list[str] | None":
 
 
 def _unreadable_ca_paths(settings) -> list[tuple[str, str, str]]:
-    """CA files a TLS-enabled configuration names but cannot open.
+    """CA, client certificate and key files a TLS-enabled configuration names
+    but cannot open.
 
     These produce no critical, so without this check preflight exits 0 for a
     configuration whose startup dies in ssl.create_default_context — the
@@ -217,7 +218,11 @@ def _unreadable_ca_paths(settings) -> list[tuple[str, str, str]]:
     problems: list[tuple[str, str, str]] = []
     for enabled_attr, path_attr in (
         ("DB_SSL", "DB_SSL_CA"),
+        ("DB_SSL", "DB_SSL_CERT"),
+        ("DB_SSL", "DB_SSL_KEY"),
         ("REDIS_SSL", "REDIS_SSL_CA"),
+        ("REDIS_SSL", "REDIS_SSL_CERT"),
+        ("REDIS_SSL", "REDIS_SSL_KEY"),
     ):
         if not getattr(settings, enabled_attr, False):
             continue

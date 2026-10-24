@@ -113,6 +113,14 @@ of a rotation safe: nothing breaks the moment you deploy the new key.
 4. When a `--commit` run reports zero rotated and zero unreadable values,
    remove the drained key from `ENCRYPTION_KEYS_LEGACY` and restart.
 
+### Database and cache TLS
+
+The bundled MySQL and Redis can offer TLS with certificates from a private CA
+you generate (`scripts/tls-setup.sh`). The backend and the backup sidecar verify
+the server's certificate and name, and present a client certificate. Plaintext is
+still accepted until a later enforcement switch. Setup, renewal and CA-key
+custody: [`docs/TLS.md`](../docs/TLS.md).
+
 ### Encrypted backups
 
 Backups are encrypted once `scripts/backup-keygen.sh` has created a key

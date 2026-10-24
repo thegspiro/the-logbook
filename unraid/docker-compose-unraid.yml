@@ -34,6 +34,9 @@ services:
       MYSQL_USER: ${DB_USER:-logbook_user}
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       TZ: ${TZ:-America/New_York}
+    # TLS: with certificates in the tls/mysql folder (scripts/tls-setup.sh) the
+    # wrapper adds the --ssl-* flags; without them MySQL starts as before.
+    entrypoint: ["sh", "/tls-entrypoint.sh"]
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
@@ -46,6 +49,8 @@ services:
       --innodb_flush_log_at_trx_commit=2
     volumes:
       - /mnt/user/appdata/the-logbook/mysql:/var/lib/mysql
+      - ./database/tls-entrypoint.sh:/tls-entrypoint.sh:ro
+      - /mnt/user/appdata/the-logbook/tls/mysql:/etc/mysql/tls:ro
     # Internal port only - not exposed to host to avoid conflicts
     expose:
       - "3306"
@@ -72,12 +77,17 @@ services:
     container_name: logbook-redis
     restart: on-failure
     stop_grace_period: 10s
+    # TLS: with certificates in the tls/redis folder (scripts/tls-setup.sh)
+    # Redis also listens for TLS on 6380; without them it starts as before.
+    entrypoint: ["sh", "/tls-entrypoint.sh"]
     command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env} --maxmemory 256mb --maxmemory-policy allkeys-lru
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
       TZ: ${TZ:-America/New_York}
     volumes:
       - /mnt/user/appdata/the-logbook/redis:/data
+      - ./infrastructure/redis/tls-entrypoint.sh:/tls-entrypoint.sh:ro
+      - /mnt/user/appdata/the-logbook/tls/redis:/etc/redis/tls:ro
     # Internal port only - not exposed to host (more secure)
     # Uncomment the next 2 lines if you need external Redis access
     # ports:
@@ -128,7 +138,8 @@ services:
 
       # Redis (connects to redis container)
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      # 6379 is plaintext, 6380 is TLS (scripts/tls-setup.sh --print-env).
+      REDIS_PORT: ${BACKEND_REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
 
       # Security - REQUIRED: Generate unique keys!
@@ -382,7 +393,11 @@ services:
       # CA certificates for DB_SSL / REDIS_SSL (paths inside the container),
       # and the break-glass for TLS whose certificate is not verified
       DB_SSL_CA: ${DB_SSL_CA:-}
+      DB_SSL_CERT: ${DB_SSL_CERT:-}
+      DB_SSL_KEY: ${DB_SSL_KEY:-}
       REDIS_SSL_CA: ${REDIS_SSL_CA:-}
+      REDIS_SSL_CERT: ${REDIS_SSL_CERT:-}
+      REDIS_SSL_KEY: ${REDIS_SSL_KEY:-}
       SECURITY_ALLOW_UNVERIFIED_TLS: ${SECURITY_ALLOW_UNVERIFIED_TLS:-false}
 
       # Dedicated vote-signature key (falls back to SECRET_KEY when empty)
@@ -435,6 +450,8 @@ services:
       - /mnt/user/appdata/the-logbook/uploads:/app/uploads
       - /mnt/user/appdata/the-logbook/logs:/app/logs
       - /mnt/user/backups/the-logbook:/backups
+      # CA and client certificate from scripts/tls-setup.sh.
+      - /mnt/user/appdata/the-logbook/tls/backend:/etc/ssl/logbook-tls:ro
 
     depends_on:
       db:
@@ -558,6 +575,9 @@ services:
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       VERIFY_EVERY_N_BACKUPS: ${VERIFY_EVERY_N_BACKUPS:-7}
       BACKUP_ENCRYPT_EXISTING: ${BACKUP_ENCRYPT_EXISTING:-true}
+      # Its CA and client certificate (below): with them the sidecar connects
+      # to MySQL over verified TLS and will not fall back to plaintext.
+      DB_TLS_DIR: /tls
       TZ: ${TZ:-America/New_York}
     volumes:
       - ./scripts:/scripts:ro
@@ -565,6 +585,7 @@ services:
       # Created by scripts/backup-keygen.sh (see docs/BACKUP.md). Read-only:
       # the sidecar only needs the certificate and the drill key.
       - /mnt/user/appdata/the-logbook/backup-keys:/keys:ro
+      - /mnt/user/appdata/the-logbook/tls/backup:/tls:ro
       - /mnt/user/appdata/the-logbook/uploads:/uploads:ro
     networks:
       - logbook-internal
