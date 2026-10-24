@@ -16,7 +16,8 @@ import { Hand } from 'lucide-react';
 import { eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
-import { Breadcrumbs, EmptyState } from '../components/ux';
+import { EmptyState } from '../components/ux';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import {
   AttendancePetitionApproveDialog,
   AttendancePetitionDeclineDialog,
@@ -64,130 +65,126 @@ export const AttendanceRequestsPage: React.FC = () => {
   const remove = (id: string) => setRequests((current) => current.filter((r) => r.id !== id));
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <Breadcrumbs />
-
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold sm:text-3xl">
-            <Hand className="h-7 w-7" aria-hidden="true" />
-            Attendance Requests
-          </h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            Members with no check-in who asked to be marked present, oldest first. Approving records the times you
-            confirm, credited when the event&apos;s attendance is finalized.
-          </p>
-        </div>
-        {canSeeAll && (
-          <div className="flex shrink-0 gap-2" role="group" aria-label="Which events">
-            <button
-              type="button"
-              aria-pressed={scope === 'mine'}
-              onClick={() => setScope('mine')}
-              className={scope === 'mine' ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
-            >
-              My events
-            </button>
-            <button
-              type="button"
-              aria-pressed={scope === 'all'}
-              onClick={() => setScope('all')}
-              className={scope === 'all' ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
-            >
-              All events
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <EventsPageHeader
+        icon={Hand}
+        title="Attendance Requests"
+        subtitle="Members with no check-in who asked to be marked present, oldest first. Approving records the times you confirm, credited when the event's attendance is finalized."
+        actions={
+          canSeeAll ? (
+            <div className="flex shrink-0 gap-2" role="group" aria-label="Which events">
+              <button
+                type="button"
+                aria-pressed={scope === 'mine'}
+                onClick={() => setScope('mine')}
+                className={scope === 'mine' ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
+              >
+                My events
+              </button>
+              <button
+                type="button"
+                aria-pressed={scope === 'all'}
+                onClick={() => setScope('all')}
+                className={scope === 'all' ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
+              >
+                All events
+              </button>
+            </div>
+          ) : undefined
+        }
+      />
+      {/* The list keeps its reading width under the full-width strip. */}
+      <div className="mx-auto max-w-5xl">
+        {loading ? (
+          <div className="space-y-4" aria-busy="true">
+            {[1, 2].map((i) => (
+              <div key={i} className="card p-6">
+                <div className="bg-theme-surface-hover mb-3 h-5 w-48 animate-pulse rounded-sm" />
+                <div className="bg-theme-surface-hover h-4 w-72 animate-pulse rounded-sm" />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="alert-danger text-sm" role="alert">
+            <p>{error}</p>
+            <button type="button" onClick={() => void load(scope)} className="mt-2 underline">
+              Try again
             </button>
           </div>
+        ) : requests.length === 0 ? (
+          <EmptyState
+            icon={Hand}
+            title="No attendance requests waiting"
+            description={
+              scope === 'all'
+                ? 'Nobody in the department is waiting to be marked present.'
+                : 'Nobody is waiting on an event you organize or are alternate for.'
+            }
+          />
+        ) : (
+          <ul className="space-y-4">
+            {requests.map((request) => (
+              <li key={request.id} className="card p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <Link
+                      to={`/events/${request.event_id}`}
+                      className="text-theme-text-primary text-base font-semibold hover:underline"
+                    >
+                      {request.event_title}
+                    </Link>
+                    <p className="text-theme-text-secondary text-xs">{formatDate(request.event_start_datetime, tz)}</p>
+                    <p className="text-theme-text-primary mt-2 text-sm font-medium">
+                      {request.user_name || 'A member'}
+                      <span className="text-theme-text-secondary font-normal">
+                        {' '}
+                        · asked {formatDateTime(request.created_at, tz)}
+                        {resendNote(request.withdrawal_count) && ` · ${resendNote(request.withdrawal_count)}`}
+                      </span>
+                    </p>
+                    <p className="text-theme-text-primary mt-1 text-sm break-words whitespace-pre-line">
+                      {request.reason}
+                    </p>
+                    {(request.requested_check_in_at || request.requested_check_out_at) && (
+                      <p className="text-theme-text-secondary mt-1 text-xs">
+                        Says they were there
+                        {request.requested_check_in_at && ` from ${formatDateTime(request.requested_check_in_at, tz)}`}
+                        {request.requested_check_out_at &&
+                          ` until ${formatDateTime(request.requested_check_out_at, tz)}`}
+                      </p>
+                    )}
+                    {request.attendance_finalized && (
+                      <p className="text-theme-text-secondary mt-2 text-xs">
+                        Attendance for this event is finalized. Reopen it on the event page to approve; declining still
+                        works.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setApproving(request)}
+                      disabled={request.attendance_finalized}
+                      className="btn-primary text-sm font-medium disabled:opacity-50"
+                      aria-label={`Approve ${request.user_name || 'member'}'s request for ${request.event_title}`}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeclining(request)}
+                      className="btn-secondary text-sm font-medium"
+                      aria-label={`Decline ${request.user_name || 'member'}'s request for ${request.event_title}`}
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
-
-      {loading ? (
-        <div className="space-y-4" aria-busy="true">
-          {[1, 2].map((i) => (
-            <div key={i} className="card p-6">
-              <div className="bg-theme-surface-hover mb-3 h-5 w-48 animate-pulse rounded-sm" />
-              <div className="bg-theme-surface-hover h-4 w-72 animate-pulse rounded-sm" />
-            </div>
-          ))}
-        </div>
-      ) : error ? (
-        <div className="alert-danger text-sm" role="alert">
-          <p>{error}</p>
-          <button type="button" onClick={() => void load(scope)} className="mt-2 underline">
-            Try again
-          </button>
-        </div>
-      ) : requests.length === 0 ? (
-        <EmptyState
-          icon={Hand}
-          title="No attendance requests waiting"
-          description={
-            scope === 'all'
-              ? 'Nobody in the department is waiting to be marked present.'
-              : 'Nobody is waiting on an event you organize or are alternate for.'
-          }
-        />
-      ) : (
-        <ul className="space-y-4">
-          {requests.map((request) => (
-            <li key={request.id} className="card p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <Link
-                    to={`/events/${request.event_id}`}
-                    className="text-theme-text-primary text-base font-semibold hover:underline"
-                  >
-                    {request.event_title}
-                  </Link>
-                  <p className="text-theme-text-secondary text-xs">{formatDate(request.event_start_datetime, tz)}</p>
-                  <p className="text-theme-text-primary mt-2 text-sm font-medium">
-                    {request.user_name || 'A member'}
-                    <span className="text-theme-text-secondary font-normal">
-                      {' '}
-                      · asked {formatDateTime(request.created_at, tz)}
-                      {resendNote(request.withdrawal_count) && ` · ${resendNote(request.withdrawal_count)}`}
-                    </span>
-                  </p>
-                  <p className="text-theme-text-primary mt-1 text-sm break-words whitespace-pre-line">
-                    {request.reason}
-                  </p>
-                  {(request.requested_check_in_at || request.requested_check_out_at) && (
-                    <p className="text-theme-text-secondary mt-1 text-xs">
-                      Says they were there
-                      {request.requested_check_in_at && ` from ${formatDateTime(request.requested_check_in_at, tz)}`}
-                      {request.requested_check_out_at && ` until ${formatDateTime(request.requested_check_out_at, tz)}`}
-                    </p>
-                  )}
-                  {request.attendance_finalized && (
-                    <p className="text-theme-text-secondary mt-2 text-xs">
-                      Attendance for this event is finalized. Reopen it on the event page to approve; declining still
-                      works.
-                    </p>
-                  )}
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setApproving(request)}
-                    disabled={request.attendance_finalized}
-                    className="btn-primary text-sm font-medium disabled:opacity-50"
-                    aria-label={`Approve ${request.user_name || 'member'}'s request for ${request.event_title}`}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeclining(request)}
-                    className="btn-secondary text-sm font-medium"
-                    aria-label={`Decline ${request.user_name || 'member'}'s request for ${request.event_title}`}
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
 
       {approving && (
         <AttendancePetitionApproveDialog

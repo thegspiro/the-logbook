@@ -39,6 +39,7 @@ import { FACILITY_ENTRY_PERMISSIONS } from './modules/facilities/routes';
 import { QUICK_ADD_ACTIONS } from './components/layout/quickAddActions';
 import { governanceNavItems } from './components/layout/governanceNavigation';
 import { trainingNavItems } from './components/layout/trainingNavigation';
+import { EVENTS_NAV_ITEMS } from './components/layout/eventsNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from './modules/governance/routes';
 import { barePath, routeGate, routeSources } from './test/routeGates';
 
@@ -138,6 +139,15 @@ describe('navigation gates match the routes they target', () => {
       expect(routeGate(sources, row.path), row.path).toEqual({ permissions: [], module: 'training', exists: true });
       expect(row.permission, row.path).toBeUndefined();
       expect(row.anyPermission, row.path).toBeUndefined();
+    }
+  });
+
+  it('gates each Events section on exactly its route’s grant', () => {
+    const sources = routeSources();
+    for (const row of EVENTS_NAV_ITEMS) {
+      const gate = routeGate(sources, row.path);
+      expect(gate.exists, row.path).toBe(true);
+      expect(row.permission ? [row.permission] : [], row.path).toEqual(gate.permissions);
     }
   });
 

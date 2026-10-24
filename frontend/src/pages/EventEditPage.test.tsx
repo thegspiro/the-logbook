@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import EventEditPage from './EventEditPage';
@@ -136,13 +136,17 @@ describe('EventEditPage', () => {
       });
     });
 
-    it('should display back link and event title in description', async () => {
+    it('should trail back to the event and name it in the description', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      // The trail starts from the section the URL sits under.
+      window.history.replaceState({}, '', '/events/evt-1/edit');
 
       renderWithRouter(<EventEditPage />);
 
-      const backLink = await screen.findByRole('link', { name: /back to event/i });
-      expect(backLink).toHaveAttribute('href', '/events/evt-1');
+      // Waits for the loaded page: the loading state's trail cannot name the event yet.
+      const eventCrumb = await screen.findByRole('link', { name: 'Existing Event' });
+      expect(eventCrumb).toHaveAttribute('href', '/events/evt-1');
+      expect(screen.getByRole('navigation', { name: /breadcrumb/i })).toContainElement(eventCrumb);
       expect(screen.getByText(/Update the details for/)).toBeInTheDocument();
     });
 
@@ -540,13 +544,15 @@ describe('EventEditPage', () => {
       });
     });
 
-    it('should have proper back navigation link', async () => {
+    it('should have a trail back to the events list', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      window.history.replaceState({}, '', '/events/evt-1/edit');
 
       renderWithRouter(<EventEditPage />);
 
-      const backLink = await screen.findByRole('link', { name: /back to event/i });
-      expect(backLink).toHaveAttribute('href', '/events/evt-1');
+      await screen.findByRole('link', { name: 'Existing Event' });
+      const trail = screen.getByRole('navigation', { name: /breadcrumb/i });
+      expect(within(trail).getByRole('link', { name: 'Events' })).toHaveAttribute('href', '/events');
     });
   });
 });

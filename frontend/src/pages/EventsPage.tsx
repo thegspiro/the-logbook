@@ -22,12 +22,10 @@ import {
   X,
   CheckSquare,
   XCircle,
-  FileText,
   Bookmark,
   BookmarkPlus,
   Trash2,
   AlertCircle,
-  BarChart3,
   MoreHorizontal,
   Settings,
   Hand,
@@ -46,6 +44,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { errorTracker } from '../services/errorTracking';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
@@ -773,140 +772,124 @@ export const EventsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs />
-
-        {/* Header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-red-800 p-2">
-              <Calendar className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Events</h1>
-              <p className="text-theme-text-secondary mt-1 text-sm">
-                Department events, meetings, training sessions, and more
-              </p>
-            </div>
-          </div>
-
-          {/* One row at every width: the create action, with everything else
+        <EventsPageHeader
+          icon={Calendar}
+          title="Events"
+          subtitle="Department events, meetings, training sessions, and more"
+          actions={
+            <>
+              {/* One row at every width: the create action, with everything else
               behind a single overflow menu. As eight sibling buttons these
               wrapped to a column of full-width bars on a phone — and since
               each hid its label below 640px, a column of unlabelled ones —
               which pushed the first event most of a screen below the fold. */}
-          <div className="flex items-center gap-2">
-            <NfcTapButton />
-            {canManage && (
-              <Link
-                to="/events/admin?tab=create"
-                className="btn-primary btn-auto inline-flex flex-1 items-center justify-center gap-2 sm:flex-none"
-              >
-                <Plus className="h-5 w-5" aria-hidden="true" />
-                Create Event
-              </Link>
-            )}
-            {hasMoreActions && (
-              <div className="relative shrink-0" ref={moreMenuRef}>
-                <button
-                  ref={moreTriggerRef}
-                  type="button"
-                  onClick={() => setShowMoreMenu((prev) => !prev)}
-                  className="btn-secondary btn-auto btn-icon"
-                  aria-label="More event actions"
-                  aria-expanded={showMoreMenu}
-                >
-                  <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-                </button>
-                {showMoreMenu && (
-                  <div className="popover-panel absolute right-0 z-50 mt-2 w-64">
-                    {canManage && (
-                      <div className="border-theme-surface-border border-b p-2">
-                        <p className="text-theme-text-secondary px-3 py-1.5 text-xs font-semibold tracking-wider uppercase">
-                          Create from Template
-                        </p>
-                        {templatesLoading ? (
-                          <p className="text-theme-text-secondary px-3 py-2 text-sm">Loading templates...</p>
-                        ) : templates.length === 0 ? (
-                          <p className="text-theme-text-secondary px-3 py-2 text-sm">No templates available</p>
-                        ) : (
-                          <div className="max-h-48 overflow-y-auto">
-                            {templates.map((template) => (
+              <div className="flex items-center gap-2">
+                <NfcTapButton />
+                {canManage && (
+                  <Link
+                    to="/events/admin?tab=create"
+                    className="btn-primary btn-auto inline-flex flex-1 items-center justify-center gap-2 sm:flex-none"
+                  >
+                    <Plus className="h-5 w-5" aria-hidden="true" />
+                    Create Event
+                  </Link>
+                )}
+                {hasMoreActions && (
+                  <div className="relative shrink-0" ref={moreMenuRef}>
+                    <button
+                      ref={moreTriggerRef}
+                      type="button"
+                      onClick={() => setShowMoreMenu((prev) => !prev)}
+                      className="btn-secondary btn-auto btn-icon"
+                      aria-label="More event actions"
+                      aria-expanded={showMoreMenu}
+                    >
+                      <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    {showMoreMenu && (
+                      <div className="popover-panel absolute right-0 z-50 mt-2 w-64">
+                        {canManage && (
+                          <div className="border-theme-surface-border border-b p-2">
+                            <p className="text-theme-text-secondary px-3 py-1.5 text-xs font-semibold tracking-wider uppercase">
+                              Create from Template
+                            </p>
+                            {templatesLoading ? (
+                              <p className="text-theme-text-secondary px-3 py-2 text-sm">Loading templates...</p>
+                            ) : templates.length === 0 ? (
+                              <p className="text-theme-text-secondary px-3 py-2 text-sm">No templates available</p>
+                            ) : (
+                              <div className="max-h-48 overflow-y-auto">
+                                {templates.map((template) => (
+                                  <button
+                                    key={template.id}
+                                    onClick={() => {
+                                      setShowMoreMenu(false);
+                                      void navigate(`/events/admin?tab=create&template=${template.id}`);
+                                    }}
+                                    className={MENU_ITEM_CLASS}
+                                  >
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate font-medium">{template.name}</span>
+                                      {template.description && (
+                                        <span className="text-theme-text-secondary block truncate text-xs">
+                                          {template.description}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className="p-2">
+                          {canManage && sortedEvents.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowMoreMenu(false);
+                                setSelectionMode(true);
+                              }}
+                              className={MENU_ITEM_CLASS}
+                            >
+                              <CheckSquare className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              Select Events
+                            </button>
+                          )}
+                          {sortedEvents.length > 0 && (
+                            <button type="button" onClick={handleExportFromMenu} className={MENU_ITEM_CLASS}>
+                              <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              Export to CSV
+                            </button>
+                          )}
+                          {canManage && (
+                            <>
                               <button
-                                key={template.id}
+                                type="button"
                                 onClick={() => {
                                   setShowMoreMenu(false);
-                                  void navigate(`/events/admin?tab=create&template=${template.id}`);
+                                  setShowImportModal(true);
                                 }}
                                 className={MENU_ITEM_CLASS}
                               >
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate font-medium">{template.name}</span>
-                                  {template.description && (
-                                    <span className="text-theme-text-secondary block truncate text-xs">
-                                      {template.description}
-                                    </span>
-                                  )}
-                                </span>
+                                <Upload className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                Import from CSV
                               </button>
-                            ))}
-                          </div>
-                        )}
+                              <Link to="/events/admin?tab=settings" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
+                                <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                Event Settings
+                              </Link>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
-                    <div className="p-2">
-                      {canManage && sortedEvents.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowMoreMenu(false);
-                            setSelectionMode(true);
-                          }}
-                          className={MENU_ITEM_CLASS}
-                        >
-                          <CheckSquare className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          Select Events
-                        </button>
-                      )}
-                      {sortedEvents.length > 0 && (
-                        <button type="button" onClick={handleExportFromMenu} className={MENU_ITEM_CLASS}>
-                          <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          Export to CSV
-                        </button>
-                      )}
-                      {canManage && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowMoreMenu(false);
-                              setShowImportModal(true);
-                            }}
-                            className={MENU_ITEM_CLASS}
-                          >
-                            <Upload className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            Import from CSV
-                          </button>
-                          <Link to="/events/templates" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
-                            <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            Event Templates
-                          </Link>
-                          <Link to="/events/analytics" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
-                            <BarChart3 className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            Attendance Trends
-                          </Link>
-                          <Link to="/events/admin?tab=settings" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
-                            <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            Event Settings
-                          </Link>
-                        </>
-                      )}
-                    </div>
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Always mounted, so a check-in window opening mid-session is a text
             change inside an existing live region rather than a new region
