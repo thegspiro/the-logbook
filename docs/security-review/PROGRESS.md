@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3636](https://github.com/thegspiro/the-logbook/pull/3636)** (branch
+`claude/security-review-meetings-minutes-p9`) — Feature 24 (Meetings &
+minutes), pass 9, a watchdog pickup. **0 fixed, 0 new findings** — re-verified
+the real delta since pass 8 (approved-meeting delete refusal, carried-forward/
+attachment cleanup on minutes delete, automatic election-result filing,
+numeric bounds, UTC-instant timestamps, the probationary-account-status sweep
+— which fixed a real gap in this feature's quorum denominator and attendance
+roster — and the shared file-storage interface consolidation), all already
+correctly org-scoped. MM-19/MM-20 (pass 8's two flagged LOW find-or-create
+races) re-confirmed OPEN, unchanged.
+
+Full writeup: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 9**
+section.
+
+Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
+notifications) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3635, Feature 23, Medical supplies, pass 16, merged; duplicate sibling PR #3634 closed), preserved for history</summary>
+
 **PR [#3635](https://github.com/thegspiro/the-logbook/pull/3635)** (branch
 `claude/security-review-medical-supplies-p16`) —
 Feature 23 (Medical supplies), pass 16, a watchdog run. PR #3633 (Feature
@@ -39,9 +60,20 @@ file has not reviewed.
 Full writeup: `docs/security-review/MSUP-23-medical-supplies.md`'s
 **Pass 16** section.
 
+**A second, independent watchdog session raced this same pass concurrently**
+and opened PR #3634 (`claude/security-review-medical-supplies`, the same
+branch name an earlier, already-merged pass had used) with materially the
+same conclusions; #3635's push landed first and merged, so #3634 was closed
+as a duplicate per this rotation's own race-handling rule. #3634's one
+genuinely new finding (MSUP-28, MED, a domain-check TOCTOU on
+`record_lot_recall`) had already been posted as a review comment on the
+actually-relevant target, the open sibling PR #3627 ("Medical supplies:
+record lot recalls"), rather than lost with the closed PR.
+
 Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
-minutes) — re-check `search_pull_requests` fresh rather than trusting
-this note.
+minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 10, PR #3633, merged), preserved for history</summary>
@@ -21123,7 +21155,7 @@ this iteration's commit" rule.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -21141,6 +21173,53 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 24 (Meetings & minutes, pass 9) — watchdog pickup, 0 fixed, 0 new findings; MM-19/MM-20 re-confirmed OPEN
+
+Watchdog pickup for the security-review rotation: a race-prone pass-16 pair
+for Feature 23 (Medical supplies) had just resolved — PR #3635 merged
+docs-only and its duplicate sibling #3634 was closed — which is not
+independently recordable, so only the Open PR row needed clearing (see
+above). No open PR's head branch starts with `claude/security-review-`
+(`list_pull_requests` and a fresh GitHub search both empty, checked again
+immediately before pushing); row 24 (Meetings & minutes) was confirmed the
+next `⬜` row on a freshly fetched `main`.
+
+Scope check against pass 8's merge (`d4fd563e7`, PR #3456) found 9 commits
+with a real backend diff over the last 4 days, all read in full: an approved
+meeting can no longer be deleted (409, `MeetingDeleteRefusedError`, still
+org-scoped through `get_meeting_by_id`); deleting draft minutes now reopens
+any carried-forward action item whose copy is deleted and removes attachment
+files from storage only after the row-delete commits; a closed election's
+result now files itself with its meeting's minutes automatically
+(`minutes_election_filing.py`, reusing the existing org-scoped, row-locked,
+uniquely-constrained manual-import path, so a race can't double-file);
+every numeric field in the minutes schemas gained an `INT32_MAX` upper bound;
+minutes/interview timestamps now store the UTC instant instead of the wall
+clock; the repo-wide probationary-account-status sweep (Pitfall #32) fixed a
+real gap in this feature specifically — `attendance_dashboard_service.py`'s
+member list and `quorum_service.py`'s quorum denominator both used to drop
+probationary members via a literal `== ACTIVE` comparison, both now use
+`ACTIVE_ACCOUNT_STATUSES`; and the stored-file interface consolidation
+routed minutes-attachment delete/serve through the new shared
+`file_storage` operations. All nine re-verified directly against current
+code across all seven `CHECKLIST.md` dimensions — org-scoping, `assert_in_org`
+on client-supplied FKs, the DB-level unique constraint backing the
+election-filing "never twice" claim, and `file_storage.resolve()`'s
+fail-closed path-containment check all confirmed intact. Routes
+re-enumerated by AST from scratch: 81 total (17 `meetings.py` + 32
+`minutes.py` + 30 `minutes_records.py` + 2 `api/public/minutes.py`), every
+one still carrying `require_permission(...)` or, for the two already-audited
+deliberate self-scoped exceptions, `get_current_active_user` with the
+narrower check made in the handler body. **0 new findings.**
+
+MM-19 and MM-20 (pass 8's two flagged LOW find-or-create races) re-checked at
+their current lines: unchanged, still open, neither file touched by this
+delta. `docs/KNOWN_LIMITATIONS.md`'s MM-9/MM-17/MM-19/MM-20 entries re-read
+against current code and confirmed still accurate.
+
+Full write-up: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 9**
+section.
 
 ### 2026-10-24 — Feature 23 (Medical supplies, pass 16) — watchdog run, 0 fixed, 0 new findings
 
