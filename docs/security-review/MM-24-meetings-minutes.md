@@ -1,6 +1,6 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4), [#2881](https://github.com/thegspiro/the-logbook/pull/2881) (pass 5), pass 6 PR recorded in `PROGRESS.md`, pass 7 PR recorded in `PROGRESS.md`, pass 8 (this PR)
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4), [#2881](https://github.com/thegspiro/the-logbook/pull/2881) (pass 5), pass 6 PR recorded in `PROGRESS.md`, pass 7 PR recorded in `PROGRESS.md`, [#3456](https://github.com/thegspiro/the-logbook/pull/3456) (pass 8), pass 9 (this PR)
 
 ## Pass 1 (2026-08-26)
 
@@ -2178,3 +2178,211 @@ Only one backend file carries a behavior change this pass
 in its own existing integration-test file. No frontend file was touched, so
 `npm run lint`/`typecheck` re-confirm a clean baseline rather than check new
 code.
+
+---
+
+## Pass 9 (2026-10-24) — watchdog pickup, 0 fixes, 0 new findings; MM-19/MM-20 re-confirmed OPEN
+
+This iteration is a watchdog pickup for `/loop 30m /security-review`: the
+dedicated loop session was not reachable, and `list_pull_requests`/a
+`claude/security-review-*` head search both returned no open security-review PR
+before starting, and again immediately before pushing (no collision; also
+confirmed `git ls-remote origin 'refs/heads/claude/security-review-meetings*'`
+had nothing live — every prior pass's branch was deleted on merge).
+
+**Backend, re-read in full against current `origin/main`:**
+`app/api/v1/endpoints/meetings.py` (682 L, was 675), `app/api/v1/endpoints/minutes.py`
+(1,574 L, was 1,570), `app/api/v1/endpoints/minutes_records.py` (1,250 L,
+unchanged), `app/services/meetings_service.py` (782 L, was 763),
+`app/services/minute_service.py` (2,288 L, was 2,218),
+`app/services/quorum_service.py` (172 L, was unchanged until this delta — see
+below), `app/services/attendance_dashboard_service.py` (339 L, was unchanged
+until this delta), `app/services/minutes_signature_service.py`,
+`app/services/minutes_reminder_service.py`, `app/services/minutes_record_service.py`
+(1,352 L, was 1,250), `app/services/minutes_notifications.py`,
+`app/services/minutes_publishing_service.py` (unchanged),
+`app/services/agenda_document_access.py` (unchanged),
+`app/utils/minutes_pdf.py`/`motion_votes.py`/`rich_text.py`/`minutes_public.py`
+(unchanged)/`minutes_search.py` (unchanged), `app/api/public/minutes.py`
+(unchanged), `app/models/meeting.py`/`app/models/minute.py`,
+`app/schemas/meetings.py`/`app/schemas/minute.py`, `app/mcp/tools/meetings.py`
+(unchanged, confirmed via `git log` rather than trusted from pass 8's note).
+New file read in full: `app/services/minutes_election_filing.py`.
+**Frontend:** `frontend/src/modules/minutes/pages/MinutesPage.tsx` (the only
+module file with a substantive diff this delta — delete-outcome/confirm-dialog
+changes), spot-checked the rest via `git log` (only a11y/copy-only diffs since
+pass 8, no logic change).
+**Migrations:** none new under `backend/alembic/versions/` touch
+`meetings`/`meeting_minutes`/`meeting_action_items`/`minutes_*`/
+`minutes_election_results` since pass 8's head (`ca0c2111466f`). Chain
+re-validated at 649 revisions, single head `a0195b397bf3`.
+
+### Scope
+
+`git log d4fd563e7..origin/main` (pass 8's merge commit to current `main`)
+against every file this feature names surfaced 9 non-merge commits with a real
+backend diff, all read in full rather than trusted from their commit
+summaries, plus several pure frontend a11y/copy commits and merge noise
+excluded as out of scope:
+
+- `8c504336e` — "refuse approved-meeting delete": `delete_meeting` now raises
+  `MeetingDeleteRefusedError` (409) for a meeting in `APPROVED` status,
+  surfaced via an `X-Delete-Outcome` header the frontend reads. Re-verified
+  `get_meeting_by_id(meeting_id, organization_id)` still gates the fetch
+  (XC-3 intact) before the status check.
+- `f5ddf81bf` — "governance and finance deletes": `delete_minutes` now also
+  (a) reopens any carried-forward action item whose _copy_ is about to be
+  deleted (`_release_carried_sources`, org-scoped via a `MeetingMinutes.id`
+  subquery filtered on `organization_id` — re-verified directly, not merely
+  cited) and (b) deletes the minutes' attachment files from storage only
+  _after_ the row-delete commits (so a rolled-back delete keeps its files).
+  Separately, `documents_service.py`'s delete path now clears
+  `MeetingMinutes.published_document_id`/`published_revision_version`/
+  `published_at` when the library document it pointed at is deleted — an
+  `UPDATE ... WHERE organization_id = :org AND published_document_id IN
+(:ids)` (org-scoped, confirmed) rather than a bare FK, since that column is
+  deliberately not a real foreign key (see the model's own docstring).
+- `911a111d1` — "file a closed election's result with its meeting's minutes
+  automatically": new `app/services/minutes_election_filing.py`, called from
+  `ElectionService.close_election` (after commit, never allowed to fail the
+  close) and from `MinuteService.create_minutes`/`create_from_meeting` (after
+  commit). Re-verified: both entry points resolve the target minutes/elections
+  through `organization_id`-filtered queries; the actual write goes through
+  the existing `MinutesRecordService.capture_election_result`, which itself
+  calls `assert_in_org` on the client-reachable `election_id` (XC-1) and locks
+  the minutes row (`lock_minutes`, `.with_for_update()`) before its
+  check-then-insert — and `MinutesElectionResult` carries a DB-level
+  `UniqueConstraint("minutes_id", "election_id")`
+  (`uq_minutes_election_results_pair`, confirmed in `app/models/minute.py`),
+  so a race between the automatic filing and a manager's manual import (or two
+  automatic triggers) cannot double-file; the loser's `IntegrityError` is
+  caught by `_file`'s own `except Exception` and logged, never raised into the
+  election-close or minutes-create transaction. A department can disable the
+  behavior (`auto_file_election_results`, read through the same
+  `OrganizationService.update_organization_settings` deep-merge/deep-copy path
+  pass 8 already verified for this settings section, gated on
+  `settings.manage`/`organization.update_settings`, not `minutes.manage`).
+- `746382501` — "bound every numeric request field to its column range":
+  `SectionEntry.order`/`TemplateSectionEntry.order`/`MotionBase.votes_*`/
+  `MotionCreate.order`/`MotionUpdate.votes_*`/`order`/`MinutesBase.quorum_count`/
+  `MinutesUpdate.quorum_count` all gained `le=INT32_MAX`. Does not touch
+  `set_meeting_quorum_config`'s `quorum_threshold` query parameter, which
+  already carries its own `math.isfinite()` + percentage/count bound from
+  MM-15 (re-read directly at `minutes.py:1409-1454`, unchanged and still
+  correct).
+- `9b1b17226`/`3561ed0c4` — UTC-instant storage for `meeting_date`/
+  `called_to_order_at`/`adjourned_at`/`MinutesAdopt.adopted_on`/closed-session
+  timestamps, and a due-date display fix. Correctness/timezone fixes with no
+  authorization or tenancy surface; not re-derived in detail since neither
+  touches an auth, permission or org-scoping path.
+- `8a57d0699` — "count a probationary account as a current member at every
+  status gate" (CLAUDE.md Pitfall #32): `attendance_dashboard_service.py`'s
+  member list and `quorum_service.py`'s quorum denominator both switched
+  `User.status == UserStatus.ACTIVE` to `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`.
+  Re-swept both files plus `meetings_service.py`/`minute_service.py`/
+  `meetings.py`/`minutes.py`/`minutes_records.py` for any remaining literal
+  `UserStatus.ACTIVE`/`"active"` comparison: zero hits — the sweep's own
+  repo-wide guard test (`tests/test_account_status_gates.py`) also passed.
+  This closes a real gap this feature had before today: a probationary member
+  was previously excluded from the quorum denominator and the attendance
+  dashboard's roster, which could make quorum appear met on a smaller
+  department-recognized body than actually existed, or vice-versa undercount
+  who needed to be marked present. Filed as a fix of a cross-cutting sweep
+  landed outside this rotation, not as a new `MM-` id, per this file's own
+  convention of assigning ids only to gaps this rotation itself finds and
+  fixes/flags — recorded here because it is new, genuine, and in scope.
+- `b92da7f3a` — "route every stored-file read/check/delete through one
+  interface": `minute_service.py`'s attachment-file cleanup on
+  `delete_minutes` and `minutes_record_service.py`'s attachment download/
+  delete now call `file_storage.delete_quietly`/`file_storage.exists`/
+  `file_storage.file_response` instead of raw `os`/a private `remove_quietly`
+  shim. `file_storage.resolve()` (unchanged, re-read) remains fail-closed:
+  non-string/missing-org input returns `None`, and a resolved real path must
+  start with `<root>/<org>/<area>/` (symlinks and `..` included, compared on
+  the real path) or it is refused — confirmed this still gates both call
+  sites in this feature before any delete or serve.
+- `d6233224890` — "return the refreshed minutes after a prepared motion is
+  removed": extends MM-18's `refresh=True` fix (pass 8) to two more response
+  paths (`apply_outline`, `apply_agenda_sync`'s section-save) that call
+  `ensure_section_motions` and previously returned the stale, pre-refresh
+  object. Same class as MM-18, same fix shape, landed by other work and
+  independently verified here rather than authored by this pass.
+
+No new route was added by any of the above (confirmed by AST-enumerating both
+endpoint files and `minutes_records.py`/`app/api/public/minutes.py` from
+scratch — 17 + 32 + 30 + 2 = 81 routes total, matching the current count with
+no gap against the files' own route count from pass 8's description of this
+same surface). Every route still carries either `require_permission(...)` or,
+for the two deliberate self-scoped exceptions already audited in pass 7/8
+(`PUT /minutes/{id}/action-items/{item_id}`'s `as_assignee` path and
+`GET /minutes/action-items/mine`), `get_current_active_user` with the
+narrower check made in the handler body or filtered to the caller's own id —
+re-verified both are unchanged at their current line.
+
+### New findings
+
+**None.** Nothing in the reviewed delta introduces a cross-tenant,
+authorization, injection, or data-exposure gap; every new or changed code path
+above follows this codebase's already-established pattern for its class
+(org-scoped by-id fetch, `assert_in_org` on a client-supplied FK, a DB unique
+constraint backing a "never twice" claim, `.with_for_update()` before a
+check-then-write, `file_storage.resolve()` before any filesystem operation).
+
+### Confirmed still open, unchanged
+
+- **MM-19** (`ensure_section_motions`'s find-or-create for a new prepared
+  motion has no lock) — re-read at its current location in
+  `minute_service.py`; unchanged, still no `.with_for_update()` and no unique
+  constraint on `(minutes_id, section_key)`. Still LOW per pass 8's own
+  reasoning (a cosmetic duplicate-motion race, not a tenancy or privilege
+  gap). **OPEN.**
+- **MM-20** (`MinutesPublishingService._post_public`'s find-or-create has no
+  lock) — `minutes_publishing_service.py` is byte-identical to pass 8
+  (confirmed via `git log`, not re-read cold); the DB-level
+  `unique=True` on `MinutesPublicCopy.minutes_id` still backs the no-silent-
+  duplicate claim pass 8 verified. **OPEN.**
+- **MM5-4** (app-review; no `ETag`/`updated_at` precondition on
+  `PUT /minutes/{minutes_id}`, two editors silently overwrite each other's
+  sections) — unchanged, still a correctness/lost-update concern rather than
+  a cross-tenant or privilege one under this checklist's seven dimensions.
+  Left FLAGGED per the same disposition as every prior pass.
+- Carried-forward "looked at, not a finding" items from passes 5-8
+  (`get_stats`'s UTC-clock "this month" count, `list_waivers`'s per-waiver
+  N+1, `grant_waiver`'s unlocked find-or-create) — none of the files
+  involved changed this delta; not re-investigated beyond confirming no
+  commit touched them.
+
+`docs/KNOWN_LIMITATIONS.md`'s MM-9, MM-17, MM-19 and MM-20 entries were
+re-read against current code and all four still accurately describe the
+present state (MM-9/MM-17 resolved, MM-19/MM-20 open) — no edit needed.
+
+### Guard tests added
+
+None. No new finding required one; the existing suite (notably
+`tests/test_minutes_election_autofile_integration.py`, 270 L added by
+`911a111d1` itself, and `tests/test_account_status_gates.py` for the
+Pitfall #32 sweep) already covers this pass's reviewed delta.
+
+### Completion gate (pass 9)
+
+| Check                                                                                                                                                   | Result                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                                                                                         | clean (0 violations)                                |
+| `black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                                                                 | clean (2,606 files unchanged)                       |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                                             | clean                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                       | PASSED — 649 revisions, single head `a0195b397bf3`  |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                       | 273 routes checked, 0 errors, 0 warnings            |
+| backend tests, scope (`-k "meeting or minute or motion or quorum or attendance_dashboard"`)                                                             | 1,200 passed, 1 skipped (pre-existing, `pywebpush`) |
+| backend tests, cross-cutting guards (`test_org_scoping_ratchet`, `test_endpoint_auth_coverage`, `test_account_status_gates`, `test_storage_operations`) | 35 passed                                           |
+| `cd frontend && npm run typecheck`                                                                                                                      | 0 errors                                            |
+| `cd frontend && npm run lint`                                                                                                                           | 0 errors, 0 warnings (`--max-warnings 10`)          |
+
+No source file under this feature's scope was changed by this pass — every
+behavioral delta since pass 8 was landed by other work (the deletion-refusal,
+election-auto-filing, numeric-bounds, UTC-timestamp, probationary-status and
+storage-interface changes listed under Scope) and independently re-verified
+here against all seven `CHECKLIST.md` dimensions, not authored by this pass.
+The diff this pass contributes is this findings file, `docs/security-review/PROGRESS.md`
+and the header line's PR-link backfill for pass 8 (`#3456`, found via
+`search_pull_requests` and not previously linked in this file) — no code
+change.
