@@ -58,6 +58,10 @@ tablet, checking training status on a laptop.]**
 
 **[SCREEN: Show 2FA prompt if applicable]**
 
+> "If you're an officer or administrator, two-factor isn't optional: you'll see a
+> banner with the days left to set it up, and for sensitive actions the app will
+> ask for a code before it goes ahead."
+
 > "If this is your first login, I'd recommend going straight to **My Account**
 > to change your password and set up two-factor if it's not already required."
 

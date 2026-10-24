@@ -258,6 +258,45 @@ Screenshots to create or replace are in
 
 ---
 
+# October 23–24, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                                                                                          | Now in                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Mark pipeline complete; Completed by hand; officer-only progress actions                                                       | [02 — Training](./02-training.md) (Completing a Pipeline by Hand)         |
+| No active requirements; inactive requirements and prerequisites; deactivating a pipeline withdraws members; prerequisite email | [02 — Training](./02-training.md) (Inactive Requirements and Pipelines)   |
+| Finance: reimburse by check, withdraw a draft, approver preview, inactive category                                             | [11 — Finance](./11-finance.md)                                           |
+| Shift patterns skip an inactive template                                                                                       | [03 — Scheduling](./03-scheduling.md)                                     |
+| Rename a variant product                                                                                                       | [05 — Inventory](./05-inventory.md) (Renaming a variant product)          |
+| Directory accounts: retirement, groups, name changes, secret expiry                                                            | [16 — Integrations](./16-integrations.md)                                 |
+| Locked built-in rank codes                                                                                                     | [08 — Admin & Reports](./08-admin-reports.md)                             |
+| Backup encryption; Google Shared Drive storage                                                                                 | Operator-facing: `BACKUP.md`, `FILE_STORAGE_HARDENING.md`, `UPGRADING.md` |
+
+---
+
+# October 22–23, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                                                                   | Now in                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Two-step sign-in required of administrative roles (14-day grace); step-up code before sensitive actions | [00 — Getting Started](./00-getting-started.md), [08 — Admin & Reports](./08-admin-reports.md), [`UPGRADING.md`](../UPGRADING.md) |
+| Gear low-stock email links to a filtered Inventory Items list                                           | [05 — Inventory](./05-inventory.md) (Low stock emails)                                                                            |
+| A checklist is overdue when its shift ends, not at midnight                                             | [03 — Scheduling](./03-scheduling.md) (written with the change)                                                                   |
+| Historical training import refuses undated rows                                                         | [02 — Training](./02-training.md) (written with the change)                                                                       |
+| Event page check-in and check-out controls                                                              | [Learning Center](./LEARNING_CENTER_SCREENSHOTS.md), 04 (written with the change)                                                 |
+| Department's own S3 / MinIO bucket and moving existing files into it                                    | Operator-facing: `BACKUP.md`, `FILE_STORAGE_HARDENING.md`, `UPGRADING.md`                                                         |
+| iCal integration drops the unused include-shifts setting                                                | `KNOWN_LIMITATIONS.md`                                                                                                            |
+
+---
+
 # October 20–21, 2026 workflow updates
 
 Index for the latest window. Audit:

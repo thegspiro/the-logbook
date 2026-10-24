@@ -292,6 +292,9 @@ class BudgetCategoryResponse(UTCResponseBase):
     charge_position_ids: list[str] = Field(default_factory=list)
     # Names from the top-level category down to this one.
     path: list[str] = Field(default_factory=list)
+    # The inactive ancestor that closes this category to new charges, lines
+    # and proposals while it is itself active; null otherwise.
+    inactive_through: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -608,6 +611,9 @@ class BudgetOptionResponse(BaseModel):
     id: str
     label: str
     amount_remaining: Optional[Decimal] = None
+    # False when the line's category is inactive: still listed so a request
+    # already on the line can show it, never offered as a new choice.
+    category_active: bool = True
 
 
 class FiscalYearOptionResponse(BaseModel):
@@ -963,6 +969,34 @@ class ApprovalChainUpdate(BaseModel):
     def _check_range(self) -> "ApprovalChainUpdate":
         _require_ordered_range(self.min_amount, self.max_amount)
         return self
+
+
+class ApprovalRouteStepResponse(BaseModel):
+    """One step a request would wait on, as its timeline would describe it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    name: str
+    step_order: int
+    step_type: str
+    # Who the step waits on; null on a notification step, which waits on
+    # nobody.
+    assignee_label: Optional[str] = None
+    # The amount falls under the step's auto-approve limit.
+    auto_approved: bool = False
+
+
+class ApprovalRoutePreviewResponse(BaseModel):
+    """Who a request would wait on if it were submitted now."""
+
+    model_config = _RESPONSE_CONFIG
+
+    chain_name: Optional[str] = None
+    # No chain applies: a finance approver decides by hand.
+    manual: bool
+    steps: list[ApprovalRouteStepResponse] = []
+    # At or over the department's dual-approval threshold.
+    second_approver_required: bool = False
 
 
 class ApprovalChainResponse(UTCResponseBase):
@@ -1463,6 +1497,11 @@ class PurchaseRequestResponse(UTCResponseBase):
     receipt_file_url: Optional[str] = None
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
+    # The expense report claiming this purchase back for the requester, while
+    # one does (app/services/finance_reimbursement.py; detail responses).
+    reimbursement_report_id: Optional[str] = None
+    reimbursement_report_number: Optional[str] = None
+    reimbursement_report_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
@@ -1516,6 +1555,26 @@ class ExpenseLineItemCreate(BaseModel):
     _check_receipt_url = field_validator("receipt_url", mode="before")(
         validate_external_http_url
     )
+
+
+class ExpenseLineItemUpdate(BaseModel):
+    """Edit a line on a draft expense report. Omitted fields are left alone;
+    null clears an optional one (description, amount, date and type cannot be
+    cleared)."""
+
+    model_config = _REQUEST_CONFIG
+
+    _check_expense_type = field_validator("expense_type", mode="before")(
+        _enum_check(_EXPENSE_TYPES, "expense_type")
+    )
+
+    budget_id: Optional[str] = None
+    fund_campaign_id: Optional[str] = None
+    description: Optional[str] = Field(None, min_length=1, max_length=500)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
+    date_incurred: Optional[datetime] = None
+    expense_type: Optional[ExpenseType] = None
+    merchant: Optional[str] = Field(None, max_length=300)
 
 
 class ExpenseLineItemResponse(UTCResponseBase):
@@ -1631,6 +1690,16 @@ class ExpenseReportResponse(UTCResponseBase):
     # have left, while it is not yet approved; null when it fits or charges
     # no fund (detail responses).
     fund_shortfall: Optional[Decimal] = None
+    # The purchase request this report claims back, and the check paying the
+    # member, while one does (app/services/finance_reimbursement.py; detail
+    # responses). ``amount_owed`` is what a check would pay: the total less
+    # what a cash advance already covered.
+    purchase_request_id: Optional[str] = None
+    purchase_request_number: Optional[str] = None
+    reimbursement_check_id: Optional[str] = None
+    reimbursement_check_number: Optional[str] = None
+    reimbursement_check_status: Optional[str] = None
+    amount_owed: Optional[Decimal] = None
     created_at: datetime
     updated_at: datetime
     line_items: list[ExpenseLineItemResponse] = []
@@ -1734,10 +1803,37 @@ class CheckRequestResponse(UTCResponseBase):
     qb_exported_at: Optional[datetime] = None
     # When the reversing entry for a void went to QuickBooks.
     qb_void_exported_at: Optional[datetime] = None
+    # The expense report this check reimburses the member for; the number is
+    # set on detail responses (app/services/finance_reimbursement.py).
+    expense_report_id: Optional[str] = None
+    expense_report_number: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+
+class ReimbursementReportCreate(BaseModel):
+    """Claim back an approved purchase the requester paid for themselves.
+
+    Each field defaults to the purchase request's own: its actual amount
+    (else its estimate), the day it was received or ordered, its vendor.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
+    date_incurred: Optional[UTCDateTime] = None
+    merchant: Optional[str] = Field(None, max_length=300)
+
+
+class ReimbursementCheckCreate(BaseModel):
+    """Pay an approved expense report by check, to the member who filed it."""
+
+    model_config = _REQUEST_CONFIG
+
+    payee_address: Optional[str] = Field(None, max_length=1000)
+    memo: Optional[str] = Field(None, max_length=500)
 
 
 # ============================================

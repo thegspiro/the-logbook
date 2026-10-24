@@ -1,7 +1,7 @@
 # Security Review 17 — Training Core
 
-**Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9) ·
-**PR:** see `PROGRESS.md`'s **Open PR** row
+**Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9),
+2026-10-24 (pass 10) · **PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training.py` (3,162 L),
 `api/v1/endpoints/training_programs.py` (2,142 L),
@@ -2616,6 +2616,173 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 10 (2026-10-24) — 0 fixed, 0 new findings; real delta (9 of 395 commits), TR7-1 re-confirmed unchanged, repo-wide Alembic fork found and merged
+
+**Watchdog pickup.** PR #3625 (Feature 16, Events & requests, pass 10) had
+already merged. No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). Rotation row 17 (Training core) was confirmed
+the next `⬜` by reading the rotation table directly on a freshly fetched
+`main`.
+
+### Scope
+
+Baseline `74dfaf58` (PR #3440's merge, pass 9). Of 395 non-merge commits
+repo-wide in the window, 9 touch this feature's declared files (excluding
+`653ace20`, whose only in-scope-path change is a comment-only docstring
+update in `SkillsTestingRoute.tsx`/`practicalSkillsStore.ts` describing
+server-side enforcement that lives in `skills_testing.py` — Feature 19's
+scope, not this one's).
+
+### Commits reviewed
+
+- **`b10aead2`** (new routes) — `GET`/`PUT /training/certifications/
+alert-settings`, both gated `training.manage`. `CertAlertService.
+get_alert_settings`/`update_alert_settings` read/write
+  `organization.settings.cert_alert_config` keyed off `current_user.
+organization_id` only; the write path deep-copies the JSON column before
+  mutating (Pitfall #12, with an explicit comment citing it) and writes
+  only the three named switches, each coerced through `bool()` — no
+  mass-assignment risk even though the dict originates from a
+  `model_dump(exclude_unset=True)`.
+- **`294d5a74`** (reactivate action) — `PATCH /training/programs/{id}`'s
+  `active: true` is now how a deactivated program is restored, audited as
+  `program_reactivated` after an org-scoped `get_program_by_id` read
+  (XC-3: resolved in-org before the audit decision, not just behind the
+  permission gate). `active: null` is now refused with a 400 instead of
+  silently hiding the program. `GET /training/programs?include_inactive`
+  has no permission check beyond the existing `get_current_user` the whole
+  endpoint already carries — checked whether this widens exposure: it
+  does not, since every member can already list every _active_ program on
+  this same endpoint with no extra permission, so including inactive ones
+  is the same sensitivity level the endpoint already serves, not a new
+  class of data.
+- **`0eefe3c5`** (deactivate-instead-of-delete) — `delete_requirement`'s
+  new `remove_requirement()` (new module
+  `training_requirement_removal.py`) deactivates a still-referenced
+  requirement instead of cascading away progress/pipelines/tests/waivers,
+  explicitly modeled on the already-reviewed `LocationService.
+remove_location`. Its reference-count helper is deliberately unfiltered
+  by org for the FK columns (the requirement was already org-resolved by
+  the caller before this runs — same reasoning as `location_reference_
+count`) and org-filtered for the two JSON-id-list columns, which carry
+  no FK constraint. `delete_training_program` gained the equivalent
+  deactivate-with-graduates path, same `organization_id`-scoped service
+  call as before.
+- **`f5447376`** (phase-delete progress fix) — `delete_phase` no longer
+  wipes `RequirementProgress` for a requirement a sibling phase of the
+  _same, already org-resolved_ program still links; an orphaned
+  phase-owned requirement is cleaned up afterward. No new by-id surface.
+- **`8511182b`** (historical import) — the parse and confirm steps both
+  now refuse a `COMPLETED`-status row with a blank/missing completion
+  date; the existing "not a member of this organization" row check is
+  unchanged. Pure validation fix.
+- **`a948beed`, `b0c40332`** (null-vs-404) — `GET /training/sessions/
+by-event/{id}` and its `/approval` sibling now answer `200`/`null`
+  instead of `404` for the ordinary "no session/approval yet" case. Each
+  commit's own text confirms the org-scoped lookup is unchanged: an id
+  naming another org's event got the same `404` before and gets the same
+  `null` now, so no case distinction is newly exposed. `/approval`'s
+  `include_token` gate (`training.manage`-only) is untouched.
+- **`87ac8514`** (member-facing course name) — new read-only
+  `training_course_names.py`: resolves a record's library course name at
+  _read_ time for members only (`is_officer` branch keeps the stored
+  name, since the edit form round-trips it). `library_course_names()`
+  explicitly filters `TrainingCourse.organization_id == organization_id`
+  and falls back to the record's own stored name for any id that doesn't
+  resolve in-org — the module's own docstring names this as the XC-1
+  guard against leaking a foreign course's name. Returns response copies,
+  never mutates the loaded ORM rows.
+- **`8a57d069`** (repo-wide Pitfall #32 sweep) — three `User.status ==
+UserStatus.ACTIVE` sites in `training.py`/`training_compliance.py`
+  became `.status.in_(ACTIVE_ACCOUNT_STATUSES)`; `organization_id`/
+  `deleted_at`/`compliance_exempt` filters on each query are unchanged.
+  Matches the established, test-enforced pattern.
+
+### Repo-wide issue found and fixed: forked Alembic chain
+
+Running this pass's own completion gate (`validate_migrations.py
+--strict`) found `main`'s migration chain **forked** at two heads —
+`6dce1364ff7e` ("NOT NULL on the 99 columns...", merged via PR #3612) and
+`c561cf7730ce` ("directory account name pending", merged via PR #3613) —
+both revising the same parent, `4250eb8b8378`, independently. Neither
+touches a training-core file and this pass made no code change in this
+feature, but an unresolvable `alembic upgrade head` fails the Migration
+Chain CI job on every open and future PR, security-review included, and
+no open PR already fixes it. Per CLAUDE.md's "no acceptable pre-existing
+errors" and the Pitfall #24/#26 precedent for this exact situation (see
+PROGRESS.md's log for PR #3437/#3546, which rejoined earlier forks the
+same way), generated and committed a pure-join merge revision,
+`7dba2d6d2dbb` (`alembic merge`, docstring explaining the fork per the
+`merge heads` convention already used by `5128feb36dd2` and others — no
+schema change, `downgrade()` is a no-op restoring the fork as those do).
+Verified by running `alembic upgrade head` against a real, freshly
+migrated database end to end (both branches then the merge, all three
+steps logged success) and by `test_alembic_migrations.py`/
+`test_migration_create_all_tables.py` (80 passed).
+
+### Route inventory
+
+`training.py` 37 (+2: the new alert-settings routes), `training_programs.
+py` 46 (unchanged route count; `include_inactive` is a query param, not a
+new route), `training_sessions.py` 11 (unchanged) — confirmed via
+`grep -c '^@router\.'` on each file. `check_route_permissions.py --strict`
+— 273 routes repo-wide, 0 errors, 0 warnings.
+
+### Re-verified standing items
+
+- **TR7-1 — still OPEN/FLAGGED, unchanged.** Zero diff on
+  `enroll_member_in_program` (`training.py`) and `TrainingProgramService.
+enroll_member` (`training_program_service.py`) this window (neither
+  appears in the 9 in-scope commits above) — the defect pass 8 found and
+  widened still applies exactly as described there.
+- TR-4's `year`-default semantics (owner-decision, acknowledged) —
+  unchanged.
+
+### Verified good ✅ (pass 10)
+
+- `GET /training/programs?include_inactive` checked explicitly for a
+  permission gap and found none — see `294d5a74` above.
+- `training_course_names.py`'s org-scoped fallback (`87ac8514`) is a model
+  XC-1 guard, not merely absence of a bug.
+- `remove_requirement`'s deliberately-unfiltered FK counts (`0eefe3c5`)
+  traced safe on the same reasoning already accepted for
+  `LocationService.remove_location`.
+- No new unbounded query, no new CSV export, no new `.like()`/`.ilike()`
+  usage, no new JSON-column shallow-copy mutation (the one new JSON write,
+  `cert_alert_config`, deep-copies), no new unauthenticated route.
+
+## Schema & migration notes (pass 10)
+
+No training-core model/migration this window. The repo-wide Alembic fork
+found and merged is recorded above, not as a training-core finding.
+
+## Guard tests added (pass 10)
+
+None new for this feature. The existing `test_alembic_migrations.py`/
+`test_migration_create_all_tables.py` cover the merge revision.
+
+## Completion gate (pass 10)
+
+| Check                                                                | Result                                                               |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (pinned 7.3.0)                         | ✅ 0 violations                                                      |
+| `black --check app/ tests/ alembic/` (pinned 26.5.1)                 | ✅ clean (2595 files unchanged)                                      |
+| `isort --check-only app/ tests/ alembic/` (pinned 9.0.1)             | ✅ clean                                                             |
+| `python3 scripts/validate_migrations.py --strict`                    | ✅ single head `7dba2d6d2dbb` (after the merge above), 648 revisions |
+| `python3 scripts/check_route_permissions.py --strict`                | ✅ 273 routes, 0 errors, 0 warnings                                  |
+| `alembic upgrade head` against a real MariaDB                        | ✅ all steps applied, including the merge revision                   |
+| `test_alembic_migrations.py` / `test_migration_create_all_tables.py` | ✅ 80 passed                                                         |
+| `pytest tests/ -q -k "training or compliance"`                       | ✅ 2024 passed, 1 pre-existing skip (`pywebpush`)                    |
+| `npm run typecheck`                                                  | ✅ 0 errors                                                          |
+| `npm run lint`                                                       | ✅ clean (exit 0)                                                    |
+
+Rotation row 17 → ✅ (pending this PR's merge). Next: Feature 18 (Training
+extended).
 
 ---
 

@@ -55,6 +55,14 @@ from app.utils.org_timezone import (
     resolve_org_today,
     scheduling_timezone,
 )
+from app.utils.positions import CANONICAL_POSITIONS
+
+
+def _covers(seats: Any, position: str) -> bool:
+    """Whether ``seats`` names ``position``, ignoring case."""
+    folded = str(position).casefold()
+    return any(str(seat).casefold() == folded for seat in seats or [])
+
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -393,7 +401,7 @@ class ShiftEligibilityService:
             if shift and administrative:
                 return self._administrative_shift_positions(shift)
             if shift and shift.open_to_all_members and can_ride:
-                return self._shift_position_list(shift)
+                return self._open_to_all_seats(shift)
 
         # ----- Step 2: Membership type gate -----
         excluded = self.get_excluded_membership_types(org)
@@ -575,9 +583,7 @@ class ShiftEligibilityService:
                 )
                 continue
             if answered_shift.open_to_all_members and can_ride:
-                answers[str(shift_id)] = sorted(
-                    set(self._shift_position_list(answered_shift))
-                )
+                answers[str(shift_id)] = self._open_to_all_seats(answered_shift)
                 continue
             if blocked:
                 answers[str(shift_id)] = []
@@ -632,7 +638,10 @@ class ShiftEligibilityService:
 
         excluded = self.get_excluded_membership_types(org)
         open_positions = self.get_open_positions(org)
-        is_open = position in open_positions
+        # Case-insensitive throughout, as ``_seats_granted`` is: a rank granting
+        # ``rescue_tech`` covers a seat typed ``Rescue_Tech``, and the roster
+        # left such a member out while signup accepted them.
+        is_open = _covers(open_positions, position)
 
         users_result = await self.db.execute(
             select(User)
@@ -665,7 +674,7 @@ class ShiftEligibilityService:
 
             rank_code = user.rank or ""
             rank_entry = rank_map.get(rank_code)
-            if position in slug_map.get(rank_code, []):
+            if _covers(slug_map.get(rank_code, []), position):
                 sources.append(
                     {
                         "type": "rank",
@@ -679,7 +688,7 @@ class ShiftEligibilityService:
 
             for qualification in qualification_map.get(str(user.id), []):
                 code = qualification["code"]
-                if position in positions_for_qualifications([code]):
+                if _covers(positions_for_qualifications([code]), position):
                     sources.append(
                         {
                             "type": "qualification",
@@ -786,7 +795,7 @@ class ShiftEligibilityService:
             if target_position is None:
                 continue
             mapped = TRAINING_POSITION_MAP.get(target_position, target_position)
-            if mapped == position:
+            if str(mapped).casefold() == str(position).casefold():
                 by_user.setdefault(str(user_id), []).append(program_name)
         return by_user
 
@@ -870,6 +879,21 @@ class ShiftEligibilityService:
                 if pos:
                     result.append(pos)
         return result
+
+    def _open_to_all_seats(self, shift: Shift) -> List[str]:
+        """Every seat an open-to-all shift offers a member who can ride.
+
+        A shift with named seats offers those. One with none offers what such
+        a shift accepts — the built-in seats, which is exactly the set
+        ``resolve_seat`` lets onto a shift that names nothing (a department's
+        own seat must be named on the shift to be filled). Returning the empty
+        seat list here instead read as "eligible for nothing", so nobody at all
+        could sign up for an open-to-all shift with no seats named.
+        """
+        named = self._shift_position_list(shift)
+        if named:
+            return sorted(set(named))
+        return sorted(CANONICAL_POSITIONS)
 
     @staticmethod
     def _seats_granted(granted: Set[str], shift_positions: Set[str]) -> Set[str]:

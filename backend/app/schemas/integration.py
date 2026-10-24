@@ -7,6 +7,7 @@ Includes per-integration-type config schemas with strict validation.
 
 import json
 import re
+from datetime import date
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -156,7 +157,6 @@ class ICalConfig(BaseModel):
     # on rotate (see the ical-feed endpoints), so a client cannot pick a
     # guessable one. Empty included_event_types means every event type.
     included_event_types: List[str] = Field(default_factory=list)
-    include_shifts: bool = False
 
 
 class CSVImportConfig(BaseModel):
@@ -317,6 +317,8 @@ class GoogleWorkspaceConfig(BaseModel):
     The service account acts as ``admin_email`` through domain-wide
     delegation; that admin needs the right to create users and, when
     ``group_emails`` is set, to manage group membership.
+    ``suspend_on_retirement`` makes retiring suspend the account too, as a
+    drop does; it applies to members who retire while it is on.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -326,6 +328,7 @@ class GoogleWorkspaceConfig(BaseModel):
     domain: str
     org_unit_path: str = "/"
     group_emails: List[str] = Field(default_factory=list)
+    suspend_on_retirement: bool = False
 
     @field_validator("service_account_key")
     @classmethod
@@ -398,6 +401,13 @@ class Microsoft365Config(BaseModel):
     assigned after creation (leave it empty for group-based licensing).
     ``groups`` takes a group's object ID or, for a Microsoft 365 group, its
     address; a security group without mail can only be named by its ID.
+    ``client_secret_expires_on`` is the date Entra ID shows beside the secret;
+    the administrators' morning email warns before it (an expired secret
+    stops every account change). Reading it from Graph would need
+    Application.Read.All, which can read every app registration in the
+    tenant, so an administrator types it in (owner decision, 2026-10-23).
+    ``suspend_on_retirement`` makes retiring block the account too, as a drop
+    does; it applies to members who retire while it is on.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -409,6 +419,8 @@ class Microsoft365Config(BaseModel):
     usage_location: str = "US"
     license_sku_id: str = ""
     groups: List[str] = Field(default_factory=list)
+    client_secret_expires_on: str = ""
+    suspend_on_retirement: bool = False
 
     @field_validator("tenant_id")
     @classmethod
@@ -462,6 +474,19 @@ class Microsoft365Config(BaseModel):
         if cleaned and not _GUID_RE.match(cleaned):
             raise ValueError("license_sku_id must be a license SKU ID (a GUID)")
         return cleaned
+
+    @field_validator("client_secret_expires_on")
+    @classmethod
+    def _check_secret_expiry(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            return ""
+        try:
+            return date.fromisoformat(cleaned).isoformat()
+        except ValueError:
+            raise ValueError(
+                "client_secret_expires_on must be a date such as 2027-06-30"
+            ) from None
 
     @field_validator("groups")
     @classmethod

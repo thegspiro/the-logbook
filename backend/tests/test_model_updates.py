@@ -18,7 +18,7 @@ import pytest
 
 from app.models.finance import Budget
 from app.models.storefront import StoreSettings
-from app.utils.model_updates import apply_updates
+from app.utils.model_updates import apply_updates, reject_null_for_required
 
 
 class TestClearingFields:
@@ -188,3 +188,35 @@ class TestSkip:
         apply_updates(budget, {"fiscal_year_id": None}, skip={"fiscal_year_id"})
 
         assert budget.fiscal_year_id == "fy1"
+
+
+class TestRejectNullForRequired:
+    """The same refusal as apply_updates, made before anything is written."""
+
+    def test_null_on_a_not_null_column_is_rejected(self):
+        settings = StoreSettings(organization_id="org1", store_name="Department Store")
+
+        with pytest.raises(ValueError, match="store_name"):
+            reject_null_for_required(settings, {"store_name": None})
+
+    def test_it_writes_nothing(self):
+        settings = StoreSettings(organization_id="org1", store_name="Department Store")
+
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            reject_null_for_required(settings, {"tagline": "New", "store_name": None})
+
+        assert settings.tagline is None
+        assert settings.store_name == "Department Store"
+
+    def test_null_on_a_nullable_column_and_real_values_pass(self):
+        settings = StoreSettings(organization_id="org1", store_name="Department Store")
+
+        reject_null_for_required(settings, {"venmo_handle": None, "store_name": "New"})
+
+    def test_a_skipped_null_is_not_checked(self):
+        settings = StoreSettings(organization_id="org1", store_name="Department Store")
+
+        reject_null_for_required(settings, {"store_name": None}, skip={"store_name"})
+
+    def test_an_unmapped_object_passes(self):
+        reject_null_for_required(SimpleNamespace(), {"anything": None})

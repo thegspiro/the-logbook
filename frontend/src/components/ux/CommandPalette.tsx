@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router';
 import {
   Search,
   Calendar,
+  CreditCard,
+  Nfc,
   Users,
   GraduationCap,
   Package,
@@ -174,6 +176,26 @@ const COMMANDS: CommandItem[] = [
     // Mirror the route gate — offering the page to anyone else just
     // navigates them into an Access Denied screen.
     anyPermission: ['locations.manage', 'facilities.manage', 'apparatus.view'],
+  },
+  {
+    id: 'card-readers',
+    label: 'Card Readers',
+    description: 'Rooms whose kiosk takes ID card taps, and how each is used',
+    path: '/locations/card-readers',
+    icon: Nfc,
+    section: 'Navigation',
+    keywords: ['nfc', 'badge', 'kiosk', 'reader', 'tap'],
+    anyPermission: ['locations.manage', 'facilities.manage', 'locations.manage_nfc_tags'],
+  },
+  {
+    id: 'member-id-cards',
+    label: 'Member ID Cards',
+    description: 'Every NFC ID card, who is missing one, and the tap log',
+    path: '/members/admin/id-cards',
+    icon: CreditCard,
+    section: 'Navigation',
+    keywords: ['nfc', 'badge', 'card', 'tap', 'credential'],
+    permission: 'members.manage_id_cards',
   },
   {
     id: 'documents',

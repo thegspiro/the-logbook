@@ -13,6 +13,7 @@ const mockGetItemLots = vi.fn();
 const mockGetStorageOptions = vi.fn();
 const mockGetItemPlacements = vi.fn();
 const mockCheckPermission = vi.fn();
+const mockGetRecalls = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
   medicalSuppliesService: {
@@ -25,6 +26,7 @@ vi.mock('../../../services/medicalSuppliesService', () => ({
     getItemLots: (...args: unknown[]) => mockGetItemLots(...args) as unknown,
     getStorageOptions: (...args: unknown[]) => mockGetStorageOptions(...args) as unknown,
     getItemPlacements: (...args: unknown[]) => mockGetItemPlacements(...args) as unknown,
+    getRecalls: (...args: unknown[]) => mockGetRecalls(...args) as unknown,
   },
 }));
 
@@ -140,7 +142,9 @@ describe('MedicalSuppliesPage', () => {
       mockGetStorageOptions,
       mockGetItemPlacements,
       mockIsModuleOn,
+      mockGetRecalls,
     ].forEach((mock) => mock.mockReset());
+    mockGetRecalls.mockResolvedValue([]);
     mockCheckPermission.mockReturnValue(false);
     mockIsModuleOn.mockReturnValue(true);
     mockGetSummary.mockResolvedValue(summary);
@@ -183,6 +187,105 @@ describe('MedicalSuppliesPage', () => {
       renderWithRouter(<MedicalSuppliesPage />);
 
       expect(await screen.findByText('Oxygen Mask, Non-Rebreather — Pediatric')).toBeInTheDocument();
+    });
+
+    it('lists the lots under recall on the Expiring tab', async () => {
+      mockGetRecalls.mockResolvedValue([
+        {
+          id: 'r-1',
+          inventory_item_id: 'item-1',
+          item_name: '4x4 Gauze',
+          lot_number: 'GZ-24117',
+          reason: 'Sterility breach',
+          recalled_at: '2026-10-20T12:00:00Z',
+          units_on_shelf: 6,
+          units_aboard: 3,
+        },
+      ]);
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      const panel = await screen.findByRole('region', { name: 'Recalled lots' });
+      expect(within(panel).getByRole('row', { name: /GZ-24117/ })).toHaveTextContent('6 shelf · 3 on trucks');
+      // Read past the cache: a recall just recorded must show at once.
+      expect(mockGetRecalls).toHaveBeenCalledWith(false, { bypassCache: true });
+    });
+
+    it('shows how many supplies wait on a count on the tab itself', async () => {
+      mockGetSummary.mockResolvedValue({ ...summary, uncounted_on_apparatus: 3 });
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      expect(await screen.findByRole('tab', { name: 'Not yet counted (3)' })).toBeInTheDocument();
+    });
+
+    it('widens the expiring window for the list and the tiles together', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await screen.findByRole('button', { name: 'Show 3 lots expiring within 30 days' });
+      mockGetSummary.mockResolvedValue({ ...summary, expiring_within_days: 90 });
+
+      await userEvent.selectOptions(screen.getByLabelText('Look ahead'), '90');
+
+      await waitFor(() => expect(mockGetExpiringStock).toHaveBeenLastCalledWith(90, undefined));
+      expect(mockGetSummary).toHaveBeenLastCalledWith(90, undefined);
+      expect(await screen.findByText('Expiring within 90 days')).toBeInTheDocument();
+    });
+
+    describe('the Not yet counted view', () => {
+      const uncountedRow = item({
+        name: 'Gauze',
+        apparatus_uncounted: 2,
+        apparatus_uncounted_places: [
+          { template_item_id: 'ti-3', apparatus_id: 'app-3', where: 'Medic 3 › Main Compartment › Jump Bag' },
+          { template_item_id: 'ti-4', apparatus_id: null, where: 'Any Ambulance › Jump Bag' },
+        ],
+        apparatus_places: ['Medic 1 › Jump Bag'],
+      });
+
+      beforeEach(() => {
+        mockGetItems.mockResolvedValue({ items: [uncountedRow], total: 1, skip: 0, limit: 200 });
+      });
+
+      it('asks the server for the supplies with uncounted positions', async () => {
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        await userEvent.click(await screen.findByRole('tab', { name: 'Not yet counted' }));
+
+        await waitFor(() => expect(lastItemsQuery()).toMatchObject({ uncounted: true, skip: 0 }));
+        expect(await screen.findByRole('region', { name: 'Supplies not yet counted' })).toBeInTheDocument();
+        await userEvent.click(screen.getByRole('tab', { name: 'All supplies' }));
+        await waitFor(() => expect(lastItemsQuery()['uncounted']).toBeUndefined());
+      });
+
+      it('names each uncounted position and links the truck that has one', async () => {
+        mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
+        renderWithRouter(<MedicalSuppliesPage />);
+        await userEvent.click(await screen.findByRole('tab', { name: 'Not yet counted' }));
+
+        const places = await screen.findByRole('list', { name: 'Uncounted positions for Gauze' });
+        expect(places).toHaveTextContent('Medic 3 › Main Compartment › Jump Bag');
+        expect(places).toHaveTextContent('Any Ambulance › Jump Bag');
+        // Only those positions here, not every place that carries it.
+        expect(screen.queryByText('Medic 1 › Jump Bag')).not.toBeInTheDocument();
+        const links = within(places).getAllByRole('link', { name: /^Count Gauze at/ });
+        // A checklist for an apparatus type has no single truck to open.
+        expect(links).toHaveLength(1);
+        expect(links[0]).toHaveAttribute('href', '/inventory/checklists/apparatus-inventory?apparatus=app-3');
+      });
+
+      it('offers no link without a grant the apparatus inventory admits', async () => {
+        renderWithRouter(<MedicalSuppliesPage />);
+        await userEvent.click(await screen.findByRole('tab', { name: 'Not yet counted' }));
+
+        await screen.findByRole('list', { name: 'Uncounted positions for Gauze' });
+        expect(screen.queryByRole('link', { name: /^Count Gauze/ })).not.toBeInTheDocument();
+      });
+
+      it('says everything is counted rather than that the catalog is empty', async () => {
+        mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
+        renderWithRouter(<MedicalSuppliesPage />);
+        await userEvent.click(await screen.findByRole('tab', { name: 'Not yet counted' }));
+
+        expect(await screen.findByText('Everything aboard has been counted')).toBeInTheDocument();
+      });
     });
 
     it('opens the Low stock tab from its tile, and All supplies clears the filter', async () => {
@@ -945,6 +1048,18 @@ describe('MedicalSuppliesPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: /^Item/ }));
       await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'name', sort_order: 'asc' }));
+    });
+
+    it('sorts by next expiry on the server, shelf and trucks together', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('button', { name: /Next expiry/ }));
+      await waitFor(() =>
+        expect(lastItemsQuery()).toMatchObject({ sort_by: 'next_expiry', sort_order: 'asc', skip: 0 })
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: /Next expiry/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'next_expiry', sort_order: 'desc' }));
     });
 
     it('retires the ticked supplies in one request after confirmation', async () => {

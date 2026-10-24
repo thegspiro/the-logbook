@@ -138,8 +138,8 @@ class MembershipPipeline(Base):
     conversion_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )
-    public_status_enabled: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False
+    public_status_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
     )
     # Off: the public status page lists only completed stages, and withholds
     # the stage total — a count alone tells the applicant how much is left.
@@ -234,10 +234,12 @@ class MembershipPipelineStep(Base):
     inactivity_timeout_days: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )
-    notify_prospect_on_completion: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False
+    notify_prospect_on_completion: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
     )
-    public_visible: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    public_visible: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

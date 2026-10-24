@@ -109,6 +109,11 @@ class PurchaseRequestStatus(str, enum.Enum):
     ORDERED = "ordered"
     RECEIVED = "received"
     PAID = "paid"
+    # Bought by the requester with their own money and paid back through an
+    # expense report (``ExpenseReport.purchase_request_id``). The report's
+    # lines carry the spend, so a reimbursed request counts as neither spent
+    # nor committed anywhere -- counting it too would book the purchase twice.
+    REIMBURSED = "reimbursed"
     CANCELLED = "cancelled"
 
 
@@ -1206,6 +1211,16 @@ class ExpenseReport(Base):
     advance_applied: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(12, 2), nullable=True
     )
+    # The approved purchase request the member bought themselves and this
+    # report claims back. Paying the report closes the request as
+    # ``reimbursed`` and releases its encumbrance; until then the request's
+    # estimate stays encumbered (app/services/finance_reimbursement.py).
+    purchase_request_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("purchase_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # When the member submitted the report. Null on reports submitted before
     # this was recorded (2026-10-12).
     submitted_at: Mapped[Optional[datetime]] = mapped_column(
@@ -1255,10 +1270,13 @@ class ExpenseReport(Base):
     approver: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[approved_by]
     )
+    # Ordered so a report's lines keep their places on screen as one is
+    # edited or removed; unordered, the database returned them in any order.
     line_items: Mapped[list["ExpenseLineItem"]] = relationship(
         "ExpenseLineItem",
         back_populates="expense_report",
         cascade="all, delete-orphan",
+        order_by="(ExpenseLineItem.created_at, ExpenseLineItem.id)",
     )
 
     __table_args__ = (
@@ -1392,6 +1410,19 @@ class CheckRequest(Base):
     is_advance: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    # The approved expense report this check reimburses the member for. Like
+    # an advance it charges no budget line or fund -- the report's lines do --
+    # and issuing it is what pays the report. Fixed at creation
+    # (app/services/finance_reimbursement.py). ``use_alter``: with
+    # ``ExpenseReport.advance_id`` pointing back here the two tables reference
+    # each other, so this key is added after both exist and left out of
+    # metadata's table ordering, which the member-deletion sweep relies on.
+    expense_report_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("expense_reports.id", ondelete="SET NULL", use_alter=True),
+        nullable=True,
+        index=True,
+    )
     payee_name: Mapped[str] = mapped_column(String(300), nullable=False)
     payee_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -1448,6 +1479,12 @@ class CheckRequest(Base):
     qb_export_offset_account: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
     )
+    # A reimbursement check's whole journal entry as exported, one
+    # ``[account, debit, credit, description]`` per row: its report's lines go
+    # to several accounts, so the two columns above cannot hold it. A void is
+    # reversed from this, never re-derived from mappings that may have moved.
+    # Written once by the export and never mutated in place.
+    qb_export_entry: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # When a reversing entry for the void was exported, and in which export.
     qb_void_exported_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True

@@ -184,10 +184,14 @@ export interface EmailServiceSettings {
 
 export interface FileStorageSettings {
   platform: string;
-  // Google Drive
-  google_drive_client_id?: string;
-  google_drive_client_secret?: string;
+  // Google Drive: a service account writing to a Shared Drive
+  google_drive_service_account_key?: string;
+  google_drive_shared_drive_id?: string;
   google_drive_folder_id?: string;
+  /** Unused since Google Drive signs in with a service account. */
+  google_drive_client_id?: string;
+  /** Unused since Google Drive signs in with a service account. */
+  google_drive_client_secret?: string;
   // OneDrive / SharePoint
   onedrive_tenant_id?: string;
   onedrive_client_id?: string;
@@ -212,11 +216,22 @@ export interface FileStorageSettings {
  */
 export interface FileStorageStatus {
   platform: string;
-  new_files_go_to: 'local' | 's3';
+  /** Null when the saved platform is not one this installation can connect to. */
+  platform_label: string | null;
+  platform_short_label: string | null;
+  container_noun: string | null;
+  container: string | null;
+  platform_connectable: boolean;
+  /** The platforms this installation can switch files to, by label. */
+  available_platforms: string[];
+  /** `'local'`, or the remote platform's setting value (such as `'s3'`). */
+  new_files_go_to: string;
+  location: Record<string, unknown>;
   bucket: string | null;
   endpoint_url: string | null;
   activated_at: string | null;
   changed_since_test: boolean;
+  problem: string | null;
   s3_problem: string | null;
   private_endpoints_allowed: boolean;
 }

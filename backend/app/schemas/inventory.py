@@ -503,6 +503,16 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+class UncountedPosition(BaseModel):
+    """A truck position whose stock is assumed at target: nobody counted it."""
+
+    template_item_id: str
+    # The vehicle, when the checklist names one; None for a template written
+    # for an apparatus type, which has no single truck to open.
+    apparatus_id: Optional[str] = None
+    where: str
+
+
 class MedicalExpiringStockRow(BaseModel):
     """A medical supply expiring soon, on a shelf or aboard an apparatus.
 
@@ -526,6 +536,53 @@ class MedicalExpiringStockRow(BaseModel):
     days_until_expiration: Optional[int] = None
     quantity: int = 0
     where: Optional[str] = None
+    # Under an active recall of its lot number: pull it, whatever its date.
+    recalled: bool = False
+
+
+class LotRecallCreate(BaseModel):
+    """Record a manufacturer's recall of one lot number of one supply."""
+
+    inventory_item_id: str = Field(..., min_length=1, max_length=36)
+    lot_number: str = Field(..., min_length=1, max_length=100)
+    reason: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("lot_number")
+    @classmethod
+    def _lot_number_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Enter the recalled lot number")
+        return value.strip()
+
+
+class LotRecallLift(BaseModel):
+    """Why a recall no longer applies (entered in error, or cleared)."""
+
+    note: str = Field(..., min_length=1, max_length=1000)
+
+    @field_validator("note")
+    @classmethod
+    def _note_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Say why the recall is lifted")
+        return value.strip()
+
+
+class LotRecallResponse(BaseModel):
+    """A recall, with what of the lot is still to be pulled."""
+
+    id: str
+    inventory_item_id: str
+    item_name: Optional[str] = None
+    item_size: Optional[str] = None
+    lot_number: str
+    reason: Optional[str] = None
+    recalled_at: Optional[datetime] = None
+    lifted_at: Optional[datetime] = None
+    lift_note: Optional[str] = None
+    # Units still carrying the number: in the stock room, and aboard trucks.
+    units_on_shelf: int = 0
+    units_aboard: int = 0
 
 
 class MedicalStorageRoom(BaseModel):
@@ -867,6 +924,9 @@ class InventoryItemResponse(InventoryItemBase):
     # Medical supply list only.
     apparatus_stock: Optional[int] = None
     apparatus_uncounted: Optional[int] = None
+    # The positions behind apparatus_uncounted, named as the checklist names
+    # them, with the vehicle to open to count each. Medical supply list only.
+    apparatus_uncounted_places: Optional[List[UncountedPosition]] = None
     is_low_stock: Optional[bool] = None
 
     # The requesting member's own pin position, 0-based, or null when they

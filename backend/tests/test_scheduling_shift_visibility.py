@@ -28,7 +28,10 @@ def _department_today(monkeypatch):
 
 @pytest.fixture
 def shifts():
-    return [SimpleNamespace(id="ordinary"), SimpleNamespace(id="admin")]
+    return [
+        SimpleNamespace(id="ordinary", shift_officer_id=None),
+        SimpleNamespace(id="admin", shift_officer_id=None),
+    ]
 
 
 async def test_member_list_omits_shifts_without_eligible_positions(monkeypatch, shifts):
@@ -40,7 +43,47 @@ async def test_member_list_omits_shifts_without_eligible_positions(monkeypatch, 
         bulk,
     )
     user = SimpleNamespace(id="member", organization_id="org")
-    service = SimpleNamespace(db=object())
+    service = SimpleNamespace(
+        db=object(), member_seated_shift_ids=AsyncMock(return_value=set())
+    )
+
+    visible = await scheduling._member_visible_shifts(service, user, shifts)
+
+    assert visible == [shifts[1]]
+
+
+async def test_member_list_keeps_a_shift_they_are_seated_on(monkeypatch, shifts):
+    # Seated by an officer or a pattern, or a qualification lapsed after they
+    # were seated: not eligible to sign up, but the shift is still theirs, and
+    # its detail page already opens for them.
+    monkeypatch.setattr(scheduling, "user_has_permission", lambda *_args: False)
+    monkeypatch.setattr(
+        scheduling.ShiftEligibilityService,
+        "get_eligible_positions_bulk",
+        AsyncMock(return_value={"ordinary": [], "admin": []}),
+    )
+    user = SimpleNamespace(id="member", organization_id="org")
+    service = SimpleNamespace(
+        db=object(), member_seated_shift_ids=AsyncMock(return_value={"ordinary"})
+    )
+
+    visible = await scheduling._member_visible_shifts(service, user, shifts)
+
+    assert visible == [shifts[0]]
+
+
+async def test_member_list_keeps_a_shift_they_are_the_officer_of(monkeypatch, shifts):
+    monkeypatch.setattr(scheduling, "user_has_permission", lambda *_args: False)
+    monkeypatch.setattr(
+        scheduling.ShiftEligibilityService,
+        "get_eligible_positions_bulk",
+        AsyncMock(return_value={"ordinary": [], "admin": []}),
+    )
+    shifts[1].shift_officer_id = "member"
+    user = SimpleNamespace(id="member", organization_id="org")
+    service = SimpleNamespace(
+        db=object(), member_seated_shift_ids=AsyncMock(return_value=set())
+    )
 
     visible = await scheduling._member_visible_shifts(service, user, shifts)
 
@@ -73,9 +116,28 @@ async def test_member_pagination_happens_after_visibility_filter(monkeypatch, sh
     )
     # SchedulingService imports the same class locally on this path.
     service = SchedulingService(db)
+    service.member_seated_shift_ids = AsyncMock(return_value=set())
     user = SimpleNamespace(id="member", organization_id="org")
 
     page, total = await service.get_member_visible_shifts(user, "org", skip=0, limit=1)
+
+    assert page == [shifts[1]]
+    assert total == 1
+
+
+async def test_member_service_list_keeps_a_seated_shift(monkeypatch, shifts):
+    result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: shifts))
+    db = SimpleNamespace(execute=AsyncMock(return_value=result))
+    monkeypatch.setattr(
+        scheduling.ShiftEligibilityService,
+        "get_eligible_positions_bulk",
+        AsyncMock(return_value={"ordinary": [], "admin": []}),
+    )
+    service = SchedulingService(db)
+    service.member_seated_shift_ids = AsyncMock(return_value={"admin"})
+    user = SimpleNamespace(id="member", organization_id="org")
+
+    page, total = await service.get_member_visible_shifts(user, "org")
 
     assert page == [shifts[1]]
     assert total == 1
@@ -140,8 +202,10 @@ class TestCandidateWindowIsBounded:
             AsyncMock(return_value={"ordinary": [], "admin": ["support"]}),
         )
         user = SimpleNamespace(id="member", organization_id="org")
+        service = SchedulingService(db)
+        service.member_seated_shift_ids = AsyncMock(return_value=set())
 
-        await SchedulingService(db).get_member_visible_shifts(user, "org")
+        await service.get_member_visible_shifts(user, "org")
 
         bounds = sorted(
             value

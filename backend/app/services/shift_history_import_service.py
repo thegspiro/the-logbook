@@ -59,6 +59,7 @@ from app.models.training import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.services import shift_history_import_engine as engine
+from app.services.pre_shift_work_service import PreShiftWorkService
 from app.services.scheduling_service import SchedulingService
 from app.utils.org_timezone import scheduling_timezone
 from app.utils.positions import (
@@ -562,7 +563,16 @@ class ShiftHistoryImportService:
         result = await self.db.execute(
             select(ExternalShiftHours).where(
                 ExternalShiftHours.organization_id == str(organization_id),
-                ExternalShiftHours.status == ExternalShiftHoursStatus.COUNTED.value,
+                # A rejected entry counts as existing too. Matching only
+                # counted ones let a later file covering the same dates
+                # recreate an entry an officer had rejected, silently undoing
+                # the rejection.
+                ExternalShiftHours.status.in_(
+                    [
+                        ExternalShiftHoursStatus.COUNTED.value,
+                        ExternalShiftHoursStatus.REJECTED.value,
+                    ]
+                ),
                 ExternalShiftHours.shift_date >= span[0],
                 ExternalShiftHours.shift_date <= span[1],
             )
@@ -1104,22 +1114,19 @@ class ShiftHistoryImportService:
     ) -> None:
         """Keep a finalized shift's stored totals agreeing with its rows.
 
-        ``total_hours`` is the sum of attendance, as ``finalize_shift`` takes
-        it. ``call_count`` is the shift's calls, not a sum over the crew —
+        ``total_hours`` is attendance plus approved pre-shift work, the same
+        snapshot ``finalize_shift`` takes — recomputing it from attendance
+        alone dropped an existing shift's approved prep time from its total
+        whenever an import added crew to it. ``call_count`` is the shift's calls, not a sum over the crew —
         four members on one call is one call — so the best a per-member file
         can say is the largest count any one member logged. An existing
         shift's call count is left alone when it already has one.
         """
         if not shift.is_finalized:
             return
-        total = (
-            await self.db.execute(
-                select(
-                    func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0)
-                ).where(ShiftAttendance.shift_id == shift.id)
-            )
-        ).scalar() or 0
-        shift.total_hours = round(float(total) / 60.0, 1) if total > 0 else 0.0
+        shift.total_hours = await PreShiftWorkService(self.db).shift_total_hours(
+            str(shift.id)
+        )
         if shift.call_count is None:
             counts = [a.call_count for a in imported if a.call_count is not None]
             if counts:

@@ -504,6 +504,78 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A department can keep its files in a Google Shared Drive (2026-10-23)
+
+Google Drive under **Organization Settings > Storage** (and in onboarding) now
+works, the same way as S3. **Nothing moves on upgrade**: new files go to the
+drive only after an administrator presses **Test and switch to Google Drive**.
+
+- The screen now asks for a **service account key** (the JSON file Google
+  Cloud downloads) and a **Shared Drive ID**, plus an optional folder. Add
+  the service account to the Shared Drive as a **Content manager**, and
+  enable the Google Drive API in its Google Cloud project. Shared Drives need
+  Google Workspace.
+- The old OAuth client ID and secret fields were never read. A department
+  that filled them in has to enter the service-account details instead; the
+  saved values are left where they are and ignored.
+- Files are encrypted before upload, a drive that cannot be reached refuses
+  uploads (`LB-UPLD-006`), and `scripts/migrate_uploads_to_s3.py` already
+  moves existing files to whichever remote platform a department has
+  switched to, Google Drive included. `encrypt_uploads.py --rewrap` and the
+  `backup.sh` notice cover Drive too.
+- The server needs outbound HTTPS to `www.googleapis.com` and
+  `oauth2.googleapis.com`.
+
+### An explicit `null` for an on/off or count setting is refused with a 400 (2026-10-23)
+
+Migration `6dce1364ff7e` makes 99 columns `NOT NULL` with defaults. They are
+mostly on/off settings, counts, statuses and timestamps, across 36 tables,
+including training module configuration, inventory items and categories,
+shift templates and users. Which databases it touches:
+
+- **An installation that has been upgraded through the migrations** already had
+  these constraints. The migration finds nothing to change and finishes at once.
+- **An installation first set up from the models** (a fresh install) is
+  changed. Any stored `NULL` in one of these columns is set to the column's
+  default, and each affected table is rebuilt once to add the constraint. On a
+  large `inventory_items` or `checkout_records` table the rebuild takes longer
+  and the backend starts after it finishes. Back up first, as for every
+  upgrade.
+
+What you will notice afterwards: an API request that sends `null` for one of
+these fields gets a **400** naming the field ("Field 'quantity' cannot be
+cleared"). Before, an upgraded installation failed the same request with a 500
+and a fresh install stored the NULL. The app's own screens do not send these
+nulls. A script or integration that does should leave the field out instead.
+
+The downgrade does nothing on purpose: upgraded installations always had these
+constraints.
+
+### Former members' ID cards show as Suspended, and card taps are logged (2026-10-23)
+
+Only affects departments that have turned on **NFC ID Cards** under
+Settings → Integrations.
+
+- **The migration suspends cards held by former members.** Any card still
+  marked Active whose holder is inactive, suspended, dropped, archived or
+  deleted becomes **Suspended**, with the reason "Suspended automatically: the
+  card holder is no longer an active member". Those cards were already refused
+  at every reader, so nobody loses a working card; the card's status simply
+  stops reading Active. Retired and on-leave members keep working cards.
+- **From now on this happens on every status change.** A member who leaves
+  has their active cards suspended; if they return to active or probationary,
+  only the cards the system suspended come back. A card an officer suspended
+  by hand, or a lost or revoked card, stays as it is.
+- **Every tap at a check-in station or room kiosk is recorded**, refused taps
+  included, for the new **Member ID Cards** page (`/members/admin/id-cards`,
+  needs `members.manage_id_cards`). History starts at the upgrade; nothing
+  earlier was recorded. Taps are deleted after **24 months** by a nightly task
+  (`nfc_card_tap_purge`). A department can change that on the page's Settings
+  tab, from 3 to 84 months.
+
+Rolling back with `alembic downgrade a0195b397bf3` returns every automatically suspended card to Active — their
+taps are still refused by the member-status check — and drops the tap log.
+
 ### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
 
 Nothing runs on upgrade. Three operator commands, all inside the backend
@@ -564,6 +636,68 @@ What an operator needs to know:
   the volume that time is truncated to noon of the day so an anonymous
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
+
+### Backups can be encrypted (2026-10-23)
+
+Backups were plaintext. They can now be encrypted, and **nothing changes until
+you create a key**: with no key the nightly backup runs as before, logs a
+warning every run, and administrators see a critical "Backups are not
+encrypted" notice. No migration; no restart is needed to keep working.
+
+To turn it on, on the host in the install directory:
+
+1. `./scripts/backup-keygen.sh`. It writes `backup-keys/` (Unraid:
+   `/mnt/user/appdata/the-logbook/backup-keys`), prints a private key **once**
+   and asks you to confirm you stored it away from the server. **Store the
+   private key and a copy of `backup-keys/backup-drill.key` somewhere other
+   than this server and its backups. With both lost, encrypted backups cannot
+   be recovered.**
+2. Production compose only: `docker compose ... up -d backup backend` so the
+   sidecar mounts `./backup-keys` and the backend can read the sidecar's status
+   (the backend now mounts the `backups` volume read-only). Unraid users
+   re-apply the compose file (the key directory and `BACKUP_ENCRYPT_EXISTING`
+   are new).
+3. The next nightly run writes `.tar.gz.enc` + `.enc.key` + `.sha256` instead
+   of `.tar.gz`, and then **encrypts the plaintext archives already in the
+   backups directory and deletes the plaintext** after decrypting each copy and
+   comparing it with the original. Set `BACKUP_ENCRYPT_EXISTING=false` to keep
+   them.
+
+Things that change once a key exists:
+
+- **Backup files are three files, not one.** Anything that copies the backups
+  directory offsite must copy the `.enc`, `.enc.key` and `.sha256`.
+- **`backup.sh --destination s3|azure|gcs` now refuses to upload an
+  unencrypted archive** (before, it uploaded whatever it made). Create a key
+  first, or the offsite step fails.
+- Restoring an encrypted archive needs the drill key or the offline private key
+  (`backup.sh --restore FILE.enc [--drill-key F | --private-key F]`). Plaintext
+  archives restore as before.
+
+Full details: [BACKUP.md](./BACKUP.md#encrypted-backups).
+
+### Administrators must use two-factor authentication, and sensitive actions ask you to confirm (2026-10-23)
+
+Adds a migration (`users.mfa_grace_started_at`, `sessions.stepup_verified_at`, both
+nullable and applied by the normal startup). **Nothing is blocked on upgrade day.**
+
+- **Privileged members get 14 days.** A member holding administration or health-record
+  permissions (the fire, deputy and assistant chiefs, president, secretary, membership
+  coordinator and IT manager in the seeded positions; the full list is on the
+  Security-Authentication wiki page) has 14 days from the first request after the
+  upgrade to enroll in two-factor authentication. They are emailed once and see a
+  banner. After that they can reach only the setup screens. Change the period with
+  `MFA_GRACE_DAYS` (`0` closes it at once). **Make sure the IT manager has saved their
+  recovery codes first**: they hold `*`, and recovery codes are their only way back
+  from a lost authenticator.
+- **Sensitive actions ask for a code (or password).** Exports of the audit and error
+  logs, security and role changes, positions assignment, IP and integration changes,
+  administrator password/MFA resets and deleting or anonymizing a member now need a
+  re-verification within the last 10 minutes (`STEPUP_WINDOW_MINUTES`). The app
+  prompts and repeats the action. **Scripts calling these endpoints directly** must
+  `POST /auth/step-up` first on the same session, or they receive `403 LB-AUTH-013`.
+- **Single-sign-on-only accounts without MFA cannot step up** and are told to enroll
+  in MFA; they must anyway once their grace period ends.
 
 ### Station kiosks can stay signed in for a week (2026-10-21)
 

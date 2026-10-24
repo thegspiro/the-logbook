@@ -45,7 +45,6 @@ import {
   CalendarPlus,
   CheckCircle,
   ChevronDown,
-  ChevronLeft,
   ClipboardCheck,
   Clock,
   EllipsisVertical,
@@ -61,6 +60,7 @@ import {
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
@@ -87,6 +87,9 @@ import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { formatHoursExact } from '../utils/hoursFormatting';
 import { CREDITED_HOURS_BASIS } from '../components/events/creditedHours';
+import { EventCardTapsCard } from '../components/event-detail/EventCardTapsCard';
+import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
+import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 
 /**
  * `custom_fields` keys that are not custom fields.
@@ -265,6 +268,9 @@ export const EventDetailPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
+  // Card taps are shown to event managers; the integration only decides
+  // whether an event with none yet still gets an (empty) section.
+  const { isConnected: isIntegrationConnected } = useConnectedIntegrations({ enabled: canManage });
   // Deliberately a separate grant from events.manage: whoever closed the event
   // should not also be able to quietly reopen it and move the numbers.
   const canReopenAttendance = checkPermission('events.reopen_attendance');
@@ -1008,22 +1014,12 @@ export const EventDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
-
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            to="/events"
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center text-sm"
-          >
-            <ChevronLeft className="mr-1 h-5 w-5" aria-hidden="true" />
-            Back to Events
-          </Link>
-
-          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
-            <div className="min-w-0">
-              <h1 className="text-theme-text-primary text-2xl font-bold wrap-break-word sm:text-3xl">{event.title}</h1>
-              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <EventsPageHeader
+          icon={Calendar}
+          title={event.title}
+          subtitle={
+            <>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <EventTypeBadge type={event.event_type} size="sm" />
                 {event.is_draft && (
                   <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-500/20 dark:text-gray-300">
@@ -1061,10 +1057,13 @@ export const EventDetailPage: React.FC = () => {
                   timezone={tz}
                 />
               )}
-            </div>
-
-            {!event.is_cancelled && (
-              <div className="flex flex-wrap gap-2 sm:gap-3">
+            </>
+          }
+          actions={
+            event.is_cancelled ? undefined : (
+              // Capped so the actions wrap onto a second row rather than
+              // squeezing the event's name into a narrow column beside them.
+              <div className="flex flex-wrap gap-2 sm:max-w-xl sm:justify-end sm:gap-3">
                 {/* Primary actions — always visible */}
                 {event.is_draft && canManage && (
                   <button
@@ -1349,9 +1348,9 @@ export const EventDetailPage: React.FC = () => {
                   </>
                 )}
               </div>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Main Content */}
@@ -1749,6 +1748,13 @@ export const EventDetailPage: React.FC = () => {
                 onPrintRoster={printRoster}
                 onExportCSV={exportAttendanceCSV}
                 attendanceFinalized={isAttendanceFinalized}
+              />
+            )}
+            {canManage && eventId && (
+              <EventCardTapsCard
+                eventId={eventId}
+                tz={tz}
+                cardsEnabled={isIntegrationConnected(NFC_ID_CARDS_INTEGRATION)}
               />
             )}
             {/* The member-facing counterpart. Managers are excluded rather

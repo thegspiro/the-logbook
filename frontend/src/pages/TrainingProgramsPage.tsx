@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { trainingProgramService, trainingService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
-import { Breadcrumbs } from '../components/ux/Breadcrumbs';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import RegistryImportModal from './RegistryImportModal';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -286,66 +286,66 @@ const TrainingProgramsPage: React.FC = () => {
             registry's own label and gate: a member without training.manage
             does not see it, and it can no longer drift from the hub's name —
             this trail used to call the page "Admin". */}
-        <Breadcrumbs underHub="/training/admin" />
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-              <GraduationCap className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
-              <span>Training Programs</span>
-            </h1>
-            <p className="text-theme-text-muted mt-2">
-              {canManage
-                ? 'Build programs, import requirements, and track member progress'
-                : "Your department's training programs and what each one covers"}
-            </p>
-          </div>
-
-          {/* Every action in this header creates a program or a requirement,
+        <TrainingPageHeader
+          icon={GraduationCap}
+          title="Training Programs"
+          subtitle={
+            canManage
+              ? 'Build programs, import requirements, and track member progress'
+              : "Your department's training programs and what each one covers"
+          }
+          underHub="/training/admin"
+          actions={
+            canManage && visibleTab !== 'templates' ? (
+              <>
+                {/* Every action in this header creates a program or a requirement,
               and each one is training.manage-gated on the backend. Members get
               the read-only view rather than affordances that 403 on use. */}
-          {canManage && visibleTab === 'programs' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                ref={importFileRef}
-                type="file"
-                accept=".json"
-                onChange={(e) => {
-                  void handleImportProgram(e);
-                }}
-                className="hidden"
-                aria-label="Import pipeline JSON file"
-              />
-              <button
-                onClick={() => importFileRef.current?.click()}
-                className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
-              >
-                <Upload className="h-5 w-5" aria-hidden="true" />
-                <span>Import</span>
-              </button>
-              <button
-                onClick={() => void navigate('/training/programs/new')}
-                className="btn-primary flex items-center space-x-2"
-              >
-                <Plus className="h-5 w-5" aria-hidden="true" />
-                <span>New Pipeline</span>
-              </button>
-            </div>
-          )}
+                {canManage && visibleTab === 'programs' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={importFileRef}
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => {
+                        void handleImportProgram(e);
+                      }}
+                      className="hidden"
+                      aria-label="Import pipeline JSON file"
+                    />
+                    <button
+                      onClick={() => importFileRef.current?.click()}
+                      className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+                    >
+                      <Upload className="h-5 w-5" aria-hidden="true" />
+                      <span>Import</span>
+                    </button>
+                    <button
+                      onClick={() => void navigate('/training/programs/new')}
+                      className="btn-primary flex items-center space-x-2"
+                    >
+                      <Plus className="h-5 w-5" aria-hidden="true" />
+                      <span>New Pipeline</span>
+                    </button>
+                  </div>
+                )}
 
-          {canManage && visibleTab === 'requirements' && (
-            <button
-              onClick={() => {
-                setEditingRequirement(null);
-                setShowRequirementModal(true);
-              }}
-              className="btn-primary flex items-center space-x-2"
-            >
-              <Plus className="h-5 w-5" aria-hidden="true" />
-              <span>New Requirement</span>
-            </button>
-          )}
-        </div>
+                {canManage && visibleTab === 'requirements' && (
+                  <button
+                    onClick={() => {
+                      setEditingRequirement(null);
+                      setShowRequirementModal(true);
+                    }}
+                    className="btn-primary flex items-center space-x-2"
+                  >
+                    <Plus className="h-5 w-5" aria-hidden="true" />
+                    <span>New Requirement</span>
+                  </button>
+                )}
+              </>
+            ) : undefined
+          }
+        />
 
         {/* Tabs. Requirements and Templates are manager-only views, so a member
             sees the Programs list on its own with no strip above it. */}

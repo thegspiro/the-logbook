@@ -970,6 +970,15 @@ export interface InventoryCategory {
   item_count?: number | null;
 }
 
+/** A truck position whose stock is assumed at its target, because no crew has counted it. */
+export interface UncountedPosition {
+  template_item_id: string;
+  /** The vehicle to open to count it; null for a checklist written for an apparatus type. */
+  apparatus_id: string | null;
+  /** As the checklist names it: "Medic 3 › Main Compartment › Jump Bag". */
+  where: string;
+}
+
 export interface InventoryItem {
   id: string;
   organization_id: string;
@@ -1049,6 +1058,8 @@ export interface InventoryItem {
   /** In-date units on the trucks, and how many positions entered it uncounted (at their target). Medical list only. */
   apparatus_stock?: number | null;
   apparatus_uncounted?: number | null;
+  /** The positions behind `apparatus_uncounted`, and the apparatus to open to count each. Medical list only. */
+  apparatus_uncounted_places?: UncountedPosition[] | null;
   /** At or below the reorder point on shelf plus trucks — the server's call. Medical list only. */
   is_low_stock?: boolean | null;
   last_inspection_date?: string;

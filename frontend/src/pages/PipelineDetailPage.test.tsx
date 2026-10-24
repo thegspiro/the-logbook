@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import toast from 'react-hot-toast';
@@ -24,6 +24,7 @@ const mockDeleteProgramPhase = vi.fn();
 const mockDeleteProgram = vi.fn();
 const mockReopenEnrollment = vi.fn();
 const mockGetPrograms = vi.fn();
+const mockCompleteEnrollment = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -45,13 +46,20 @@ vi.mock('../services/api', () => ({
     deleteProgram: (...a: unknown[]) => mockDeleteProgram(...a) as unknown,
     reopenEnrollment: (...a: unknown[]) => mockReopenEnrollment(...a) as unknown,
     getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
+    completeEnrollment: (...a: unknown[]) => mockCompleteEnrollment(...a) as unknown,
   },
 }));
 
 // Grant training.manage so officer-only controls (the Required toggle) render.
 let mockHasPermission = true;
+// Set to grant exactly these permissions instead of the blanket answer above.
+let mockPermissions: string[] | null = null;
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: (selector: (s: unknown) => unknown) => selector({ checkPermission: () => mockHasPermission }),
+  useAuthStore: (selector: (s: unknown) => unknown) =>
+    selector({
+      checkPermission: (permission: string) =>
+        mockPermissions ? mockPermissions.includes(permission) : mockHasPermission,
+    }),
 }));
 
 const mockNavigate = vi.fn();
@@ -876,6 +884,48 @@ describe('PipelineDetailPage — requirements outside any phase', () => {
   });
 });
 
+describe('PipelineDetailPage — an inactive requirement', () => {
+  const link = (id: string, name: string, active: boolean) => ({
+    id: `pr-${id}`,
+    program_id: 'prog-1',
+    phase_id: null,
+    requirement_id: id,
+    is_required: true,
+    is_prerequisite: false,
+    sort_order: 0,
+    owns_requirement: true,
+    created_at: '2026-01-01T00:00:00Z',
+    requirement: { id, name, requirement_type: 'hours', required_hours: 4, active },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue({ ...program, structure_type: 'flexible' });
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([
+      link('req-live', 'Hazmat Awareness', true),
+      link('req-retired', 'Legacy Decon Drill', false),
+    ]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([]);
+  });
+
+  it('is listed as not currently required and left out of the required count', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
+    expect(screen.getByText('Hazmat Awareness')).toBeInTheDocument();
+    // One of the two is inactive, so exactly one is labelled, and only the
+    // active one counts as required.
+    expect(screen.getAllByText('Inactive — not currently required')).toHaveLength(1);
+    expect(screen.getByText('1 required')).toBeInTheDocument();
+  });
+});
+
 describe('PipelineDetailPage — checklist sign-off and expiry', () => {
   const checklistProgress = {
     id: 'rp-check',
@@ -1003,6 +1053,24 @@ describe('PipelineDetailPage — enrollment rules', () => {
     expect(screen.getByText('Not allowed — flagged when enrolling')).toBeInTheDocument();
   });
 
+  it('labels an inactive prerequisite as not currently required rather than hiding it', async () => {
+    mockGetProgram.mockResolvedValue({
+      ...program,
+      prerequisite_program_ids: ['prog-a', 'prog-b'],
+      prerequisite_programs: [
+        { id: 'prog-a', name: 'Recruit School', active: false },
+        { id: 'prog-b', name: 'Hazmat Operations', active: true },
+      ],
+    });
+    renderWithRouter(<PipelineDetailPage />);
+
+    // The listing, in order, with the label right after the inactive one.
+    expect(await screen.findByText(/Recruit School/)).toHaveTextContent(
+      'Recruit School Inactive — not currently required, Hazmat Operations'
+    );
+    expect(screen.getAllByText('Inactive — not currently required')).toHaveLength(1);
+  });
+
   it('says there are none and that concurrency is allowed', async () => {
     mockGetProgram.mockResolvedValue({ ...program, prerequisite_programs: [] });
     renderWithRouter(<PipelineDetailPage />);
@@ -1081,8 +1149,438 @@ describe('PipelineDetailPage — reactivating an inactive pipeline', () => {
 
     mockHasPermission = true;
     renderWithRouter(<PipelineDetailPage />);
-    expect(await screen.findByText('Recruit Pipeline')).toBeInTheDocument();
+    // The name is in the trail as well as the heading, so ask for the heading.
+    expect(await screen.findByRole('heading', { level: 1, name: /Recruit Pipeline/ })).toBeInTheDocument();
     expect(screen.queryByText('Inactive')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reactivate' })).not.toBeInTheDocument();
+  });
+});
+
+describe('PipelineDetailPage — no active requirements', () => {
+  // Every required item in this pipeline is inactive. The server completes
+  // nobody for finishing an empty set, and the page says so rather than
+  // showing a percentage that measures nothing.
+  const phase1 = {
+    id: 'ph-1',
+    program_id: 'prog-1',
+    phase_number: 1,
+    name: 'Awareness',
+    requires_manual_advancement: false,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+  const phase2 = { ...phase1, id: 'ph-2', phase_number: 2, name: 'Operations' };
+  const retired = {
+    id: 'pr-retired',
+    program_id: 'prog-1',
+    phase_id: 'ph-1',
+    requirement_id: 'req-retired',
+    is_required: true,
+    is_prerequisite: false,
+    sort_order: 0,
+    owns_requirement: true,
+    created_at: '2026-01-01T00:00:00Z',
+    requirement: { id: 'req-retired', name: 'Legacy Decon Drill', requirement_type: 'certification', active: false },
+  };
+  const runningEnrollment = { ...enrollment, current_phase_id: 'ph-1', progress_percentage: 60 };
+  const progress = {
+    enrollment: runningEnrollment,
+    program,
+    current_phase: phase1,
+    requirement_progress: [
+      {
+        ...certProgress,
+        id: 'rp-retired',
+        requirement_id: 'req-retired',
+        status: 'in_progress',
+        progress_percentage: 60,
+        // The server sends no date for an inactive requirement.
+        due_date: null,
+        is_overdue: false,
+        requirement: retired.requirement,
+      },
+    ],
+    completed_requirements: 0,
+    total_requirements: 0,
+    next_milestones: [],
+    is_behind_schedule: false,
+    no_active_requirements: true,
+    phases_without_active_requirements: ['ph-1'],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue({ ...program, no_active_requirements: true });
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([phase1, phase2]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([retired]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([
+      runningEnrollment,
+      { ...enrollment, id: 'enr-2', user_name: 'Sam Graduate', status: 'completed', progress_percentage: 100 },
+    ]);
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue(progress);
+    mockAdvancePhase.mockReset();
+    mockAdvancePhase.mockResolvedValue({ ...runningEnrollment, current_phase_id: 'ph-2' });
+  });
+
+  it('tells the officer nobody completes it automatically, for the pipeline and the phase', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
+    expect(screen.getAllByText('No active requirements')).toHaveLength(2);
+    expect(screen.getByText(/no member is completed automatically/)).toBeInTheDocument();
+    expect(screen.getByText(/Advance members by hand, or reactivate a requirement/)).toBeInTheDocument();
+    expect(screen.getByText('0 required')).toBeInTheDocument();
+  });
+
+  it('lists a running member without a percentage, and a graduate with theirs', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    const running = await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i });
+    expect(within(running).getByText('No active requirements')).toBeInTheDocument();
+    expect(within(running).queryByText(/% complete/)).not.toBeInTheDocument();
+    const graduate = screen.getByRole('button', { name: /Manage progress for Sam Graduate/i });
+    expect(within(graduate).getByText('100% complete')).toBeInTheDocument();
+  });
+
+  it('says so in the member’s progress and advances them by hand out of the empty phase', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(await within(dialog).findByText(/Phase 1: Awareness/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/% overall/)).not.toBeInTheDocument();
+    expect(within(dialog).getAllByText('No active requirements').length).toBeGreaterThanOrEqual(2);
+    expect(within(dialog).queryByLabelText('Phase complete')).not.toBeInTheDocument();
+    // The inactive requirement carries the badge and no date.
+    expect(within(dialog).getByText('Inactive — not currently required')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Due |was due|Overdue/)).not.toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /Advance to next phase/i }));
+    await waitFor(() => expect(mockAdvancePhase).toHaveBeenCalledWith('enr-1', true));
+  });
+});
+
+describe('PipelineDetailPage — mark pipeline complete', () => {
+  // An officer completes a member's whole enrollment by hand. Offered only to
+  // training.manage, only on an active or on-hold enrollment, and only with a
+  // reason; the server decides the rest.
+  const graduate = {
+    ...enrollment,
+    id: 'enr-2',
+    user_name: 'Sam Graduate',
+    status: 'completed',
+    progress_percentage: 100,
+  };
+  const paused = { ...enrollment, id: 'enr-3', user_name: 'Pat Paused', status: 'on_hold' };
+  const progressFor = (e: typeof enrollment) => ({
+    enrollment: e,
+    program,
+    requirement_progress: [certProgress],
+    completed_requirements: 0,
+    total_requirements: 1,
+    next_milestones: [],
+    is_behind_schedule: false,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue(program);
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([enrollment, graduate, paused]);
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor(enrollment));
+    mockCompleteEnrollment.mockReset();
+    mockCompleteEnrollment.mockResolvedValue({ ...enrollment, status: 'completed' });
+  });
+
+  afterEach(() => {
+    // Back to the blanket grant the other blocks assume.
+    mockPermissions = null;
+  });
+
+  const openEnrollments = async () => {
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i });
+  };
+
+  it('offers it on active and on-hold enrollments in the list, not on a finished one', async () => {
+    await openEnrollments();
+
+    expect(screen.getByRole('button', { name: 'Mark pipeline complete for Jane Recruit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark pipeline complete for Pat Paused' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark pipeline complete for Sam Graduate' })).not.toBeInTheDocument();
+  });
+
+  it('is not offered to a viewer without training.manage', async () => {
+    // training.view_all reaches the list and the progress dialog, not the action.
+    mockPermissions = ['training.view_all'];
+    await openEnrollments();
+
+    expect(screen.queryByRole('button', { name: /Mark pipeline complete/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('CPR Certification')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Mark pipeline complete/i })).not.toBeInTheDocument();
+  });
+
+  it('is in the member’s progress dialog for a running enrollment only', async () => {
+    mockGetEnrollmentProgress.mockResolvedValueOnce(progressFor(enrollment));
+    mockGetEnrollmentProgress.mockResolvedValueOnce(progressFor(graduate));
+    await openEnrollments();
+
+    await userEvent.click(screen.getByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    let dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('button', { name: 'Mark pipeline complete' })).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+
+    await userEvent.click(screen.getByRole('button', { name: /Manage progress for Sam Graduate/i }));
+    dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('CPR Certification')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Mark pipeline complete' })).not.toBeInTheDocument();
+  });
+
+  it('requires a reason before it calls the server', async () => {
+    await openEnrollments();
+    await userEvent.click(screen.getByRole('button', { name: 'Mark pipeline complete for Jane Recruit' }));
+    const prompt = await screen.findByRole('dialog', { name: 'Mark pipeline complete?' });
+
+    expect(within(prompt).getByText(/stays unmet on their record/)).toBeInTheDocument();
+    await userEvent.type(within(prompt).getByLabelText('Reason'), '   ');
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Mark complete' }));
+
+    expect(await within(prompt).findByText('Reason is required.')).toBeInTheDocument();
+    expect(mockCompleteEnrollment).not.toHaveBeenCalled();
+  });
+
+  it('completes from the list with the trimmed reason, then reloads the list', async () => {
+    const success = vi.spyOn(toast, 'success');
+    await openEnrollments();
+    mockGetProgramEnrollments.mockClear();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mark pipeline complete for Jane Recruit' }));
+    const prompt = await screen.findByRole('dialog', { name: 'Mark pipeline complete?' });
+    await userEvent.type(within(prompt).getByLabelText('Reason'), '  Chief signed off  ');
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Mark complete' }));
+
+    await waitFor(() => expect(mockCompleteEnrollment).toHaveBeenCalledWith('enr-1', 'Chief signed off'));
+    await waitFor(() => expect(success).toHaveBeenCalledWith('Jane Recruit marked complete'));
+    await waitFor(() => expect(mockGetProgramEnrollments).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Mark pipeline complete?' })).not.toBeInTheDocument()
+    );
+  });
+
+  it('completes from the progress dialog and re-fetches the member’s progress', async () => {
+    await openEnrollments();
+    await userEvent.click(screen.getByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Mark pipeline complete' }));
+    mockGetEnrollmentProgress.mockClear();
+    mockGetProgramEnrollments.mockClear();
+
+    const prompt = await screen.findByRole('dialog', { name: 'Mark pipeline complete?' });
+    await userEvent.type(within(prompt).getByLabelText('Reason'), 'Retired pipeline');
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Mark complete' }));
+
+    await waitFor(() => expect(mockCompleteEnrollment).toHaveBeenCalledWith('enr-1', 'Retired pipeline'));
+    await waitFor(() => expect(mockGetEnrollmentProgress).toHaveBeenCalledWith('enr-1'));
+    await waitFor(() => expect(mockGetProgramEnrollments).toHaveBeenCalled());
+  });
+
+  it('shows the server’s refusal and keeps the prompt open', async () => {
+    const error = vi.spyOn(toast, 'error');
+    mockCompleteEnrollment.mockRejectedValue({
+      isAxiosError: true,
+      message: 'Request failed with status code 409',
+      response: { status: 409, data: { detail: 'This enrollment is already complete' } },
+    });
+    await openEnrollments();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mark pipeline complete for Jane Recruit' }));
+    const prompt = await screen.findByRole('dialog', { name: 'Mark pipeline complete?' });
+    await userEvent.type(within(prompt).getByLabelText('Reason'), 'Chief signed off');
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Mark complete' }));
+
+    await waitFor(() => expect(error).toHaveBeenCalledWith('This enrollment is already complete'));
+    expect(screen.getByRole('dialog', { name: 'Mark pipeline complete?' })).toBeInTheDocument();
+  });
+});
+
+describe('PipelineDetailPage — progress dialog actions need training.manage', () => {
+  // Advance, start-new-cycle and reopen all require training.manage on the
+  // server, so a viewer who can open the dialog is not offered them.
+  const progressFor = (status: string) => ({
+    enrollment: { ...enrollment, status },
+    program,
+    requirement_progress: [certProgress],
+    completed_requirements: 0,
+    total_requirements: 1,
+    next_milestones: [],
+    is_behind_schedule: false,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockPermissions = null;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue(program);
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([enrollment]);
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor('active'));
+  });
+
+  afterEach(() => {
+    mockPermissions = null;
+  });
+
+  const openDialog = async () => {
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('CPR Certification');
+    return dialog;
+  };
+
+  it('offers an officer the cycle reset', async () => {
+    const dialog = await openDialog();
+    expect(within(dialog).getByRole('button', { name: /Start new cycle/i })).toBeInTheDocument();
+  });
+
+  it('offers a viewer none of the officer actions', async () => {
+    mockPermissions = ['training.view_all'];
+    const dialog = await openDialog();
+
+    expect(within(dialog).queryByRole('button', { name: /Start new cycle/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Advance to next phase/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Mark pipeline complete/i })).not.toBeInTheDocument();
+  });
+
+  it('tells a viewer an enrollment expired without offering to reopen it', async () => {
+    mockPermissions = ['training.view_all'];
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor('expired'));
+    const dialog = await openDialog();
+
+    expect(within(dialog).getByText(/Deadline passed/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Reopen enrollment/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/New deadline/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('PipelineDetailPage — a pipeline completed by hand', () => {
+  // The officer's reason is an officer note: shown to training.manage on a
+  // completed enrollment that carries one, and to nobody else.
+  const byHand = {
+    ...enrollment,
+    id: 'enr-4',
+    user_name: 'Chris ByHand',
+    status: 'completed',
+    progress_percentage: 50,
+    completion_reason: "Chief's call after the live burn",
+  };
+  const automatic = {
+    ...enrollment,
+    id: 'enr-5',
+    user_name: 'Alex Automatic',
+    status: 'completed',
+    progress_percentage: 100,
+    completion_reason: null,
+  };
+  const NOTE = "Completed by hand: Chief's call after the live burn";
+  const progressFor = (e: typeof byHand | typeof automatic) => ({
+    enrollment: e,
+    program,
+    requirement_progress: [certProgress],
+    completed_requirements: 0,
+    total_requirements: 1,
+    next_milestones: [],
+    is_behind_schedule: false,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockPermissions = null;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValue(program);
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([byHand, automatic]);
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor(byHand));
+  });
+
+  afterEach(() => {
+    mockPermissions = null;
+  });
+
+  const openEnrollments = async () => {
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await screen.findByRole('button', { name: /Manage progress for Chris ByHand/i });
+  };
+
+  const openDialogFor = async (name: string) => {
+    await openEnrollments();
+    await userEvent.click(screen.getByRole('button', { name: `Manage progress for ${name}` }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('CPR Certification');
+    return dialog;
+  };
+
+  it('shows an officer the reason in the enrollment list, only on the by-hand row', async () => {
+    await openEnrollments();
+
+    const byHandRow = screen.getByRole('button', { name: 'Manage progress for Chris ByHand' });
+    expect(within(byHandRow).getByText(NOTE)).toBeInTheDocument();
+    const automaticRow = screen.getByRole('button', { name: 'Manage progress for Alex Automatic' });
+    expect(within(automaticRow).queryByText(/Completed by hand/)).not.toBeInTheDocument();
+  });
+
+  it('shows an officer the reason in the progress dialog header', async () => {
+    const dialog = await openDialogFor('Chris ByHand');
+
+    expect(within(dialog).getByText(NOTE)).toBeInTheDocument();
+  });
+
+  it('shows nothing in the dialog for an automatic completion', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue(progressFor(automatic));
+    const dialog = await openDialogFor('Alex Automatic');
+
+    expect(within(dialog).queryByText(/Completed by hand/)).not.toBeInTheDocument();
+  });
+
+  it('shows a viewer without training.manage no reason, in the list or the dialog', async () => {
+    mockPermissions = ['training.view_all'];
+    const dialog = await openDialogFor('Chris ByHand');
+
+    expect(screen.queryAllByText(/Completed by hand/)).toHaveLength(0);
+    expect(within(dialog).queryByText(/Completed by hand/)).not.toBeInTheDocument();
   });
 });

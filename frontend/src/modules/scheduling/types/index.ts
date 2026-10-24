@@ -276,6 +276,8 @@ export interface ShiftTemplateUpdate {
   apparatus_type?: string;
   apparatus_id?: string;
   is_default?: boolean;
+  /** True reactivates a template that was deactivated because it was in use. */
+  is_active?: boolean;
   open_to_all_members?: boolean;
 }
 
@@ -371,6 +373,8 @@ export interface ShiftPatternUpdate {
   start_date?: string;
   end_date?: string;
   assigned_members?: Array<{ user_id: string; position: string; platoon?: string }>;
+  /** False pauses the pattern; neither manual nor scheduled generation runs it. */
+  is_active?: boolean;
 }
 
 export interface PatternGenerateRequest {
@@ -382,6 +386,11 @@ export interface PatternGenerateResponse {
   shifts_created: number;
   /** Driver seats generation left empty for want of an EVOC level; absent when none. */
   driver_warnings?: string[] | undefined;
+  /**
+   * Members the pattern names whom generation could not seat — not eligible for
+   * the seat, the seat already full, or a conflict that date; absent when none.
+   */
+  seat_warnings?: string[] | undefined;
 }
 
 // ============================================================================

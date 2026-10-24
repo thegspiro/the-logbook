@@ -54,9 +54,9 @@ class InventoryNfcTagCreate(BaseModel):
 
 
 class InventoryNfcTagUpdate(BaseModel):
-    """Partial update. The identifier and the item it names are not editable:
-    moving a tag to another item is unlinking it and linking it again, which
-    leaves both actions in the audit log."""
+    """Partial update. The identifier and the target it names are not
+    editable here; ``POST /nfc-tags/{id}/move`` re-points a tag, and records
+    the move in the audit log."""
 
     label: Optional[str] = Field(None, max_length=100)
     status: Optional[InventoryNfcTagStatus] = None
@@ -84,6 +84,89 @@ class InventoryNfcTagResponse(UTCResponseBase):
 class InventoryNfcTagListResponse(BaseModel):
     items: List[InventoryNfcTagResponse]
     total: int
+
+
+_ID_FIELD = Field(None, min_length=1, max_length=36)
+
+
+class InventoryNfcRegisterTag(InventoryNfcTagResponse):
+    """A row of the department-wide tag register."""
+
+    kind: Literal["item", "storage_area", "compartment"]
+    # What the tag names, and for a compartment the checklist it is on.
+    target_name: Optional[str] = None
+    template_name: Optional[str] = None
+    # Newest staff tap of this tag. Item tags only: the tap log records the
+    # item a tap found, not the shelf or compartment tag that was tapped.
+    last_scanned_at: Optional[datetime] = None
+
+
+class InventoryNfcRegisterListResponse(BaseModel):
+    items: List[InventoryNfcRegisterTag]
+    total: int
+
+
+class InventoryNfcMoveTarget(BaseModel):
+    """Somewhere a tag could be moved to."""
+
+    id: str
+    name: str
+    # Serial number for an item, checklist name for a compartment.
+    detail: Optional[str] = None
+
+
+class InventoryNfcMoveTargetListResponse(BaseModel):
+    items: List[InventoryNfcMoveTarget]
+
+
+class InventoryNfcTagBulkStatusRequest(BaseModel):
+    """Mark several tags lost or found at once.
+
+    The cap matches ``MAX_BULK_TAGS`` in ``inventory_nfc_register_service``.
+    """
+
+    tag_ids: List[str] = Field(..., min_length=1, max_length=200)
+    status: InventoryNfcTagStatus
+
+    @field_validator("tag_ids")
+    @classmethod
+    def _ids_are_ids(cls, value: List[str]) -> List[str]:
+        if any(not item or len(item) > 36 for item in value):
+            raise ValueError("Each tag id must be 1 to 36 characters")
+        return value
+
+
+class InventoryNfcTagBulkFailure(BaseModel):
+    id: str
+    detail: str
+
+
+class InventoryNfcTagBulkStatusResponse(UTCResponseBase):
+    """Which tags changed and which could not be found."""
+
+    updated: List[InventoryNfcTagResponse]
+    failed: List[InventoryNfcTagBulkFailure]
+
+
+class InventoryNfcTagMove(BaseModel):
+    """Where to move a tag: exactly one target, of the kind it is on now."""
+
+    item_id: Optional[str] = _ID_FIELD
+    storage_area_id: Optional[str] = _ID_FIELD
+    check_compartment_id: Optional[str] = _ID_FIELD
+
+    @model_validator(mode="after")
+    def _one_target(self) -> "InventoryNfcTagMove":
+        chosen = [
+            t
+            for t in (self.item_id, self.storage_area_id, self.check_compartment_id)
+            if t
+        ]
+        if len(chosen) != 1:
+            raise ValueError(
+                "Choose exactly one item, storage area or compartment to move to"
+            )
+        return self
 
 
 class InventoryNfcResolveRequest(BaseModel):

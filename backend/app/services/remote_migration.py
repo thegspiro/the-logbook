@@ -1,5 +1,10 @@
-"""Moving a department's existing files into its own bucket, and keeping the
-files there under the current key (decision 31, step 3).
+"""Moving a department's existing files into its own remote store, and
+keeping the files there under the current key (decision 31, step 3).
+
+Platform-neutral: it works through ``app.services.remote_storage``, so a
+bucket below means whatever container the department's platform has. The
+manifest's directory and kind keep their S3-era names so a manifest written
+before the rename still rolls back and finalizes.
 
 ``scripts/migrate_uploads_to_s3.py`` drives the move; ``--rewrap`` in
 ``scripts/encrypt_uploads.py`` drives :func:`rewrap_bucket_objects`. A
@@ -45,8 +50,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import file_encryption
 from app.models.user import Organization
 from app.services import file_storage_service as file_storage
-from app.services import s3_storage, upload_relocation
-from app.services.s3_storage import S3Backend, S3Location, S3StorageError
+from app.services import remote_storage, upload_relocation
+from app.services.remote_storage import RemoteBackend, RemoteStorageError
 from app.services.upload_relocation import Reference
 
 MANIFEST_VERSION = 1
@@ -63,7 +68,11 @@ def manifest_directory() -> str:
 class Copy:
     organization_id: str
     old_path: str
-    ref: str
+    #: The org-first key the file keeps in the store.
+    key: str
+    #: Assigned when the file is copied, not when it is planned: a platform
+    #: may reserve a reference at the store (Drive), and a dry run must not.
+    ref: str = ""
     sha256: str = ""
 
 
@@ -97,33 +106,33 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-async def _departments_on_s3(
+async def _departments_on_remote(
     db: AsyncSession, organization_id: Optional[str]
-) -> dict[str, S3Backend]:
-    """Each department whose new files go to its bucket, with that bucket.
+) -> dict[str, RemoteBackend]:
+    """Each department whose new files go to a remote store, with that store.
     Naming one that has not switched is an error: copying a department's
-    files into a bucket it never tested would be the very thing the
-    connection test exists to prevent."""
+    files somewhere it never tested would be the very thing the connection
+    test exists to prevent."""
     if organization_id:
         ids = [organization_id]
     else:
         ids = [str(i) for i in (await db.execute(select(Organization.id))).scalars()]
-    found: dict[str, S3Backend] = {}
+    found: dict[str, RemoteBackend] = {}
     for org in ids:
         view = await file_storage.org_storage(org, db)
-        if not view.writes_to_s3:
+        if not view.writes_to:
             if organization_id:
                 raise ValueError(
-                    f"Organization {org} does not store new files in a bucket. "
-                    "Run Test and switch to S3 in its Storage settings first."
+                    f"Organization {org} does not store new files remotely. "
+                    "Run the connection test in its Storage settings first."
                 )
             continue
-        if view.s3 is None:
+        if view.writer is None:
             raise ValueError(
-                f"Organization {org} is on S3 but its bucket cannot be used: "
-                f"{view.s3_problem}"
+                f"Organization {org} is on {view.writes_to} but its store "
+                f"cannot be used: {view.problems.get(view.writes_to)}"
             )
-        found[org] = view.s3
+        found[org] = view.writer
     return found
 
 
@@ -141,7 +150,7 @@ def _bucket_key(real: str, ref: Reference) -> Optional[str]:
     return "/".join(parts)
 
 
-def plan(refs: list[Reference], buckets: dict[str, S3Backend]) -> MigrationReport:
+def plan(refs: list[Reference], buckets: dict[str, RemoteBackend]) -> MigrationReport:
     """Decide what moves where. Touches nothing."""
     report = MigrationReport(organizations=sorted(buckets))
     planned: dict[str, Copy] = {}
@@ -149,7 +158,7 @@ def plan(refs: list[Reference], buckets: dict[str, S3Backend]) -> MigrationRepor
         backend = buckets.get(ref.organization_id)
         if backend is None:
             continue
-        if s3_storage.is_ref(ref.path):
+        if remote_storage.is_remote_ref(ref.path):
             report.already_in_bucket += 1
             continue
         real = file_storage.resolve(
@@ -167,30 +176,27 @@ def plan(refs: list[Reference], buckets: dict[str, S3Backend]) -> MigrationRepor
         if not os.path.isfile(real):
             report.missing.append(real)
             continue
-        planned[real] = Copy(
-            ref.organization_id, real, s3_storage.make_ref(backend.config.bucket, key)
-        )
+        planned[real] = Copy(ref.organization_id, real, key)
     report.copies = list(planned.values())
     return report
 
 
-def _copy_verified(backend: S3Backend, copy: Copy) -> str:
+def _copy_verified(backend: RemoteBackend, copy: Copy) -> str:
     """Upload one file and prove the bucket gives it back. Re-runnable: an
     object an interrupted run already wrote with the same contents is
     accepted, one with different contents is refused."""
     plaintext = file_encryption.read_plaintext(copy.old_path)
     expected = _sha256(plaintext)
-    location = s3_storage.parse_ref(copy.ref)
-    if location is None:
-        raise ValueError(f"Not an S3 reference: {copy.ref}")
-    if backend.exists(location):
-        if _sha256(backend.read_bytes(location)) == expected:
+    if not copy.ref:
+        copy.ref = backend.ref_for(copy.key)
+    if backend.exists(copy.ref):
+        if _sha256(backend.read_bytes(copy.ref)) == expected:
             return expected
-        raise S3StorageError(f"{copy.ref} exists with different contents")
-    backend.put(location, plaintext)
-    if _sha256(backend.read_bytes(location)) != expected:
-        backend.delete(location)
-        raise S3StorageError(f"the bucket copy of {copy.old_path} did not verify")
+        raise RemoteStorageError(f"{copy.ref} exists with different contents")
+    backend.put(copy.ref, plaintext)
+    if _sha256(backend.read_bytes(copy.ref)) != expected:
+        backend.delete(copy.ref)
+        raise RemoteStorageError(f"the bucket copy of {copy.old_path} did not verify")
     return expected
 
 
@@ -225,7 +231,7 @@ async def apply(
     organization_id: Optional[str] = None,
     dry_run: bool = True,
 ) -> MigrationReport:
-    buckets = await _departments_on_s3(db, organization_id)
+    buckets = await _departments_on_remote(db, organization_id)
     refs = [
         ref
         for ref in await upload_relocation.collect_references(db, organization_id)
@@ -243,7 +249,7 @@ async def apply(
             )
         except (
             OSError,
-            S3StorageError,
+            RemoteStorageError,
             file_encryption.FileDecryptionError,
         ) as exc:
             logger.error(f"S3 migration could not copy {copy.old_path}: {exc}")
@@ -258,7 +264,7 @@ async def apply(
         {
             (ref.table, ref.row_id)
             for ref in refs
-            if not s3_storage.is_ref(ref.path)
+            if not remote_storage.is_remote_ref(ref.path)
             and upload_relocation.real_path(ref.path) in mapping
         }
     )
@@ -280,14 +286,15 @@ async def apply(
     return report
 
 
-async def _bucket_for(
-    db: AsyncSession, organization_id: str, cache: dict[str, Optional[S3Backend]]
-) -> Optional[S3Backend]:
-    if organization_id not in cache:
-        cache[organization_id] = (
-            await file_storage.org_storage(organization_id, db)
-        ).s3
-    return cache[organization_id]
+async def _store_for(
+    db: AsyncSession, ref: str, cache: dict[str, Optional[RemoteBackend]]
+) -> Optional[RemoteBackend]:
+    if ref not in cache:
+        try:
+            cache[ref] = await file_storage.remote_store_for(ref, db)
+        except ValueError:
+            cache[ref] = None
+    return cache[ref]
 
 
 async def rollback(db: AsyncSession, manifest_path: str) -> dict[str, int]:
@@ -301,16 +308,15 @@ async def rollback(db: AsyncSession, manifest_path: str) -> dict[str, int]:
     rows = [tuple(row) for row in data["rows"]]
     restored = await upload_relocation.rewrite_rows(db, rows, mapping, key=str)
     removed = kept = 0
-    buckets: dict[str, Optional[S3Backend]] = {}
+    buckets: dict[str, Optional[RemoteBackend]] = {}
     for copy in data["copies"]:
-        location = s3_storage.parse_ref(copy["ref"])
-        backend = await _bucket_for(db, copy["organization_id"], buckets)
+        backend = await _store_for(db, copy["ref"], buckets)
         # The bucket copy is removed only while the volume copy is there to
         # fall back on.
-        if location is None or backend is None or not os.path.isfile(copy["old_path"]):
+        if backend is None or not os.path.isfile(copy["old_path"]):
             kept += 1
             continue
-        if await asyncio.to_thread(backend.delete, location):
+        if await asyncio.to_thread(backend.delete, copy["ref"]):
             removed += 1
         else:
             kept += 1
@@ -328,21 +334,20 @@ async def finalize(db: AsyncSession, manifest_path: str) -> dict[str, int]:
     if data.get("rolled_back"):
         raise ValueError("This migration was rolled back; there is nothing to finalize")
     removed = kept = 0
-    buckets: dict[str, Optional[S3Backend]] = {}
+    buckets: dict[str, Optional[RemoteBackend]] = {}
     for copy in data["copies"]:
         old = copy["old_path"]
         if not os.path.isfile(old):
             continue
-        location = s3_storage.parse_ref(copy["ref"])
-        backend = await _bucket_for(db, copy["organization_id"], buckets)
+        backend = await _store_for(db, copy["ref"], buckets)
         verified = False
-        if location is not None and backend is not None:
+        if backend is not None:
             try:
-                data_back = await asyncio.to_thread(backend.read_bytes, location)
+                data_back = await asyncio.to_thread(backend.read_bytes, copy["ref"])
                 verified = _sha256(data_back) == copy["sha256"]
             except (
                 FileNotFoundError,
-                S3StorageError,
+                RemoteStorageError,
                 file_encryption.FileDecryptionError,
             ) as exc:
                 logger.error(f"Could not verify {copy['ref']}: {exc}")
@@ -364,80 +369,85 @@ async def finalize(db: AsyncSession, manifest_path: str) -> dict[str, int]:
 
 
 @dataclass(frozen=True)
-class _BucketObject:
+class _RemoteObject:
     organization_id: str
-    location: S3Location
+    ref: str
+    platform: str
+    container: str
 
 
-async def _bucket_objects(db: AsyncSession) -> list[_BucketObject]:
-    seen: dict[str, _BucketObject] = {}
+async def _remote_objects(db: AsyncSession) -> list[_RemoteObject]:
+    seen: dict[str, _RemoteObject] = {}
     for ref in await upload_relocation.collect_references(db, None):
-        location = s3_storage.parse_ref(ref.path)
-        if location is not None and ref.path not in seen:
-            seen[ref.path] = _BucketObject(ref.organization_id, location)
+        parsed = remote_storage.parse_remote_ref(ref.path)
+        if parsed is not None and ref.path not in seen:
+            seen[ref.path] = _RemoteObject(
+                ref.organization_id, ref.path, parsed.platform, parsed.container
+            )
     return list(seen.values())
 
 
 async def bucket_inventory(db: AsyncSession) -> list[dict[str, Any]]:
-    """Which departments hold files in which bucket, and how many — what a
-    backup of the uploads volume leaves out."""
-    counts: dict[tuple[str, str], int] = {}
-    for item in await _bucket_objects(db):
-        key = (item.organization_id, item.location.bucket)
+    """Which departments hold files in which remote store, and how many —
+    what a backup of the uploads volume leaves out. ``bucket`` names the
+    container on the platform (a bucket, a drive)."""
+    counts: dict[tuple[str, str, str], int] = {}
+    for item in await _remote_objects(db):
+        key = (item.organization_id, item.platform, item.container)
         counts[key] = counts.get(key, 0) + 1
     return [
-        {"organization_id": org, "bucket": bucket, "files": files}
-        for (org, bucket), files in sorted(counts.items())
+        {
+            "organization_id": org,
+            "platform": platform,
+            "bucket": container,
+            "files": files,
+        }
+        for (org, platform, container), files in sorted(counts.items())
     ]
 
 
-def _rewrap_one(backend: S3Backend, location: S3Location, current: bytes) -> bool:
-    """Re-encrypt one object under the current key; False when it already is.
-    The object is replaced in one write, so a failure leaves the old
-    ciphertext readable."""
-    if backend.key_id(location) in (None, current):
+def _rewrap_one(backend: RemoteBackend, ref: str, current: bytes) -> bool:
+    """Re-encrypt one stored file under the current key; False when it
+    already is. The file is replaced in one write, so a failure leaves the
+    old ciphertext readable."""
+    if backend.key_id(ref) in (None, current):
         return False
-    plaintext = backend.read_bytes(location)
-    backend.put(location, plaintext)
-    if backend.key_id(location) != current or (
-        _sha256(backend.read_bytes(location)) != _sha256(plaintext)
+    plaintext = backend.read_bytes(ref)
+    backend.put(ref, plaintext)
+    if backend.key_id(ref) != current or (
+        _sha256(backend.read_bytes(ref)) != _sha256(plaintext)
     ):
-        raise S3StorageError(
-            f"the rewrapped s3://{location.bucket}/{location.key} did not verify"
-        )
+        raise RemoteStorageError(f"the rewrapped {ref} did not verify")
     return True
 
 
 async def rewrap_bucket_objects(
     db: AsyncSession, *, dry_run: bool = True
 ) -> dict[str, Any]:
-    """Move every referenced bucket object under a retired key to the current
+    """Move every referenced remote file under a retired key to the current
     one, so the retired key can leave ``ENCRYPTION_KEYS_LEGACY``."""
     current = bytes.fromhex(file_encryption.current_key_fingerprint())
-    buckets: dict[str, Optional[S3Backend]] = {}
+    stores: dict[str, Optional[RemoteBackend]] = {}
     old_key = rewrapped = failed = unreachable = 0
-    for item in await _bucket_objects(db):
-        backend = await _bucket_for(db, item.organization_id, buckets)
+    for item in await _remote_objects(db):
+        backend = await _store_for(db, item.ref, stores)
         if backend is None:
             unreachable += 1
             continue
         try:
             if dry_run:
-                key_id = await asyncio.to_thread(backend.key_id, item.location)
+                key_id = await asyncio.to_thread(backend.key_id, item.ref)
                 if key_id not in (None, current):
                     old_key += 1
                 continue
-            if await asyncio.to_thread(_rewrap_one, backend, item.location, current):
+            if await asyncio.to_thread(_rewrap_one, backend, item.ref, current):
                 rewrapped += 1
         except (
             FileNotFoundError,
-            S3StorageError,
+            RemoteStorageError,
             file_encryption.FileDecryptionError,
         ) as exc:
-            logger.error(
-                f"Could not rewrap s3://{item.location.bucket}/{item.location.key}: "
-                f"{exc}"
-            )
+            logger.error(f"Could not rewrap {item.ref}: {exc}")
             failed += 1
     if dry_run:
         return {

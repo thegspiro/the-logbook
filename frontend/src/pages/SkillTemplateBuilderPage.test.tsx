@@ -115,10 +115,15 @@ describe('SkillTemplateBuilderPage', () => {
       expect(screen.getByRole('button', { name: /save draft/i })).toBeInTheDocument();
     });
 
-    it('should have back navigation link', () => {
+    it('leads back to the hub’s template list from its trail', () => {
+      window.history.replaceState({}, '', '/training/skills-testing/templates/new');
       renderWithRouter(<SkillTemplateBuilderPage />);
 
-      expect(screen.getByText('Back to Templates')).toBeInTheDocument();
+      const trail = screen.getByRole('navigation', { name: /breadcrumb/i });
+      expect(within(trail).getByRole('link', { name: 'Templates' })).toHaveAttribute(
+        'href',
+        '/training/admin?page=skills-testing&tab=templates'
+      );
     });
   });
 

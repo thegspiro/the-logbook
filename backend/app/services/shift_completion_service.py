@@ -51,11 +51,13 @@ from app.services.shift_eligibility_service import (
     ShiftEligibilityService,
 )
 from app.services.training_module_config_service import (
+    TrainingModuleConfigService,
     get_practical_skills_method,
 )
 from app.services.training_program_service import TrainingProgramService
 from app.utils.call_type_matching import matching_call_types
 from app.utils.member_names import format_display_name
+from app.utils.model_updates import reject_null_for_required
 from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import resolve_org_today
 
@@ -65,6 +67,11 @@ from app.utils.org_timezone import resolve_org_today
 #: predates the setting — keeps the original rule: any ``training.manage``
 #: holder may file (CLAUDE.md pitfall #19, absence means current behaviour).
 SHIFT_OFFICER_AUTHORSHIP = "shift_officer"
+
+#: Key in ``SkillCheckoff.evaluation_results`` naming the shift report a
+#: sign-off was recorded from. It is what makes re-approving a report a
+#: no-op for its sign-offs; checkoffs recorded before it existed carry none.
+SHIFT_REPORT_CHECKOFF_KEY = "shift_report_id"
 
 SHIFT_OFFICER_ONLY_MESSAGE = (
     "Your department has each shift's reports filed by that shift's officer"
@@ -100,6 +107,21 @@ def require_shift_officer(shift, author_id) -> None:
         raise ValueError(NO_SHIFT_OFFICER_MESSAGE)
     if str(shift.shift_officer_id) != str(author_id):
         raise ValueError(SHIFT_OFFICER_ONLY_MESSAGE)
+
+
+async def reject_future_shift_date(
+    db: AsyncSession, organization_id: UUID | str, shift_date: date
+) -> None:
+    """Refuse a report dated after today on the department's calendar.
+
+    Called where an officer's date enters (the create and batch endpoints),
+    not as a schema validator: one cannot see the organization, and the
+    server's UTC date refused today's report from a department ahead of UTC
+    until UTC midnight, while accepting a US department's tomorrow every
+    evening.
+    """
+    if shift_date > await resolve_org_today(db, organization_id):
+        raise ValueError("Shift date cannot be in the future")
 
 
 class ShiftCompletionService:
@@ -652,6 +674,7 @@ class ShiftCompletionService:
                 officer_id=officer_id,
                 skills_observed=skills_observed,
                 shift_id=shift_id,
+                report_id=str(report.id),
             )
 
             requirements_progressed = await self._update_requirement_progress(
@@ -683,10 +706,12 @@ class ShiftCompletionService:
                     f"{shift_date} is ready for your "
                     f"review and acknowledgment."
                 ),
+                commit=commit,
             )
             await self._maybe_alert_training_officers(
                 organization_id=organization_id,
                 report=report,
+                commit=commit,
             )
 
         return report
@@ -941,8 +966,14 @@ class ShiftCompletionService:
         message: str,
         action_url: Optional[str] = None,
         notification_metadata: Optional[Dict] = None,
+        commit: bool = True,
     ) -> None:
-        """Send an in-app training notification."""
+        """Send an in-app training notification.
+
+        ``commit=False`` leaves the row for the caller's transaction: a batch
+        commits once, and a commit here would make every report added before
+        it durable even if a later crew member's report then fails.
+        """
         try:
             notification = NotificationLog(
                 organization_id=str(organization_id),
@@ -955,14 +986,16 @@ class ShiftCompletionService:
                 notification_metadata=notification_metadata,
             )
             self.db.add(notification)
-            await self.db.commit()
+            if commit:
+                await self.db.commit()
         except Exception as e:
-            logger.error(f"Failed to send notification: {e}")
+            logger.error("Failed to send notification: {}", e)
 
     async def _maybe_alert_training_officers(
         self,
         organization_id: UUID | str,
         report: ShiftCompletionReport,
+        commit: bool = True,
     ) -> None:
         """Alert training officers when a report flags trainee follow-up.
 
@@ -1063,7 +1096,8 @@ class ShiftCompletionService:
                     notification_metadata=metadata,
                 )
                 self.db.add(notification)
-            await self.db.commit()
+            if commit:
+                await self.db.commit()
         except Exception as e:
             logger.error(
                 "Failed to alert training officers for report {}: {}",
@@ -1107,10 +1141,19 @@ class ShiftCompletionService:
         officer_id: UUID | str | None,
         skills_observed: Optional[list],
         shift_id: Optional[str] = None,
+        report_id: Optional[str] = None,
     ) -> List[str]:
         """Create SkillCheckoff records for demonstrated skills.
 
         Returns list of matched SkillEvaluation IDs.
+
+        Repeat-safe per report: a report can reach approval more than once
+        (approved, flagged by a reviewer, approved again), and each approval
+        runs this. A sign-off already recorded from ``report_id`` for a skill
+        is not recorded again, and competency moves only with a new sign-off
+        — otherwise one observed shift approved twice raised a trainee a
+        competency level per approval. The skill still counts as matched, so
+        requirement credit (itself keyed on the report) sees the same skills.
 
         Records nothing for a department that runs Skills Testing: it chose
         that system over these sign-offs, so a skills list on a shift report
@@ -1148,6 +1191,25 @@ class ShiftCompletionService:
         if not skill_map:
             return []
 
+        already_signed_off: set = set()
+        if report_id:
+            prior = await self.db.execute(
+                select(
+                    SkillCheckoff.skill_evaluation_id,
+                    SkillCheckoff.evaluation_results,
+                ).where(
+                    SkillCheckoff.organization_id == str(organization_id),
+                    SkillCheckoff.user_id == trainee_id,
+                    SkillCheckoff.skill_evaluation_id.in_(set(skill_map.values())),
+                )
+            )
+            already_signed_off = {
+                str(eval_id)
+                for eval_id, results in prior.all()
+                if isinstance(results, dict)
+                and results.get(SHIFT_REPORT_CHECKOFF_KEY) == str(report_id)
+            }
+
         matched_ids: List[str] = []
         for skill in demonstrated:
             name = (
@@ -1173,6 +1235,10 @@ class ShiftCompletionService:
             eval_id = skill_map.get(name.lower())
             if not eval_id:
                 continue
+            matched_ids.append(eval_id)
+            if eval_id in already_signed_off:
+                continue
+            already_signed_off.add(eval_id)
 
             checkoff = SkillCheckoff(
                 organization_id=str(organization_id),
@@ -1182,9 +1248,11 @@ class ShiftCompletionService:
                 status="passed",
                 score=float(score) if score is not None else None,
                 notes=comment or notes or None,
+                evaluation_results=(
+                    {SHIFT_REPORT_CHECKOFF_KEY: str(report_id)} if report_id else None
+                ),
             )
             self.db.add(checkoff)
-            matched_ids.append(eval_id)
 
             await self._update_member_competency(
                 organization_id=organization_id,
@@ -1486,6 +1554,7 @@ class ShiftCompletionService:
         organization_id: UUID | str,
         officer_id: str,
         updates: dict,
+        manages_training: bool = False,
     ) -> Optional[ShiftCompletionReport]:
         """Update a draft shift completion report and optionally submit it.
 
@@ -1511,8 +1580,17 @@ class ShiftCompletionService:
             return None
         if report.organization_id != str(organization_id):
             raise ValueError("Report not found in this organization")
-        if report.officer_id != officer_id:
+        # A draft whose filing officer's account was permanently deleted has
+        # nobody left who could finish it, so a training manager may; anyone
+        # else's draft stays theirs.
+        orphaned_for_manager = report.officer_id is None and manages_training
+        if report.officer_id != officer_id and not orphaned_for_manager:
             raise ValueError("Only the filing officer can update this report")
+        # Before the draft-regression check, which skips a None review_status
+        # and would let it reach the column.
+        reject_null_for_required(
+            report, {f: v for f, v in updates.items() if f in UPDATABLE_FIELDS}
+        )
 
         was_draft = report.review_status == "draft"
         was_released = report.review_status == "approved"
@@ -1521,6 +1599,28 @@ class ShiftCompletionService:
         new_status = updates.get("review_status")
         if new_status == "draft" and not was_draft:
             raise ValueError("Cannot revert to draft after submission")
+        # Once submitted, a report's status changes only through review.
+        # Letting the filing officer set it would let them approve their own
+        # report past a required review, clear a reviewer's flag, or cycle an
+        # approved report back through approval and re-run its sign-offs.
+        if new_status is not None and new_status != report.review_status:
+            if not was_draft:
+                raise ValueError(
+                    "A submitted report's status is changed through review, "
+                    "not by its filing officer"
+                )
+            # Submitting a draft: the department's review setting decides where
+            # the report goes, exactly as create and submit-all decide it. The
+            # client's choice of pending_review vs approved is not trusted.
+            config = await TrainingModuleConfigService(self.db).get_config(
+                organization_id
+            )
+            updates = {
+                **updates,
+                "review_status": (
+                    "pending_review" if config.report_review_required else "approved"
+                ),
+            }
 
         # Captured before the write: the marker turns on whether the stored
         # values are still the ones the marker describes.
@@ -1614,6 +1714,7 @@ class ShiftCompletionService:
             officer_id=officer_uuid,
             skills_observed=report.skills_observed,
             shift_id=report.shift_id,
+            report_id=str(report.id),
         )
 
         requirements_progressed = await self._update_requirement_progress(
@@ -1989,7 +2090,10 @@ class ShiftCompletionService:
             )
             .where(*base_filter)
             .group_by("month")
-            .order_by("month")
+            # Newest first so LIMIT keeps the latest twelve, then reversed for
+            # display — as in get_officer_analytics. Ascending kept a trainee's
+            # *first* twelve months once they had thirteen.
+            .order_by(desc("month"))
             .limit(12)
         )
         monthly = [
@@ -1999,7 +2103,7 @@ class ShiftCompletionService:
                 "hours": float(r.hours or 0),
                 "calls": int(r.calls or 0),
             }
-            for r in monthly_result.all()
+            for r in reversed(monthly_result.all())
         ]
 
         return {

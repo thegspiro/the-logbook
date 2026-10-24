@@ -991,6 +991,12 @@ export interface ReminderConditions {
 export interface PrerequisiteProgramSummary {
   id: string;
   name: string;
+  /**
+   * False while the prerequisite pipeline is deactivated: still stored, but not
+   * enforced until it is reactivated. Absent on summaries built client-side
+   * from the active program list.
+   */
+  active?: boolean | undefined;
 }
 
 // Training Program
@@ -1211,6 +1217,12 @@ export interface ProgramEnrollment {
   progress_percentage: number;
   status: EnrollmentStatus;
   completed_at?: string;
+  /**
+   * An officer's reason for completing the enrollment by hand; null for an
+   * automatic completion. The API blanks it for a member reading their own
+   * enrollment, and the UI shows it only to training.manage holders.
+   */
+  completion_reason?: string | null;
   deadline_warning_sent: boolean;
   next_recert_reset_at?: string;
   last_recert_reset_at?: string;
@@ -1321,6 +1333,14 @@ export interface MemberProgramProgress {
    * then refused by the API.
    */
   locked_requirements?: Record<string, string[]>;
+  /**
+   * Nothing counts toward completing this pipeline (every required item is
+   * inactive, or none is required). The server completes nobody then, so the
+   * enrollment's percentage and "N of M" mean nothing: show this instead.
+   */
+  no_active_requirements?: boolean;
+  /** Phases whose required items are all inactive: none of them completes. */
+  phases_without_active_requirements?: string[];
 }
 
 export interface RegistryImportResult {

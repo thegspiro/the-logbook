@@ -10,15 +10,32 @@
  * read it here too, receipts included.
  */
 
-import React, { useEffect } from 'react';
-import { useParams, Link } from 'react-router';
-import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban, CreditCard } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router';
+import {
+  ArrowLeft,
+  AlertTriangle,
+  Receipt,
+  Send,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Ban,
+  CreditCard,
+  FileText,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { LateLinesBadge } from '../components/LateLinesBadge';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
+import { PayByCheckDialog } from '../components/PayByCheckDialog';
+import { ExpenseLineDialog } from '../components/ExpenseLineDialog';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { expenseReportService, functionalClassService } from '../services/api';
 import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundShortfallNotice } from '../components/FundShortfallNotice';
@@ -37,6 +54,7 @@ import {
   EXPENSE_REPORT_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
   EXPENSE_TYPE_LABELS,
+  type ExpenseLineItem,
 } from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
 
@@ -48,6 +66,14 @@ const STATUS_LABELS: Record<string, string> = {
   denied: 'Denied',
   paid: 'Paid',
   cancelled: 'Cancelled',
+};
+
+const CHECK_STATUS_LABELS: Record<string, string> = {
+  draft: 'draft',
+  submitted: 'submitted',
+  pending_approval: 'awaiting approval',
+  approved: 'approved, not yet issued',
+  issued: 'issued',
 };
 
 const APPROVAL_STEP_LABELS: Record<string, string> = {
@@ -89,6 +115,10 @@ const ExpenseReportDetailPage: React.FC = () => {
   const { selectedExpenseReport: er, isLoading, error, fetchExpenseReport, submitExpenseReport } = useFinanceStore();
   const access = useFinanceRequestAccess();
   const { confirm } = useConfirm();
+  const navigate = useNavigate();
+  const [payingByCheck, setPayingByCheck] = useState(false);
+  // The line being edited, 'new' while one is being added.
+  const [editingLine, setEditingLine] = useState<ExpenseLineItem | 'new' | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -131,6 +161,52 @@ const ExpenseReportDetailPage: React.FC = () => {
       }
     });
 
+  const handleRemoveLine = (item: ExpenseLineItem) =>
+    run(async () => {
+      if (!id) return;
+      const ok = await confirm({
+        title: 'Remove this line?',
+        message: `"${item.description}" (${formatCurrency(item.amount)}) is taken off the report. Its receipt stays on file.`,
+        confirmLabel: 'Remove line',
+        cancelLabel: 'Keep it',
+        variant: 'danger',
+      });
+      if (!ok) return;
+      try {
+        await expenseReportService.deleteLineItem(id, item.id);
+        toast.success('Line removed');
+        void fetchExpenseReport(id);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not remove the line'));
+      }
+    });
+
+  // A member withdraws only their own draft; the finance office cancels one
+  // further along (FinanceService.cancel_expense_report decides, and says why
+  // when it will not).
+  const handleCancel = () =>
+    run(async () => {
+      if (!id || !er) return;
+      const withdrawing = er.status === ExpenseReportStatus.DRAFT;
+      const ok = await confirm({
+        title: withdrawing ? 'Withdraw this report?' : 'Cancel this report?',
+        message: withdrawing
+          ? `${er.reportNumber} is closed and nobody is asked to approve it. It cannot be reopened; start a new report to claim these expenses later.`
+          : `${er.reportNumber} is closed for good: any approval still outstanding is withdrawn and emailed approval links stop working. Nothing has been paid on it, so no budget line changes.`,
+        confirmLabel: withdrawing ? 'Withdraw report' : 'Cancel report',
+        cancelLabel: 'Keep it',
+        variant: 'danger',
+      });
+      if (!ok) return;
+      try {
+        await expenseReportService.cancel(id);
+        toast.success(withdrawing ? 'Report withdrawn' : 'Report cancelled');
+        void fetchExpenseReport(id);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not cancel the report'));
+      }
+    });
+
   if (isLoading && !er) {
     return (
       <div className="space-y-6">
@@ -167,7 +243,23 @@ const ExpenseReportDetailPage: React.FC = () => {
     );
   }
 
-  const canMarkPaid = er.status === ExpenseReportStatus.APPROVED && access.canManage;
+  // A check already paying the report is how it gets paid; the server refuses
+  // paying it another way, or by a second check, until that one is denied.
+  const paidByLiveCheck = Boolean(er.reimbursementCheckId);
+  const canMarkPaid = er.status === ExpenseReportStatus.APPROVED && access.canManage && !paidByLiveCheck;
+  const canPayByCheck = canMarkPaid && Number(er.amountOwed ?? er.totalAmount) > 0;
+  // Lines change only while the report is a draft, by whoever may submit it.
+  const canEditLines = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
+  const canCancel = access.canManage
+    ? (
+        [
+          ExpenseReportStatus.DRAFT,
+          ExpenseReportStatus.SUBMITTED,
+          ExpenseReportStatus.PENDING_APPROVAL,
+          ExpenseReportStatus.APPROVED,
+        ] as string[]
+      ).includes(er.status) && !paidByLiveCheck
+    : er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
   // Submitting is the requester's action (or the finance office's).
   const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
   // Every line needs an uploaded receipt before the report is submitted;
@@ -235,6 +327,17 @@ const ExpenseReportDetailPage: React.FC = () => {
                 Submit for Approval
               </button>
             )}
+            {canPayByCheck && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setPayingByCheck(true)}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                Pay by Check
+              </button>
+            )}
             {canMarkPaid && (
               <button
                 type="button"
@@ -244,6 +347,17 @@ const ExpenseReportDetailPage: React.FC = () => {
               >
                 <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
                 Mark Paid
+              </button>
+            )}
+            {canCancel && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleCancel()}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-500/10"
+              >
+                <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                {er.status === ExpenseReportStatus.DRAFT ? 'Withdraw Report' : 'Cancel Report'}
               </button>
             )}
           </div>
@@ -280,6 +394,38 @@ const ExpenseReportDetailPage: React.FC = () => {
             <div>
               <p className="text-theme-text-secondary text-xs">Sent to QuickBooks</p>
               <p className="text-theme-text-primary text-sm">{formatDateTime(er.qbExportedAt, tz)}</p>
+            </div>
+          )}
+          {er.purchaseRequestId && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Claims back purchase</p>
+              <p className="text-theme-text-primary text-sm">
+                <Link
+                  to={`/finance/purchase-requests/${er.purchaseRequestId}`}
+                  className="font-medium text-red-700 hover:underline dark:text-red-400"
+                >
+                  {er.purchaseRequestNumber ?? 'Purchase request'}
+                </Link>
+              </p>
+            </div>
+          )}
+          {er.reimbursementCheckId && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Reimbursement check</p>
+              <p className="text-theme-text-primary text-sm">
+                <Link
+                  to={`/finance/check-requests/${er.reimbursementCheckId}`}
+                  className="font-medium text-red-700 hover:underline dark:text-red-400"
+                >
+                  {er.reimbursementCheckNumber ?? 'Check request'}
+                </Link>
+                {er.reimbursementCheckStatus && (
+                  <span className="text-theme-text-secondary">
+                    {' '}
+                    ({CHECK_STATUS_LABELS[er.reimbursementCheckStatus] ?? er.reimbursementCheckStatus})
+                  </span>
+                )}
+              </p>
             </div>
           )}
           {er.advanceId && (
@@ -337,93 +483,139 @@ const ExpenseReportDetailPage: React.FC = () => {
       </div>
 
       {/* Line Items */}
-      {er.lineItems.length > 0 && (
+      {(er.lineItems.length > 0 || canEditLines) && (
         <div className="card p-6">
-          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Line Items</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-theme-surface-border border-b">
-                <tr>
-                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
-                    Description
-                  </th>
-                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
-                    Type
-                  </th>
-                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
-                    Receipt
-                  </th>
-                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs uppercase">
-                    Amount
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-theme-surface-border divide-y">
-                {er.lineItems.map((item) => (
-                  <tr key={item.id}>
-                    <td className="text-theme-text-primary px-4 py-3 text-sm">
-                      {item.description}
-                      {item.substantiatedLate && (
-                        <div className="mt-1">
-                          <LateLinesBadge />
-                        </div>
-                      )}
-                      {item.fundName && (
-                        <p className="text-theme-text-secondary mt-1 text-xs">Restricted fund: {item.fundName}</p>
-                      )}
-                    </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
-                      <span className="capitalize">
-                        {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
-                      </span>
-                      <div className="mt-1">
-                        <FunctionalClassControl
-                          compact
-                          value={item.functionalClass}
-                          effective={item.effectiveFunctionalClass}
-                          subject={item.description}
-                          onChange={async (next) => {
-                            await functionalClassService.setExpenseLine(er.id, item.id, next);
-                            await fetchExpenseReport(er.id);
-                          }}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (
-                        <ReceiptControl
-                          subject={item.description}
-                          receiptFileUrl={item.receiptFileUrl}
-                          receiptUrl={item.receiptUrl}
-                          canAttach={canAttachReceipt}
-                          onUpload={async (file) => {
-                            await expenseReportService.uploadLineItemReceipt(er.id, item.id, file);
-                            await fetchExpenseReport(er.id);
-                          }}
-                          onDownload={() => expenseReportService.downloadLineItemReceipt(er.id, item.id)}
-                        />
-                      ) : (
-                        <span className="text-theme-text-muted">--</span>
-                      )}
-                    </td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm">
-                      {formatCurrency(item.amount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-theme-surface-border border-t-2">
-                  <td colSpan={3} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
-                    Total
-                  </td>
-                  <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">
-                    {formatCurrency(er.totalAmount)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-theme-text-primary text-lg font-semibold">Line Items</h2>
+            {canEditLines && (
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2"
+                onClick={() => setEditingLine('new')}
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add line
+              </button>
+            )}
           </div>
+          {er.lineItems.length === 0 && (
+            <p className="text-theme-text-secondary text-sm">
+              No lines yet. Add one, with its receipt, before submitting the report.
+            </p>
+          )}
+          {er.lineItems.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-theme-surface-border border-b">
+                  <tr>
+                    <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
+                      Description
+                    </th>
+                    <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
+                      Type
+                    </th>
+                    <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
+                      Receipt
+                    </th>
+                    <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs uppercase">
+                      Amount
+                    </th>
+                    {canEditLines && (
+                      <th scope="col" className="px-4 py-2">
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-theme-surface-border divide-y">
+                  {er.lineItems.map((item) => (
+                    <tr key={item.id}>
+                      <td className="text-theme-text-primary px-4 py-3 text-sm">
+                        {item.description}
+                        {item.substantiatedLate && (
+                          <div className="mt-1">
+                            <LateLinesBadge />
+                          </div>
+                        )}
+                        {item.fundName && (
+                          <p className="text-theme-text-secondary mt-1 text-xs">Restricted fund: {item.fundName}</p>
+                        )}
+                      </td>
+                      <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                        <span className="capitalize">
+                          {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
+                        </span>
+                        <div className="mt-1">
+                          <FunctionalClassControl
+                            compact
+                            value={item.functionalClass}
+                            effective={item.effectiveFunctionalClass}
+                            subject={item.description}
+                            onChange={async (next) => {
+                              await functionalClassService.setExpenseLine(er.id, item.id, next);
+                              await fetchExpenseReport(er.id);
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (
+                          <ReceiptControl
+                            subject={item.description}
+                            receiptFileUrl={item.receiptFileUrl}
+                            receiptUrl={item.receiptUrl}
+                            canAttach={canAttachReceipt}
+                            onUpload={async (file) => {
+                              await expenseReportService.uploadLineItemReceipt(er.id, item.id, file);
+                              await fetchExpenseReport(er.id);
+                            }}
+                            onDownload={() => expenseReportService.downloadLineItemReceipt(er.id, item.id)}
+                          />
+                        ) : (
+                          <span className="text-theme-text-muted">--</span>
+                        )}
+                      </td>
+                      <td className="text-theme-text-primary px-4 py-3 text-right text-sm">
+                        {formatCurrency(item.amount)}
+                      </td>
+                      {canEditLines && (
+                        <td className="px-2 py-3 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            className="btn-icon text-theme-text-secondary hover:text-theme-text-primary"
+                            aria-label={`Edit line: ${item.description}`}
+                            onClick={() => setEditingLine(item)}
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="btn-icon text-theme-text-secondary hover:text-red-700"
+                            aria-label={`Remove line: ${item.description}`}
+                            onClick={() => void handleRemoveLine(item)}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-theme-surface-border border-t-2">
+                    <td colSpan={3} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
+                      Total
+                    </td>
+                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">
+                      {formatCurrency(er.totalAmount)}
+                    </td>
+                    {canEditLines && <td />}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -439,6 +631,12 @@ const ExpenseReportDetailPage: React.FC = () => {
         requesterId={er.submittedBy}
         onDecided={() => void fetchExpenseReport(er.id)}
       />
+
+      {er.status === ExpenseReportStatus.DRAFT && (
+        <div className="card p-6">
+          <ApprovalRoutePreview entityType={ApprovalEntityType.EXPENSE_REPORT} amount={Number(er.totalAmount)} />
+        </div>
+      )}
 
       {/* Approval Timeline */}
       {er.approvalSteps.length > 0 && (
@@ -499,6 +697,29 @@ const ExpenseReportDetailPage: React.FC = () => {
               })}
           </div>
         </div>
+      )}
+
+      {editingLine && (
+        <ExpenseLineDialog
+          reportId={er.id}
+          line={editingLine === 'new' ? undefined : editingLine}
+          onClose={() => setEditingLine(null)}
+          onSaved={() => {
+            setEditingLine(null);
+            void fetchExpenseReport(er.id);
+          }}
+        />
+      )}
+
+      {payingByCheck && (
+        <PayByCheckDialog
+          report={er}
+          onClose={() => setPayingByCheck(false)}
+          onRequested={(check) => {
+            setPayingByCheck(false);
+            void navigate(`/finance/check-requests/${check.id}`);
+          }}
+        />
       )}
     </div>
   );

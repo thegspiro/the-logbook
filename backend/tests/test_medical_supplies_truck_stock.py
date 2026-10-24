@@ -182,7 +182,7 @@ async def dept(db_session):
     medic2 = await position(
         rigs["Medic 2"], gauze, nested=False, expected_quantity=5, quantity_on_truck=5
     )
-    await position(rigs["Medic 3"], gauze, expected_quantity=4)
+    medic3 = await position(rigs["Medic 3"], gauze, expected_quantity=4)
     await position(rigs["Medic 1"], gauze, active=False, quantity_on_truck=10)
     rope_line = await position(
         rigs["Medic 2"], rope, nested=False, expected_quantity=5, quantity_on_truck=5
@@ -197,6 +197,9 @@ async def dept(db_session):
         medic2=str(medic2.id),
         rope_line=str(rope_line.id),
         medic1_rig=str(rigs["Medic 1"].id),
+        medic3=str(medic3.id),
+        medic3_rig=str(rigs["Medic 3"].id),
+        medical_cat=str(medical.id),
     )
 
 
@@ -838,3 +841,509 @@ class TestTruckRowsNameTheirApparatus:
         assert rows
         assert {r["apparatus_id"] for r in rows} == {None}
         assert all(r["where"].startswith("Any ambulance") for r in rows)
+
+
+async def _medical_item(db_session, dept, name, *, lot_in_days=None):
+    """Another medical supply, with a shelf lot expiring ``lot_in_days`` out."""
+    row = InventoryItem(
+        id=_uid(),
+        organization_id=dept.org_id,
+        category_id=dept.medical_cat,
+        name=name,
+        tracking_type=TrackingType.POOL,
+        quantity=0,
+        active=True,
+    )
+    db_session.add(row)
+    await db_session.flush()
+    if lot_in_days is not None:
+        db_session.add(
+            InventoryLot(
+                id=_uid(),
+                organization_id=dept.org_id,
+                inventory_item_id=row.id,
+                quantity=3,
+                expiration_date=dept.today + timedelta(days=lot_in_days),
+            )
+        )
+    await db_session.commit()
+    return str(row.id)
+
+
+class TestSortByNextExpiry:
+    """Ordered by the Next expiry the rows show: shelf and trucks together."""
+
+    async def _names(self, db_session, dept, **overrides):
+        result = await ms.list_medical_items(
+            **_list_kwargs(dept, db=db_session, sort_by="next_expiry", **overrides)
+        )
+        return [i.name for i in result.items], result.total
+
+    async def _stock(self, db_session, dept):
+        await _medical_item(db_session, dept, "Bandage", lot_in_days=100)
+        await _medical_item(db_session, dept, "Cold Pack", lot_in_days=1)
+        await _medical_item(db_session, dept, "Saline")
+
+    async def test_soonest_first_with_the_trucks_counted(self, db_session, dept):
+        await self._stock(db_session, dept)
+
+        names, total = await self._names(db_session, dept, sort_order="asc")
+
+        # Gauze's shelf lot is +5, after Cold Pack's +1; it leads only because
+        # the expired units on Medic 1 count. Saline has nothing dated.
+        assert names == ["Gauze", "Cold Pack", "Bandage", "Saline"]
+        assert total == 4
+
+    async def test_latest_first_still_puts_undated_last(self, db_session, dept):
+        await self._stock(db_session, dept)
+
+        names, _ = await self._names(db_session, dept, sort_order="desc")
+
+        assert names == ["Bandage", "Cold Pack", "Gauze", "Saline"]
+
+    async def test_a_later_page_continues_the_order(self, db_session, dept):
+        """Ranked over the filtered set, so page two follows page one."""
+        await self._stock(db_session, dept)
+
+        names, total = await self._names(
+            db_session, dept, sort_order="asc", skip=2, limit=2
+        )
+
+        assert names == ["Bandage", "Saline"]
+        assert total == 4
+
+    async def test_the_filters_still_apply(self, db_session, dept):
+        await self._stock(db_session, dept)
+
+        names, total = await self._names(
+            db_session, dept, sort_order="asc", search="nda"
+        )
+
+        assert names == ["Bandage"]
+        assert total == 1
+
+    async def test_with_nothing_dated_it_falls_back_to_name(self, db_session, dept):
+        await db_session.execute(
+            InventoryLot.__table__.delete().where(
+                InventoryLot.organization_id == dept.org_id
+            )
+        )
+        await db_session.execute(
+            CheckItemDeployedLot.__table__.delete().where(
+                CheckItemDeployedLot.organization_id == dept.org_id
+            )
+        )
+        await db_session.commit()
+        await _medical_item(db_session, dept, "Bandage")
+
+        names, _ = await self._names(db_session, dept, sort_order="asc")
+
+        assert names == ["Bandage", "Gauze"]
+
+
+class TestUncountedPositions:
+    """Medic 3 carries Gauze on a position no crew has counted (target 4)."""
+
+    def _user(self, dept):
+        return SimpleNamespace(id=dept.user_id, organization_id=dept.org_id)
+
+    async def test_finds_the_supply(self, db_session, dept):
+        ids = await InventoryService(db_session).item_ids_with_uncounted_positions(
+            dept.org_id, MEDICAL_ITEM_TYPES
+        )
+
+        assert ids == [dept.gauze]
+
+    async def test_the_list_names_the_position_and_its_apparatus(
+        self, db_session, dept
+    ):
+        result = await ms.list_medical_items(
+            **_list_kwargs(dept, db=db_session, uncounted=True)
+        )
+
+        assert [str(i.id) for i in result.items] == [dept.gauze]
+        places = result.items[0].apparatus_uncounted_places
+        assert [place.model_dump() for place in places] == [
+            {
+                "template_item_id": dept.medic3,
+                "apparatus_id": dept.medic3_rig,
+                "where": "Medic 3 › Main Compartment › Jump Bag",
+            }
+        ]
+
+    async def test_the_summary_counts_supplies(self, db_session, dept):
+        summary = await ms.medical_supply_summary(
+            expiring_within_days=30, db=db_session, current_user=self._user(dept)
+        )
+
+        assert summary["uncounted_on_apparatus"] == 1
+
+    async def test_a_count_clears_it(self, db_session, dept):
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.medic3)
+            .values(quantity_on_truck=4)
+        )
+        await db_session.commit()
+
+        result = await ms.list_medical_items(
+            **_list_kwargs(dept, db=db_session, uncounted=True)
+        )
+        summary = await ms.medical_supply_summary(
+            expiring_within_days=30, db=db_session, current_user=self._user(dept)
+        )
+
+        assert result.items == []
+        assert summary["uncounted_on_apparatus"] == 0
+
+    async def test_a_draft_template_is_not_asked_for(self, db_session, dept):
+        await db_session.execute(
+            EquipmentCheckTemplate.__table__.update()
+            .where(EquipmentCheckTemplate.apparatus_id == dept.medic3_rig)
+            .values(is_active=False)
+        )
+        await db_session.commit()
+
+        ids = await InventoryService(db_session).item_ids_with_uncounted_positions(
+            dept.org_id, MEDICAL_ITEM_TYPES
+        )
+
+        assert ids == []
+
+    async def test_gear_is_left_out(self, db_session, dept):
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.rope_line)
+            .values(quantity_on_truck=None)
+        )
+        await db_session.commit()
+
+        ids = await InventoryService(db_session).item_ids_with_uncounted_positions(
+            dept.org_id, MEDICAL_ITEM_TYPES
+        )
+
+        assert ids == [dept.gauze]
+
+    async def test_ignores_another_departments_trucks(self, db_session, dept):
+        service = InventoryService(db_session)
+
+        assert (
+            await service.item_ids_with_uncounted_positions(_uid(), MEDICAL_ITEM_TYPES)
+            == []
+        )
+        assert (
+            await EquipmentCheckService(db_session).position_places(
+                _uid(), [dept.medic3]
+            )
+            == {}
+        )
+
+    async def test_a_fully_counted_row_lists_no_places(self, db_session, dept):
+        rope = await _medical_item(db_session, dept, "Bandage")
+
+        result = await ms.list_medical_items(**_list_kwargs(dept, db=db_session))
+
+        row = next(i for i in result.items if str(i.id) == rope)
+        assert row.apparatus_uncounted_places == []
+
+
+class TestEveryLotAboardForTheExport:
+    """``include_undated``: every lot on the trucks, dated or not."""
+
+    async def _rows(self, db_session, org_id, dept):
+        return await EquipmentCheckService(db_session).apparatus_expiring_stock(
+            org_id,
+            list(MEDICAL_ITEM_TYPES),
+            days_ahead=None,
+            today=dept.today,
+            include_undated=True,
+        )
+
+    async def _number_medic2(self, db_session, dept, **values):
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.medic2)
+            .values(**values)
+        )
+        await db_session.commit()
+
+    async def test_an_undated_lot_on_a_position_is_listed(self, db_session, dept):
+        await self._number_medic2(db_session, dept, lot_number="M2-LOT")
+
+        rows = await self._rows(db_session, dept.org_id, dept)
+
+        assert [(r["lot_number"], r["quantity"]) for r in rows] == [
+            ("L4", 4),
+            ("L3", 3),
+            ("M2-LOT", 5),
+        ]
+
+    async def test_a_position_with_no_lot_and_no_date_is_not(self, db_session, dept):
+        rows = await self._rows(db_session, dept.org_id, dept)
+
+        # Medic 2 and Medic 3 record no lot: nothing to list.
+        assert {r["lot_number"] for r in rows} == {"L3", "L4"}
+
+    async def test_an_empty_position_is_not(self, db_session, dept):
+        await self._number_medic2(
+            db_session, dept, lot_number="M2-LOT", quantity_on_truck=0
+        )
+
+        rows = await self._rows(db_session, dept.org_id, dept)
+
+        assert "M2-LOT" not in {r["lot_number"] for r in rows}
+
+    async def test_ignores_another_departments_trucks(self, db_session, dept):
+        assert await self._rows(db_session, _uid(), dept) == []
+
+    async def test_category_names_are_org_scoped(self, db_session, dept):
+        service = InventoryService(db_session)
+
+        assert await service.item_category_names(dept.org_id, [dept.gauze]) == {
+            dept.gauze: "Airway"
+        }
+        assert await service.item_category_names(_uid(), [dept.gauze]) == {}
+
+    async def test_the_export_lists_shelf_and_truck_lots(self, db_session, dept):
+        response = await ms.export_medical_lots_csv(
+            db=db_session,
+            current_user=SimpleNamespace(id=dept.user_id, organization_id=dept.org_id),
+        )
+        text = "".join(
+            [
+                c if isinstance(c, str) else c.decode()
+                async for c in response.body_iterator
+            ]
+        )
+
+        rows = [line.split(",") for line in text.strip().splitlines()]
+        header, body = rows[0], rows[1:]
+        where = header.index("Location")
+        # Medic 1's expired 4 (-2d), the shelf's 2 (+5d), Medic 1's 3 (+10d).
+        assert [(r[header.index("Quantity")], r[where]) for r in body] == [
+            ("4", "On apparatus"),
+            ("2", "In storage"),
+            ("3", "On apparatus"),
+        ]
+
+
+class TestUncountedPositionsForTheEmail:
+    async def test_names_each_position_and_its_supply(self, db_session, dept):
+        rows = await EquipmentCheckService(db_session).uncounted_supply_positions(
+            dept.org_id, list(MEDICAL_ITEM_TYPES)
+        )
+
+        assert rows == [
+            {
+                "item_name": "Gauze",
+                "item_size": None,
+                "apparatus_id": dept.medic3_rig,
+                "where": "Medic 3 › Main Compartment › Jump Bag",
+            }
+        ]
+
+    async def test_none_once_counted(self, db_session, dept):
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.medic3)
+            .values(quantity_on_truck=4)
+        )
+        await db_session.commit()
+
+        rows = await EquipmentCheckService(db_session).uncounted_supply_positions(
+            dept.org_id, list(MEDICAL_ITEM_TYPES)
+        )
+
+        assert rows == []
+
+    async def test_ignores_another_departments_trucks(self, db_session, dept):
+        rows = await EquipmentCheckService(db_session).uncounted_supply_positions(
+            _uid(), list(MEDICAL_ITEM_TYPES)
+        )
+
+        assert rows == []
+
+
+class TestLotRecalls:
+    """A recall reaches every unit carrying the number, shelf and truck."""
+
+    def _user(self, dept):
+        return SimpleNamespace(
+            id=dept.user_id, organization_id=dept.org_id, username="supply"
+        )
+
+    async def _recall(self, db_session, dept, number, item=None, reason=None):
+        from app.schemas.inventory import LotRecallCreate
+
+        with patch.object(ms, "log_audit_event", new=AsyncMock()):
+            return await ms.record_medical_lot_recall(
+                data=LotRecallCreate(
+                    inventory_item_id=item or dept.gauze,
+                    lot_number=number,
+                    reason=reason,
+                ),
+                db=db_session,
+                current_user=self._user(dept),
+            )
+
+    async def _lift(self, db_session, dept, recall_id, note="Entered in error"):
+        from app.schemas.inventory import LotRecallLift
+
+        with patch.object(ms, "log_audit_event", new=AsyncMock()):
+            return await ms.lift_medical_lot_recall(
+                recall_id=recall_id,
+                data=LotRecallLift(note=note),
+                db=db_session,
+                current_user=self._user(dept),
+            )
+
+    async def _parts(self, db_session, dept):
+        items = await _items(db_session, dept.gauze)
+        parts = await InventoryService(db_session).stock_breakdown(
+            dept.org_id, list(items.values())
+        )
+        return parts[dept.gauze]
+
+    async def _number_shelf_lot(self, db_session, dept, number, days=5):
+        await db_session.execute(
+            InventoryLot.__table__.update()
+            .where(InventoryLot.inventory_item_id == dept.gauze)
+            .values(
+                lot_number=number, expiration_date=dept.today + timedelta(days=days)
+            )
+        )
+        await db_session.commit()
+
+    async def test_a_recalled_truck_lot_stops_counting(self, db_session, dept):
+        # Medic 1's in-date 3 are lot L3; case and spaces do not matter.
+        await self._recall(db_session, dept, " l3 ")
+
+        parts = await self._parts(db_session, dept)
+
+        # 12 aboard before: 3 (L3) + 5 counted + 4 assumed full.
+        assert parts["apparatus"] == 9
+
+    async def test_a_recalled_position_lot_stops_counting(self, db_session, dept):
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.medic2)
+            .values(lot_number="M2-LOT")
+        )
+        await db_session.commit()
+        await self._recall(db_session, dept, "M2-LOT")
+
+        parts = await self._parts(db_session, dept)
+
+        assert parts["apparatus"] == 7
+
+    async def test_a_recalled_shelf_lot_stops_counting(self, db_session, dept):
+        await self._number_shelf_lot(db_session, dept, "GZ-1")
+        await self._recall(db_session, dept, "gz-1")
+        service = InventoryService(db_session)
+
+        parts = await self._parts(db_session, dept)
+        swappable = await service.get_lots_for_items(dept.org_id, [dept.gauze])
+
+        assert parts["shelf"] == 0
+        # Not offered as replacement stock, since the swap refuses it.
+        assert swappable == {}
+
+    async def test_it_lists_first_in_expiring_whatever_its_date(self, db_session, dept):
+        await self._number_shelf_lot(db_session, dept, "GZ-1", days=400)
+        await self._recall(db_session, dept, "GZ-1")
+
+        rows = await ms.list_expiring_medical_stock(
+            days_ahead=30, db=db_session, current_user=self._user(dept)
+        )
+
+        assert rows[0].lot_number == "GZ-1"
+        assert rows[0].recalled is True
+        assert all(not r.recalled for r in rows[1:])
+
+    async def test_the_list_says_what_is_left_to_pull(self, db_session, dept):
+        await self._number_shelf_lot(db_session, dept, "L3")
+        made = await self._recall(db_session, dept, "L3", reason="Sterility")
+
+        assert made.units_on_shelf == 2
+        assert made.units_aboard == 3
+        assert made.reason == "Sterility"
+        listed = await ms.list_medical_lot_recalls(
+            include_lifted=False, db=db_session, current_user=self._user(dept)
+        )
+        assert [r.id for r in listed] == [made.id]
+
+    async def test_lifting_restores_the_stock_and_keeps_the_record(
+        self, db_session, dept
+    ):
+        made = await self._recall(db_session, dept, "L3")
+
+        lifted = await self._lift(db_session, dept, made.id)
+        parts = await self._parts(db_session, dept)
+
+        assert parts["apparatus"] == 12
+        assert lifted.lift_note == "Entered in error"
+        assert lifted.units_aboard == 0
+        active = await ms.list_medical_lot_recalls(
+            include_lifted=False, db=db_session, current_user=self._user(dept)
+        )
+        everything = await ms.list_medical_lot_recalls(
+            include_lifted=True, db=db_session, current_user=self._user(dept)
+        )
+        assert active == []
+        assert [r.id for r in everything] == [made.id]
+
+    async def test_a_second_active_recall_of_the_lot_is_refused(self, db_session, dept):
+        await self._recall(db_session, dept, "L3")
+
+        with pytest.raises(HTTPException) as err:
+            await self._recall(db_session, dept, "l3")
+
+        assert err.value.status_code == 409
+
+    async def test_a_lifted_recall_cannot_be_lifted_again(self, db_session, dept):
+        made = await self._recall(db_session, dept, "L3")
+        await self._lift(db_session, dept, made.id)
+
+        with pytest.raises(HTTPException) as err:
+            await self._lift(db_session, dept, made.id)
+
+        assert err.value.status_code == 409
+
+    async def test_a_gear_supply_cannot_be_recalled_here(self, db_session, dept):
+        with pytest.raises(HTTPException) as err:
+            await self._recall(db_session, dept, "R-1", item=dept.rope)
+
+        assert err.value.status_code == 404
+
+    async def test_another_departments_recall_cannot_be_lifted(self, db_session, dept):
+        made = await self._recall(db_session, dept, "L3")
+        stranger = SimpleNamespace(id=_uid(), organization_id=_uid(), username="x")
+        from app.schemas.inventory import LotRecallLift
+
+        with pytest.raises(HTTPException) as err:
+            await ms.lift_medical_lot_recall(
+                recall_id=made.id,
+                data=LotRecallLift(note="Not ours"),
+                db=db_session,
+                current_user=stranger,
+            )
+
+        assert err.value.status_code == 404
+        assert (await self._parts(db_session, dept))["apparatus"] == 9
+
+    async def test_another_departments_recall_does_not_reach_us(self, db_session, dept):
+        service = InventoryService(db_session)
+
+        assert await service.recalled_lot_keys(_uid(), [dept.gauze]) == set()
+
+    async def test_the_lot_lookup_flags_it(self, db_session, dept):
+        # A different lot whose number merely contains the recalled one.
+        await self._number_shelf_lot(db_session, dept, "L30")
+        await self._recall(db_session, dept, "L3")
+
+        rows = await ms.search_medical_lots(
+            lot_number="L3", db=db_session, current_user=self._user(dept)
+        )
+
+        flags = {r.lot_number: r.recalled for r in rows}
+        assert flags == {"L3": True, "L30": False}

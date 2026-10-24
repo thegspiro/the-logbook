@@ -36,6 +36,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     openLateSignup: vi.fn().mockResolvedValue({}),
     closeLateSignup: vi.fn().mockResolvedValue({}),
     confirmAssignment: vi.fn().mockResolvedValue({}),
+    declineAssignment: vi.fn().mockResolvedValue({}),
     checkIn: vi.fn().mockResolvedValue({}),
     checkOut: vi.fn().mockResolvedValue({}),
     updateAssignment: vi.fn().mockResolvedValue({}),
@@ -978,6 +979,32 @@ describe('ShiftDetailPanel member confirming their own assignment', () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
+  it('tells the page to re-read after a confirmation', async () => {
+    // The board's "You + n" and the My Shifts list are the page's copies,
+    // not the panel's; without this they stay stale until the next poll.
+    const onRefresh = vi.fn();
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={futureShift as never} onClose={vi.fn()} onRefresh={onRefresh} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Confirm assignment' }));
+
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+  });
+
+  it('tells the page to re-read after a decline, which frees the seat', async () => {
+    vi.mocked(schedulingService.declineAssignment).mockReset();
+    vi.mocked(schedulingService.declineAssignment).mockResolvedValue({} as never);
+    const onRefresh = vi.fn();
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={futureShift as never} onClose={vi.fn()} onRefresh={onRefresh} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Decline assignment' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm decline' }));
+
+    await waitFor(() => expect(schedulingService.declineAssignment).toHaveBeenCalledWith('assign-1'));
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+  });
+
   it('keeps the row confirmed rather than reverting it to Assigned', async () => {
     const user = userEvent.setup();
     // Two distinct responses so the refresh is observable: the first call is
@@ -1131,6 +1158,13 @@ describe('ShiftDetailPanel delete and withdraw', () => {
   };
 
   beforeEach(() => {
+    // startingIn() is relative to now, and "started" is judged by calendar day.
+    // Run just after UTC midnight, a shift that began a minute ago is on
+    // yesterday's date, so Edit is withheld and the test fails. Midday keeps
+    // every offset used here on the same day. Only Date is faked, so waitFor
+    // and userEvent keep their real timers.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
     grantedPermissions.current = null;
     mediaListeners = [];
     mockViewport('phone');
@@ -1143,6 +1177,7 @@ describe('ShiftDetailPanel delete and withdraw', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     mockAssignments.mockResolvedValue([]);
   });
 

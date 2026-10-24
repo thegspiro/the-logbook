@@ -32,14 +32,11 @@ ALLOWED = {
     ): "the end bound sent to an external provider's API; the UTC date is never "
     "earlier than any US department's, so it can only include more records",
     (
-        "schemas/shift_completion.py",
-        "shift_date_not_future",
-    ): "a schema validator cannot see the organization; for a US department "
-    "the server's date is never behind its own, so it never refuses a real date",
-    (
         "schemas/training_submission.py",
         "_validate_completion_date",
-    ): "same as the shift-completion validator, with a day's tolerance on top",
+    ): "a schema validator cannot see the organization; for a US department "
+    "the server's date is never behind its own, and a day's tolerance on top "
+    "covers a department ahead of UTC",
 }
 
 

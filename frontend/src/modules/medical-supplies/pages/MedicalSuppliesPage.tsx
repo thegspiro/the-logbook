@@ -49,18 +49,20 @@ import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
 import { MedicalItemLotsModal } from '../components/MedicalItemLotsModal';
 import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
 import { LotRecallSearch } from '../components/LotRecallSearch';
+import { LotRecallsPanel } from '../components/LotRecallsPanel';
 import { StockRowsTable } from '../components/StockRowsTable';
-import { EXPIRY_WINDOW_DAYS, expiryLabel, expiryTone, storageNote, supplyLabel } from '../types';
+import { EXPIRY_WINDOW_DAYS, EXPIRY_WINDOW_OPTIONS, expiryLabel, expiryTone, storageNote, supplyLabel } from '../types';
 import type { MedicalExpiringStockRow, MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
-type Tab = 'expiring' | 'stock' | 'low';
+type Tab = 'expiring' | 'stock' | 'low' | 'uncounted';
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'expiring', label: 'Expiring stock' },
   { id: 'stock', label: 'All supplies' },
   { id: 'low', label: 'Low stock' },
+  { id: 'uncounted', label: 'Not yet counted' },
 ];
 
 /**
@@ -78,10 +80,10 @@ const PAGE_SIZE = 200;
  * Colour for a supply's next expiry. Beyond the expiring window a date is just
  * a date; colour is kept for the ones that need action.
  */
-function nextExpiryTone(item: InventoryItem): string {
+function nextExpiryTone(item: InventoryItem, windowDays: number): string {
   const days = item.days_until_next_expiration;
   if (!item.next_expiration_date || days == null) return 'text-theme-text-muted';
-  if (days > EXPIRY_WINDOW_DAYS) return 'text-theme-text-secondary';
+  if (days > windowDays) return 'text-theme-text-secondary';
   return expiryTone(days);
 }
 
@@ -107,7 +109,20 @@ const PLACES_SHOWN = 2;
  * Main Compartment › Jump Bag"). Past the first few, the rest open the
  * supply's dialog, which lists them all with what is aboard.
  */
-const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ item, onOpen }) => {
+interface SupplyWhereProps {
+  item: InventoryItem;
+  onOpen: () => void;
+  /**
+   * List only the truck positions nobody has counted, each linked to its
+   * apparatus's inventory when `linkToApparatus` -- the Not yet counted view,
+   * where those are the places to go.
+   */
+  uncountedOnly?: boolean;
+  linkToApparatus?: boolean;
+}
+
+const SupplyWhere: React.FC<SupplyWhereProps> = ({ item, onOpen, uncountedOnly = false, linkToApparatus = false }) => {
+  if (uncountedOnly) return <UncountedPlaces item={item} linkToApparatus={linkToApparatus} />;
   // A supply kept on the apparatus only has no shelf, so a room or note left
   // over from before it was marked would point somewhere it is not.
   const shelved = !item.apparatus_only;
@@ -149,6 +164,38 @@ const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ it
 };
 
 /**
+ * The positions behind a supply's "uncounted" figure. A position whose
+ * checklist names a vehicle links to that vehicle's inventory, where the
+ * count is entered; one written for an apparatus type has no single truck to
+ * open, so it is named without a link.
+ */
+const UncountedPlaces: React.FC<{ item: InventoryItem; linkToApparatus: boolean }> = ({ item, linkToApparatus }) => {
+  const places = item.apparatus_uncounted_places ?? [];
+  if (places.length === 0) return <div>—</div>;
+  return (
+    <ul className="space-y-1 text-xs" aria-label={`Uncounted positions for ${supplyLabel(item)}`}>
+      {places.map((place) => (
+        <li key={place.template_item_id} className="text-theme-text-secondary">
+          <span className="flex items-start gap-1">
+            <Truck className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+            <span>{place.where}</span>
+          </span>
+          {linkToApparatus && place.apparatus_id && (
+            <Link
+              to={`/inventory/checklists/apparatus-inventory?apparatus=${encodeURIComponent(place.apparatus_id)}`}
+              className="touch-target-phone block font-medium underline"
+              aria-label={`Count ${supplyLabel(item)} at ${place.where}`}
+            >
+              Count it
+            </Link>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+/**
  * Identity of an item query: what the rendered rows are an answer to.
  *
  * NUL separator, because a plain space would let search "a b" with no category
@@ -159,7 +206,7 @@ function itemQueryKey(searchTerm: string, category: string, sort: string, pageIn
 }
 
 /** The columns the supplies table sorts by, as the API names them. */
-type SortField = 'name' | 'category' | 'on_hand' | 'reorder_point';
+type SortField = 'name' | 'category' | 'on_hand' | 'reorder_point' | 'next_expiry';
 
 type Section = 'summary' | 'items' | 'categories' | 'expiring';
 
@@ -273,7 +320,13 @@ const MedicalSuppliesPage: React.FC = () => {
   // The Low stock tab is the supply table with the server's low-stock filter
   // on, so it shares the search, category and location controls below.
   const lowStockOnly = tab === 'low';
+  // Likewise, with the server's filter for supplies on a truck position
+  // nobody has counted -- whose truck figure is therefore only the target.
+  const uncountedOnly = tab === 'uncounted';
   const showsSupplyTable = tab !== 'expiring';
+  // How far ahead the Expiring tab and its tiles look. Not mirrored into the
+  // URL, for the reason `tab` is not.
+  const [expiryWindow, setExpiryWindow] = useState(EXPIRY_WINDOW_DAYS);
   const [summary, setSummary] = useState<MedicalSupplySummary | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -308,7 +361,7 @@ const MedicalSuppliesPage: React.FC = () => {
   const [storageOptions, setStorageOptions] = useState<MedicalStorageOptions | null>(null);
   // Part of the query key, so turning a filter on or off is a new query:
   // it resets the page and the selection like any other filter.
-  const sortKey = `${sortField && sortDirection ? `${sortField}:${sortDirection}` : ''}${lowStockOnly ? '\u0000low' : ''}${storageFilter ? `\u0000${storageFilter}` : ''}`;
+  const sortKey = `${sortField && sortDirection ? `${sortField}:${sortDirection}` : ''}${lowStockOnly ? '\u0000low' : ''}${uncountedOnly ? '\u0000uncounted' : ''}${storageFilter ? `\u0000${storageFilter}` : ''}`;
   const [lotsItem, setLotsItem] = useState<InventoryItem | null>(null);
   // Ids, not rows: a refreshed page hands back new objects for the same items.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -402,7 +455,7 @@ const MedicalSuppliesPage: React.FC = () => {
       // passes no options should reach the service the same way it always did.
       const base = bypassCache ? { bypassCache: true } : undefined;
       const requests: Record<Section, () => Promise<unknown>> = {
-        summary: () => medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS, base),
+        summary: () => medicalSuppliesService.getSummary(expiryWindow, base),
         items: () =>
           medicalSuppliesService.getItems(
             {
@@ -411,6 +464,7 @@ const MedicalSuppliesPage: React.FC = () => {
               sort_by: (sortDirection && sortField) || undefined,
               sort_order: (sortField && sortDirection) || undefined,
               low_stock: lowStockOnly || undefined,
+              uncounted: uncountedOnly || undefined,
               ...storageQuery,
               skip: page * PAGE_SIZE,
               limit: PAGE_SIZE,
@@ -418,7 +472,7 @@ const MedicalSuppliesPage: React.FC = () => {
             { ...base, ...(controller ? { signal: controller.signal } : {}) }
           ),
         categories: () => medicalSuppliesService.getCategories(true, base),
-        expiring: () => medicalSuppliesService.getExpiringStock(EXPIRY_WINDOW_DAYS, base),
+        expiring: () => medicalSuppliesService.getExpiringStock(expiryWindow, base),
       };
 
       // Settled per section, not through one Promise.all or allSettled. Those
@@ -529,7 +583,18 @@ const MedicalSuppliesPage: React.FC = () => {
         })
       );
     },
-    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, lowStockOnly, storageQuery, page]
+    [
+      debouncedSearch,
+      categoryFilter,
+      sortField,
+      sortDirection,
+      sortKey,
+      lowStockOnly,
+      uncountedOnly,
+      storageQuery,
+      page,
+      expiryWindow,
+    ]
   );
 
   const loadSectionsRef = useRef(loadSections);
@@ -540,6 +605,14 @@ const MedicalSuppliesPage: React.FC = () => {
   // while swallowing the revalidation's failure -- so the refresh would report
   // success against old quantities and never raise the error it exists to find.
   const refresh = useCallback(() => loadSectionsRef.current(ALL_SECTIONS, { bypassCache: true }), []);
+
+  // A recall changes on-hand figures, Low stock and the Expiring list, so a
+  // recall recorded or lifted reloads them, and bumps the recalls panel.
+  const [recallVersion, setRecallVersion] = useState(0);
+  const handleRecallChanged = useCallback(() => {
+    setRecallVersion((v) => v + 1);
+    void refresh();
+  }, [refresh]);
 
   // Two effects, not one. `loadSections` closes over the filters, so a single
   // effect keyed on it reloaded all four sections on every keystroke -- and
@@ -588,10 +661,20 @@ const MedicalSuppliesPage: React.FC = () => {
     void loadSectionsRef.current(['items']);
   }, [debouncedSearch, categoryFilter, sortKey, page]);
 
-  // Moving into or out of the low-stock view changes the query, so the page
-  // goes back to the first one; a tab change within the same query does not.
+  // The two sections that depend on the window, and only on a change: the
+  // mount effect above has already asked for the first one.
+  const lastExpiryWindow = useRef(EXPIRY_WINDOW_DAYS);
+  useEffect(() => {
+    if (lastExpiryWindow.current === expiryWindow) return;
+    lastExpiryWindow.current = expiryWindow;
+    void loadSectionsRef.current(['summary', 'expiring']);
+  }, [expiryWindow]);
+
+  // Moving into or out of the low-stock or uncounted view changes the query,
+  // so the page goes back to the first one; a tab change within the same
+  // query does not.
   const selectTab = (next: Tab) => {
-    if ((next === 'low') !== lowStockOnly) setPage(0);
+    if ((next === 'low') !== lowStockOnly || (next === 'uncounted') !== uncountedOnly) setPage(0);
     setTab(next);
   };
 
@@ -696,6 +779,9 @@ const MedicalSuppliesPage: React.FC = () => {
   const expiringTotal = (summary?.expiring_soon ?? 0) + (summary?.expiring_soon_on_apparatus ?? 0);
   const expiredTotal = (summary?.expired ?? 0) + (summary?.expired_on_apparatus ?? 0);
   const noSuppliesYet = loaded.summary && summary?.total_items === 0;
+  // On the tab rather than as a fifth tile: the tile row is full, and the tab
+  // is where the list behind the number lives.
+  const uncountedCount = summary?.uncounted_on_apparatus ?? 0;
   const emptyCatalogHint = !canManage
     ? 'Nothing has been added to the medical catalog yet.'
     : categories.length === 0
@@ -901,6 +987,7 @@ const MedicalSuppliesPage: React.FC = () => {
             }`}
           >
             {label}
+            {id === 'uncounted' && uncountedCount > 0 && ` (${formatNumber(uncountedCount)})`}
           </button>
         ))}
       </div>
@@ -940,7 +1027,31 @@ const MedicalSuppliesPage: React.FC = () => {
           <SkeletonCard />
         ) : tab === 'expiring' ? (
           <section aria-label="Expiring stock">
-            {!noSuppliesYet && <LotRecallSearch linkToApparatus={canOpenApparatusInventory} />}
+            {!noSuppliesYet && (
+              <LotRecallSearch
+                linkToApparatus={canOpenApparatusInventory}
+                canRecall={canManage}
+                onRecalled={handleRecallChanged}
+              />
+            )}
+            <LotRecallsPanel canManage={canManage} version={recallVersion} onChanged={handleRecallChanged} />
+            <div className="mb-3 flex items-center gap-2">
+              <label htmlFor="medical-expiry-window" className="text-theme-text-secondary text-sm">
+                Look ahead
+              </label>
+              <select
+                id="medical-expiry-window"
+                className="form-input w-auto"
+                value={expiryWindow}
+                onChange={(e) => setExpiryWindow(Number(e.target.value))}
+              >
+                {EXPIRY_WINDOW_OPTIONS.map((days) => (
+                  <option key={days} value={days}>
+                    {days} days
+                  </option>
+                ))}
+              </select>
+            </div>
             {loaded.expiring && expiring.length === 0 && noSuppliesYet ? (
               // "Nothing expiring" over an empty catalog reads as an all-clear
               // for stock nobody has entered (CLAUDE.md pitfall #29: an empty set
@@ -950,14 +1061,26 @@ const MedicalSuppliesPage: React.FC = () => {
               <EmptyState
                 icon={CalendarClock}
                 title="Nothing expiring"
-                description={`Nothing on the shelves or the apparatus expires within ${EXPIRY_WINDOW_DAYS} days.`}
+                description={`Nothing on the shelves or the apparatus expires within ${expiryWindow} days.`}
               />
             ) : (
               <StockRowsTable rows={expiring} linkToApparatus={canOpenApparatusInventory} />
             )}
           </section>
         ) : (
-          <section aria-label={lowStockOnly ? 'Low stock supplies' : 'All supplies'} aria-busy={loading.items}>
+          <section
+            aria-label={
+              lowStockOnly ? 'Low stock supplies' : uncountedOnly ? 'Supplies not yet counted' : 'All supplies'
+            }
+            aria-busy={loading.items}
+          >
+            {uncountedOnly && (
+              <p className="text-theme-text-secondary mb-3 text-sm">
+                These supplies are carried on a truck position no crew has counted, so On hand includes that
+                position&apos;s target rather than what is really aboard. A count on the checklist or the
+                apparatus&apos;s inventory settles it.
+              </p>
+            )}
             <div className="mb-4 flex flex-wrap gap-2">
               <div className="relative min-w-[200px] flex-1">
                 <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -1052,7 +1175,13 @@ const MedicalSuppliesPage: React.FC = () => {
                   title="Nothing is low"
                   description="No supply is at or below its reorder point."
                 />
-              ) : debouncedSearch || categoryFilter || lowStockOnly || storageFilter ? (
+              ) : uncountedOnly && !debouncedSearch && !categoryFilter && !storageFilter ? (
+                <EmptyState
+                  icon={ClipboardList}
+                  title="Everything aboard has been counted"
+                  description="Every truck position carrying a medical supply has a count from a crew."
+                />
+              ) : debouncedSearch || categoryFilter || lowStockOnly || uncountedOnly || storageFilter ? (
                 <EmptyState
                   icon={Search}
                   title="No matching supplies"
@@ -1152,8 +1281,14 @@ const MedicalSuppliesPage: React.FC = () => {
                             onSort={handleSort}
                           />
                         </th>
-                        <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                          Next expiry
+                        <th className="px-4 py-3 text-left">
+                          <SortableHeader
+                            label="Next expiry"
+                            field="next_expiry"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
                         </th>
                         <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
                           Where
@@ -1242,7 +1377,7 @@ const MedicalSuppliesPage: React.FC = () => {
                             >
                               {item.reorder_point == null ? '—' : formatNumber(item.reorder_point)}
                             </td>
-                            <td data-label="Next expiry" className={`px-4 py-3 ${nextExpiryTone(item)}`}>
+                            <td data-label="Next expiry" className={`px-4 py-3 ${nextExpiryTone(item, expiryWindow)}`}>
                               {item.next_expiration_date ? (
                                 <>
                                   {formatDate(item.next_expiration_date, tz)}
@@ -1270,7 +1405,12 @@ const MedicalSuppliesPage: React.FC = () => {
                               )}
                             </td>
                             <td data-label="Where" className="text-theme-text-muted px-4 py-3">
-                              <SupplyWhere item={item} onOpen={() => setLotsItem(item)} />
+                              <SupplyWhere
+                                item={item}
+                                onOpen={() => setLotsItem(item)}
+                                uncountedOnly={uncountedOnly}
+                                linkToApparatus={canOpenApparatusInventory}
+                              />
                             </td>
                             <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
                               {/* Lots for everyone who can see the list: a crew
@@ -1408,6 +1548,7 @@ const MedicalSuppliesPage: React.FC = () => {
             sort_by: (sortDirection && sortField) || undefined,
             sort_order: (sortField && sortDirection) || undefined,
             low_stock: lowStockOnly || undefined,
+            uncounted: uncountedOnly || undefined,
             ...storageQuery,
           }}
         />

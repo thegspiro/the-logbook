@@ -168,9 +168,13 @@ and an owner may want to revisit each:
   real tenant. Two behaviours rest on documentation alone: that a cloud-only
   user's `extensionAttribute15` can be set in the request that creates it
   (the tag that tells a retry its own account from someone else's), and the
-  shape of Graph's "already exists" and on-premises errors. A department's
-  first conversion is the first real test; **Test** checks credentials,
-  license and groups beforehand but creates nothing.
+  shape of Graph's "already exists" and on-premises errors. A third, added
+  2026-10-23: that Graph reports a group's `assignedLicenses` to this
+  application, which is how a licensing group is told apart and left alone on
+  departure; if it does not, every group is left alone. The wiki's
+  "Verifying Against a Real Tenant" checklist exercises all three and the
+  rest of the integration, step by step; until a department has run it, its
+  first conversion is the first real test.
 - **The User Administrator role may be more than is needed.** Microsoft's
   documentation does not say whether resetting a password with the
   `User-PasswordProfile.ReadWrite.All` application permission also needs a
@@ -185,10 +189,16 @@ and an owner may want to revisit each:
   there. A tenant that already uses Exchange custom attribute 15 for every
   user (in a dynamic-group rule, say) will see The Logbook's value on new
   members' accounts instead.
-- **Client secrets expire.** An Entra ID secret lasts at most 24 months, and
-  The Logbook cannot read its expiry date without a further permission. When
-  it lapses, creation and blocking fail with "The client secret has expired"
-  until a new one is entered. A certificate is not supported.
+- **Client secrets expire, and the date is typed in.** An Entra ID secret
+  lasts at most 24 months. Reading its expiry from Graph would need
+  Application.Read.All, which can read every app registration in the tenant,
+  so an administrator records the date in the integration's settings instead
+  (owner decision, 2026-10-23). With a date recorded, the Integrations card
+  says so from 30 days out and the administrators' morning email warns at 30
+  days, at 7 and on the day. Without one, or with a stale one after the secret
+  is replaced, nothing warns: creation and blocking simply fail with "The
+  client secret has expired" until a new one is entered. A certificate is not
+  supported.
 - **One directory per department.** Google Workspace and Microsoft 365 cannot
   both be connected. Switching moves nothing: records for the old directory
   stay, and their suspensions wait until it is connected again.
@@ -202,15 +212,37 @@ converted to a member and suspends it when the member is dropped or deleted
 (`wiki/Integration-Google-Workspace.md`). Each of these is a deliberate
 choice an owner may want to revisit:
 
-- **Retirement keeps the account.** Only a drop or a delete suspends it; a
-  department may let retirees keep their address. Retired, on-leave, inactive
-  and Logbook-suspended members keep a working Google account.
+- **Retirement keeps the account unless the department opts in.** A drop or a
+  delete always suspends it. Retiring does only when the integration's
+  "suspend when a member retires" setting is on (off by default; owner
+  decision, 2026-10-23), and only for members who retire while it is on:
+  turning it on does not reach back to members already retired, and turning
+  it off does not lift suspensions it caused. On-leave, inactive and
+  Logbook-suspended members always keep a working account.
 - **Suspended, never deleted.** A departed member's account keeps its mailbox
   and its Workspace license until an administrator deletes it in Google.
+- **Long-suspended accounts are listed, not unlicensed.** The daily departure
+  check marks an account still in the directory 90 days after its suspension;
+  the attention list shows it and the morning email names it once (owner
+  decision, 2026-10-23). Nothing is removed. An account deleted in the
+  directory is unmarked only when its record holds the directory's id; one
+  matched by address alone stays listed until the member returns.
 - **A permanent delete cannot be retried.** The account record goes with the
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
-- **No rename.** A member's name change in The Logbook does not reach Google.
+- **A rename changes the name, never the address.** A member's first or last
+  name change reaches an account The Logbook created (given and family name;
+  Microsoft 365's display name too), but the email address and sign-in name
+  stay as they were. An existing account The Logbook only linked to is never
+  renamed, a Microsoft 365 account synced from Active Directory is renamed
+  there, and a departed member's account keeps its name until they return.
+  Names changed before this was added are not sent.
+- **Groups follow the configuration, not history.** A departure takes an
+  account The Logbook created out of the groups configured _now_, and a return
+  puts it back in them; the record does not keep which groups the account
+  joined at creation. A Microsoft 365 group that assigns licenses is never
+  touched (owner decision, 2026-10-23), nor is one whose licenses Graph does
+  not report. Members who left before this was added keep their groups.
 - **A departed member's account cannot be kept on.** The daily departure check
   (owner decision, 2026-10-20) suspends again any departed member's account
   found active in the directory, every morning, with no exemption: an
@@ -472,11 +504,19 @@ guides can point at one place and an owner can decide it.
   name NFC tags and ID cards among what a changed or mismatched salt breaks.
 - **Probationary counts as active only where `User.is_active` is read**
   (#2886). Sign-in, scheduling, messaging recipients and the other
-  `is_active` callers now admit probationary and junior members. About forty
-  other places compare `status == ACTIVE` by hand — training compliance,
-  certification alerts, rosters, reports, meeting quorum, administrative
-  continuity — and still leave them out. Some (quorum, continuity) may be
-  right to, depending on bylaws. **Pending an owner decision per site.**
+  `is_active` callers already admitted probationary and junior members.
+  ✅ **Resolved 2026-10-20** (CLAUDE.md Pitfall #32): the owner decided
+  training compliance, the compliance officer views, certificate alerts,
+  the competency matrix, meeting quorum, administrative continuity, rosters,
+  reports/exports and the remaining `== ACTIVE` sites all count a
+  probationary member as current, with no bylaws exception for quorum or
+  continuity. Every such gate now filters
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (or the instance form); the one
+  deliberate holdout is the admin hub's `_members_active` tile, which keeps
+  the literal status because its Probationary tile sits beside it and the
+  two must add up. `tests/test_account_status_gates.py` sweeps `app/` for a
+  literal `== ACTIVE` comparison and fails on any site outside that single
+  allowlist entry.
 - **Another member's ID card is gated in the screens, not the API** (#2860).
   The profile's **ID Card** button and the card page now require
   `members.manage` or `members.manage_id_cards` for someone else's card, but
@@ -976,8 +1016,16 @@ own bucket once **Test and switch to S3** passes with its saved settings, and
 the Storage screen reports where new files go whatever platform is picked.
 Still open:
 
-- **Google Drive, OneDrive / SharePoint and "Other" are still unread.** The
-  screen now says files stay on the server for them.
+- **OneDrive / SharePoint and "Other" are still unread.** The screen says
+  files stay on the server for them, and lists what can be connected.
+  **Resolved 2026-10-23: Google Drive works** (decision 32), through a
+  service account and a Shared Drive. It needs Google Workspace; a personal
+  Google account has no Shared Drives.
+- **A Drive reference is trusted to name the department's drive.** Reads go
+  by file id with the department's own service account, which reaches only
+  the drives it was added to; the existence check also requires the file to
+  be in the drive the reference names, but a download does not repeat that
+  check. Rows are written only by the server.
 - **Resolved 2026-10-22: existing files move with
   `scripts/migrate_uploads_to_s3.py`** (apply, rollback, finalize), and
   `scripts/encrypt_uploads.py --rewrap` reaches bucket objects. Every object
@@ -1975,11 +2023,18 @@ not, and remains unwired.
 A fresh install is built from the models (`main.py`'s fast path:
 `create_all`, then `MIGRATION_ONLY_FILES` and the seed files, then a stamp at
 head). An existing installation is built by the Alembic chain plus the startup
-column repair. A comparison of the two on 2026-10-20 found two defects, which
-are fixed (duplicate RESTRICT foreign keys on 18 apparatus columns, and three
-redundant `organization_id` indexes), and the differences below, which are
-**accepted** for now. `backend/tests/test_live_schema_drift.py` guards the
-fixed directions on CI's migrated database. It deliberately does not assert
+column repair. A comparison of the two on 2026-10-20 found defects that are
+now fixed:
+
+- duplicate RESTRICT foreign keys on 18 apparatus columns;
+- three redundant `organization_id` indexes;
+- 99 columns NOT NULL on upgraded databases and nullable in the models
+  (`f938324f8081` relaxed `training_waivers.end_date`; `6dce1364ff7e` made the
+  other 99 NOT NULL everywhere).
+
+The differences below are **accepted** for now.
+`backend/tests/test_live_schema_drift.py` guards the fixed directions on CI's
+migrated database, nullability included. It deliberately does not assert
 these.
 
 **Tables only an upgraded database has: by design.** Three bookkeeping tables,
@@ -1998,16 +2053,19 @@ tables are the separately named `facility_compliance_checklists` family.
 **Open decision:** retire them (this drops whatever rows a department has in
 them), or leave them as harmless empty tables.
 
-**Upgraded databases are stricter than the models.** About 100 columns are
-`NOT NULL` on an upgraded database and nullable in the models, and about 177
-carry a server default that a fresh install lacks. They are mostly booleans,
-sort orders and timestamps. The
-application supplies every one of these values on insert, so ordinary use does
-not reach the gap. It shows up when code writes an explicit `null` to one of
-these columns: `apply_updates` reads nullability from the models, so it passes
-the write, and an upgraded database then rejects it at flush time with a 500
-instead of a 400. Closing it means choosing, per column, which side is right.
-That makes it a sweep with its own review, not a mechanical migration.
+**Server defaults only upgraded databases carry.** 133 columns have a server
+default (`0`, `1`, a sort order, `'pending'`) on an upgraded database and none
+on a fresh install, where the model's Python default is used instead. Their
+nullability already agrees:
+
+- 34 are `NOT NULL` on both kinds of database;
+- 99 are nullable on both, for example `apparatus.is_financed`.
+
+Writes through the ORM supply the Python default, so ordinary requests do not
+see the difference. Only a hand-written `INSERT` that leaves one of these
+columns out behaves differently. On an upgraded database it gets the default.
+On a fresh install it fails for the 34 and stores NULL for the 99. These were
+left as they are because every write found goes through the ORM.
 
 **One unused index on upgraded databases.** `20260808_0003` dropped the
 foreign key on `shift_equipment_checks.apparatus_id`, and MySQL kept the index
@@ -2075,8 +2133,9 @@ shows one URL with a copy button and a **Reset link** control
 (`/api/public/v1/calendar/org/{token}.ics`). The integration's stored
 `included_event_types` narrows that feed by event type, but no screen sets it,
 so in practice the card's link carries every published event. There is no
-training-only feed and no per-filter list of URLs. `ICalConfig.include_shifts`
-is accepted and stored but read by nothing; no screen offers it.
+training-only feed and no per-filter list of URLs. The department feed carries
+no shifts; an `include_shifts` setting that was accepted and stored but read by
+nothing was removed on 2026-10-23.
 
 The guide-03 subscribe card is deliberately not captured because expanding it
 exposes the calendar feed's bearer credential; the same applies to a connected
@@ -2199,7 +2258,9 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    (`enforce_position_eligibility=True`), which returns no positions for an
    excluded type, and the assignment is refused with "Member is no longer
    eligible for this shift". Shifts open to all members and administrative
-   members are the exceptions.
+   members are the exceptions. **Same refusal now extends to pattern
+   generation (2026-10-24):** generated seats run the same check, so an
+   excluded member is left unseated rather than seated by the pattern.
 6. **"Manage schedules" sees assign controls the server refuses.**
    `ShiftDetailPanel.tsx` and `OpenShiftsTab.tsx` show **Assign someone** to
    `scheduling.manage` holders, but creating, editing or removing an assignment
@@ -2212,6 +2273,68 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    **Complete Checklists** button.
    **Resolved (2026-10-11):** the hint now reads "Not started — use Complete
    Checklists above".
+
+## Scheduling — Left Open by the Shifts-Module Review (2026-10-24)
+
+The 2026-10-24 review of the shifts module fixed what it found in a set of
+pull requests: the trainee report view that erased officers' narratives, the
+generation duplicate guard and DST end time, template reactivation,
+assignment and eligibility gates, locks on finalized and cancelled shifts,
+shift-report review rules, and the report figures. Each item below was found
+in the same pass and needs a schema change or a product decision, so it is
+recorded here rather than built.
+
+1. **Deleting or re-timing a generated shift lets auto-generation recreate
+   it.** Pattern generation treats an occurrence as already present when a
+   shift from the pattern's template starts at that date and time; that is not
+   a durable occurrence key. Deleting a generated shift (which removes the
+   row) or moving its start leaves nothing at that key, so the next scheduled
+   run — when auto-generation is on — recreates the original occurrence with
+   the pattern's full crew. **Cancel** is the supported way to remove one
+   occurrence: a cancelled shift stays in the guard and is never regenerated.
+   To change a generated shift's start, cancel it and create the replacement
+   by hand. A fix needs a stored pattern/occurrence key on generated shifts (a
+   column and a migration).
+2. **The nightly run reports skipped seats as a count in the server log
+   only.** Generation now seats a member only where the seat, eligibility,
+   seat cap, leave and overlap checks an officer's assignment runs would allow
+   it. A manual Generate names the skipped members in its result; the
+   scheduled run logs how many it skipped per pattern and shows nothing in the
+   app, so a department whose members have no rank, qualification or open
+   position configured sees crews left unseated with no on-screen notice.
+   Surfacing it (a notification to schedulers, or a badge on the pattern) is
+   open.
+3. **Editing an approved shift report does not restate its training
+   credit.** The filing officer can no longer change a submitted report's
+   status, but can still edit an approved report's hours, calls and skills,
+   and the credit already applied keeps the old figures, so the report and the
+   pipeline disagree. Locking content edits after approval would remove
+   behaviour existing call-type provenance tests depend on; restating the
+   credit on edit is the alternative. Either is the owner's choice.
+4. **Sign-offs recorded before 2026-10-24 can still duplicate on
+   re-approval.** Re-approving a report no longer adds a second skill sign-off
+   for the same skill, keyed on the report id now stored in
+   `SkillCheckoff.evaluation_results`. Sign-offs written before that carry no
+   report id, so re-approving one of those older reports can still add one.
+5. **Shift attendance has no database-level uniqueness.** `add_attendance`
+   now locks the shift and refuses a second row for the same member, and
+   `member_check_in` already did, but `shift_attendance` has no unique
+   constraint on `(shift_id, user_id)`. Adding one needs a migration that first
+   settles any duplicate rows already stored (CLAUDE.md Pitfall #35).
+6. **Shift cancellation notices are in-app only.** `cancel_shift` notifies the
+   crew in the app and sends no email, and unlike the decline and assignment
+   notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes
+   email the channel of record; whether a cancellation should email, and
+   under which member email kind, is a product decision.
+7. **The month and week calendars stop at 500 shifts without saying so.**
+   `get_month_shifts` and `get_week_shifts` pass `limit=500`, so a department
+   running enough units with day and night shifts loses the end of the month
+   from the calendar.
+8. **Driver/EVOC enforcement knows the seat named `driver` only.** Custom
+   seat names are stored as typed, so a department that names its wheel seat
+   "Engineer" or "Driver/Operator" seats members without the required EVOC
+   level, with no block or warning. A fix is a "drives apparatus" flag on the
+   seat definition or an alias list.
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
@@ -3427,6 +3550,28 @@ Recorded here rather than as a second entry (security review MP-08 pass 8,
 **Accepted by the owner (2026-10-05):** both sites keep the file-first order;
 the residual is retry-safe and needs a rare compound failure, so no
 trash-and-restore scheme is built.
+
+## Membership Pipeline — Typing Your Own Email Into the Duplicate Check Names Your Own Application (2026-10-23, resolved 2026-10-23)
+
+`POST /prospective-members/prospects/check-existing` returns
+`existing_applicant` (name, pipeline, stage) for the active applicant holding
+the email the caller typed, and `POST /prospects` refuses that email with a
+409 that names the same three things. Neither route has `{prospect_id}` in its
+path, so the router-wide `block_self_prospect_access` guard never runs, and
+neither applies `get_hidden_prospect_ids`. A caller holding `members.create`
+or `prospective_members.manage` who also has an active application of their
+own can type their own email and learn which pipeline and stage that
+application is at. `prospect_privacy.py` says a member must never be able to
+read that about their own file.
+
+**Resolved (2026-10-23, owner decision: hide the caller's own match).** Both
+routes now depend on `get_hidden_prospect_ids`. `check-existing` returns
+`existing_applicant: null` when the match is the caller's own application,
+and the 409 says only "An active applicant already uses this email", with no
+name, pipeline or stage. The refusal still confirms that an active
+application holds the email; it has to refuse, and the caller already knows
+they applied. That is the same line the router guard's 404 draws. Both routes
+were removed from `EXEMPT` in `tests/test_prospect_route_self_access_coverage.py`.
 
 ## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02, resolved 2026-10-11)
 
@@ -6955,6 +7100,34 @@ declared scope — it is the closest sibling (a requirement-credit path,
 like `training_programs.py`'s own enrollment logic) — and give it a first
 full pass before Feature 17 is next due in the rotation, rather than let it
 ride uncovered through another full cycle under Feature 17's existing ✅.
+
+## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)
+
+Found by security review DOC-10 pass 11
+(`docs/security-review/DOC-10-documents-legal.md`, pass 11, DOC-31). An
+owner-direct change landed between pass 10 and pass 11 that makes
+`DocumentsService.delete_document`/`delete_folder` refuse to delete a
+document that is the receipt on a purchase request or expense report once
+that record has left `DRAFT` — closing a prior silent-data-loss gap where the
+`SET NULL` foreign key let the receipt reference disappear with no trace.
+
+The new check (`_release_document_references`) reads the referencing
+`PurchaseRequest`/`ExpenseReport` rows with a plain `SELECT`, not
+`.with_for_update()`. If another transaction submits that same request past
+`DRAFT` between this read and the deleting transaction's commit, the delete
+can still proceed and the request ends up referencing a document that no
+longer exists — the original failure mode, reached through a race instead of
+through the missing check. The window is one request's own transaction, and
+the worst case is no worse than the pre-pass-11 behavior; this is an unclosed
+gap in the new guard, not a regression.
+
+**Not fixed.** Closing it means taking a locking read
+(`.with_for_update()`) on the referencing `PurchaseRequest`/`ExpenseReport`
+rows inside a document-delete transaction, which raises a lock-ordering
+question against Finance's own locking conventions (Pitfall #27) that a
+documents-feature review pass should not decide unilaterally — Finance and
+Documents would need to agree on one order before this can lock safely
+without risking a new cross-feature deadlock.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be

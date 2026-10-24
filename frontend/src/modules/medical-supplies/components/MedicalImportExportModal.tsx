@@ -3,7 +3,7 @@
  *
  * Export comes in two files because an officer reaches for them for different
  * jobs: the supply list (one row per item, with reorder points and ready-lot
- * totals) for ordering, and the lot list (one row per dated lot) for an expiry
+ * totals) for ordering, and the lot list (one row per lot, shelf and truck) for an expiry
  * audit. Import creates supplies and records stock lots; it never edits a
  * supply already on file, only adds lots to one.
  *
@@ -56,7 +56,14 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
   const [busy, setBusy] = useState<'items' | 'lots' | 'template' | 'import' | null>(null);
   const [result, setResult] = useState<MedicalImportResult | null>(null);
 
-  const filtered = Boolean(filters.search || filters.category_id);
+  const filtered = Boolean(
+    filters.search ||
+    filters.category_id ||
+    filters.low_stock ||
+    filters.uncounted ||
+    filters.location_id ||
+    filters.storage_area_id
+  );
 
   const handleClose = () => {
     if (result && (result.imported > 0 || result.lots_added > 0 || result.categories_created.length > 0)) onImported();
@@ -135,8 +142,8 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
           </h3>
           <p className="text-theme-text-muted text-sm">
             {filtered
-              ? 'The supply list uses the search and category filter on the page.'
-              : 'The supply list has one row per item. The lot list has one row per dated lot, soonest expiry first.'}
+              ? 'The supply list uses the filters on the page, with what the trucks carry and each next expiry.'
+              : 'The supply list has one row per item, with what the trucks carry and each next expiry. The lot list has one row per lot, on the shelves and the apparatus, soonest expiry first.'}
           </p>
           <div className="flex flex-wrap gap-2">
             <button

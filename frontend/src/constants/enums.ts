@@ -33,6 +33,14 @@ export const InventoryNfcTagStatus = {
 } as const;
 export type InventoryNfcTagStatus = (typeof InventoryNfcTagStatus)[keyof typeof InventoryNfcTagStatus];
 
+/** What an inventory NFC tag is stuck to. A tag moves only within its kind. */
+export const InventoryNfcTagKind = {
+  ITEM: 'item',
+  STORAGE_AREA: 'storage_area',
+  COMPARTMENT: 'compartment',
+} as const;
+export type InventoryNfcTagKind = (typeof InventoryNfcTagKind)[keyof typeof InventoryNfcTagKind];
+
 /**
  * What a logged NFC tap did: identified an item, moved it onto a shelf, or
  * found it during a shelf audit.
@@ -122,6 +130,13 @@ export const NfcCheckInStatus = {
   REFUSED: 'refused',
 } as const;
 export type NfcCheckInStatus = (typeof NfcCheckInStatus)[keyof typeof NfcCheckInStatus];
+
+/** Which kind of reader a card tap came through: a staffed station or a room's public kiosk. */
+export const NfcTapSource = {
+  STATION: 'station',
+  KIOSK: 'kiosk',
+} as const;
+export type NfcTapSource = (typeof NfcTapSource)[keyof typeof NfcTapSource];
 
 /** Badge classes per card status, matching the status-colour maps below. */
 export const NFC_CARD_STATUS_COLORS: Record<string, string> = {

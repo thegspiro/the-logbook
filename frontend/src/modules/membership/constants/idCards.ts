@@ -6,7 +6,7 @@
  * about cards that identify a person.
  */
 
-import { NfcCardStatus, NfcCheckInStatus } from '../../../constants/enums';
+import { NfcCardStatus, NfcCheckInStatus, NfcTapSource } from '../../../constants/enums';
 
 /**
  * Reduce a reader's serial to one canonical form.
@@ -40,6 +40,30 @@ export const NFC_CARD_STATUS_LABELS: Record<NfcCardStatus, string> = {
   [NfcCardStatus.SUSPENDED]: 'Suspended',
   [NfcCardStatus.LOST]: 'Lost',
   [NfcCardStatus.REVOKED]: 'Revoked',
+};
+
+/** What a tap on the log did, in the words an officer would use. */
+export const NFC_TAP_OUTCOME_LABELS: Record<NfcCheckInStatus, string> = {
+  [NfcCheckInStatus.CHECKED_IN]: 'Checked in',
+  [NfcCheckInStatus.CHECKED_OUT]: 'Checked out',
+  [NfcCheckInStatus.ALREADY_CHECKED_IN]: 'Already checked in',
+  [NfcCheckInStatus.ALREADY_CHECKED_OUT]: 'Already checked out',
+  [NfcCheckInStatus.UNKNOWN_CARD]: 'Unknown card',
+  [NfcCheckInStatus.CARD_INACTIVE]: 'Card not active',
+  [NfcCheckInStatus.MEMBER_INACTIVE]: 'Member not active',
+  [NfcCheckInStatus.REFUSED]: 'Refused',
+};
+
+export const NFC_TAP_SOURCE_LABELS: Record<NfcTapSource, string> = {
+  [NfcTapSource.STATION]: 'Check-in station',
+  [NfcTapSource.KIOSK]: 'Room kiosk',
+};
+
+/** Badge classes for a tap outcome, by the same tone the station screen uses. */
+export const NFC_TAP_TONE_COLORS: Record<'success' | 'info' | 'error', string> = {
+  success: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  info: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  error: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
 /**

@@ -66,6 +66,7 @@ from app.api.v1.endpoints import (
     messages,
     minutes,
     minutes_records,
+    nfc_activity,
     nfc_tags,
     notifications,
     officers,
@@ -161,6 +162,9 @@ api_router.include_router(locations.router, prefix="/locations", tags=["location
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(nfc_tags.router, prefix="/nfc-tags", tags=["nfc-tags"])
+api_router.include_router(
+    nfc_activity.router, prefix="/nfc-activity", tags=["nfc-activity"]
+)
 api_router.include_router(
     organizations.router, prefix="/organization", tags=["organization"]
 )

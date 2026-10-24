@@ -17,6 +17,7 @@ import type {
   NfcCheckInStatus,
   NfcCheckInTarget,
   NfcCredentialType,
+  NfcTapSource,
 } from '../../../constants/enums';
 
 export interface NfcCard {
@@ -35,6 +36,8 @@ export interface NfcCard {
   issuedBy?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Suspended because the holder left; comes back by itself if they return. */
+  autoSuspended?: boolean;
   memberName?: string | null;
   issuedByName?: string | null;
 }
@@ -90,4 +93,115 @@ export interface NfcStationCheckInResult {
   membershipNumber?: string | null;
   occurredAt?: string | null;
   durationMinutes?: number | null;
+}
+
+export interface NfcCardBulkStatusPayload {
+  tag_ids: string[];
+  status: NfcCardStatus;
+  revoked_reason?: string | null;
+}
+
+export interface NfcCardBulkStatusResult {
+  updated: NfcCard[];
+  failed: { id: string; detail: string }[];
+}
+
+/** A current member with no working card. */
+export interface NfcCoverageMember {
+  userId: string;
+  memberName?: string | null;
+  membershipNumber?: string | null;
+  memberStatus?: string | null;
+}
+
+/** A card on a coverage list, with its holder's membership status. */
+export interface NfcCoverageCard extends NfcCard {
+  memberStatus?: string | null;
+}
+
+/**
+ * Each list is capped server-side; its `*Total` is the real count, so the
+ * screen can say "showing 1,000 of 1,240" rather than imply completeness.
+ */
+export interface NfcCoverage {
+  unusedDays: number;
+  currentMemberCount: number;
+  cardCounts: Record<NfcCardStatus, number>;
+  membersWithoutCard: NfcCoverageMember[];
+  membersWithoutCardTotal: number;
+  unusedCards: NfcCoverageCard[];
+  unusedCardsTotal: number;
+  formerMemberCards: NfcCoverageCard[];
+  formerMemberCardsTotal: number;
+}
+
+/**
+ * One tap on the log. `unknownCardKey` is the start of an unregistered card's
+ * peppered hash — enough to see the same stranger's card tried repeatedly,
+ * never the serial itself.
+ */
+export interface NfcCardTap {
+  id: string;
+  tappedAt: string;
+  outcome: NfcCheckInStatus;
+  source: NfcTapSource;
+  tagId?: string | null;
+  cardUidPreview?: string | null;
+  cardLabel?: string | null;
+  unknownCardKey?: string | null;
+  userId?: string | null;
+  memberName?: string | null;
+  locationId?: string | null;
+  locationName?: string | null;
+  operatorId?: string | null;
+  operatorName?: string | null;
+  targetType?: NfcCheckInTarget | null;
+  targetId?: string | null;
+  targetName?: string | null;
+}
+
+export interface NfcCardTapList {
+  items: NfcCardTap[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Tap-log filters. `since`/`until` are UTC ISO instants (until exclusive). */
+export interface NfcCardTapFilters {
+  tagId?: string | undefined;
+  userId?: string | undefined;
+  outcome?: NfcCheckInStatus | undefined;
+  source?: NfcTapSource | undefined;
+  since?: string | undefined;
+  until?: string | undefined;
+}
+
+export interface NfcIdCardSettings {
+  tapRetentionMonths: number;
+}
+
+/** One room on the Card Readers page. Counts are kiosk taps over `NfcReaderList.days`. */
+export interface NfcReaderRoom {
+  locationId: string;
+  name: string;
+  building?: string | null;
+  roomNumber?: string | null;
+  readerEnabled: boolean;
+  taps: number;
+  refusals: number;
+  lastTapAt?: string | null;
+}
+
+/**
+ * Rooms and their readers, plus what this viewer may do: `canSwitch` mirrors
+ * the grant the badge-check-in switch enforces, `canSeeMembers` whether room
+ * tap lists will name members.
+ */
+export interface NfcReaderList {
+  items: NfcReaderRoom[];
+  days: number;
+  cardsEnabled: boolean;
+  canSwitch: boolean;
+  canSeeMembers: boolean;
 }

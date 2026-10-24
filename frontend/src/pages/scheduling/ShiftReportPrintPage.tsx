@@ -12,7 +12,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { shiftCompletionService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
 import {
@@ -102,11 +102,12 @@ const ShiftReportPrintPage: React.FC = () => {
     );
   }
 
-  const dateStr = formatDateCustom(
-    report.shift_date + 'T12:00:00',
-    { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' },
-    tz
-  );
+  const dateStr = formatCalendarDate(report.shift_date, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
   const hasEvaluation =
     report.performance_rating ||

@@ -4,10 +4,11 @@
  * without pulling the hub into the main bundle.
  */
 
-import { CalendarPlus, History, Inbox, Megaphone, QrCode, Settings } from 'lucide-react';
+import { CalendarPlus, History, Inbox, Megaphone, Nfc, QrCode, Settings } from 'lucide-react';
 import type { AdminHubCardTab } from '../components/admin/AdminHubCardTabs';
 
-export type EventsAdminTab = 'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'settings';
+export type EventsAdminTab =
+  'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'card_checkins' | 'settings';
 
 /**
  * Settings is always last — the frame's rule, on every module. Every tab is
@@ -30,6 +31,12 @@ export const EVENTS_ADMIN_TABS: AdminHubCardTab<EventsAdminTab>[] = [
     label: 'Community Engagement',
     description: 'How far public outreach events reach',
     icon: Megaphone,
+  },
+  {
+    id: 'card_checkins',
+    label: 'Card Check-ins',
+    description: 'Member ID card taps at stations and room kiosks',
+    icon: Nfc,
   },
   {
     id: 'settings',

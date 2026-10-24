@@ -1,5 +1,19 @@
 # Script currency
 
+## Flagged by the 2026-10-23 → 10-24 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+| Script                    | Beat                    | Was                               | Now                                                                                                                                                              |
+| ------------------------- | ----------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **05** (training), **09** | Completing a member     | Only by meeting every requirement | Officers can **Mark pipeline complete** with a required reason; a pipeline with no active requirements shows **No active requirements** and completes nobody     |
+| **05**, **09**, **11**    | Deactivating a pipeline | Members keep progressing          | Deactivating from the edit form withdraws in-progress members after a confirmation                                                                               |
+| **03** (IT)               | Directory accounts      | Retired members keep the account  | Opt-in **Suspend the account when a member retires**; departures leave groups; name changes rename the account; Microsoft client secret expiry date and warnings |
+| **03** (IT)               | Backups                 | Plain encrypted archive           | Encrypt to an offline certificate with a server drill key (see `BACKUP.md`)                                                                                      |
+| **04** (finance)          | Reimbursement           | Not scripted                      | Reimburse a purchase by check; withdraw a draft; approver shown before submit; budget lines under an inactive category refuse new charges                        |
+| **Any inventory beat**    | Renaming a size group   | Group row only                    | **Rename** carries onto every size                                                                                                                               |
+
 ## Flagged by the 2026-10-21 → 10-22 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).

@@ -416,6 +416,16 @@ There are two ways to make one:
 In the item list, a product's size variants fold into one row that you expand
 to see each size. A coat in six sizes is one line until you open it.
 
+### Renaming a variant product
+
+Rename a product once and every size follows. On **Inventory Administration →
+Variant Groups**, edit the group's name, or on the folded product row in the item
+list choose **Rename** (needs **Manage inventory**). The first part of each size's
+name, before the dash, becomes the new name; the size, colour and style after it
+stay. A size filed under a different name is left alone. If any new name would be
+over 255 characters, nothing changes. Generating more sizes afterward reuses the
+group by its new name.
+
 ### Generating sizes and styles
 
 Needs the **Manage gear, uniforms and equipment** permission.
@@ -1265,6 +1275,12 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
   manage gear; medical rows to those who manage medical supplies. Someone with
   both gets one complete email.
 - An officer who has turned off their quartermaster duty emails is left out.
+- When the email lists gear or uniform rows it ends with **View low-stock gear
+  and uniforms**. The link opens **Inventory Items** already narrowed to items at
+  or below their reorder point, with a notice **Showing only items at or below
+  their reorder point** and a **Show all items** button to lift it. Medical rows
+  link to the **Low stock** tab of Medical Supplies instead, and an officer who
+  sees only one kind gets only that link.
 - Low-stock alerts are **email only**. No text message is sent, because
   reordering is a business-hours decision made from an item table a text
   cannot hold.
@@ -1277,9 +1293,7 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
 | **Property return reminder** and **member dropped** notice | Two columns, **Item** and **Value**, with condition, serial number and asset tag as grey lines under the item. A missing value is left out          |
 | **Supplies to Replace** (weekly)                           | Supplies expiring on the apparatus, with a **Status** column. See [Shifts & Scheduling](./03-scheduling.md#alerts)                                  |
 
-<!-- Screenshot needed:
-_[A test send, at phone width (390px), of the Supplies to Replace email from the email template editor preview: the Status column with one expiring row, one "Restock reported" row and one "Short — 2 of 4 aboard" row.]_
--->
+![The weekly Supplies to Replace email at phone width: supplies on apparatus with replacement stock ready, the Status column showing a date with days left for an expiring supply, Restock reported with the crew's note, and Short with how many are aboard against the target, and the shelf lots expiring below](./images/05-136-supplies-to-replace-email-phone.png)
 
 ---
 
@@ -1647,9 +1661,7 @@ In **Distribute** or **Return** for a member, select **Tap NFC** next to
 like a scanned barcode. Select **Stop NFC** when done; closing the window also
 stops it.
 
-<!-- Screenshot needed:
-_[Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Assign for a demo member, NFC on: the scanner with Tap NFC armed (reading "Stop NFC") and one tapped item in the list. Web NFC does not exist in the capture harness, so this cannot be a manifest entry.]_
--->
+![The Assign items scanner on an Android phone with Tap NFC armed, the button reading Stop NFC, and the tapped Structural Coat — S added to the list](./images/05-138-scan-tap-nfc.png)
 
 ### Putting items away by tap
 
@@ -1754,9 +1766,7 @@ Cards**), the **Scan Member ID** window on the inventory screens also shows
 card marked lost, or one belonging to an inactive member, is refused with the
 reason.
 
-<!-- Screenshot needed:
-_[Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Scan Member ID, with inventory NFC and NFC ID Cards both on: the Scan Member ID window with "Or tap their ID card" below the camera controls. No card serial or member number may be visible. Not a manifest entry, because Web NFC is absent in the harness.]_
--->
+![The Scan Member ID window on an Android phone with the camera controls and, below them, Or tap their ID card](./images/05-139-scan-member-id-tap-card.png)
 
 ### Self-service kiosk
 
@@ -1834,9 +1844,7 @@ and use **Download CSV** for the full list.
 
 This report works whether or not NFC tags are turned on.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/not-seen: default 180 days, All categories, with at least one "Never" row and one dated row showing its source (e.g. "Returned · 212 days ago"), and Download CSV enabled. NFC may be off, which shows the report needs no tags.]_
--->
+![Items Not Seen at its default of 180 days and All categories: items never handled listed first as Never, then two items last seen on a date with Returned or Assigned and the days ago, and Download CSV enabled](./images/05-127-items-not-seen.png)
 
 ---
 
@@ -2343,9 +2351,7 @@ The **property return report** created when a member is dropped is a separate
 document. See
 [Membership > Member Status Management](./01-membership.md#member-status-management).
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin: crop to the Needs attention card showing an "Unresolved departure clearance · <demo member> · 1 outstanding · Due <date> · Review" row. Requires a demo member dropped while holding an item.]_
--->
+![The Needs attention card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button](./images/05-132-departure-clearance-needs-attention.png)
 
 ### Creating a Clearance
 
@@ -2745,7 +2751,7 @@ allow. On a page below a section, such as one apparatus, the strip shows a trail
 in Operations' terms. The side and top navigation draw from the same list, so
 the three can no longer offer different sections.
 
-<!-- Screenshot needed: the Operations section strip under the page title, on Fleet Readiness at 1280px, with the current section marked. Replaces the old per-page headers wherever a guide 05 or 06 image shows the page title. -->
+![Fleet Readiness at laptop width: the Operations sections strip with Fleet Readiness marked as the current section, and under it the page title row with its description and actions](./images/05-128-operations-section-strip.png)
 
 ### Phone layouts for the apparatus screens
 
@@ -2762,7 +2768,11 @@ the three can no longer offer different sections.
   apparatus** puts a heading per rig. **Add stock** opens a sheet with Quantity
   and Lot side by side and the amount on the truck now above them.
 
-<!-- Screenshot needed: at 390px: the apparatus detail header and pinned tabs; the supply worklist with its count chips; the Add stock sheet. None exist. -->
+![One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header](./images/05-129-apparatus-detail-phone.png)
+
+![The Expiring on Apparatus worklist on a phone with its count chips, each item showing its rig, compartment, expiry and lot, and full-size Add and Manage buttons](./images/05-130-supply-worklist-phone.png)
+
+![The Add stock sheet on a phone: the amount on the truck now above Quantity and Lot side by side](./images/05-131-add-stock-sheet-phone.png)
 
 ### Where checklists live
 
@@ -3038,7 +3048,11 @@ and tiles, not deleted; unticking brings them back. The CSV import and export
 carry the setting as a **Kept on Apparatus Only** column (Yes or No; any other
 value is refused rather than guessed).
 
-<!-- Screenshot needed: the Medical Supplies list showing "+12 on trucks" and a Next expiry that names a truck; the supply form with Kept on apparatus only ticked; the Expiring tab with the shelf/truck split on its tiles. -->
+![Medical Supplies with a supply's shelf count followed by how many are on trucks, and a Next expiry that names the truck carrying the soonest-expiring lot](./images/05-133-medical-supplies-on-trucks.png)
+
+![The medical supply form with Kept on apparatus only ticked and its explanation, for a supply that never goes through the stock room](./images/05-134-medical-supply-apparatus-only.png)
+
+![The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 1 shelf and 1 on trucks, and the list carrying a shelf lot beside the tourniquet carried on Rescue 7](./images/05-137-medical-expiring-split.png)
 
 ### Deleting a medical supply category
 

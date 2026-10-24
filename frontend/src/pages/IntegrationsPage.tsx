@@ -463,6 +463,9 @@ const IntegrationsPage: React.FC = () => {
   const [msUsageLocation, setMsUsageLocation] = useState('US');
   const [msLicenseSkuId, setMsLicenseSkuId] = useState('');
   const [msGroups, setMsGroups] = useState('');
+  const [msSecretExpiresOn, setMsSecretExpiresOn] = useState('');
+  // Shared by Google Workspace and Microsoft 365: only one form is open at once.
+  const [suspendOnRetirement, setSuspendOnRetirement] = useState(false);
   // The connect form doubles as the settings form for a connected Claude
   // (MCP) integration. Reconnecting is not an option there: disconnect
   // revokes the service key and ends every member connection.
@@ -656,6 +659,10 @@ const IntegrationsPage: React.FC = () => {
     setMsDomain(typeof stored['domain'] === 'string' ? stored['domain'] : '');
     setMsUsageLocation(typeof stored['usage_location'] === 'string' ? stored['usage_location'] : 'US');
     setMsLicenseSkuId(typeof stored['license_sku_id'] === 'string' ? stored['license_sku_id'] : '');
+    setMsSecretExpiresOn(
+      typeof stored['client_secret_expires_on'] === 'string' ? stored['client_secret_expires_on'] : ''
+    );
+    setSuspendOnRetirement(stored['suspend_on_retirement'] === true);
     setMsGroups(
       Array.isArray(stored['groups'])
         ? stored['groups'].filter((g): g is string => typeof g === 'string').join('\n')
@@ -711,6 +718,7 @@ const IntegrationsPage: React.FC = () => {
             .split(/[\s,]+/)
             .map((g) => g.trim())
             .filter(Boolean),
+          suspend_on_retirement: suspendOnRetirement,
         };
       case 'microsoft-365':
         return {
@@ -722,10 +730,13 @@ const IntegrationsPage: React.FC = () => {
           usage_location: msUsageLocation.trim().toUpperCase() || 'US',
           // Sent even when blank: clearing it switches to group-based licensing.
           license_sku_id: msLicenseSkuId.trim(),
+          // Sent even when blank, so clearing the date stops the warnings.
+          client_secret_expires_on: msSecretExpiresOn,
           groups: msGroups
             .split(/[\s,]+/)
             .map((g) => g.trim())
             .filter(Boolean),
+          suspend_on_retirement: suspendOnRetirement,
         };
       case 'claude-mcp':
         return {
@@ -1513,6 +1524,22 @@ const IntegrationsPage: React.FC = () => {
               />
               <p className="text-theme-text-muted mt-1 text-xs">One address per line, up to 20.</p>
             </div>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={suspendOnRetirement}
+                onChange={(e) => setSuspendOnRetirement(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Suspend the account when a member retires</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Off by default: retired members keep their account. When on, retiring suspends the account as a drop
+                  does, and returning to active lifts it. It applies to members who retire while it is on; members
+                  already retired are not changed when you turn it on or off.
+                </span>
+              </span>
+            </label>
             <p className="text-theme-text-muted text-xs">
               In the Google Admin console, open Security &rarr; API controls &rarr; Domain-wide delegation and authorize
               the service account&apos;s client ID for <code>https://www.googleapis.com/auth/admin.directory.user</code>{' '}
@@ -1569,6 +1596,23 @@ const IntegrationsPage: React.FC = () => {
                 {editingSettings
                   ? 'A secret is stored. Enter one only to replace it, for example before it expires.'
                   : 'The secret value (not its ID) from the app registration. It is stored encrypted and never shown again.'}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="ms-secret-expires" className={labelClass}>
+                Client secret expires on (optional)
+              </label>
+              <input
+                id="ms-secret-expires"
+                type="date"
+                value={msSecretExpiresOn}
+                onChange={(e) => setMsSecretExpiresOn(e.target.value)}
+                className="form-input w-48"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                The &quot;Expires&quot; date Entra ID shows beside the secret. Administrators are emailed 30 days and 7
+                days before it, and on the day; an expired secret stops every account change. Update it whenever you
+                replace the secret.
               </p>
             </div>
             <div>
@@ -1639,6 +1683,22 @@ const IntegrationsPage: React.FC = () => {
                 Distribution lists, mail-enabled security groups and dynamic groups cannot be used; Test rejects them.
               </p>
             </div>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={suspendOnRetirement}
+                onChange={(e) => setSuspendOnRetirement(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Block sign-in when a member retires</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Off by default: retired members keep their account. When on, retiring blocks the account as a drop
+                  does, and returning to active lifts it. It applies to members who retire while it is on; members
+                  already retired are not changed when you turn it on or off.
+                </span>
+              </span>
+            </label>
             <p className="text-theme-text-muted text-xs">
               In Entra ID, register an application, add a client secret, and grant it these Microsoft Graph application
               permissions with admin consent: <code>User.ReadWrite.All</code>,{' '}
@@ -2193,6 +2253,19 @@ const IntegrationsPage: React.FC = () => {
                           <span>Settings</span>
                         </button>
                       )}
+                      {integration.credential_expiring === true &&
+                        typeof integration.credential_days_left === 'number' && (
+                          <span className="flex items-center space-x-1 rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm text-amber-800 dark:text-amber-300">
+                            <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>
+                              {integration.credential_days_left <= 0
+                                ? 'Client secret expired'
+                                : `Client secret expires in ${integration.credential_days_left} day${
+                                    integration.credential_days_left === 1 ? '' : 's'
+                                  }`}
+                            </span>
+                          </span>
+                        )}
                       {isDirectory(integration.integration_type) && googleAttention.length > 0 && (
                         <button
                           onClick={() => setShowGoogleAttention(!showGoogleAttention)}

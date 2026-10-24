@@ -3055,6 +3055,16 @@ class MembershipPipelineService:
         await self.db.commit()
 
         if isinstance(transfer, dict) and transfer.get("success"):
+            notify_skip = transfer.pop("_notify_enrollment_skipped", None)
+            if notify_skip is not None:
+                # After the commit, like the welcome email; never raises into
+                # the approval it follows.
+                try:
+                    await notify_skip()
+                except Exception:
+                    logger.exception(
+                        f"Enrollment-skipped notice failed for prospect {prospect_id}"
+                    )
             await self._deliver_auto_transfer_welcome(prospect, transfer, completed_by)
 
         # An automated-email stage has nothing left for anyone to do once its
@@ -4588,7 +4598,16 @@ class MembershipPipelineService:
         result_msg = (
             f"Prospect {prospect.full_name} transferred to membership as {username}"
         )
-        if enrollment_result:
+        skipped_enrollment: Optional[Dict[str, Any]] = None
+        if enrollment_result and enrollment_result.get("missing_prerequisites"):
+            skipped_enrollment = enrollment_result
+            result_msg += (
+                f". Not enrolled in training program "
+                f"{skipped_enrollment['program_name']}: must first complete "
+                f"{', '.join(skipped_enrollment['missing_prerequisites'])}. "
+                "Training officers will be emailed"
+            )
+        elif enrollment_result:
             prog = enrollment_result["program_name"]
             result_msg += f". Auto-enrolled in training program: {prog}"
 
@@ -4708,6 +4727,27 @@ class MembershipPipelineService:
                 else None
             ),
         }
+        # Sent once the member is durable, by whichever caller commits —
+        # the same reason as the deferred welcome email.
+        if skipped_enrollment is not None:
+            skipped = skipped_enrollment
+
+            async def notify_enrollment_skipped() -> None:
+                from app.services.training_program_service import (
+                    TrainingProgramService,
+                )
+
+                await TrainingProgramService(
+                    self.db
+                ).notify_officers_enrollment_skipped(
+                    organization_id=prospect.organization_id,
+                    member_name=skipped["member_name"],
+                    program_id=skipped["program_id"],
+                    program_name=skipped["program_name"],
+                    missing_names=skipped["missing_prerequisites"],
+                )
+
+            result["_notify_enrollment_skipped"] = notify_enrollment_skipped
         if send_welcome_email and defer_welcome_email:
             result["_send_welcome_email"] = send_welcome
         elif directory_provision_id is not None:
@@ -4774,6 +4814,42 @@ class MembershipPipelineService:
 
             if not program:
                 return None
+
+            # The same prerequisite gate as every manual enrollment path
+            # (TrainingProgramService.missing_prerequisites). A member who has
+            # not finished a prerequisite is left out of this pipeline only;
+            # the conversion goes ahead, and the training officers are emailed
+            # once it has committed (``notify_enrollment_skipped`` in
+            # _do_transfer) so they can enroll the member by hand later.
+            from app.services.training_program_service import (
+                TrainingProgramService,
+            )
+
+            missing = await TrainingProgramService(self.db).missing_prerequisites(
+                program.prerequisite_program_ids, [user_id], organization_id
+            )
+            if missing:
+                missing_names = next(iter(missing.values()))
+                member = (
+                    await self.db.execute(
+                        select(User).where(
+                            User.id == user_id,
+                            User.organization_id == organization_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                logger.info(
+                    f"Auto-enrollment of user {user_id} in '{program.name}' "
+                    f"(program_id={program.id}) skipped: prerequisites not "
+                    f"completed: {', '.join(missing_names)}"
+                )
+                return {
+                    "program_id": str(program.id),
+                    "program_name": program.name,
+                    "member_name": (member.display_name if member else None)
+                    or "A new member",
+                    "missing_prerequisites": list(missing_names),
+                }
 
             # Check if already enrolled
             existing = await self.db.execute(
@@ -6451,6 +6527,7 @@ class MembershipPipelineService:
         organization_id: str,
         prospect_ids: Optional[List[str]] = None,
         purged_by: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> int:
         """Permanently delete inactive prospects from a pipeline.
 
@@ -6467,12 +6544,20 @@ class MembershipPipelineService:
         the server. A file that exists but cannot be removed raises before any
         row is deleted, so a retry can finish the job; files already removed by
         then are treated as gone on the retry.
+
+        ``exclude_prospect_ids`` carries the caller's own prospect record (see
+        app/api/prospect_privacy.py): a coordinator whose own application is
+        inactive must not be able to destroy the file other members wrote
+        about them, whether by naming its id or by purging the whole tab.
         """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return 0
         ids = await self._delete_inactive_prospects(
-            pipeline_id, organization_id, prospect_ids=prospect_ids
+            pipeline_id,
+            organization_id,
+            prospect_ids=prospect_ids,
+            exclude_prospect_ids=exclude_prospect_ids,
         )
         if ids:
             await self.db.commit()
@@ -6484,6 +6569,7 @@ class MembershipPipelineService:
         organization_id: str,
         prospect_ids: Optional[List[str]] = None,
         inactive_before: Optional[datetime] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> List[str]:
         """Delete the matching inactive applications and their files; no commit.
 
@@ -6506,19 +6592,13 @@ class MembershipPipelineService:
             conditions.append(ProspectiveMember.inactive_since.isnot(None))
             conditions.append(ProspectiveMember.inactive_since <= inactive_before)
 
+        query = self._apply_prospect_exclusions(
+            select(ProspectiveMember.id).where(and_(*conditions)),
+            exclude_prospect_ids,
+        )
         # Locked so an applicant reactivated mid-purge is either purged before
         # the reactivation or not at all.
-        ids = list(
-            (
-                await self.db.execute(
-                    select(ProspectiveMember.id)
-                    .where(and_(*conditions))
-                    .with_for_update()
-                )
-            )
-            .scalars()
-            .all()
-        )
+        ids = list((await self.db.execute(query.with_for_update())).scalars().all())
         if not ids:
             return []
 

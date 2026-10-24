@@ -21,7 +21,7 @@ from app.models.document import Document
 from app.models.event import Event
 from app.schemas.organization import encrypt_settings_secrets
 from app.services import file_storage_service as file_storage
-from app.services import s3_migration, s3_storage
+from app.services import remote_migration, s3_storage
 from app.services.file_storage_service import ACTIVATION_KEY, StorageArea
 from app.services.s3_storage import S3Backend, S3StorageError
 
@@ -144,7 +144,7 @@ class TestApply:
         await _switch_to_s3(db_session, org_id)
         document_id, doc_path, _shared, legacy = await _rows(db_session, org_id, root)
 
-        report = await s3_migration.apply(db_session, organization_id=org_id)
+        report = await remote_migration.apply(db_session, organization_id=org_id)
 
         assert len(report.copies) == 2
         assert report.needs_relocation == [legacy]
@@ -159,7 +159,7 @@ class TestApply:
         await _switch_to_s3(db_session, org_id)
         document_id, doc_path, shared, _legacy = await _rows(db_session, org_id, root)
 
-        report = await s3_migration.apply(
+        report = await remote_migration.apply(
             db_session, organization_id=org_id, dry_run=False
         )
 
@@ -188,10 +188,10 @@ class TestApply:
         org_id, _admin = setup_org_and_admin
         await _switch_to_s3(db_session, org_id)
         await _rows(db_session, org_id, root)
-        await s3_migration.apply(db_session, organization_id=org_id, dry_run=False)
+        await remote_migration.apply(db_session, organization_id=org_id, dry_run=False)
         file_storage.forget_org_storage()
 
-        again = await s3_migration.apply(
+        again = await remote_migration.apply(
             db_session, organization_id=org_id, dry_run=False
         )
 
@@ -214,7 +214,7 @@ class TestApply:
 
         monkeypatch.setattr(S3Backend, "put", flaky_put)
 
-        report = await s3_migration.apply(
+        report = await remote_migration.apply(
             db_session, organization_id=org_id, dry_run=False
         )
 
@@ -226,8 +226,8 @@ class TestApply:
         self, db_session, setup_org_and_admin, root
     ):
         org_id, _admin = setup_org_and_admin
-        with pytest.raises(ValueError, match="Test and switch to S3"):
-            await s3_migration.apply(db_session, organization_id=org_id)
+        with pytest.raises(ValueError, match="connection test"):
+            await remote_migration.apply(db_session, organization_id=org_id)
 
     async def test_departments_that_have_not_switched_are_left_alone(
         self, db_session, setup_org_and_admin, root
@@ -235,7 +235,7 @@ class TestApply:
         org_id, _admin = setup_org_and_admin
         await _rows(db_session, org_id, root)
 
-        report = await s3_migration.apply(db_session, dry_run=False)
+        report = await remote_migration.apply(db_session, dry_run=False)
 
         assert org_id not in report.organizations
         assert report.copies == [] or all(
@@ -247,7 +247,7 @@ class TestRollbackAndFinalize:
     async def _applied(self, db_session, org_id, root):
         await _switch_to_s3(db_session, org_id)
         rows = await _rows(db_session, org_id, root)
-        report = await s3_migration.apply(
+        report = await remote_migration.apply(
             db_session, organization_id=org_id, dry_run=False
         )
         return rows, report.manifest_path
@@ -260,7 +260,7 @@ class TestRollbackAndFinalize:
             db_session, org_id, root
         )
 
-        result = await s3_migration.rollback(db_session, manifest)
+        result = await remote_migration.rollback(db_session, manifest)
 
         assert result == {
             "rows_restored": 3,
@@ -271,7 +271,7 @@ class TestRollbackAndFinalize:
         assert await _event_paths(db_session, org_id) == {shared}
         assert bucket.list_objects_v2(Bucket=BUCKET).get("KeyCount") == 0
         with pytest.raises(ValueError, match="rolled back"):
-            await s3_migration.finalize(db_session, manifest)
+            await remote_migration.finalize(db_session, manifest)
 
     async def test_finalize_deletes_the_disk_copies_once_verified(
         self, db_session, setup_org_and_admin, root, bucket
@@ -281,7 +281,7 @@ class TestRollbackAndFinalize:
             db_session, org_id, root
         )
 
-        result = await s3_migration.finalize(db_session, manifest)
+        result = await remote_migration.finalize(db_session, manifest)
 
         assert result == {"disk_copies_removed": 2, "kept_unverified": 0}
         assert not os.path.exists(doc_path)
@@ -291,7 +291,7 @@ class TestRollbackAndFinalize:
         assert await file_storage.read_bytes(new_doc) == b"%PDF-1.4 sop"
         assert json.loads(open(manifest).read())["finalized"] is True
         with pytest.raises(ValueError, match="finalized"):
-            await s3_migration.rollback(db_session, manifest)
+            await remote_migration.rollback(db_session, manifest)
 
     async def test_finalize_keeps_a_disk_copy_whose_bucket_copy_is_gone(
         self, db_session, setup_org_and_admin, root, bucket
@@ -304,7 +304,7 @@ class TestRollbackAndFinalize:
             Bucket=BUCKET, Key=f"{org_id}/documents/{document_id}/a.pdf"
         )
 
-        result = await s3_migration.finalize(db_session, manifest)
+        result = await remote_migration.finalize(db_session, manifest)
 
         assert result == {"disk_copies_removed": 1, "kept_unverified": 1}
         assert os.path.isfile(doc_path)
@@ -316,7 +316,7 @@ class TestRollbackAndFinalize:
         other = tmp_path / "relocation.json"
         other.write_text(json.dumps({"version": 1, "moves": []}))
         with pytest.raises(ValueError, match="not an S3 migration manifest"):
-            await s3_migration.rollback(db_session, str(other))
+            await remote_migration.rollback(db_session, str(other))
 
 
 class TestInventoryAndRewrap:
@@ -326,11 +326,16 @@ class TestInventoryAndRewrap:
         org_id, _admin = setup_org_and_admin
         await _switch_to_s3(db_session, org_id)
         await _rows(db_session, org_id, root)
-        await s3_migration.apply(db_session, organization_id=org_id, dry_run=False)
+        await remote_migration.apply(db_session, organization_id=org_id, dry_run=False)
 
-        inventory = await s3_migration.bucket_inventory(db_session)
+        inventory = await remote_migration.bucket_inventory(db_session)
 
-        assert {"organization_id": org_id, "bucket": BUCKET, "files": 2} in inventory
+        assert {
+            "organization_id": org_id,
+            "platform": "s3",
+            "bucket": BUCKET,
+            "files": 2,
+        } in inventory
 
     async def test_rewrap_moves_bucket_objects_off_a_retired_key(
         self, db_session, setup_org_and_admin, root, bucket, monkeypatch
@@ -342,16 +347,18 @@ class TestInventoryAndRewrap:
         org_id, _admin = setup_org_and_admin
         await _switch_to_s3(db_session, org_id)
         document_id, *_rest = await _rows(db_session, org_id, root)
-        await s3_migration.apply(db_session, organization_id=org_id, dry_run=False)
+        await remote_migration.apply(db_session, organization_id=org_id, dry_run=False)
 
         monkeypatch.setattr(settings, "ENCRYPTION_KEY", key_b)
         monkeypatch.setattr(settings, "ENCRYPTION_KEYS_LEGACY", key_a)
         reset_encryption_ciphers()
         file_storage.forget_org_storage()
         try:
-            dry = await s3_migration.rewrap_bucket_objects(db_session, dry_run=True)
+            dry = await remote_migration.rewrap_bucket_objects(db_session, dry_run=True)
             assert dry["bucket_objects_under_a_retired_key"] == 2
-            done = await s3_migration.rewrap_bucket_objects(db_session, dry_run=False)
+            done = await remote_migration.rewrap_bucket_objects(
+                db_session, dry_run=False
+            )
             assert done["bucket_objects_rewrapped"] == 2
             assert done["failed"] == 0
 
@@ -360,7 +367,9 @@ class TestInventoryAndRewrap:
             reset_encryption_ciphers()
             ref = await _document_path(db_session, document_id)
             assert await file_storage.read_bytes(ref) == b"%PDF-1.4 sop"
-            again = await s3_migration.rewrap_bucket_objects(db_session, dry_run=True)
+            again = await remote_migration.rewrap_bucket_objects(
+                db_session, dry_run=True
+            )
             assert again["bucket_objects_under_a_retired_key"] == 0
         finally:
             monkeypatch.undo()

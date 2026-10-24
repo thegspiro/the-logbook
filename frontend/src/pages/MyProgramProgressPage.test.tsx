@@ -478,3 +478,150 @@ describe('MyProgramProgressPage — due dates and the program’s own wording', 
     expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
   });
 });
+
+describe('MyProgramProgressPage — an inactive requirement', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: {
+        id: 'enr-1',
+        current_phase_id: null,
+        progress_percentage: 100,
+        enrolled_at: '2026-02-01T00:00:00Z',
+        status: 'active',
+      },
+      program: { id: 'prog-1', name: 'Hazmat Ops' },
+      requirement_progress: [
+        {
+          id: 'rp-live',
+          requirement_id: 'req-live',
+          status: 'completed',
+          progress_percentage: 100,
+          requirement: { id: 'req-live', name: 'Hazmat Awareness', active: true },
+        },
+        {
+          id: 'rp-retired',
+          requirement_id: 'req-retired',
+          status: 'in_progress',
+          progress_percentage: 50,
+          requirement: { id: 'req-retired', name: 'Legacy Decon Drill', active: false },
+        },
+      ],
+      completed_requirements: 1,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+      locked_requirements: {},
+    });
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+  });
+
+  it('keeps it listed, marked as not currently required', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
+    expect(screen.getAllByText('Inactive — not currently required')).toHaveLength(1);
+  });
+});
+
+describe('MyProgramProgressPage — no active requirements', () => {
+  // Every required item in the pipeline is inactive. The server completes
+  // nobody for finishing an empty set and says so; the stored 100% is left
+  // over from before and must not be shown as progress.
+  const progress = (status: string) => ({
+    enrollment: {
+      id: 'enr-1',
+      current_phase_id: 'ph-1',
+      progress_percentage: 100,
+      enrolled_at: '2026-02-01T00:00:00Z',
+      status,
+    },
+    program: { id: 'prog-1', name: 'Hazmat Ops' },
+    current_phase: { id: 'ph-1', phase_number: 1, name: 'Awareness' },
+    requirement_progress: [
+      {
+        id: 'rp-retired',
+        requirement_id: 'req-retired',
+        status: 'in_progress',
+        progress_percentage: 40,
+        due_date: null,
+        is_overdue: false,
+        requirement: { id: 'req-retired', name: 'Legacy Decon Drill', active: false },
+      },
+    ],
+    completed_requirements: 0,
+    total_requirements: 0,
+    next_milestones: [{ id: 'ms-1', name: 'Halfway', completion_percentage_threshold: 50 }],
+    is_behind_schedule: true,
+    locked_requirements: {},
+    no_active_requirements: true,
+    phases_without_active_requirements: ['ph-1'],
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetEnrollmentProgress.mockReset();
+    mockGetEnrollmentProgress.mockResolvedValue(progress('active'));
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([
+      {
+        id: 'ph-1',
+        program_id: 'prog-1',
+        phase_number: 1,
+        name: 'Awareness',
+        requires_manual_advancement: false,
+        created_at: '',
+        updated_at: '',
+      },
+    ]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([
+      {
+        id: 'pr-1',
+        program_id: 'prog-1',
+        phase_id: 'ph-1',
+        requirement_id: 'req-retired',
+        is_required: true,
+        is_prerequisite: false,
+        sort_order: 0,
+        created_at: '',
+      },
+    ]);
+  });
+
+  it('says there are no active requirements instead of a percentage', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
+    // Once for the pipeline, once for its only phase.
+    expect(screen.getAllByText('No active requirements')).toHaveLength(2);
+    expect(screen.getByText(/so it will not complete on its own/)).toBeInTheDocument();
+    expect(screen.queryByText('100%')).not.toBeInTheDocument();
+    expect(screen.queryByText(/0\/0 requirements complete/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Behind schedule')).not.toBeInTheDocument();
+    expect(screen.queryByText('Next milestones')).not.toBeInTheDocument();
+    // The phase is not marked complete just because nothing in it counts.
+    expect(screen.queryByLabelText('Phase complete')).not.toBeInTheDocument();
+  });
+
+  it('leaves a finished enrollment showing the figure it finished with', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue(progress('completed'));
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    // The phase notice still explains why the phase itself is not complete.
+    expect(screen.getAllByText('No active requirements')).toHaveLength(1);
+  });
+
+  it('shows no due or overdue date beside an inactive requirement, only the badge', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
+    expect(screen.getByText('Inactive — not currently required')).toBeInTheDocument();
+    expect(screen.queryByText(/Due |was due|Overdue/)).not.toBeInTheDocument();
+  });
+});

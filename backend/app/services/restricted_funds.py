@@ -19,6 +19,10 @@ every payment charged to it through ``fund_campaign_id``:
   not been agreed to, and an approver deciding it needs to see what is left
   before it.
 
+A purchase claimed back through an expense report
+(app/services/finance_reimbursement.py) is counted once: its estimate is
+committed until the report is approved, the report's lines from then on.
+
 ``available = received - spent - committed``. These are the same stages that
 move a budget line's spent and encumbered totals (``FinanceService``), counted
 here from the records rather than kept as running totals, so a fund's balance
@@ -34,7 +38,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import (
@@ -172,7 +176,7 @@ async def fund_balances(
         .group_by(Donation.campaign_id)
     )
 
-    def purchases(statuses, amount):
+    def purchases(statuses, amount, *, unless_report_approved: bool = False):
         statement = (
             select(PurchaseRequest.fund_campaign_id, func.sum(amount))
             .where(
@@ -184,6 +188,29 @@ async def fund_balances(
         )
         if exclude_kind == KIND_PURCHASE:
             statement = statement.where(PurchaseRequest.id != exclude_id)
+        if exclude_kind == KIND_EXPENSE:
+            # A report being decided is compared against what is left without
+            # the purchase it claims back, which it replaces.
+            claimed = (
+                select(ExpenseReport.purchase_request_id)
+                .where(
+                    ExpenseReport.id == exclude_id,
+                    ExpenseReport.organization_id == org_id,
+                    ExpenseReport.purchase_request_id.is_not(None),
+                )
+                .scalar_subquery()
+            )
+            statement = statement.where(PurchaseRequest.id.is_distinct_from(claimed))
+        if unless_report_approved:
+            statement = statement.where(
+                ~exists().where(
+                    and_(
+                        ExpenseReport.organization_id == org_id,
+                        ExpenseReport.purchase_request_id == PurchaseRequest.id,
+                        ExpenseReport.status == ExpenseReportStatus.APPROVED,
+                    )
+                )
+            )
         return statement
 
     def checks(statuses):
@@ -224,7 +251,13 @@ async def fund_balances(
         await totals(lines([ExpenseReportStatus.PAID])),
     ]
     committed = [
-        await totals(purchases(_PR_COMMITTED, PurchaseRequest.estimated_amount)),
+        await totals(
+            purchases(
+                _PR_COMMITTED,
+                PurchaseRequest.estimated_amount,
+                unless_report_approved=True,
+            )
+        ),
         await totals(checks([CheckRequestStatus.APPROVED])),
         await totals(lines([ExpenseReportStatus.APPROVED])),
     ]

@@ -458,6 +458,12 @@ SCHEDULE = {
         "recommended_time": "07:30",
         "cron": "30 7 * * *",
     },
+    "nfc_card_tap_purge": {
+        "description": "Delete member ID card taps older than each department's retention period (24 months unless the department changed it on the ID Cards page)",
+        "frequency": "daily",
+        "recommended_time": "03:30",
+        "cron": "30 3 * * *",
+    },
     "inventory_audit_digest": {
         "description": "Email inventory managers a list of shelves overdue for an NFC shelf audit. Checked daily, sent at most once a week per department, and only when something is overdue",
         "frequency": "daily check, weekly send",
@@ -600,7 +606,7 @@ SCHEDULE = {
         "cron": "35 7 * * *",
     },
     "google_workspace_suspension_sync": {
-        "description": "Finish Google Workspace suspensions (and their lifting) that a member's departure or return left unsettled, and retry failed ones",
+        "description": "Finish Google Workspace and Microsoft 365 suspensions (and their lifting) that a member's departure or return left unsettled, retry failed ones, and retry taking departed members out of their groups and passing on name changes",
         "frequency": "every 15 minutes",
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
@@ -4937,6 +4943,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         items_html = ""
         any_from_lots = False
         any_medical = False
+        any_gear = False
         for item, on_hand, from_lots in rows:
             cat_name = item.category.name if item.category else "Uncategorized"
             any_from_lots = any_from_lots or from_lots
@@ -4947,6 +4954,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             # (InventoryService.stock_breakdown), and says so.
             medical = _row_domain(item) == DOMAIN_MEDICAL
             any_medical = any_medical or medical
+            any_gear = any_gear or not medical
             source = (
                 "shelf + apparatus"
                 if medical
@@ -4977,7 +4985,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
-        return table_html, any_from_lots, any_medical
+        return table_html, any_from_lots, any_medical, any_gear
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         from app.services.email_service import wrap_email_body
@@ -5006,13 +5014,17 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not rows or not emails:
                 continue
 
-            table_html, any_from_lots, any_medical = _render(rows)
-            # Opens the Low stock tab, which lists exactly what the table
-            # above counts, so the purchaser lands on the reorder list rather
-            # than the page's default expiring-stock view. Offered only when
-            # medical rows are in this message: a gear-only email has no such
-            # page to point at.
+            table_html, any_from_lots, any_medical, any_gear = _render(rows)
+            # Each link opens the list that holds exactly the rows of its
+            # domain in the table above, so the purchaser lands on the reorder
+            # list rather than a page's default view. A link is offered only
+            # when its domain has rows in this message: the audience split
+            # means a medical-only officer never receives gear rows, and the
+            # gear page needs a permission they may not hold.
             low_stock_url = f"{settings.FRONTEND_URL}/medical-supplies?tab=low"
+            gear_low_stock_url = (
+                f"{settings.FRONTEND_URL}/inventory/admin/items?low_stock=true"
+            )
             html_body = wrap_email_body(
                 org,
                 "Low Stock Alert",
@@ -5041,6 +5053,12 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     if any_medical
                     else ""
                 )
+                + (
+                    f'<p><a href="{_html.escape(gear_low_stock_url)}">'
+                    "View low-stock gear and uniforms</a></p>"
+                    if any_gear
+                    else ""
+                )
                 + "<p>Please review and reorder as needed.</p>",
                 header_color="#dc2626",
             )
@@ -5056,6 +5074,11 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     + (
                         f" Low-stock medical supplies: {low_stock_url}"
                         if any_medical
+                        else ""
+                    )
+                    + (
+                        f" Low-stock gear and uniforms: {gear_low_stock_url}"
+                        if any_gear
                         else ""
                     )
                 ),
@@ -5197,6 +5220,28 @@ async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
         return 1
 
     return await _for_each_org(db, "inventory_audit_digest", process)
+
+
+async def run_nfc_card_tap_purge(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Delete ID card taps older than each organization's retention period.
+
+    Runs whether or not the department still has NFC ID cards switched on: a
+    department that turned cards off still holds taps from when they were on,
+    and the retention period it chose applies to those too.
+    """
+    from app.services.nfc_card_admin_service import NfcCardAdminService
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        deleted = await NfcCardAdminService(db_session).purge_expired_taps(org)
+        await db_session.commit()
+        if deleted:
+            logger.info(
+                f"nfc_card_tap_purge: deleted {deleted} tap(s) for org {org.id}"
+            )
+        return deleted
+
+    return await _for_each_org(db, "nfc_card_tap_purge", process)
 
 
 async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
@@ -5395,12 +5440,14 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "nfpa_retirement_alerts", process)
 
 
-def _supply_summary(expiring: int, restock: int, shelf_lots: int) -> str:
+def _supply_summary(
+    expiring: int, restock: int, shelf_lots: int, uncounted: int = 0
+) -> str:
     """One clause per kind of row, naming only the kinds present.
 
     Used for the subject, the opening line and the plain-text body, so the
     three cannot drift apart. Example: "2 expiring on apparatus, 1 to restock
-    on apparatus, 3 stock lots expiring".
+    on apparatus, 3 stock lots expiring, 2 positions not yet counted".
     """
     parts = []
     if expiring:
@@ -5410,6 +5457,9 @@ def _supply_summary(expiring: int, restock: int, shelf_lots: int) -> str:
     if shelf_lots:
         noun = "stock lot" if shelf_lots == 1 else "stock lots"
         parts.append(f"{shelf_lots} {noun} expiring")
+    if uncounted:
+        noun = "position" if uncounted == 1 else "positions"
+        parts.append(f"{uncounted} {noun} not yet counted")
     return ", ".join(parts)
 
 
@@ -5503,6 +5553,12 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
 
         if not deployed and not lot_rows:
             return 0
+        # Rides along with an email that is going anyway rather than sending
+        # one of its own: a department that never counts a position would
+        # otherwise be mailed about it every Monday for good.
+        uncounted = await check_service.uncounted_supply_positions(
+            str(org.id), list(MEDICAL_ITEM_TYPES)
+        )
 
         # Split by whether a replacement is actually on hand: "swap it" and
         # "order it" are different jobs, and the officer plans the week around
@@ -5597,6 +5653,36 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
+        def _uncounted_section(rows: list) -> str:
+            if not rows:
+                return ""
+            body = ""
+            for row in rows:
+                name = str(row.get("item_name") or "Unknown")
+                if row.get("item_size"):
+                    name = f"{name} · {row['item_size']}"
+                place = " &rsaquo; ".join(
+                    _html.escape(part) for part in str(row["where"]).split(" › ")
+                )
+                body += "<tr>" + _cell(_stacked(_html.escape(name), place), _wrap)
+                body += "</tr>"
+            return f"""
+                <h3 style="color:#2563eb;margin-top:16px;">
+                    Not yet counted on apparatus ({len(rows)})
+                </h3>
+                <p style="color:#6b7280;font-size:13px;margin:4px 0;">
+                    No crew has counted these positions, so the stock figures
+                    assume each one is full. A count on the checklist or the
+                    apparatus inventory settles it.
+                </p>
+                <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+                    <thead><tr style="background:#f3f4f6;">
+                        {_th("Item")}
+                    </tr></thead>
+                    <tbody>{body}</tbody>
+                </table>
+                """
+
         def _lot_section(rows) -> str:
             if not rows:
                 return ""
@@ -5653,8 +5739,13 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 rows = list(gear_lots) + rows
             if not emails or (not deployed and not rows):
                 continue
+            # Medical stock figures, so for the audiences that manage them,
+            # as the shelf-lot table is.
+            unseen = uncounted if DOMAIN_MEDICAL in domains else []
 
-            summary = _supply_summary(expiring_count, restock_count, len(rows))
+            summary = _supply_summary(
+                expiring_count, restock_count, len(rows), len(unseen)
+            )
             html_body = wrap_email_body(
                 org,
                 "Supplies to Replace",
@@ -5671,7 +5762,8 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                     "#ea580c",
                     "In-date stock is on hand; swap it in during the next check.",
                 )
-                + _lot_section(rows),
+                + _lot_section(rows)
+                + _uncounted_section(unseen),
                 header_color="#dc2626",
             )
             success_count, _ = await email_svc.send_email(
@@ -6684,8 +6776,16 @@ async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, An
     name: it is the identifier schedules and run history already use."""
     from app.services.directory_account_service import DirectoryAccountService
 
-    attempted = await DirectoryAccountService(db).sync_pending_suspensions()
-    return {"task": "google_workspace_suspension_sync", "attempted": attempted}
+    service = DirectoryAccountService(db)
+    attempted = await service.sync_pending_suspensions()
+    groups = await service.retry_group_removals()
+    renames = await service.sync_pending_names()
+    return {
+        "task": "google_workspace_suspension_sync",
+        "attempted": attempted,
+        "group_removals_attempted": groups,
+        "renames_attempted": renames,
+    }
 
 
 async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
@@ -7647,6 +7747,7 @@ TASK_RUNNERS = {
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "inventory_audit_digest": run_inventory_audit_digest,
+    "nfc_card_tap_purge": run_nfc_card_tap_purge,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
@@ -7733,6 +7834,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "inventory_overdue_alerts": 86400,
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
     "inventory_audit_digest": 86400,
+    "nfc_card_tap_purge": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "paypal_capture_backfill": 86400,

@@ -67,6 +67,7 @@ from app.models.finance import (
     ExpenseLineItem,
     ExpenseReport,
     ExpenseReportStatus,
+    ExpenseType,
     ExportLog,
     ExportMapping,
     FiscalYear,
@@ -105,6 +106,17 @@ from app.services.finance_budget_access import (
     load_category_tree,
 )
 from app.services.finance_budget_ownership import owned_budgets_query, resolve_owner
+from app.services.finance_reimbursement import (
+    CLAIMABLE_PURCHASE_STATUSES,
+    LIVE_CHECK_STATUSES,
+    LIVE_REPORT_STATUSES,
+    ReimbursementLinkError,
+    amount_owed,
+    live_check_for_report,
+    live_report_for_purchase,
+    lock_purchase,
+    reopened_status,
+)
 from app.services.restricted_funds import (
     KIND_CHECK,
     KIND_EXPENSE,
@@ -131,7 +143,7 @@ from app.utils.finance_settings import (
     dues_default_accounts,
     load_finance_settings,
 )
-from app.utils.member_names import format_display_name
+from app.utils.member_names import format_display_name, format_legal_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_locks import QUICKBOOKS_EXPORT, lock_organization_scope
 from app.utils.org_scoping import assert_in_org
@@ -633,6 +645,23 @@ def _refuse_advance_charges(data: dict) -> None:
             "A cash advance is not charged to a budget line or fund; the "
             "expense report that accounts for it is"
         )
+
+
+def _refuse_reimbursement_changes(cr: CheckRequest, data: dict) -> None:
+    """A reimbursement check pays what its report owes the member and charges
+    nothing itself (app/services/finance_reimbursement.py). A form that sends
+    every field back unchanged is fine; a different value is refused."""
+    if (data.get("budget_id") or data.get("fund_campaign_id")) or (
+        "amount" in data and Decimal(str(data["amount"])) != Decimal(str(cr.amount))
+    ):
+        raise ValueError(
+            "A reimbursement check pays what its expense report owes the "
+            "member; its amount, budget line and fund cannot be changed"
+        )
+
+
+def _enum_value(value: Any) -> str:
+    return value.value if hasattr(value, "value") else str(value)
 
 
 def _aware_utc(value: datetime) -> datetime:
@@ -1175,6 +1204,14 @@ class FinanceService:
             tree.named_positions.get(str(category.id), set())
         )
         row["path"] = tree.path(str(category.id))
+        # Active itself but closed by an inactive category above it: the
+        # settings screen says so rather than badging it open (pitfall #29).
+        source = tree.inactive_source(str(category.id))
+        row["inactive_through"] = (
+            source.name
+            if source is not None and source.id != str(category.id)
+            else None
+        )
         return row
 
     async def list_budget_category_details(
@@ -1282,8 +1319,11 @@ class FinanceService:
     async def list_charge_access_categories(
         self, org_id: str, user_id: str
     ) -> list[dict]:
-        """The active categories ``user_id`` owns or that sit beneath one they
+        """The open categories ``user_id`` owns or that sit beneath one they
         own, with the charge rule each is under — the owner's own settings.
+
+        Open means neither the category nor one above it is inactive
+        (``CategoryTree.inactive_source``).
 
         Ordered as a tree, parents before their children.
         """
@@ -1291,13 +1331,12 @@ class FinanceService:
         held = await held_position_ids(self.db, org_id, user_id)
         if not held:
             return []
-        result = await self.db.execute(
-            self._category_detail_query(org_id).where(BudgetCategory.is_active)
-        )
+        result = await self.db.execute(self._category_detail_query(org_id))
         rows = [
             self._category_row(cat, name, tree)
             for cat, name in result.all()
-            if tree.manageable_by(str(cat.id), held)
+            if tree.is_effectively_active(str(cat.id))
+            and tree.manageable_by(str(cat.id), held)
         ]
         rows.sort(key=lambda row: [part.casefold() for part in row["path"]])
         return rows
@@ -1882,21 +1921,39 @@ class FinanceService:
             and Decimal(kwargs.get("amount_budgeted") or 0) != 0
         ):
             raise ValueError(_NEW_LINE_AT_ZERO_MESSAGE)
-        category_id = kwargs.get("category_id")
-        category = (
-            await self.get_budget_category(category_id, org_id) if category_id else None
-        )
-        if category is not None and not category.is_active:
-            # Deactivated rather than deleted because lines elsewhere still
-            # use it (delete_budget_category); it is not offered for new ones.
-            raise ValueError(
-                "This budget category is inactive. Choose an active category."
-            )
+        await self.assert_category_takes_new_lines(org_id, kwargs.get("category_id"))
         budget = Budget(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(budget)
         await self.db.flush()
         await self.db.refresh(budget, ["created_at", "updated_at"])
         return budget
+
+    async def assert_category_takes_new_lines(
+        self, org_id: str, category_id: Optional[str]
+    ) -> None:
+        """Refuse a new budget line or proposal in a closed category.
+
+        A category in use is deactivated rather than deleted
+        (``delete_budget_category``) and is not offered for new lines. Closed
+        means it or any category above it is inactive
+        (``CategoryTree.inactive_source``); when a parent is the cause, the
+        refusal names the parent, since that is what would be reactivated.
+        A category id that is not the org's is left to the FK validation.
+        """
+        if not category_id:
+            return
+        tree = await load_category_tree(self.db, org_id)
+        source = tree.inactive_source(str(category_id))
+        if source is None:
+            return
+        if source.id == str(category_id):
+            raise ValueError(
+                "This budget category is inactive. Choose an active category."
+            )
+        raise ValueError(
+            f'The budget category "{source.name}" is inactive, so no new budget '
+            "lines can be added under it. Choose an active category."
+        )
 
     async def update_budget(self, budget_id: str, org_id: str, **kwargs) -> Budget:
         await self._validate_finance_fks(org_id, kwargs)
@@ -2461,6 +2518,11 @@ class FinanceService:
         ``finance.manage``, lists every line. The request writes enforce the
         same rule, so a line hidden here is also refused there.
 
+        A line whose category, or any category above it, is inactive is
+        listed with ``category_active`` False (``CategoryTree.inactive_source``): the forms offer it only as a request's existing selection, and
+        the request writes refuse it as a new charge
+        (``_assert_budget_open_for_new_charges``).
+
         The label is the category's path — ``Quartermaster › Officer brass``
         for a sub-category — plus the station when the line has one. Two lines
         that would still read the same are numbered, so a member never has to
@@ -2540,6 +2602,7 @@ class FinanceService:
                         if sees_all_amounts or str(row.id) in owned_ids
                         else None
                     ),
+                    "category_active": tree.is_effectively_active(str(row.category_id)),
                 }
             )
         return options
@@ -4164,6 +4227,84 @@ class FinanceService:
             raise ValueError(f"Invalid entity type: {entity_type}")
         return await self.resolve_approval_chain(org_id, et, amount, category_id)
 
+    async def _request_chain(
+        self,
+        org_id: str,
+        entity_type: ApprovalEntityType,
+        amount: Decimal,
+        budget_id: Optional[str],
+    ) -> Optional[ApprovalChain]:
+        """The chain a request of this type, amount and budget line goes to.
+
+        Submission and the route preview both ask this, so the preview cannot
+        promise a route that submitting would not take (CLAUDE.md pitfall
+        #29). A purchase or check request is matched on its budget line's
+        category; an expense report on its total alone, since its lines can
+        charge several lines.
+        """
+        category_id = None
+        if budget_id and entity_type != ApprovalEntityType.EXPENSE_REPORT:
+            budget = await self.get_budget(budget_id, org_id)
+            if budget:
+                category_id = budget.category_id
+        return await self.resolve_approval_chain(
+            org_id, entity_type, amount, category_id
+        )
+
+    async def preview_request_route(
+        self,
+        org_id: str,
+        entity_type: str,
+        amount: Decimal,
+        budget_id: Optional[str] = None,
+    ) -> dict:
+        """Who a request would wait on if submitted now, for the member
+        raising it.
+
+        Steps are described as the request's own timeline describes them
+        (``describe_assignee``), never by the chain's raw approver values, so
+        the member learns nothing a submitted request would not show them.
+        A step the amount falls under auto-approves; with no chain, or one
+        with no steps, a finance approver decides by hand. Requests at or over
+        the dual-approval threshold also need a second, different approver.
+        """
+        try:
+            et = ApprovalEntityType(entity_type)
+        except ValueError:
+            raise ValueError(f"Invalid entity type: {entity_type}")
+        chain = await self._request_chain(org_id, et, amount, budget_id)
+        threshold = (
+            await load_finance_settings(self.db, org_id)
+        ).dual_approval_threshold
+        route: dict[str, Any] = {
+            "chain_name": None,
+            "manual": True,
+            "steps": [],
+            "second_approver_required": threshold is not None and amount >= threshold,
+        }
+        if chain is None or not chain.steps:
+            return route
+        directory = ApproverDirectory(self.db, org_id)
+        steps = []
+        for step in sorted(chain.steps, key=lambda s: (s.step_order, s.id)):
+            approval = step.step_type == ApprovalStepType.APPROVAL
+            steps.append(
+                {
+                    "name": step.name,
+                    "step_order": step.step_order,
+                    "step_type": step.step_type.value,
+                    # A notification step waits on nobody.
+                    "assignee_label": (
+                        await describe_assignee(step, directory) if approval else None
+                    ),
+                    "auto_approved": approval
+                    and step.auto_approve_under is not None
+                    and amount < step.auto_approve_under,
+                }
+            )
+        route.update(chain_name=chain.name, manual=False, steps=steps)
+        return route
+
     async def _advance_reachable_steps(
         self,
         entity_type: ApprovalEntityType,
@@ -4794,6 +4935,9 @@ class FinanceService:
     ) -> PurchaseRequest:
         await self._validate_finance_fks(org_id, kwargs)
         await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
+        await self._assert_budget_open_for_new_charges(
+            org_id, [kwargs.get("budget_id")]
+        )
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         pr = PurchaseRequest(
@@ -4834,6 +4978,12 @@ class FinanceService:
             await assert_may_charge(
                 self.db, org_id, requester_id, kwargs.get("budget_id")
             )
+            # Same rule for an inactive category: refused only when the line
+            # is newly chosen, so a draft already on it can still be edited
+            # (submitting it is what is refused).
+            await self._assert_budget_open_for_new_charges(
+                org_id, [kwargs.get("budget_id")]
+            )
         apply_updates(pr, kwargs)
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
@@ -4850,21 +5000,15 @@ class FinanceService:
         await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
         if pr.status != PurchaseRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
+        await self._assert_budget_open_for_new_charges(org_id, [pr.budget_id])
 
         pr.status = PurchaseRequestStatus.SUBMITTED
 
-        # Resolve and create approval chain
-        budget_category_id = None
-        if pr.budget_id:
-            budget = await self.get_budget(pr.budget_id, org_id)
-            if budget:
-                budget_category_id = budget.category_id
-
-        chain = await self.resolve_approval_chain(
+        chain = await self._request_chain(
             org_id,
             ApprovalEntityType.PURCHASE_REQUEST,
             pr.estimated_amount,
-            budget_category_id,
+            pr.budget_id,
         )
 
         if chain and chain.steps:
@@ -4957,6 +5101,8 @@ class FinanceService:
         ):
             raise ValueError("Request cannot be marked as paid in this status")
         await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
+        # Paying the vendor as well as the member would pay for it twice.
+        await self._refuse_while_claimed(pr, org_id, "marked as paid")
 
         # The approval committed the estimate; paying more than it spends the
         # difference, which the fund must still have.
@@ -5023,11 +5169,16 @@ class FinanceService:
         await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         if pr.status in (PurchaseRequestStatus.PAID,):
             raise ValueError("Paid requests cannot be cancelled")
+        if pr.status == PurchaseRequestStatus.REIMBURSED:
+            raise ValueError("Reimbursed requests cannot be cancelled")
         if requester_id is not None and pr.status != PurchaseRequestStatus.DRAFT:
             raise ValueError(
                 "You can withdraw your own request only while it is a draft; "
                 "ask the finance office to cancel a submitted request"
             )
+        # Its encumbrance is released when the report claiming it is paid;
+        # releasing it now as well would release it twice.
+        await self._refuse_while_claimed(pr, org_id, "cancelled")
 
         # Release encumbrance if approved
         if pr.budget_id and pr.status in (
@@ -5125,6 +5276,9 @@ class FinanceService:
             await assert_may_charge(
                 self.db, org_id, charger_id, item_data.get("budget_id")
             )
+        await self._assert_budget_open_for_new_charges(
+            org_id, [item_data.get("budget_id") for item_data in line_items or []]
+        )
         if kwargs.get("advance_id"):
             await assert_settleable(self.db, org_id, kwargs["advance_id"], submitted_by)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
@@ -5201,24 +5355,144 @@ class FinanceService:
             raise ValueError("Can only add items to draft reports")
         await self._validate_finance_fks(org_id, kwargs)
         await assert_may_charge(self.db, org_id, requester_id, kwargs.get("budget_id"))
+        await self._assert_budget_open_for_new_charges(
+            org_id, [kwargs.get("budget_id")]
+        )
         item = ExpenseLineItem(expense_report_id=er_id, **kwargs)
         self.db.add(item)
         await self.db.flush()
+        await self._recalculate_report_total(er)
+        await self.db.refresh(item, ["created_at"])
+        return item
 
-        # Recalculate the total from a fresh aggregate over the persisted line
-        # items rather than the loaded `er.line_items` collection. That
-        # collection may or may not already include the row just added (depending
-        # on whether it was loaded before the flush), so `sum(...) + item.amount`
-        # could double-count or drift. The DB sum is authoritative (FIN-7).
+    async def _recalculate_report_total(self, er: ExpenseReport) -> None:
+        """Set the report's total from a fresh aggregate over its persisted
+        lines, rather than the loaded ``er.line_items`` collection. That
+        collection may or may not reflect a line just added or removed
+        (depending on when it was loaded), so summing it could double-count or
+        drift. The DB sum is authoritative (FIN-7)."""
         total_result = await self.db.execute(
             select(func.coalesce(func.sum(ExpenseLineItem.amount), 0)).where(
-                ExpenseLineItem.expense_report_id == er_id
+                ExpenseLineItem.expense_report_id == er.id
             )
         )
         er.total_amount = total_result.scalar_one()
         await self.db.flush()
+
+    async def _draft_line(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str],
+    ) -> tuple[ExpenseReport, ExpenseLineItem]:
+        """A line on a draft report, the report locked so a change cannot
+        land beside a concurrent submission that is grading the lines."""
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=True
+        )
+        if not er:
+            _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
+        if er.status != ExpenseReportStatus.DRAFT:
+            raise ValueError("Lines can only be changed while the report is a draft")
+        item = next((i for i in er.line_items if i.id == item_id), None)
+        if item is None:
+            raise FinanceEntityNotFoundError("Expense line not found")
+        return er, item
+
+    async def update_expense_line_item(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str] = None,
+        **kwargs,
+    ) -> ExpenseLineItem:
+        """Edit a line while its report is a draft.
+
+        Only the fields sent change; an explicit null clears an optional one
+        (``apply_updates``). As ``update_purchase_request``, only a change of
+        budget line is checked against who may charge it, so a line copied
+        from a request (finance_reimbursement.py) can still be edited.
+        """
+        er, item = await self._draft_line(er_id, item_id, org_id, requester_id)
+        await self._validate_finance_fks(org_id, kwargs)
+        if "budget_id" in kwargs and kwargs["budget_id"] != item.budget_id:
+            await assert_may_charge(
+                self.db, org_id, requester_id, kwargs.get("budget_id")
+            )
+        apply_updates(item, kwargs)
+        await self.db.flush()
+        await self._recalculate_report_total(er)
         await self.db.refresh(item, ["created_at"])
         return item
+
+    async def delete_expense_line_item(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str] = None,
+    ) -> ExpenseReport:
+        """Remove a line while its report is a draft. Its receipt document is
+        kept, as replacing a receipt keeps the earlier one. A report left with
+        no lines stays a draft; submitting it is refused until one is added."""
+        er, item = await self._draft_line(er_id, item_id, org_id, requester_id)
+        await self.db.delete(item)
+        await self.db.flush()
+        await self._recalculate_report_total(er)
+        # The loaded collection still holds the deleted line until reloaded.
+        await self.db.refresh(er, ["line_items", "updated_at"])
+        return er
+
+    async def cancel_expense_report(
+        self, er_id: str, org_id: str, requester_id: Optional[str] = None
+    ) -> ExpenseReport:
+        """Withdraw or cancel an expense report.
+
+        ``requester_id`` is set when the caller is withdrawing their own
+        report rather than acting as a finance manager: as with a purchase
+        request, a member may withdraw only a draft, and the finance office
+        cancels one that is further along. A paid report is settled and a
+        denied one already closed. While a check is paying the report it is
+        refused: the check is cancelled or voided first.
+
+        Nothing has been spent or encumbered for an unpaid report, so no
+        budget line moves; a cancelled report stops counting against its cash
+        advance and its restricted funds, and frees the purchase it claimed
+        back (finance_reimbursement.py) for another claim.
+        """
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=True
+        )
+        if not er:
+            _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="finish")
+        if er.status == ExpenseReportStatus.PAID:
+            raise ValueError("Paid reports cannot be cancelled")
+        if er.status in (ExpenseReportStatus.DENIED, ExpenseReportStatus.CANCELLED):
+            raise ValueError("This report is already closed")
+        if requester_id is not None and er.status != ExpenseReportStatus.DRAFT:
+            raise ValueError(
+                "You can withdraw your own report only while it is a draft; "
+                "ask the finance office to cancel a submitted report"
+            )
+        check = await live_check_for_report(self.db, org_id, er.id)
+        if check is not None:
+            raise ReimbursementLinkError(
+                f"Check request {check.request_number} is paying this report. "
+                "Cancel or void that check first."
+            )
+        er.status = ExpenseReportStatus.CANCELLED
+        # Close the chain as cancel_purchase_request does, so it leaves every
+        # approver's queue and its emailed links stop working.
+        await self._terminate_entity_pending_steps(
+            ApprovalEntityType.EXPENSE_REPORT, er.id, org_id
+        )
+        await self.db.flush()
+        await self.db.refresh(er, ["updated_at"])
+        return er
 
     async def reviews_entity(
         self,
@@ -5268,6 +5542,9 @@ class FinanceService:
             raise ValueError("Only draft reports can be submitted")
         if er.total_amount <= 0:
             raise ValueError("Expense report must have line items")
+        await self._assert_budget_open_for_new_charges(
+            org_id, [item.budget_id for item in er.line_items]
+        )
         missing = [item for item in er.line_items if not item.receipt_document_id]
         if missing:
             named = ", ".join(f'"{item.description}"' for item in missing[:3])
@@ -5297,14 +5574,14 @@ class FinanceService:
             item.substantiated_late = item.id in late_ids
         if er.advance_id:
             er.advance_applied = await self._apply_advance(er, org_id)
+        if er.purchase_request_id:
+            await self._assert_purchase_claimable(er, org_id)
         er.submitted_at = now
 
         er.status = ExpenseReportStatus.SUBMITTED
 
-        chain = await self.resolve_approval_chain(
-            org_id,
-            ApprovalEntityType.EXPENSE_REPORT,
-            er.total_amount,
+        chain = await self._request_chain(
+            org_id, ApprovalEntityType.EXPENSE_REPORT, er.total_amount, None
         )
 
         if chain and chain.steps:
@@ -5386,19 +5663,346 @@ class FinanceService:
         if er.status != ExpenseReportStatus.APPROVED:
             raise ValueError("Only approved reports can be marked as paid")
         await self.require_year_accepts(er.fiscal_year_id, org_id, action="finish")
+        check = await live_check_for_report(self.db, org_id, er.id)
+        if check is not None:
+            raise ReimbursementLinkError(
+                f"Check request {check.request_number} is paying this report. "
+                "Issue that check, or wait for it to be denied, rather than "
+                "paying the report another way."
+            )
 
-        er.status = ExpenseReportStatus.PAID
-        er.paid_at = datetime.now(timezone.utc)
-        er.payment_method = payment_method
-
-        # Add to spent for each line item's budget
-        for item in er.line_items:
-            if item.budget_id:
-                await self._add_to_spent(item.budget_id, item.amount, org_id)
-
+        await self._settle_report(
+            er, org_id, datetime.now(timezone.utc), payment_method
+        )
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
         return er
+
+    # ========================================
+    # Reimbursement: purchase -> report -> check
+    # (app/services/finance_reimbursement.py)
+    # ========================================
+
+    async def _refuse_while_claimed(
+        self, pr: PurchaseRequest, org_id: str, action: str
+    ) -> None:
+        """Refuse paying or cancelling a purchase a submitted report claims.
+
+        A draft does not block: the finance office can settle the purchase
+        and the draft is then refused on submission, rather than a member's
+        forgotten draft holding the request open for good.
+        """
+        report = await live_report_for_purchase(self.db, org_id, pr.id)
+        if report is not None and report.status != ExpenseReportStatus.DRAFT:
+            raise ReimbursementLinkError(
+                f"Expense report {report.report_number} claims this purchase "
+                f"back for the member, so it cannot be {action}. Deny that "
+                "report first."
+            )
+
+    async def _assert_purchase_claimable(self, er: ExpenseReport, org_id: str) -> None:
+        pr = await lock_purchase(self.db, org_id, er.purchase_request_id or "")
+        if pr is None or pr.status not in CLAIMABLE_PURCHASE_STATUSES:
+            raise ReimbursementLinkError(
+                "The purchase request this report claims back is no longer "
+                "approved and unpaid, so it cannot be reimbursed."
+            )
+
+    async def create_reimbursement_report(
+        self,
+        pr_id: str,
+        org_id: str,
+        caller_id: str,
+        *,
+        requester_scope: Optional[str],
+        amount: Optional[Decimal] = None,
+        date_incurred: Optional[datetime] = None,
+        merchant: Optional[str] = None,
+    ) -> ExpenseReport:
+        """Raise a draft expense report claiming back an approved purchase the
+        requester paid for themselves, with one line copied from it.
+
+        ``requester_scope`` is the caller's id when they lack the manage
+        grant, so another member's request reads as one that does not exist.
+        Only the member who raised the request may claim it: the report pays
+        whoever submits it.
+        """
+        pr = await lock_purchase(self.db, org_id, pr_id)
+        if pr is None or (
+            requester_scope is not None and pr.requested_by != requester_scope
+        ):
+            _raise_not_found("Purchase request", requester_scope)
+        if pr.requested_by != caller_id:
+            raise ReimbursementLinkError(
+                "Only the member who raised this purchase request can claim it back."
+            )
+        await self.require_year_accepts(pr.fiscal_year_id, org_id, action="new")
+        if pr.status not in CLAIMABLE_PURCHASE_STATUSES:
+            raise ReimbursementLinkError(
+                "Only an approved purchase that has not been paid can be "
+                "claimed back."
+            )
+        existing = await live_report_for_purchase(self.db, org_id, pr.id)
+        if existing is not None:
+            raise ReimbursementLinkError(
+                f"Expense report {existing.report_number} already claims this "
+                "purchase back."
+            )
+
+        claimed = Decimal(str(amount or pr.actual_amount or pr.estimated_amount))
+        er = ExpenseReport(
+            organization_id=org_id,
+            submitted_by=pr.requested_by,
+            fiscal_year_id=pr.fiscal_year_id,
+            title=pr.title,
+            description=f"Reimbursement for purchase request {pr.request_number}",
+            purchase_request_id=pr.id,
+            total_amount=claimed,
+        )
+        await self._flush_with_unique_number(
+            er, "report_number", org_id, "ER", pr.fiscal_year_id
+        )
+        # The line is the request's own charge, which its approval already
+        # authorized, so it is copied rather than re-checked against who may
+        # charge the line today. The request's receipt, if any, comes with it.
+        self.db.add(
+            ExpenseLineItem(
+                expense_report_id=er.id,
+                budget_id=pr.budget_id,
+                fund_campaign_id=pr.fund_campaign_id,
+                functional_class=pr.functional_class,
+                description=pr.title[:500],
+                amount=claimed,
+                date_incurred=date_incurred
+                or pr.received_at
+                or pr.ordered_at
+                or datetime.now(timezone.utc),
+                expense_type=ExpenseType.GENERAL,
+                merchant=merchant or pr.vendor,
+                receipt_document_id=pr.receipt_document_id,
+            )
+        )
+        await self.db.flush()
+        await self.db.refresh(er, ["created_at", "updated_at", "line_items"])
+        logger.info(
+            "Expense report {} claims purchase request {}",
+            er.report_number,
+            pr.request_number,
+        )
+        return er
+
+    async def request_reimbursement_check(
+        self,
+        er_id: str,
+        org_id: str,
+        *,
+        payee_address: Optional[str] = None,
+        memo: Optional[str] = None,
+    ) -> CheckRequest:
+        """Raise the check that pays an approved report, and submit it.
+
+        It is payable to the member for what the report still owes them, is
+        raised in their name (so the requester rules -- no approving or
+        issuing your own check -- protect it as any check), and goes through
+        the check-request approval chain (owner decision, 2026-10-23).
+        """
+        er = await self.get_expense_report(er_id, org_id, for_update=True)
+        if er is None:
+            raise ValueError("Expense report not found")
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="finish")
+        if er.status != ExpenseReportStatus.APPROVED:
+            raise ReimbursementLinkError(
+                "Only an approved expense report can be paid by check."
+            )
+        existing = await live_check_for_report(self.db, org_id, er.id)
+        if existing is not None:
+            raise ReimbursementLinkError(
+                f"Check request {existing.request_number} is already paying "
+                "this report."
+            )
+        owed = amount_owed(er)
+        if owed <= 0:
+            raise ReimbursementLinkError(
+                "The cash advance covers this whole report, so there is "
+                "nothing to pay by check. Mark it paid instead."
+            )
+        member = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == er.submitted_by, User.organization_id == org_id
+                )
+            )
+        ).scalar_one_or_none()
+        payee = (
+            format_legal_name(member.first_name, member.last_name) or member.username
+            if member is not None
+            else ""
+        )
+        if not payee:
+            raise ReimbursementLinkError(
+                "The member who submitted this report is no longer in the "
+                "department, so the check cannot be made out to them here."
+            )
+        cr = CheckRequest(
+            organization_id=org_id,
+            requested_by=er.submitted_by,
+            fiscal_year_id=er.fiscal_year_id,
+            expense_report_id=er.id,
+            payee_name=payee[:300],
+            payee_address=payee_address,
+            amount=owed,
+            memo=(memo or f"Reimbursement {er.report_number}")[:500],
+            purpose=f"Reimbursement for expense report {er.report_number}: {er.title}",
+        )
+        await self._flush_with_unique_number(
+            cr, "request_number", org_id, "CK", er.fiscal_year_id
+        )
+        await self._route_check_request(cr, org_id)
+        await self.db.flush()
+        await self.db.refresh(cr, ["created_at", "updated_at"])
+        logger.info(
+            "Check request {} raised to pay expense report {}",
+            cr.request_number,
+            er.report_number,
+        )
+        return cr
+
+    async def reimbursement_links(
+        self, kind: str, entity, org_id: str
+    ) -> dict[str, Any]:
+        """The other records on a payment's reimbursement path, by response
+        field (app/services/finance_reimbursement.py). Plain reads, for a
+        response; the transitions take their own locks."""
+        links: dict[str, Any] = {}
+        if kind == KIND_PURCHASE:
+            row = (
+                await self.db.execute(
+                    select(
+                        ExpenseReport.id,
+                        ExpenseReport.report_number,
+                        ExpenseReport.status,
+                    )
+                    .where(
+                        ExpenseReport.organization_id == org_id,
+                        ExpenseReport.purchase_request_id == entity.id,
+                        ExpenseReport.status.in_(LIVE_REPORT_STATUSES),
+                    )
+                    .order_by(ExpenseReport.created_at.desc(), ExpenseReport.id)
+                    .limit(1)
+                )
+            ).first()
+            if row is not None:
+                links["reimbursement_report_id"] = row[0]
+                links["reimbursement_report_number"] = row[1]
+                links["reimbursement_report_status"] = _enum_value(row[2])
+        elif kind == KIND_EXPENSE:
+            links["amount_owed"] = amount_owed(entity)
+            if entity.purchase_request_id:
+                links["purchase_request_number"] = await self.db.scalar(
+                    select(PurchaseRequest.request_number).where(
+                        PurchaseRequest.organization_id == org_id,
+                        PurchaseRequest.id == entity.purchase_request_id,
+                    )
+                )
+            check = (
+                await self.db.execute(
+                    select(
+                        CheckRequest.id,
+                        CheckRequest.request_number,
+                        CheckRequest.status,
+                    )
+                    .where(
+                        CheckRequest.organization_id == org_id,
+                        CheckRequest.expense_report_id == entity.id,
+                        CheckRequest.status.in_(LIVE_CHECK_STATUSES),
+                    )
+                    .order_by(CheckRequest.created_at.desc(), CheckRequest.id)
+                    .limit(1)
+                )
+            ).first()
+            if check is not None:
+                links["reimbursement_check_id"] = check[0]
+                links["reimbursement_check_number"] = check[1]
+                links["reimbursement_check_status"] = _enum_value(check[2])
+        elif kind == KIND_CHECK and entity.expense_report_id:
+            links["expense_report_number"] = await self.db.scalar(
+                select(ExpenseReport.report_number).where(
+                    ExpenseReport.organization_id == org_id,
+                    ExpenseReport.id == entity.expense_report_id,
+                )
+            )
+        return links
+
+    async def _settle_report(
+        self,
+        er: ExpenseReport,
+        org_id: str,
+        paid_at: datetime,
+        payment_method: Optional[str],
+    ) -> None:
+        """Pay an approved report: its lines are spent on their budget lines,
+        and the purchase it claims back, if any, closes as reimbursed.
+
+        The purchase's encumbrance is released in the same budget mutation as
+        the spend on that line, as ``mark_pr_paid`` does, so a line that is
+        nearly full is not refused for briefly counting both.
+        """
+        deltas: dict[str, list[Decimal]] = {}
+        for item in er.line_items:
+            if item.budget_id:
+                deltas.setdefault(item.budget_id, [Decimal("0"), Decimal("0")])
+                deltas[item.budget_id][0] += Decimal(str(item.amount))
+        if er.purchase_request_id:
+            pr = await lock_purchase(self.db, org_id, er.purchase_request_id)
+            if pr is None or pr.status not in CLAIMABLE_PURCHASE_STATUSES:
+                raise ReimbursementLinkError(
+                    "The purchase request this report claims back is no longer "
+                    "approved and unpaid, so the report cannot be paid."
+                )
+            if pr.budget_id:
+                deltas.setdefault(pr.budget_id, [Decimal("0"), Decimal("0")])
+                deltas[pr.budget_id][1] -= Decimal(str(pr.estimated_amount))
+            pr.status = PurchaseRequestStatus.REIMBURSED
+            pr.paid_at = paid_at
+        for budget_id in sorted(deltas):
+            spent, encumbered = deltas[budget_id]
+            await self._mutate_budget(
+                budget_id, org_id, spent_delta=spent, encumbered_delta=encumbered
+            )
+        er.status = ExpenseReportStatus.PAID
+        er.paid_at = paid_at
+        er.payment_method = payment_method
+
+    async def _unsettle_report(self, er: ExpenseReport, org_id: str) -> None:
+        """Undo ``_settle_report`` for a report whose check was voided: back to
+        approved, its spend reversed and its purchase reopened with its
+        encumbrance, so another check can pay it."""
+        deltas: dict[str, list[Decimal]] = {}
+        for item in er.line_items:
+            if item.budget_id:
+                deltas.setdefault(item.budget_id, [Decimal("0"), Decimal("0")])
+                deltas[item.budget_id][0] -= Decimal(str(item.amount))
+        if er.purchase_request_id:
+            pr = await lock_purchase(self.db, org_id, er.purchase_request_id)
+            if pr is not None and pr.status == PurchaseRequestStatus.REIMBURSED:
+                if pr.budget_id:
+                    deltas.setdefault(pr.budget_id, [Decimal("0"), Decimal("0")])
+                    deltas[pr.budget_id][1] += Decimal(str(pr.estimated_amount))
+                pr.status = reopened_status(pr)
+                pr.paid_at = None
+        for budget_id in sorted(deltas):
+            spent, encumbered = deltas[budget_id]
+            await self._mutate_budget(
+                budget_id, org_id, spent_delta=spent, encumbered_delta=encumbered
+            )
+        er.status = ExpenseReportStatus.APPROVED
+        er.paid_at = None
+        er.payment_method = None
+        # QuickBooks holds the report's entry under the voided check, whose
+        # reversing entry goes out with the next export; the report itself is
+        # unpaid again, and is exported afresh when another check pays it.
+        er.qb_exported_at = None
+        er.qb_export_log_id = None
 
     # ========================================
     # Check Requests
@@ -5466,6 +6070,9 @@ class FinanceService:
             _refuse_advance_charges(kwargs)
         await self._validate_finance_fks(org_id, kwargs)
         await assert_may_charge(self.db, org_id, charger_id, kwargs.get("budget_id"))
+        await self._assert_budget_open_for_new_charges(
+            org_id, [kwargs.get("budget_id")]
+        )
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         await self.require_year_accepts(fiscal_year_id, org_id, action="new")
         cr = CheckRequest(
@@ -5499,11 +6106,16 @@ class FinanceService:
             raise ValueError("Cannot edit a check request in this status")
         if cr.is_advance:
             _refuse_advance_charges(kwargs)
+        if cr.expense_report_id:
+            _refuse_reimbursement_changes(cr, kwargs)
         await self._validate_finance_fks(org_id, kwargs)
         # As update_purchase_request: only a change of line is checked.
         if kwargs.get("budget_id") != cr.budget_id:
             await assert_may_charge(
                 self.db, org_id, requester_id, kwargs.get("budget_id")
+            )
+            await self._assert_budget_open_for_new_charges(
+                org_id, [kwargs.get("budget_id")]
             )
         apply_updates(cr, kwargs)
         await self.db.flush()
@@ -5521,22 +6133,21 @@ class FinanceService:
         await self.require_year_accepts(cr.fiscal_year_id, org_id, action="new")
         if cr.status != CheckRequestStatus.DRAFT:
             raise ValueError("Only draft requests can be submitted")
+        await self._assert_budget_open_for_new_charges(org_id, [cr.budget_id])
         if cr.is_advance:
             await assert_no_overdue(self.db, org_id, cr.requested_by)
 
+        await self._route_check_request(cr, org_id)
+        await self.db.flush()
+        await self.db.refresh(cr, ["updated_at"])
+        return cr
+
+    async def _route_check_request(self, cr: CheckRequest, org_id: str) -> None:
+        """Submit a check request into its approval chain."""
         cr.status = CheckRequestStatus.SUBMITTED
 
-        budget_category_id = None
-        if cr.budget_id:
-            budget = await self.get_budget(cr.budget_id, org_id)
-            if budget:
-                budget_category_id = budget.category_id
-
-        chain = await self.resolve_approval_chain(
-            org_id,
-            ApprovalEntityType.CHECK_REQUEST,
-            cr.amount,
-            budget_category_id,
+        chain = await self._request_chain(
+            org_id, ApprovalEntityType.CHECK_REQUEST, cr.amount, cr.budget_id
         )
 
         if chain and chain.steps:
@@ -5558,6 +6169,40 @@ class FinanceService:
         else:
             cr.status = CheckRequestStatus.PENDING_APPROVAL
 
+    async def cancel_check_request(
+        self, cr_id: str, org_id: str, requester_id: Optional[str] = None
+    ) -> CheckRequest:
+        """Withdraw or cancel a check request that has not been issued.
+
+        The same rule as a purchase request: a member withdraws only their own
+        draft, and the finance office cancels one further along. An issued
+        check is voided instead, which reverses what it moved. An unissued
+        check has moved no budget total, so nothing is reversed; a cancelled
+        reimbursement check leaves its report approved, to be paid again.
+        """
+        cr = await self.get_check_request(
+            cr_id, org_id, for_update=True, restrict_to_user=requester_id
+        )
+        if not cr:
+            _raise_not_found("Check request", requester_id)
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
+        if cr.status == CheckRequestStatus.ISSUED:
+            raise ValueError("An issued check is voided, not cancelled")
+        if cr.status in (
+            CheckRequestStatus.DENIED,
+            CheckRequestStatus.VOIDED,
+            CheckRequestStatus.CANCELLED,
+        ):
+            raise ValueError("This check request is already closed")
+        if requester_id is not None and cr.status != CheckRequestStatus.DRAFT:
+            raise ValueError(
+                "You can withdraw your own request only while it is a draft; "
+                "ask the finance office to cancel a submitted request"
+            )
+        cr.status = CheckRequestStatus.CANCELLED
+        await self._terminate_entity_pending_steps(
+            ApprovalEntityType.CHECK_REQUEST, cr.id, org_id
+        )
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
         return cr
@@ -5570,6 +6215,7 @@ class FinanceService:
         check_date: Optional[datetime] = None,
         acted_by: Optional[str] = None,
     ) -> CheckRequest:
+        report = await self._lock_reimbursed_report(cr_id, org_id)
         # Locked read -- see mark_pr_paid. Two concurrent "issue" calls on the
         # same request must not both pass the APPROVED check off a plain
         # SELECT and both add the check's amount to spent.
@@ -5595,6 +6241,18 @@ class FinanceService:
         cr.status = CheckRequestStatus.ISSUED
         cr.check_number = check_number
         cr.check_date = check_date or datetime.now(timezone.utc)
+        if cr.expense_report_id:
+            # The check is how the report is paid: the report's lines are the
+            # spend, and the check (with no budget line) adds none of its own.
+            if report is None or report.status != ExpenseReportStatus.APPROVED:
+                raise ReimbursementLinkError(
+                    "The expense report this check pays is no longer approved "
+                    "and unpaid."
+                )
+            await self.require_year_accepts(
+                report.fiscal_year_id, org_id, action="finish"
+            )
+            await self._settle_report(report, org_id, cr.check_date, "check")
 
         if cr.budget_id:
             await self._add_to_spent(cr.budget_id, cr.amount, org_id)
@@ -5603,7 +6261,27 @@ class FinanceService:
         await self.db.refresh(cr, ["updated_at"])
         return cr
 
+    async def _lock_reimbursed_report(
+        self, cr_id: str, org_id: str
+    ) -> Optional[ExpenseReport]:
+        """The report a reimbursement check pays, locked before the check is.
+
+        Report, then check, is the order ``mark_expense_paid`` and
+        ``request_reimbursement_check`` take the two locks in, so issuing or
+        voiding the check cannot deadlock against them. The link itself is
+        fixed at creation, so it is read without a lock.
+        """
+        er_id = await self.db.scalar(
+            select(CheckRequest.expense_report_id).where(
+                CheckRequest.id == cr_id, CheckRequest.organization_id == org_id
+            )
+        )
+        if not er_id:
+            return None
+        return await self.get_expense_report(er_id, org_id, for_update=True)
+
     async def void_check(self, cr_id: str, org_id: str) -> CheckRequest:
+        report = await self._lock_reimbursed_report(cr_id, org_id)
         # Locked read -- see mark_pr_paid/issue_check. Two concurrent "void"
         # calls on the same check must not both pass the ISSUED check off a
         # plain SELECT and both subtract the check's amount from spent.
@@ -5630,6 +6308,8 @@ class FinanceService:
         cr.status = CheckRequestStatus.VOIDED
         # The date a check exported to QuickBooks is reversed on.
         cr.voided_at = datetime.now(timezone.utc)
+        if report is not None and report.status == ExpenseReportStatus.PAID:
+            await self._unsettle_report(report, org_id)
 
         # Reverse the spent amount through the same locked helper every other
         # budget mutation uses (Pitfall #27), rather than a duplicated inline
@@ -6524,6 +7204,13 @@ class FinanceService:
             ExpenseReport.status == ExpenseReportStatus.PAID,
             ExpenseReport.paid_at >= date_start,
             ExpenseReport.paid_at <= date_end,
+            # A report a reimbursement check paid goes out as that check's
+            # entry, so a void can reverse it (finance_reimbursement.py).
+            ~exists().where(
+                CheckRequest.organization_id == org_id,
+                CheckRequest.expense_report_id == ExpenseReport.id,
+                CheckRequest.status == CheckRequestStatus.ISSUED,
+            ),
         ]
         # Dues received in the period: money in, debited to the deposit
         # account and credited to the schedule's income account.
@@ -6577,9 +7264,42 @@ class FinanceService:
         pr_count = await self.db.scalar(
             select(func.count()).select_from(PurchaseRequest).where(*pr_filters)
         )
+        plain_check = CheckRequest.expense_report_id.is_(None)
         cr_count = await self.db.scalar(
-            select(func.count()).select_from(CheckRequest).where(*cr_filters)
+            select(func.count())
+            .select_from(CheckRequest)
+            .where(*cr_filters, plain_check)
         )
+        # Few enough to hold at once: each is at least two of the file's rows.
+        reimbursements = list(
+            (
+                await self.db.execute(
+                    select(CheckRequest)
+                    .where(*cr_filters, CheckRequest.expense_report_id.is_not(None))
+                    .order_by(CheckRequest.check_date, CheckRequest.id)
+                )
+            ).scalars()
+        )
+        reimbursed_reports = await self._reimbursed_reports(
+            org_id,
+            [cr.expense_report_id for cr in reimbursements if not cr.qb_export_entry],
+        )
+        reimbursement_voids = list(
+            (
+                await self.db.execute(
+                    select(CheckRequest).where(
+                        *void_filters, CheckRequest.expense_report_id.is_not(None)
+                    )
+                )
+            ).scalars()
+        )
+        if any(not cr.qb_export_entry for cr in reimbursement_voids):
+            # Every export of one records its entry, so this is a row edited
+            # by hand; reversing a guess would unbalance the books.
+            raise ValueError(
+                "A voided reimbursement check has no record of the entry "
+                "QuickBooks received, so its reversal cannot be exported"
+            )
         line_count = await self.db.scalar(
             select(func.count())
             .select_from(ExpenseLineItem)
@@ -6587,7 +7307,9 @@ class FinanceService:
             .where(*er_filters)
         )
         void_count = await self.db.scalar(
-            select(func.count()).select_from(CheckRequest).where(*void_filters)
+            select(func.count())
+            .select_from(CheckRequest)
+            .where(*void_filters, plain_check)
         )
         dues_setup = await self._dues_accounts(org_id)
         dues_count = (
@@ -6614,10 +7336,17 @@ class FinanceService:
                 raise ReimportConfirmationRequired(reimported)
         # Reports that account for a cash advance, and advances not yet given
         # the accounts they were exported to.
-        settling_count = await self.db.scalar(
-            select(func.count())
-            .select_from(ExpenseReport)
-            .where(*er_filters, ExpenseReport.advance_applied > 0)
+        settling_count = int(
+            await self.db.scalar(
+                select(func.count())
+                .select_from(ExpenseReport)
+                .where(*er_filters, ExpenseReport.advance_applied > 0)
+            )
+            or 0
+        ) + sum(
+            1
+            for er in reimbursed_reports.values()
+            if er.advance_applied and er.advance_applied > 0
         )
         new_advance_count = await self.db.scalar(
             select(func.count())
@@ -6641,7 +7370,14 @@ class FinanceService:
         # on is paid partly from it and partly from the bank. A file
         # QuickBooks will not import is no use, and splitting one would let an
         # expense report's entry straddle two files, so refuse instead.
-        rows = 2 * total + int(settling_count or 0) + 1
+        # A reimbursement check carries its report's whole entry: two rows a
+        # line (counted with the settling reports above when an advance splits
+        # one), or exactly the rows it recorded when it was first sent.
+        reimbursement_rows = sum(
+            len(cr.qb_export_entry or [])
+            for cr in [*reimbursements, *reimbursement_voids]
+        ) + sum(2 * len(report.line_items) for report in reimbursed_reports.values())
+        rows = 2 * total + int(settling_count or 0) + reimbursement_rows + 1
         if rows > max_rows:
             raise ValueError(
                 f"QuickBooks Online imports files of fewer than {max_rows + 1:,} "
@@ -6724,6 +7460,7 @@ class FinanceService:
                 ),
                 select(CheckRequest.request_number, CheckRequest.budget_id).where(
                     *cr_filters,
+                    plain_check,
                     CheckRequest.qb_export_account.is_(None),
                     CheckRequest.is_advance.is_(False),
                 ),
@@ -6731,8 +7468,21 @@ class FinanceService:
                 .select_from(ExpenseLineItem)
                 .join(ExpenseReport)
                 .where(*er_filters),
+                # A reimbursement check posts to its report's lines' accounts.
+                select(CheckRequest.request_number, ExpenseLineItem.budget_id)
+                .select_from(CheckRequest)
+                .join(
+                    ExpenseLineItem,
+                    ExpenseLineItem.expense_report_id == CheckRequest.expense_report_id,
+                )
+                .where(
+                    *cr_filters,
+                    CheckRequest.expense_report_id.is_not(None),
+                    CheckRequest.qb_export_entry.is_(None),
+                ),
                 select(CheckRequest.request_number, CheckRequest.budget_id).where(
                     *void_filters,
+                    plain_check,
                     CheckRequest.qb_export_account.is_(None),
                     CheckRequest.is_advance.is_(False),
                 ),
@@ -6778,6 +7528,64 @@ class FinanceService:
                 [number, day, memo, paid_from, "", value, description],
             ]
 
+        def line_entry(
+            account: str,
+            paid_from: str,
+            amount: Decimal,
+            description: str,
+            advance_left: Decimal,
+        ) -> tuple[list[list], Decimal]:
+            """One expense line as ``[account, debit, credit, description]``
+            rows, and what the report's cash advance has left after it.
+
+            The line is paid from the advance until that runs out, and from
+            the bank after: the expense clears what the member owed instead.
+            """
+            value = _qb_amount(amount)
+            covered = min(value, advance_left)
+            if covered <= 0:
+                return (
+                    [
+                        [account, value, "", description],
+                        [paid_from, "", value, description],
+                    ],
+                    advance_left,
+                )
+            rows = [
+                [account, value, "", description],
+                [advance_account, "", covered, description],
+            ]
+            if value > covered:
+                rows.append([paid_from, "", value - covered, description])
+            return rows, advance_left - covered
+
+        def line_description(item: ExpenseLineItem) -> str:
+            return (
+                f"{item.merchant}: {item.description}"
+                if item.merchant
+                else item.description
+            )
+
+        def reimbursement_entry(cr: CheckRequest) -> list[list]:
+            """The entry a reimbursement check posts: its report's lines, as
+            the report's own entry would be, as first sent if it was."""
+            if cr.qb_export_entry:
+                return [list(row) for row in cr.qb_export_entry]
+            report = reimbursed_reports[cr.expense_report_id or ""]
+            left = _qb_amount(report.advance_applied or Decimal("0"))
+            entry: list[list] = []
+            for item in sorted(report.line_items, key=lambda i: i.id):
+                account, paid_from = line_accounts(item.budget_id)
+                rows, left = line_entry(
+                    account, paid_from, item.amount, line_description(item), left
+                )
+                entry += rows
+            # Stored as text so the record reads back exactly as it was sent.
+            return [
+                [account, str(debit), str(credit), description]
+                for account, debit, credit, description in entry
+            ]
+
         def payee(cr: CheckRequest) -> str:
             return (
                 f"{cr.payee_name} (check {cr.check_number})"
@@ -6790,6 +7598,7 @@ class FinanceService:
         sent_reports: set[str] = set()
         sent_checks: dict[tuple[str, str], list[str]] = {}
         sent_voids: list[str] = []
+        sent_reimbursements: list[tuple[CheckRequest, list[list]]] = []
         sent_dues: list[str] = []
         sent_returns: list[str] = []
         # What each report's cash advance has left to cover, as its lines go
@@ -6860,7 +7669,7 @@ class FinanceService:
 
                 async for checks in batches(
                     select(CheckRequest)
-                    .where(*cr_filters)
+                    .where(*cr_filters, plain_check)
                     .order_by(CheckRequest.check_date, CheckRequest.id),
                     int(cr_count or 0),
                 ):
@@ -6883,6 +7692,20 @@ class FinanceService:
                     delivered += len(checks)
                     yield csv_chunk(lines)
 
+                # A reimbursement check's entry is its report's, under the
+                # check's own number: a report voided and paid again by a new
+                # check posts again under a number QuickBooks has not seen.
+                lines = []
+                for cr in reimbursements:
+                    posted = reimbursement_entry(cr)
+                    day = local_day(cr.check_date)
+                    memo = cr.purpose or cr.memo or cr.request_number
+                    lines += [[cr.request_number, day, memo, *row] for row in posted]
+                    sent_reimbursements.append((cr, posted))
+                if lines:
+                    delivered += len(reimbursements)
+                    yield csv_chunk(lines)
+
                 # One journal entry per report: its lines are ordered by
                 # report, so they stay consecutive across batch boundaries.
                 for offset in range(0, int(line_count or 0), batch_size):
@@ -6902,66 +7725,21 @@ class FinanceService:
                     lines = []
                     for item, er in records:
                         account, paid_from = line_accounts(item.budget_id)
-                        description = (
-                            f"{item.merchant}: {item.description}"
-                            if item.merchant
-                            else item.description
-                        )
                         if er.id not in advance_left:
                             advance_left[er.id] = _qb_amount(
                                 er.advance_applied or Decimal("0")
                             )
-                        covered = min(_qb_amount(item.amount), advance_left[er.id])
-                        if covered > 0:
-                            # Paid from the cash advance, not the bank: the
-                            # expense clears what the member owed instead.
-                            advance_left[er.id] -= covered
-                            value = _qb_amount(item.amount)
-                            day = local_day(er.paid_at)
-                            lines.append(
-                                [
-                                    er.report_number,
-                                    day,
-                                    er.title,
-                                    account,
-                                    value,
-                                    "",
-                                    description,
-                                ]
-                            )
-                            lines.append(
-                                [
-                                    er.report_number,
-                                    day,
-                                    er.title,
-                                    advance_account,
-                                    "",
-                                    covered,
-                                    description,
-                                ]
-                            )
-                            if value > covered:
-                                lines.append(
-                                    [
-                                        er.report_number,
-                                        day,
-                                        er.title,
-                                        paid_from,
-                                        "",
-                                        value - covered,
-                                        description,
-                                    ]
-                                )
-                        else:
-                            lines += journal_lines(
-                                er.report_number,
-                                local_day(er.paid_at),
-                                er.title,
-                                account,
-                                paid_from,
-                                item.amount,
-                                description,
-                            )
+                        rows, advance_left[er.id] = line_entry(
+                            account,
+                            paid_from,
+                            item.amount,
+                            line_description(item),
+                            advance_left[er.id],
+                        )
+                        day = local_day(er.paid_at)
+                        lines += [
+                            [er.report_number, day, er.title, *row] for row in rows
+                        ]
                         sent_reports.add(er.id)
                     delivered += len(records)
                     yield csv_chunk(lines)
@@ -7085,7 +7863,7 @@ class FinanceService:
                 # posted before it is reversed.
                 async for voids in batches(
                     select(CheckRequest)
-                    .where(*void_filters)
+                    .where(*void_filters, plain_check)
                     .order_by(CheckRequest.voided_at, CheckRequest.id),
                     int(void_count or 0),
                 ):
@@ -7107,6 +7885,30 @@ class FinanceService:
                     delivered += len(voids)
                     yield csv_chunk(lines)
 
+                # A voided reimbursement check reverses exactly the entry it
+                # recorded, every row's sides swapped.
+                lines = []
+                for cr in sorted(
+                    reimbursement_voids,
+                    key=lambda c: (_aware_utc(c.voided_at or date_end), c.id),
+                ):
+                    for account, debit, credit, description in cr.qb_export_entry or []:
+                        lines.append(
+                            [
+                                f"{cr.request_number}{QB_VOID_SUFFIX}",
+                                local_day(cr.voided_at),
+                                f"Void: {cr.purpose or cr.memo or cr.request_number}",
+                                account,
+                                credit,
+                                debit,
+                                f"{description}, voided",
+                            ]
+                        )
+                    sent_voids.append(cr.id)
+                if lines:
+                    delivered += len(reimbursement_voids)
+                    yield csv_chunk(lines)
+
                 stamped_at = datetime.now(timezone.utc)
                 await self._stamp_exported(
                     org_id,
@@ -7118,6 +7920,7 @@ class FinanceService:
                     voids=sent_voids,
                     dues=sent_dues,
                     returns=sent_returns,
+                    reimbursements=sent_reimbursements,
                 )
                 log.status = "successful"
                 log.record_count = delivered
@@ -7337,6 +8140,23 @@ class FinanceService:
             "accounts_not_in_chart": list(not_in_chart),
         }
 
+    async def _reimbursed_reports(
+        self, org_id: str, report_ids: Sequence[Optional[str]]
+    ) -> dict[str, ExpenseReport]:
+        """The reports these reimbursement checks pay, with their lines."""
+        wanted = sorted({i for i in report_ids if i})
+        if not wanted:
+            return {}
+        result = await self.db.execute(
+            select(ExpenseReport)
+            .options(selectinload(ExpenseReport.line_items))
+            .where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.id.in_(wanted),
+            )
+        )
+        return {er.id: er for er in result.scalars()}
+
     async def _stamp_exported(
         self,
         org_id: str,
@@ -7349,6 +8169,7 @@ class FinanceService:
         voids: list[str],
         dues: Optional[list[str]] = None,
         returns: Optional[list[str]] = None,
+        reimbursements: Optional[list[tuple[CheckRequest, list[list]]]] = None,
     ) -> None:
         """Mark what a completed export carried, and the accounts it used."""
         stamp = {"qb_exported_at": stamped_at, "qb_export_log_id": log_id}
@@ -7380,6 +8201,26 @@ class FinanceService:
                     qb_export_offset_account=offset,
                 )
             )
+        for cr, entry in reimbursements or []:
+            # The entry is written whole, never edited in place (pitfall #12).
+            await self.db.execute(
+                update(CheckRequest)
+                .where(
+                    CheckRequest.organization_id == org_id,
+                    CheckRequest.id == cr.id,
+                )
+                .values(**stamp, qb_export_entry=entry)
+            )
+            if cr.status == CheckRequestStatus.ISSUED and cr.expense_report_id:
+                # So the report's page says QuickBooks has it.
+                await self.db.execute(
+                    update(ExpenseReport)
+                    .where(
+                        ExpenseReport.organization_id == org_id,
+                        ExpenseReport.id == cr.expense_report_id,
+                    )
+                    .values(**stamp)
+                )
         if voids:
             await self.db.execute(
                 update(CheckRequest)
@@ -7901,3 +8742,64 @@ class FinanceService:
         fund_campaign_id = data.get("fund_campaign_id")
         if fund_campaign_id:
             await assert_chargeable(self.db, org_id, fund_campaign_id)
+
+    async def _assert_budget_open_for_new_charges(
+        self, org_id: str, budget_ids: Iterable[Optional[str]]
+    ) -> None:
+        """Refuse new spending on a line whose budget category is inactive.
+
+        A category in use is deactivated rather than deleted
+        (``delete_budget_category``); the owner's rule (2026-10-22) is that
+        its lines then take no new charges. "New" means the moment spending
+        attaches to the line: creating a request, adding an expense line,
+        repointing a request at the line, or submitting a draft into approval.
+        Approving, paying, issuing and cancelling are deliberately not
+        checked, so a request already in flight finishes on the line it was
+        approved against, and the spend still shows in every report.
+
+        A line is closed when its category or any category above it is
+        inactive (``CategoryTree.inactive_source``, the one definition
+        ``create_budget`` and the request-form picker also use), and the
+        refusal names the category that closed it.
+
+        The org's category tree is read once for every line named, so an
+        expense report with many lines costs the same few queries as one.
+        """
+        wanted = {str(budget_id) for budget_id in budget_ids if budget_id}
+        if not wanted:
+            return
+        result = await self.db.execute(
+            select(Budget.category_id).where(
+                Budget.id.in_(wanted),
+                Budget.organization_id == org_id,
+            )
+        )
+        category_ids = {str(cid) for cid in result.scalars().all() if cid}
+        if not category_ids:
+            return
+        tree = await load_category_tree(self.db, org_id)
+        # For each closing category: whether it closes its own lines, lines
+        # beneath it, or both -- which decides how the refusal words it.
+        closed: dict[str, set[bool]] = {}
+        for category_id in category_ids:
+            source = tree.inactive_source(category_id)
+            if source is not None:
+                closed.setdefault(source.name, set()).add(source.id == category_id)
+        if not closed:
+            return
+        names = sorted(closed)
+        kinds = set().union(*closed.values())
+        single = len(names) == 1
+        pronoun = "it" if single else "them"
+        if kinds == {True}:
+            lines = "its budget lines" if single else "their budget lines"
+        elif kinds == {False}:
+            lines = f"budget lines under {pronoun}"
+        else:
+            lines = f"budget lines in or under {pronoun}"
+        named = ", ".join(f'"{name}"' for name in names)
+        noun, verb = ("category", "is") if single else ("categories", "are")
+        raise ValueError(
+            f"The budget {noun} {named} {verb} inactive, so {lines} take no "
+            "new charges. Choose another budget line."
+        )

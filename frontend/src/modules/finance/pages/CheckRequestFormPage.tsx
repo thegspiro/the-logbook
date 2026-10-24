@@ -18,11 +18,12 @@ import { useFinanceStore } from '../store/financeStore';
 import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
+import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
-import { ADVANCE_RETURN_DAYS, type CheckRequest } from '../types';
+import { ADVANCE_RETURN_DAYS, ApprovalEntityType, type CheckRequest } from '../types';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 
@@ -225,7 +226,8 @@ const CheckRequestFormPage: React.FC = () => {
                 </label>
                 <select id="budgetId" {...register('budgetId')} className={selectClass}>
                   <option value="">No budget linked</option>
-                  {budgetOptions.map((option) => (
+                  {/* A new request: nothing on file, so no inactive line. */}
+                  {selectableBudgetOptions(budgetOptions).map((option) => (
                     <option key={option.id} value={option.id}>
                       {budgetOptionLabel(option)}
                     </option>
@@ -243,6 +245,13 @@ const CheckRequestFormPage: React.FC = () => {
               />
             </>
           )}
+
+          <ApprovalRoutePreview
+            entityType={ApprovalEntityType.CHECK_REQUEST}
+            amount={watch('amount') || 0}
+            // An advance charges no budget line, so none picks its chain.
+            budgetId={isAdvance ? undefined : watch('budgetId') || undefined}
+          />
 
           <div>
             <label htmlFor="purpose" className={labelClass}>

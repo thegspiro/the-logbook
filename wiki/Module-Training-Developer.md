@@ -206,6 +206,7 @@ POST   /api/v1/training/programs/enrollments/{id}/advance-phase  # Officer advan
 POST   /api/v1/training/programs/enrollments/{id}/reset    # Reset a whole enrollment for a new recert cycle
 POST   /api/v1/training/programs/enrollments/{id}/withdraw # Withdraw (self or officer; soft)
 POST   /api/v1/training/programs/enrollments/{id}/reopen   # Put an EXPIRED enrollment back to active, optionally on a new deadline (training.manage)
+POST   /api/v1/training/programs/enrollments/{id}/complete # Mark an ACTIVE/ON_HOLD enrollment complete by hand; body {reason}, audited with the unmet count (training.manage)
 PATCH  /api/v1/training/programs/progress/{id}             # Update progress (log value, mark complete/in-progress/reopen, verify, record test score)
 POST   /api/v1/training/programs/progress/{id}/reset       # Reset one requirement's progress for a new recert cycle
 POST   /api/v1/training/programs/recert/run-due            # Auto-reset every enrollment past its stored recert deadline
@@ -310,9 +311,9 @@ category per section and links them; the result reports
 GET    /api/v1/training/sessions/calendar                  # Session calendar
 POST   /api/v1/training/sessions                           # Create session (events.manage)
 POST   /api/v1/training/sessions/recurring                 # Create a recurring series (events.manage)
-GET    /api/v1/training/sessions/by-event/{event_id}       # The session behind a Training event
+GET    /api/v1/training/sessions/by-event/{event_id}       # The session behind a Training event (200 with null when it has none)
 POST   /api/v1/training/sessions/by-event/{event_id}       # Attach training details to a Training event (events.manage)
-GET    /api/v1/training/sessions/by-event/{event_id}/approval  # Where the event's approval stands (events.manage or training.manage)
+GET    /api/v1/training/sessions/by-event/{event_id}/approval  # Where the event's approval stands (events.manage or training.manage; 200 with null when it has none)
 PATCH  /api/v1/training/sessions/{id}                      # Relink course/program/requirement (events.manage; locked while attendance is finalized)
 POST   /api/v1/training/sessions/{id}/finalize             # Runs the event's Finalize Attendance (events.manage)
 POST   /api/v1/training/sessions/{id}/reopen               # Runs the event's Reopen Attendance (events.reopen_attendance)

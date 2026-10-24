@@ -34,6 +34,7 @@ import {
   Truck,
   Pin,
   PinOff,
+  Pencil,
   GripVertical,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { EmptyState } from '../../../components/ux/EmptyState';
+import { PromptDialog } from '../../../components/ux/PromptDialog';
 import { Modal } from '../../../components/Modal';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
@@ -301,6 +303,8 @@ interface VariantProductRowProps {
   showLocation: boolean;
   canManage: boolean;
   onToggle: () => void;
+  /** Absent where the table offers no product rename (the pinned list). */
+  onRename?: ((members: InventoryItem[]) => void) | undefined;
 }
 
 /**
@@ -328,6 +332,7 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
   showLocation,
   canManage,
   onToggle,
+  onRename,
 }) => {
   const lead = members[0];
   if (!lead) return null;
@@ -344,6 +349,9 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
   // the list rather than as four sizes in two colours.
   const sizes = [...new Set(members.map((m) => displaySize(m)).filter(Boolean))];
   const mixed = <span className="text-theme-text-muted italic">Mixed</span>;
+  // The rename goes through the variant group, which carries it onto every
+  // member's name, so a cluster without one has nothing to rename through.
+  const canRename = canManage && !!onRename && !!lead.variant_group_id;
 
   return (
     <tr className="hover:bg-theme-surface-hover bg-theme-surface-hover/25 transition-colors">
@@ -427,8 +435,30 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
           carrying NO data-label hidden, so rendering them empty put five blank
           labelled rows in every folded card. They are `hidden` on desktop, so
           leaving them out costs no column there. */}
-      <td className="px-3 py-3" />
-      {canManage && <td data-label="" className="hidden" />}
+      <td className="px-3 py-3">
+        {canRename && (
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => onRename(members)}
+              className="btn-icon-sm text-theme-text-muted hover:text-theme-text-primary"
+              aria-label={`Rename ${name}`}
+              title="Rename product"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </td>
+      {canManage && (
+        <td data-label="" className="hidden">
+          {canRename && (
+            <button type="button" onClick={() => onRename(members)} className="btn-secondary btn-sm">
+              Rename
+            </button>
+          )}
+        </td>
+      )}
     </tr>
   );
 };
@@ -472,6 +502,7 @@ interface ItemTableProps {
   /** Variant clusters the member has opened, keyed by `collapseKey`. */
   expandedVariants?: Set<string>;
   onToggleVariants?: (key: string) => void;
+  onRenameProduct?: (members: InventoryItem[]) => void;
   /** Renders the drag handle and the move arrows. Pinned section only. */
   pinnedMode?: boolean;
   onMovePin?: (itemId: string, toIndex: number) => void;
@@ -503,6 +534,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
   onToggleGroup,
   expandedVariants,
   onToggleVariants,
+  onRenameProduct,
   pinnedMode = false,
   onMovePin,
 }) => {
@@ -747,6 +779,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                         showLocation={!grouped('location')}
                         canManage={canManage}
                         onToggle={() => onToggleVariants?.(collapseKey(label, item.id))}
+                        onRename={onRenameProduct}
                       />
                     )}
                     {!isCollapsed && !foldedAway && (
@@ -955,6 +988,10 @@ const InventoryItemsPage: React.FC = () => {
   // shareable link is the point.
   const [searchParams, setSearchParams] = useSearchParams();
   const vendorFilter = searchParams.get('vendor_id') ?? '';
+  // Arrived at from the low-stock alert email, so it lives in the URL like the
+  // vendor scope. Only the literal 'true' turns it on: anything else is an
+  // unrecognized value and degrades to the full list rather than an error.
+  const lowStockOnly = searchParams.get('low_stock') === 'true';
   // The type filter is URL-driven for the same reason vendor scoping is: the
   // inventory hub's supply-line cards link straight at one domain
   // (?item_type=uniform), and that only works if the list reads the URL.
@@ -1064,6 +1101,8 @@ const InventoryItemsPage: React.FC = () => {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ groupId: string; name: string } | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -1130,6 +1169,7 @@ const InventoryItemsPage: React.FC = () => {
       location_id: fLoc && fLoc !== UNASSIGNED_LOCATION ? fLoc : undefined,
       unassigned_location: fLoc === UNASSIGNED_LOCATION ? true : undefined,
       vendor_id: vendorFilter || undefined,
+      low_stock: lowStockOnly || undefined,
       size: fSize || undefined,
       color: fColor || undefined,
       style: fStyle || undefined,
@@ -1138,7 +1178,23 @@ const InventoryItemsPage: React.FC = () => {
       sort_order: sortOrd,
       group_by: groupBy || undefined,
     }),
-    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, fLabel, sortBy, sortOrd, groupBy]
+    [
+      search,
+      fCat,
+      fStatus,
+      fCond,
+      fType,
+      fLoc,
+      vendorFilter,
+      lowStockOnly,
+      fSize,
+      fColor,
+      fStyle,
+      fLabel,
+      sortBy,
+      sortOrd,
+      groupBy,
+    ]
   );
 
   const loadItems = useCallback(
@@ -1597,6 +1653,29 @@ const InventoryItemsPage: React.FC = () => {
     setEditItem(it);
     setModalOpen(true);
   };
+  const openRenameProduct = (members: InventoryItem[]) => {
+    const lead = members[0];
+    if (!lead?.variant_group_id) return;
+    setRenameTarget({ groupId: lead.variant_group_id, name: getDisplayName(lead) });
+  };
+  const renameProduct = async (newName: string) => {
+    if (!renameTarget) return;
+    if (newName === renameTarget.name) {
+      setRenameTarget(null);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await inventoryService.updateVariantGroup(renameTarget.groupId, { name: newName });
+      toast.success(`Renamed to ${newName}`);
+      setRenameTarget(null);
+      void loadItems(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to rename product'));
+    } finally {
+      setRenaming(false);
+    }
+  };
   const offerLabels = (ids: string[] | undefined, verb: 'added' | 'received') => {
     if (canManage && ids && ids.length > 0) setJustAdded({ ids, verb });
   };
@@ -1859,6 +1938,24 @@ const InventoryItemsPage: React.FC = () => {
             className="ml-auto text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
           >
             Clear vendor filter
+          </button>
+        </div>
+      )}
+
+      {/* Low-stock scope, arrived at from the alert email */}
+      {lowStockOnly && (
+        <div className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+          <span>Showing only items at or below their reorder point.</span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('low_stock');
+              setSearchParams(next, { replace: true });
+            }}
+            className="touch-target-phone font-medium underline"
+          >
+            Show all items
           </button>
         </div>
       )}
@@ -2140,6 +2237,23 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       )}
 
+      <PromptDialog
+        isOpen={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        onSubmit={(value) => void renameProduct(value)}
+        title="Rename product"
+        message={
+          <>
+            Renames <strong>{renameTarget?.name}</strong> on every size and variant. The size, colour and style part of
+            each name stays as it is.
+          </>
+        }
+        label="Product name"
+        defaultValue={renameTarget?.name ?? ''}
+        confirmLabel="Rename"
+        loading={renaming}
+      />
+
       {/* Bulk status modal */}
       <Modal
         isOpen={bulkStatusOpen}
@@ -2217,7 +2331,8 @@ const InventoryItemsPage: React.FC = () => {
           fColor ||
           fStyle ||
           fLabel ||
-          vendorFilter ? (
+          vendorFilter ||
+          lowStockOnly ? (
           <EmptyState
             icon={Package}
             title="No items found"
@@ -2359,6 +2474,7 @@ const InventoryItemsPage: React.FC = () => {
             onToggleGroup={toggleGroup}
             expandedVariants={expandedVariants}
             onToggleVariants={toggleVariants}
+            onRenameProduct={openRenameProduct}
           />
           <ItemTable
             label="Unavailable"
@@ -2386,6 +2502,7 @@ const InventoryItemsPage: React.FC = () => {
             onToggleGroup={toggleGroup}
             expandedVariants={expandedVariants}
             onToggleVariants={toggleVariants}
+            onRenameProduct={openRenameProduct}
           />
         </div>
       )}

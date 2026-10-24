@@ -10,11 +10,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import { Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert, Users } from 'lucide-react';
 import { schedulingService, type PlatoonOverview } from '../../modules/scheduling/services/api';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useRanks } from '../../hooks/useRanks';
-import SchedulingHeader from './SchedulingHeader';
+import { SchedulingPageHeader } from '../../components/scheduling/SchedulingPageHeader';
 
 // Standard platoon labels offered in the assign dropdown, merged with any
 // platoons already present in the org.
@@ -83,11 +83,11 @@ const SchedulingPlatoonsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingHeader
+        <SchedulingPageHeader
+          icon={Users}
           title="Platoons"
-          backTo="/scheduling/admin"
-          backLabel="Back to scheduling administration"
-          description="Assign and manage department rosters"
+          subtitle="Assign and manage department rosters"
+          underHub="/scheduling/admin"
         />
 
         {loading ? (

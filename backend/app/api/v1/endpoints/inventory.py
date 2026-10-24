@@ -216,6 +216,7 @@ from app.services.organization_service import OrganizationService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import label_renderer
 from app.utils.item_aliases import normalize_aliases
+from app.utils.model_updates import reject_null_for_required
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
@@ -652,11 +653,15 @@ async def list_items(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     fuzzy: bool = False,
+    low_stock: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
     List inventory items with filtering, sorting, and pagination
+
+    ``low_stock=true`` narrows to the gear and uniform items at or below their
+    reorder point — the set the daily low-stock alert email lists.
 
     **Authentication required**
     **Requires permission: inventory.view**
@@ -708,6 +713,15 @@ async def list_items(
     # whether `groups` comes back populated.
     grouping = group_by if group_by in InventoryService.GROUPABLE else None
 
+    # The alert email's own scan, so the list its link opens holds exactly the
+    # items it named; a second definition of "low" here would let them disagree.
+    low_stock_ids = None
+    if low_stock:
+        low_rows = await service.get_low_stock_items_for_alerts(
+            current_user.organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
+        low_stock_ids = [str(item.id) for item, _on_hand, _from_lots in low_rows]
+
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
         category_id=category_id,
@@ -736,6 +750,7 @@ async def list_items(
         skip=skip,
         limit=limit,
         fuzzy=fuzzy,
+        item_ids=low_stock_ids,
     )
 
     # Counted over the whole filtered set rather than the page above, so a
@@ -760,6 +775,7 @@ async def list_items(
             style=style,
             active_only=active_only,
             label_printed=label_printed,
+            item_ids=low_stock_ids,
         )
         if grouping
         else []
@@ -1056,6 +1072,7 @@ async def export_items_csv(
     label_printed: bool | None = None,
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
+    low_stock: bool = False,
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Export inventory items as CSV.
@@ -1128,6 +1145,12 @@ async def export_items_csv(
         # accepted risk.
         async with async_session_factory() as db:
             service = InventoryService(db)
+            low_stock_ids = None
+            if low_stock:
+                low_rows = await service.get_low_stock_items_for_alerts(
+                    organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
+                )
+                low_stock_ids = [str(item.id) for item, _oh, _fl in low_rows]
             skip = 0
             while True:
                 # get_items_page, not get_items: the latter COUNTs the whole
@@ -1155,6 +1178,7 @@ async def export_items_csv(
                     label_printed=label_printed,
                     sort_by=sort_by,
                     sort_order=sort_order,
+                    item_ids=low_stock_ids,
                     skip=skip,
                     limit=_EXPORT_PAGE_SIZE,
                 )
@@ -5658,6 +5682,10 @@ async def update_nfpa_compliance(
         )
 
     update_data = data.model_dump(exclude_unset=True)
+    try:
+        reject_null_for_required(record, update_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     for field, value in update_data.items():
         setattr(record, field, value)
 
@@ -7111,15 +7139,36 @@ async def update_variant_group(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
+    updates = data.model_dump(exclude_unset=True)
     group, error = await service.update_variant_group(
         group_id,
         current_user.organization_id,
-        data.model_dump(exclude_unset=True),
+        updates,
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or group is None:
+        raise HTTPException(
+            status_code=400,
+            detail=sanitize_error_message(error or "Variant group not found"),
+        )
     await db.commit()
     await db.refresh(group)
+    if "name" in updates:
+        # A rename also rewrites the product segment of every member item's
+        # name, so it is recorded and broadcast like any other item edit.
+        await log_audit_event(
+            db=db,
+            event_type="inventory_variant_group_renamed",
+            event_category="inventory",
+            severity="info",
+            event_data={"variant_group_id": str(group.id), "name": group.name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "variant_group_renamed",
+            {"variant_group_id": str(group.id)},
+        )
     return ItemVariantGroupResponse.model_validate(group)
 
 

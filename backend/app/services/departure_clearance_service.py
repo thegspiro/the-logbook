@@ -222,6 +222,11 @@ class DepartureClearanceService:
 
             await self.db.commit()
             await self.db.refresh(clearance)
+            # The route's response lists the line items. Reading them for the
+            # first time while the response is serialized goes to the database
+            # outside the async context and answers 500 after the clearance is
+            # already saved.
+            await self.db.refresh(clearance, ["line_items"])
             return clearance, None
 
         except Exception as e:

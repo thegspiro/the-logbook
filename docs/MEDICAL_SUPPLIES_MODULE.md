@@ -392,6 +392,86 @@ takes Low from the server (`is_low_stock`).
   restores them. CSV carries "Kept on Apparatus Only" (Yes/No); an unreadable
   value is refused, an apparatus-only row may carry Quantity 0, and lot columns
   on such a row are refused.
+- **Sort by Next expiry** _(2026-10-23)_: `GET /items?sort_by=next_expiry` (and
+  the export) orders by the Next expiry each row shows. The figure spans shelf
+  lots and truck positions and is worked out in Python (`_next_expiries`, the one
+  definition behind the column, the sort and the export), over the whole
+  filtered set rather than one page, then handed to `get_items` as
+  `sort_values`, which orders by it in SQL so paging still works. Supplies with
+  nothing dated come last in either direction, then by name.
+- **Truck stock in the CSV export** _(2026-10-23)_: the supply export appends
+  "On Apparatus", "Uncounted Positions", "Next Expiry" and "Next Expiry Where"
+  after "Notes", so the columns the import reads keep their positions. The
+  import ignores all four, and the template leaves them out.
+- **Not yet counted** _(2026-10-23)_: `GET /items?uncounted=true` (and the
+  export) narrows to supplies carried on a truck position no crew has counted —
+  the positions On hand counts at their target. The summary adds
+  `uncounted_on_apparatus` (supplies, not positions). Each list row carries
+  `apparatus_uncounted_places` (`template_item_id`, `apparatus_id`, `where`).
+  The page's "Not yet counted" tab (`?tab=uncounted`) lists them with a "Count
+  it" link to the apparatus's inventory, under the same gate as "Swap or
+  restock". One rule decides "uncounted" for every reader:
+  `InventoryService._ready_positions`.
+- **Truck lots in the lot export** _(2026-10-23)_: `GET /lots/export` lists the
+  lots aboard the apparatus beside the shelf lots, in one list soonest first and
+  undated last. Two columns are appended after "Notes": "Location" ("In storage"
+  or "On apparatus") and "Where" (the storage path, or the apparatus and
+  compartment). A truck unit is listed by its deployed lot, or by the position's
+  own lot number and date when no lot is recorded; a position with neither, or
+  holding nothing, has no lot to list (`apparatus_expiring_stock(...,
+include_undated=True)`). Shelf-only columns (Received Date, Storage Location,
+  Unit Cost, Notes) are blank on a truck row.
+- **Not yet counted count** _(2026-10-23)_: the tab reads "Not yet counted (N)"
+  from the summary's `uncounted_on_apparatus`.
+- **Uncounted positions in the weekly email** _(2026-10-23)_: "Supplies to
+  Replace" adds a "Not yet counted on apparatus" table naming each medical
+  position no crew has counted, and the summary line counts them. It rides
+  along with an email that is going anyway and never sends one of its own, so a
+  department that never counts a position is not mailed about it every week.
+  Shown to audiences holding the medical domain, as the shelf lots are. Rows
+  come from `EquipmentCheckService.uncounted_supply_positions`, which reads the
+  same rule as the page's Not yet counted tab.
+- **Look-ahead window** _(2026-10-23)_: the Expiring tab offers 30, 60 or 90
+  days. The tiles, the Expiring list, its empty state and the Next expiry
+  colouring all follow the choice; it is not saved between visits, and the
+  weekly email keeps its 30 days.
+
+## Recalls _(2026-10-23)_
+
+A manufacturer's recall names a lot number, so a recall is recorded against a
+**supply and a lot number** (`inventory_lot_recalls`, migration
+`3d67883cd461`, guarded, downgrade drops the table) rather than one lot row. It
+reaches every unit carrying that number: shelf lots, units already deployed on
+an apparatus (which keep only a snapshot of the number), and any later delivery
+of the same lot. Numbers are compared trimmed and lowercased (`lot_key`, and
+`lower(trim(...))` in SQL); a lot with no number cannot be recalled.
+
+While a recall is active (`lifted_at` NULL):
+
+- **The units are not stock.** `InventoryService._usable_lot` (in date and not
+  recalled) is the one filter behind on hand, Low stock, the low-stock email,
+  automatic reorder, category totals, the on-hand sort and issuing; truck
+  figures (`_ready_positions`) leave recalled deployed lots, and a position
+  whose own lot number is recalled, out the same way. A recall can therefore
+  drop a supply into Low stock and start a reorder, which is the intent.
+- **They cannot be deployed.** `swap_item_lot` refuses a recalled lot, and
+  `get_lots_for_items` no longer offers one as replacement stock.
+- **They are listed to pull.** The Expiring tab lists every recalled unit,
+  shelf and truck, first and whatever its date, marked "Recalled"; the lot
+  lookup marks them too.
+
+Recording one: the lot lookup offers "Recall lot … of …" for each supply and
+lot it found (manage permission), with an optional reason. Ending one: the
+"Recalled lots" panel on the Expiring tab lists active recalls with what is
+still on the shelf and the trucks, and **Lift** asks why. A lifted recall stays
+on record (`GET /recalls?include_lifted=true`). Recording and lifting are both
+audit-logged (`medical_lot_recalled`, `medical_lot_recall_lifted`). A second
+active recall of the same supply and number is refused (409), under a lock on
+the supply row so two officers cannot both record one.
+
+Not yet shown on the Inventory module's Apparatus Inventory page: a recalled
+unit there reads as it did, though its swap is refused and the Medical Supplies
+page lists it.
 
 ## Alerts
 
@@ -508,6 +588,9 @@ permission **or** the broad equivalent.
 | `PATCH`  | `/lots/{lot_id}`            | manage     |
 | `DELETE` | `/lots/{lot_id}`            | manage     |
 | `GET`    | `/lots/expiring`            | view       |
+| `GET`    | `/recalls`                  | view       |
+| `POST`   | `/recalls`                  | manage     |
+| `POST`   | `/recalls/{recall_id}/lift` | manage     |
 | `GET`    | `/summary`                  | view       |
 
 `/summary` reports counts for the landing page. **Low stock is judged against

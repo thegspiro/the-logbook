@@ -22,6 +22,7 @@ const mockUpdateRequirementEnhanced = vi.fn();
 const mockGetPrograms = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
 const mockUpdateMilestone = vi.fn();
+const mockGetProgramEnrollments = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -35,6 +36,7 @@ vi.mock('../services/api', () => ({
     getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
     updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
     updateMilestone: (...a: unknown[]) => mockUpdateMilestone(...a) as unknown,
+    getProgramEnrollments: (...a: unknown[]) => mockGetProgramEnrollments(...a) as unknown,
   },
   trainingService: {
     getCourses: (...a: unknown[]) => mockGetCourses(...a) as unknown,
@@ -542,6 +544,23 @@ describe('EditProgramModal — enrollment rules', () => {
     expect(screen.getByRole('checkbox', { name: concurrencyLabel })).not.toBeChecked();
   });
 
+  it('labels an inactive prerequisite as not currently required rather than hiding it', async () => {
+    const withInactive = {
+      ...withPrerequisite,
+      prerequisite_programs: [
+        { id: 'prog-hazmat', name: 'Hazmat Operations', active: true },
+        { id: 'prog-archived', name: 'Old Academy', active: false },
+      ],
+    };
+    renderWithRouter(<EditProgramModal program={withInactive} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    // Still selected, and named with the label; the active one is not.
+    expect(
+      await screen.findByRole('checkbox', { name: 'Old Academy Inactive — not currently required' })
+    ).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Hazmat Operations' })).toBeChecked();
+  });
+
   it('clears the prerequisites with an empty list', async () => {
     const user = userEvent.setup();
     renderWithRouter(<EditProgramModal program={withPrerequisite} onClose={vi.fn()} onSaved={vi.fn()} />);
@@ -576,6 +595,72 @@ describe('EditProgramModal — enrollment rules', () => {
       );
     });
     expect(onSaved).not.toHaveBeenCalled();
+  });
+});
+
+describe('EditProgramModal — deactivating', () => {
+  const enrollments = [
+    { id: 'e1', status: 'active' },
+    { id: 'e2', status: 'on_hold' },
+    { id: 'e3', status: 'completed' },
+    { id: 'e4', status: 'withdrawn' },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockUpdateProgram.mockReset();
+    mockUpdateProgram.mockResolvedValue(program);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue(enrollments);
+  });
+
+  it('says how many in-progress members will be withdrawn, and saves only once confirmed', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={onSaved} />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Active' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText(/2 members are in progress on it and will be withdrawn/)).toBeInTheDocument();
+    expect(screen.getByText(/Reactivating it later will not re-enroll anyone/)).toBeInTheDocument();
+    expect(mockGetProgramEnrollments).toHaveBeenCalledWith('prog-1');
+    expect(mockUpdateProgram).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Deactivate and withdraw' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith('prog-1', expect.objectContaining({ active: false }));
+    });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves nothing when the officer keeps it active', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Active' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep it active' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/will be withdrawn/)).not.toBeInTheDocument();
+    });
+    expect(mockUpdateProgram).not.toHaveBeenCalled();
+  });
+
+  it('does not ask when the pipeline stays active', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith('prog-1', expect.objectContaining({ active: true }));
+    });
+    expect(mockGetProgramEnrollments).not.toHaveBeenCalled();
   });
 });
 

@@ -16,6 +16,7 @@ import type { AxiosResponse } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
 import { clearQueuedReports, reportApiError } from './errorReporting';
 import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
+import { isStepUpRequired, requestStepUp } from '../utils/stepUp';
 import {
   getCacheKey,
   getCached,
@@ -312,10 +313,23 @@ api.interceptors.response.use(
   },
   async (
     error: AxiosError & {
-      config: AxiosRequestConfig & { _retry?: boolean; _retryCount?: number; _503retries?: number };
+      config: AxiosRequestConfig & {
+        _retry?: boolean;
+        _retryCount?: number;
+        _503retries?: number;
+        _stepUpTried?: boolean;
+      };
     }
   ) => {
     const originalRequest = error.config;
+
+    // A sensitive action needs a recent re-verification. Ask once, then repeat
+    // the request; a cancelled prompt surfaces the original 403 to the caller.
+    if (isStepUpRequired(error) && !originalRequest._stepUpTried) {
+      originalRequest._stepUpTried = true;
+      if (await requestStepUp()) return api(originalRequest);
+      return Promise.reject(error);
+    }
 
     // 503 Service Unavailable — the backend is up but a dependency (MySQL)
     // is temporarily unreachable.  Retry with exponential backoff instead

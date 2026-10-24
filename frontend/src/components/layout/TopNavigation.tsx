@@ -31,6 +31,7 @@ import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
 import { governanceNavItems } from './governanceNavigation';
+import { trainingNavItems } from './trainingNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
@@ -180,17 +181,12 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
           {
             label: 'Training',
             path: '/training/my-training',
-            subItems: [
-              { label: 'My Training', path: '/training/my-training' },
-              { label: 'Submit Training', path: '/training/submit' },
-              { label: 'Course Library', path: '/training/courses' },
-              { label: 'Programs', path: '/training/programs' },
-              // Hidden for a department that records skills on shift reports.
-              ...(offersSkillsTesting(practicalSkillsMethod)
-                ? [{ label: 'Skills Testing', path: '/training/skills-testing' }]
-                : []),
-              { label: 'Knowledge Tests', path: '/training/knowledge-tests' },
-            ],
+            // One list with SideNavigation and the section strip on every
+            // Training page; see trainingNavigation.ts.
+            subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod)).map(({ label, path }) => ({
+              label,
+              path,
+            })),
           } as NavItem,
         ]
       : []),
@@ -278,7 +274,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               // backend serves to users.view or members.manage holders.
               { label: 'Scan Member ID', path: '/members/scan', anyPermission: ['users.view', 'members.manage'] },
               ...(isNfcCardsOn
-                ? [{ label: 'Check-In Station', path: '/members/check-in-station', permission: 'members.check_in' }]
+                ? [
+                    { label: 'Check-In Station', path: '/members/check-in-station', permission: 'members.check_in' },
+                    { label: 'ID Cards', path: '/members/admin/id-cards', permission: 'members.manage_id_cards' },
+                  ]
                 : []),
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,

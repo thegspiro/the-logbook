@@ -1,6 +1,6 @@
 # Finance Module
 
-> **Status**: All six phases below are **implemented** — foundation and budget tracking, approval chains, purchase requests, expense reports and check requests, dues and assessments, and the dashboard (`GET /finance/dashboard`), reports (`/finance/reports/*`) and QuickBooks export (`/finance/export/*`). What is still planned is marked _(planned)_ where it appears: three reports, the IIF export format and the approval-chain preview component. The phase headings record the order the module was built in.
+> **Status**: All six phases below are **implemented** — foundation and budget tracking, approval chains, purchase requests, expense reports and check requests, dues and assessments, and the dashboard (`GET /finance/dashboard`), reports (`/finance/reports/*`) and QuickBooks export (`/finance/export/*`). What is still planned is marked _(planned)_ where it appears: three reports and the IIF export format. The phase headings record the order the module was built in.
 >
 > **Availability**: Controlled per organization at runtime via the organization's settings (`enabled_modules`), configured in Organization/Admin Settings. The API routers register unconditionally.
 >
@@ -23,7 +23,8 @@ an id that does not exist.
 | List / read purchase and check requests                                                                      | `finance.request`, `finance.view` or `finance.manage` | own only, unless the caller holds `finance.view`                                                                                                                                           |
 | List / read expense reports                                                                                  | `finance.request`, `finance.view` or `finance.manage` | own only — including for `finance.view` (FIN-5)                                                                                                                                            |
 | Create, edit (draft / submitted), submit; add an expense line                                                | `finance.request` or `finance.manage`                 | own only; `finance.view` alone cannot write                                                                                                                                                |
-| Cancel a purchase request                                                                                    | `finance.request` or `finance.manage`                 | own **draft** only — a submitted request has approval steps and possibly an encumbrance; the office cancels                                                                                |
+| Edit or remove an expense line — `PUT` / `DELETE /expense-reports/{id}/items/{item}` _(2026-10-23)_          | `finance.request` or `finance.manage`                 | own only, and only while the report is a **draft** (for `finance.manage` too); the report is locked against a concurrent submission                                                        |
+| Cancel a purchase request, expense report or check request — `POST …/{id}/cancel`                            | `finance.request` or `finance.manage`                 | own **draft** only ("withdraw") — a submitted one has approval steps; the office cancels it until it is paid, issued, denied or already cancelled                                          |
 | Mark ordered / received / paid, mark an expense paid, issue / void                                           | `finance.manage`                                      | —                                                                                                                                                                                          |
 | Attach a receipt — `POST /purchase-requests/{id}/receipt`, `POST /expense-reports/{id}/items/{item}/receipt` | `finance.request` or `finance.manage`                 | own only; a purchase request until paid, an expense line while the report is a draft or submitted. `finance.manage`: until denied or cancelled. Replacing a receipt keeps the earlier file |
 | Open a receipt — `GET` on the same paths                                                                     | `finance.request`, `finance.view` or `finance.manage` | whoever may read the record. The file is a document under **Finance > Receipts**, a folder only finance rights open                                                                        |
@@ -981,6 +982,83 @@ when it is paid, so the two reports differ by the advances paid and not yet
 accounted for, and for a period with advances in it the register no longer
 totals exactly to the change in budget-vs-actual **Spent**.
 
+## Reimbursing a purchase _(2026-10-23)_
+
+A member who buys an approved purchase with their own money is paid back by
+check, without anyone re-keying the purchase. Three records, linked (migration
+`4250eb8b8378`); the rules are in `app/services/finance_reimbursement.py`.
+
+1. **Purchase request → expense report.** On an approved, ordered or received
+   request, its requester chooses **Request Reimbursement** (what they paid,
+   when, where). `POST /finance/purchase-requests/{id}/reimbursement-report`
+   raises a draft expense report with `purchase_request_id` set and one line
+   copied from the request: its budget line, restricted fund, functional class,
+   vendor and receipt. Only the member who raised the request may claim it —
+   not the finance office on their behalf, because a report pays whoever files
+   it. One report claims a purchase at a time; a denied one lets another
+   follow.
+2. **Expense report → check request.** The report is submitted and approved
+   like any other. On the approved report the finance office chooses **Pay by
+   Check** (`POST /finance/expense-reports/{id}/reimbursement-check`,
+   `finance.manage`; optional mailing address and memo). That raises a check
+   request with `expense_report_id` set, in the member's name and payable to
+   their legal name, for what the report still owes (`amountOwed`: the total
+   less any cash advance), and **submits it through the check-request approval
+   chain** (owner decision, 2026-10-23). **Mark Paid** stays for cash, direct
+   deposit and the rest. While a check is paying a report, neither a second
+   check nor Mark Paid is accepted.
+3. **Check issued → report paid.** Issuing the check marks the report paid
+   (method `check`, dated by the check) and closes the request as
+   **reimbursed**. The usual separation of duties applies: the member cannot
+   approve or issue their own check.
+
+**Counted once.** Each record counted its own money when it settled alone, so
+the link decides which one carries it:
+
+| Record           | Budget line                                                   | Restricted fund                                     | Board reports and QuickBooks                       |
+| ---------------- | ------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------- |
+| Purchase request | estimate encumbered until the report is paid, then released   | estimate committed until the report is **approved** | not shown once reimbursed                          |
+| Expense report   | lines spent when it is paid                                   | lines committed when approved, spent when paid      | shown **through the check**                        |
+| Check            | charges nothing (`budget_id` and fund refused, as an advance) | charges nothing                                     | the report's payment: dated by it, with its number |
+
+The request's release and the report's spend on a line are applied in one
+budget mutation, so a nearly full line is not refused for counting both at
+once. A purchase claimed by a submitted report cannot be marked paid or
+cancelled (400, naming the report); a draft claim does not hold it, and is
+refused on submission once the request has been settled another way.
+
+**Voiding the check** puts the report back to approved and unpaid, reverses
+its lines' spend, and reopens the request — to received, ordered or approved,
+from its own timestamps — with its estimate encumbered again, so another
+check can be cut. That re-encumbrance is held to the line's ceiling like any
+other: if the line has since been cut below it, the void is refused (409) until
+the budget is amended.
+
+**QuickBooks.** A report paid by a reimbursement check is exported as that
+check's entry: its lines' debits and the bank (and, where an advance covers
+part, advances-account) credits, under the **check's** request number, so a
+report voided and paid again posts under a number QuickBooks has not seen. The
+first export records that entry on the check (`check_requests.qb_export_entry`,
+`[account, debit, credit, description]` per row) and stamps the report too. A
+check voided after that export is reversed from the recorded entry with every
+row's sides swapped, as `CK-…-V`, in the export covering the void — never from
+the account mappings, which may have moved since. The report's own stamp is
+cleared on the void so its next payment is exported afresh.
+
+**Board reports.** The payments register shows the report once, on the
+check's date and with its check number, and a voided reimbursement check as a
+negative row on the day of the void; functional expenses count the report's
+lines when the check is issued and take them back when it is voided; the
+as-of spent on budget-vs-actual counts them between the two dates. Re-running
+an earlier period after a void therefore still shows what was paid in it.
+
+**Screens.** The purchase request shows **Request Reimbursement** to its
+requester, a link to the report claiming it, and **Reimbursed** once paid;
+**Mark Paid** and **Cancel Request** are hidden while a submitted claim holds
+it. The expense report links to its purchase and its check, and shows **Pay by
+Check** beside **Mark Paid** to the finance office. The check request links to
+the report it pays and offers no expense classification of its own.
+
 ## Board reports _(2026-10-12)_
 
 **Finance › Reports** (`/finance/reports`, `finance.view`) holds the three
@@ -1320,7 +1398,7 @@ Components:
 - **ApprovalTimeline** — shown on PurchaseRequestDetailPage, ExpenseReportDetailPage, CheckRequestDetailPage. Displays each step's status, timestamps and notes
 - **ApprovalStepActions** — above the timeline on the same three pages. When the request is pending approval, shows "Waiting on <assigneeLabel>." for the step it is waiting on, to anyone who can see the request. Buttons come from that step's `canAct` / `requiresOverride`, which the detail endpoint sets for the viewer (false on notification steps and without `finance.approve`): Approve / Deny for the named approver, "Approve / Deny as approvals admin" with a required override reason for an approvals admin who is not. A requester who is also the named approver still sees Approve; the API refuses it (separation of duties) and the dialog shows why. Re-fetches the request after a decision. Shares **ApprovalDecisionDialog** with the Approvals page
 - **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. Since 2026-10-11 it also shows on a request held for a second approver (`awaitingSecondApproval`), and the Approvals page lists both kinds below its step rows, from `GET /finance/approvals/unrouted`
-- **ApprovalChainPreview** — _planned, not built._ `GET /finance/approval-chains/preview` and `approvalChainService.preview()` exist, but no component calls them; request forms show no chain preview and the settings page has no preview tool
+- **ApprovalRoutePreview** _(built 2026-10-23)_ — **Who will approve this**, on the purchase request, expense report and check request forms (as the amount and budget line change, debounced) and on a draft's page beside **Submit**. It reads `GET /finance/approval-chains/route-preview?entity_type&amount&budget_id` (`finance.request`, `finance.view` or `finance.manage`), which answers from `FinanceService._request_chain`, the resolver submission itself uses, so the route shown is the route taken: a purchase or check request is matched on its budget line's category (an unknown or other department's line counts as none), an expense report on its total alone. The response is the chain's name, each step's name, type and approver **as the request's own timeline names them** (`describe_assignee`; a notification step names nobody), which steps the amount auto-approves, whether the dual-approval threshold applies, and `manual` when no chain does. It carries no approver configuration. `GET /finance/approval-chains/preview` (`finance.view`, the raw chain) is unchanged; the settings page still has no preview tool
 
 **Request bodies accept camelCase and snake_case** _(2026-09-30)_. Every request schema in `app/schemas/finance.py` uses `_REQUEST_CONFIG` (`alias_generator=to_camel`, `populate_by_name=True`, `loc_by_alias=False`). Before this the pages sent camelCase and no schema carried an alias: creates were refused with a 422 for "missing" required fields (`POST /finance/fiscal-years` with `startDate`), and updates silently dropped every multi-word key, so clearing a purchase request's `budgetId` returned 200 and changed nothing. Dumps stay by field name, `exclude_unset` keeps "omitted = leave alone, null = clear", and 422 field names stay snake_case. `tests/test_finance_request_camelcase.py` fails if a new request schema lacks the config.
 
@@ -1348,7 +1426,7 @@ Where `PENDING_APPROVAL` means "at least one approval step is pending." The serv
 
 Enums:
 
-- `PurchaseRequestStatus`: DRAFT, SUBMITTED, PENDING_APPROVAL, APPROVED, DENIED, ORDERED, RECEIVED, PAID, CANCELLED
+- `PurchaseRequestStatus`: DRAFT, SUBMITTED, PENDING_APPROVAL, APPROVED, DENIED, ORDERED, RECEIVED, PAID, REIMBURSED, CANCELLED — `REIMBURSED` is a purchase the requester paid for and was paid back through an expense report; see [Reimbursing a purchase](#reimbursing-a-purchase-2026-10-23)
 
 **Endpoints:**
 
@@ -1361,6 +1439,7 @@ Enums:
 - `POST /finance/purchase-requests/{id}/mark-paid`
 - `GET/POST /finance/purchase-requests/{id}/receipt`
 - `PUT /finance/purchase-requests/{id}/functional-class`
+- `POST /finance/purchase-requests/{id}/reimbursement-report` — claim it back; see [Reimbursing a purchase](#reimbursing-a-purchase-2026-10-23)
 
 There is no per-request approve or deny endpoint. Approval goes through the
 shared approval endpoints — `POST /finance/approvals/{step_record_id}/approve`
@@ -1407,8 +1486,23 @@ Enums:
 - `GET/PUT /finance/expense-reports/{id}`
 - `POST /finance/expense-reports/{id}/submit`
 - `POST /finance/expense-reports/{id}/mark-paid`
+- `POST /finance/expense-reports/{id}/reimbursement-check` — pay it by check; see [Reimbursing a purchase](#reimbursing-a-purchase-2026-10-23)
 - `POST /finance/expense-reports/{id}/items` (add a line item; lines are read
-  back on the report)
+  back on the report, oldest first)
+- `PUT /finance/expense-reports/{id}/items/{item_id}`,
+  `DELETE /finance/expense-reports/{id}/items/{item_id}` — edit or remove a line
+  while the report is a draft; the total is recomputed from the stored lines.
+  An edit changes only the fields sent, null clearing an optional one. A line
+  copied from a purchase request keeps its budget line; removing one keeps its
+  receipt document. A report left with no lines stays a draft and cannot be
+  submitted until one is added.
+- `POST /finance/expense-reports/{id}/cancel` — withdraw a draft, or (finance
+  office) cancel a submitted, pending or approved report. Its approval steps
+  are skipped and their emailed links revoked. Nothing was spent or encumbered
+  for an unpaid report, so no budget line moves; a cancelled report stops
+  counting against its cash advance and its restricted funds, and frees the
+  purchase request it claimed back for a new claim. Refused while a
+  reimbursement check is paying the report, and for a paid report.
 - `GET/POST /finance/expense-reports/{id}/items/{item_id}/receipt`
 - `PUT /finance/expense-reports/{id}/items/{item_id}/functional-class`
 - `GET/POST /finance/check-requests`
@@ -1416,6 +1510,10 @@ Enums:
 - `POST /finance/check-requests/{id}/submit`
 - `POST /finance/check-requests/{id}/issue`
 - `POST /finance/check-requests/{id}/void`
+- `POST /finance/check-requests/{id}/cancel` — withdraw a draft, or (finance
+  office) cancel one not yet issued; an issued check is voided instead. An
+  unissued check moved no budget total, so nothing is reversed; a cancelled
+  reimbursement check leaves its report approved, to be paid again.
 - `PUT /finance/check-requests/{id}/functional-class`
 
 Approve and deny go through `/finance/approvals/...`, as for purchase requests.

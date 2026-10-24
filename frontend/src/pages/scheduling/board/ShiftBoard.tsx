@@ -20,15 +20,20 @@ import {
   memberSignupClosedReason,
   monthMatrix,
   shiftPeriodLetter,
+  shiftEndInstant,
   shiftStatusInfo,
   toDateKey,
   weekDates,
   type BoardFilter,
 } from '../../../modules/scheduling/utils/shiftBoard';
-import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
+import {
+  schedulingClockInstant,
+  useSchedulingClock,
+  useSignupWindow,
+} from '../../../modules/scheduling/hooks/useSignupWindow';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatCalendarDate } from '../../../utils/dateFormatting';
+import { formatCalendarDate, toLocalDateString } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { displayNameOf } from '../../../utils/memberName';
 import DayDetailPanel from './DayDetailPanel';
@@ -49,6 +54,9 @@ import { BACKGROUND_REQUEST_CONFIG } from '../../../utils/backgroundRequest';
  * not half an hour stale.
  */
 const BOARD_REFRESH_MS = 120_000;
+
+/** How many shifts past an empty range are read to find one that is not cancelled. */
+const NEXT_SCHEDULED_LOOKAHEAD = 10;
 
 /** The Sunday that starts the week containing `date`, as "YYYY-MM-DD". */
 const weekStartKey = (date: Date): string => toDateKey(weekDates(date)[0] ?? date);
@@ -119,7 +127,17 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   const [myOffers, setMyOffers] = useState<SwapRequest[]>([]);
   const [nextScheduled, setNextScheduled] = useState<ShiftRecord | null>(null);
 
-  const today = useMemo(() => new Date(), []);
+  // "Today" is the department's calendar day, re-read on every clock tick.
+  // Frozen at first render, a board left open overnight on a station tablet
+  // kept yesterday ringed, offered yesterday's shift as "your next shift" and
+  // counted last week's gaps after Saturday rolled to Sunday; read from the
+  // browser's clock, it disagreed with My Shifts for anyone whose device is
+  // not set to the department's timezone. The Date is built at local noon of
+  // that day so `toDateKey` hands the same key back to every helper.
+  const clock = useSchedulingClock();
+  const now = useMemo(() => schedulingClockInstant(clock), [clock]);
+  const todayKey = useMemo(() => toLocalDateString(now, timezone), [now, timezone]);
+  const today = useMemo(() => new Date(`${todayKey}T12:00:00`), [todayKey]);
 
   const days = useMemo(
     () => (view === 'week' ? weekDates(visibleDate) : monthMatrix(visibleDate.getFullYear(), visibleDate.getMonth())),
@@ -176,23 +194,49 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     [shifts, currentUserId, signupWindow]
   );
 
+  /**
+   * The days the fetch covers — the month, not the grid's spill-over days, or
+   * the week. Anything computed "for this week" or "next" from `shifts` is only
+   * true when the days it is about lie inside this span.
+   */
+  const rangeStartKey = useMemo(() => {
+    if (view === 'week') return toDateKey(weekDates(visibleDate)[0] ?? visibleDate);
+    return toDateKey(new Date(visibleDate.getFullYear(), visibleDate.getMonth(), 1));
+  }, [view, visibleDate]);
+  const rangeEndKey = useMemo(() => {
+    if (view === 'week') return toDateKey(weekDates(visibleDate)[6] ?? visibleDate);
+    return toDateKey(new Date(visibleDate.getFullYear(), visibleDate.getMonth() + 1, 0));
+  }, [view, visibleDate]);
+
   const urgentDaysThisWeek = useMemo(() => {
     const week = weekDates(today).map(toDateKey);
+    // A week straddling the fetched range would be counted from the days that
+    // happen to be loaded and still be labelled "this week".
+    const firstDay = week[0] ?? todayKey;
+    const lastDay = week[6] ?? todayKey;
+    if (firstDay < rangeStartKey || lastDay > rangeEndKey) return 0;
     return week.filter((key) => daySummary(shiftsByDate.get(key) ?? [], currentUserId, signupWindow).openSeats > 0)
       .length;
-  }, [shiftsByDate, currentUserId, today, signupWindow]);
+  }, [shiftsByDate, currentUserId, today, todayKey, rangeStartKey, rangeEndKey, signupWindow]);
 
   const nextShift = useMemo(() => {
-    const todayKey = toDateKey(today);
+    // Only the range on screen is loaded: paged to next month, its first shift
+    // is not the member's next one when they have one this week.
+    if (todayKey < rangeStartKey || todayKey > rangeEndKey) return null;
+    const nowMs = now.getTime();
     return (
       shifts
-        .filter(
-          (shift) =>
-            shift.shift_date >= todayKey && shiftStatusInfo(shift, currentUserId, new Date(), signupWindow).isMine
-        )
+        .filter((shift) => {
+          if (!shiftStatusInfo(shift, currentUserId, now, signupWindow).isMine) return false;
+          // "Next" means not yet over. A day shift worked this morning is still
+          // dated today at 21:00, and offering Give up on it hands the member a
+          // button the server refuses once the roster locks.
+          const end = shiftEndInstant(shift, signupWindow);
+          return end !== null ? end > nowMs : shift.shift_date >= todayKey;
+        })
         .sort((a, b) => a.start_time.localeCompare(b.start_time))[0] ?? null
     );
-  }, [shifts, currentUserId, today, signupWindow]);
+  }, [shifts, currentUserId, now, todayKey, rangeStartKey, rangeEndKey, signupWindow]);
 
   /**
    * Re-read the visible range. Returns the shifts so a caller that has just
@@ -244,10 +288,6 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
    * The range end is the fetch's own end (the month, not the grid's spill-over
    * days), so the shift offered is never one already in the data on screen.
    */
-  const rangeEndKey = useMemo(() => {
-    if (view === 'week') return toDateKey(weekDates(visibleDate)[6] ?? visibleDate);
-    return toDateKey(new Date(visibleDate.getFullYear(), visibleDate.getMonth() + 1, 0));
-  }, [view, visibleDate]);
   const rangeIsEmpty = !loading && !error && shifts.length === 0;
 
   useEffect(() => {
@@ -259,9 +299,11 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     const [y, m, d] = rangeEndKey.split('-').map(Number);
     const after = toDateKey(new Date(y ?? 0, (m ?? 1) - 1, (d ?? 0) + 1));
     schedulingService
-      .getShifts({ start_date: after, limit: 1 })
+      // A few rather than one: the list carries cancelled shifts, and pointing
+      // a member at a day whose only shift is not happening is no hint at all.
+      .getShifts({ start_date: after, limit: NEXT_SCHEDULED_LOOKAHEAD })
       .then((page) => {
-        if (!cancelled) setNextScheduled(page.shifts[0] ?? null);
+        if (!cancelled) setNextScheduled(page.shifts.find((shift) => shift.status !== 'cancelled') ?? null);
       })
       .catch(() => {
         // Only a hint: without it the empty state reads as it always has.

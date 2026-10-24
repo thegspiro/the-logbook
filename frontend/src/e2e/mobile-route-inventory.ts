@@ -379,6 +379,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/locations/card-readers',
+    source: 'src/modules/facilities/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/locations/:locationId/check-in',
     source: 'src/modules/facilities/routes.tsx',
     coverage: 'exempt',
@@ -970,6 +976,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/members/admin/id-cards',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/admin/members',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',
@@ -1372,6 +1384,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/inventory/admin/nfc/enroll',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/inventory/admin/nfc/tags',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',

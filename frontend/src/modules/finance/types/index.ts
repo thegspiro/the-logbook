@@ -31,6 +31,8 @@ export const PurchaseRequestStatus = {
   ORDERED: 'ordered',
   RECEIVED: 'received',
   PAID: 'paid',
+  /** Bought by the requester and paid back through an expense report. */
+  REIMBURSED: 'reimbursed',
   CANCELLED: 'cancelled',
 } as const;
 export type PurchaseRequestStatus = (typeof PurchaseRequestStatus)[keyof typeof PurchaseRequestStatus];
@@ -146,6 +148,27 @@ export const ApprovalEntityType = {
 } as const;
 export type ApprovalEntityType = (typeof ApprovalEntityType)[keyof typeof ApprovalEntityType];
 
+/** One step a request would wait on, named as its timeline would name it. */
+export interface ApprovalRouteStep {
+  name: string;
+  stepOrder: number;
+  stepType: ApprovalStepType;
+  /** Who the step waits on; null on a notification step. */
+  assigneeLabel?: string | null;
+  /** The amount falls under the step's auto-approve limit. */
+  autoApproved: boolean;
+}
+
+/** Who a request would wait on if it were submitted now (`GET /finance/approval-chains/route-preview`). */
+export interface ApprovalRoutePreview {
+  chainName?: string | null;
+  /** No chain applies: a finance approver decides by hand. */
+  manual: boolean;
+  steps: ApprovalRouteStep[];
+  /** At or over the department's dual-approval threshold. */
+  secondApproverRequired: boolean;
+}
+
 // =============================================================================
 // Status Badge Color Mappings (Tailwind classes)
 // =============================================================================
@@ -159,6 +182,7 @@ export const PURCHASE_REQUEST_STATUS_COLORS: Record<string, string> = {
   ordered: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
   received: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
   paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
+  reimbursed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
@@ -336,6 +360,12 @@ export interface BudgetCategory {
   chargePositionIds?: string[];
   /** Category names from the top-level category down to this one. */
   path?: string[];
+  /**
+   * The inactive ancestor that closes this otherwise-active category to new
+   * charges, budget lines and proposals, as the backend resolved it; null when
+   * nothing above it is inactive (or it is inactive itself).
+   */
+  inactiveThrough?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -575,6 +605,12 @@ export interface BudgetOption {
   /** Category name, plus the station when the line has one. */
   label: string;
   amountRemaining: MonetaryAmount | null;
+  /**
+   * False when the line's category is inactive. Such a line takes no new
+   * charges (the server refuses it), so a picker shows it only as a
+   * request's existing selection — see `selectableBudgetOptions`.
+   */
+  categoryActive: boolean;
 }
 
 /** An active or draft fiscal year — `GET /finance/fiscal-years/options`. */
@@ -967,9 +1003,26 @@ export interface PurchaseRequest extends FunctionalClassFields, FundFields {
   receiptFileUrl?: string | null;
   apparatusId?: string;
   facilityId?: string;
+  /** The expense report claiming this purchase back for the requester, while one does (detail responses only). */
+  reimbursementReportId?: string | null;
+  reimbursementReportNumber?: string | null;
+  reimbursementReportStatus?: ExpenseReportStatus | null;
   createdAt: string;
   updatedAt: string;
   approvalSteps: ApprovalStepRecord[];
+}
+
+/** Claiming back an approved purchase; each field defaults to the request's own. */
+export interface ReimbursementReportPayload {
+  amount?: MonetaryAmount | undefined;
+  dateIncurred?: string | undefined;
+  merchant?: string | undefined;
+}
+
+/** Paying an approved expense report by check, to the member who filed it. */
+export interface ReimbursementCheckPayload {
+  payeeAddress?: string | undefined;
+  memo?: string | undefined;
 }
 
 export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
@@ -987,6 +1040,16 @@ export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
   /** Submitted after the department's substantiation deadline; decided at submission. */
   substantiatedLate?: boolean;
   createdAt: string;
+}
+
+/** An edit to a draft report's line: omit a field to leave it, null to clear an optional one. */
+export interface ExpenseLineItemUpdatePayload {
+  description?: string | undefined;
+  amount?: MonetaryAmount | undefined;
+  dateIncurred?: string | undefined;
+  expenseType?: ExpenseType | undefined;
+  merchant?: string | null | undefined;
+  fundCampaignId?: string | null | undefined;
 }
 
 export interface ExpenseReport {
@@ -1030,6 +1093,15 @@ export interface ExpenseReport {
   awaitingLateAcknowledgement?: boolean;
   /** How far its lines would take their restricted funds past what they have left, until approved (detail responses only). */
   fundShortfall?: MonetaryAmount | null;
+  /** The purchase request this report claims back. */
+  purchaseRequestId?: string | null;
+  purchaseRequestNumber?: string | null;
+  /** The check paying the member, while one does (detail responses only). */
+  reimbursementCheckId?: string | null;
+  reimbursementCheckNumber?: string | null;
+  reimbursementCheckStatus?: CheckRequestStatus | null;
+  /** What a check would pay: the total less what a cash advance covered (detail responses only). */
+  amountOwed?: MonetaryAmount | null;
   createdAt: string;
   updatedAt: string;
   lineItems: ExpenseLineItem[];
@@ -1069,6 +1141,9 @@ export interface CheckRequest extends FunctionalClassFields, FundFields {
   qbExportedAt?: string | null;
   /** When the reversing entry for a void went to QuickBooks. */
   qbVoidExportedAt?: string | null;
+  /** The expense report this check reimburses the member for; it charges no budget line or fund itself. */
+  expenseReportId?: string | null;
+  expenseReportNumber?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;

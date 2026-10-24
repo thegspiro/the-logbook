@@ -20,9 +20,7 @@ import {
   Clock,
   CalendarClock,
   Vote,
-  ClipboardList,
   BookOpen,
-  Layers,
   AlertTriangle,
   BarChart3,
   Bell,
@@ -37,7 +35,6 @@ import {
   ShieldCheck,
   ShieldAlert,
   ClipboardCheck,
-  BookOpenCheck,
   Activity,
   CreditCard,
   ScanLine,
@@ -67,6 +64,7 @@ import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
 import { governanceNavItems } from './governanceNavigation';
+import { trainingNavItems } from './trainingNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
@@ -219,39 +217,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'Training',
             path: '#',
             icon: GraduationCap,
-            subItems: [
-              {
-                label: 'My Training',
-                path: '/training/my-training',
-                icon: GraduationCap,
-              },
-              {
-                label: 'Submit Training',
-                path: '/training/submit',
-                icon: ClipboardList,
-              },
-              {
-                label: 'Course Library',
-                path: '/training/courses',
-                icon: BookOpen,
-              },
-              { label: 'Programs', path: '/training/programs', icon: Layers },
-              // Hidden for a department that records skills on shift reports.
-              ...(offersSkillsTesting(practicalSkillsMethod)
-                ? [
-                    {
-                      label: 'Skills Testing',
-                      path: '/training/skills-testing',
-                      icon: ClipboardCheck,
-                    },
-                  ]
-                : []),
-              {
-                label: 'Knowledge Tests',
-                path: '/training/knowledge-tests',
-                icon: BookOpenCheck,
-              },
-            ],
+            // One list with TopNavigation and the section strip on every
+            // Training page; see trainingNavigation.ts.
+            subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod)),
           } as NavItem,
         ]
       : []),
@@ -403,6 +371,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                       path: '/members/check-in-station',
                       icon: Nfc,
                       permission: 'members.check_in',
+                    },
+                    {
+                      label: 'ID Cards',
+                      path: '/members/admin/id-cards',
+                      icon: CreditCard,
+                      permission: 'members.manage_id_cards',
                     },
                   ]
                 : []),

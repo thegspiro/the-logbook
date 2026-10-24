@@ -13,6 +13,11 @@
 #
 #   ./scripts/verify_backup.sh ./backups/logbook_backup_YYYYmmdd_HHMMSS.tar.gz
 #
+# An encrypted archive (.tar.gz.enc, with its .enc.key) is opened with the drill
+# key in BACKUP_KEYS_DIR (default /keys), or with the offline private key:
+#
+#   ./scripts/verify_backup.sh FILE.tar.gz.enc --private-key /path/to/private.pem
+#
 # Environment: DB_HOST (default localhost), DB_PORT (3306),
 #   MYSQL_ROOT_PASSWORD or DB_VERIFY_USER/DB_VERIFY_PASSWORD — the account
 #   needs CREATE/DROP DATABASE rights for the throwaway schema.
@@ -22,10 +27,21 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE="${1:-}"
+PRIVATE_KEY=""
+if [[ "${2:-}" == "--private-key" ]]; then
+    PRIVATE_KEY="${3:-}"
+    if [[ -z "$PRIVATE_KEY" || ! -f "$PRIVATE_KEY" ]]; then
+        echo "✗ --private-key needs an existing file" >&2
+        exit 2
+    fi
+fi
 if [[ -z "$ARCHIVE" || ! -f "$ARCHIVE" ]]; then
-    echo "✗ Usage: $0 <backup-archive.tar.gz>" >&2
+    echo "✗ Usage: $0 <backup-archive.tar.gz[.enc]> [--private-key FILE]" >&2
     exit 2
 fi
+export BACKUP_KEYS_DIR="${BACKUP_KEYS_DIR:-/keys}"
+# shellcheck source=backup_crypto.sh
+source "$SCRIPT_DIR/backup_crypto.sh"
 
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-3306}"
@@ -94,6 +110,7 @@ safe_extract() {
 }
 
 WORK_DIR="$(mktemp -d)"
+mkdir -p "$WORK_DIR/extracted"
 cleanup() {
     rm -rf "$WORK_DIR"
     "${MYSQL[@]}" -e "DROP DATABASE IF EXISTS \`$VERIFY_DB\`;" 2>/dev/null || true
@@ -109,8 +126,22 @@ else
     echo "⚠ No .sha256 file next to the archive — skipping checksum check"
 fi
 
-safe_extract "$ARCHIVE" "$WORK_DIR"
-SQL_FILE="$(find "$WORK_DIR" -name 'database.sql*' | head -1)"
+EXTRACT_FROM="$ARCHIVE"
+if bk_is_encrypted_archive "$ARCHIVE"; then
+    if [[ -z "$PRIVATE_KEY" ]] && ! bk_have_drill_key; then
+        echo "✗ Cannot restore-verify an encrypted archive without the drill key ($(bk_drill_key_file)) or --private-key" >&2
+        exit 1
+    fi
+    EXTRACT_FROM="$WORK_DIR/decrypted.tar.gz"
+    bk_decrypt_file "$ARCHIVE" "$EXTRACT_FROM" "" "$PRIVATE_KEY" || {
+        echo "✗ RESTORE VERIFICATION FAILED: $ARCHIVE could not be decrypted" >&2
+        exit 1
+    }
+    echo "✓ Archive decrypted"
+fi
+
+safe_extract "$EXTRACT_FROM" "$WORK_DIR/extracted"
+SQL_FILE="$(find "$WORK_DIR/extracted" -name 'database.sql*' | head -1)"
 if [[ -z "$SQL_FILE" ]]; then
     echo "✗ Archive contains no database.sql(.gz)" >&2
     exit 1

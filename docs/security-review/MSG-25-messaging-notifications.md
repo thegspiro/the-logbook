@@ -2189,3 +2189,159 @@ confirmed passing.
 No code was changed by this pass, so the gate confirms current `main` is
 clean rather than verifying a diff this pass produced, matching passes 5-7's
 own rationale.
+
+## Pass 9 (2026-10-24) — watchdog pickup, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`). PR
+#3636 (Feature 24, Meetings & minutes, pass 9) was found open, green on
+every CI check and `mergeable_state: clean`, with no unresolved review
+comment (the only review activity was a Codex bot run that failed outright
+from hitting its own usage limit — an external tool error, not a finding)
+— merged by this same watchdog run. `search_pull_requests`
+(`head:claude/security-review-`) returned 0 immediately after. Row 25
+(Messaging & notifications) was confirmed the next `⬜` row in
+`docs/security-review/PROGRESS.md`'s rotation table on a freshly fetched
+`main` (head `53779a30`, carrying PR #3636's merge).
+
+Baseline `cd58d784` (PR #3457's squash, pass 8). Five non-merge commits
+touch this feature's declared scope since then, all read in full:
+
+- **Explicit-null tightening** (`609e04d21`) — `NotificationLog.pinned` and
+  `DepartmentMessage.is_persistent` moved from `Optional[bool]` to
+  `nullable=False` with a server default, matching the upgraded schema;
+  `MessagingService`'s own update path now calls
+  `reject_null_for_required` before applying `updates`, so an explicit
+  `null` aimed at either column is refused with a clear `ValueError` (→ 400
+  via the existing `except Exception` → `safe_error_detail` wrapper) instead
+  of reaching MySQL as error 1048.
+- **Shared file-storage interface** (`b92da7f3a`) — `email_templates.py`'s
+  attachment delete and `email_service.py`'s Cloudflare/SMTP attachment
+  paths now call `file_storage_service.exists/read_bytes/plaintext_size/
+delete` instead of bare `os.path.isfile`/`file_encryption.read_plaintext`/
+  `os.remove`. Behaviour is unchanged (the only backend is still the local
+  volume); the attachment-delete path's org-scoped path confinement
+  (`email_attachment_paths.resolve_email_attachment_path`) runs exactly as
+  before, upstream of the new `file_storage.delete()` call — re-verified by
+  reading the full diff, not merely the import swap.
+- **Role deletion untargets messages** (`128147e72`,
+  `release_role_from_messages` in `messaging_service.py`) — new function,
+  called from `RoleService.delete_role` (`role_service.py:497`) after the
+  role has already been resolved through an org-scoped `get_role(db,
+role_id, organization_id)`. Its own query additionally filters
+  `DepartmentMessage.organization_id == str(organization_id)`, so it cannot
+  touch another org's messages even if called with a wrong id (it isn't —
+  the id and name come from the already-resolved `role`). Mutates
+  `target_roles` by reassigning a new filtered list (`kept = [...]`), not an
+  in-place `.remove()`, so the JSON-column change is seen and written
+  (Pitfall #12 — no `flag_modified` needed because this is a full
+  reassignment). Row selection takes `.with_for_update()`, serializing
+  against a concurrent audience edit.
+- **Same commit, `_drop_vanished_stored_targets`** — on message update, an
+  audience id/role already stored on the message is dropped if it no longer
+  resolves (a member hard-deleted, a role deleted after the message was
+  written), so editing an unrelated field no longer fails validation over a
+  stale reference the editor can't see or fix. Traced the boundary this
+  creates deliberately: the filter keeps an entry when `str(m) in existing`
+  **or** `str(m) not in stored` — i.e. an entry already on the message is
+  kept only if it still resolves, but an entry _not_ previously stored (a
+  genuinely new id the caller is adding) is left untouched by this
+  function and still has to pass the unchanged `_validate_targeting` check
+  immediately after, which raises `ValueError` on any id that doesn't
+  resolve in-org. Confirmed by reading both call sites together — this
+  cannot be used to plant an unresolvable or cross-org id, only to stop a
+  vanished one from blocking an otherwise-valid save.
+- **Scheduled-email cancel: row lock + audit + soft state** (`128147e72`,
+  `email_templates.py`) — `cancel_scheduled_email` and
+  `update_scheduled_email`'s cancel branch both now take
+  `.with_for_update()` on the same org-scoped `ScheduledEmail` row the
+  background sender locks before sending, so a cancel can no longer race a
+  send already in flight (the sender finds the row `CANCELLED`, not
+  `PENDING`, under the same lock). Cancel now sets `CANCELLED` instead of
+  deleting the row (history/audit preserved) and logs
+  `scheduled_email_cancelled` with `recipient_count` rather than the actual
+  addresses — no PII in the audit payload. A second cancel of an
+  already-cancelled row is now a no-op (`return` before any write) rather
+  than hitting the `SENT`-only guard it fell through to before.
+- **Timezone correctness pair** (`29064e36b`, `45f8d92b1`) — net effect on
+  current `main`: `schedule_email`/`update_scheduled_email` still refuse a
+  naive `scheduled_at` with a 400 (the guard was removed by the first
+  commit assuming a schema-level `UTCDateTime` annotation, then restored by
+  the second alongside an explicit `as_utc()` conversion before storage).
+  Comparison against `datetime.now(timezone.utc)` is therefore always
+  tz-aware on both sides; no TypeError path. Correctness-only, no
+  authorization or tenancy surface.
+
+**0 new findings.** All five commits reviewed against every applicable
+`CHECKLIST.md` dimension; none introduce a new route, change a permission
+string, or touch SMS/CSV/LIKE-pattern/JSON-shape code (confirmed by `grep`
+re-sweeps below).
+
+### Re-swept, unchanged since pass 8
+
+- `grep -rn "SMSService("` across `backend/app`: still exactly the same two
+  gated call sites (Pitfall #18); no direct call added.
+- `.ilike(`/`.like(` sites in this feature's scope
+  (`message_history.py:83-84`, `messaging_service.py:203-204`,
+  `notifications_service.py:91-92`): unchanged, still pass
+  `escape=LIKE_ESCAPE_CHAR` with a `like_pattern()`-built pattern.
+- CSV export: still none in this feature's scope.
+- `jinja2` in `backend/app`: still zero hits — no new template-evaluation
+  surface for the email-template `{{var}}` substitution.
+
+### Standing findings — re-confirmed open/unchanged
+
+- **MSG-3** — `POST /message-history/test-email` sends to an admin-typed
+  `to_email`, by design. Unchanged.
+- **MAIL-4** — `POST /email-templates/schedule`'s `to/cc/bcc_emails` accept
+  arbitrary addresses, by design, same trust boundary as MSG-3. Unchanged.
+- **`email_service.py`'s F4** — no SSRF-style validation on an
+  org-configured SMTP host, a deliberate policy decision. Unchanged.
+- **`NotificationRuleCreate`/`Update.config` unbounded-JSON note** —
+  informational, low severity, unchanged.
+
+### Route inventory — re-enumerated by AST, 51 routes (unchanged since pass 5)
+
+Walked all four endpoint files' decorators by AST rather than trusting the
+prior count: 13 (`messages.py`) + 2 (`message_history.py`) + 20
+(`notifications.py`) + 16 (`email_templates.py`) = **51**, matching pass 8
+exactly. Every route body carries `require_permission`,
+`require_all_permissions`, or `get_current_user`/`get_current_active_user`
+with the narrower check made in the handler.
+
+### Schema & migration notes
+
+`validate_migrations.py --strict`: 649 revisions, single head
+`a0195b397bf3`, up from pass 8's 631 — growth is other features' work.
+Migration `6dce1364ff7e` (part of `609e04d21`, the explicit-null-tightening
+commit) touches `notification_log.pinned`/`department_messages.
+is_persistent` among its 99 columns across 36 tables; re-read in full —
+guarded by existence checks per CLAUDE.md Pitfall #26/#35 (skips an absent
+table, sets stored NULLs to the column's default before adding `NOT NULL`),
+consistent with the rest of that migration's handling of the other 97
+columns it touches outside this feature's scope.
+
+## Guard tests added (pass 9)
+
+None added — no new finding. `tests/test_explicit_null_writes.py`'s
+coverage of `NotificationLog.pinned`/`DepartmentMessage.is_persistent` and
+`tests/test_storage_operations.py`'s coverage of the attachment
+read/delete paths (both added by other work, not this pass) were exercised
+by this pass's scoped test run below and confirmed passing.
+
+## Completion gate (pass 9)
+
+| Check                                                                   | Result                                                   |
+| ----------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                           | clean (0 violations)                                     |
+| `black --check app/ tests/ alembic/`                                    | clean — 2,606 files unchanged                            |
+| `isort --check-only app/ tests/ alembic/`                               | clean                                                    |
+| `python3 scripts/validate_migrations.py --strict`                       | PASSED — 649 revisions, single head `a0195b397bf3`       |
+| `python3 scripts/check_route_permissions.py --strict`                   | 273 routes, 0 errors, 0 warnings                         |
+| backend tests, scope (`-k "message or notification or email_template"`) | 1,084 passed, 1 skipped (environment-only — `pywebpush`) |
+| `npm run typecheck` (frontend)                                          | 0 errors                                                 |
+| `npm run lint` (frontend, `eslint --max-warnings 10`)                   | clean, exit 0                                            |
+
+No source file was changed by this pass — every behavioral delta since
+pass 8 was landed by other, non-rotation work and independently
+re-verified here against all seven `CHECKLIST.md` dimensions.

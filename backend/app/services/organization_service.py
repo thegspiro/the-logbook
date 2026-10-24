@@ -442,7 +442,7 @@ class OrganizationService:
         # extra keys, so without this a settings.manage holder could write it
         # here and skip that permission and its allowed-host check. The same
         # holds for the record of a passed S3 connection test: only
-        # file_storage_service.activate_s3 may write it, after the test.
+        # file_storage_service.activate_remote may write it, after the test.
         settings_update = {
             k: v
             for k, v in settings_update.items()

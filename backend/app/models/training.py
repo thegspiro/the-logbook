@@ -888,11 +888,14 @@ class TrainingSession(Base):
     )
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -1513,11 +1516,14 @@ class TrainingApproval(Base):
     attendee_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (
@@ -1623,11 +1629,14 @@ class TrainingProgram(Base):
     )  # Can be used as template for new programs
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -1660,15 +1669,16 @@ class TrainingProgram(Base):
         Index("idx_program_position", "target_position"),
     )
 
-    # Not a column: the service stamps resolved {id, name} pairs here
-    # (attach_prerequisite_summaries) so responses can show names. A program
-    # nobody stamped reads as an empty list, matching the response default.
+    # Not a column: the service stamps resolved {id, name, active} entries
+    # here (attach_prerequisite_summaries) so responses can show names and
+    # flag an inactive prerequisite. A program nobody stamped reads as an
+    # empty list, matching the response default.
     @property
-    def prerequisite_programs(self) -> list[dict[str, str]]:
+    def prerequisite_programs(self) -> list[dict[str, Any]]:
         return getattr(self, "_prerequisite_programs", [])
 
     @prerequisite_programs.setter
-    def prerequisite_programs(self, value: list[dict[str, str]]) -> None:
+    def prerequisite_programs(self, value: list[dict[str, Any]]) -> None:
         self._prerequisite_programs = value
 
     def __repr__(self):
@@ -1721,11 +1731,14 @@ class ProgramPhase(Base):
     )  # Deadline from phase start
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     # Relationships
@@ -1809,8 +1822,8 @@ class ProgramRequirement(Base):
     notification_message: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships
@@ -1874,8 +1887,8 @@ class ProgramMilestone(Base):
     verification_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships
@@ -1933,12 +1946,19 @@ class ProgramEnrollment(Base):
     )  # Overall program completion percentage
 
     # Status
-    status: Mapped[Optional[EnrollmentStatus]] = mapped_column(
+    status: Mapped[EnrollmentStatus] = mapped_column(
         Enum(EnrollmentStatus, values_callable=lambda x: [e.value for e in x]),
         default=EnrollmentStatus.ACTIVE,
         index=True,
+        nullable=False,
+        server_default="active",
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Why an officer completed the enrollment by hand
+    # (TrainingProgramService.complete_enrollment_manually); NULL for an
+    # automatic completion. Cleared on every move out of COMPLETED, so a reason
+    # never outlives the completion it explains. Also kept in the audit log.
+    completion_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     withdrawn_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     withdrawal_reason: Mapped[Optional[str]] = mapped_column(Text)
 
@@ -1980,11 +2000,14 @@ class ProgramEnrollment(Base):
     )
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     enrolled_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -2033,10 +2056,12 @@ class RequirementProgress(Base):
     )
 
     # Progress Tracking
-    status: Mapped[Optional[RequirementProgressStatus]] = mapped_column(
+    status: Mapped[RequirementProgressStatus] = mapped_column(
         Enum(RequirementProgressStatus, values_callable=lambda x: [e.value for e in x]),
         default=RequirementProgressStatus.NOT_STARTED,
         index=True,
+        nullable=False,
+        server_default="not_started",
     )
     progress_value: Mapped[Optional[float]] = mapped_column(
         Float, default=0.0
@@ -2076,13 +2101,14 @@ class RequirementProgress(Base):
     )
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
+        nullable=False,
     )
 
     # Relationships
@@ -2242,11 +2268,14 @@ class SkillEvaluation(Base):
     active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -2321,8 +2350,8 @@ class SkillCheckoff(Base):
     evaluated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), default=func.now()
     )
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (
@@ -2381,7 +2410,9 @@ class ShiftCompletionReport(Base):
 
     # Shift details
     hours_on_shift: Mapped[float] = mapped_column(Float, nullable=False)
-    calls_responded: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    calls_responded: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, server_default="0"
+    )
     call_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # Array of incident types responded to
@@ -2418,8 +2449,8 @@ class ShiftCompletionReport(Base):
     )  # Array of { requirement_progress_id, value_added }
 
     # Review workflow — reports can require approval before trainee visibility
-    review_status: Mapped[Optional[str]] = mapped_column(
-        String(20), default="approved"
+    review_status: Mapped[str] = mapped_column(
+        String(20), default="approved", nullable=False, server_default="approved"
     )  # draft, pending_review, approved, flagged
     reviewed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -2435,7 +2466,9 @@ class ShiftCompletionReport(Base):
     )  # Array of { status, reviewer_id, reviewer_name, notes, timestamp }
 
     # Trainee acknowledgment
-    trainee_acknowledged: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    trainee_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     trainee_acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )
@@ -2539,47 +2572,47 @@ class TrainingModuleConfig(Base):
     # -- Member visibility: what members see on their own training page --
 
     # Training records & history
-    show_training_history: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_training_history: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    show_training_hours: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_training_hours: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    show_certification_status: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_certification_status: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
 
     # Pipeline / program progress
-    show_pipeline_progress: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_pipeline_progress: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    show_requirement_details: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_requirement_details: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
 
     # Shift completion reports
-    show_shift_reports: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_shift_reports: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    show_shift_stats: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_shift_stats: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
 
     # Officer-written content visibility to members
-    show_officer_narrative: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, server_default="0"
+    show_officer_narrative: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
     )  # Officer narrative on shift reports
-    show_performance_rating: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_performance_rating: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )  # 1-5 star ratings
-    show_areas_of_strength: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_areas_of_strength: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    show_areas_for_improvement: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_areas_for_improvement: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    show_skills_observed: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_skills_observed: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
 
     # Skills-test results: the department-wide default for what the person
@@ -2606,29 +2639,35 @@ class TrainingModuleConfig(Base):
     )
 
     # Self-reported submissions
-    show_submission_history: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    show_submission_history: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
 
     # Reports access
-    allow_member_report_export: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, server_default="0"
+    allow_member_report_export: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
     )  # Can members download their own data
 
     # Shift report review workflow
-    report_review_required: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, server_default="0"
+    report_review_required: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
     )  # Must reports be approved before trainee can see?
-    report_review_role: Mapped[Optional[str]] = mapped_column(
-        String(50), default="training_officer"
+    report_review_role: Mapped[str] = mapped_column(
+        String(50),
+        default="training_officer",
+        nullable=False,
+        server_default="training_officer",
     )  # Who reviews: training_officer, captain, chief
 
     # Rating customization
-    rating_label: Mapped[Optional[str]] = mapped_column(
-        String(100), default="Performance Rating"
+    rating_label: Mapped[str] = mapped_column(
+        String(100),
+        default="Performance Rating",
+        nullable=False,
+        server_default="Performance Rating",
     )  # Custom label for the rating field
-    rating_scale_type: Mapped[Optional[str]] = mapped_column(
-        String(20), default="stars"
+    rating_scale_type: Mapped[str] = mapped_column(
+        String(20), default="stars", nullable=False, server_default="stars"
     )  # stars, competency, custom
     rating_scale_labels: Mapped[Optional[dict[str, str]]] = mapped_column(
         JSON, nullable=True
@@ -2644,26 +2683,26 @@ class TrainingModuleConfig(Base):
     )
 
     # Report form sections — which optional sections appear on the form
-    form_show_performance_rating: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    form_show_performance_rating: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    form_show_areas_of_strength: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    form_show_areas_of_strength: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    form_show_areas_for_improvement: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    form_show_areas_for_improvement: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    form_show_officer_narrative: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    form_show_officer_narrative: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    form_show_skills_observed: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    form_show_skills_observed: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    form_show_tasks_performed: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    form_show_tasks_performed: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
-    form_show_call_types: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True, server_default="1"
+    form_show_call_types: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1", nullable=False
     )
 
     # Feature toggles
@@ -2787,22 +2826,22 @@ class SelfReportConfig(Base):
     )
 
     # Approval Settings
-    require_approval: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True
+    require_approval: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
     )  # Require training officer approval
     auto_approve_under_hours: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )  # Auto-approve if under X hours (null = never auto-approve)
-    approval_deadline_days: Mapped[Optional[int]] = mapped_column(
-        Integer, default=14
+    approval_deadline_days: Mapped[int] = mapped_column(
+        Integer, default=14, nullable=False, server_default="14"
     )  # Days officers have to review
 
     # Notification Settings
-    notify_officer_on_submit: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True
+    notify_officer_on_submit: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
     )  # Email training officer when submission arrives
-    notify_member_on_decision: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=True
+    notify_member_on_decision: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
     )  # Email member when approved/rejected
 
     # Field Configuration (JSON)
@@ -3776,11 +3815,14 @@ class Shift(Base):
     cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -3824,8 +3866,8 @@ class ShiftAttendance(Base):
     )  # Snapshotted at finalization
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (
@@ -3974,8 +4016,8 @@ class ShiftCall(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (
@@ -4115,7 +4157,9 @@ class ShiftTemplate(Base):
     positions: Mapped[Optional[list[dict[str, Any]] | dict[str, Any]]] = mapped_column(
         JSON
     )
-    min_staffing: Mapped[Optional[int]] = mapped_column(Integer, default=1)
+    min_staffing: Mapped[int] = mapped_column(
+        Integer, default=1, nullable=False, server_default="1"
+    )
 
     # Categorization
     category: Mapped[Optional[str]] = mapped_column(
@@ -4129,8 +4173,12 @@ class ShiftTemplate(Base):
     )  # Links template to a specific vehicle (BasicApparatus or full Apparatus)
 
     # Defaults
-    is_default: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # When True, all members (including non-operational membership types)
     # can self-signup for positions defined on this template/shift.
@@ -4289,7 +4337,9 @@ class ShiftPattern(Base):
         JSON
     )  # [{"user_id": "...", "platoon": "A", "position": "firefighter"}]
 
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(

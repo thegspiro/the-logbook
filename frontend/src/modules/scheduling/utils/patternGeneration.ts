@@ -29,4 +29,12 @@ export function reportGeneration(result: PatternGenerateResponse): void {
     const seats = warnings.length === 1 ? 'One driver seat was' : `${String(warnings.length)} driver seats were`;
     toast.error(`${seats} left unfilled: ${warnings.join('; ')}`, { duration: 8000 });
   }
+  // Members the pattern names whom the server would not seat — not eligible
+  // for the seat, the seat already full, or a conflict that date. Same reason
+  // as above: the roster is short and the officer has to hear it here.
+  const seatWarnings = result.seat_warnings ?? [];
+  if (seatWarnings.length > 0) {
+    const members = seatWarnings.length === 1 ? 'One member was' : `${String(seatWarnings.length)} members were`;
+    toast.error(`${members} not seated: ${seatWarnings.join('; ')}`, { duration: 8000 });
+  }
 }

@@ -114,6 +114,11 @@ GUARDED_CALLS = [
     ("POST", "/inventory/nfc/resolve-check", {**RESOLVE_BODY, "template_id": "t-1"}),
     ("GET", "/inventory/check-compartments/c-1/nfc-tags", None),
     ("POST", "/inventory/check-compartments/c-1/nfc-tags", LINK_BODY),
+    ("GET", "/inventory/nfc-tags", None),
+    ("GET", "/inventory/nfc-tags/export", None),
+    ("GET", "/inventory/nfc-tags/move-targets?kind=item", None),
+    ("POST", "/inventory/nfc-tags/bulk-status", {"tag_ids": ["t-1"], "status": "lost"}),
+    ("POST", "/inventory/nfc-tags/tag-1/move", {"item_id": "i-2"}),
     (
         "PUT",
         "/inventory/storage-areas/area-1/audit-schedule",

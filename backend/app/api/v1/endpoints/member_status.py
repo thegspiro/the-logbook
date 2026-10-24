@@ -47,6 +47,7 @@ from app.services.member_service_history_service import (
 from app.services.member_shift_release_service import (
     release_future_shift_commitments,
 )
+from app.services.nfc_card_status_sync import sync_cards_with_member_status
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
 from app.utils.org_timezone import (
     resolve_org_today,
@@ -459,6 +460,14 @@ async def change_member_status(
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason
+    await sync_cards_with_member_status(
+        db,
+        organization_id=str(current_user.organization_id),
+        user_id=str(member.id),
+        member_status=new_status,
+        performed_by_id=str(current_user.id),
+        performed_by_username=current_user.username,
+    )
     await db.commit()
     await db.refresh(member)
 
@@ -828,6 +837,14 @@ async def undo_member_drop(
     member.status = restore
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason or "Drop undone"
+    await sync_cards_with_member_status(
+        db,
+        organization_id=str(current_user.organization_id),
+        user_id=str(member.id),
+        member_status=restore,
+        performed_by_id=str(current_user.id),
+        performed_by_username=current_user.username,
+    )
     await db.commit()
 
     await log_audit_event(
@@ -995,6 +1012,14 @@ async def archive_member(
     member.archived_at = now
     member.status_changed_at = now
     member.status_change_reason = request.reason or "Manually archived by leadership"
+    await sync_cards_with_member_status(
+        db,
+        organization_id=str(current_user.organization_id),
+        user_id=str(member.id),
+        member_status=UserStatus.ARCHIVED,
+        performed_by_id=str(current_user.id),
+        performed_by_username=current_user.username,
+    )
     await db.commit()
 
     # Audit log

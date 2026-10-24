@@ -537,7 +537,20 @@ The account is created **after** the conversion is saved, so a Google failure ne
 
 ### When a Member Leaves
 
-Dropping a member (voluntary or involuntary) or deleting them **suspends** their Google account; undoing the drop, a rejoin or reactivating an archived member lifts it again. Retired, on-leave and inactive members keep their account. The Logbook only lifts a suspension it applied itself — an account someone had already suspended in Google stays suspended. If Google cannot be reached, the departure still goes through and the member's profile offers a **Retry**.
+Dropping a member (voluntary or involuntary) or deleting them **suspends** their Google account; undoing the drop, a rejoin or reactivating an archived member lifts it again. On-leave and inactive members keep their account, and so do retired members unless the retirement setting below is on. The Logbook only lifts a suspension it applied itself — an account someone had already suspended in Google stays suspended. If Google cannot be reached, the departure still goes through and the member's profile offers a **Retry**.
+
+**Retirement and name changes.** Retiring a member does not suspend their account
+unless the integration's **Suspend the account when a member retires** setting is
+on (off by default). It affects members who retire after it is turned on; it does
+not suspend those already retired or restore anyone when turned off. A retired
+member who returns gets the account back. When a member's first or last name
+changes, an account The Logbook created is renamed to match; the address is never
+changed, and linked accounts are never renamed.
+
+**Groups.** Suspending a departed member's account also takes it out of the groups
+set under **Add new members to these groups**, so it stops receiving department
+mail; a return puts it back. A group that would not let go is retried and, after a
+day, listed under **N need attention** as "Left, but still in a group".
 
 ### Accounts Needing Attention
 
@@ -564,6 +577,8 @@ See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) f
 | **Groups**                  | _(optional)_ Up to 20 security groups (by object ID) or Microsoft 365 groups. **Test** rejects distribution lists, mail-enabled security groups and dynamic groups. |
 
 The app registration needs the Microsoft Graph application permissions `User.ReadWrite.All`, `User-PasswordProfile.ReadWrite.All`, `User.RevokeSessions.All`, `GroupMember.ReadWrite.All` and, with a license, `LicenseAssignment.ReadWrite.All`, with admin consent, and the **User Administrator** role.
+
+Enter the secret's **Expires** date as **Client secret expires on**. From 30 days before it, the card shows the days left and administrators get a morning email at 30 days, 7 days and on the day. A new secret needs its new date entered with it. The Microsoft setting is **Block sign-in when a member retires**, and a group that assigns licenses is never edited, because removing the member would remove the license. Accounts still in the directory 90 days after suspension are listed under **N need attention** for information only; The Logbook never deletes an account.
 
 Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
 

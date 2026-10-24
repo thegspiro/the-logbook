@@ -65,14 +65,25 @@ def _member(user_id, name):
     return {"user_id": user_id, "user_name": name, "rank": "ff"}
 
 
-def _service(*, roster, unavailable, busy, load_rows, owed_rows):
+def _service(*, roster, unavailable, busy, load_rows, owed_rows, eligible=None):
+    """``eligible`` maps a user id to that member's per-shift eligibility; a
+    member it does not name is cleared for the firefighter seat."""
+    eligible = eligible or {}
+    users = [SimpleNamespace(id=m["user_id"]) for m in roster]
     service = SchedulingService(
-        _ScriptedSession([_rows(busy), _rows(load_rows), _rows(owed_rows)])
+        _ScriptedSession(
+            [_rows(busy), _rows(users), _rows(load_rows), _rows(owed_rows)]
+        )
     )
     service.get_shift_by_id = AsyncMock(return_value=SHIFT)
     service.get_unavailable_user_ids = AsyncMock(return_value=unavailable)
+
+    async def _eligible_for(user, _org, _shift_id):
+        return eligible.get(str(user.id), [ShiftPosition.FIREFIGHTER.value])
+
     eligibility = SimpleNamespace(
-        get_position_roster=AsyncMock(return_value={"members": roster})
+        get_position_roster=AsyncMock(return_value={"members": roster}),
+        get_eligible_positions=AsyncMock(side_effect=_eligible_for),
     )
     return service, eligibility
 
@@ -89,6 +100,21 @@ async def _run(**kwargs):
 
 
 class TestTradeCandidates:
+    async def test_excludes_a_rostered_member_the_shift_itself_would_refuse(self):
+        # The roster is today's department-wide answer; acceptance asks the
+        # shift. A qualification lapsing before the shift date, or the
+        # administrative-class rule, empties the member's per-shift answer,
+        # and an offer to them would be refused on acceptance.
+        result = await _run(
+            roster=[_member("u1", "A"), _member("u2", "B")],
+            unavailable=[],
+            busy=[],
+            load_rows=[],
+            owed_rows=[],
+            eligible={"u2": []},
+        )
+        assert [c["user_id"] for c in result] == ["u1"]
+
     async def test_lists_a_qualified_available_member(self):
         result = await _run(
             roster=[_member("u1", "T. Nguyen")],

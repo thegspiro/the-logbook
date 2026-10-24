@@ -48,6 +48,7 @@ class ErrorCode(str, Enum):
     AUTH_REGISTRATION_DISABLED = "LB-AUTH-010"
     AUTH_MFA_CHALLENGE_EXPIRED = "LB-AUTH-011"
     AUTH_REFRESH_SUPERSEDED = "LB-AUTH-012"
+    AUTH_STEPUP_REQUIRED = "LB-AUTH-013"
 
     # --- Permissions ---------------------------------------------------
     PERM_INSUFFICIENT = "LB-PERM-001"
@@ -253,6 +254,22 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
         resolution=(
             "Nothing to do: the app retries with the new session cookies.",
             "If a member sees it as an error, a reload picks up the new " "session.",
+        ),
+    ),
+    ErrorCode.AUTH_STEPUP_REQUIRED: ErrorCodeInfo(
+        title="Re-verification required",
+        description=(
+            "This action (an export, a security or policy change, an "
+            "account-recovery change or a destructive member action) needs "
+            "a recent re-verification on the current session. The member "
+            "is signed in; they have not confirmed their identity again "
+            "within the step-up window."
+        ),
+        resolution=(
+            "The app prompts for an authenticator code (or the password, "
+            "for a member without MFA) and retries the action.",
+            "Calling the API directly: POST /auth/step-up, then repeat the "
+            "request within STEPUP_WINDOW_MINUTES.",
         ),
     ),
     ErrorCode.PERM_INSUFFICIENT: ErrorCodeInfo(

@@ -410,8 +410,12 @@ class DocumentFolder(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     color: Mapped[Optional[str]] = mapped_column(String(20), default="#3B82F6")
     icon: Mapped[Optional[str]] = mapped_column(String(50), default="folder")
-    is_system: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    sort_order: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, server_default="0"
+    )
 
     # Hierarchy
     parent_id: Mapped[Optional[str]] = mapped_column(
@@ -563,9 +567,11 @@ class Document(Base):
         BigInteger, default=0
     )  # Size in bytes
     file_type: Mapped[Optional[str]] = mapped_column(String(100))  # MIME type
-    document_type: Mapped[Optional[DocumentType]] = mapped_column(
+    document_type: Mapped[DocumentType] = mapped_column(
         Enum(DocumentType, values_callable=lambda x: [e.value for e in x]),
         default=DocumentType.UPLOADED,
+        nullable=False,
+        server_default="uploaded",
     )
     status: Mapped[DocumentStatus] = mapped_column(
         Enum(DocumentStatus, values_callable=lambda x: [e.value for e in x]),

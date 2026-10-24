@@ -16,9 +16,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CreditCard, Plus, Trash2, Ban, RotateCcw, AlertTriangle, PenLine } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
-import { NfcCardCapture } from './NfcCardCapture';
+import { IssueIdCardDialog } from './IssueIdCardDialog';
 import { nfcCardService } from '../services/nfcCardService';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -26,7 +25,7 @@ import { useConnectedIntegrations } from '../../../hooks/useConnectedIntegration
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { NfcCardStatus, NfcCredentialType, NFC_CARD_STATUS_COLORS } from '../../../constants/enums';
-import { NFC_CARD_STATUS_LABELS, NFC_ID_CARDS_INTEGRATION, isPlausibleCardSerial } from '../constants/idCards';
+import { NFC_CARD_STATUS_LABELS, NFC_ID_CARDS_INTEGRATION } from '../constants/idCards';
 import type { NfcCard } from '../types/idCard';
 
 interface MemberIdCardsPanelProps {
@@ -46,11 +45,6 @@ export const MemberIdCardsPanel: React.FC<MemberIdCardsPanelProps> = ({ userId, 
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [credential, setCredential] = useState('');
-  const [credentialType, setCredentialType] = useState<NfcCredentialType>(NfcCredentialType.SERIAL);
-  const [label, setLabel] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -71,44 +65,6 @@ export const MemberIdCardsPanel: React.FC<MemberIdCardsPanelProps> = ({ userId, 
   }, [load, cardsEnabled]);
 
   const activeCount = useMemo(() => cards.filter((c) => c.status === NfcCardStatus.ACTIVE).length, [cards]);
-
-  const closeAdd = useCallback(() => {
-    setAddOpen(false);
-    setCredential('');
-    setCredentialType(NfcCredentialType.SERIAL);
-    setLabel('');
-    setAddError(null);
-  }, []);
-
-  const handleCapture = useCallback((value: string, type: NfcCredentialType) => {
-    setCredential(value);
-    setCredentialType(type);
-  }, []);
-
-  const handleAdd = useCallback(async () => {
-    if (!isPlausibleCardSerial(credential)) {
-      setAddError('No card has been read yet. Write a code to a blank card, tap a printed one, or type its serial.');
-      return;
-    }
-    setSaving(true);
-    setAddError(null);
-    try {
-      await nfcCardService.register({
-        user_id: userId,
-        tag_uid: credential,
-        credential_type: credentialType,
-        // Create payload: a blank label is omitted rather than sent as "".
-        label: label.trim() || undefined,
-      });
-      toast.success('ID card issued');
-      closeAdd();
-      await load();
-    } catch (err: unknown) {
-      setAddError(getErrorMessage(err, 'Unable to register this card'));
-    } finally {
-      setSaving(false);
-    }
-  }, [credential, credentialType, label, userId, closeAdd, load]);
 
   const setStatus = useCallback(
     async (card: NfcCard, status: NfcCardStatus, reason?: string) => {
@@ -277,45 +233,13 @@ export const MemberIdCardsPanel: React.FC<MemberIdCardsPanelProps> = ({ userId, 
         </ul>
       )}
 
-      <Modal
+      <IssueIdCardDialog
         isOpen={addOpen}
-        onClose={closeAdd}
-        title={memberName ? `Issue an ID card to ${memberName}` : 'Issue an ID card'}
-        size="sm"
-        footer={
-          <>
-            <button type="button" onClick={closeAdd} className="btn-secondary">
-              Cancel
-            </button>
-            <button type="button" onClick={() => void handleAdd()} disabled={saving} className="btn-primary">
-              {saving ? 'Registering…' : 'Register card'}
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <NfcCardCapture
-            value={credential}
-            onChange={handleCapture}
-            credentialType={credentialType}
-            error={addError}
-          />
-          <div>
-            <label className="form-label" htmlFor="nfc-card-label">
-              Label <span className="text-theme-text-secondary font-normal">(optional)</span>
-            </label>
-            <input
-              id="nfc-card-label"
-              type="text"
-              className="form-input"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Blue ID card"
-              maxLength={100}
-            />
-          </div>
-        </div>
-      </Modal>
+        onClose={() => setAddOpen(false)}
+        userId={userId}
+        memberName={memberName}
+        onIssued={load}
+      />
     </div>
   );
 };

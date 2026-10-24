@@ -12,17 +12,21 @@ vi.mock('./pages/FacilitiesSettingsPage', () => ({
 
 const capturedAnyPermissions: string[][] = [];
 const capturedPermissions: string[] = [];
+const capturedModules: (string | undefined)[] = [];
 let grantedPermissions: string[] = [];
 vi.mock('../../components/ProtectedRoute', () => ({
   ProtectedRoute: ({
     children,
     requiredAnyPermission,
     requiredPermission,
+    requiredModule,
   }: {
     children: React.ReactNode;
     requiredAnyPermission?: string[];
     requiredPermission?: string;
+    requiredModule?: string;
   }) => {
+    capturedModules.push(requiredModule);
     if (requiredAnyPermission) capturedAnyPermissions.push(requiredAnyPermission);
     if (requiredPermission) capturedPermissions.push(requiredPermission);
     if (requiredPermission && !grantedPermissions.includes(requiredPermission)) return <div>Access Denied</div>;
@@ -75,5 +79,18 @@ describe('getFacilitiesRoutes', () => {
       'locations.manage_nfc_tags',
       'apparatus.manage_nfc_tags',
     ]);
+  });
+
+  // The Locations page — what a department sees with Facilities off — links
+  // here, and the page reads only the ungated /locations stand-in.
+  it('opens the QR code directory with the Facilities module off', async () => {
+    capturedModules.length = 0;
+    render(
+      <MemoryRouter initialEntries={['/locations/qr-codes']}>
+        <Routes>{getFacilitiesRoutes()}</Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByTestId('room-qr-codes-page')).toBeInTheDocument();
+    expect(capturedModules).toEqual([undefined]);
   });
 });

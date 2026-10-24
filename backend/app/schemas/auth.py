@@ -11,6 +11,7 @@ Security Features:
 """
 
 import re
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -143,6 +144,7 @@ class CurrentUser(BaseModel):
     email_verified: bool
     mfa_enabled: bool
     mfa_enrollment_required: bool = False  # Org requires MFA and user not enrolled
+    mfa_grace_ends_at: datetime | None = None  # Privileged, un-enrolled, still in grace
     password_expired: bool = False  # True when password age exceeds HIPAA max
     must_change_password: bool = (
         False  # True when admin requires password change on next login
@@ -196,6 +198,18 @@ class MFAVerify(BaseModel):
     """Schema for MFA verification"""
 
     code: str = Field(..., min_length=6, max_length=6)
+
+
+class StepUpRequest(BaseModel):
+    """Re-verification before a sensitive action.
+
+    A member with MFA enrolled proves it with ``code``; one without it proves
+    the account password with ``password``. Exactly one is meaningful for a
+    given member; the other is ignored.
+    """
+
+    code: str | None = Field(None, min_length=6, max_length=6)
+    password: str | None = Field(None, max_length=1024)
 
 
 class MFALogin(BaseModel):

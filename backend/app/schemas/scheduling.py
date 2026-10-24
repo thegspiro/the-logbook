@@ -57,6 +57,29 @@ SeatToken = Annotated[
 ]
 
 
+def _seat_names_within_cap(value: Any) -> Any:
+    """Refuse a seat list naming a seat longer than an assignment can store.
+
+    A seat is saved on a shift, template or apparatus as JSON, with no length
+    limit, but the member who fills it is stored in a VARCHAR(100) column and
+    every request naming a seat is capped there (``SeatToken``). A longer seat
+    could be created and never filled. Only a flat list is a seat list; a
+    template's event-metadata dict passes through untouched.
+    """
+    if not isinstance(value, list):
+        return value
+    for entry in value:
+        if isinstance(entry, dict):
+            name = entry.get("position")
+        else:
+            name = getattr(entry, "position", entry)
+        if isinstance(name, str) and len(name.strip()) > SEAT_NAME_MAX_LENGTH:
+            raise ValueError(
+                f"A seat name can be at most {SEAT_NAME_MAX_LENGTH} characters."
+            )
+    return value
+
+
 # ============================================
 # Position Slot
 # ============================================
@@ -75,6 +98,16 @@ class PositionSlot(BaseModel):
     allow_administrative_members: bool = False
 
 
+# Request-side seat lists, held to the seat-name cap. Responses keep the plain
+# types, so a row stored before the cap still reads.
+SeatListInput = Annotated[
+    Optional[List[PositionSlot | str]], AfterValidator(_seat_names_within_cap)
+]
+TemplatePositionsInput = Annotated[
+    Optional[Any], AfterValidator(_seat_names_within_cap)
+]
+
+
 # ============================================
 # Shift Schemas
 # ============================================
@@ -90,7 +123,7 @@ class ShiftCreate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
-    positions: Optional[List[PositionSlot | str]] = None
+    positions: SeatListInput = None
     min_staffing: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     notes: Optional[str] = None
     activities: Optional[Any] = None
@@ -117,7 +150,7 @@ class ShiftUpdate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
-    positions: Optional[List[PositionSlot | str]] = None
+    positions: SeatListInput = None
     min_staffing: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     notes: Optional[str] = None
     activities: Optional[Any] = None
@@ -973,7 +1006,7 @@ class ShiftTemplateCreate(BaseModel):
     end_time_of_day: str
     duration_hours: float = Field(..., ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     color: Optional[str] = None
-    positions: Optional[Any] = None
+    positions: TemplatePositionsInput = None
     min_staffing: int = Field(1, ge=INT32_MIN, le=INT32_MAX)
     category: Optional[str] = "standard"
     apparatus_type: Optional[str] = None
@@ -995,12 +1028,15 @@ class ShiftTemplateUpdate(BaseModel):
     end_time_of_day: Optional[str] = None
     duration_hours: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     color: Optional[str] = None
-    positions: Optional[Any] = None
+    positions: TemplatePositionsInput = None
     min_staffing: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     category: Optional[str] = None
     apparatus_type: Optional[str] = None
     apparatus_id: Optional[str] = None
     is_default: Optional[bool] = None
+    # A template in use is deactivated rather than deleted; sending True is how
+    # it comes back, which resumes the patterns it was holding.
+    is_active: Optional[bool] = None
     open_to_all_members: Optional[bool] = None
     # Omitting the key leaves the links alone; sending [] clears them. The
     # form owns this field, so it sends it on every save — an omitted key on
@@ -1073,6 +1109,9 @@ class ShiftPatternUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     assigned_members: Optional[Any] = None
+    # False pauses the pattern: neither the scheduled run nor manual generation
+    # makes new shifts from it until it is set True again.
+    is_active: Optional[bool] = None
 
 
 class ShiftPatternResponse(UTCResponseBase):
@@ -1095,6 +1134,10 @@ class ShiftPatternResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Names of the inactive templates the pattern names (its own, or the
+    # day/night ones in schedule_config). Non-empty means the pattern is not
+    # generating shifts (SchedulingService.inactive_templates_by_pattern).
+    inactive_templates: list[str] = Field(default_factory=list)
 
     model_config = _response_config
 
@@ -1649,7 +1692,7 @@ class BasicApparatusCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     apparatus_type: str = Field(default="engine", max_length=50)
     min_staffing: Optional[int] = Field(default=1, ge=1, le=50)
-    positions: Optional[List[PositionSlot | str]] = None
+    positions: SeatListInput = None
 
 
 class BasicApparatusUpdate(BaseModel):
@@ -1659,7 +1702,7 @@ class BasicApparatusUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     apparatus_type: Optional[str] = Field(None, max_length=50)
     min_staffing: Optional[int] = Field(None, ge=1, le=50)
-    positions: Optional[List[PositionSlot | str]] = None
+    positions: SeatListInput = None
 
 
 class BasicApparatusResponse(UTCResponseBase):
@@ -1701,6 +1744,12 @@ class MemberComplianceRecord(BaseModel):
     # another jurisdiction's apparatus.
     external_shift_count: int = 0
     external_hours: float = 0.0
+    # Set (an ISO date) when a member is short of the target but still inside
+    # the requirement's catch-up period. The service already leaves such a
+    # member out of total/compliant/non_compliant counts; without the field
+    # here the response model stripped it, and the list painted that member
+    # red under a header count that excluded them.
+    catch_up_deadline: Optional[str] = None
 
 
 class RequirementComplianceSummary(BaseModel):

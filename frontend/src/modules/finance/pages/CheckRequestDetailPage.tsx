@@ -16,6 +16,7 @@ import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNotice';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { AdvancePanel } from '../components/AdvancePanel';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { PromptDialog } from '@/components/ux/PromptDialog';
@@ -126,13 +127,43 @@ const CheckRequestDetailPage: React.FC = () => {
     }
   };
 
+  // A member withdraws only their own draft; the finance office cancels any
+  // request not yet issued (FinanceService.cancel_check_request decides).
+  const handleCancel = async () => {
+    if (!id || !cr) return;
+    const withdrawing = cr.status === CheckRequestStatus.DRAFT;
+    const ok = await confirm({
+      title: withdrawing ? 'Withdraw this request?' : 'Cancel this check request?',
+      message: withdrawing
+        ? `${cr.requestNumber} is closed and nobody is asked to approve it. It cannot be reopened.`
+        : `${cr.requestNumber} is closed for good: any approval still outstanding is withdrawn and emailed approval links stop working. No check has been issued, so nothing is reversed.${
+            cr.expenseReportId ? ' The expense report it would have paid stays approved, to be paid another way.' : ''
+          }`,
+      confirmLabel: withdrawing ? 'Withdraw request' : 'Cancel request',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await checkRequestService.cancel(id);
+      toast.success(withdrawing ? 'Request withdrawn' : 'Check request cancelled');
+      void fetchCheckRequest(id);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not cancel the check request'));
+    }
+  };
+
   const handleVoid = async () => {
     if (!id || !cr) return;
     // Voiding is final and takes the amount back off the budget line's
     // spending, so it is not left to a single stray tap.
     const ok = await confirm({
       title: 'Void this check?',
-      message: `${cr.requestNumber}, ${formatCurrency(cr.amount)} to ${cr.payeeName}, will be marked as voided and its amount taken off the budget line's spending. This cannot be undone.`,
+      // A reimbursement check charges no budget line itself: voiding it puts
+      // its expense report back to approved, so another check can be cut.
+      message: cr.expenseReportId
+        ? `${cr.requestNumber}, ${formatCurrency(cr.amount)} to ${cr.payeeName}, will be marked as voided. Expense report ${cr.expenseReportNumber ?? ''} goes back to approved and unpaid, its spending is taken off its budget lines, and the finance office can pay it again. This cannot be undone.`
+        : `${cr.requestNumber}, ${formatCurrency(cr.amount)} to ${cr.payeeName}, will be marked as voided and its amount taken off the budget line's spending. This cannot be undone.`,
       confirmLabel: 'Void check',
       cancelLabel: 'Keep it',
       variant: 'danger',
@@ -189,6 +220,16 @@ const CheckRequestDetailPage: React.FC = () => {
   const canSubmit = cr.status === CheckRequestStatus.DRAFT && access.canActAsRequester(cr.requestedBy);
   const canIssue = access.canManage && cr.status === CheckRequestStatus.APPROVED;
   const canVoid = access.canManage && cr.status === CheckRequestStatus.ISSUED;
+  const canCancel = access.canManage
+    ? (
+        [
+          CheckRequestStatus.DRAFT,
+          CheckRequestStatus.SUBMITTED,
+          CheckRequestStatus.PENDING_APPROVAL,
+          CheckRequestStatus.APPROVED,
+        ] as string[]
+      ).includes(cr.status)
+    : cr.status === CheckRequestStatus.DRAFT && access.canActAsRequester(cr.requestedBy);
 
   return (
     <div className="space-y-6">
@@ -258,6 +299,16 @@ const CheckRequestDetailPage: React.FC = () => {
                 Void Request
               </button>
             )}
+            {canCancel && (
+              <button
+                type="button"
+                onClick={() => void handleCancel()}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                {cr.status === CheckRequestStatus.DRAFT ? 'Withdraw Request' : 'Cancel Request'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -292,9 +343,22 @@ const CheckRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(cr.checkDate, tz)}</p>
             </div>
           )}
-          {/* An advance charges no budget line or fund; the expense reports that
-              account for it are classified instead. */}
-          {!cr.isAdvance && (
+          {cr.expenseReportId && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Reimburses</p>
+              <p className="text-theme-text-primary text-sm">
+                <Link
+                  to={`/finance/expenses/${cr.expenseReportId}`}
+                  className="font-medium text-red-700 hover:underline dark:text-red-400"
+                >
+                  {cr.expenseReportNumber ?? 'Expense report'}
+                </Link>
+              </p>
+            </div>
+          )}
+          {/* An advance or a reimbursement charges no budget line or fund; the
+              expense reports behind them are classified instead. */}
+          {!cr.isAdvance && !cr.expenseReportId && (
             <FunctionalClassControl
               value={cr.functionalClass}
               effective={cr.effectiveFunctionalClass}
@@ -371,6 +435,16 @@ const CheckRequestDetailPage: React.FC = () => {
         requesterId={cr.requestedBy}
         onDecided={() => void fetchCheckRequest(cr.id)}
       />
+
+      {cr.status === CheckRequestStatus.DRAFT && (
+        <div className="card p-6">
+          <ApprovalRoutePreview
+            entityType={ApprovalEntityType.CHECK_REQUEST}
+            amount={Number(cr.amount)}
+            budgetId={cr.budgetId ?? undefined}
+          />
+        </div>
+      )}
 
       {cr.approvalSteps.length > 0 && (
         <div className="card p-6">

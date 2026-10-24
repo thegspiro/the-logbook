@@ -228,9 +228,13 @@ class ReportsService:
         active_count = 0
         inactive_count = 0
 
+        # A probationary account is current (CLAUDE.md Pitfall #32): the
+        # roster's own "Active"/"Inactive" tally must count it the same way
+        # every other status gate in this file now does, not as inactive.
+        active_status_values = {s.value for s in ACTIVE_ACCOUNT_STATUSES}
         for user in users:
             status_val = str(getattr(user.status, "value", user.status))
-            is_active = status_val == UserStatus.ACTIVE.value
+            is_active = status_val in active_status_values
             if is_active:
                 active_count += 1
             else:

@@ -52,6 +52,7 @@ async def test_archived_match_conflict_does_not_disclose_member_identity():
                 request=SimpleNamespace(client=None, headers={}),
                 db=AsyncMock(),
                 current_user=current_user,
+                hidden_prospect_ids=set(),
             )
 
     assert exc_info.value.status_code == 409

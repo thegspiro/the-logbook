@@ -158,9 +158,7 @@ training record yet" it lists the three ways training reaches the page:
 It also offers **Submit External Training** and a link to the Learning Center's
 training walkthrough.
 
-<!-- Screenshot needed:
-_[My Training → as a brand-new member with no records and no requirements: the **Required Training** card reading **None assigned**, and the "Nothing is on your training record yet" panel with its three numbered ways, **Submit External Training** and **Take the short walkthrough in the Learning Center**.]_
--->
+![My Training for a brand-new member: Required Training reading None assigned with the line that nothing is asked of them yet, and the Nothing is on your training record yet panel with its three numbered ways, Submit External Training and the Learning Center walkthrough link](./images/02-123-my-training-new-member.png)
 
 > **What if a requirement says "Due by" a date instead of overdue?** Your
 > department added the requirement after you joined and gave existing members
@@ -240,9 +238,7 @@ filtered on screen. That is what an outside audit or a new employer wants.
 
 ![The History tab on My Training: all-time totals, the course search and Type filter, this year's records open and earlier years closed with their counts and hours](./images/02-107-my-training-history-tab.png)
 
-<!-- Screenshot needed:
-_[My Training → the Upcoming Expirations & Due Dates list with one row of each kind, including an hours requirement reading "52.5 hrs to go".]_
--->
+![My Training's Upcoming Expirations & Due Dates list, soonest first, with a row for each kind of item, including an hours requirement reading hours to go](./images/02-124-my-training-upcoming.png)
 
 ![Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave marked and left out of the average](./images/02-108-monthly-hours-leave.png)
 
@@ -775,6 +771,60 @@ credit part of it without completing it.
 > for review. They cannot set their own requirement to 100%.
 
 ![The officer's view of a member's pipeline progress, with the controls that credit and verify each requirement](./images/02-94-officer-progress-detail.png)
+
+### Completing a Pipeline by Hand
+
+**Who can do this:** members with **Manage training records**
+(`training.manage`).
+
+A pipeline normally completes a member by itself when every required item is
+done. Sometimes it cannot: the pipeline has no active requirements, or the member
+earned the credential elsewhere. For those cases an officer can finish the
+enrollment by hand.
+
+1. On the program's **Enrollments** tab, choose **Mark pipeline complete** beside
+   an **Active** or **On hold** enrollment, or use the same button in the member's
+   progress dialog.
+2. Type the **reason**. It is required.
+3. Confirm. The member gets the usual completion notice, and the action is
+   recorded in the audit log with the reason and how many required items were
+   still unmet.
+
+Officers then see **Completed by hand: <reason>** on the enrollment and in the
+progress dialog. Members do not see the reason, because it is an officer's note.
+A completed, withdrawn, failed or expired enrollment cannot be completed this way;
+reopen or start a new cycle first. A later recalculation does not undo a hand
+completion, even if the member is below 100%. Starting a new cycle, reopening or
+withdrawing the member clears the note.
+
+**Advance to next phase**, **Start new cycle** and **Reopen enrollment** in the
+progress dialog also need **Manage training records**. Without it the dialog is
+read-only, and an expired enrollment still shows its deadline-passed note.
+
+> _Screenshot to be captured: the progress dialog with **Mark pipeline complete** and its reason prompt (queued in SCREENSHOT_CURRENCY.md)._
+
+### Inactive Requirements and Pipelines
+
+- **A pipeline, or a phase, with no active requirements completes nobody.** An
+  empty set of requirements is not a passing set. Progress shows **No active
+  requirements** instead of a percentage. Add a requirement, reactivate one, or
+  use **Mark pipeline complete**. To move a member out of such a phase, use the
+  audited **Force** option when advancing. A phase with nothing required at all
+  is still complete.
+- **A deactivated requirement is no longer required** for the pipeline or phase,
+  as in the compliance grade. Deactivating or reactivating one recalculates the
+  affected enrollments, so members who had finished everything else now complete.
+  It shows **Inactive — not currently required** and carries no due date.
+- **A deactivated pipeline used as a prerequisite no longer blocks anyone.**
+  Reactivating it restores the requirement.
+- **Deactivating a pipeline from its edit form withdraws members who are still in
+  it,** the same as deleting it. The confirmation says how many members are
+  affected.
+- **Automatic enrollment with a missing prerequisite.** When a member becomes
+  Probationary and a pipeline's prerequisite is unmet, they are not enrolled in
+  that pipeline, but the conversion goes ahead. Training officers get an email
+  naming the member, the pipeline and what is missing. Manual enrollment from
+  the old enrollment screen refuses the same way.
 
 ### Working Through a Checklist Requirement
 
@@ -1561,9 +1611,7 @@ three required steps are done — the optional program step never keeps it open 
 or when an officer selects the **×** (**Hide the setup guide**). Hiding is
 remembered in that browser only.
 
-<!-- Screenshot needed:
-_[Training Admin → Dashboard → Overview on a fresh department with one course and nothing else: the **Set up training for your department** guide reading "1 of 3 steps done", step 1 ticked, steps 2–4 with their links, and the **Department Compliance** widget reading **Not set up**.]_
--->
+![Training Admin Overview for a department that has set up one course: the Set up training for your department guide reading 1 of 3 steps done with step 1 ticked and steps 2 to 4 linked, and the Department Compliance widget reading Not set up](./images/02-122-training-setup-guide.png)
 
 **No requirements means "Not set up", not 100%.** With no requirements, the
 **Department Compliance** card reads **Not set up** ("No training requirements
@@ -1848,9 +1896,7 @@ the same rules, so their figures agree:
   requirements, but only for records completed before the requirement was
   upgraded. Link the course on any requirement you rely on.
 
-<!-- Screenshot needed:
-_[Training officer under Training Admin > Compliance Matrix in a demo department with one member no requirement applies to: the rail with the Not applicable group beneath Compliant, and that member's detail panel. Demo data only.]_
--->
+![The Compliance Matrix triage rail with a Not applicable group beneath Compliant holding the one member no requirement asks anything of, and that member's detail panel saying nothing grades them](./images/02-125-compliance-matrix-not-applicable.png)
 
 ![The Training dashboard Overview: the Compliance figure in the header and the Department Compliance card both read 91%, with the Compliance Matrix tab beside the Dashboard tab](./images/02-118-compliance-card-and-matrix.png)
 

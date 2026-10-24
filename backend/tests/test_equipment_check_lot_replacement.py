@@ -33,6 +33,11 @@ def _department_today(monkeypatch):
         "app.services.equipment_check_service.resolve_org_today",
         AsyncMock(return_value=date.today()),
     )
+    # No recalls unless a test says so; the db here is a mock.
+    monkeypatch.setattr(
+        "app.services.inventory_service.InventoryService.recalled_lot_keys",
+        AsyncMock(return_value=set()),
+    )
 
 
 TODAY = date.today()
@@ -467,3 +472,16 @@ class TestReportItemUsedIsLocked:
         assert source.index("with_for_update()") < source.index(
             "self._consume_deployed"
         )
+
+
+class TestARecalledLotIsNotDeployed:
+    async def test_the_swap_refuses_it(self, service, item, monkeypatch):
+        monkeypatch.setattr(
+            "app.services.inventory_service.InventoryService.recalled_lot_keys",
+            AsyncMock(return_value={("inv-item-1", "new-9")}),
+        )
+
+        with pytest.raises(ValueError, match="recalled"):
+            await _swap(service)
+
+        assert [lot.lot_number for lot in item.deployed_lots] == ["OLD-1"]

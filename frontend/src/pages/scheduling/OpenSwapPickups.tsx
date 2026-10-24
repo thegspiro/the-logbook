@@ -18,7 +18,7 @@ import type { OpenSwapPickup } from '../../modules/scheduling/types';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, formatTime } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 
 interface OpenSwapPickupsProps {
@@ -46,11 +46,7 @@ export const OpenSwapPickups: React.FC<OpenSwapPickupsProps> = ({ onPickedUp }) 
   }, [load]);
 
   const describe = (item: OpenSwapPickup): string => {
-    const day = formatDateCustom(
-      `${item.shift_date}T12:00:00`,
-      { weekday: 'short', month: 'short', day: 'numeric' },
-      tz
-    );
+    const day = formatCalendarDate(item.shift_date, { weekday: 'short', month: 'short', day: 'numeric' });
     const time = item.start_time ? ` ${formatTime(item.start_time, tz)}` : '';
     return `${day}${time}`;
   };

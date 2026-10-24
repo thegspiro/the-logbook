@@ -132,7 +132,15 @@ def sent():
         ).InventoryService,
         "get_expiring_lots",
         new_callable=AsyncMock,
-    ) as lots:
+    ) as lots, patch.object(
+        __import__(
+            "app.services.equipment_check_service", fromlist=["EquipmentCheckService"]
+        ).EquipmentCheckService,
+        "uncounted_supply_positions",
+        new_callable=AsyncMock,
+        return_value=[],
+    ) as uncounted:
+        captured["uncounted"] = uncounted
         yield captured, overview, lots
 
 
@@ -517,3 +525,71 @@ class TestSupplyAlertWording:
         assert f"<p>{summary}.</p>" in captured["html_body"]
         assert captured["text_body"].startswith(summary)
         assert "10d left" in captured["html_body"]
+
+
+class TestUncountedPositionsInTheEmail:
+    """Positions no crew has counted, named so a crew can go and count them."""
+
+    _ROWS = [
+        {
+            "item_name": "Gauze <4x4>",
+            "item_size": None,
+            "apparatus_id": "app-3",
+            "where": "Medic 3 › Main Compartment › Jump Bag",
+        },
+        {
+            "item_name": "Oxygen Mask",
+            "item_size": "Pediatric",
+            "apparatus_id": None,
+            "where": "Any Ambulance › Airway Bag",
+        },
+    ]
+
+    async def test_listed_when_the_email_goes_anyway(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {"items": []}
+        lots.return_value = [_lot()]
+        captured["uncounted"].return_value = self._ROWS
+
+        await run_supply_expiration_alerts(_db())
+
+        html = captured["html_body"]
+        assert "Not yet counted on apparatus (2)" in html
+        assert "Medic 3 &rsaquo; Main Compartment &rsaquo; Jump Bag" in html
+        assert "Oxygen Mask · Pediatric" in html
+        # Names are escaped like every other row.
+        assert "Gauze &lt;4x4&gt;" in html
+        assert "2 positions not yet counted" in captured["subject"]
+
+    async def test_does_not_send_an_email_of_its_own(self, sent):
+        """Rides along; it would otherwise go out every week for good."""
+        captured, overview, lots = sent
+        overview.return_value = {"items": []}
+        lots.return_value = []
+        captured["uncounted"].return_value = self._ROWS
+
+        result = await run_supply_expiration_alerts(_db())
+
+        assert captured["all"] == []
+        assert result["total"] == 0
+
+    async def test_the_medical_only_officer_is_mailed_them(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {"items": []}
+        lots.side_effect = _lots_by_domain([_lot(lot_id="med-1")], [])
+        captured["uncounted"].return_value = self._ROWS
+
+        ems = _user_with(["inventory.manage_medical"], email="ems@example.org")
+        await run_supply_expiration_alerts(_db(users=[ems]))
+
+        assert "Not yet counted on apparatus (2)" in captured["html_body"]
+
+    async def test_none_leaves_the_email_as_it_was(self, sent):
+        captured, overview, lots = sent
+        overview.return_value = {"items": []}
+        lots.return_value = [_lot()]
+
+        await run_supply_expiration_alerts(_db())
+
+        assert "Not yet counted" not in captured["html_body"]
+        assert captured["subject"] == "Supplies to Replace — 1 stock lot expiring"

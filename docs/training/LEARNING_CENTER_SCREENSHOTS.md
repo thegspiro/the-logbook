@@ -94,7 +94,7 @@ lessons themselves.
 
 ## Captured
 
-Twenty-six images in `frontend/public/lesson-images/` (about 700 KB), taken as
+Twenty-eight images in `frontend/public/lesson-images/` (about 700 KB), taken as
 the ordinary demo member by
 [`scripts/screenshots/learning-center.mjs`](../../scripts/screenshots/learning-center.mjs)
 and attached to a step through its `screenshots` list. Every step now has at
@@ -114,6 +114,8 @@ itself is the real UI; only the data behind it is substituted:
 | `scheduling-not-eligible`   | The eligibility answer replaced with "not cleared"                         |
 | `scheduling-pick-up`        | One open swap from another member                                          |
 | `events-check-out`          | The member's own check-in time added to the real QR data                   |
+| `events-page-check-in`      | The event's check-in window set around now, so the Check In button shows   |
+| `events-page-checked-in`    | The same event reported as attended, so the You're checked in badge shows  |
 
 **Check-out.** The check-in page's **Check Out of This Event** prompt was
 unreachable until the fix that returns the scanning member's own check-in and

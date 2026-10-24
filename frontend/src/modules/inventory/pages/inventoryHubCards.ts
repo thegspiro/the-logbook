@@ -528,6 +528,18 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     requiresModule: 'inventory',
   },
   {
+    id: 'nfc-register',
+    label: 'NFC Tag Register',
+    description: 'Every tag on items, shelves and compartments: mark lost, move or unlink',
+    path: '/inventory/admin/nfc/tags',
+    icon: Nfc,
+    section: 'Setup & Tools',
+    tone: 'indigo',
+    // A checklist manager opens it too, for compartment tags only.
+    anyPermission: ['inventory.manage', 'inventory.check_manage'],
+    requiresModule: 'inventory',
+  },
+  {
     // The settings grant, like the route: the switch is written through the
     // organization-settings endpoint, which inventory.manage cannot reach.
     id: 'nfc-settings',

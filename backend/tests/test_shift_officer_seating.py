@@ -67,10 +67,12 @@ async def _seat(service, mock_db, shift, apparatus, existing=None):
     service._get_apparatus_map = AsyncMock(
         return_value={shift.apparatus_id: apparatus} if apparatus else {}
     )
-    # 1st execute: the officer's own assignment. 2nd: whoever else holds the
-    # officer seat and must be displaced.
+    # 1st execute: the officer's own live assignment. Then, only when there is
+    # none, the delete clearing a declined/cancelled row of theirs. Last:
+    # whoever else holds the officer seat and must be displaced.
     mock_db.execute.side_effect = [
         _scalars([existing] if existing else []),
+        *([] if existing else [_scalars([])]),
         _scalars([]),
     ]
     officer_id = str(uuid4())

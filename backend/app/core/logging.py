@@ -170,6 +170,71 @@ def _sentry_before_send_transaction(event: "Event", hint: "Hint") -> "Event":
     return event
 
 
+# ------------------------------------------------------------------
+# Single-line text output
+# ------------------------------------------------------------------
+
+# The text sinks write each record as one line, so a line break inside a
+# message starts what reads as a new record: a search term of
+# "bob\nINFO | Admin login succeeded" plants a forged entry in the log an
+# incident is reconstructed from. Escaping at the sink covers every call site,
+# including values reaching Loguru from intercepted stdlib loggers. The JSON
+# sink needs none of this — json.dumps already escapes control characters.
+#
+# U+0085, U+2028 and U+2029 are included because str.splitlines() and many log
+# viewers break on them. Tab is left alone: it cannot end a line. A traceback is
+# untouched: it arrives through {exception}, not through the message.
+_LINE_BREAK_ESCAPES = {0x0A: "\\n", 0x0D: "\\r"}
+_CONTROL_CHAR_ESCAPES: Dict[int, str] = {
+    code: _LINE_BREAK_ESCAPES.get(code, f"\\x{code:02x}")
+    for code in [*range(0x20), 0x7F, 0x85]
+    if code != 0x09
+}
+_CONTROL_CHAR_ESCAPES[0x2028] = "\\u2028"
+_CONTROL_CHAR_ESCAPES[0x2029] = "\\u2029"
+
+# A top-level record key rather than one under "extra": the record a format
+# function receives is the one every later handler sees, and Sentry's Loguru
+# handler forwards each "extra" key as a log attribute.
+_SINGLE_LINE_KEY = "single_line_message"
+
+_STDOUT_TEXT_FORMAT = (
+    "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+    "<level>{level: <8}</level> | "
+    "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+    "<level>{" + _SINGLE_LINE_KEY + "}</level>"
+)
+
+# Loguru's own default layout, which app.log used before it had a format.
+_FILE_TEXT_FORMAT = (
+    "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+    "<level>{level: <8}</level> | "
+    "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+    "<level>{" + _SINGLE_LINE_KEY + "}</level>"
+)
+
+
+def escape_log_message(message: str) -> str:
+    """Render line breaks and other control characters as visible escapes."""
+    return message.translate(_CONTROL_CHAR_ESCAPES)
+
+
+def _single_line_format(template: str):
+    """Build a Loguru format function that prints the escaped message.
+
+    A function rather than a string because the escaped text has to be computed
+    per record; a format function must also supply the trailing newline and
+    ``{exception}`` that Loguru appends to a string format on its own.
+    """
+    line = template + "\n{exception}"
+
+    def _format(record: Dict[str, Any]) -> str:
+        record[_SINGLE_LINE_KEY] = escape_log_message(record["message"])
+        return line
+
+    return _format
+
+
 def setup_logging(
     log_level: str = "INFO",
     log_format: str = "text",
@@ -201,12 +266,7 @@ def setup_logging(
     else:
         logger.add(
             sys.stdout,
-            format=(
-                "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
-                "<level>{level: <8}</level> | "
-                "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
-                "<level>{message}</level>"
-            ),
+            format=_single_line_format(_STDOUT_TEXT_FORMAT),
             level=effective_level,
             diagnose=False,
         )
@@ -221,6 +281,7 @@ def setup_logging(
         _log_path = os.path.join(_logs_dir, "app.log")
         logger.add(
             _log_path,
+            format=_single_line_format(_FILE_TEXT_FORMAT),
             rotation="500 MB",
             retention="30 days",
             compression="gz",

@@ -19,6 +19,7 @@ from app.api.dependencies import (
     _collect_user_permissions,
     get_current_user,
     require_permission,
+    require_stepup,
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
@@ -226,6 +227,7 @@ async def create_role(
             "positions.create", "positions.manage_permissions", "roles.create"
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Create a new custom role
@@ -301,6 +303,7 @@ async def update_role(
             "roles.update",
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Update a role
@@ -379,6 +382,7 @@ async def delete_role(
             "positions.delete", "positions.manage_permissions", "roles.delete"
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Delete a role
@@ -438,6 +442,7 @@ async def clone_role(
             "positions.create", "positions.manage_permissions", "roles.create"
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Clone an existing role with new name and slug

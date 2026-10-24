@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 
 from app.api.v1.endpoints.inventory import get_departure_clearance
+from app.schemas.inventory import DepartureClearanceResponse
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
 
@@ -93,3 +94,19 @@ async def test_another_orgs_clearance_is_not_found(db_session):
             current_user=SimpleNamespace(id=other_user, organization_id=other_org),
         )
     assert exc_info.value.status_code == 404
+
+
+async def test_a_clearance_just_opened_serializes_with_its_line_items(db_session):
+    """POST /inventory/clearances answers with the clearance it just made.
+
+    The response lists the line items, and the object the service hands back
+    was refreshed without them, so reading them at serialization time went to
+    the database outside the request's async context and the route answered
+    500 after the clearance had already been saved.
+    """
+    org_id, user_id = await _org_with_member(db_session)
+    clearance = await _clearance(db_session, org_id, user_id)
+
+    response = DepartureClearanceResponse.model_validate(clearance)
+
+    assert [line.item_name for line in response.line_items] == ["Helmet"]

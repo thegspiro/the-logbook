@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime
+from sqlalchemy import Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -52,6 +52,45 @@ class NfcTagStatus(str, Enum):
     # that stopped working and when.
     LOST = "lost"
     REVOKED = "revoked"
+
+
+class NfcCheckInTarget(str, Enum):
+    """What a station is checking members into."""
+
+    SHIFT = "shift"
+    EVENT = "event"
+    ADMIN_HOURS = "admin_hours"
+
+
+class NfcCheckInStatus(str, Enum):
+    """Outcome of a tap, as the station screen must render it.
+
+    Declared on the model rather than the schema because every tap is now
+    stored with its outcome (``NfcCardTap.outcome``); ``app.schemas.nfc_tag``
+    imports it from here so existing imports keep working.
+    """
+
+    CHECKED_IN = "checked_in"
+    CHECKED_OUT = "checked_out"
+    ALREADY_CHECKED_IN = "already_checked_in"
+    ALREADY_CHECKED_OUT = "already_checked_out"
+    UNKNOWN_CARD = "unknown_card"
+    CARD_INACTIVE = "card_inactive"
+    MEMBER_INACTIVE = "member_inactive"
+    REFUSED = "refused"
+
+
+class NfcTapSource(str, Enum):
+    """Which kind of reader a tap came through.
+
+    A station is staffed — somebody holding ``members.check_in`` chose the
+    target. A kiosk is a room's public screen with nobody signed in, where the
+    room decides the target; the two are worth telling apart when a refusal
+    needs explaining.
+    """
+
+    STATION = "station"
+    KIOSK = "kiosk"
 
 
 class NfcTag(Base):
@@ -121,6 +160,15 @@ class NfcTag(Base):
     )
     revoked_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # True only while the card is SUSPENDED because its holder left (see
+    # app/services/nfc_card_status_sync.py). It is what lets a returning
+    # member's card come back on its own without also undoing a suspension an
+    # officer chose — the two are otherwise the same status. Any officer change
+    # of status clears it, handing the card back to human control.
+    auto_suspended: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
     issued_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -147,3 +195,77 @@ class NfcTag(Base):
 
     def __repr__(self):
         return f"<NfcTag(user_id={self.user_id}, preview=…{self.uid_preview})>"
+
+
+class NfcCardTap(Base):
+    """One tap of a card at a station or a room kiosk, whatever its outcome.
+
+    Refusals are recorded as well as check-ins, because a refusal is the event
+    an officer is usually asked about ("my card didn't work at the meeting").
+    The audit log keeps its own entries for taps that moved attendance; this
+    table exists so the ID-card screen can filter by card, member and outcome
+    without parsing audit JSON, and it is purged after the organization's
+    retention period (``nfc_id_cards.tap_retention_months``).
+
+    ``tag_id`` and ``user_id`` are SET NULL rather than CASCADE: deleting a
+    mis-registered card must not erase the record that a tap happened, and the
+    tap is evidence about the reader as much as about the member.
+    """
+
+    __tablename__ = "nfc_card_taps"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tag_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("nfc_tags.id", ondelete="SET NULL"), nullable=True
+    )
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Set only for a card no registration matched. The same peppered hash
+    # nfc_tags stores, so repeated tries with one stranger's card group
+    # together without the serial itself ever being kept.
+    unknown_uid_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    source: Mapped[NfcTapSource] = mapped_column(
+        SQLEnum(NfcTapSource, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    location_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+    )
+    operator_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Polymorphic (a shift, an event or an admin-hours category), so not a
+    # foreign key. target_name is a snapshot: the log should still say which
+    # meeting it was after the event is renamed or deleted.
+    target_type: Mapped[Optional[NfcCheckInTarget]] = mapped_column(
+        SQLEnum(NfcCheckInTarget, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
+    target_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    target_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    outcome: Mapped[NfcCheckInStatus] = mapped_column(
+        SQLEnum(NfcCheckInStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    tapped_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_nfc_card_tap_org_time", "organization_id", "tapped_at"),
+        Index("idx_nfc_card_tap_org_tag", "organization_id", "tag_id"),
+        Index("idx_nfc_card_tap_org_user", "organization_id", "user_id"),
+        Index("idx_nfc_card_tap_org_location", "organization_id", "location_id"),
+    )
+
+    def __repr__(self):
+        return f"<NfcCardTap(outcome={self.outcome}, tapped_at={self.tapped_at})>"

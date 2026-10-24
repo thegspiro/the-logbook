@@ -10,15 +10,18 @@ after a UI change refreshes the images rather than leaving stale ones behind.
 
 ## Pieces
 
-| File                    | Role                                                                                                                                                                                                                                                            |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bootstrap_demo.py`     | Runs the onboarding API end to end, creating the demo organization and its administrator                                                                                                                                                                        |
-| `seed_demo_data.py`     | Populates every module through the public API — members, stations, apparatus, shifts, events and RSVPs, training records and programs, skills tests, inventory, documents, forms, elections, prospects, grants, medical screening, storefront, finance and dues |
-| `manifest.mjs`          | Declares each screenshot: which placeholder it fills, which route to visit, and any interaction needed                                                                                                                                                          |
-| `capture.mjs`           | Logs in, walks the manifest, writes PNGs to `docs/training/images/`, and records the result in `capture-report.json`                                                                                                                                            |
-| `apply_placeholders.py` | Rewrites the placeholder blocks in `docs/training/*.md` into `![alt](./images/....png)`                                                                                                                                                                         |
-| `status_report.py`      | Regenerates `docs/training/SCREENSHOT_STATUS.md` (filled counts). Staleness of already-captured images is tracked by hand in `docs/training/SCREENSHOT_CURRENCY.md`                                                                                             |
-| `inventory-setup.mjs`   | Captures the inventory setup workflow without a database, from fixtures (see "Shots a seeded department cannot produce")                                                                                                                                        |
+| File                                         | Role                                                                                                                                                                                                                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bootstrap_demo.py`                          | Runs the onboarding API end to end, creating the demo organization and its administrator                                                                                                                                                                        |
+| `seed_demo_data.py`                          | Populates every module through the public API — members, stations, apparatus, shifts, events and RSVPs, training records and programs, skills tests, inventory, documents, forms, elections, prospects, grants, medical screening, storefront, finance and dues |
+| `manifest.mjs`                               | Declares each screenshot: which placeholder it fills, which route to visit, and any interaction needed                                                                                                                                                          |
+| `capture.mjs`                                | Logs in, walks the manifest, writes PNGs to `docs/training/images/`, and records the result in `capture-report.json`                                                                                                                                            |
+| `totp.mjs`                                   | Generates the administrator's authenticator codes for `capture.mjs` (see "The administrator's two-factor secret")                                                                                                                                               |
+| `apply_placeholders.py`                      | Rewrites the placeholder blocks in `docs/training/*.md` into `![alt](./images/....png)`                                                                                                                                                                         |
+| `status_report.py`                           | Regenerates `docs/training/SCREENSHOT_STATUS.md` (filled counts). Staleness of already-captured images is tracked by hand in `docs/training/SCREENSHOT_CURRENCY.md`                                                                                             |
+| `inventory-setup.mjs`                        | Captures the inventory setup workflow without a database, from fixtures (see "Shots a seeded department cannot produce")                                                                                                                                        |
+| `wizard-extra.mjs`                           | Photographs the IT contacts and apparatus steps of the setup wizard, which only serve on an empty database. Creates the organization and administrator first, so run it against a throwaway database and backend (`RATE_LIMIT_ENABLED=false`)                   |
+| `render_supply_email.py` + `email-shots.mjs` | The weekly Supplies to Replace email is built by a scheduled task, so no screen previews it. The first writes the message the demo would send to disk (nothing is mailed); the second photographs it at phone width                                             |
 
 ## Running it
 
@@ -105,6 +108,48 @@ prevents accidentally creating this privileged demo account on a reachable
 environment. For an intentionally isolated remote demo, pass `--allow-remote`
 to both scripts and keep `SCREENSHOT_ADMIN_PASSWORD` secret. The administrator
 username defaults to `chief`; `SCREENSHOT_ADMIN_USERNAME` can override it.
+
+### The administrator's two-factor secret
+
+The application requires members with administrative rights to use two-factor
+authentication, and asks them to confirm their identity again before sensitive
+actions such as granting a role. The pipeline signs in the way a real
+administrator does rather than working around either:
+
+- **Enrolment.** The first seeder run enrols the demo administrator in TOTP and
+  stores the secret in
+  `${XDG_STATE_HOME:-~/.local/state}/logbook-screenshots/admin-totp.env` (mode
+  600, outside the repository, beside the demo encryption keys). The file is
+  written before the enrolment is confirmed, so an interrupted run cannot leave
+  an enrolled account whose secret exists nowhere. Later runs find the account
+  enrolled and leave it alone.
+- **Signing in.** The seeder completes the authentication-code step with a code
+  generated from that secret, and `capture.mjs` types one into the login page's
+  code step for every administrator context. Member accounts sign in with a
+  password as before.
+- **Confirming identity.** When an action answers `403` with
+  `X-Stepup-Required` (`LB-AUTH-013`), the seeder re-verifies with a fresh code
+  and retries that request once. A confirmation lasts ten minutes by default
+  (`STEPUP_WINDOW_MINUTES`), so a long run does this several times.
+
+The server accepts each 30-second code once per account, so a sign-in and the
+confirmation straight after it cannot share one: the scripts wait for the next
+code rather than resubmit a spent one. A code refused because another run spent
+it moments earlier is retried once with the next.
+
+`SCREENSHOT_ADMIN_TOTP_SECRET` overrides the file, for a demo whose secret is
+managed elsewhere. The seeder will not enrol the administrator while it is set,
+because the server chooses the secret at enrolment and it could not be the one
+in the variable.
+
+The secret is a credential for a privileged account: never print it or commit
+it. Like `demo-keys.env`, it belongs to the database it was created against —
+delete it only together with that database. If the secret is lost or no longer
+matches, the seeder stops and says so. Recover by having another member with
+`members.manage` use **Reset MFA** on the administrator's row at
+`/members/admin` (administrators cannot reset their own there), then re-run the
+seeder, which enrols the account again and stores the new secret — or start
+over on a fresh database.
 
 ## Shots a seeded department cannot produce
 

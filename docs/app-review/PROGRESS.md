@@ -55,7 +55,7 @@ from its open list.
 | B14 | grants & fundraising       | GF2    | ✅     |
 | B15 | admin-hours                | AH2    | ✅     |
 | B16 | reports & analytics        | RPT2   | ✅     |
-| B17 | events                     | EV2    | ⬜     |
+| B17 | events                     | EV2    | ✅     |
 | B18 | training                   | TR2    | ✅     |
 | B19 | scheduling                 | SCH2   | ⬜     |
 | B20 | finance                    | FIN2   | ⬜     |
@@ -3341,6 +3341,30 @@ secrets redacted for non-admins. See
   14 related suites **180 passed** · new files 17 pass, 4 fail without the fix, 0 under the
   unit job's marker expression · route-permission check 0 errors · no frontend change. See
   reports-analytics.md → Pass 5. Next: B17 events.
+- **B17 events ✅ (pass 5) — a null on a required field answered 500 in four update paths
+  (EV2-3 to EV2-6).** The events service is the one place in the rotation that still writes
+  updates with a bare `setattr` loop rather than `apply_updates`, so the null probe found work.
+  `PATCH /events/{id}` with `null` for any of 13 NOT NULL fields (title, event_type, the two
+  times, `requires_rsvp`, `is_mandatory`, `allow_guests`, `send_reminders`, `reminder_target`,
+  `require_checkout`, `check_in_window_type`, the two guest check-in flags) answered 500 — a
+  `TypeError` for the times (the end-after-start comparison ran on `None`), an
+  `IntegrityError` at the flush for the rest — and `reminder_schedule: null` answered **200**
+  and left a stored JSON `null` where every reader expects a list. `PATCH /events/templates/{id}`
+  (10 fields), `PATCH /event-requests/email-templates/{id}` (4) and the external-attendee
+  edit (`name`) did the same. **Fixed** with `reject_null_for_required` in
+  `utils/model_updates.py` — `apply_updates`' refusal, made before the update reads its own
+  payload — called ahead of the date arithmetic in `update_event` and in
+  `update_future_events`, and `apply_updates` in the other three (all 400, "cannot be
+  cleared"); nullable fields still clear. None is reachable from the app's own forms (the
+  frontend type allows `null` only on nullable fields), so each needs a direct client with
+  `events.manage`. The B14 `updated_at` shape is **absent** here: a real change saves and
+  answers 200 on all three that return a row. **Verified good:** AST scan found nothing
+  unreferenced; EV-1 / 8 / 9 / 10 hold in their suites; every fetch is org-scoped. **Not
+  read:** creation, recurrence expansion, waitlist, finalization and training credit,
+  reminder tasks, public intake (their suites pass). Gate: flake8 / black / isort / mypy clean
+  · 28 related suites **818 passed** · new tests 72 pass, 30 fail without the fixes, 0 under
+  the unit job's marker expression · route-permission check 0 errors · no frontend change.
+  See events.md → Pass 5. Next: B18 training.
 - **B18 training ✅ (pass 5) — 13 update schemas accepted `null` on 45 required fields, and the
   program edit modal could send one (TR2-2, TR2-3).** The update-payload contract driven through
   the real handlers: a test derives its cases from each route's request schema and model
