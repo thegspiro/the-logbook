@@ -130,8 +130,8 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
 
       {unconnected && (
         <p className="text-theme-text-secondary text-sm">
-          This platform is not connected yet, so files stay on this server. Amazon S3 (or an S3-compatible service such
-          as MinIO) is available now.
+          This platform is not connected yet, so files stay on this server.
+          {status.available_platforms.length > 0 && ` Available now: ${status.available_platforms.join(', ')}.`}
         </p>
       )}
 

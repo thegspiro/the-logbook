@@ -1008,10 +1008,16 @@ own bucket once **Test and switch to S3** passes with its saved settings, and
 the Storage screen reports where new files go whatever platform is picked.
 Still open:
 
-- **Google Drive, OneDrive / SharePoint and "Other" are still unread.** The
-  screen now says files stay on the server for them. **In progress
-  (2026-10-23): Google Drive** (decision 32), through a service account and a
-  Shared Drive; step 1 made the storage machinery platform-neutral.
+- **OneDrive / SharePoint and "Other" are still unread.** The screen says
+  files stay on the server for them, and lists what can be connected.
+  **Resolved 2026-10-23: Google Drive works** (decision 32), through a
+  service account and a Shared Drive. It needs Google Workspace; a personal
+  Google account has no Shared Drives.
+- **A Drive reference is trusted to name the department's drive.** Reads go
+  by file id with the department's own service account, which reaches only
+  the drives it was added to; the existence check also requires the file to
+  be in the drive the reference names, but a download does not repeat that
+  check. Rows are written only by the server.
 - **Resolved 2026-10-22: existing files move with
   `scripts/migrate_uploads_to_s3.py`** (apply, rollback, finalize), and
   `scripts/encrypt_uploads.py --rewrap` reaches bucket objects. Every object

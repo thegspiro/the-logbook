@@ -646,6 +646,7 @@ async def _file_storage_status(
         # bucket.
         container=activation.get("container") or activation.get("bucket"),
         platform_connectable=chosen is not None,
+        available_platforms=list(remote_storage.labels().values()),
         new_files_go_to=view.writes_to or "local",
         location=location,
         bucket=activation.get("bucket"),

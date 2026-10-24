@@ -26,6 +26,7 @@ const status = (overrides: Partial<FileStorageStatus> = {}): FileStorageStatus =
   container_noun: 'bucket',
   container: null,
   platform_connectable: true,
+  available_platforms: ['Amazon S3', 'Google Drive'],
   new_files_go_to: 'local',
   location: {},
   bucket: null,
@@ -120,9 +121,11 @@ describe('StorageLocationPanel', () => {
   });
 
   it('says a platform that is not connected keeps files on the server', async () => {
-    mockGetStatus.mockResolvedValue(status({ platform: 'googledrive', ...notConnectable }));
+    mockGetStatus.mockResolvedValue(status({ platform: 'onedrive', ...notConnectable }));
     renderPanel();
-    expect(await screen.findByText(/This platform is not connected yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/This platform is not connected yet/)).toHaveTextContent(
+      'Available now: Amazon S3, Google Drive.'
+    );
     expect(screen.queryByRole('button', { name: 'Test and switch to S3' })).not.toBeInTheDocument();
   });
 

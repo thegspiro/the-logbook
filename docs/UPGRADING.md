@@ -504,6 +504,28 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A department can keep its files in a Google Shared Drive (2026-10-23)
+
+Google Drive under **Organization Settings > Storage** (and in onboarding) now
+works, the same way as S3. **Nothing moves on upgrade**: new files go to the
+drive only after an administrator presses **Test and switch to Google Drive**.
+
+- The screen now asks for a **service account key** (the JSON file Google
+  Cloud downloads) and a **Shared Drive ID**, plus an optional folder. Add
+  the service account to the Shared Drive as a **Content manager**, and
+  enable the Google Drive API in its Google Cloud project. Shared Drives need
+  Google Workspace.
+- The old OAuth client ID and secret fields were never read. A department
+  that filled them in has to enter the service-account details instead; the
+  saved values are left where they are and ignored.
+- Files are encrypted before upload, a drive that cannot be reached refuses
+  uploads (`LB-UPLD-006`), and `scripts/migrate_uploads_to_s3.py` already
+  moves existing files to whichever remote platform a department has
+  switched to, Google Drive included. `encrypt_uploads.py --rewrap` and the
+  `backup.sh` notice cover Drive too.
+- The server needs outbound HTTPS to `www.googleapis.com` and
+  `oauth2.googleapis.com`.
+
 ### An explicit `null` for an on/off or count setting is refused with a 400 (2026-10-23)
 
 Migration `6dce1364ff7e` makes 99 columns `NOT NULL` with defaults. They are
