@@ -984,6 +984,17 @@ the member's current state instead of checking them out.
 Then issue a replacement. For a card with a written code, that can be the same
 tag written again.
 
+### Looking after every card at once _(2026-10-24)_
+
+**Members Admin → Member ID cards** lists every card, who has none, cards still
+held by former members, unused cards, and every tap, with a tap-log retention
+setting (24 months by default). Cards stop by themselves when a member becomes
+Inactive, Suspended, Dropped or Archived. See
+[Membership → The Member ID Cards page](./01-membership.md#the-member-id-cards-page).
+Where cards were tapped, by room and by event, is on **Card Readers** and the
+event page: see
+[Events → Seeing who tapped a card](./04-events-meetings.md#seeing-who-tapped-a-card-2026-10-24).
+
 ---
 
 ## Training Provider Integrations

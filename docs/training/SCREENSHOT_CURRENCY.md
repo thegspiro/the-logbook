@@ -1,5 +1,22 @@
 # Screenshot currency
 
+## Queued by the October 24 (afternoon) documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24-2026-afternoon).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 01 | Member ID Cards: **Cards** tab with two cards ticked and the bulk bar; **Coverage** tab's three sections; **Tap log** with a refused tap; **Settings** retention box | Create |
+| 04 | Event page **Card taps** section; Events Admin **Card Check-ins** tab; **Card Readers** with one room's reader on | Create |
+| 05 | **NFC Tag Register** (full view, and the compartment-only view of a checklist builder); **Move tag** dialog | Create |
+| 05 | Medical Supplies **Expiring** tab: **Find a lot** result with **Recall lot**, the **Recall this lot** dialog, the **Recalled lots** panel, a row marked **Recalled** | Create |
+| 05 | Medical Supplies **Not yet counted** tab; the **Look ahead** 30/60/90 choice | Create |
+| 03 | Templates tab: an inactive template with **Reactivate**; a pattern reading **Paused** with **Resume** and Generate disabled; the "not seated" generation toast | Create |
+| 03 | Scheduling Settings **Position Names** with the **Not in effect yet** note | Replace if 03 has a shot of this card |
+| 02 | Session wizard first step **Use a course from the Course Library** with Credit Hours shown | Re-check |
+| 15 | Add Applicant duplicate-applicant warning naming pipeline and stage | Create |
+
 ## Queued by the October 23 – 24 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).

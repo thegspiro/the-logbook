@@ -1829,6 +1829,45 @@ row to the inventory item.
 Loading a vehicle preset or importing a checklist replaces its compartments and
 deletes their tags. Link them again afterwards.
 
+### The NFC Tag Register
+
+**Inventory Administration → NFC Tag Register** lists every NFC tag the
+department has linked, in one place: tags on items, on storage areas and on
+equipment-check compartments. Each row shows what the tag names, its label, its
+status and, for an item tag, when a quartermaster last tapped it.
+
+**Who can open it:**
+
+| Permission                                    | What they see and change                                  |
+| --------------------------------------------- | --------------------------------------------------------- |
+| **Manage gear, uniforms and equipment**       | Every tag: items, storage areas and compartments          |
+| **Create and edit equipment check templates** | Compartment tags only. Item and shelf tags are not listed |
+
+Filter by kind (**Everything**, items, **Storage areas** or **Compartments**),
+by status (**Active and lost**, **Active** or **Lost**), or search. Then:
+
+- **Mark lost** / **Mark found** on one tag, or tick several and use the bar
+  that appears above the list.
+- **Move** a tag onto another target **of the same kind**: an item tag to
+  another item, a compartment tag to another compartment. **Move tag …1234**
+  opens a search for the new target. To put a tag on something of a different
+  kind, unlink it and link it again there.
+- **Unlink** a tag. The register asks **Unlink this NFC tag?** first.
+- **CSV** downloads the register as filtered.
+
+Moves and lost/found changes are recorded in the audit log.
+
+> **Changed with this page:** the **Manage gear, uniforms and equipment**
+> permission can now also relabel, mark lost or found, move and unlink
+> **compartment** tags, alongside checklist builders. A checklist builder still
+> cannot change item or shelf tags.
+
+The page only appears while NFC tags are turned on.
+
+<!-- Screenshot needed: The NFC Tag Register as a quartermaster: item and shelf tags with their status and last tap, one tag marked Lost -->
+
+<!-- Screenshot needed: The Move tag dialog from the NFC Tag Register, searching for another item to move an item tag onto -->
+
 ### Items not seen
 
 Needs the **Manage gear, uniforms and equipment** permission.
@@ -3037,6 +3076,21 @@ total. Gear is unchanged: it is still judged on the shelf alone.
   them ("3 shelf · 2 on trucks").
 - Auto-reorder is also checked after a daily check, a **report used** and a
   recount, because usage on a truck is what lowers the total.
+- The **Not yet counted** tab lists every truck position still running on its
+  target because nobody has counted it, each linked to that truck's inventory.
+  The tab shows how many supplies wait on a count, and the list can be filtered
+  to them.
+
+  <!-- Screenshot needed: The Not yet counted tab of Medical Supplies, each uncounted truck position linked to that truck's inventory -->
+
+- The list (and its CSV export) can be sorted by **Next expiry**, shelf and
+  trucks together; supplies with no date sort last. The supply export adds
+  On Apparatus, Uncounted Positions, Next Expiry and Next Expiry Where columns
+  at the end, and the lot export lists lots aboard the trucks beside the shelf
+  lots. The import ignores the added columns.
+- The **Expiring** tab's **Look ahead** offers 30, 60 or 90 days. The tiles,
+  the list and the Next expiry colouring follow it. It is not saved between
+  visits, and the weekly email keeps 30 days.
 
 **Kept on apparatus only.** Some equipment has no spare in a stock room: a LUCAS
 device or a cardiac monitor lives on the ambulance. Tick **Kept on apparatus
@@ -3115,6 +3169,48 @@ drops an area that belongs to another one. The old free text stays as a
 ![The Lots dialog for Tourniquet, CAT: Where it is, with its storage room and the two apparatus and compartments carrying it with the count aboard, above Stock lots with the lot table, its edit controls and the Add lot form](./images/05-89-medical-supply-where-lots.png)
 
 ![The medical supply form for Bag Valve Mask, with its also-called names, Size Adult, the Station 1 room and the EMS Supply Cabinet shelf as its storage area](./images/05-90-medical-supply-form.png)
+
+### Recalling a lot
+
+**Who can do this:** officers who manage medical supplies (or gear). Anyone who
+can view medical supplies can look a lot up.
+
+A manufacturer's recall names a **lot number**, so a recall is recorded against
+a supply and its lot number, not one box on a shelf. It reaches every unit with
+that number: lots on the shelf, units already on an apparatus, and any later
+delivery of the same lot.
+
+1. On **Medical Supplies**, open the **Expiring** tab.
+2. Under **Find a lot**, type the lot number from the recall notice and select
+   **Find**. It searches the shelves and every apparatus checklist, in date or
+   not.
+
+   <!-- Screenshot needed: Find a lot on the Medical Supplies Expiring tab, with a lot found on the shelf and its Recall lot button -->
+
+3. Select **Recall lot _number_ of _supply_**. Add a reason if you like (for
+   example the manufacturer's notice number) and select **Recall lot**.
+
+   <!-- Screenshot needed: The Recall this lot dialog with a reason typed and the Recall lot button -->
+
+**While a lot is recalled:**
+
+- **It is not stock.** Recalled units stop counting toward on hand, Low stock,
+  the low-stock email, automatic reorder and the truck figures. A recall can
+  therefore drop a supply into Low stock and start a reorder. That is intended.
+- **It cannot go on a truck.** An equipment-check swap refuses it, and it is
+  not offered as replacement stock.
+- **It is listed to pull.** The Expiring tab lists every recalled unit, shelf
+  and truck, **first**, whatever its date, marked **Recalled**.
+
+The **Recalled lots** panel on the same tab lists each active recall and how
+many units are **Still to pull**. When the recall is over, select **Lift
+recall**. A note is required (**Why is it lifted?**). Recording and lifting a
+recall are both written to the audit log. The same lot cannot be recalled twice
+at once.
+
+A lot with no lot number cannot be recalled.
+
+<!-- Screenshot needed: The Recalled lots panel on the Expiring tab, with the recalled saline lot, how many are still to pull, and Lift recall -->
 
 ---
 
@@ -3369,6 +3465,11 @@ do not know them.
 | You add an item without a current value | The current value is set to the purchase price. If you later change the purchase price without entering a current value, the current value follows it. Enter a current value yourself to record depreciation |
 | You set an item's status to retired     | Its condition is set to retired too                                                                                                                                                                          |
 | Two people change the same item at once | The changes are applied one after the other, never mixed                                                                                                                                                     |
+| A name is only spaces                   | Refused. Names are trimmed. A blank serial, asset tag or barcode is stored as empty, so two blank items do not clash                                                                                         |
+| An asset tag or barcode is already used | Refused, naming the identifier that clashes. A serial number is checked against retired items too                                                                                                            |
+| A number is too large for its field     | Refused, naming the field                                                                                                                                                                                    |
+| You change the tracking type            | Refused while the item is assigned or has stock issued. Return it first                                                                                                                                      |
+| A category is given itself as parent    | Refused, and so is any category below it                                                                                                                                                                     |
 
 ### Returns & Unassignment
 

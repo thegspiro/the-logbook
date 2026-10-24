@@ -2418,6 +2418,39 @@ When a card is tapped at a station for admin hours, the entry's method reads
 phone reads **QR Scan**. These are different acts by different people, so an
 admin-hours check can tell a station tap from a member's own scan.
 
+### The Member ID Cards page
+
+**Who can do this:** officers with the **Issue and revoke member ID card (NFC)
+credentials** permission. They do not need permission to edit the roster.
+
+Open **Members Admin** and select **Member ID cards**. The page covers every
+card in the department, in four tabs:
+
+| Tab          | What it is for                                                                                                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cards**    | Every card, searchable by member, label or last four characters, and filterable by status and card type. Tick cards to **Suspend**, **Reactivate**, **Report lost** or **Revoke** them together. Revoking asks for an optional reason |
+| **Coverage** | **Current members without a working card** (with **Issue card** on each row), **Cards held by former members** (**Revoke all shown**), and **Active cards not used in** a number of days you choose                                   |
+| **Tap log**  | Every tap at a check-in station or room kiosk, **including refused ones**, filterable by outcome and reader. **Export CSV** downloads it                                                                                              |
+| **Settings** | **Keep the tap log for (months)**: between 3 and 84, 24 by default. Older taps are deleted overnight                                                                                                                                  |
+
+Deleting old taps does not touch attendance. The check-in itself stays on the
+shift, event or admin-hours record.
+
+<!-- Screenshot needed: The Member ID Cards page on the Cards tab with two cards ticked and the Suspend, Reactivate, Report lost and Revoke bar above the list -->
+
+<!-- Screenshot needed: The Coverage tab of Member ID Cards: current members without a working card, cards held by former members, and active cards not used lately -->
+
+<!-- Screenshot needed: The Tap log tab of Member ID Cards with the drill's taps, including an unknown card and a card that is not active -->
+
+A tap from a card nobody has registered is logged as **Unknown card**, without
+the card's number.
+
+**When a member leaves, their cards stop by themselves.** Changing a member to
+Inactive, Suspended, Dropped or Archived suspends their active cards, because
+those members' taps are refused anyway. If the member comes back, only the
+cards suspended this way are reactivated. A card an officer suspended, reported
+lost or revoked stays as it is.
+
 ## Troubleshooting
 
 | What happened                                                  | What it means / what to do                                                                                                                                                                                                                                                                                                                       |

@@ -472,6 +472,27 @@ record**: the log tracks equipment, not where members were.
   view, lock them with a third-party NFC app after writing (permanent: a
   locked tag cannot be rewritten or reused), or link them by serial instead.
 
+## The NFC Tag Register _(2026-10-24)_
+
+**Inventory Administration → NFC Tag Register** (`/inventory/admin/nfc/tags`)
+lists every tag linked to an item, a storage area or an equipment-check
+compartment, with what it names and, for item tags, the last staff tap. Mark
+tags lost or found (one or a selection), move a tag onto another target **of
+the same kind**, unlink one, and download the filtered register as a CSV
+written with `SafeCsvWriter`. Moves and bulk changes are audited, and the
+export is in `EXPORT_ENDPOINTS`.
+
+| Permission               | Register                                                                                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `inventory.manage`       | Every tag. **New:** may now also relabel, mark lost/found, move and unlink compartment tags                     |
+| `inventory.check_manage` | Compartment tags only. A request for item or shelf tags is a 403, and bulk status reports them as not permitted |
+| `inventory.view`         | Refused                                                                                                         |
+
+API: `GET /inventory/nfc-tags`, `/nfc-tags/export`, `/nfc-tags/move-targets`,
+`POST /nfc-tags/bulk-status` and `/nfc-tags/{id}/move`, all behind the NFC
+tracking switch. The move-target search exists because `inventory.manage` alone
+cannot list equipment-check templates.
+
 ## Troubleshooting
 
 | Symptom                                                   | Cause and fix                                                                                                                                                                                                                                                |
