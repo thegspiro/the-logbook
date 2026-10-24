@@ -32,6 +32,7 @@ import urllib.request
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from http.cookiejar import CookieJar
+from pathlib import Path
 from time import monotonic, sleep
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -157,13 +158,14 @@ COMPLIANCE_OFFICER_USERNAME = "lnakamura"
 # and the members admin page's Reset MFA action have something to picture.
 #
 # Enrolling an account has a cost the rest of this file has to respect: once
-# MFA is on, `login_as` no longer yields a session — it stops at the code step,
-# and every call the returned Api makes answers 401. Several steps below sign
-# in as *every* non-administrator member, so the account cannot be one they
-# reach. `password_login_members` is the filter they all go through; adding the
+# MFA is on, a password alone no longer yields a session, and `login_as` —
+# which holds no secret for a member — refuses with an ApiError at the code
+# step. Several steps below sign in as *every* non-administrator member, so the
+# account cannot be one they reach. `password_login_members` is the filter they all go through; adding the
 # 2FA member to any bare `members` loop that logs in will break that step.
 #
-# It must also not be DEMO_ADMIN_USERNAME, DEMO_MEMBER_USERNAME or
+# It must also not be DEMO_ADMIN_USERNAME (enrolled separately by `Api.login`,
+# whose secret the seeder keeps), DEMO_MEMBER_USERNAME or
 # DEMO_PEER_EXAMINER_USERNAME — each of those is signed into by name elsewhere.
 # `_assert_two_factor_account_is_unused` checks that at seed time.
 TWO_FACTOR_USERNAME = "whalloway"
@@ -330,23 +332,106 @@ def iso(dt: datetime) -> str:
     return dt.replace(microsecond=0).isoformat()
 
 
-def totp_now(secret: str, digits: int = 6, period: int = 30) -> str:
-    """The current TOTP code for a base32 *secret* (RFC 6238, SHA-1).
+TOTP_PERIOD_SECONDS = 30
+
+
+def totp_now(
+    secret: str,
+    digits: int = 6,
+    period: int = TOTP_PERIOD_SECONDS,
+    at: float | None = None,
+) -> str:
+    """The TOTP code for a base32 *secret* (RFC 6238, SHA-1) — now, or at *at*.
 
     Hand-rolled rather than imported: this script is stdlib-only so the README's
     plain `python scripts/screenshots/seed_demo_data.py` works without the
     backend's virtualenv, and pyotp — which the backend does depend on — is not
-    installed system-wide.
+    installed system-wide. `totp.mjs` is the Node twin capture.mjs signs in
+    with; both are checked against the same RFC 6238 vector.
     """
     # Base32 secrets are conventionally unpadded; b32decode insists on padding.
     padded = secret.upper() + "=" * (-len(secret) % 8)
     key = base64.b32decode(padded)
-    counter = int(time_module.time()) // period
+    counter = int(time_module.time() if at is None else at) // period
     digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
     # Dynamic truncation: the low nibble of the last byte picks the offset.
     offset = digest[-1] & 0x0F
     code = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
     return str(code % (10**digits)).zfill(digits)
+
+
+# The administrator's authenticator secret. It is a credential for a privileged
+# account, so it lives beside dev_env.sh's demo encryption keys — outside the
+# repository, mode 600 — and never in the tree, a log line or the terminal.
+# capture.mjs reads the same file through totp.mjs.
+ADMIN_TOTP_ENV = "SCREENSHOT_ADMIN_TOTP_SECRET"
+
+ADMIN_TOTP_RECOVERY = (
+    "Recover by having another member with members.manage reset the "
+    "administrator's two-factor (Reset MFA on its row at /members/admin), then "
+    "re-run this script, which enrols it again and stores the new secret — or "
+    "start over on a fresh database."
+)
+
+
+def admin_totp_path() -> Path:
+    # An empty XDG_STATE_HOME counts as unset, as `${XDG_STATE_HOME:-...}` in
+    # dev_env.sh treats it — the two must agree on where the state directory is.
+    state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(state) / "logbook-screenshots" / "admin-totp.env"
+
+
+def read_admin_totp_secret() -> str | None:
+    """The administrator's TOTP secret: the env override first, then the file."""
+    override = os.environ.get(ADMIN_TOTP_ENV, "").strip()
+    if override:
+        return override
+    try:
+        text = admin_totp_path().read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() == ADMIN_TOTP_ENV and value.strip():
+            return value.strip()
+    return None
+
+
+def write_admin_totp_secret(secret: str) -> Path:
+    """Store *secret* at `admin_totp_path()`, mode 600, replacing any old one.
+
+    Written to a sibling and renamed into place, so a crash mid-write leaves
+    the previous secret or the new one — never a truncated file.
+    """
+    path = admin_totp_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    staging = path.with_name(path.name + ".tmp")
+    fd = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(f"{ADMIN_TOTP_ENV}={secret}\n")
+    # O_CREAT's mode does not apply to a staging file left by an earlier crash.
+    os.chmod(staging, 0o600)
+    os.replace(staging, path)
+    return path
+
+
+def is_stepup_required(code: int, headers: Any, body: str) -> bool:
+    """Whether a refusal is `require_stepup` asking for re-verification."""
+    if code != 403:
+        return False
+    flagged = (headers.get("X-Stepup-Required") or "").lower() == "true"
+    return flagged or "LB-AUTH-013" in body
+
+
+def is_rejected_code(exc: "ApiError") -> bool:
+    """Whether the server refused an authenticator code (LB-AUTH-007).
+
+    A correct code is also refused when another client — a capture run, a
+    second seeder — already spent its time-step: `_verify_and_consume_totp`
+    accepts each step once per account.
+    """
+    return exc.code in (400, 401) and "LB-AUTH-007" in exc.detail
 
 
 class ApiError(RuntimeError):
@@ -369,6 +454,11 @@ class Api:
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.jar)
         )
+        # What a step-up proves identity with: the authenticator secret when
+        # the account is enrolled, otherwise the password it signed in with.
+        self.totp_secret: str | None = None
+        self.password: str | None = None
+        self._last_totp_step: int | None = None
 
     def _csrf(self) -> str | None:
         for cookie in self.jar:
@@ -397,6 +487,7 @@ class Api:
         # later step answered 401 -- so a 401 is answered the way the frontend
         # answers it: one cookie-based refresh, then one retry.
         refreshed = False
+        stepped_up = False
         attempt = 0
         while True:
             req = urllib.request.Request(url, data=data, method=method)
@@ -427,9 +518,22 @@ class Api:
                     refreshed = True
                     if self._refresh():
                         continue
-                raise ApiError(
-                    method, path, exc.code, exc.read().decode()[:600]
-                ) from exc
+                detail = exc.read().decode()
+                # Sensitive actions (role grants, security settings) need a
+                # re-verification stamped on this session within the last few
+                # minutes. Answered the way the frontend answers it: prove
+                # identity once, then retry once. A second refusal is raised,
+                # so a step-up the server keeps ignoring cannot loop. The stamp
+                # also lapses mid-run, which lands here again and renews it.
+                if (
+                    not stepped_up
+                    and not path.startswith("/auth/")
+                    and is_stepup_required(exc.code, exc.headers, detail)
+                ):
+                    stepped_up = True
+                    self.step_up()
+                    continue
+                raise ApiError(method, path, exc.code, detail[:600]) from exc
 
     def _refresh(self) -> bool:
         """Renew an expired access token from the refresh-token cookie.
@@ -552,10 +656,130 @@ class Api:
         )
 
     def login(self) -> None:
-        self.login_as(DEMO_ADMIN_USERNAME, admin_password())
+        """Sign in as the demo administrator, enrolling it in TOTP if needed.
+
+        Privileged members are required to use two-factor, so the
+        administrator is enrolled on the first run and signs in with a code on
+        every run after. The login response is itself the enrolment flag: the
+        server issues a session on the password alone only when MFA is off, so
+        no second read is needed to make this idempotent.
+        """
+        self.totp_secret = read_admin_totp_secret()
+        try:
+            enrolled = self._sign_in(DEMO_ADMIN_USERNAME, admin_password())
+        except ApiError as exc:
+            if is_rejected_code(exc):
+                raise SystemExit(
+                    f"The stored two-factor secret for {DEMO_ADMIN_USERNAME!r} "
+                    f"(${ADMIN_TOTP_ENV} or {admin_totp_path()}) does not match "
+                    f"the account. {ADMIN_TOTP_RECOVERY}"
+                ) from exc
+            raise
+        if not enrolled:
+            self._enrol_in_totp()
+
+    def _enrol_in_totp(self) -> None:
+        if os.environ.get(ADMIN_TOTP_ENV, "").strip():
+            # The server picks the secret at enrolment, so it cannot be the one
+            # in the variable; enrolling would leave the next run signing in
+            # with a secret that matches nothing.
+            raise SystemExit(
+                f"${ADMIN_TOTP_ENV} is set, but {DEMO_ADMIN_USERNAME!r} is not "
+                "enrolled in two-factor. Unset it to let the seeder enrol the "
+                f"administrator and store the secret in {admin_totp_path()}."
+            )
+        secret = self.post("/auth/mfa/setup")["secret"]
+        # Stored before the code is verified: once verify-setup succeeds the
+        # account cannot sign in without it, so a crash between the two must
+        # not leave an enrolled administrator whose secret exists nowhere. A
+        # crash before verification leaves MFA off, and the next run enrols
+        # again over this file.
+        path = write_admin_totp_secret(secret)
+        self.totp_secret = secret
+        self.post("/auth/mfa/verify-setup", {"code": self.fresh_totp_code()})
+        print(f"Enrolled {DEMO_ADMIN_USERNAME} in two-factor; secret saved to {path}")
 
     def login_as(self, username: str, password: str) -> None:
-        self.call("POST", "/auth/login", {"username": username, "password": password})
+        self._sign_in(username, password)
+
+    def _sign_in(self, username: str, password: str) -> bool:
+        """Sign in; True when the account answered with a two-factor step.
+
+        A second factor is completed with `totp_secret`. Without one the
+        sign-in is refused here rather than returned as though it worked —
+        the server issues no session until the code is in, so every later call
+        would 401 a long way from the cause.
+        """
+        self.password = password
+        result = self.call(
+            "POST", "/auth/login", {"username": username, "password": password}
+        )
+        if not (isinstance(result, dict) and result.get("mfa_required")):
+            return False
+        if not self.totp_secret:
+            if username == DEMO_ADMIN_USERNAME:
+                raise SystemExit(
+                    f"{DEMO_ADMIN_USERNAME!r} is enrolled in two-factor, but no "
+                    f"secret is available: ${ADMIN_TOTP_ENV} is unset and "
+                    f"{admin_totp_path()} does not exist. {ADMIN_TOTP_RECOVERY}"
+                )
+            raise ApiError(
+                "POST",
+                "/auth/login",
+                401,
+                f"{username} requires a two-factor code and no secret is known",
+            )
+        self._with_fresh_code(
+            lambda code: self.call(
+                "POST",
+                "/auth/mfa/login",
+                {"temp_token": result["mfa_token"], "code": code},
+            )
+        )
+        return True
+
+    def step_up(self) -> None:
+        """Stamp this session as re-verified (`POST /auth/step-up`)."""
+        if self.totp_secret:
+            self._with_fresh_code(
+                lambda code: self.call("POST", "/auth/step-up", {"code": code})
+            )
+        elif self.password:
+            self.call("POST", "/auth/step-up", {"password": self.password})
+        else:
+            raise ApiError("POST", "/auth/step-up", 0, "this session never signed in")
+
+    def _with_fresh_code(self, submit) -> Any:
+        """Submit an authenticator code, retrying once if its step was spent.
+
+        The first refusal is the expected one: a capture or another seeder
+        signed in with the same step moments ago. `fresh_totp_code` then waits
+        for the next step. A second refusal is a wrong secret, and is raised.
+        """
+        try:
+            return submit(self.fresh_totp_code())
+        except ApiError as exc:
+            if not is_rejected_code(exc):
+                raise
+        return submit(self.fresh_totp_code())
+
+    def fresh_totp_code(self) -> str:
+        """A code from a time-step this client has not already submitted.
+
+        The server accepts each step once per account, so a sign-in and the
+        step-up straight after it cannot share one. Rather than leaning on the
+        server's one-step clock-drift allowance to send the next step's code
+        early, wait for that step to begin.
+        """
+        if not self.totp_secret:
+            raise RuntimeError("fresh_totp_code called on a session with no secret")
+        now = time_module.time()
+        step = int(now) // TOTP_PERIOD_SECONDS
+        if self._last_totp_step is not None and step <= self._last_totp_step:
+            step = self._last_totp_step + 1
+            sleep(max(0.0, step * TOTP_PERIOD_SECONDS - now) + 1)
+        self._last_totp_step = step
+        return totp_now(self.totp_secret, at=step * TOTP_PERIOD_SECONDS)
 
 
 def items(result: Any, *keys: str) -> list[dict]:
@@ -1355,8 +1579,10 @@ class Seeder:
         return created
 
     # Accounts something else signs into by name. Enrolling any of them in TOTP
-    # breaks that caller, because a password sign-in on an MFA account stops at
-    # the code step and returns no session.
+    # as the demo member breaks that caller, because a password sign-in on an
+    # MFA account stops at the code step and returns no session. The
+    # administrator is listed because it must not be *this* enrolment: its own
+    # is done by `Api.login`, which keeps the secret.
     PASSWORD_LOGIN_ACCOUNTS = frozenset(
         {
             DEMO_ADMIN_USERNAME,
