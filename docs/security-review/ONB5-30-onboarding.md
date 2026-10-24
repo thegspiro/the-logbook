@@ -1,36 +1,213 @@
-# Security Review — Feature 30: Onboarding (passes 7–8)
+# Security Review — Feature 30: Onboarding (passes 7–9)
 
-**Prefix:** `ONB5` · **Rotation pass:** 8 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` · **Rotation pass:** 9 (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
 #2898 (`docs/security-review/ONB3-30-onboarding.md`), pass 6 — PR #2996,
-pass 7 — PR #3381 (both `docs/security-review/ONB4-30-onboarding.md` and this
-file)) · **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8, this PR)
+pass 7 — PR #3381, pass 8 — PR #3517 (both `docs/security-review/ONB4-30-onboarding.md`
+and this file)) · **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8),
+2026-10-24 (pass 9, watchdog pickup, this PR)
 
-**Backend:** `backend/app/api/v1/onboarding.py` (now 3,196 L, 26
-unauthenticated bootstrap routes — 24 carried forward plus 2 new),
-`backend/app/services/onboarding.py`, `backend/app/models/onboarding.py`,
-`backend/app/utils/onboarding_security.py`,
+**Backend:** `backend/app/api/v1/onboarding.py` (now 3,200 L, 26
+unauthenticated bootstrap routes — unchanged count from pass 7/8, re-enumerated
+by AST this pass), `backend/app/services/onboarding.py`,
+`backend/app/models/onboarding.py`, `backend/app/utils/onboarding_security.py`,
 `backend/app/api/v1/email_test_helper.py`, `backend/app/utils/email_providers.py`,
 `backend/app/utils/microsoft_oauth.py`, `backend/app/services/template_service.py`,
 `backend/app/services/org_template_service.py`,
-`backend/app/services/org_template_registry.py`. New this pass, reviewed in
-full as part of the same sub-feature even though it sits behind a
-post-onboarding permission rather than in this file:
+`backend/app/services/org_template_registry.py`,
 `backend/app/services/key_custody_service.py`,
-`backend/app/services/system_notices.py`,
+`backend/app/services/system_notices.py` (51 new lines this pass — a backup
+system notice; reviewed in full even though it sits behind a post-onboarding
+permission, same reasoning as pass 7),
 `backend/app/api/v1/endpoints/system_notices.py`,
 `backend/app/schemas/system_notices.py`,
-`backend/app/services/upload_scanning.py` (the `scan_and_validate_logo` entry
-point onboarding now calls; the rest of the module is shared with other
-already-reviewed upload paths and not re-read here).
-**Frontend:** `frontend/src/modules/onboarding/` (new `KeyCustody.tsx` read in
-full; `steps.ts`, `routes.tsx`, `api-client.ts`, `OrganizationSetup.tsx`,
-`SetupPrerequisites.tsx`, `positionTemplates.ts`, `BackButton.tsx` diffed and
-read at each changed line).
-**Migrations:** `20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`
-(new `encryption_key_custody` table).
+`backend/app/utils/upload_scanning.py`. Also touched this pass, in scope only
+because the diff passes through onboarding's own persist function:
+`backend/app/schemas/organization.py` (`FileStorageSettings`,
+`encrypt_settings_secrets`/`decrypt_settings_secrets`,
+`_FILE_STORAGE_SECRET_FIELDS`), `backend/app/services/google_drive_storage.py`
+(read for context on how the service-account key is used downstream, not a
+full line-by-line re-review — that storage backend belongs to a different
+rotation feature and was engineered/tested on its own, `test_google_drive_storage.py`).
+**Frontend:** `frontend/src/modules/onboarding/` — new this pass:
+`components/OnboardingGate.tsx`, `utils/onboardingGateState.ts` (both read in
+full); diffed and read at each changed line: `routes.tsx`,
+`pages/FileStorageConfiguration.tsx`, `pages/FileStorageChoice.tsx`,
+`services/api-client.ts`, `types/index.ts`, and the a11y-only token-rename
+diffs in `pages/ApparatusSetup.tsx`, `pages/OnboardingCheck.tsx`,
+`pages/RoleSetup.tsx`, `pages/SetupComplete.tsx`.
+**Migrations:** none in this pass's window (last onboarding-owned migration
+remains `20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`, pass 7).
+
+---
+
+## Pass 9 (2026-10-24) — watchdog pickup, 0 fixed, 0 new findings
+
+**Step 0.** The dedicated loop session for this rotation
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable, so this is a watchdog
+pickup. `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+and `list_pull_requests` (`state=open`) both returned 0 rotation PRs,
+re-checked fresh immediately before starting. PR #3647 (Feature 29, Reports &
+analytics, pass 11) had already merged, docs-only (findings file +
+`PROGRESS.md`), nothing to record per the "docs-only PR is not a recordable
+event" rule. Row 30 (Onboarding) was the first `⬜` in the rotation table on a
+freshly-pulled `main` (`1bce6940`).
+
+**Scope check.** Pass 8 landed as PR #3517, merge commit containing
+`dbe57bf6` ("security(onboarding): refuse /test/email once onboarding is
+complete") as its tip on this feature's files. `git log dbe57bf6..HEAD`
+restricted to this feature's full file list (as pass 7/8 defined it, plus
+`schemas/organization.py` since the diff touches it) found real changes in
+exactly two of this feature's own files:
+
+- `backend/app/api/v1/onboarding.py` — 8 lines, in `_persist_session_data_to_org`
+  (`onboarding.py:1081-1089`): the Google Drive mapping switched from
+  `googleDriveClientId`/`googleDriveClientSecret` to
+  `googleDriveServiceAccountKey`/`googleDriveSharedDriveId`.
+- `backend/app/services/system_notices.py` — 51 new lines, a
+  `BACKUPS_NOT_ENCRYPTED` system notice.
+
+Everything else in the diff since pass 8 is frontend (`OnboardingGate.tsx` and
+its routing, copy/a11y edits) or belongs to a different rotation feature
+(Google Drive/S3 storage backends, backup encryption) and only passes through
+a file this feature owns.
+
+**Google Drive field rename — verified good, no finding.** Read end-to-end:
+`onboarding.py:1081-1089` now maps `googleDriveServiceAccountKey` →
+`google_drive_service_account_key` and `googleDriveSharedDriveId` →
+`google_drive_shared_drive_id`, matching `FileStorageSettings`
+(`schemas/organization.py:415-424`, docstring: "encrypted at rest and never
+returned"). Confirmed `google_drive_service_account_key` is a member of
+`_FILE_STORAGE_SECRET_FIELDS` (`schemas/organization.py:117-123`), and that the
+same `encrypt_settings_secrets(org_settings)` call onboarding's email-config
+branch already used (reviewed in prior passes) runs again, unconditionally,
+right after this storage block is built
+(`onboarding.py:1125` area) — so the service-account key is encrypted
+(`enc:` + `encrypt_data`) before `organization.settings = org_settings` is
+assigned, the same mechanism, not a new one. The raw value itself never
+touches the wire from the browser as plaintext either: it arrives inside
+`storage_data["config_encrypted"]`, which `/session/file-storage`
+(`onboarding.py:1953`, unchanged) already encrypts with `encrypt_data` at
+submit time — the field rename changes only which key the decrypted dict is
+read from, not when or whether encryption happens. **No security
+consequence; a correctness/naming change following a different feature's new
+storage backend.**
+
+**Frontend `OnboardingGate` — verified good, no finding.** `OnboardingGate.tsx`
+(new, 76 L) wraps every setup-step route except `/onboarding/complete` (which
+must render immediately after the backend just flipped
+`needs_onboarding()` to false) and calls `GET /onboarding/status` once per
+browser session (cached in `onboardingGateState.ts`'s module-level variable,
+not `localStorage`/`sessionStorage`), redirecting to `/login` when the backend
+says setup is finished. Confirmed by direct read that this is advisory UX
+only, not a new security boundary: the component's own docstring states it
+"deliberately fails open" on an errored or rate-limited status call, and every
+mutating `/session/*`/top-level route it fronts already enforces
+`needs_onboarding()` or `_require_owner_authority` server-side (established in
+passes 1-8, re-confirmed unchanged below). A visitor who bypasses the gate
+(disabled JS state, direct navigation, a stale cached `'open'`) reaches
+exactly the same backend refusal the gate exists to pre-empt, not a weaker
+one. `routes.tsx`'s restructuring wraps existing routes only (no new route
+added — confirmed against the AST enumeration below, still 26/26), so
+CLAUDE.md Pitfall #30a's three registries are unaffected.
+
+**Backup-encryption system notice — verified good, no finding.**
+`backups_are_unencrypted()` (`system_notices.py`, new) reads a fixed path
+(`/backups/.backup_status`, not client- or session-influenced), fails closed
+to "no notice" on `FileNotFoundError` or a JSON decode error (logged, not
+raised), and is surfaced only through the existing `GET /system-notices`
+endpoint already gated on `require_permission("settings.manage")` — unchanged
+by this diff. Not reachable from any of onboarding's 26 unauthenticated
+routes. Read `scripts/backup-sidecar.sh`'s write side only far enough to
+confirm the path and shape match (`{"encrypted": bool, ...}`); the backup
+tooling itself belongs to a different rotation feature (Core infrastructure /
+scheduled tasks) and is not re-reviewed line-by-line here.
+
+**Route inventory re-enumerated by AST this pass** (not carried forward from
+pass 7/8's table): 26 routes, identical method/path/function set to pass 7's
+table — see that table in this same file, still accurate. No route gained,
+lost, or changed its auth dependency.
+
+**Standing findings re-verified unchanged, by direct read at current line
+numbers:**
+
+- Duplicate `role.id` within one `/session/roles` payload still raises an
+  unhandled `IntegrityError` → 500 — `save_session_roles`'s creation loop
+  (`onboarding.py:2770-2846` at current line numbers) still has no dedup of
+  `data.roles`' own `id` values against each other; `_check_submitted_positions`
+  only checks a submitted id against the organization's _existing_ system
+  roles. `await db.commit()` at the end of the function
+  (`onboarding.py:2901`) is not wrapped in try/except, so the `IntegrityError`
+  propagates uncaught. Confirmed the app is constructed with no explicit
+  `debug=` flag (`main.py:2031`, defaults to `False`) and no global
+  `add_exception_handler` exists for unhandled exceptions
+  (`grep -rn "exception_handler(" app/` — no hits), so Starlette's default
+  `ServerErrorMiddleware` returns a generic 500 with no traceback either way —
+  confirmed this is a robustness/availability gap (one onboarding session can
+  500 itself with a malformed payload), not a data-exposure one. OPEN,
+  unchanged across 6 passes (first flagged in `ONB3-30-onboarding.md`); not
+  attempted as a "safe, low-risk" fix this pass either, consistent with every
+  prior pass's judgment that resolving it means deciding what a duplicate
+  submission _should_ do (reject the whole payload? keep first-seen? merge
+  permissions?) — a product decision, not a one-line guard.
+- `POST /organization` (`onboarding.py:1363-1409` at current line numbers)
+  still has only `except ValueError` around `service.create_organization(...)`,
+  not the `except Exception` its twin `/session/organization` carries.
+  Confirmed by reading the full try/except block. Cosmetic robustness gap, not
+  a security finding for the same reason as above (no handler difference in
+  what reaches the client). OPEN, unchanged.
+- `ITTeamMemberRequest.email` (`onboarding.py:488`) is still `str`, not
+  `EmailStr` — confirmed unchanged, intentionally loose to match
+  `create_it_team_users`'s skip-if-invalid behavior. OPEN (by design),
+  unchanged.
+
+**Minor documentation correction, not a finding:** the rotation table's row
+30 in `docs/security-review/PROGRESS.md` described this feature's principal
+code as "24 unauth bootstrap routes," unchanged since before pass 7 added the
+two key-custody routes. Corrected to 26 in this PR (see `PROGRESS.md`'s own
+diff). `SEC-00-cross-cutting-baseline.md` carries the same stale "24" in
+several whole-codebase counts from its own most recent pass (predates pass 7) — left alone here; that file is Feature 00's own territory and will be
+refreshed the next time the rotation wraps to it, per the skill's "re-verify,
+don't re-derive another feature's settled count" guidance.
+
+**Minor note, not a finding:** `FileStorageConfiguration.tsx`'s new
+`multiline` field (the pasted Google service-account-key JSON) renders as a
+plain `<textarea>` with no masking — HTML has no `type="password"` equivalent
+for a multi-line control, so this is the same accepted tradeoff every
+paste-a-key-file UI (GitHub's deploy-key box included) makes, not a regression
+from the single-line `secret: true` `<input type="password">` the OAuth
+client-secret field used before this feature's Google Drive redesign replaced
+it. No action.
+
+**Schema & migration:** no migration in this pass's window; `validate_migrations.py --strict`
+clean, single head, 651 revisions (see completion gate below).
+
+**Guard tests:** none added by this pass — nothing here is a new defect to
+close; `dbe57bf61`'s structural test from pass 8 (`tests/test_onboarding_test_email_completion_guard.py`)
+re-run and still passing in the scoped run below.
+
+### Completion gate (pass 9)
+
+| Check                                                                                                       | Result                                         |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/` (7.3.0, CI-pinned)                                              | ✅ 0 violations                                |
+| `python3 -m flake8 app/ tests/ alembic/` (system interpreter, 7.3.0 after installing `flake8-pytest-style`) | ✅ 0 violations                                |
+| `python3.13 -m black --check app/ tests/ alembic/` (26.5.1, CI-pinned)                                      | ✅ clean, 2,624 files unchanged                |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned)                                  | ✅ clean                                       |
+| `python3.13 scripts/validate_migrations.py --strict`                                                        | ✅ 651 revisions, single head `3d67883cd461`   |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices"`        | ✅ 323 passed, 1 skipped (pywebpush, env-only) |
+| `npm run typecheck` (frontend)                                                                              | ✅ 0 errors                                    |
+| `npm run lint` (frontend, `--max-warnings 10`)                                                              | ✅ 0 errors, 0 warnings                        |
+
+Findings doc for this pass is this section; no `KNOWN_LIMITATIONS.md` change
+needed — the one onboarding-adjacent entry a reader might expect to update
+(file storage) was already corrected 2026-10-22/23 by the engineering work
+itself, independent of this pass, and is accurate as read. Rotation row 30 →
+✅ (pending this PR's merge). Next: Feature 31 (Scheduled tasks) — unless a
+later watchdog pass already advanced further; check `search_pull_requests`
+fresh rather than trusting this note.
 
 ---
 
