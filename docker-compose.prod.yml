@@ -39,6 +39,10 @@ services:
       # makes the documented production stack unavailable.
       DB_SSL: ${DB_SSL:-false}
       REDIS_SSL: ${REDIS_SSL:-false}
+      DB_SSL_CERT: ${DB_SSL_CERT:-}
+      DB_SSL_KEY: ${DB_SSL_KEY:-}
+      REDIS_SSL_CERT: ${REDIS_SSL_CERT:-}
+      REDIS_SSL_KEY: ${REDIS_SSL_KEY:-}
       # Fail closed until production data services have TLS configured. The
       # bundled plaintext services therefore require an explicit, documented
       # SECURITY_REQUIRE_TLS=false override rather than silently carrying
@@ -67,6 +71,9 @@ services:
       # silently loses the CA mount, which is precisely where private-CA TLS
       # is actually used.
       - ${SSL_CERTS_DIR:-./infrastructure/certs}:/etc/ssl/logbook:ro
+      # Restated for the same reason: CA and client certificate from
+      # scripts/tls-setup.sh.
+      - ${TLS_DIR:-./tls}/backend:/etc/ssl/logbook-tls:ro
       # Read-only: only the backup sidecar's status file is read from here, so
       # administrators are told when backups are not encrypted.
       - backups:/backups:ro
@@ -100,6 +107,10 @@ services:
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       VERIFY_EVERY_N_BACKUPS: ${VERIFY_EVERY_N_BACKUPS:-7}
       BACKUP_ENCRYPT_EXISTING: ${BACKUP_ENCRYPT_EXISTING:-true}
+      # Where the sidecar finds its CA and client certificate (below). When
+      # they exist it connects to MySQL with verified TLS and refuses to fall
+      # back to plaintext.
+      DB_TLS_DIR: /tls
     volumes:
       - ./scripts:/scripts:ro
       - backups:/backups
@@ -107,6 +118,7 @@ services:
       # the public certificate and the drill key. With no keys here, backups
       # stay unencrypted and say so on every run.
       - ./backup-keys:/keys:ro
+      - ${TLS_DIR:-./tls}/backup:/tls:ro
       - uploads:/uploads:ro
       - audit_archives:/audit_archives:ro
     networks:
