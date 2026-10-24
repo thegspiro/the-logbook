@@ -95,6 +95,7 @@ from app.utils.apparatus_ref import (
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.member_names import format_display_name
 from app.utils.membership import is_administrative
+from app.utils.model_updates import reject_null_for_required
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import (
@@ -500,6 +501,7 @@ class SchedulingService:
         skipping protected fields, then commit and refresh."""
         try:
             pf = protected_fields or self.PROTECTED_FIELDS
+            reject_null_for_required(record, update_data, skip=pf)
             for key, value in update_data.items():
                 if key not in pf:
                     setattr(record, key, value)

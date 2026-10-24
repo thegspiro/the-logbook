@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router';
-import { AlertTriangle } from 'lucide-react';
+import { Activity, AlertTriangle } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { Breadcrumbs } from '../components/ux';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
 import { getRSVPStatusLabel } from '../utils/eventHelpers';
 
@@ -199,21 +200,14 @@ const EventCheckInMonitoringPage: React.FC = () => {
   const avgCheckInMinutes = stats.avg_check_in_time_minutes;
 
   return (
-    <div className="mx-auto min-h-screen max-w-7xl p-6">
-      <Breadcrumbs items={trail} />
-
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          to={`/events/${eventId}`}
-          className="mobile-touch-target mb-4 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          ← Back to Event
-        </Link>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Check-In Monitoring</h1>
-            <p className="text-theme-text-secondary mt-1 text-xl">{stats.event_name}</p>
+    <div className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <EventsPageHeader
+        icon={Activity}
+        title="Check-In Monitoring"
+        parentCrumbs={[{ label: stats.event_name, path: `/events/${eventId ?? ''}` }]}
+        subtitle={
+          <>
+            <p className="text-theme-text-secondary text-xl">{stats.event_name}</p>
             {/* This route has no event payload to read the organizer from, and
                 it is the screen a manager actually works the check-in list
                 from. The endpoint is already events.manage-gated, so presence
@@ -221,7 +215,9 @@ const EventCheckInMonitoringPage: React.FC = () => {
             {stats.created_by_name && (
               <p className="text-theme-text-muted mt-1 text-sm">Organized by {stats.created_by_name}</p>
             )}
-          </div>
+          </>
+        }
+        actions={
           <div className="sm:text-right">
             <div className="text-theme-text-muted text-sm">Last updated: {formatTime(lastUpdated, tz)}</div>
             <div className="mt-1">
@@ -237,8 +233,8 @@ const EventCheckInMonitoringPage: React.FC = () => {
               )}
             </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Key Metrics */}
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">

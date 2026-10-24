@@ -11,6 +11,7 @@ import { NfcTagWriter } from '../components/nfc/NfcTagWriter';
 import { NfcTapHint } from '../components/nfc/NfcTapHint';
 import { useAuthStore } from '../stores/authStore';
 import { buildEventCheckInUrl } from '../constants/nfc';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 
 /**
  * Event QR Code Page
@@ -114,131 +115,132 @@ const EventQRCodePage: React.FC = () => {
   const checkInUrl = eventId ? buildEventCheckInUrl(eventId) : '';
 
   return (
-    <div className="mx-auto min-h-screen max-w-4xl p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          to={`/events/${eventId}`}
-          className="mb-4 inline-block text-blue-700 hover:text-blue-500 dark:text-blue-400"
-        >
-          &larr; Back to Event
-        </Link>
-        <h1 className="text-theme-text-primary text-3xl font-bold">Event Check-In QR Code</h1>
+    <div className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* Not on the printout: the sheet is the code and the event it admits
+          to, taped up at the door, not a page of the app. */}
+      <div className="print:hidden">
+        <EventsPageHeader
+          icon={QrCode}
+          title="Event Check-In QR Code"
+          breadcrumbLabel="QR Code"
+          parentCrumbs={eventId ? [{ label: qrData.event_name, path: `/events/${eventId}` }] : undefined}
+        />
       </div>
+      {/* The code keeps its width under the full-width strip. */}
+      <div className="mx-auto max-w-4xl">
+        {/* Event Info */}
+        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <h2 className="text-theme-text-primary mb-2 text-2xl font-semibold">{qrData.event_name}</h2>
 
-      {/* Event Info */}
-      <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
-        <h2 className="text-theme-text-primary mb-2 text-2xl font-semibold">{qrData.event_name}</h2>
+          <div className="text-theme-text-secondary space-y-2">
+            {qrData.event_type && (
+              <p className="capitalize">
+                <span className="font-medium">Type:</span> {qrData.event_type.replace('_', ' ')}
+              </p>
+            )}
 
-        <div className="text-theme-text-secondary space-y-2">
-          {qrData.event_type && (
-            <p className="capitalize">
-              <span className="font-medium">Type:</span> {qrData.event_type.replace('_', ' ')}
-            </p>
-          )}
+            {qrData.location && (
+              <p>
+                <span className="font-medium">Location:</span> {qrData.location}
+              </p>
+            )}
 
-          {qrData.location && (
             <p>
-              <span className="font-medium">Location:</span> {qrData.location}
+              <span className="font-medium">Scheduled:</span> {formatShortDateTime(qrData.start_datetime, tz)} -{' '}
+              {formatShortDateTime(qrData.end_datetime, tz)}
             </p>
-          )}
 
-          <p>
-            <span className="font-medium">Scheduled:</span> {formatShortDateTime(qrData.start_datetime, tz)} -{' '}
-            {formatShortDateTime(qrData.end_datetime, tz)}
-          </p>
-
-          <p>
-            <span className="font-medium">Check-in Available:</span> {formatShortDateTime(qrData.check_in_start, tz)} -{' '}
-            {formatShortDateTime(qrData.check_in_end, tz)}
-          </p>
+            <p>
+              <span className="font-medium">Check-in Available:</span> {formatShortDateTime(qrData.check_in_start, tz)}{' '}
+              - {formatShortDateTime(qrData.check_in_end, tz)}
+            </p>
+          </div>
         </div>
-      </div>
 
-      {/* QR Code Section */}
-      <div className="bg-theme-surface rounded-lg p-8 shadow-md backdrop-blur-xs">
-        {/* can_check_in, not is_valid: a Flexible/Window event admits a tap up
+        {/* QR Code Section */}
+        <div className="bg-theme-surface rounded-lg p-8 shadow-md backdrop-blur-xs">
+          {/* can_check_in, not is_valid: a Flexible/Window event admits a tap up
             to an hour before its official window with a notice, so a code
             withheld on is_valid alone would be withheld while the backend was
             still accepting scans. is_valid remains the strict on-time window
             used for the "Check-in Not Available" time range below.
             EventSelfCheckInPage gates its Check In button on the same field. */}
-        {qrData.can_check_in ? (
-          <div className="text-center">
-            <div className="mb-6">
-              <div className="inline-flex items-center rounded-full bg-green-100 px-4 py-2 text-green-800 dark:bg-green-500/20 dark:text-green-400">
-                <svg className="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                Check-in is Active
-              </div>
-            </div>
-
-            <h3 className="text-theme-text-primary mb-4 text-xl font-semibold">Scan to Check In</h3>
-
-            <p className="text-theme-text-secondary mb-6">Members scan this code to check themselves in</p>
-
-            {/* QR Code */}
-            {checkInUrl && (
-              <div className="mb-6 flex justify-center">
-                <div className="qr-container">
-                  <QRCodeSVG value={checkInUrl} size={300} level="H" includeMargin={true} />
+          {qrData.can_check_in ? (
+            <div className="text-center">
+              <div className="mb-6">
+                <div className="inline-flex items-center rounded-full bg-green-100 px-4 py-2 text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                  <svg className="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Check-in is Active
                 </div>
               </div>
-            )}
 
-            {/* Instructions */}
-            <div className="alert-info text-left">
-              <h4 className="text-theme-alert-info-title mb-2 font-semibold">Instructions:</h4>
-              <ol className="text-theme-alert-info-text list-inside list-decimal space-y-1">
-                <li>Display this QR code at the event venue</li>
-                <li>Members scan the code with their phone camera</li>
-                <li>Members sign in if they aren&apos;t already</li>
-                <li>Members tap Check In to record their attendance</li>
-              </ol>
-            </div>
+              <h3 className="text-theme-text-primary mb-4 text-xl font-semibold">Scan to Check In</h3>
 
-            <NfcTapHint action="check in" />
-            {checkInUrl && canWriteTags && (
-              <div className="print:hidden">
-                <NfcTagWriter url={checkInUrl} targetLabel={qrData.event_name} />
+              <p className="text-theme-text-secondary mb-6">Members scan this code to check themselves in</p>
+
+              {/* QR Code */}
+              {checkInUrl && (
+                <div className="mb-6 flex justify-center">
+                  <div className="qr-container">
+                    <QRCodeSVG value={checkInUrl} size={300} level="H" includeMargin={true} />
+                  </div>
+                </div>
+              )}
+
+              {/* Instructions */}
+              <div className="alert-info text-left">
+                <h4 className="text-theme-alert-info-title mb-2 font-semibold">Instructions:</h4>
+                <ol className="text-theme-alert-info-text list-inside list-decimal space-y-1">
+                  <li>Display this QR code at the event venue</li>
+                  <li>Members scan the code with their phone camera</li>
+                  <li>Members sign in if they aren&apos;t already</li>
+                  <li>Members tap Check In to record their attendance</li>
+                </ol>
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-center">
-            <div className="mb-6">
-              <div className="inline-flex items-center rounded-full bg-red-100 px-4 py-2 text-red-800 dark:bg-red-500/20 dark:text-red-400">
-                <svg className="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                Check-in Not Available
-              </div>
-            </div>
 
-            <h3 className="text-theme-text-primary mb-4 text-xl font-semibold">QR Code Check-In Window</h3>
-
-            <div className="alert-warning mb-6">
-              <p className="text-theme-alert-warning-text mb-2">
-                Check-in is only available during the following time window:
-              </p>
-              <p className="text-theme-alert-warning-title font-semibold">
-                {formatShortDateTime(qrData.check_in_start, tz)} - {formatShortDateTime(qrData.check_in_end, tz)}
-              </p>
-              {qrData.actual_end_time && (
-                <p className="text-theme-alert-warning-text mt-2 text-sm">This event was ended early.</p>
+              <NfcTapHint action="check in" />
+              {checkInUrl && canWriteTags && (
+                <div className="print:hidden">
+                  <NfcTagWriter url={checkInUrl} targetLabel={qrData.event_name} />
+                </div>
               )}
             </div>
+          ) : (
+            <div className="text-center">
+              <div className="mb-6">
+                <div className="inline-flex items-center rounded-full bg-red-100 px-4 py-2 text-red-800 dark:bg-red-500/20 dark:text-red-400">
+                  <svg className="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Check-in Not Available
+                </div>
+              </div>
 
-            {/*
+              <h3 className="text-theme-text-primary mb-4 text-xl font-semibold">QR Code Check-In Window</h3>
+
+              <div className="alert-warning mb-6">
+                <p className="text-theme-alert-warning-text mb-2">
+                  Check-in is only available during the following time window:
+                </p>
+                <p className="text-theme-alert-warning-title font-semibold">
+                  {formatShortDateTime(qrData.check_in_start, tz)} - {formatShortDateTime(qrData.check_in_end, tz)}
+                </p>
+                {qrData.actual_end_time && (
+                  <p className="text-theme-alert-warning-text mt-2 text-sm">This event was ended early.</p>
+                )}
+              </div>
+
+              {/*
               The QR code is withheld until the window opens. A greyed-out code
               was still a scannable code: a phone camera reads it through the
               opacity, so members photographed it early and hit a check-in that
@@ -246,38 +248,39 @@ const EventQRCodePage: React.FC = () => {
               placeholder keeps the same footprint so the layout does not jump
               when the window opens and the real code takes its place.
             */}
-            <div className="mb-4 flex justify-center">
-              <div
-                className="border-theme-surface-border text-theme-text-muted flex h-[250px] w-[250px] flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center"
-                data-testid="qr-code-placeholder"
-              >
-                <QrCode className="h-12 w-12" aria-hidden="true" />
-                <span className="text-sm font-medium">QR code hidden until check-in opens</span>
+              <div className="mb-4 flex justify-center">
+                <div
+                  className="border-theme-surface-border text-theme-text-muted flex h-[250px] w-[250px] flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center"
+                  data-testid="qr-code-placeholder"
+                >
+                  <QrCode className="h-12 w-12" aria-hidden="true" />
+                  <span className="text-sm font-medium">QR code hidden until check-in opens</span>
+                </div>
               </div>
-            </div>
-            <p className="text-theme-text-muted text-sm">
-              The QR code will appear here when the check-in window opens. This page refreshes automatically.
-            </p>
-            {/* The "how it works" steps only render once the window is open,
+              <p className="text-theme-text-muted text-sm">
+                The QR code will appear here when the check-in window opens. This page refreshes automatically.
+              </p>
+              {/* The "how it works" steps only render once the window is open,
                 and this is where a member lands from the event page days
                 early — wondering whether they are meant to show this code or
                 scan it. */}
-            <p className="text-theme-text-muted mt-2 text-sm">
-              This code is put on display at the event. When you arrive, scan it with your phone camera to check
-              yourself in.
-            </p>
+              <p className="text-theme-text-muted mt-2 text-sm">
+                This code is put on display at the event. When you arrive, scan it with your phone camera to check
+                yourself in.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Print Button */}
+        {qrData.can_check_in && (
+          <div className="mt-6 text-center">
+            <button onClick={() => window.print()} className="btn-info px-6 transition">
+              Print QR Code
+            </button>
           </div>
         )}
       </div>
-
-      {/* Print Button */}
-      {qrData.can_check_in && (
-        <div className="mt-6 text-center">
-          <button onClick={() => window.print()} className="btn-info px-6 transition">
-            Print QR Code
-          </button>
-        </div>
-      )}
     </div>
   );
 };

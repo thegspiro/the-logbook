@@ -600,7 +600,7 @@ SCHEDULE = {
         "cron": "35 7 * * *",
     },
     "google_workspace_suspension_sync": {
-        "description": "Finish Google Workspace suspensions (and their lifting) that a member's departure or return left unsettled, and retry failed ones",
+        "description": "Finish Google Workspace and Microsoft 365 suspensions (and their lifting) that a member's departure or return left unsettled, retry failed ones, and retry taking departed members out of their groups and passing on name changes",
         "frequency": "every 15 minutes",
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
@@ -6701,8 +6701,16 @@ async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, An
     name: it is the identifier schedules and run history already use."""
     from app.services.directory_account_service import DirectoryAccountService
 
-    attempted = await DirectoryAccountService(db).sync_pending_suspensions()
-    return {"task": "google_workspace_suspension_sync", "attempted": attempted}
+    service = DirectoryAccountService(db)
+    attempted = await service.sync_pending_suspensions()
+    groups = await service.retry_group_removals()
+    renames = await service.sync_pending_names()
+    return {
+        "task": "google_workspace_suspension_sync",
+        "attempted": attempted,
+        "group_removals_attempted": groups,
+        "renames_attempted": renames,
+    }
 
 
 async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:

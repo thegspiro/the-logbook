@@ -37,6 +37,7 @@ can echo addresses and request detail.
 
 import asyncio
 import re
+from datetime import date
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
 from urllib.parse import quote
 
@@ -69,7 +70,9 @@ USER_FIELDS = (
     "id,userPrincipalName,mail,accountEnabled,onPremisesSyncEnabled,"
     "onPremisesExtensionAttributes"
 )
-GROUP_FIELDS = "id,displayName,mail,groupTypes,mailEnabled,securityEnabled"
+GROUP_FIELDS = (
+    "id,displayName,mail,groupTypes,mailEnabled,securityEnabled,assignedLicenses"
+)
 _GUID = re.compile(r"\A[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 # A mailNickname may not contain these, among others; anything outside the
 # safe set is dropped rather than risk Graph refusing the whole account.
@@ -98,6 +101,33 @@ class Microsoft365ManagedOnPremisesError(
     Microsoft365Error, DirectoryAccountManagedElsewhereError
 ):
     """The account is synced from on-premises Active Directory."""
+
+
+# The integration config key an administrator fills from Entra ID, and the
+# days before it at which the administrators are warned: a month to arrange a
+# new secret, a week as the reminder, and the day it has run out.
+SECRET_EXPIRY_KEY = "client_secret_expires_on"
+SECRET_WARNING_DAYS = (30, 7, 0)
+
+
+def client_secret_days_left(config: Any, today: date) -> Optional[int]:
+    """Days from *today* until the client secret expires, negative once it
+    has; None when no date is recorded (or the stored one is unreadable)."""
+    raw = config.get(SECRET_EXPIRY_KEY) if isinstance(config, dict) else None
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        return (date.fromisoformat(raw) - today).days
+    except ValueError:
+        return None
+
+
+def client_secret_warning_level(days_left: Optional[int]) -> Optional[int]:
+    """The smallest warning threshold *days_left* has reached, if any."""
+    if days_left is None:
+        return None
+    reached = [days for days in SECRET_WARNING_DAYS if days_left <= days]
+    return min(reached) if reached else None
 
 
 MANAGED_ON_PREMISES_MESSAGE = (
@@ -491,6 +521,49 @@ class Microsoft365Directory:
             )
         except Microsoft365AccountExistsError:
             return
+
+    async def update_name(
+        self, user_key: str, given_name: str, family_name: str
+    ) -> None:
+        """Give the account the member's name -- display name included, as at
+        creation. The sign-in name and address are not changed."""
+        await self._request(
+            "PATCH",
+            f"{GRAPH_BASE}/users/{quote(user_key, safe='')}",
+            "account rename",
+            json={
+                "displayName": f"{given_name} {family_name}".strip(),
+                "givenName": given_name,
+                "surname": family_name,
+            },
+            user_scoped=True,
+        )
+
+    async def remove_from_group(self, group: str, user_key: str) -> bool:
+        """Take a member out of a group; not being in it counts as done.
+
+        A group that assigns licenses is left alone (False): removing the
+        member would take the license, and a mailbox without one is deleted
+        after Microsoft's grace period (owner decision, 2026-10-23). So is a
+        group whose licenses Graph did not report, rather than guessed at.
+        """
+        found = await self._group(group)
+        licenses = found.get("assignedLicenses")
+        if not isinstance(licenses, list) or licenses:
+            return False
+        group_id = str(found.get("id") or "")
+        try:
+            account = await self.get_user(user_key)
+            await self._request(
+                "DELETE",
+                f"{GRAPH_BASE}/groups/{quote(group_id, safe='')}/members/"
+                f"{quote(account.id, safe='')}/$ref",
+                "group membership removal",
+                user_scoped=True,
+            )
+        except Microsoft365AccountNotFoundError:
+            pass
+        return True
 
     async def test_connection(
         self, domain: str, groups: Sequence[str], license_sku_id: Optional[str]

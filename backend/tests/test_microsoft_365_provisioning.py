@@ -541,6 +541,9 @@ class FakeGraph:
         self.accounts: dict[str, dict[str, Any]] = {}
         self.create_error: Optional[Exception] = None
         self.managed_elsewhere = False
+        self.left: list[tuple[str, str]] = []
+        self.licensing_groups: set[str] = set()
+        self.renamed: list[tuple[str, str, str]] = []
 
     async def create_user(self, email, given, family, password, member_id):
         if self.create_error:
@@ -555,6 +558,17 @@ class FakeGraph:
 
     async def add_to_group(self, group, email):
         self.groups.append((group, email))
+
+    async def update_name(self, key, given, family):
+        if self.managed_elsewhere:
+            raise Microsoft365ManagedOnPremisesError("change it in Active Directory")
+        self.renamed.append((key, given, family))
+
+    async def remove_from_group(self, group, key):
+        if group in self.licensing_groups:
+            return False
+        self.left.append((group, key))
+        return True
 
     async def reset_password(self, key, password):
         return None

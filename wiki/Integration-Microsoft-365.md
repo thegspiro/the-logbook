@@ -17,8 +17,8 @@ either is refused while the other is connected.
 
 > **Tested against Microsoft's documented API only.** The Microsoft Graph calls
 > are covered by automated tests against recorded Graph responses, not yet
-> against a live tenant. Run **Test** after connecting, and convert one
-> applicant before relying on it. See
+> against a live tenant. Before relying on it, work through
+> [Verifying Against a Real Tenant](#verifying-against-a-real-tenant). See
 > [Known Limitations](../docs/KNOWN_LIMITATIONS.md).
 
 ---
@@ -39,7 +39,7 @@ either is refused while the other is connected.
 
 1. In **Organization Settings → Department Email**, turn on department email addresses for a domain that is **verified** in your Microsoft 365 tenant. Connecting is refused until this matches the integration's domain.
 2. In the **Microsoft Entra admin center**, open **App registrations → New registration**. Single tenant is right. Note the **Application (client) ID** and **Directory (tenant) ID** on its Overview page.
-3. Under **Certificates & secrets**, add a **client secret** and copy its **Value** (not its ID). Note when it expires: provisioning stops on that day until a new secret is entered.
+3. Under **Certificates & secrets**, add a **client secret** and copy its **Value** (not its ID). Note its **Expires** date: provisioning stops on that day until a new secret is entered. Enter it as **Client secret expires on** in step 6, and The Logbook warns before it (see [Client secret expiry](#client-secret-expiry)).
 4. Under **API permissions → Add a permission → Microsoft Graph → Application permissions**, add the following, then click **Grant admin consent**:
 
    | Permission                           | Why                                                                                 |
@@ -93,8 +93,17 @@ Logbook creates will carry its value there instead.
 
 The same events as Google Workspace: a drop or delete blocks sign-in (and ends
 active sessions); undoing the drop, a rejoin or a reactivation unblocks an
-account The Logbook blocked. Retired, on-leave, inactive and
-Logbook-suspended members keep their account. An account that was already
+account The Logbook blocked. On-leave, inactive and Logbook-suspended members
+keep their account, and so do retired members unless **Block sign-in when a
+member retires** is turned on in the integration's settings (it works as the
+Google Workspace setting does). A member's name change renames an account The Logbook
+created (display name included; never the sign-in name or address), as on
+Google Workspace; one synced from Active Directory is renamed there. A
+departure also takes an account The Logbook created out of the configured groups and a return puts it back, as on Google
+Workspace, except that **a group that assigns licenses is never touched**:
+removing the member would take the license, and Microsoft deletes an
+unlicensed mailbox after its grace period. A group whose licenses Graph does
+not report is left alone the same way. An account that was already
 blocked when the member left stays blocked when they return.
 
 **Accounts synced from on-premises Active Directory** cannot be blocked from
@@ -136,6 +145,17 @@ is only ever governed by one member. Nothing changes in Microsoft 365.
 
 ---
 
+## Client Secret Expiry
+
+An Entra ID client secret lasts at most 24 months, and when it lapses every account change fails until a new one is entered. Record its **Expires** date as **Client secret expires on** in the integration's settings. From 30 days before it:
+
+- the Microsoft 365 card on **Integrations** says how many days are left (or that it has expired);
+- the administrators' morning email (`google_workspace_attention_digest`, 7:35) warns once at 30 days, once at 7 and once on the day, and repeats the line in any other email it sends while the date is that close.
+
+When you create the replacement secret, enter its value **and** its new expiry date together; a new date starts the warnings over. The Logbook does not read the date from Microsoft, because that needs the Application.Read.All permission, which can read every app registration in the tenant.
+
+---
+
 ## API Endpoints
 
 The member, attention and link endpoints are shared with Google Workspace and
@@ -151,9 +171,71 @@ POST   /api/v1/integrations/google-workspace/link-existing?apply=false   # Previ
 
 ---
 
+## Verifying Against a Real Tenant
+
+Every Graph call in the test suite answers from recorded responses built from
+Microsoft's documentation. Run the integration once against your own tenant
+before relying on it, ideally with a spare license and two test groups: one
+ordinary Microsoft 365 group, and one that assigns a license (group-based
+licensing). Each step names what it proves; if one fails, stop and report the
+message the member's profile or **Test** shows.
+
+1. **Connect and Test.** Enter the tenant, client ID, secret, domain, license
+   SKU (or none, for group-based licensing), both groups, and the secret's
+   **Expires** date. **Test** should report the license with the number left,
+   and each group. Change one group to an address that does not exist and
+   **Test** again: it should say so. _Proves the permissions, the license and
+   the group checks._
+2. **Convert** a test applicant whose department address does not exist yet.
+   The account should appear with the license (or from the licensing group),
+   in both groups, and the temporary password should reach the applicant's
+   personal address. Sign in once: Microsoft should ask for a new password.
+   _Proves creation, licensing, groups and password delivery._
+3. In the Exchange admin center, open the account's **Custom attributes**:
+   attribute 15 should be `the-logbook-member:<member id>`. _Proves the
+   creation tag can be set in the request that creates the account, which
+   rests on documentation alone._
+4. On the member's profile, **Retry** should report nothing left to do. Then
+   change the member's last name in The Logbook: within a minute the account's
+   display name and surname should change, and its sign-in name should not.
+   _Proves renaming._
+5. **Drop** the member. Within a minute sign-in should be blocked and the
+   profile should say so. The account should have left the ordinary group and
+   **still be in the licensing group**, with its license. _Proves blocking,
+   group removal, and that Graph reports a group's licenses to this
+   application (if it does not, both groups are left alone, and the profile
+   shows nothing wrong: check the membership by hand)._
+6. **Undo** the drop: sign-in should be unblocked and the account back in the
+   ordinary group. Then block sign-in by hand in the admin center, and drop
+   and undo-drop the member: the account must **stay** blocked. _Proves only
+   The Logbook's own blocks are lifted._
+7. Drop the member again, then unblock the account by hand in the admin
+   center. The next morning (or sooner, by having a member with
+   `system.run_tasks` call
+   `POST /api/v1/scheduled/run-task?task=directory_account_departure_check`),
+   sign-in should be blocked again, and the administrators' email should say
+   the account was turned back on. _Proves the departure check._
+8. Create a user by hand at another member's Logbook email, then run **Link
+   existing members**: the preview should count one, and applying should link
+   it without changing anything in Microsoft 365. _Proves linking, and Graph's
+   "already exists" answer if you then convert an applicant at that address._
+9. If any accounts are synced from on-premises Active Directory, drop a test
+   member whose account is one: the profile should say to disable it in
+   Active Directory, and the sweep should stop retrying. _Proves the
+   on-premises error shape, which rests on documentation alone._
+10. Remove the **User Administrator** role from the application, convert a
+    second test applicant who never receives their password, and **Retry** on
+    their profile. If the reset works, the role can stay off (see Known
+    Limitations). Put it back otherwise.
+11. Delete the test accounts and groups in Microsoft 365, and the test members
+    in The Logbook. Note the date the run passed wherever your department
+    keeps its IT records, so the next administrator knows it has been
+    checked.
+
+---
+
 ## Not Covered
 
-- Deleting the account, or removing its license, when a member leaves — blocking sign-in keeps both.
-- Renaming the account when a member's name changes.
+- Deleting the account, or removing its license, when a member leaves — blocking sign-in keeps both. Accounts still blocked 90 days on are listed under **N need attention** instead.
 - A certificate instead of a client secret.
 - Switching a department from Google Workspace to Microsoft 365 moves nothing: accounts recorded for Google stay Google's, and their suspension waits until Google Workspace is connected again.

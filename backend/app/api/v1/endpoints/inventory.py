@@ -216,6 +216,7 @@ from app.services.organization_service import OrganizationService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import label_renderer
 from app.utils.item_aliases import normalize_aliases
+from app.utils.model_updates import reject_null_for_required
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
@@ -5681,6 +5682,10 @@ async def update_nfpa_compliance(
         )
 
     update_data = data.model_dump(exclude_unset=True)
+    try:
+        reject_null_for_required(record, update_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     for field, value in update_data.items():
         setattr(record, field, value)
 

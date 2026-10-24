@@ -35,6 +35,12 @@ import {
   DEMO_TREASURER_CREDENTIALS,
   SHOTS,
 } from "./manifest.mjs";
+import {
+  TOTP_PERIOD_SECONDS,
+  readAdminTotpSecret,
+  totpForStep,
+  totpStep,
+} from "./totp.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..", "..");
@@ -450,10 +456,105 @@ async function signIn(page, credentials) {
     .getByRole("button", { name: /sign in|log ?in/i })
     .first()
     .click();
+  // An account enrolled in two-factor stays on /login and shows the code step
+  // instead of leaving it, so wait for whichever happens first.
+  await page.waitForFunction(
+    () =>
+      !window.location.pathname.startsWith("/login") ||
+      document.querySelector("#mfa-code") !== null,
+    null,
+    { timeout: 30_000 },
+  );
+  if (new URL(page.url()).pathname.startsWith("/login")) {
+    await enterAuthenticatorCode(page, credentials);
+  }
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
     timeout: 30_000,
   });
   await settle(page);
+}
+
+/**
+ * The administrator's authenticator secret, read once from where the seeder
+ * stores it (see "The administrator's two-factor secret" in README.md).
+ */
+let adminTotpSecret;
+function adminSecret() {
+  if (adminTotpSecret === undefined) adminTotpSecret = readAdminTotpSecret();
+  return adminTotpSecret;
+}
+
+// The server accepts each time-step once per account, and the light and dark
+// admin contexts sign in back to back, so the second must not reuse the first
+// one's step.
+let lastTotpStep = -1;
+
+async function freshTotpCode(page, secret) {
+  let step = totpStep();
+  if (step <= lastTotpStep) {
+    step = lastTotpStep + 1;
+    const waitMs = step * TOTP_PERIOD_SECONDS * 1000 - Date.now() + 1000;
+    await page.waitForTimeout(Math.max(0, waitMs));
+  }
+  lastTotpStep = step;
+  return totpForStep(secret, step);
+}
+
+/**
+ * Complete the login page's code step for the administrator.
+ *
+ * A first refusal is expected now and then: the seeder (or another capture)
+ * may have spent the current step moments earlier. The next step's code is
+ * tried once; a second refusal means the stored secret is wrong.
+ */
+async function enterAuthenticatorCode(page, credentials) {
+  // Neither of these is cured by signing in again, so `login` must not retry.
+  if (credentials !== DEMO_CREDENTIALS) {
+    throw Object.assign(
+      new Error(
+        `${credentials.username} asked for a two-factor code; only the ` +
+          "administrator is expected to be enrolled",
+      ),
+      { noRetry: true },
+    );
+  }
+  const secret = adminSecret();
+  if (!secret) {
+    throw Object.assign(
+      new Error(
+        `${credentials.username} is enrolled in two-factor but no secret is ` +
+          'available — see "The administrator\'s two-factor secret" in ' +
+          "scripts/screenshots/README.md",
+      ),
+      { noRetry: true },
+    );
+  }
+  const field = page.locator("#mfa-code");
+  const verify = page.getByRole("button", { name: /^verify$/i });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await field.fill(await freshTotpCode(page, secret));
+    // Read the verdict off the response rather than the page: a refusal's
+    // alert from the first attempt is still on screen when the second is
+    // submitted, so the page alone cannot say which attempt it belongs to.
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/v1/auth/mfa/login") &&
+          r.request().method() === "POST",
+        { timeout: 30_000 },
+      ),
+      verify.click(),
+    ]);
+    if (response.ok()) return;
+  }
+  // Not retried by `login`: each refused code counts toward the account
+  // lockout, and signing in again would only spend two more.
+  throw Object.assign(
+    new Error(
+      `the stored two-factor secret was refused twice for ${credentials.username}`,
+    ),
+    { noRetry: true },
+  );
 }
 
 /**
@@ -551,6 +652,7 @@ async function login(page, credentials) {
       await signIn(page, credentials);
       break;
     } catch (error) {
+      if (error.noRetry) throw error;
       // The sign-in limiter counts every attempt from this address, and a
       // second capture or seeder running against the same backend spends the
       // same allowance. A refusal says so on the page; waiting out its window

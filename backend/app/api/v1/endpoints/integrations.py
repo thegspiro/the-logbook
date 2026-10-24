@@ -6,7 +6,7 @@ Endpoints for managing external integration configurations.
 
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, NotRequired, Optional, TypedDict
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
@@ -29,6 +29,7 @@ from app.core.utils import sanitize_connector_error
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
 from app.mcp.oauth import McpOAuthService
+from app.models.directory_account import MICROSOFT_365_INTEGRATION
 from app.models.integration import (
     CalendarSyncMapping,
     Integration,
@@ -66,6 +67,11 @@ from app.services.integration_services.ical_service import (
     org_feed_path,
     org_feed_token_matches,
 )
+from app.services.integration_services.microsoft_365_service import (
+    client_secret_days_left,
+    client_secret_warning_level,
+)
+from app.utils.org_timezone import resolve_org_today
 from app.utils.url_validator import validate_integration_url
 
 router = APIRouter()
@@ -562,8 +568,25 @@ def _iso(value: Any) -> str | None:
     return value.isoformat() if isinstance(value, datetime) else None
 
 
+def _credential_days_left(
+    integration: Integration, today: Optional[date]
+) -> int | None:
+    """Days until the stored credential stops working, where it is known.
+
+    Only Microsoft 365 records it (an administrator types in the client
+    secret's expiry date). *today* is the department's date, as the morning
+    email counts it; without one nothing is reported.
+    """
+    if integration.integration_type != MICROSOFT_365_INTEGRATION or today is None:
+        return None
+    return client_secret_days_left(integration.config or {}, today)
+
+
 def _integration_to_dict(
-    integration: Integration, *, sanitize_secrets: bool = True
+    integration: Integration,
+    *,
+    sanitize_secrets: bool = True,
+    today: Optional[date] = None,
 ) -> dict[str, Any]:
     """Convert an Integration model to a response dict."""
     config = integration.config or {}
@@ -572,6 +595,7 @@ def _integration_to_dict(
     # The row's description is a copy taken when the catalog was seeded for
     # the org; the catalog is what describes the integration as it is today.
     catalog = _CATALOG_BY_TYPE.get(integration.integration_type)
+    credential_days_left = _credential_days_left(integration, today)
     return {
         "id": integration.id,
         "organization_id": integration.organization_id,
@@ -592,6 +616,9 @@ def _integration_to_dict(
         "consecutive_error_count": int(
             getattr(integration, "consecutive_error_count", 0) or 0
         ),
+        "credential_days_left": credential_days_left,
+        "credential_expiring": client_secret_warning_level(credential_days_left)
+        is not None,
         "health": health_state(integration),
         "supports_sync": integration.integration_type in SYNC_CAPABLE_TYPES,
         "created_at": (
@@ -916,7 +943,8 @@ async def list_integrations(
         .order_by(Integration.name)
     )
     integrations = result.scalars().all()
-    return [_integration_to_dict(i) for i in integrations]
+    today = await resolve_org_today(db, current_user.organization_id)
+    return [_integration_to_dict(i, today=today) for i in integrations]
 
 
 @router.get("/connected")
@@ -969,7 +997,10 @@ async def get_integration(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
-    return _integration_to_dict(integration)
+    return _integration_to_dict(
+        integration,
+        today=await resolve_org_today(db, integration.organization_id),
+    )
 
 
 @router.post("/{integration_id}/connect")
@@ -1076,7 +1107,10 @@ async def connect_integration(
         organization_id=str(current_user.organization_id),
     )
 
-    return _integration_to_dict(integration)
+    return _integration_to_dict(
+        integration,
+        today=await resolve_org_today(db, integration.organization_id),
+    )
 
 
 @router.post("/{integration_id}/disconnect")
@@ -1294,7 +1328,10 @@ async def update_integration(
     await db.commit()
     await db.refresh(integration)
 
-    return _integration_to_dict(integration)
+    return _integration_to_dict(
+        integration,
+        today=await resolve_org_today(db, integration.organization_id),
+    )
 
 
 async def _test_mcp_connection(
@@ -1676,5 +1713,8 @@ async def retry_integration_sync(
     return {
         "success": error is None,
         "message": message if error is None else sanitize_integration_error(error),
-        "integration": _integration_to_dict(integration),
+        "integration": _integration_to_dict(
+            integration,
+            today=await resolve_org_today(db, integration.organization_id),
+        ),
     }
