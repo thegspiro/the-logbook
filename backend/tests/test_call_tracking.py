@@ -54,7 +54,9 @@ async def test_detailed_shift_call_rejected_outside_detailed_mode(monkeypatch, m
     db = MagicMock()
     db.rollback = AsyncMock()
     service = SchedulingService(db)
-    service.get_shift_by_id = AsyncMock(return_value=SimpleNamespace(id="shift-1"))
+    service.get_shift_by_id = AsyncMock(
+        return_value=SimpleNamespace(id="shift-1", is_finalized=False)
+    )
     monkeypatch.setattr(
         CallTrackingService,
         "get_settings",
@@ -89,8 +91,13 @@ async def test_shift_call_update_rejected_outside_detailed_mode(monkeypatch, mod
     db.rollback = AsyncMock()
     db.commit = AsyncMock()
     service = SchedulingService(db)
-    existing = SimpleNamespace(id="call-1", incident_type="medical", notes=None)
+    existing = SimpleNamespace(
+        id="call-1", shift_id="shift-1", incident_type="medical", notes=None
+    )
     service.get_shift_call_by_id = AsyncMock(return_value=existing)
+    service.get_shift_by_id = AsyncMock(
+        return_value=SimpleNamespace(id="shift-1", is_finalized=False)
+    )
     monkeypatch.setattr(
         CallTrackingService,
         "get_settings",

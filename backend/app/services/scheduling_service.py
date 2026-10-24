@@ -2772,17 +2772,56 @@ class SchedulingService:
         organization_id: UUID | str,
         attendance_data: Dict[str, Any],
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
-        """Add an attendance record to a shift"""
+        """Add an attendance record to a shift.
+
+        Locks the shift row and then reads for an existing row with a locking
+        read, in that order, for the reasons ``member_check_in`` gives:
+        ``ShiftAttendance`` has no unique constraint on ``(shift_id,
+        user_id)``, and a second row makes the member's own check-out and
+        ``get_my_attendance`` raise ``MultipleResultsFound``. Shift before
+        attendance is also the order ``finalize_shift`` takes the two locks in.
+        """
         try:
-            shift = await self.get_shift_by_id(shift_id, organization_id)
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
             if not shift:
                 return None, "Shift not found"
+            locked = self._attendance_locked_error(shift)
+            if locked:
+                return None, locked
+            if shift.status == ShiftStatus.CANCELLED:
+                return None, "Cannot record attendance on a cancelled shift."
 
             att_user_id = attendance_data.get("user_id")
             if att_user_id and not await self._user_in_org(
                 att_user_id, organization_id
             ):
                 return None, "User not found"
+
+            order_error = self._attendance_order_error(
+                attendance_data.get("checked_in_at"),
+                attendance_data.get("checked_out_at"),
+            )
+            if order_error:
+                return None, order_error
+
+            if att_user_id:
+                existing = (
+                    await self.db.execute(
+                        select(ShiftAttendance.id)
+                        .where(
+                            ShiftAttendance.shift_id == str(shift_id),
+                            ShiftAttendance.user_id == str(att_user_id),
+                        )
+                        .with_for_update()
+                    )
+                ).first()
+                if existing:
+                    return None, (
+                        "This member already has an attendance record on this "
+                        "shift. Edit that record instead."
+                    )
 
             attendance = ShiftAttendance(shift_id=shift_id, **attendance_data)
 
@@ -2797,6 +2836,33 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    @staticmethod
+    def _attendance_locked_error(shift: Optional[Shift]) -> Optional[str]:
+        """Why a shift's attendance cannot be changed, or None if it can.
+
+        Finalizing snapshots the shift's hours from its attendance and feeds
+        training tracking, so the rows behind that snapshot are locked until
+        the shift is reopened — as ``delete_shift_call`` locks its calls.
+        """
+        if shift is not None and shift.is_finalized:
+            return (
+                "Cannot change attendance on a finalized shift. "
+                "Reopen the shift first."
+            )
+        return None
+
+    @staticmethod
+    def _attendance_order_error(
+        checked_in_at: Optional[datetime], checked_out_at: Optional[datetime]
+    ) -> Optional[str]:
+        """Refuse a check-out before the check-in, which stores a negative
+        duration that every hours total then subtracts."""
+        check_in = _as_utc(checked_in_at)
+        check_out = _as_utc(checked_out_at)
+        if check_in and check_out and check_out < check_in:
+            return "Check-out time cannot be before check-in time."
+        return None
 
     async def get_shift_attendance(
         self, shift_id: UUID, organization_id: UUID | str
@@ -2831,6 +2897,20 @@ class SchedulingService:
             attendance = result.scalar_one_or_none()
             if not attendance:
                 return None, "Attendance record not found"
+
+            shift = await self.get_shift_by_id(attendance.shift_id, organization_id)
+            locked = self._attendance_locked_error(shift)
+            if locked:
+                return None, locked
+
+            # Judged against the pair as it will be stored: an edit to one
+            # end is checked against the other end already on the row.
+            order_error = self._attendance_order_error(
+                update_data.get("checked_in_at", attendance.checked_in_at),
+                update_data.get("checked_out_at", attendance.checked_out_at),
+            )
+            if order_error:
+                return None, order_error
 
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
@@ -3052,6 +3132,8 @@ class SchedulingService:
             return None, "Shift not found"
         if shift.is_finalized:
             return None, "Shift is already finalized"
+        if shift.status == ShiftStatus.CANCELLED:
+            return None, "This shift has been cancelled."
 
         # Optionally restrict check-in to members actually rostered on the
         # shift, so attendance reflects the real crew. Open shifts (self-signup
@@ -3213,6 +3295,11 @@ class SchedulingService:
             if not attendance:
                 return False, "Attendance record not found"
 
+            shift = await self.get_shift_by_id(attendance.shift_id, organization_id)
+            locked = self._attendance_locked_error(shift)
+            if locked:
+                return False, locked
+
             await self.db.delete(attendance)
             await self.db.commit()
             return True, None
@@ -3371,6 +3458,9 @@ class SchedulingService:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return None, "Shift not found"
+            locked = self._call_locked_error(shift)
+            if locked:
+                return None, locked
 
             tracking = await CallTrackingService(self.db).get_settings(
                 str(organization_id)
@@ -3404,6 +3494,21 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    @staticmethod
+    def _call_locked_error(shift: Optional[Shift]) -> Optional[str]:
+        """Why a shift's call records cannot be changed, or None if they can.
+
+        Finalizing snapshots the shift's call count onto the shift and each
+        attendee, so a call added, edited or removed afterwards would leave
+        the snapshot describing calls the record no longer holds.
+        """
+        if shift is not None and shift.is_finalized:
+            return (
+                "Cannot change the calls on a finalized shift. "
+                "Reopen the shift first."
+            )
+        return None
 
     async def get_shift_calls(
         self, shift_id: UUID, organization_id: UUID | str
@@ -3453,6 +3558,11 @@ class SchedulingService:
             if not call:
                 return None, "Shift call not found"
 
+            shift = await self.get_shift_by_id(call.shift_id, organization_id)
+            locked = self._call_locked_error(shift)
+            if locked:
+                return None, locked
+
             tracking = await CallTrackingService(self.db).get_settings(
                 str(organization_id)
             )
@@ -3491,11 +3601,9 @@ class SchedulingService:
                 return False, "Shift call not found"
 
             shift = await self.get_shift_by_id(call.shift_id, organization_id)
-            if shift is not None and shift.is_finalized:
-                return False, (
-                    "Cannot remove a call from a finalized shift. "
-                    "Reopen the shift first."
-                )
+            locked = self._call_locked_error(shift)
+            if locked:
+                return False, locked
 
             await self.db.delete(call)
             await self.db.commit()
@@ -9686,6 +9794,11 @@ class SchedulingService:
 
             if shift.is_finalized:
                 return None, "Shift is already finalized"
+
+            # A cancelled shift did not run; finalizing it would snapshot and
+            # credit hours for it.
+            if shift.status == ShiftStatus.CANCELLED:
+                return None, "Cannot finalize a cancelled shift"
 
             now = datetime.now(timezone.utc)
             if shift.end_time and shift.end_time > now:

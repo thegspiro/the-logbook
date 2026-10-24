@@ -225,6 +225,7 @@ class TestFinalizeManualHoursScoping:
             id="s1",
             organization_id="org-1",
             is_finalized=False,
+            status="scheduled",
             end_time=now - timedelta(hours=1),  # ended
             start_time=now - timedelta(hours=9),
             settings=None,
@@ -307,7 +308,7 @@ class TestShiftCallRespondingMembersScoping:
     loop would cost up to 100 serial round trips)."""
 
     async def test_create_rejects_foreign_responding_member(self):
-        shift = SimpleNamespace(id="s1", organization_id="org-1")
+        shift = SimpleNamespace(id="s1", organization_id="org-1", is_finalized=False)
         org = SimpleNamespace(id="org-1", settings={})
         db = MagicMock()
         db.execute = AsyncMock(
@@ -329,7 +330,7 @@ class TestShiftCallRespondingMembersScoping:
         db.add.assert_not_called()
 
     async def test_create_accepts_in_org_responding_members(self):
-        shift = SimpleNamespace(id="s1", organization_id="org-1")
+        shift = SimpleNamespace(id="s1", organization_id="org-1", is_finalized=False)
         org = SimpleNamespace(id="org-1", settings={})
         db = MagicMock()
         db.execute = AsyncMock(
@@ -352,12 +353,14 @@ class TestShiftCallRespondingMembersScoping:
         db.add.assert_called_once()
 
     async def test_update_rejects_foreign_responding_member(self):
-        call = SimpleNamespace(id="c1", organization_id="org-1")
+        call = SimpleNamespace(id="c1", organization_id="org-1", shift_id="s1")
+        shift = SimpleNamespace(id="s1", organization_id="org-1", is_finalized=False)
         org = SimpleNamespace(id="org-1", settings={})
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
                 _one(call),  # get_shift_call_by_id
+                _one(shift),  # get_shift_by_id -> not finalized
                 _one(org),  # CallTrackingService.get_settings -> _get_org
                 _scalars([]),  # _all_users_in_org -> none found, foreign
             ]
@@ -372,12 +375,14 @@ class TestShiftCallRespondingMembersScoping:
     async def test_update_ignores_a_partial_match(self):
         """One valid id and one foreign id must still reject the whole call
         — a batched query has to compare the full set, not just non-empty."""
-        call = SimpleNamespace(id="c1", organization_id="org-1")
+        call = SimpleNamespace(id="c1", organization_id="org-1", shift_id="s1")
+        shift = SimpleNamespace(id="s1", organization_id="org-1", is_finalized=False)
         org = SimpleNamespace(id="org-1", settings={})
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
                 _one(call),  # get_shift_call_by_id
+                _one(shift),  # get_shift_by_id -> not finalized
                 _one(org),  # CallTrackingService.get_settings -> _get_org
                 _scalars(["u1"]),  # only u1 found; uFOREIGN is not
             ]
