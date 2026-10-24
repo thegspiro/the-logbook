@@ -16,6 +16,332 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3645](https://github.com/thegspiro/the-logbook/pull/3645)** (branch
+`claude/security-review-security-audit-ip-p9`) —
+Feature 28 (Security, audit & IP), pass 9. PR #3641 (Feature 27,
+Integrations, pass 9) had already merged with no open rotation PR behind
+it — confirmed via `search_pull_requests` (`head:claude/security-review-`,
+state=open, 0 results) immediately before starting, and row 28 was
+confirmed the next `⬜` row. **0 fixed, 0 new findings** — five real
+changes since pass 8 (`require_stepup` added to seven endpoints,
+`/health/detailed` removed from the IP-blocking bypass set, an IP-exception
+revoke now invalidates every worker's cache, a new export route added to
+exfiltration monitoring, and three frontend a11y/contrast fixes) were read
+in full and found clean/already-fixed-and-tested; both standing open items
+(SEC2-28-6, dead detector code) re-verified unchanged. Route count
+re-enumerated by AST at 37, unchanged from pass 8.
+
+Full writeup: `docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass
+9** section.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3641, Feature 27, Integrations, pass 9, merged, docs-only — nothing to record), preserved for history</summary>
+
+**None.** PR #3641 (Feature 27, Integrations, pass 9) merged clean
+(`09b18569`), docs-only (the findings file and `PROGRESS.md` itself — no app
+code, so nothing to record in the Log per the "docs-only PR is not a
+recordable event" rule). Row 27 already shows ✅ in the table below (that
+PR's own commit). This iteration (`search_pull_requests`,
+`head:claude/security-review-`, state=open → 0 results, confirmed fresh
+against `main` at `09b18569`) proceeds to Feature 28 (Security, audit & IP),
+the next `⬜` row.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3641, Feature 27, Integrations, pass 9, before it merged), preserved for history</summary>
+
+**PR [#3641](https://github.com/thegspiro/the-logbook/pull/3641)** (branch
+`claude/security-review-integrations`) — Feature 27
+(Integrations), pass 9, a watchdog pickup. PR #3640 (Feature 26, Forms, pass 9) had already merged with no open rotation PR behind it — confirmed via
+`list_pull_requests` (state=open) and `search_pull_requests`
+(`head:claude/security-review-`, both empty) immediately before starting —
+and row 27 (Integrations) was confirmed the next `⬜` row. **0 fixed, 0 new
+findings** — five real feature commits since pass 8 (a per-integration
+`suspend_on_retirement` switch, group removal on departure, a 90-day
+long-suspension marker, a member-rename sync to the directory account, and
+a Microsoft 365 client-secret-expiry warning) were read in full and found
+clean: every by-id and multi-row query org-scoped, the JSON
+`pending_group_removals` column always reassigned whole, every value
+interpolated into the attention-digest email HTML escaped, and the new
+`require_stepup` dependency on connect/disconnect/update correctly ordered
+after the permission check. Route count re-enumerated at the same total as
+pass 8; no new endpoint.
+
+Full writeup: `docs/security-review/INT-27-integrations.md`'s **Pass 9**
+section.
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
+IP) — re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3640, Feature 26, Forms, pass 9, merged), preserved for history</summary>
+
+**PR [#3640](https://github.com/thegspiro/the-logbook/pull/3640)** (branch
+`claude/security-review-forms`) —
+Feature 26 (Forms), pass 9, a watchdog pickup. PR #3638 (Feature 25,
+Messaging & notifications, pass 9) had already merged with no open
+rotation PR behind it — confirmed via `list_pull_requests` (state=open)
+and `search_pull_requests` (`head:claude/security-review-`, both empty)
+immediately before starting — and row 26 (Forms) was confirmed the next
+`⬜` row. **0 fixed, 0 new findings** — the real delta since pass 8 (a
+numeric-bounds tightening on form-field schemas, `delete_form` archiving
+instead of hard-deleting a form with existing submissions, and the
+repo-wide probationary-account-status sweep applied to the member-lookup
+search) was read in full and found clean: org scoping on the archive
+decision, the `PUBLISHED`-only submission gate holding on both the
+authenticated and public paths, and no change to `LIKE`-escaping. Two
+frontend commits (an a11y contrast fix, and a `useConfirm()` step added
+before a submission delete) are correctness/UX only.
+
+Full writeup: `docs/security-review/FORM-26-forms.md`'s **Pass 9** section.
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3638, Feature 25, Messaging & notifications, pass 9, merged), preserved for history</summary>
+
+**PR [#3638](https://github.com/thegspiro/the-logbook/pull/3638)** (branch
+`claude/security-review-messaging-notifications`) —
+Feature 25 (Messaging & notifications), pass 9, a watchdog pickup. PR #3636
+(Feature 24, Meetings & minutes, pass 9) was found open, CI green on its
+head, `mergeable_state: clean`, no unresolved review comment — merged by
+this same watchdog run. Row 25 (Messaging & notifications) was confirmed
+the next `⬜` row. **0 fixed, 0 new findings** — the real delta since pass 8
+(explicit-null tightening on two columns, the shared file-storage interface
+swap in the email-attachment path, a role-deletion audience cleanup with
+its own org-scoped locked query, a stored-target leniency fix that cannot
+admit an unresolvable id, a row-locked scheduled-email cancel, and a
+timezone-correctness pair) was read in full and found clean: org scoping,
+JSON-column mutation shape, and the SMS/CSV/LIKE-pattern/Jinja2 re-sweeps
+all intact. Route count re-enumerated by AST at 51 (unchanged since pass
+5). MSG-3/MAIL-4/email_service F4/the NotificationRule `.config`
+unbounded-JSON note all re-confirmed open, owner-accepted or by-design,
+unchanged.
+
+Full writeup: `docs/security-review/MSG-25-messaging-notifications.md`'s
+**Pass 9** section.
+
+Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3636, Feature 24, Meetings & minutes, pass 9, merged), preserved for history</summary>
+
+**PR [#3636](https://github.com/thegspiro/the-logbook/pull/3636)** (branch
+`claude/security-review-meetings-minutes-p9`) — Feature 24 (Meetings &
+minutes), pass 9, a watchdog pickup. **0 fixed, 0 new findings** — re-verified
+the real delta since pass 8 (approved-meeting delete refusal, carried-forward/
+attachment cleanup on minutes delete, automatic election-result filing,
+numeric bounds, UTC-instant timestamps, the probationary-account-status sweep
+— which fixed a real gap in this feature's quorum denominator and attendance
+roster — and the shared file-storage interface consolidation), all already
+correctly org-scoped. MM-19/MM-20 (pass 8's two flagged LOW find-or-create
+races) re-confirmed OPEN, unchanged.
+
+Full writeup: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 9**
+section.
+
+Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
+notifications) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3635, Feature 23, Medical supplies, pass 16, merged; duplicate sibling PR #3634 closed), preserved for history</summary>
+
+**PR [#3635](https://github.com/thegspiro/the-logbook/pull/3635)** (branch
+`claude/security-review-medical-supplies-p16`) —
+Feature 23 (Medical supplies), pass 16, a watchdog run. PR #3633 (Feature
+22, Grants & fundraising, pass 10) had already merged — confirmed via
+`list_pull_requests` (state=open, empty) and `search_pull_requests`
+(`head:claude/security-review-`, empty) immediately before starting, and
+row 23 (Medical supplies) was the first ⬜ row. **0 fixed, 0 new
+findings** — the real delta since pass 15 (six commits: the lot recall
+lookup's `GET /lots/search`, truck-stock links, a Low stock tab, a
+next-expiry sort, truck lots in the lot export, and an uncounted-positions
+table on the weekly email) was read in full and found clean: org scoping,
+domain pinning, LIKE-pattern escaping and HTML escaping all intact. Route
+count re-enumerated by AST at 26 (up from 25), the one addition being
+`search_medical_lots`. MSUP-4/MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) re-confirmed open, owner-accepted,
+unchanged. Noted for the next pass: PR #3627 ("Medical supplies: record
+lot recalls") is open but not yet merged, and will add three new routes
+(`GET /recalls`, `POST /recalls`, `POST /recalls/{id}/lift`) this findings
+file has not reviewed.
+
+Full writeup: `docs/security-review/MSUP-23-medical-supplies.md`'s
+**Pass 16** section.
+
+**A second, independent watchdog session raced this same pass concurrently**
+and opened PR #3634 (`claude/security-review-medical-supplies`, the same
+branch name an earlier, already-merged pass had used) with materially the
+same conclusions; #3635's push landed first and merged, so #3634 was closed
+as a duplicate per this rotation's own race-handling rule. #3634's one
+genuinely new finding (MSUP-28, MED, a domain-check TOCTOU on
+`record_lot_recall`) had already been posted as a review comment on the
+actually-relevant target, the open sibling PR #3627 ("Medical supplies:
+record lot recalls"), rather than lost with the closed PR.
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 10, PR #3633, merged), preserved for history</summary>
+
+**PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633)** (branch
+`claude/security-review-grants-fundraising-p10`) —
+Feature 22 (Grants & fundraising), pass 10, a watchdog pickup. PR #3632
+(Feature 21, Admin hours, pass 10) had already merged — docs-only, so not
+independently recordable. **0 fixed by this pass itself, 0 new findings** —
+GF-9 is now fully resolved (both remaining thirds closed by PR #3533's
+money-bounds and donor-PII fixes, re-verified against current code); a
+campaign soft-delete enforcement fix and two UTC-normalization fixes round
+out the real delta, all from non-rotation commits.
+
+Full writeup: `docs/security-review/GF-22-grants-fundraising.md`'s
+**Pass 10** section.
+
+Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
+supplies) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 10, PR #3632, merged, docs-only), preserved for history</summary>
+
+**PR [#3632](https://github.com/thegspiro/the-logbook/pull/3632)** (branch
+`claude/security-review-admin-hours-p10`) —
+Feature 21 (Admin hours), pass 10, a watchdog pickup. PR #3631 (Feature 20,
+Compliance, pass 10) had already merged (this same watchdog run merged
+it). No open PR's head branch starts with `claude/security-review-`
+(`list_pull_requests`, 0 results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+21 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`. **0 fixed by this pass, 0 new findings** — real
+delta since pass 9's merge (`4a1eeed4`): AH-18 (pass 9's one open finding,
+a read-then-write race in `_assert_name_free`) was already fixed by
+`9789684f` (PR #3464, a dedicated security-sweep branch) with CLAUDE.md
+Pitfall #27's full lock pattern and a guard test; app-review finding B15
+(an explicit null silently ignored on the event-hour-mapping update
+schema) was already fixed by `1f02bcd5` (PR #3477, an app-review branch).
+Both re-verified against current code and their guard tests re-run rather
+than trusted from the commit message. Eleven frontend files also moved,
+all cosmetic.
+
+Full writeup: `docs/security-review/AH-21-admin-hours.md`'s **Pass 10**
+section.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 10, PR #3631, merged), preserved for history</summary>
+
+**PR [#3631](https://github.com/thegspiro/the-logbook/pull/3631)** (branch
+`claude/security-review-compliance-p10`) —
+Feature 20 (Compliance), pass 10, a watchdog pickup. PR #3630 (Feature 19,
+Skills testing, pass 10) had already merged. No open PR's head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0 results),
+and the dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was
+not reachable (`ListAgents`); row 20 was confirmed the next `⬜` by
+reading the rotation table directly on a freshly fetched `main`. **0
+fixed, 0 new findings** — real delta since pass 9's merge (`4f346dab`):
+the repo-wide Pitfall #32 status-gate sweep (now verified complete for
+this feature's own query sites — `ISOReadinessService`,
+`ContributedHoursService`, `AnnualComplianceReportService`,
+`compute_org_compliance_tally`, `grade_org_members` — closing a real
+denominator gap this rotation had not previously flagged: a probationary
+member was silently excluded from every department-wide compliance
+figure), the repo-wide numeric-bounds hardening sweep, and audit logging
+added to the two profile/report delete routes. All already correctly
+implemented before this pass began; this pass's own contribution is
+verifying each against current code and correcting a stale
+`docs/KNOWN_LIMITATIONS.md` claim ("Probationary counts as active...
+Pending an owner decision per site") that named this feature among the
+sites still excluding probationary members.
+
+Full writeup: `docs/security-review/CMP-20-compliance.md`'s **Pass 10**
+section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 10, PR #3630, merged), preserved for history</summary>
+
+**PR [#3630](https://github.com/thegspiro/the-logbook/pull/3630)** (branch
+`claude/security-review-skills-testing-p10`) —
+Feature 19 (Skills testing), pass 10, a watchdog pickup. PR #3629
+(Feature 18, Training extended, pass 10) had already merged. No open
+PR's head branch starts with `claude/security-review-`
+(`search_pull_requests`, 0 results), and the dedicated loop session was
+not reachable (`ListAgents`); row 19 was confirmed the next `⬜` by
+reading the rotation table directly on a freshly fetched `main`. **0
+fixed, 0 new findings** — real delta since pass 9's merge (`cef8a679`):
+69/19 lines across the endpoint, schema and model files, 16 frontend
+files. All of it a single, already-correctly-implemented cross-cutting
+change (`SkillTest.examiner_id` relaxed to nullable with `ondelete` CASCADE
+→ SET NULL, so a candidate's test record survives the examiner's
+permanent deletion — Pitfall #2-compliant, every call site in this
+feature already null-safe) plus the repo-wide Pitfall #32 status sweep, a
+new business-rule gate refusing to open a test for a department that
+records skills on shift sign-offs instead, and a defensive column-bounds
+hardening sweep. Every standing SKT finding (SKT-1 through SKT-4, SKT2-1,
+SKT3-1/2, SKT4-1 through SKT4-7, SKT5-1) re-verified unchanged. Route
+surface 29/29, unchanged. See `SKT-19-skills-testing.md`'s **Pass 10**
+section. Row 19 → ✅ (pending this PR's merge); next is Feature 20
+(Compliance) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 10, PR #3629, merged), preserved for history</summary>
+
+**PR [#3629](https://github.com/thegspiro/the-logbook/pull/3629)** (branch
+`claude/security-review-training-extended`) —
+Feature 18 (Training extended), pass 10, a watchdog pickup. PR #3628
+(Feature 17, Training core, pass 10) had already merged. No open PR's
+head branch starts with `claude/security-review-` (`search_pull_requests`,
+0 results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+18 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`. **0 fixed, 0 new findings** — real delta since
+pass 9's merge (`69f785be`): eight files touched. A `delete_training_program`
+deactivate-instead-of-delete path (shared with Feature 17's own file,
+already reviewed and merged by PR #3628); a new org-scoped
+`import-matched` retry endpoint for staged external-training completions;
+a column-bounds hardening sweep (`le=INT32_MAX`/`FLOAT32_MAX`); a
+file-storage call-site migration onto the already-reviewed shared
+`file_storage` interface, with the org/area confinement check confirmed
+still gating every call; and a migration relaxing
+`training_waivers.end_date` to nullable (Pitfall #35-compliant, no data
+loss). All traced safe. Every standing TRX finding re-verified unchanged
+at its current citation. See `TRX-18-training-extended.md`'s **Pass 10**
+section. Row 18 → ✅ (pending this PR's merge); next is Feature 19
+(Skills testing) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 10, PR #3628, merged), preserved for history</summary>
+
 **PR [#3628](https://github.com/thegspiro/the-logbook/pull/3628)** (branch
 `claude/security-review-training-core-p10`) —
 Feature 17 (Training core), pass 10, a watchdog pickup. PR #3625 (Feature
@@ -44,6 +370,8 @@ open PR already fixed it, so this PR carries a pure-join merge revision
 `TR-17-training-core.md`'s **Pass 10** section. Row 17 → ✅ (pending this
 PR's merge); next is Feature 18 (Training extended) — re-check
 `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 10, PR #3625, merged), preserved for history</summary>
@@ -20946,17 +21274,17 @@ this iteration's commit" rule.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -20970,6 +21298,408 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 28 (Security, audit & IP, pass 9) — 0 fixed, 0 new findings
+
+PR #3641 (Feature 27, Integrations, pass 9) had merged clean (`09b18569`),
+docs-only (findings file + `PROGRESS.md` itself, confirmed via `git show
+--stat` — no app code, so nothing to record per the "docs-only PR is not a
+recordable event" rule). A fresh `search_pull_requests`
+(`head:claude/security-review-`, state=open) returned 0 immediately before
+starting, and row 28 (Security, audit & IP) was confirmed the next `⬜` row
+in the rotation table on a freshly fetched `main`.
+
+Baseline `458f6ffd` (PR #3475's merge, pass 8). Diffed each of this
+feature's nine backend files and four frontend surfaces directly against
+that commit through current `main` (not path-filtered `git log`, which
+this repo's squash-merge/grafted history has made unreliable in prior
+passes — one such lookup surfaced a commit whose message/file-count bore
+no relation to its real diff). Five real changes land in scope: `require_
+stepup` added to seven endpoints across `security_monitoring.py`,
+`ip_security.py` and `error_logs.py` (part of the repo-wide MFA step-up
+feature — every call site correctly orders `require_permission` before
+`require_stepup`, proven bijectively by
+`test_mfa_policy.py::test_step_up_is_on_exactly_the_documented_handlers`);
+`IPBlockingMiddleware.BYPASS_PATHS` no longer exempts `/health/detailed`
+(already fixed and guard-tested); revoking an IP exception now invalidates
+the edge middleware's cached allow on every worker via a new GeoIP-channel
+message (already fixed and guard-tested end to end in
+`test_ip_exception_revoke_cache.py`); `/api/v1/nfc-tags/taps/export` added
+to export-monitoring; and three frontend a11y/contrast-only edits on
+`AuditLogPage.tsx`/`ErrorMonitoringPage.tsx`/`IPExceptionTable.tsx`. All
+five verified good, no new finding. Route surface re-enumerated by AST at
+37, unchanged from pass 8, every route still carrying an auth dependency.
+Both standing open items (SEC2-28-6 LOW/flagged TOCTOU on the duplicate-
+exception check; the dead-detector-code note) re-verified unchanged
+against current code, still correctly needing an owner/product decision
+rather than a drive-by fix.
+
+Full writeup: `docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass
+9** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.3.0/26.5.1/9.0.1, installed into this session's interpreter since the
+sandbox default `flake8` resolved an unpinned 7.4.1) on `app/ tests/
+alembic/` all clean; `validate_migrations.py --strict` — 650 revisions,
+single head `a8c3b50b6d9b`; `check_route_permissions.py --strict` — 275
+routes, 0 errors/warnings; scoped backend tests (`-k "audit or
+security_monitoring or security_middleware or ip_security or ip_allowlist
+or ip_exception or error_log or suspicious_ip or signing_key_cutover or
+security_alert or mfa_policy or geoip or health_detailed or w50_audit"`) —
+755 passed, 1 pre-existing skip (`pywebpush`); frontend `npm run typecheck`
+clean; `npm run lint` clean (exit 0).
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+### 2026-10-24 — Feature 27 (Integrations, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`
+returned no other running session). PR #3640 (Feature 26, Forms, pass 9)
+had already merged; a fresh `search_pull_requests`
+(`head:claude/security-review-`, state=open) and `list_pull_requests`
+(state=open) both returned no rotation PR, and row 27 (Integrations) was
+confirmed the next `⬜` row in the rotation table on a freshly fetched
+`main` (`2d000c36`).
+
+Baseline `8fb7eba1` (PR #3467's merge, pass 8). `git diff 8fb7eba1..HEAD`
+scoped to this feature's own files shows five real feature commits: a
+per-directory-integration `suspend_on_retirement` switch (off by default,
+retiring suspends/blocks the account as a drop does for members who retire
+while it is on); a departure now also takes an account The Logbook created
+out of the integration's configured groups (never a Microsoft 365 group
+that assigns licenses), and a return puts it back; the daily departure
+check marks an account still in the directory more than 90 days after its
+suspension (listed, never auto-removed); a member rename reaches an
+account The Logbook created (address never changed); and an administrator
+can record the Microsoft 365 client secret's Entra ID expiry date, warned
+at 30/7/0 days. All five read in full against every `CHECKLIST.md`
+dimension. **0 new findings** — every by-id and multi-row query is
+org-scoped (including the two new multi-row `JOIN`s in
+`check_departed_suspensions`/`attention_items`/the attention digest), the
+new `pending_group_removals` JSON column is always reassigned whole
+(Pitfall #12 n/a), every value interpolated into the attention-digest
+email HTML is `html.escape`d, the Microsoft 365 connector methods
+URL-quote every path segment, and the new `require_stepup` dependency on
+connect/disconnect/update is correctly ordered after the permission check.
+Route count re-enumerated identical to pass 8; no new endpoint.
+
+Full writeup: `docs/security-review/INT-27-integrations.md`'s **Pass 9**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (isort
+pinned to CI's 9.0.1) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 650 revisions, single head
+`a8c3b50b6d9b`; `check_route_permissions.py --strict` — 274 routes, 0
+errors/warnings; `pytest tests/ -q -k "integration or salesforce or calcom
+or documenso or paypal or webhook or connector or mcp_key or
+google_calendar or google_workspace or ical or calendar or outlook or
+directory_account or microsoft_365 or directory"` — 8397 passed, 22
+skipped (environment-only), 0 failed; frontend `npm run typecheck` clean;
+`npm run lint` clean (exit 0).
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit
+& IP) — re-check `search_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-10-24 — Feature 26 (Forms, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`
+returned no other running session). PR #3638 (Feature 25, Messaging &
+notifications, pass 9) had already merged; a fresh `search_pull_requests`
+(`head:claude/security-review-`, state=open) and `list_pull_requests`
+(state=open) both returned no rotation PR, and row 26 (Forms) was
+confirmed the next `⬜` row in the rotation table on a freshly fetched
+`main`.
+
+Baseline `322c41fb` (PR #3458's merge, pass 8). Three non-merge commits
+touch this feature's declared backend scope since then, all read in full
+against every `CHECKLIST.md` dimension: a numeric-bounds tightening on
+`FormFieldBase`/`FormFieldUpdate` (`min_length`/`max_length`/`min_value`/
+`max_value`/`sort_order` now capped at `INT32_MIN`/`INT32_MAX`, closing a
+class of unbounded input that previously reached MySQL as a raw 500 —
+strengthens abuse resistance, no new exposure); `delete_form` now archives
+a form that already has submissions instead of hard-deleting it (verified
+the archive-vs-delete decision is itself org-scoped, that `FormStatus.ARCHIVED`
+already existed before this change, and that both the authenticated and
+public submission paths still refuse an archived form — `form.status ==
+PUBLISHED` and `get_form_by_slug`'s own `PUBLISHED` filter both hold); and
+the repo-wide probationary-account-status sweep (Pitfall #32) applied to
+this module's `search_members` lookup, with no change to its
+`organization_id` filter or `LIKE`-escaping. Two frontend commits in the
+window: an accessibility-contrast fix (cosmetic) and a `useConfirm()`
+confirmation step added before a submission delete (closing a Pitfall #16
+gap this one control had — there was previously no confirmation at all).
+**0 new findings** — all of pass 8's "Verified good" items re-checked and
+unaffected; route count re-enumerated at 22, unchanged.
+
+Full writeup: `docs/security-review/FORM-26-forms.md`'s **Pass 9** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (isort
+pinned to CI's 9.0.1) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 650 revisions, single head
+`a8c3b50b6d9b`; `pytest tests/ -q -k form` — 850 passed, 1 pre-existing
+skip (`pywebpush`); frontend `npm run typecheck` clean; `npm run lint`
+clean (exit 0).
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-24 — Feature 25 (Messaging & notifications, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`). PR
+#3636 (Feature 24, Meetings & minutes, pass 9) was found open, CI fully
+green on its head commit, `mergeable_state: clean`, and with no unresolved
+review comment — the only review activity was a Codex bot run that failed
+outright from hitting its own usage limit, an external tool error rather
+than a finding — so it was merged by this same watchdog run
+(`53779a30112d510dbfca83439954dbc477133319`, squash). A fresh
+`search_pull_requests` (`head:claude/security-review-`) then returned 0;
+row 25 (Messaging & notifications) was confirmed the next `⬜` row in the
+rotation table on `main` at that head.
+
+Baseline `cd58d784` (PR #3457's squash, pass 8). Five non-merge commits
+touch this feature's declared scope since then — explicit-null tightening
+on `NotificationLog.pinned`/`DepartmentMessage.is_persistent` (with a new
+`reject_null_for_required` guard on the messaging update path), the shared
+file-storage interface swap in the email-attachment delete/send paths, a
+new `release_role_from_messages` cleanup called from role deletion (its own
+org-scoped, row-locked query; a full-list JSON reassignment, not an
+in-place mutation), a stored-target leniency fix that drops a vanished
+audience reference without being able to admit an unresolvable or
+cross-org one (the unchanged `_validate_targeting` call still gates every
+new id), and a row-locked scheduled-email cancel (audited, soft-stated,
+race-proof against the sender) alongside a timezone-correctness pair for
+`scheduled_at`. All five read in full against every `CHECKLIST.md`
+dimension; **0 new findings**. MSG-3, MAIL-4, `email_service.py`'s F4 and
+the `NotificationRule.config` unbounded-JSON note all re-confirmed
+open/by-design, unchanged. Route count re-enumerated by AST: 51, unchanged
+since pass 5.
+
+Full writeup: `docs/security-review/MSG-25-messaging-notifications.md`'s
+**Pass 9** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 649
+revisions, single head `a0195b397bf3`; `check_route_permissions.py
+--strict` — 273 routes, 0 errors/warnings; scoped backend tests (`-k
+"message or notification or email_template"`) — 1,084 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck` clean; `npm
+run lint` clean.
+
+Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-24 — Feature 24 (Meetings & minutes, pass 9) — watchdog pickup, 0 fixed, 0 new findings; MM-19/MM-20 re-confirmed OPEN
+
+Watchdog pickup for the security-review rotation: a race-prone pass-16 pair
+for Feature 23 (Medical supplies) had just resolved — PR #3635 merged
+docs-only and its duplicate sibling #3634 was closed — which is not
+independently recordable, so only the Open PR row needed clearing (see
+above). No open PR's head branch starts with `claude/security-review-`
+(`list_pull_requests` and a fresh GitHub search both empty, checked again
+immediately before pushing); row 24 (Meetings & minutes) was confirmed the
+next `⬜` row on a freshly fetched `main`.
+
+Scope check against pass 8's merge (`d4fd563e7`, PR #3456) found 9 commits
+with a real backend diff over the last 4 days, all read in full: an approved
+meeting can no longer be deleted (409, `MeetingDeleteRefusedError`, still
+org-scoped through `get_meeting_by_id`); deleting draft minutes now reopens
+any carried-forward action item whose copy is deleted and removes attachment
+files from storage only after the row-delete commits; a closed election's
+result now files itself with its meeting's minutes automatically
+(`minutes_election_filing.py`, reusing the existing org-scoped, row-locked,
+uniquely-constrained manual-import path, so a race can't double-file);
+every numeric field in the minutes schemas gained an `INT32_MAX` upper bound;
+minutes/interview timestamps now store the UTC instant instead of the wall
+clock; the repo-wide probationary-account-status sweep (Pitfall #32) fixed a
+real gap in this feature specifically — `attendance_dashboard_service.py`'s
+member list and `quorum_service.py`'s quorum denominator both used to drop
+probationary members via a literal `== ACTIVE` comparison, both now use
+`ACTIVE_ACCOUNT_STATUSES`; and the stored-file interface consolidation
+routed minutes-attachment delete/serve through the new shared
+`file_storage` operations. All nine re-verified directly against current
+code across all seven `CHECKLIST.md` dimensions — org-scoping, `assert_in_org`
+on client-supplied FKs, the DB-level unique constraint backing the
+election-filing "never twice" claim, and `file_storage.resolve()`'s
+fail-closed path-containment check all confirmed intact. Routes
+re-enumerated by AST from scratch: 81 total (17 `meetings.py` + 32
+`minutes.py` + 30 `minutes_records.py` + 2 `api/public/minutes.py`), every
+one still carrying `require_permission(...)` or, for the two already-audited
+deliberate self-scoped exceptions, `get_current_active_user` with the
+narrower check made in the handler body. **0 new findings.**
+
+MM-19 and MM-20 (pass 8's two flagged LOW find-or-create races) re-checked at
+their current lines: unchanged, still open, neither file touched by this
+delta. `docs/KNOWN_LIMITATIONS.md`'s MM-9/MM-17/MM-19/MM-20 entries re-read
+against current code and confirmed still accurate.
+
+Full write-up: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 9**
+section.
+
+### 2026-10-24 — Feature 23 (Medical supplies, pass 16) — watchdog run, 0 fixed, 0 new findings
+
+Watchdog run for the security-review rotation. PR #3633 (Feature 22,
+Grants & fundraising, pass 10) had already merged. No open PR's head
+branch starts with `claude/security-review-` (`list_pull_requests`
+state=open empty, and `search_pull_requests` `head:claude/security-review-`
+empty, both checked immediately before starting), and row 23 (Medical
+supplies) was confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `main` (head `dbf2d64b`).
+
+Routes re-enumerated by AST walk rather than trusted from the prior pass's
+count: **26**, up from pass 15's 25 — the one addition is `GET
+/lots/search` (`search_medical_lots`), the lot recall lookup added by
+commit `c75e0cea` after pass 15 closed. Real delta since pass 15's baseline
+(`dce89db1`) is six commits, all read in full: the lot recall lookup
+itself (shelf half through `InventoryService.find_lots_by_number`, truck
+half through a new `lot_number` filter on
+`EquipmentCheckService.apparatus_expiring_stock`), a truck-row link to
+Inventory's swap/restock pages, a Low stock tab, a next-expiry sort on the
+items list/export, truck lots added to the lot export, and a "Not yet
+counted on apparatus" table on the weekly low-stock email. All six verified
+clean: the new route's LIKE pattern goes through `like_pattern()` with
+`escape=LIKE_ESCAPE_CHAR` on both the shelf and truck sides (Pitfall #25),
+every query stays org- and domain-scoped (including a subquery that scopes
+itself independently rather than inheriting the outer query's filter), both
+CSV exports still use `SafeCsvWriter`, the email's new section runs free
+text through `html.escape()`, and `sort_by` stays allowlisted (unknown keys
+fall back to a name sort, no arbitrary-column exposure). MSUP-4
+(`get_expiring_lots`, no row cap) and MSUP-11 (`list_lots`, no row cap)
+re-confirmed open at their current line numbers, still owner-accepted
+(`docs/KNOWN_LIMITATIONS.md`, 2026-10-05) — not re-opened for a fix.
+
+Noted for the next pass, not reviewed here: PR #3627 ("Medical supplies:
+record lot recalls") is open against `main`, not yet merged
+(`mergeable_state: clean`), and will add a new `inventory_lot_recalls`
+table plus three new routes (`GET /recalls`, `POST /recalls`, `POST
+/recalls/{id}/lift`) once it lands.
+
+Full write-up: `docs/security-review/MSUP-23-medical-supplies.md`'s
+**Pass 16** section.
+
+### 2026-10-24 — Feature 21 (Admin hours, pass 10) — watchdog pickup, 0 fixed by this pass, 0 new findings; AH-18 (pass 9's one open finding) confirmed fixed
+
+Watchdog pickup for the security-review rotation: PR #3631 (Feature 20,
+Compliance, pass 10) had already merged (this same watchdog run merged
+it). No open PR's head branch starts with `claude/security-review-`
+(`list_pull_requests`, 0 results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+21 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`. Baseline `4a1eeed4` (pass 9's merge, PR #3451).
+Real delta since then is two commits already merged by other branches
+before this pass began: `9789684f` (PR #3464, a dedicated security-sweep
+branch) fixed AH-18 — the read-then-write race in `_assert_name_free` — with
+CLAUDE.md Pitfall #27's full two-part lock pattern and a guard test
+asserting the SQL lock ordering directly; `1f02bcd5` (PR #3477, an
+app-review branch) fixed app-review finding B15, an explicit-null-silently-
+ignored bug on the event-hour-mapping update schema. Both re-verified
+against current code and their guard tests re-run (3/3 and included in the
+170/170 `-k admin_hours` run) rather than trusted from the commit message.
+Eleven frontend files also moved, all cosmetic (contrast/layout/alt-text
+sweeps plus an additive `config` passthrough param on
+`adminHoursCategoryService.list()`). Route surface unchanged (30/30,
+`endpoints/admin_hours.py` itself has no diff since pass 9). Full write-up:
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 10** section.
+
+### 2026-10-24 — Feature 20 (Compliance, pass 10) — watchdog pickup, real delta (already-fixed Pitfall #32 sweep + numeric bounds), 0 fixed, 0 new findings; stale KNOWN_LIMITATIONS claim corrected
+
+Watchdog pickup for the security-review rotation: PR #3630 (Feature 19,
+Skills testing, pass 10) had already merged. No open PR's head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0
+results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+20 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`.
+
+Real delta since pass 9's merge (`4f346dab`): the repo-wide Pitfall #32
+status-gate sweep closed a real (if quiet) gap in this feature's own
+query sites — `ISOReadinessService`, `ContributedHoursService`,
+`AnnualComplianceReportService`, `compute_org_compliance_tally`,
+`grade_org_members` all moved from `User.status == UserStatus.ACTIVE` to
+`User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, so a probationary member is no
+longer silently dropped from the ISO-readiness roster, the
+contributed-hours tally, the annual compliance report or any
+department-wide compliance percentage. Verified by direct grep of both
+files and by `tests/test_account_status_gates.py`'s repo-wide sweep
+(single allowlisted exception, elsewhere in the codebase). Also landed: a
+repo-wide numeric-bounds hardening sweep on this feature's schemas
+(`year`, `priority`, `required_hours`), and audit logging on the profile
+and report delete routes. All already correctly implemented before this
+pass began — 0 fixes needed, 0 new code findings.
+
+One documentation correction: `docs/KNOWN_LIMITATIONS.md`'s "Probationary
+counts as active only where `User.is_active` is read" entry still named
+training compliance and the compliance officer views as sites "Pending an
+owner decision." Per the sweep verified above, marked ✅ Resolved.
+
+Full writeup: `docs/security-review/CMP-20-compliance.md`'s **Pass 10**
+section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-24 — Feature 19 (Skills testing, pass 10) — watchdog pickup, real delta (SkillTest.examiner_id nullable + sweeps), 0 fixed, 0 new findings; PR #3630 merged
+
+Watchdog pickup for the security-review rotation: PR #3629 (Feature 18,
+Training extended, pass 10) had already merged. No open PR's head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0
+results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+19 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`.
+
+Real delta since pass 9's merge (`cef8a679`): `SkillTest.examiner_id`
+relaxed to nullable with `ondelete` CASCADE → SET NULL (Pitfall
+#2-compliant, every call site already null-safe), a new business-rule
+gate refusing to open a test for a department that records skills on
+shift sign-offs instead, the repo-wide Pitfall #32 status sweep, and a
+defensive column-bounds hardening sweep. Every standing SKT finding
+(SKT-1 through SKT-4, SKT2-1, SKT3-1/2, SKT4-1 through SKT4-7, SKT5-1)
+re-verified unchanged. Route surface 29/29, unchanged.
+
+Full writeup: `docs/security-review/SKT-19-skills-testing.md`'s **Pass
+10** section.
+
+Row 19 → ✅ (PR #3630 merged); row 20 (Compliance) picked up next, logged
+above.
+
+### 2026-10-24 — Feature 18 (Training extended, pass 10) — watchdog pickup, real delta (eight files), 0 fixed, 0 new findings; PR #3629 merged
+
+Watchdog pickup for the security-review rotation: PR #3628 (Feature 17,
+Training core, pass 10) had already merged. No open PR's head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0
+results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+18 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`.
+
+Real delta since pass 9's merge (`69f785be`): eight files touched. A
+`delete_training_program` deactivate-instead-of-delete path (shared with
+Feature 17's own file, already reviewed and merged by PR #3628); a new
+org-scoped `import-matched` retry endpoint for staged external-training
+completions, with the full org-scoping chain traced (provider lookup
+org-filtered before the service call, the service's own query filtering
+both `organization_id` and `deleted_at`); a column-bounds hardening
+sweep (`le=INT32_MAX`/`FLOAT32_MAX`) across the training schemas; a
+file-storage call-site migration onto the already-reviewed shared
+`file_storage` interface, with the org/area confinement check confirmed
+still gating every call before the new primitives run; a migration
+relaxing `training_waivers.end_date` to nullable (Pitfall #35-compliant,
+table-existence guard, no data loss, safe downgrade); and a frontend
+hardening (an attachment delete now goes through `useConfirm()` instead
+of deleting unconfirmed). All traced safe. Every standing TRX finding
+(TRX-1 through TRX-10, TRX3-1, TRX4-1/TRX4-2) re-verified unchanged at its
+current citation. Completion gate fully green (flake8/black/isort clean,
+single migration head, 273 routes/0 errors, 2173 targeted tests passed,
+frontend typecheck/lint 0 errors). See
+`TRX-18-training-extended.md`'s **Pass 10** section and PR
+[#3629](https://github.com/thegspiro/the-logbook/pull/3629) (merged). Row
+18 → ✅.
 
 ### 2026-10-24 — Feature 17 (Training core, pass 10) — watchdog pickup, real delta (9 of 395 commits), 0 fixed, 0 new findings; repo-wide Alembic fork found and merged
 
@@ -37113,3 +37843,52 @@ nfc or kiosk"`) — 1,907 passed, 1 pre-existing skip (`pywebpush`); frontend
 
 Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
 re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-24 — Feature 22 (Grants & fundraising, pass 10) — watchdog pickup, GF-9 fully resolved (owner decision), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results after this same
+run merged PR #3632, Feature 21, Admin hours, pass 10, which was docs-only),
+and the dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). Row 22 (Grants & fundraising) confirmed the next
+`⬜` by reading the rotation table directly on a freshly fetched `main`.
+
+Baseline `115afe67` (PR #3454's merge, pass 9). Six non-merge commits touch
+this feature's declared scope since then, all dated 2026-10-20/21, all
+non-rotation: PR #3533's two halves finally close **GF-9** — every money
+field on a grants/fundraising request now has an upper bound ($1M for a
+gift, $100M for an award/budget/goal; `$0` still valid where it means
+something), and a `fundraising.view`-only caller now reads a donor's name,
+type, company, totals and dates but not their contact details (email,
+phone, address, notes, linked account), which need `fundraising.manage` —
+re-verified by reading `donor_privacy.py` and the new
+`test_donor_contact_privacy.py` directly, including the compiled-SQL proof
+that a view-only donor search no longer matches on email. A
+governance/finance-deletes commit out of this feature's own scope
+(`f5ddf81b`) added campaign soft-delete enforcement to `get_campaign`
+(the `active` column already existed; only the by-id read path gained the
+filter) — confirmed this does not weaken GF-15's locking, since
+`_lock_campaign`/`_update_campaign_total` use their own unfiltered queries.
+Two UTC-normalization commits round out the window (`donation_date`/
+`event_date` typed `UTCDateTime`; the fundraising report's monthly grouping
+now buckets by the department's local month). Route surface re-enumerated
+from scratch: 45/45 unchanged, 273 routes repo-wide, 0 errors/warnings.
+
+**GF-9 has no open remainder** — both gaps pass 9 left open are now closed;
+`KNOWN_LIMITATIONS.md`'s GF-9 row already reflects the resolution.
+
+Full writeup: `docs/security-review/GF-22-grants-fundraising.md`'s
+**Pass 10** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 649
+revisions, single head `a0195b397bf3`; `check_route_permissions.py
+--strict` — 273 routes, 0 errors/warnings; scoped backend tests (`-k
+"grant or fundraising"`) — 1,239 passed, 1 pre-existing skip (`pywebpush`);
+frontend `npm run typecheck` clean; `npm run lint` clean; scoped frontend
+suite (`npx vitest run src/modules/grants-fundraising`) — 112 passed
+(23 files).
+
+Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
+supplies) — re-check `search_pull_requests` fresh rather than trusting this
+note.

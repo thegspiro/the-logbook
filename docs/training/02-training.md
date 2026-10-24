@@ -772,6 +772,60 @@ credit part of it without completing it.
 
 ![The officer's view of a member's pipeline progress, with the controls that credit and verify each requirement](./images/02-94-officer-progress-detail.png)
 
+### Completing a Pipeline by Hand
+
+**Who can do this:** members with **Manage training records**
+(`training.manage`).
+
+A pipeline normally completes a member by itself when every required item is
+done. Sometimes it cannot: the pipeline has no active requirements, or the member
+earned the credential elsewhere. For those cases an officer can finish the
+enrollment by hand.
+
+1. On the program's **Enrollments** tab, choose **Mark pipeline complete** beside
+   an **Active** or **On hold** enrollment, or use the same button in the member's
+   progress dialog.
+2. Type the **reason**. It is required.
+3. Confirm. The member gets the usual completion notice, and the action is
+   recorded in the audit log with the reason and how many required items were
+   still unmet.
+
+Officers then see **Completed by hand: <reason>** on the enrollment and in the
+progress dialog. Members do not see the reason, because it is an officer's note.
+A completed, withdrawn, failed or expired enrollment cannot be completed this way;
+reopen or start a new cycle first. A later recalculation does not undo a hand
+completion, even if the member is below 100%. Starting a new cycle, reopening or
+withdrawing the member clears the note.
+
+**Advance to next phase**, **Start new cycle** and **Reopen enrollment** in the
+progress dialog also need **Manage training records**. Without it the dialog is
+read-only, and an expired enrollment still shows its deadline-passed note.
+
+> _Screenshot to be captured: the progress dialog with **Mark pipeline complete** and its reason prompt (queued in SCREENSHOT_CURRENCY.md)._
+
+### Inactive Requirements and Pipelines
+
+- **A pipeline, or a phase, with no active requirements completes nobody.** An
+  empty set of requirements is not a passing set. Progress shows **No active
+  requirements** instead of a percentage. Add a requirement, reactivate one, or
+  use **Mark pipeline complete**. To move a member out of such a phase, use the
+  audited **Force** option when advancing. A phase with nothing required at all
+  is still complete.
+- **A deactivated requirement is no longer required** for the pipeline or phase,
+  as in the compliance grade. Deactivating or reactivating one recalculates the
+  affected enrollments, so members who had finished everything else now complete.
+  It shows **Inactive — not currently required** and carries no due date.
+- **A deactivated pipeline used as a prerequisite no longer blocks anyone.**
+  Reactivating it restores the requirement.
+- **Deactivating a pipeline from its edit form withdraws members who are still in
+  it,** the same as deleting it. The confirmation says how many members are
+  affected.
+- **Automatic enrollment with a missing prerequisite.** When a member becomes
+  Probationary and a pipeline's prerequisite is unmet, they are not enrolled in
+  that pipeline, but the conversion goes ahead. Training officers get an email
+  naming the member, the pipeline and what is missing. Manual enrollment from
+  the old enrollment screen refuses the same way.
+
 ### Working Through a Checklist Requirement
 
 A **checklist** requirement holds the list of things a member has to do — "tour

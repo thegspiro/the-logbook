@@ -24,8 +24,14 @@ from app.core.security import get_encryption_salt
 from app.models.admin_hours import AdminHoursEntryMethod
 from app.models.event import Event, EventRSVP
 from app.models.location import Location
-from app.models.nfc_tag import NfcCredentialType, NfcTag, NfcTagStatus
-from app.models.user import User, UserStatus
+from app.models.nfc_tag import (
+    NfcCardTap,
+    NfcCredentialType,
+    NfcTag,
+    NfcTagStatus,
+    NfcTapSource,
+)
+from app.models.user import User
 from app.schemas.nfc_tag import (
     NfcCheckInDirection,
     NfcCheckInStatus,
@@ -38,6 +44,7 @@ from app.services.event_service import (
     EventService,
 )
 from app.services.location_service import LocationService
+from app.services.nfc_card_status_sync import BLOCKED_MEMBER_STATUSES
 from app.services.scheduling_service import SchedulingService
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
@@ -55,20 +62,6 @@ _TERMINAL_CARD_STATUSES = {NfcTagStatus.LOST, NfcTagStatus.REVOKED}
 # seconds old and record a zero-minute shift, so within this window the station
 # reports the state instead of inverting it.
 MIN_TOGGLE_SECONDS = 60
-
-# Members whose card must stop working even though the record still exists.
-# Mirrors ``User.is_active`` (ACTIVE or PROBATIONARY, not deleted) apart from two
-# deliberate exceptions: a retired or on-leave member keeps a working card,
-# because they still attend meetings and banquets, which is exactly what a
-# station records. INACTIVE carries no such meaning — it is the plain "not an
-# active member" state — so a card must not go on recording attendance for one.
-_BLOCKED_MEMBER_STATUSES = {
-    UserStatus.INACTIVE,
-    UserStatus.SUSPENDED,
-    UserStatus.DROPPED_VOLUNTARY,
-    UserStatus.DROPPED_INVOLUNTARY,
-    UserStatus.ARCHIVED,
-}
 
 
 def normalize_tag_uid(raw_uid: str) -> str:
@@ -241,7 +234,14 @@ class NfcTagService:
                 "reclassified. Issue a replacement card instead."
             )
 
-        apply_updates(tag, updates, skip={"organization_id", "id", "user_id"})
+        status_changing = new_status is not None and new_status != tag.status
+        apply_updates(
+            tag, updates, skip={"organization_id", "id", "user_id", "auto_suspended"}
+        )
+        # An officer setting the status takes the card back from the automatic
+        # suspension, so a member returning later does not undo their choice.
+        if status_changing:
+            tag.auto_suspended = False
 
         # Stamping the revocation here rather than asking the caller to send it
         # keeps "when did this card stop working" answerable from the row
@@ -319,7 +319,7 @@ class NfcTagService:
             )
         ).scalar_one_or_none()
 
-        if not user or user.deleted_at or user.status in _BLOCKED_MEMBER_STATUSES:
+        if not user or user.deleted_at or user.status in BLOCKED_MEMBER_STATUSES:
             return tag, user, NfcCheckInStatus.MEMBER_INACTIVE
         return tag, user, None
 
@@ -336,59 +336,120 @@ class NfcTagService:
         target_id: str,
         direction: NfcCheckInDirection = NfcCheckInDirection.AUTO,
         tag_payload: Optional[str] = None,
+        source: NfcTapSource = NfcTapSource.STATION,
+        location_id: Optional[str] = None,
+        operator_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Record a tap. Never raises for a domain outcome — see the schema."""
+        """Record a tap. Never raises for a domain outcome — see the schema.
+
+        Every outcome is written to ``nfc_card_taps``, refusals included. A
+        target that does not exist still raises (the endpoint's 404) and
+        records nothing: that is a station misconfiguration, not a tap.
+        """
         tag, user, refusal = await self.resolve_tag(
             organization_id, (tag_payload, tag_uid)
         )
 
         if refusal == NfcCheckInStatus.UNKNOWN_CARD:
-            return self._result(
+            result = self._result(
                 NfcCheckInStatus.UNKNOWN_CARD,
                 "This card is not registered. Ask an officer to add it to your "
                 "member record.",
             )
-        if refusal == NfcCheckInStatus.CARD_INACTIVE:
+        elif refusal == NfcCheckInStatus.CARD_INACTIVE:
             status_word = tag.status.value if tag else "inactive"
-            return self._result(
+            result = self._result(
                 NfcCheckInStatus.CARD_INACTIVE,
                 f"This card has been marked {status_word} and no longer works. "
                 "Ask an officer to issue a replacement.",
             )
-        if refusal == NfcCheckInStatus.MEMBER_INACTIVE or user is None:
-            return self._result(
+        elif refusal == NfcCheckInStatus.MEMBER_INACTIVE or user is None:
+            result = self._result(
                 NfcCheckInStatus.MEMBER_INACTIVE,
                 "This card belongs to a member who is not currently active.",
             )
-
-        if target_type == NfcCheckInTarget.SHIFT:
-            result = await self._check_in_shift(
-                organization_id, user, target_id, direction
-            )
-        elif target_type == NfcCheckInTarget.EVENT:
-            result = await self._check_in_event(
-                organization_id, user, target_id, direction
-            )
         else:
-            result = await self._check_in_admin_hours(
-                organization_id, user, target_id, direction
-            )
+            if target_type == NfcCheckInTarget.SHIFT:
+                result = await self._check_in_shift(
+                    organization_id, user, target_id, direction
+                )
+            elif target_type == NfcCheckInTarget.EVENT:
+                result = await self._check_in_event(
+                    organization_id, user, target_id, direction
+                )
+            else:
+                result = await self._check_in_admin_hours(
+                    organization_id, user, target_id, direction
+                )
 
-        result.setdefault("user_id", str(user.id))
-        result.setdefault("member_name", user.display_name)
-        result.setdefault("membership_number", user.membership_number)
+            result.setdefault("user_id", str(user.id))
+            result.setdefault("member_name", user.display_name)
+            result.setdefault("membership_number", user.membership_number)
 
-        # Only a tap that actually moved attendance counts as use. Stamping on
-        # a refusal too would make "last used" mean "last waved at a reader",
-        # which is not what a card audit is looking for.
-        if tag and result["status"] in (
-            NfcCheckInStatus.CHECKED_IN,
-            NfcCheckInStatus.CHECKED_OUT,
-        ):
-            tag.last_used_at = datetime.now(timezone.utc)
-            await self.db.flush()
+            # Only a tap that actually moved attendance counts as use. Stamping
+            # on a refusal too would make "last used" mean "last waved at a
+            # reader", which is not what a card audit is looking for.
+            if tag and result["status"] in (
+                NfcCheckInStatus.CHECKED_IN,
+                NfcCheckInStatus.CHECKED_OUT,
+            ):
+                tag.last_used_at = datetime.now(timezone.utc)
 
+        await self._record_tap(
+            organization_id=organization_id,
+            tag=tag,
+            user=user,
+            tag_uid=tag_uid,
+            outcome=result["status"],
+            source=source,
+            location_id=location_id,
+            operator_id=operator_id,
+            target_type=target_type,
+            target_id=target_id,
+            target_name=result.get("target_name"),
+        )
         return result
+
+    async def _record_tap(
+        self,
+        *,
+        organization_id: str,
+        tag: Optional[NfcTag],
+        user: Optional[User],
+        tag_uid: str,
+        outcome: NfcCheckInStatus,
+        source: NfcTapSource,
+        location_id: Optional[str] = None,
+        operator_id: Optional[str] = None,
+        target_type: Optional[NfcCheckInTarget] = None,
+        target_id: Optional[str] = None,
+        target_name: Optional[str] = None,
+    ) -> None:
+        """Write one row to the tap log.
+
+        A card that matched no registration is kept as its peppered hash, the
+        same value ``nfc_tags`` would store, so repeated tries with one
+        stranger's card can be seen as one card without the serial itself
+        being kept anywhere.
+        """
+        member_id = user.id if user else (tag.user_id if tag else None)
+        self.db.add(
+            NfcCardTap(
+                organization_id=str(organization_id),
+                tag_id=tag.id if tag else None,
+                user_id=str(member_id) if member_id else None,
+                unknown_uid_hash=None if tag else hash_tag_uid(tag_uid),
+                source=source,
+                location_id=str(location_id) if location_id else None,
+                operator_id=str(operator_id) if operator_id else None,
+                target_type=target_type,
+                target_id=str(target_id) if target_id else None,
+                target_name=target_name[:255] if target_name else None,
+                outcome=outcome,
+                tapped_at=datetime.now(timezone.utc),
+            )
+        )
+        await self.db.flush()
 
     # =========================================================================
     # Room kiosk (unattended)
@@ -423,12 +484,12 @@ class NfcTagService:
         )
 
         if not events:
-            return self._kiosk_result(
-                self._result(
-                    NfcCheckInStatus.REFUSED,
-                    "No event in this room is open for check-in right now.",
-                )
+            result = self._result(
+                NfcCheckInStatus.REFUSED,
+                "No event in this room is open for check-in right now.",
             )
+            await self._record_kiosk_refusal(location, tag_uid, tag_payload)
+            return self._kiosk_result(result)
 
         event: Optional[Event]
         if len(events) == 1:
@@ -438,14 +499,14 @@ class NfcTagService:
                 organization_id, events, (tag_payload, tag_uid)
             )
             if event is None:
-                return self._kiosk_result(
-                    self._result(
-                        NfcCheckInStatus.REFUSED,
-                        "More than one event is running in this room. Tap the "
-                        "room's tag with your phone to choose, or ask an "
-                        "officer to check you in.",
-                    )
+                result = self._result(
+                    NfcCheckInStatus.REFUSED,
+                    "More than one event is running in this room. Tap the "
+                    "room's tag with your phone to choose, or ask an "
+                    "officer to check you in.",
                 )
+                await self._record_kiosk_refusal(location, tag_uid, tag_payload)
+                return self._kiosk_result(result)
 
         result = await self.check_in(
             organization_id=organization_id,
@@ -454,9 +515,35 @@ class NfcTagService:
             target_type=NfcCheckInTarget.EVENT,
             target_id=str(event.id),
             direction=NfcCheckInDirection.AUTO,
+            source=NfcTapSource.KIOSK,
+            location_id=str(location.id),
         )
         result["event_id"] = str(event.id)
         return self._kiosk_result(result)
+
+    async def _record_kiosk_refusal(
+        self, location: Location, tag_uid: str, tag_payload: Optional[str]
+    ) -> None:
+        """Log a kiosk tap the room itself turned away, before any event.
+
+        The card is still resolved so the log can say whose tap it was — the
+        question an officer is asked is "why didn't my card work in the
+        training room", and an anonymous refusal cannot answer it. Nothing
+        resolved here reaches the public screen.
+        """
+        organization_id = str(location.organization_id)
+        tag, user, _refusal = await self.resolve_tag(
+            organization_id, (tag_payload, tag_uid)
+        )
+        await self._record_tap(
+            organization_id=organization_id,
+            tag=tag,
+            user=user,
+            tag_uid=tag_uid,
+            outcome=NfcCheckInStatus.REFUSED,
+            source=NfcTapSource.KIOSK,
+            location_id=str(location.id),
+        )
 
     async def _only_event_checked_into(
         self,
@@ -873,6 +960,7 @@ class NfcTagService:
             "issued_by": tag.issued_by,
             "created_at": tag.created_at,
             "updated_at": tag.updated_at,
+            "auto_suspended": bool(tag.auto_suspended),
             "member_name": names.get(tag.user_id),
             "issued_by_name": names.get(tag.issued_by) if tag.issued_by else None,
         }

@@ -416,6 +416,16 @@ There are two ways to make one:
 In the item list, a product's size variants fold into one row that you expand
 to see each size. A coat in six sizes is one line until you open it.
 
+### Renaming a variant product
+
+Rename a product once and every size follows. On **Inventory Administration →
+Variant Groups**, edit the group's name, or on the folded product row in the item
+list choose **Rename** (needs **Manage inventory**). The first part of each size's
+name, before the dash, becomes the new name; the size, colour and style after it
+stay. A size filed under a different name is left alone. If any new name would be
+over 255 characters, nothing changes. Generating more sizes afterward reuses the
+group by its new name.
+
 ### Generating sizes and styles
 
 Needs the **Manage gear, uniforms and equipment** permission.

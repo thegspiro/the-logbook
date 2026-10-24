@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**318 tables · 5262 columns · 1076 foreign keys**
+**319 tables · 5276 columns · 1081 foreign keys**
 
 ---
 
@@ -485,7 +485,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`nfc_tags`](#nfc_tags) | `NfcTag` | 15 | An NFC credential (ID card) issued to a member. |
+| [`nfc_card_taps`](#nfc_card_taps) | `NfcCardTap` | 13 | One tap of a card at a station or a room kiosk, whatever its outcome. |
+| [`nfc_tags`](#nfc_tags) | `NfcTag` | 16 | An NFC credential (ID card) issued to a member. |
 
 ### Notifications
 
@@ -7386,6 +7387,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Nfc_Tag
 
+### `nfc_card_taps`
+
+**NfcCardTap** · `app/models/nfc_tag.py`
+
+> One tap of a card at a station or a room kiosk, whatever its outcome. Refusals are recorded as well as check-ins, because a refusal is the event an officer is usually asked about ("my card didn't work at the meeting"). The audit log keeps its own entries for taps that moved attendance; this table exists so the ID-card screen can filter by card, member and outcome without parsing audit JSON, and it is purged after the organization's retention period (``nfc_id_cards.tap_retention_months``). ``tag_id`` and ``user_id`` are SET NULL rather than CASCADE: deleting a mis-registered card must not erase the record that a tap happened, and the tap is evidence about the reader as much as about the member.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `tag_id` | VARCHAR(36) | yes | FK |  | → `nfc_tags.id` ON DELETE SET NULL |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `unknown_uid_hash` | VARCHAR(64) | yes |  |  |  |
+| `source` | ENUM(`station`, `kiosk`) | no |  |  |  |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `operator_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `target_type` | ENUM(`shift`, `event`, `admin_hours`) | yes |  |  |  |
+| `target_id` | VARCHAR(36) | yes |  |  |  |
+| `target_name` | VARCHAR(255) | yes |  |  |  |
+| `outcome` | ENUM(`checked_in`, `checked_out`, `already_checked_in`, `already_checked_out`, `unknown_card`, `card_inactive`, `member_inactive`, `refused`) | no |  |  |  |
+| `tapped_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_nfc_card_tap_org_location` (`organization_id`, `location_id`)
+- `idx_nfc_card_tap_org_tag` (`organization_id`, `tag_id`)
+- `idx_nfc_card_tap_org_time` (`organization_id`, `tapped_at`)
+- `idx_nfc_card_tap_org_user` (`organization_id`, `user_id`)
+
 ### `nfc_tags`
 
 **NfcTag** · `app/models/nfc_tag.py`
@@ -7406,6 +7436,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `last_used_at` | DATETIME | yes |  |  |  |
 | `revoked_at` | DATETIME | yes |  |  |  |
 | `revoked_reason` | TEXT | yes |  |  |  |
+| `auto_suspended` | BOOL | no |  | `0` |  |
 | `issued_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -11077,7 +11108,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (395 references)
+### → `users` (397 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11339,6 +11370,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_suggestions` | `resolved_by` | SET NULL | yes |
 | `minutes_templates` | `created_by` | RESTRICT | yes |
 | `multi_agency_trainings` | `created_by` | SET NULL | yes |
+| `nfc_card_taps` | `operator_id` | SET NULL | yes |
+| `nfc_card_taps` | `user_id` | SET NULL | yes |
 | `nfc_tags` | `issued_by` | SET NULL | yes |
 | `nfc_tags` | `user_id` | CASCADE | no |
 | `nfpa_exposure_records` | `created_by` | RESTRICT | yes |
@@ -11477,7 +11510,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (261 references)
+### → `organizations` (262 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11650,6 +11683,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_suggestions` | `organization_id` | CASCADE | no |
 | `minutes_templates` | `organization_id` | CASCADE | no |
 | `multi_agency_trainings` | `organization_id` | CASCADE | no |
+| `nfc_card_taps` | `organization_id` | CASCADE | no |
 | `nfc_tags` | `organization_id` | CASCADE | no |
 | `nfpa_exposure_records` | `organization_id` | CASCADE | no |
 | `nfpa_inspection_details` | `organization_id` | CASCADE | no |
@@ -11836,7 +11870,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_records` | `source_event_id` | SET NULL | yes |
 | `training_sessions` | `event_id` | CASCADE | no |
 
-### → `locations` (13 references)
+### → `locations` (14 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11851,6 +11885,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `events` | `location_id` | RESTRICT | yes |
 | `inventory_items` | `location_id` | SET NULL | yes |
 | `meetings` | `location_id` | SET NULL | yes |
+| `nfc_card_taps` | `location_id` | SET NULL | yes |
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
@@ -12683,6 +12718,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `meeting_minutes` | `template_id` | SET NULL | yes |
+
+### → `nfc_tags` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `nfc_card_taps` | `tag_id` | SET NULL | yes |
 
 ### → `notification_rules` (1 references)
 

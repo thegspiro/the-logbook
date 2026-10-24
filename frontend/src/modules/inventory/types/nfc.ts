@@ -10,6 +10,7 @@ import type {
   InventoryAuditFrequency,
   InventoryNfcAuditResult,
   InventoryNfcScanAction,
+  InventoryNfcTagKind,
   InventoryNfcTagStatus,
   NfcCredentialType,
 } from '../../../constants/enums';
@@ -34,6 +35,48 @@ export interface InventoryNfcTag {
 export interface InventoryNfcTagListResponse {
   items: InventoryNfcTag[];
   total: number;
+}
+
+/** A row of the department-wide tag register (`GET /inventory/nfc-tags`). */
+export interface InventoryNfcRegisterTag extends InventoryNfcTag {
+  kind: InventoryNfcTagKind;
+  /** What the tag names; null if that target no longer resolves. */
+  target_name: string | null;
+  /** For a compartment tag, the checklist the compartment is on. */
+  template_name: string | null;
+  /** Newest staff tap of this tag. Item tags only. */
+  last_scanned_at: string | null;
+}
+
+export interface InventoryNfcRegisterList {
+  items: InventoryNfcRegisterTag[];
+  total: number;
+}
+
+export interface InventoryNfcRegisterFilters {
+  kind?: InventoryNfcTagKind | undefined;
+  status?: InventoryNfcTagStatus | undefined;
+  search?: string | undefined;
+}
+
+export interface InventoryNfcTagBulkStatusResponse {
+  updated: InventoryNfcTag[];
+  failed: { id: string; detail: string }[];
+}
+
+/** Somewhere a register tag could move to. */
+export interface InventoryNfcMoveTarget {
+  id: string;
+  name: string;
+  /** Serial number for an item, checklist name for a compartment. */
+  detail: string | null;
+}
+
+/** Exactly one target, of the kind the tag is on now. */
+export interface InventoryNfcTagMove {
+  item_id?: string | undefined;
+  storage_area_id?: string | undefined;
+  check_compartment_id?: string | undefined;
 }
 
 export interface InventoryNfcTagCreate {

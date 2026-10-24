@@ -3,11 +3,167 @@
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
-2026-10-20 (pass 9) · **PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
+2026-10-20 (pass 9), 2026-10-24 (pass 10) · **PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
 (pass 1), pass 7 merged as commit `9da13118` (no PR — pushed directly), pass
 6 merged as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875),
 pass 8 merged as PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339),
-pass 9 (this PR)
+pass 9 merged as PR [#3454](https://github.com/thegspiro/the-logbook/pull/3454),
+pass 10 (this PR)
+
+---
+
+## Pass 10 (2026-10-24) — watchdog pickup, GF-9 fully resolved (owner decision), 0 fixed by this pass itself, 0 new findings
+
+**Watchdog pickup.** PR #3632 (Feature 21, Admin hours, pass 10) had just
+merged (docs-only — not independently recordable) with no open PR whose head
+branch starts with `claude/security-review-` (`search_pull_requests`, 0
+results) and the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) not reachable (`ListAgents`). Row 22
+(Grants & fundraising) was confirmed the next `⬜` by reading the rotation
+table directly on a freshly fetched `main`.
+
+**Backend (unchanged file set):** `app/api/v1/endpoints/grants.py`,
+`app/services/grant_service.py`, `app/services/fundraising_service.py`,
+`app/models/grant.py`, `app/schemas/grant.py`. **Frontend:**
+`frontend/src/modules/grants-fundraising/`.
+
+### Diff-scoping methodology
+
+Baseline `115afe67` (PR #3454's merge, pass 9). `git log 115afe67..HEAD --
+<scope files>` found seven non-rotation commits touching this feature's
+files, all dated 2026-10-20/21, none from this rotation. Each read against
+the current code, not trusted from its own commit message:
+
+1. **`e8f506ac` + `74638250`** — PR #3533's money-bounds half of **GF-9**.
+   Every amount field on a grants/fundraising request schema moved from
+   `Field(..., ge=0)` (no ceiling) to a bounded `Field(..., gt=0 or ge=0,
+le=MAX_GIFT_AMOUNT or MAX_AMOUNT)`: a donation or pledge must be above $0
+   and at most $1,000,000; awards, budgets, campaign/event goals,
+   expenditures and the `GrantBudgetSummary` categories are capped at
+   $100,000,000; `$0` stays valid where it means something (a denied award, a
+   free ticket). Confirmed by reading `app/schemas/grant.py` directly — every
+   `Field(...)` carrying an amount now carries `le=`, including the
+   `GrantBudgetSummary` fields pass 9 flagged as freshly minted in the old
+   unbounded shape. Bounds are request-schema-only (a response still
+   serializes a pre-cap row); `74638250`'s repo-wide numeric-bounds sweep
+   re-ordered the same file's `Field()` declarations without changing any of
+   them beyond the `le=` additions.
+2. **`22d5b777`** — PR #3533's donor-PII half of **GF-9**. A caller with only
+   `fundraising.view` previously read a non-anonymous donor's full contact
+   detail (email, phone, address, notes, communication preferences, linked
+   member account). `app/services/donor_privacy.py`'s `present_donor` now
+   clears a new `DONOR_CONTACT_FIELDS` tuple for such a caller regardless of
+   `is_anonymous`, setting `contact_hidden=True` so the UI can explain the
+   blank fields; `present_donation` clears `donor_email` the same way. Name,
+   donor type, company, lifetime totals and dates stay visible — enough to
+   see who supports the department without exposing how to contact them
+   outside department channels. `list_donors`'s new `search_contact` flag
+   (threaded from the endpoint's `can_see_identity`) drops `Donor.email` from
+   the search `ilike` when the caller cannot see it, closing the same
+   "confirm by searching" gap GF-8 already closed for anonymity — verified by
+   reading the compiled SQL in `test_donor_contact_privacy.py`'s
+   `TestSearchDoesNotConfirmAnEmail`, not by reading the source alone. A
+   `fundraising.manage` holder is unaffected on every path. Guard tests:
+   `backend/tests/test_donor_contact_privacy.py` (new, 7 cases, all read and
+   confirmed to assert the masked fields by name rather than merely that a
+   response was returned).
+3. **`f5ddf81b`** (a governance/finance-deletes commit, out of this feature's
+   declared scope but touching `fundraising_service.py` incidentally) —
+   `FundraisingCampaign.active` (a pre-existing column from the 2026-02-01
+   table-creation migration, previously read only by `list_campaigns`) is now
+   also enforced by `get_campaign`, so a soft-deleted campaign is invisible
+   to a direct by-id fetch, update, or new donation/pledge/event assignment,
+   not just to the list. A new `_campaign_assignable` helper lets an
+   existing donation/pledge/event **keep** a campaign_id that was valid when
+   it was recorded, even after that campaign is later deleted — reassigning
+   to a _different_, inactive campaign still 400s. Verified this does not
+   regress GF-15's locking: `_lock_campaign`/`_update_campaign_total` use
+   their own direct `FundraisingCampaign` queries (no `active` filter), so a
+   donation already linked to a since-deleted campaign still recomputes that
+   campaign's running total correctly — only the public by-id read path
+   gained the filter, not the internal aggregate-recompute path. No
+   migration needed (the column already existed); confirmed by grepping
+   every migration touching `fundraising_campaigns` for `active` — none add
+   it.
+4. **`29064e36` + `45f8d92b`** — a repo-wide UTC-normalization sweep's share
+   of this feature: `donation_date`/`event_date` request fields moved to the
+   shared `UTCDateTime` type (so a naive value is rejected rather than
+   silently stored as if it were UTC), and the fundraising report's monthly
+   grouping now buckets by the department's local month
+   (`to_local(d.donation_date, tz)`) instead of the stored UTC instant, so a
+   late-evening gift on the last day of the month is no longer filed under
+   the next month while the (already-local) range filter counts it in the
+   earlier one. Pure correctness fixes, not a new surface or a weakened
+   validation — `gt=0`/`le=` bounds from item 1 are unaffected by the type
+   change.
+
+### Route surface — re-enumerated from scratch, unchanged
+
+45 `@router.` decorators, 45 `require_permission(...)` calls (27
+`fundraising.manage`, 18 `fundraising.view`) — identical counts to pass 9.
+`scripts/check_route_permissions.py --strict`: 273 routes repo-wide, 0
+errors, 0 warnings. No route added, removed, or regated.
+
+### GF-9 — now fully resolved; nothing left open under this id
+
+Pass 9 left two of GF-9's three original gaps open (zero/unbounded amounts;
+donor-PII gate breadth). Both are now closed by the two owner-decision
+commits above (items 1–2), and `docs/KNOWN_LIMITATIONS.md`'s GF-9 row
+already reflects the resolution — confirmed by reading the current row, not
+assumed from the commit messages. GF-9 has no open remainder.
+
+### Re-confirmed unchanged (not re-derived)
+
+- **GF-1 through GF-6** (cross-org FK validation) — `_entity_in_org`,
+  `_opportunity_in_org`, `_budget_item_in_application`,
+  `_validate_pledge_fks`, `_validate_fundraising_event_fks`,
+  `_validate_application_fks` all unchanged in logic; the two FK validators
+  that gained a `current_campaign_id` parameter (item 3 above) still reject
+  an out-of-org id with the same `ValueError` — the parameter only widens
+  which _in-org_ campaign is accepted when it matches the record's existing
+  one.
+- **GF-7/GF-8/GF-14/GF-24a/GF-27a/GF-33/GF-35/GF-36** — unchanged since pass
+  9; none of this pass's six commits touch `APPLICATION_STATUS_TRANSITIONS`,
+  `_generate_compliance_tasks`, `resolve_local_range_utc`/
+  `APPLICATION_STATUS_GROUPS`, or either service's pagination helpers.
+- **Locking (Pitfall #27)** — all `.with_for_update()` sites unchanged in
+  count and placement; item 3's soft-delete filter confirmed not to weaken
+  any of them (above).
+- **LIKE escaping** — every `.ilike()` call site (opportunity search, donor
+  search) still carries `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`;
+  item 2's `search_contact` flag only gates _which_ columns are OR'd into the
+  pattern match, not how the pattern itself is escaped.
+- **CSV export** — still n/a; no export exists anywhere in this module.
+- **JSON-column mutation (Pitfall #12)** — no new `dict(obj.json_column)`
+  shallow-copy-then-mutate shape introduced this window.
+
+**No new findings.**
+
+### Schema & migration notes
+
+No migration written or needed this pass; none of the six commits in scope
+added, renamed, or retyped a column (the `active` column item 3 newly reads
+already existed). Chain re-validated: 649 revisions, single head
+`a0195b397bf3`, no duplicate ids.
+
+### Completion gate (pass 10)
+
+| Check                                                 | Result                              |
+| ----------------------------------------------------- | ----------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                     |
+| `black --check app/ tests/ alembic/`                  | ✅ 2606 files unchanged             |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean                            |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 649 revisions, single head       |
+| `pytest tests/ -q -k "grant or fundraising"`          | ✅ 1239 passed, 1 pre-existing skip |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 273 routes, 0 errors, 0 warnings |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors                         |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings             |
+| `npx vitest run src/modules/grants-fundraising`       | ✅ 112/112 passed (23 files)        |
+
+No source file is modified by this pass — every fixable item (GF-9's two
+remaining thirds) had already landed via non-rotation commits (PR #3533)
+before this pass began; this pass's own diff is documentation-only (this
+file + `PROGRESS.md`).
 
 ---
 

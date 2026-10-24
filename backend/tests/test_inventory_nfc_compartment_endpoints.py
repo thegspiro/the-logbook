@@ -127,10 +127,21 @@ class TestTagKindDecidesThePermission:
         service.update_tag.assert_not_awaited()
         service.unlink_tag.assert_not_awaited()
 
+    # The quartermaster keeps the register of every tag, compartments included
+    # (owner's decision, 2026-10-23); the checklist builder still cannot reach
+    # item tags (above).
     @pytest.mark.parametrize("method", ["PATCH", "DELETE"])
-    async def test_a_quartermaster_cannot_touch_a_compartment_tag(self, method):
+    async def test_a_quartermaster_manages_a_compartment_tag(self, method):
         response, service = await self._call(
             ("inventory.manage",), method, compartment=True
+        )
+        assert response.status_code in (200, 204)
+        assert service.update_tag.await_count + service.unlink_tag.await_count == 1
+
+    @pytest.mark.parametrize("method", ["PATCH", "DELETE"])
+    async def test_a_viewer_cannot_touch_a_compartment_tag(self, method):
+        response, service = await self._call(
+            ("inventory.view",), method, compartment=True
         )
         assert response.status_code == 403
         service.update_tag.assert_not_awaited()

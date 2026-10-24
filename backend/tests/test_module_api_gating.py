@@ -270,6 +270,7 @@ DELIBERATELY_UNGATED = {
     "/api/v1/forms": "cross-module form builder; a core module in onboarding",
     "/api/v1/labels": "label printing for apparatus, facilities, prospects and members alike",
     "/api/v1/nfc-tags": "tag scanning shared across modules",
+    "/api/v1/nfc-activity": "card taps by room and by event; the room half serves the Locations stand-in when Facilities is off",
     "/api/v1/email-templates": "templates behind mail the app sends regardless of which screens exist",
     "/api/v1/analytics": "reads across several modules at once",
     "/api/v1/compliance": "reads across several modules at once",
@@ -465,6 +466,14 @@ ROUTES_OPEN_BY_DESIGN = {
     "/locations/:locationId/check-in": (
         "a room NFC tag's landing; must work in Locations and Facilities mode, "
         "and forwards to /events/:id/check-in, which carries the event gate"
+    ),
+    "/locations/qr-codes": (
+        "room kiosk QR codes are printed in Locations mode too; reached from "
+        "the Locations stand-in when Facilities is off"
+    ),
+    "/locations/card-readers": (
+        "room kiosk readers exist in Locations mode too; reached from the "
+        "Locations stand-in when Facilities is off"
     ),
     "/apparatus-basic": "the stand-in served when Apparatus is off",
 }

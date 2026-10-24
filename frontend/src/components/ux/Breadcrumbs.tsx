@@ -196,6 +196,8 @@ const PATH_LABELS: Record<string, string> = {
   // Not title-cased from the segment: that yields "Check In Station", and the
   // page's own heading hyphenates it.
   'check-in-station': 'Check-In Station',
+  'card-readers': 'Card Readers',
+  'id-cards': 'ID Cards',
   history: 'History',
   'id-card': 'ID Card',
 };

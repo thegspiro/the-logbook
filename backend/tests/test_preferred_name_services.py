@@ -92,6 +92,7 @@ class TestNfcKioskShortName:
         service._check_in_shift = AsyncMock(
             return_value={"status": NfcCheckInStatus.CHECKED_IN, "message": "ok"}
         )
+        service._record_tap = AsyncMock()
 
         result = await service.check_in(
             organization_id=user.organization_id,
