@@ -2258,7 +2258,9 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    (`enforce_position_eligibility=True`), which returns no positions for an
    excluded type, and the assignment is refused with "Member is no longer
    eligible for this shift". Shifts open to all members and administrative
-   members are the exceptions.
+   members are the exceptions. **Same refusal now extends to pattern
+   generation (2026-10-24):** generated seats run the same check, so an
+   excluded member is left unseated rather than seated by the pattern.
 6. **"Manage schedules" sees assign controls the server refuses.**
    `ShiftDetailPanel.tsx` and `OpenShiftsTab.tsx` show **Assign someone** to
    `scheduling.manage` holders, but creating, editing or removing an assignment
@@ -2271,6 +2273,68 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    **Complete Checklists** button.
    **Resolved (2026-10-11):** the hint now reads "Not started — use Complete
    Checklists above".
+
+## Scheduling — Left Open by the Shifts-Module Review (2026-10-24)
+
+The 2026-10-24 review of the shifts module fixed what it found in a set of
+pull requests: the trainee report view that erased officers' narratives, the
+generation duplicate guard and DST end time, template reactivation,
+assignment and eligibility gates, locks on finalized and cancelled shifts,
+shift-report review rules, and the report figures. Each item below was found
+in the same pass and needs a schema change or a product decision, so it is
+recorded here rather than built.
+
+1. **Deleting or re-timing a generated shift lets auto-generation recreate
+   it.** Pattern generation treats an occurrence as already present when a
+   shift from the pattern's template starts at that date and time; that is not
+   a durable occurrence key. Deleting a generated shift (which removes the
+   row) or moving its start leaves nothing at that key, so the next scheduled
+   run — when auto-generation is on — recreates the original occurrence with
+   the pattern's full crew. **Cancel** is the supported way to remove one
+   occurrence: a cancelled shift stays in the guard and is never regenerated.
+   To change a generated shift's start, cancel it and create the replacement
+   by hand. A fix needs a stored pattern/occurrence key on generated shifts (a
+   column and a migration).
+2. **The nightly run reports skipped seats as a count in the server log
+   only.** Generation now seats a member only where the seat, eligibility,
+   seat cap, leave and overlap checks an officer's assignment runs would allow
+   it. A manual Generate names the skipped members in its result; the
+   scheduled run logs how many it skipped per pattern and shows nothing in the
+   app, so a department whose members have no rank, qualification or open
+   position configured sees crews left unseated with no on-screen notice.
+   Surfacing it (a notification to schedulers, or a badge on the pattern) is
+   open.
+3. **Editing an approved shift report does not restate its training
+   credit.** The filing officer can no longer change a submitted report's
+   status, but can still edit an approved report's hours, calls and skills,
+   and the credit already applied keeps the old figures, so the report and the
+   pipeline disagree. Locking content edits after approval would remove
+   behaviour existing call-type provenance tests depend on; restating the
+   credit on edit is the alternative. Either is the owner's choice.
+4. **Sign-offs recorded before 2026-10-24 can still duplicate on
+   re-approval.** Re-approving a report no longer adds a second skill sign-off
+   for the same skill, keyed on the report id now stored in
+   `SkillCheckoff.evaluation_results`. Sign-offs written before that carry no
+   report id, so re-approving one of those older reports can still add one.
+5. **Shift attendance has no database-level uniqueness.** `add_attendance`
+   now locks the shift and refuses a second row for the same member, and
+   `member_check_in` already did, but `shift_attendance` has no unique
+   constraint on `(shift_id, user_id)`. Adding one needs a migration that first
+   settles any duplicate rows already stored (CLAUDE.md Pitfall #35).
+6. **Shift cancellation notices are in-app only.** `cancel_shift` notifies the
+   crew in the app and sends no email, and unlike the decline and assignment
+   notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes
+   email the channel of record; whether a cancellation should email, and
+   under which member email kind, is a product decision.
+7. **The month and week calendars stop at 500 shifts without saying so.**
+   `get_month_shifts` and `get_week_shifts` pass `limit=500`, so a department
+   running enough units with day and night shifts loses the end of the month
+   from the calendar.
+8. **Driver/EVOC enforcement knows the seat named `driver` only.** Custom
+   seat names are stored as typed, so a department that names its wheel seat
+   "Engineer" or "Driver/Operator" seats members without the required EVOC
+   level, with no block or warning. A fix is a "drives apparatus" flag on the
+   seat definition or an alias list.
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
