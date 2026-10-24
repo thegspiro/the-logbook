@@ -1,6 +1,131 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), pass 8 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), pass 10 (this PR)
+
+## Pass 10 (2026-10-24) — 0 fixed by this pass, 0 new findings; AH-18 (pass 9's one open finding) is now fixed
+
+**Watchdog pickup for the security-review rotation** (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`list_pull_requests`, 0 results after PR #3631,
+Feature 20 Compliance pass 10, was merged by this same watchdog run), and
+the dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). Rotation row 21 (Admin hours) was confirmed the
+next `⬜` by reading `PROGRESS.md`'s table directly on a freshly fetched
+`main`.
+
+**Baseline `4a1eeed4`** (pass 9's merge, PR #3451). `git diff --stat` across
+every file this feature declares in scope (`endpoints/admin_hours.py`,
+`admin_hours_service.py`, `schemas/admin_hours.py`,
+`utils/admin_hours_settings.py`, `core/seed_admin_hours.py`, the
+`admin-hours` frontend module) shows movement in two backend files and
+eleven frontend files — `endpoints/admin_hours.py` itself is untouched, so
+the route surface is unchanged from pass 9 (re-enumerated by AST walk:
+still 30/30, same permission strings).
+
+- **`admin_hours_service.py` — AH-18 (pass 9's one open finding) is fixed,
+  by commit `9789684f` (merged via PR #3464, a dedicated security-sweep
+  branch, not this rotation).** Pass 9 flagged `_assert_name_free` as a
+  read-then-write race: two officers adding the same category name at once
+  could both read "free" and both insert. The fix is exactly CLAUDE.md
+  Pitfall #27's two-part pattern — `select(Organization.id).where(...).with_for_update()`
+  to lock the contended parent row first, then the name check itself
+  rewritten as a `.with_for_update()` locking read (necessary because under
+  REPEATABLE READ a plain `SELECT` answers from the transaction's first
+  snapshot, which predates the lock). Read the full diff: the lock is taken
+  before the check in both the create and rename paths, nothing else in
+  this file locks category rows, and no code holding this lock waits on
+  one, so there is no lock-order inversion introduced.
+  **Guard test:** `tests/test_admin_hours_category_names.py`'s
+  `TestTheNameCheckSerializesConcurrentWrites` spies on the exact SQL
+  `db_session.execute` emits (compiled for MySQL) and asserts the
+  `organizations ... FOR UPDATE` lock statement's index precedes the
+  `admin_hours_categories ... FOR UPDATE` check statement's index, for both
+  `create_category` and `update_category`; a third test asserts
+  deactivating a category takes no lock at all. This proves the mechanism
+  (lock-then-locking-read, in order) rather than asserting a race actually
+  interleaved — the test's own docstring says why a real two-connection
+  race can't be driven inside one rolled-back test transaction. Ran it
+  directly: 3/3 pass. AH-18 moves to ✅ FIXED below.
+- **`schemas/admin_hours.py` — app-review finding B15 fixed, by commit
+  `1f02bcd5` (merged via PR #3477, an app-review branch, not this
+  rotation).** `EventHourMappingUpdate.percentage`/`.is_active` previously
+  read an explicit JSON `null` the same as an omitted key, so a client
+  clearing either field on `PUT /admin-hours/event-mappings/{id}` got a 200
+  that silently changed nothing (CLAUDE.md Pitfall #1's "omit vs. explicit
+  null" rule, violated in the omit direction). A `field_validator` on both
+  fields now raises on an explicit `None`, and does **not** fire for an
+  omitted key (the fix's own commit message records this was verified
+  rather than assumed — a `Field(None, ...)` default does not re-run
+  validators against values pydantic itself supplies). The endpoint still
+  maps the resulting `ValidationError` to FastAPI's normal 422, and the
+  underlying `apply_updates` write path is untouched. Not itself a security
+  finding (data-integrity/correctness, dimension 7), but it is this
+  feature's scope, so it is recorded here rather than silently inherited.
+  New integration test file
+  `test_admin_hours_update_endpoints_integration.py` (263 lines) exercises
+  it against a real database — not re-run in full this pass since it's
+  pre-existing coverage of an already-landed fix, but included in the
+  `-k admin_hours` run below (170/170 pass, no new failures).
+- **Frontend (eleven files) — cosmetic only.** The repo-wide AAA→AA contrast
+  sweep (`text-*-600`/`text-*-700` → `-700`/`-800` pairings) and a layout
+  wrap fix on `CategoriesTab.tsx` (`min-w-0`/`flex-wrap` so a long category
+  name no longer pushes its action icons off-card on a narrow phone), an
+  `aria`/`title` alt-text addition to the clock-in QR code's `<QRCodeSVG>`,
+  and `adminHoursCategoryService.list()` gaining an optional second
+  `config` parameter so `CheckInStationPage.tsx` (one of the six genuine
+  consumers AH21-2 found) can pass an `AbortSignal` for cancellation on
+  unmount — it still calls `createApiClient()`'s shared instance, so CSRF
+  and auth are unaffected. Swept all eleven changed files for
+  `window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`,
+  `innerHTML`, a bare `fetch(`/`axios` import, `localStorage`/
+  `sessionStorage`, and the banned `.toLocale*`/`date-fns` imports: zero
+  hits.
+
+### Findings
+
+**AH-18 — ✅ FIXED (confirmed this pass; fix itself landed in PR #3464, before this pass began)** — see above.
+
+No new findings. Every standing item from passes 1–9 (the per-org SoD
+toggle, the resync-growth re-queue, AH-16, CRON2-31-13) was already closed
+by the owner decision recorded under pass 5/8; nothing in this window's
+delta touches any of them.
+
+### Re-verification (read at current lines)
+
+- **Route inventory, enumerated by AST: 30 routes, 30 authenticated, unchanged
+  from pass 9.** `endpoints/admin_hours.py` has no diff since pass 9's
+  baseline, so the permission strings (18 routes `require_permission("admin_hours.manage")`,
+  12 self/org-scoped on `get_current_user` alone) are unchanged by
+  construction, not merely re-asserted.
+- **`check_route_permissions.py --strict`:** 273 routes repo-wide, 0 errors,
+  0 warnings — same count as pass 9's `AH` section, confirming no route
+  drift from any other feature's PR in this window either.
+
+### Completion gate (pass 10)
+
+| Check                                                                                                                                                                                               | Result                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/api/v1/endpoints/admin_hours.py app/services/admin_hours_service.py app/schemas/admin_hours.py app/utils/admin_hours_settings.py app/core/seed_admin_hours.py` (flake8 7.4.1, CI's pin) | ✅ 0 violations                                           |
+| `black --check` (same files; black 26.10.1)                                                                                                                                                         | ✅ 3 files unchanged                                      |
+| `isort --check-only` (same files; isort 9.0.2)                                                                                                                                                      | ✅ clean                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                   | ✅ 649 revisions, single head `a0195b397bf3`              |
+| `pytest tests/ -q -k "admin_hours"`                                                                                                                                                                 | ✅ 170 passed, 1 pre-existing skip (`py_vapid`/pywebpush) |
+| `check_route_permissions.py --strict`                                                                                                                                                               | ✅ 273 routes, 0 errors, 0 warnings                       |
+
+No backend or frontend source file was modified by this pass itself — every
+change in this window's delta was already landed, correctly, by two other
+branches before this pass began; this pass's own contribution is verifying
+each against current code (including running AH-18's guard test directly)
+rather than trusting the commit message, and recording AH-18's closure here.
+`npm run typecheck`/`npm run lint` were not run: no frontend file in this
+window's delta needed re-verification beyond the source read above (cosmetic
+contrast/layout/alt-text changes, already covered by the repo-wide sweeps'
+own completion gates when they landed), and this PR's own diff touches only
+this markdown file and `docs/security-review/PROGRESS.md`.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ## Pass 9 (2026-10-20) — 0 fixed, 1 new LOW flagged; one non-rotation commit (`1ae0d0ac`, W70) reviewed in full
 
