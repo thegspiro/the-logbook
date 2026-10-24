@@ -15,6 +15,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
@@ -904,6 +905,19 @@ class ShiftCallUpdate(BaseModel):
         None, max_length=100
     )
     notes: Optional[str] = Field(None, max_length=2000)
+
+    # All three are nullable columns behind response fields that are plain
+    # str / bool, so a stored NULL would be written and then fail to serialize
+    # on every read of the call.
+    @field_validator("incident_type", "cancelled_en_route", "medical_refusal")
+    @classmethod
+    def _refuse_null(cls, value: Any, info: ValidationInfo) -> Any:
+        if value is None:
+            raise ValueError(
+                f"{info.field_name} cannot be null; leave the field out to keep "
+                "its current value"
+            )
+        return value
 
 
 class ShiftCallResponse(UTCResponseBase):

@@ -1,7 +1,8 @@
 # Application Review — Scheduling (Tier B)
 
 **Prefix:** `SCH2` · **Iteration:** B19 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-24 (pass 5)
 
 **Backend:** `endpoints/scheduling.py` (~1,900 L), `services/scheduling_service.py`
 (~5,000 L)
@@ -10,6 +11,76 @@
 escalation), SCH-2 (self-signup guards), SCH-3 (DoS), SCH-4 (`shift_officer_id` +
 hours-report join) fixed; SCH-5 (swap accept-path), SCH-6 (`manual_hours` + FKs)
 left open.
+
+---
+
+## Pass 5 (2026-10-24) — three update routes accepted a null they could not store (3 fixed)
+
+Lens for this pass: the update-payload contract (omit = keep, `null` = clear, a value =
+set), driven through the real handlers with the method B18 used on training. A test reads
+each `PATCH` route's request and response schemas from the application's own OpenAPI
+document, builds a row from the model, and sends `null` for every field the request
+schema accepts. A field must be **refused** (exactly 400 or 422, value unchanged, row
+still readable) when its column is NOT NULL or its response field cannot hold `None`, and
+must **clear** otherwise. Seven routes: shifts, attendance, calls, templates, patterns,
+assignments and basic apparatus. 67 cases; 7 failed.
+
+Also checked: all 108 scheduling endpoints carry an auth dependency (an AST scan of the
+router found none without `require_permission` or `get_current_user`), and the three
+`PUT` settings routes (`/settings`, `/eligibility/settings`, `/dashboard/widget-preferences`)
+type their fields non-Optional, so a null is already a 422. Shifts, attendance, templates
+and patterns, which route through `reject_null_for_required`/`apply_updates` from the
+earlier passes, came back clean in every case.
+
+### SCH2-2 — LOW/MED — a null on three basic-apparatus fields answered 500 — ✅ FIXED
+
+`PATCH /scheduling/apparatus/{id}` wrote the payload with a bare `setattr` loop. `name`,
+`unit_number` and `apparatus_type` are NOT NULL, so each failed at the flush (500, the
+session rolled back). **Fixed** by writing through `apply_updates`, with the `ValueError`
+returned as 400.
+
+### SCH2-3 — LOW/MED — a null on three call fields was stored and made the call unreadable — ✅ FIXED
+
+`incident_type`, `cancelled_en_route` and `medical_refusal` are nullable columns behind
+response fields that are plain `str` / `bool`. `update_shift_call` wrote the payload with
+`setattr`, so a null was committed and every later read of that call failed response
+validation (500) until the row was repaired by hand. **Fixed** in two places: the service
+writes through `apply_updates` (which also reports a field the model lacks instead of
+dropping it), and `ShiftCallUpdate` refuses a null on those three fields with a 422. The
+frontend `ShiftCallUpdate` type already excludes null for them, so the app's own form
+could not send one; the exposure was a direct client holding `scheduling.manage`.
+
+### SCH2-4 — LOW — a null seat on an assignment was acknowledged and ignored — ✅ FIXED
+
+`update_assignment` popped a null `position` from the payload on purpose ("a null cannot
+clear a NOT NULL seat, so it means leave the seat alone"). The effect was a 200 for a
+request that changed nothing, which is the mirror image of the bug the update contract
+exists to prevent: the caller is told it worked. A null now reaches
+`reject_null_for_required` and answers 400 like every other required field. The only
+caller of `update_assignment` is the endpoint, and the one UI use sends a seat or leaves
+it out, so no existing flow depended on the old behaviour. A seat that is not on the
+shift is still refused, which a new test pins.
+
+### Not done
+
+- **`PATCH /shifts/{id}/closeout/attendance` and `/closeout/calls`** take their own
+  request bodies rather than an update schema and are not in the derived test.
+- **The harness is a copy of the one in `test_training_update_endpoints_integration.py`**
+  (B18, PR #3659), with only the route table and fixture names changed. Once that merges,
+  it should move to a shared test helper that both files import.
+- **`ShiftCallUpdate._refuse_null` duplicates `RefusesNull`** from the same PR. It is a
+  local validator here because the base class is not on `main` yet; it should inherit it
+  once it is.
+- The other five checklist dimensions were not re-run beyond the auth scan above; passes
+  1–4 stand, and SCH-5 (swap accept-path) and the SCH-6 residual stay flagged as before.
+
+**Completion gate (pass 5):** `flake8 app/ tests/` 0 · `black --check app/ tests/` clean ·
+`isort` clean on the changed files · `mypy` on the three changed modules clean ·
+`check_route_permissions.py --strict` 0 errors · no frontend change · new file
+`test_scheduling_update_endpoints_integration.py` 71 pass (7 of the 67 derived cases failed
+before the three fixes) with 2,398 other tests selected by
+`sched|shift|assign|apparatus|call_track|position|model_updates|capacity` · 0 selected
+under the unit job's marker expression.
 
 ---
 
