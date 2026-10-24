@@ -40,19 +40,28 @@ from app.services.training_module_config_service import TrainingModuleConfigServ
 router = APIRouter()
 
 
-def _apply_trainee_visibility(report, visibility: dict) -> None:
-    """Strip fields from a report that the trainee should not see."""
+def _trainee_view(report, visibility: dict) -> ShiftCompletionReportResponse:
+    """The report as a trainee may see it, with hidden fields blanked.
+
+    The fields are blanked on a serialized copy, never on ``report``: it is
+    attached to the request's session, and ``get_db`` commits at the end of
+    every request, reads included, so a None set on the ORM row would erase
+    the officer's narrative and the reviewer's notes from the database.
+    """
+    hidden: dict = {"reviewer_notes": None}
     if not visibility.get("show_performance_rating", True):
-        report.performance_rating = None
+        hidden["performance_rating"] = None
     if not visibility.get("show_officer_narrative", False):
-        report.officer_narrative = None
+        hidden["officer_narrative"] = None
     if not visibility.get("show_areas_of_strength", True):
-        report.areas_of_strength = None
+        hidden["areas_of_strength"] = None
     if not visibility.get("show_areas_for_improvement", True):
-        report.areas_for_improvement = None
+        hidden["areas_for_improvement"] = None
     if not visibility.get("show_skills_observed", True):
-        report.skills_observed = None
-    report.reviewer_notes = None
+        hidden["skills_observed"] = None
+    return ShiftCompletionReportResponse.model_validate(report).model_copy(
+        update=hidden
+    )
 
 
 def _manages_training(user: User) -> bool:
@@ -290,12 +299,8 @@ async def get_my_shift_reports(
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
 
-    # Strip sensitive fields based on visibility config
     visibility = config.to_visibility_dict()
-    for report in reports:
-        _apply_trainee_visibility(report, visibility)
-
-    return reports
+    return [_trainee_view(report, visibility) for report in reports]
 
 
 @router.get("/my-stats")
@@ -613,8 +618,7 @@ async def get_shift_report(
     if is_trainee and not has_manage:
         config_service = TrainingModuleConfigService(db)
         config = await config_service.get_config(current_user.organization_id)
-        visibility = config.to_visibility_dict()
-        _apply_trainee_visibility(report, visibility)
+        return _trainee_view(report, config.to_visibility_dict())
 
     return report
 
