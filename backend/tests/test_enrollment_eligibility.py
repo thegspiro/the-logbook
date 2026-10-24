@@ -103,12 +103,12 @@ class TestEnrollmentEligibility:
     async def test_marks_missing_prerequisite_with_names(self):
         u1, u2 = _user("Al"), _user("Bo")
         program = _program(concurrent=True, prereqs=["prog-a"])
-        # queries: users, enrolled(none), prereq names, completed pairs (u1 only)
+        # queries: users, enrolled(none), prereq names + active, completed pairs (u1)
         svc = _svc(
             [
                 _scalars([u1, u2]),
                 _rows([]),
-                _rows([("prog-a", "Recruit School")]),
+                _rows([("prog-a", "Recruit School", True)]),
                 _rows([(u1.id, "prog-a")]),
             ],
             program,

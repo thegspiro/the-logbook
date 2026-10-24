@@ -189,7 +189,9 @@ class TestCrud:
         assert out.sort_order == 3
 
     async def test_update_rejects_duplicate_code(self):
-        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        rank = SimpleNamespace(
+            id="r1", rank_code="station_captain", display_name="Station Captain"
+        )
         # get_rank -> rank, then duplicate lookup -> a different rank
         db = _db([_one(rank), _one(SimpleNamespace(id="r2"))])
         with pytest.raises(ValueError, match="already exists"):
@@ -198,7 +200,11 @@ class TestCrud:
             )
 
     async def test_assigned_rank_code_rename_migrates_members(self):
-        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        # A custom rank: a built-in one's code cannot change (see
+        # test_built_in_rank_code_change_is_refused).
+        rank = SimpleNamespace(
+            id="r1", rank_code="station_captain", display_name="Station Captain"
+        )
         db = _db([_one(rank), _one(None), *_rename_moves()])
 
         out = await OperationalRankService(db).update_rank(
@@ -210,12 +216,14 @@ class TestCrud:
         sql = str(compiled)
         assert "UPDATE users SET rank='company_captain'" in sql
         assert "users.organization_id = 'org-1'" in sql
-        assert "users.rank = 'captain'" in sql
+        assert "users.rank = 'station_captain'" in sql
         assert out.rank_code == "company_captain"
         db.commit.assert_awaited_once()
 
     async def test_rank_rename_is_tenant_isolated(self):
-        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        rank = SimpleNamespace(
+            id="r1", rank_code="station_captain", display_name="Station Captain"
+        )
         db = _db([_one(rank), _one(None), *_rename_moves()])
 
         await OperationalRankService(db).update_rank(
@@ -227,7 +235,9 @@ class TestCrud:
         assert "users.organization_id = 'tenant-a'" in sql
 
     async def test_rank_rename_rolls_back_member_migration_on_commit_failure(self):
-        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        rank = SimpleNamespace(
+            id="r1", rank_code="station_captain", display_name="Station Captain"
+        )
         db = _db([_one(rank), _one(None), *_rename_moves()])
         db.commit.side_effect = RuntimeError("database unavailable")
 
@@ -237,6 +247,19 @@ class TestCrud:
             )
 
         db.rollback.assert_awaited_once()
+
+    async def test_built_in_rank_code_change_is_refused(self):
+        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        db = _db([_one(rank)])
+
+        with pytest.raises(ValueError, match="built-in rank"):
+            await OperationalRankService(db).update_rank(
+                "r1", RankUpdate(rank_code="company_captain"), "org-1"
+            )
+
+        assert rank.rank_code == "captain"
+        assert db.execute.await_count == 1  # nothing moved
+        db.commit.assert_not_awaited()
 
     async def test_display_name_rename_preserves_permission_and_shift_keys(self):
         positions = ["captain", "officer"]
@@ -304,8 +327,8 @@ class TestCrud:
         rank = SimpleNamespace(
             id=str(rank_id),
             organization_id=str(org_id),
-            rank_code="captain",
-            display_name="Captain",
+            rank_code="station_captain",
+            display_name="Station Captain",
             description=None,
             sort_order=3,
             is_active=True,

@@ -14,7 +14,7 @@ Pinned here:
   notes, carries the current budget forward, starts spent at zero, skips a
   category and station already in the draft (a re-run copies nothing), takes
   only a draft target, leaves a retired category's lines behind (its own
-  category, not a parent's), and is 404 for another department's year;
+  or a parent's -- owner decision 2026-10-23), and is 404 for another department's year;
   audited;
 * the deadline is set and cleared only on a draft year, is reported on the
   fiscal-year responses, and closes requests to owners but not to the
@@ -403,11 +403,9 @@ class TestStartFromLastYear:
         assert result.scalars().all() == []
         assert audit.call_args.kwargs["event_data"]["retired"] == 2
 
-    async def test_a_retired_parent_does_not_hold_back_its_sub_lines(
-        self, db_session, dept
-    ):
-        # Only the line's own category is consulted: Training stays in use
-        # under a parent the department no longer budgets for directly.
+    async def test_a_retired_parent_holds_back_its_sub_lines(self, db_session, dept):
+        # Owner decision (2026-10-23): retiring a parent retires every
+        # category beneath it, so Training's lines stay behind as well.
         parent = BudgetCategory(
             organization_id=dept["org_id"], name="Operations", is_active=False
         )
@@ -423,7 +421,7 @@ class TestStartFromLastYear:
             f"/finance/fiscal-years/{dept['empty_draft']}/start-from/"
             f"{dept['active']}",
         )
-        assert resp.json() == {"created": 2, "skipped": 1, "retired": 0}
+        assert resp.json() == {"created": 0, "skipped": 1, "retired": 2}
 
     async def test_only_into_a_draft_year(self, db_session, dept):
         resp = await _call(

@@ -292,6 +292,9 @@ class BudgetCategoryResponse(UTCResponseBase):
     charge_position_ids: list[str] = Field(default_factory=list)
     # Names from the top-level category down to this one.
     path: list[str] = Field(default_factory=list)
+    # The inactive ancestor that closes this category to new charges, lines
+    # and proposals while it is itself active; null otherwise.
+    inactive_through: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -608,6 +611,9 @@ class BudgetOptionResponse(BaseModel):
     id: str
     label: str
     amount_remaining: Optional[Decimal] = None
+    # False when the line's category is inactive: still listed so a request
+    # already on the line can show it, never offered as a new choice.
+    category_active: bool = True
 
 
 class FiscalYearOptionResponse(BaseModel):

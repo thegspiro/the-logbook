@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { trainingProgramService } from '../../services/api';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type { PrerequisiteProgramSummary, TrainingProgram } from '../../types/training';
+import { InactiveNotRequiredBadge } from './InactiveNotRequiredBadge';
 
 interface ProgramEnrollmentRulesFieldsProps {
   /** The program being edited, which cannot be its own prerequisite. */
@@ -58,6 +59,7 @@ export const ProgramEnrollmentRulesFields: React.FC<ProgramEnrollmentRulesFields
     .filter((p) => p.id !== excludeProgramId && !p.is_template)
     .map((p) => ({ id: p.id, name: p.name }));
   const offeredIds = new Set(offered.map((p) => p.id));
+  const inactiveIds = new Set(knownPrerequisites.filter((p) => p.active === false).map((p) => p.id));
   const options = [
     ...offered,
     ...knownPrerequisites.filter((p) => !offeredIds.has(p.id) && p.id !== excludeProgramId),
@@ -93,6 +95,14 @@ export const ProgramEnrollmentRulesFields: React.FC<ProgramEnrollmentRulesFields
                   onChange={() => toggle(p.id)}
                 />
                 {p.name}
+                {/* The space keeps the checkbox's accessible name readable:
+                    "Old Academy Inactive — …", not "Old AcademyInactive". */}
+                {inactiveIds.has(p.id) && (
+                  <>
+                    {' '}
+                    <InactiveNotRequiredBadge />
+                  </>
+                )}
               </label>
             ))}
           </div>

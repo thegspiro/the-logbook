@@ -23,6 +23,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import TemplateFormModal from '../modules/scheduling/components/TemplateFormModal';
 import PatternFormModal from '../modules/scheduling/components/PatternFormModal';
+import PatternTemplateInactiveNotice from '../modules/scheduling/components/PatternTemplateInactiveNotice';
 import GenerateShiftsModal from '../modules/scheduling/components/GenerateShiftsModal';
 import type {
   ShiftTemplate,
@@ -128,7 +129,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     if (
       !(await confirm({
         title: 'Delete template',
-        message: `Delete "${template?.name ?? 'this template'}"? If any shift (past or future) or pattern uses it, it is deactivated instead of deleted: those shifts keep it and its equipment checklists, its patterns keep generating from it, and it is no longer offered for new shifts or patterns. Otherwise it is deleted, which cannot be undone.`,
+        message: `Delete "${template?.name ?? 'this template'}"? If any shift (past or future) or pattern uses it, it is deactivated instead of deleted: those shifts keep it and its equipment checklists, its patterns stop generating new shifts until it is reactivated or they are pointed at another template, and it is no longer offered for new shifts or patterns. Otherwise it is deleted, which cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -139,7 +140,7 @@ export const ShiftTemplatesPage: React.FC = () => {
       const outcome = await schedulingService.deleteTemplate(id);
       toast.success(
         outcome === 'deactivated'
-          ? `"${template?.name ?? 'The template'}" is still used by shifts or patterns, so it was deactivated instead of deleted.`
+          ? `"${template?.name ?? 'The template'}" is still used by shifts or patterns, so it was deactivated instead of deleted. Patterns using it no longer generate shifts.`
           : 'Template deleted'
       );
       void loadTemplates();
@@ -584,6 +585,12 @@ export const ShiftTemplatesPage: React.FC = () => {
                       </span>
                     </div>
                   </div>
+
+                  {(pattern.inactive_templates?.length ?? 0) > 0 && (
+                    <div className="mb-3">
+                      <PatternTemplateInactiveNotice names={pattern.inactive_templates} />
+                    </div>
+                  )}
 
                   {pattern.description && <p className="text-theme-text-muted mb-3 text-sm">{pattern.description}</p>}
 

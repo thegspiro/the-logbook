@@ -360,6 +360,12 @@ export interface BudgetCategory {
   chargePositionIds?: string[];
   /** Category names from the top-level category down to this one. */
   path?: string[];
+  /**
+   * The inactive ancestor that closes this otherwise-active category to new
+   * charges, budget lines and proposals, as the backend resolved it; null when
+   * nothing above it is inactive (or it is inactive itself).
+   */
+  inactiveThrough?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -599,6 +605,12 @@ export interface BudgetOption {
   /** Category name, plus the station when the line has one. */
   label: string;
   amountRemaining: MonetaryAmount | null;
+  /**
+   * False when the line's category is inactive. Such a line takes no new
+   * charges (the server refuses it), so a picker shows it only as a
+   * request's existing selection — see `selectableBudgetOptions`.
+   */
+  categoryActive: boolean;
 }
 
 /** An active or draft fiscal year — `GET /finance/fiscal-years/options`. */

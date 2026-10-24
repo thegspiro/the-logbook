@@ -38,12 +38,29 @@ import { useAuthStore } from '../stores/authStore';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { RequirementDueDate } from '../components/training/RequirementDueDate';
+import { InactiveNotRequiredBadge } from '../components/training/InactiveNotRequiredBadge';
+import {
+  NO_ACTIVE_REQUIREMENTS_LABEL,
+  NoActiveRequirementsNotice,
+} from '../components/training/NoActiveRequirementsNotice';
+import { MarkPipelineCompleteDialog } from '../components/training/MarkPipelineCompleteDialog';
+import {
+  MARK_PIPELINE_COMPLETE_LABEL,
+  canMarkPipelineComplete,
+  completedByHandNote,
+} from '../components/training/markPipelineComplete';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
 import { enumLabel } from '../utils/displayValue';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { formatLegalName, formatMemberName } from '../utils/memberName';
-import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
+import {
+  STATUS_META,
+  countsTowardCompletion,
+  groupRecordsByPhase,
+  isPhaseGroupComplete,
+  phaseHasNoActiveRequirements,
+} from '../utils/pipelineProgress';
 import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ENROLLMENT_STATUSES } from '../types/training';
@@ -94,6 +111,8 @@ interface ProgramDetails extends TrainingProgram {
   milestones?: ProgramMilestone[];
   total_requirements?: number;
   total_required?: number;
+  no_active_requirements?: boolean;
+  phases_without_active_requirements?: string[];
 }
 
 type DetailTab = 'overview' | 'phases' | 'enrollments';
@@ -209,6 +228,7 @@ const RequirementList: React.FC<{
                     {pr.requirement?.name || `Requirement ${pr.requirement_id.slice(0, 8)}`}
                   </span>
                   {pr.requirement?.requirement_type && <ReqTypeBadge type={pr.requirement.requirement_type} />}
+                  {pr.requirement?.active === false && <InactiveNotRequiredBadge />}
                   {canManage ? (
                     <button
                       type="button"
@@ -719,6 +739,7 @@ const RequirementProgressRow: React.FC<{
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
           <span className={statusMeta.className}>{statusMeta.label}</span>
+          {record.requirement?.active === false && <InactiveNotRequiredBadge />}
           <span className="text-theme-text-muted">· {Math.round(record.progress_percentage)}%</span>
           {target && (
             <span className="text-theme-text-muted">
@@ -926,10 +947,13 @@ const EnrollmentProgressModal: React.FC<{
   phases: ProgramPhase[];
   programReqs: ProgramRequirement[];
   structureType: ProgramStructureType;
+  /** training.manage — the only grant the manual completion endpoint accepts. */
+  canManage: boolean;
   onClose: () => void;
   onSaved: () => void;
-}> = ({ isOpen, enrollmentId, memberName, phases, programReqs, structureType, onClose, onSaved }) => {
+}> = ({ isOpen, enrollmentId, memberName, phases, programReqs, structureType, canManage, onClose, onSaved }) => {
   const { confirm } = useConfirm();
+  const [completing, setCompleting] = useState(false);
   const [data, setData] = useState<MemberProgramProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -976,11 +1000,25 @@ const EnrollmentProgressModal: React.FC<{
     }
   };
 
+  // The server's verdicts (an empty required set completes nobody). A
+  // finished enrollment keeps the figure it finished with.
+  const noActiveRequirements =
+    data?.no_active_requirements === true &&
+    (data.enrollment.status === 'active' || data.enrollment.status === 'on_hold');
+  const phasesWithoutActive = new Set(data?.phases_without_active_requirements ?? []);
+  // A phase whose required items are all inactive never completes, so the
+  // advance-phase endpoint would refuse it; the officer's advance is the
+  // by-hand move the notice offers, sent as the endpoint's audited override.
+  const currentPhaseHasNoActive =
+    !!data?.enrollment.current_phase_id && phasesWithoutActive.has(data.enrollment.current_phase_id);
+
   const handleAdvance = async () => {
     if (!enrollmentId) return;
     setAdvancing(true);
     try {
-      await trainingProgramService.advancePhase(enrollmentId);
+      await (currentPhaseHasNoActive
+        ? trainingProgramService.advancePhase(enrollmentId, true)
+        : trainingProgramService.advancePhase(enrollmentId));
       toast.success('Advanced to the next phase');
       await load();
       onSaved();
@@ -1065,204 +1103,247 @@ const EnrollmentProgressModal: React.FC<{
   // No current phase (idx -1) but phases exist → the first phase is still "next".
   const hasNextPhase = orderedPhases.length > 0 && currentIdx < orderedPhases.length - 1;
 
+  const byHandNote = completedByHandNote(data?.enrollment, canManage);
+
   const groups = data && phased ? groupRecordsByPhase(data.requirement_progress, phases, programReqs) : [];
 
+  // A sibling of the panel, not a child: a portal still bubbles React key
+  // events to its tree parent, and this panel closes on Escape.
   return (
-    <div
-      className="modal-overlay z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="member-progress-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
-    >
-      <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-2xl flex-col">
-        <div className="border-theme-surface-border border-b p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 id="member-progress-title" className="text-theme-text-primary text-xl font-bold">
-                Progress — {memberName}
-              </h2>
-              {data && (
-                <p className="text-theme-text-muted mt-1 text-sm">
-                  {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
-                </p>
-              )}
-              {phased && data?.current_phase && (
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Current phase: <span className="text-theme-text-secondary">{data.current_phase.name}</span>
-                </p>
-              )}
-              {data?.enrollment.next_recert_reset_at && (
-                <p className="text-theme-text-muted mt-1 inline-flex items-center gap-1 text-xs">
-                  <RotateCcw className="h-3 w-3" />
-                  Auto-resets{' '}
-                  <span className="text-theme-text-secondary">
-                    {formatCalendarDate(data.enrollment.next_recert_reset_at)}
-                  </span>
-                </p>
-              )}
+    <>
+      <div
+        className="modal-overlay z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="member-progress-title"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose();
+        }}
+      >
+        <DialogPanel onClose={onClose} className="flex max-h-[90dvh] w-full max-w-2xl flex-col">
+          <div className="border-theme-surface-border border-b p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 id="member-progress-title" className="text-theme-text-primary text-xl font-bold">
+                  Progress — {memberName}
+                </h2>
+                {data && (
+                  <p className="text-theme-text-muted mt-1 text-sm">
+                    {noActiveRequirements
+                      ? NO_ACTIVE_REQUIREMENTS_LABEL
+                      : `${data.completed_requirements}/${data.total_requirements} requirements · ${overall}% overall`}
+                  </p>
+                )}
+                {byHandNote && <p className="text-theme-text-muted mt-1 text-xs break-words">{byHandNote}</p>}
+                {phased && data?.current_phase && (
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Current phase: <span className="text-theme-text-secondary">{data.current_phase.name}</span>
+                  </p>
+                )}
+                {data?.enrollment.next_recert_reset_at && (
+                  <p className="text-theme-text-muted mt-1 inline-flex items-center gap-1 text-xs">
+                    <RotateCcw className="h-3 w-3" />
+                    Auto-resets{' '}
+                    <span className="text-theme-text-secondary">
+                      {formatCalendarDate(data.enrollment.next_recert_reset_at)}
+                    </span>
+                  </p>
+                )}
+              </div>
+              <button
+                data-dialog-close
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="text-theme-text-muted hover:text-theme-text-primary p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <button
-              data-dialog-close
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="text-theme-text-muted hover:text-theme-text-primary p-1"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          {/* An expired enrollment is a dead end without a way back: the member
+            {/* An expired enrollment is a dead end without a way back: the member
               cannot make progress and the officer has nothing to act on. */}
-          {data?.enrollment.status === 'expired' && (
-            <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                Deadline passed — this enrollment expired at {overall}% complete.
-              </p>
-              <p className="text-theme-text-secondary mt-1 text-xs">
-                Reopening keeps everything {memberName} has already finished. Give them a new deadline, or reopen on the
-                old one.
-              </p>
-              <div className="mt-2 flex flex-wrap items-end gap-2">
-                <div>
-                  <label htmlFor="reopen-deadline" className="text-theme-text-muted mb-1 block text-xs">
-                    New deadline (optional)
-                  </label>
-                  <input
-                    id="reopen-deadline"
-                    type="date"
-                    value={newDeadline}
-                    onChange={(e) => setNewDeadline(e.target.value)}
-                    className="form-input-sm"
-                  />
-                </div>
+            {noActiveRequirements && (
+              <div className="mt-3">
+                <NoActiveRequirementsNotice scope="pipeline" audience="officer" />
+              </div>
+            )}
+            {data?.enrollment.status === 'expired' && (
+              <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  Deadline passed — this enrollment expired at {overall}% complete.
+                </p>
+                {canManage && (
+                  <p className="text-theme-text-secondary mt-1 text-xs">
+                    Reopening keeps everything {memberName} has already finished. Give them a new deadline, or reopen on
+                    the old one.
+                  </p>
+                )}
+                {canManage && (
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <div>
+                      <label htmlFor="reopen-deadline" className="text-theme-text-muted mb-1 block text-xs">
+                        New deadline (optional)
+                      </label>
+                      <input
+                        id="reopen-deadline"
+                        type="date"
+                        value={newDeadline}
+                        onChange={(e) => setNewDeadline(e.target.value)}
+                        className="form-input-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleReopen();
+                      }}
+                      disabled={reopening}
+                      className="btn-primary px-3 text-xs disabled:opacity-50"
+                    >
+                      {reopening ? 'Reopening...' : 'Reopen enrollment'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Advance, reset and reopen all require training.manage on the server;
+              a member who can only view progress is not offered them. */}
+            {canManage && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {phased && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleAdvance();
+                    }}
+                    disabled={!data || !hasNextPhase || advancing}
+                    className="btn-primary flex items-center gap-1 px-3 text-xs disabled:opacity-50"
+                  >
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                    {advancing ? 'Advancing...' : hasNextPhase ? 'Advance to next phase' : 'Final phase reached'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
-                    void handleReopen();
+                    void handleResetCycle();
                   }}
-                  disabled={reopening}
-                  className="btn-primary px-3 text-xs disabled:opacity-50"
+                  disabled={!data || resettingCycle}
+                  title="Reset every requirement and return to the first phase — for a new recert cycle"
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg border px-3 py-2 text-xs disabled:opacity-50"
                 >
-                  {reopening ? 'Reopening...' : 'Reopen enrollment'}
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  {resettingCycle ? 'Resetting...' : 'Start new cycle'}
                 </button>
+                {canMarkPipelineComplete(data?.enrollment.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setCompleting(true)}
+                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg border px-3 py-2 text-xs"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {MARK_PIPELINE_COMPLETE_LABEL}
+                  </button>
+                )}
               </div>
-            </div>
-          )}
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            {phased && (
-              <button
-                type="button"
-                onClick={() => {
-                  void handleAdvance();
-                }}
-                disabled={!data || !hasNextPhase || advancing}
-                className="btn-primary flex items-center gap-1 px-3 text-xs disabled:opacity-50"
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-                {advancing ? 'Advancing...' : hasNextPhase ? 'Advance to next phase' : 'Final phase reached'}
-              </button>
             )}
+          </div>
+
+          <div className="space-y-4 overflow-y-auto p-6">
+            {loading ? (
+              <div
+                className="text-theme-text-muted flex items-center justify-center py-10"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <span className="text-sm">Loading progress...</span>
+              </div>
+            ) : error ? (
+              <div className="p-3 text-sm text-red-600 dark:text-red-400">{error}</div>
+            ) : !data || data.requirement_progress.length === 0 ? (
+              <div className="text-theme-text-muted py-10 text-center text-sm">
+                No requirements to track for this enrollment.
+              </div>
+            ) : phased ? (
+              groups.map((group) => {
+                const isCurrent = !!group.phase && data.enrollment.current_phase_id === group.phase.id;
+                const phaseNoActive = !!group.phase && phasesWithoutActive.has(group.phase.id);
+                const complete = !phaseNoActive && isPhaseGroupComplete(group.records, programReqs);
+                return (
+                  <div key={group.phase?.id ?? 'program-level'} className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-theme-text-primary text-sm font-semibold">
+                        {group.phase ? `Phase ${group.phase.phase_number}: ${group.phase.name}` : 'Program-level'}
+                      </h3>
+                      {isCurrent && (
+                        <span className="rounded-sm bg-red-500/15 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                          Current phase
+                        </span>
+                      )}
+                      {complete && (
+                        <CheckCircle2
+                          className="h-4 w-4 text-green-700 dark:text-green-400"
+                          aria-label="Phase complete"
+                        />
+                      )}
+                      {group.phase?.requires_manual_advancement && (
+                        <span className="inline-flex items-center gap-1 text-xs text-yellow-700 dark:text-yellow-400">
+                          <AlertTriangle className="h-3.5 w-3.5" /> Manual advancement
+                        </span>
+                      )}
+                    </div>
+                    {phaseNoActive && <NoActiveRequirementsNotice scope="phase" audience="officer" />}
+                    <div className="space-y-2">
+                      {group.records.map((record) => (
+                        <RequirementProgressRow
+                          key={record.id}
+                          record={record}
+                          onUpdate={handleUpdate}
+                          onReset={handleReset}
+                          saving={savingId === record.id}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              data.requirement_progress.map((record) => (
+                <RequirementProgressRow
+                  key={record.id}
+                  record={record}
+                  onUpdate={handleUpdate}
+                  onReset={handleReset}
+                  saving={savingId === record.id}
+                />
+              ))
+            )}
+          </div>
+
+          <div className="border-theme-surface-border flex justify-end border-t p-4">
             <button
               type="button"
-              onClick={() => {
-                void handleResetCycle();
-              }}
-              disabled={!data || resettingCycle}
-              title="Reset every requirement and return to the first phase — for a new recert cycle"
-              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg border px-3 py-2 text-xs disabled:opacity-50"
+              onClick={onClose}
+              className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
-              {resettingCycle ? 'Resetting...' : 'Start new cycle'}
+              Done
             </button>
           </div>
-        </div>
-
-        <div className="space-y-4 overflow-y-auto p-6">
-          {loading ? (
-            <div
-              className="text-theme-text-muted flex items-center justify-center py-10"
-              role="status"
-              aria-live="polite"
-            >
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              <span className="text-sm">Loading progress...</span>
-            </div>
-          ) : error ? (
-            <div className="p-3 text-sm text-red-600 dark:text-red-400">{error}</div>
-          ) : !data || data.requirement_progress.length === 0 ? (
-            <div className="text-theme-text-muted py-10 text-center text-sm">
-              No requirements to track for this enrollment.
-            </div>
-          ) : phased ? (
-            groups.map((group) => {
-              const isCurrent = !!group.phase && data.enrollment.current_phase_id === group.phase.id;
-              const complete = isPhaseGroupComplete(group.records, programReqs);
-              return (
-                <div key={group.phase?.id ?? 'program-level'} className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-theme-text-primary text-sm font-semibold">
-                      {group.phase ? `Phase ${group.phase.phase_number}: ${group.phase.name}` : 'Program-level'}
-                    </h3>
-                    {isCurrent && (
-                      <span className="rounded-sm bg-red-500/15 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
-                        Current phase
-                      </span>
-                    )}
-                    {complete && (
-                      <CheckCircle2
-                        className="h-4 w-4 text-green-700 dark:text-green-400"
-                        aria-label="Phase complete"
-                      />
-                    )}
-                    {group.phase?.requires_manual_advancement && (
-                      <span className="inline-flex items-center gap-1 text-xs text-yellow-700 dark:text-yellow-400">
-                        <AlertTriangle className="h-3.5 w-3.5" /> Manual advancement
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {group.records.map((record) => (
-                      <RequirementProgressRow
-                        key={record.id}
-                        record={record}
-                        onUpdate={handleUpdate}
-                        onReset={handleReset}
-                        saving={savingId === record.id}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            data.requirement_progress.map((record) => (
-              <RequirementProgressRow
-                key={record.id}
-                record={record}
-                onUpdate={handleUpdate}
-                onReset={handleReset}
-                saving={savingId === record.id}
-              />
-            ))
-          )}
-        </div>
-
-        <div className="border-theme-surface-border flex justify-end border-t p-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm"
-          >
-            Done
-          </button>
-        </div>
-      </DialogPanel>
-    </div>
+        </DialogPanel>
+      </div>
+      <MarkPipelineCompleteDialog
+        enrollmentId={completing ? enrollmentId : null}
+        memberName={memberName}
+        onClose={() => setCompleting(false)}
+        onCompleted={async () => {
+          await load();
+          onSaved();
+        }}
+      />
+    </>
   );
 };
 
@@ -1291,6 +1372,7 @@ const PipelineDetailPage: React.FC = () => {
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [progressEnrollment, setProgressEnrollment] = useState<ProgramEnrollmentWithUser | null>(null);
+  const [completeTarget, setCompleteTarget] = useState<ProgramEnrollmentWithUser | null>(null);
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [savingReqId, setSavingReqId] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<ProgramMilestone[]>([]);
@@ -1649,7 +1731,12 @@ const PipelineDetailPage: React.FC = () => {
   if (!program) return null;
 
   const totalReqs = programReqs.length;
-  const requiredReqs = programReqs.filter((r) => r.is_required).length;
+  // Required *and active*: the backend does not count a deactivated
+  // requirement toward finishing the pipeline while it stays inactive.
+  const requiredReqs = programReqs.filter(countsTowardCompletion).length;
+  // The server's `no_active_requirements`, kept live as links are toggled
+  // here. A pipeline with nothing in it yet already says so in its own words.
+  const noActiveRequirements = totalReqs > 0 && requiredReqs === 0;
 
   return (
     <div className="min-h-screen">
@@ -1693,8 +1780,22 @@ const PipelineDetailPage: React.FC = () => {
                 <div className="flex flex-wrap gap-x-1">
                   <dt className="text-theme-text-muted">Prerequisite programs:</dt>
                   <dd>
+                    {/* An inactive prerequisite is listed, flagged: it is
+                        skipped while inactive and applies again if the
+                        pipeline is reactivated. */}
                     {program.prerequisite_programs?.length
-                      ? program.prerequisite_programs.map((p) => p.name).join(', ')
+                      ? program.prerequisite_programs.map((p, i) => (
+                          <React.Fragment key={p.id}>
+                            {i > 0 && ', '}
+                            {p.name}
+                            {p.active === false && (
+                              <>
+                                {' '}
+                                <InactiveNotRequiredBadge />
+                              </>
+                            )}
+                          </React.Fragment>
+                        ))
                       : 'None'}
                   </dd>
                 </div>
@@ -1813,6 +1914,12 @@ const PipelineDetailPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {noActiveRequirements && (
+          <div className="mb-6">
+            <NoActiveRequirementsNotice scope="pipeline" audience="officer" />
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="bg-theme-surface hscroll mb-6 flex space-x-1 rounded-lg p-1" role="tablist" {...tablist}>
@@ -1962,6 +2069,11 @@ const PipelineDetailPage: React.FC = () => {
                             </p>
                           )}
 
+                          {phaseHasNoActiveRequirements(phaseReqs) && (
+                            <div className="mb-4">
+                              <NoActiveRequirementsNotice scope="phase" audience="officer" />
+                            </div>
+                          )}
                           <RequirementList
                             links={phaseReqs}
                             emptyLabel="No requirements assigned to this phase."
@@ -2134,29 +2246,58 @@ const PipelineDetailPage: React.FC = () => {
                 <p className="text-theme-text-muted text-xs">
                   Select a member to view and update their requirement progress.
                 </p>
-                {enrollments.map((enrollment) => (
-                  <button
-                    key={enrollment.id}
-                    type="button"
-                    onClick={() => setProgressEnrollment(enrollment)}
-                    className="bg-theme-surface hover:bg-theme-surface-hover flex w-full items-center justify-between rounded-lg p-4 text-left transition-colors"
-                    aria-label={`Manage progress for ${enrollment.user_name}`}
-                  >
-                    <div>
-                      <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
-                      <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
-                        <span>Status: {enumLabel(enrollment.status)}</span>
-                        <span>{Math.round(enrollment.progress_percentage)}% complete</span>
-                      </div>
+                {enrollments.map((enrollment) => {
+                  // A finished enrollment keeps the figure it finished with; a
+                  // running one has nothing left to measure progress against.
+                  const unmeasured =
+                    noActiveRequirements && (enrollment.status === 'active' || enrollment.status === 'on_hold');
+                  const byHandNote = completedByHandNote(enrollment, canManage);
+                  return (
+                    <div
+                      key={enrollment.id}
+                      className="bg-theme-surface flex flex-col overflow-hidden rounded-lg sm:flex-row sm:items-stretch"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setProgressEnrollment(enrollment)}
+                        className="hover:bg-theme-surface-hover flex w-full min-w-0 flex-1 items-center justify-between p-4 text-left transition-colors"
+                        aria-label={`Manage progress for ${enrollment.user_name}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
+                          <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
+                            <span>Status: {enumLabel(enrollment.status)}</span>
+                            <span>
+                              {unmeasured
+                                ? NO_ACTIVE_REQUIREMENTS_LABEL
+                                : `${Math.round(enrollment.progress_percentage)}% complete`}
+                            </span>
+                          </div>
+                          {byHandNote && <p className="text-theme-text-muted mt-1 text-xs break-words">{byHandNote}</p>}
+                        </div>
+                        {!unmeasured && (
+                          <div className="bg-theme-surface-secondary h-2 w-32 rounded-full">
+                            <div
+                              className="h-2 rounded-full bg-red-500 transition-all"
+                              style={{ width: `${enrollment.progress_percentage}%` }}
+                            />
+                          </div>
+                        )}
+                      </button>
+                      {canManage && canMarkPipelineComplete(enrollment.status) && (
+                        <button
+                          type="button"
+                          onClick={() => setCompleteTarget(enrollment)}
+                          className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch-target-phone flex shrink-0 items-center justify-center gap-1 border-t px-4 py-2 text-xs sm:border-t-0 sm:border-l"
+                          aria-label={`${MARK_PIPELINE_COMPLETE_LABEL} for ${enrollment.user_name}`}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {MARK_PIPELINE_COMPLETE_LABEL}
+                        </button>
+                      )}
                     </div>
-                    <div className="bg-theme-surface-secondary h-2 w-32 rounded-full">
-                      <div
-                        className="h-2 rounded-full bg-red-500 transition-all"
-                        style={{ width: `${enrollment.progress_percentage}%` }}
-                      />
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -2180,10 +2321,18 @@ const PipelineDetailPage: React.FC = () => {
         phases={phases}
         programReqs={programReqs}
         structureType={program.structure_type}
+        canManage={canManage}
         onClose={() => setProgressEnrollment(null)}
         onSaved={() => {
           void loadEnrollments();
         }}
+      />
+
+      <MarkPipelineCompleteDialog
+        enrollmentId={completeTarget?.id ?? null}
+        memberName={completeTarget?.user_name ?? ''}
+        onClose={() => setCompleteTarget(null)}
+        onCompleted={() => loadEnrollments()}
       />
 
       {showEditProgram && (

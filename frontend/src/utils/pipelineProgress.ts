@@ -119,10 +119,34 @@ export function groupRecordsByPhase(
 }
 
 /**
- * A phase group is complete when all of its *required* records are at 100%
- * (records with no matching program-requirement default to required).
+ * A phase group is complete when all of its *required*, *active* records are at
+ * 100% (records with no matching program-requirement default to required). An
+ * inactive requirement does not count, as on the server. A phase whose required
+ * items are all inactive is never complete; the server names those
+ * (`phases_without_active_requirements`) and callers check that first.
  */
 export function isPhaseGroupComplete(records: RequirementProgressRecord[], programReqs: ProgramRequirement[]): boolean {
   const required = new Map(programReqs.map((pr) => [pr.requirement_id, pr.is_required]));
-  return records.filter((r) => required.get(r.requirement_id) !== false).every((r) => r.progress_percentage >= 100);
+  return records
+    .filter((r) => required.get(r.requirement_id) !== false && r.requirement?.active !== false)
+    .every((r) => r.progress_percentage >= 100);
+}
+
+/**
+ * Whether one program-requirement link counts toward completion: required, and
+ * the requirement active. The client-side projection of the server's
+ * `link_counts_toward_completion`, for the pipeline page, which edits links in
+ * place and must reflect a toggle without a reload. Keep the two in step.
+ */
+export function countsTowardCompletion(link: ProgramRequirement): boolean {
+  return link.is_required && link.requirement?.active !== false;
+}
+
+/**
+ * A phase whose links include required items but none that is active — the
+ * server's `phases_without_active_requirements` rule, for one phase's links.
+ * Such a phase never completes on its own.
+ */
+export function phaseHasNoActiveRequirements(links: ProgramRequirement[]): boolean {
+  return links.some((link) => link.is_required) && !links.some(countsTowardCompletion);
 }

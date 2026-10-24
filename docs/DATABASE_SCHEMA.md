@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**317 tables · 5250 columns · 1072 foreign keys**
+**317 tables · 5251 columns · 1072 foreign keys**
 
 ---
 
@@ -662,7 +662,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`instructor_qualifications`](#instructor_qualifications) | `InstructorQualification` | 19 | Instructor Qualification model |
 | [`member_competencies`](#member_competencies) | `MemberCompetency` | 16 | Member Competency model |
 | [`multi_agency_trainings`](#multi_agency_trainings) | `MultiAgencyTraining` | 19 | Multi-Agency Training model |
-| [`program_enrollments`](#program_enrollments) | `ProgramEnrollment` | 22 | Program Enrollment model |
+| [`program_enrollments`](#program_enrollments) | `ProgramEnrollment` | 23 | Program Enrollment model |
 | [`program_milestones`](#program_milestones) | `ProgramMilestone` | 10 | Program Milestone model |
 | [`program_phases`](#program_phases) | `ProgramPhase` | 10 | Program Phase model |
 | [`program_requirements`](#program_requirements) | `ProgramRequirement` | 12 | Program Requirement model |
@@ -9413,6 +9413,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `progress_percentage` | FLOAT | yes |  | `0.0` |  |
 | `status` | ENUM(`active`, `completed`, `expired`, `on_hold`, `withdrawn`, `failed`) | no | IDX | `active` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
+| `completion_reason` | TEXT | yes |  |  |  |
 | `withdrawn_at` | DATETIME | yes |  |  |  |
 | `withdrawal_reason` | TEXT | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |

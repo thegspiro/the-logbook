@@ -383,6 +383,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=(
             "Training sessions awaiting approval",
             "New provider course versions to map",
+            "A new member not enrolled automatically for a missing prerequisite",
         ),
         rationale=(
             "Pending approvals are also listed in Training, and unmapped "

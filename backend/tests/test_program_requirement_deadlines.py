@@ -415,6 +415,30 @@ class TestTheProgressPageShowsTheDueDate:
         assert row.due_date is not None
         assert row.is_overdue is False
 
+    async def test_an_inactive_requirement_has_no_due_or_overdue_date(self, db_session):
+        # Not currently required, so not late either: the page shows only the
+        # "Inactive — not currently required" badge. The officer's view of the
+        # same enrollment reads this same response.
+        dept = await _Dept(db_session).build(deadline_days=30, enrolled_days_ago=31)
+        dept.cpr.active = False
+        await db_session.flush()
+
+        row = _cpr_row(await dept.progress(), dept)
+        assert row.due_date is None
+        assert row.is_overdue is False
+        assert row.requirement.active is False
+        # The program's own wording for it is still shown.
+        assert row.program_specific_description == (
+            "Book through the county class list."
+        )
+
+        # Reactivated, the date is back, derived as before.
+        dept.cpr.active = True
+        await db_session.flush()
+        row = _cpr_row(await dept.progress(), dept)
+        assert row.due_date == dept.start_day + timedelta(days=30)
+        assert row.is_overdue is True
+
 
 @pytest.mark.integration
 class TestReminders:
@@ -460,6 +484,19 @@ class TestReminders:
 
         assert await dept.sweep() == {"warnings_sent": 0, "overdue_sent": 0}
         assert mailer.to(dept.member.email) == []
+
+    async def test_a_deactivated_requirement_is_not_reminded(self, db_session, mailer):
+        # Not required while inactive, so nothing about it is owed either.
+        dept = await _Dept(db_session).build(deadline_days=30, enrolled_days_ago=45)
+        dept.cpr.active = False
+        await db_session.flush()
+
+        assert await dept.sweep() == {"warnings_sent": 0, "overdue_sent": 0}
+        assert mailer.to(dept.member.email) == []
+
+        dept.cpr.active = True
+        await db_session.flush()
+        assert (await dept.sweep())["overdue_sent"] == 1
 
     async def test_already_overdue_gets_one_notice_not_the_ramp(
         self, db_session, mailer

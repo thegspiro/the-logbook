@@ -54,6 +54,7 @@ class CategoryNode:
     parent_id: Optional[str]
     owner_position_id: Optional[str]
     charge_access: Optional[str]
+    is_active: bool = True
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,26 @@ class CategoryTree:
                 return ChargeRule(access, node.id, named, answerable)
         return ChargeRule(ChargeAccess.OPEN, None, frozenset(), answerable)
 
+    def inactive_source(self, category_id: Optional[str]) -> Optional[CategoryNode]:
+        """The category that closes ``category_id`` to new use, or None.
+
+        Owner decision (2026-10-23): a category is closed when it or any
+        category above it is inactive, so deactivating Apparatus closes
+        Apparatus › Pump repairs as well. The nearest inactive category is
+        returned -- the category itself before an ancestor -- so a refusal
+        can name the one an officer would reactivate. This is the single
+        definition of "effectively inactive"; the new-charge check, the
+        request-form picker, new budget lines and proposals, and "start from
+        last year" all ask it.
+        """
+        for node in self.chain(category_id):
+            if not node.is_active:
+                return node
+        return None
+
+    def is_effectively_active(self, category_id: Optional[str]) -> bool:
+        return self.inactive_source(category_id) is None
+
     def manageable_by(self, category_id: str, held_position_ids: set[str]) -> bool:
         """Whether a holder of ``held_position_ids`` owns this category or one above."""
         return any(
@@ -161,6 +182,7 @@ async def load_category_tree(db: AsyncSession, organization_id: str) -> Category
             BudgetCategory.parent_category_id,
             BudgetCategory.owner_position_id,
             BudgetCategory.charge_access,
+            BudgetCategory.is_active,
         ).where(BudgetCategory.organization_id == organization_id)
     )
     nodes = [
@@ -176,6 +198,7 @@ async def load_category_tree(db: AsyncSession, organization_id: str) -> Category
                 if isinstance(row.charge_access, ChargeAccess)
                 else row.charge_access
             ),
+            is_active=bool(row.is_active),
         )
         for row in categories.all()
     ]
