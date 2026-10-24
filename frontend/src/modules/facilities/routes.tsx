@@ -137,14 +137,12 @@ export const getFacilitiesRoutes = () => (
       path="/locations/qr-codes"
       element={
         <Suspense fallback={null}>
-          {/* apparatus.view may enter for the apparatus shift check-in cards
-              (permanent id-based URLs, no secret). Room kiosk codes are bearer
-              credentials the backend redacts for non-managers, so those cards
-              simply don't render for apparatus-only viewers. Either tag-writing
-              grant may enter too, to write its tags. */}
+          {/* No module gate: the Locations page (Facilities off) links here
+              and rooms come from the ungated /locations. apparatus.view enters
+              for the apparatus check-in cards (id-based URLs, no secret); room
+              kiosk codes are credentials the backend redacts for non-managers.
+              Either tag-writing grant enters to write its tags. */}
           <ProtectedRoute
-            requiredModule="facilities"
-            moduleLabel="Facilities"
             requiredAnyPermission={[
               'locations.manage',
               'facilities.manage',
@@ -158,7 +156,7 @@ export const getFacilitiesRoutes = () => (
         </Suspense>
       }
     />
-    {/* No module gate, unlike the QR codes page: a department on the plain
+    {/* No module gate, like the QR codes page: a department on the plain
         Locations page runs room kiosks with card readers too. The grants are
         the room-management half of the QR page's, the ones /nfc-activity/readers
         enforces. */}
