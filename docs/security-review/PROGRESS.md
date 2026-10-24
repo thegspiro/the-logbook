@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-compliance-p10`) —
+**PR [#3631](https://github.com/thegspiro/the-logbook/pull/3631)** (branch
+`claude/security-review-compliance-p10`) —
 Feature 20 (Compliance), pass 10, a watchdog pickup. PR #3630 (Feature 19,
 Skills testing, pass 10) had already merged. No open PR's head branch
 starts with `claude/security-review-` (`search_pull_requests`, 0 results),
