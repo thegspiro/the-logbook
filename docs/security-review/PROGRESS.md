@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3634](https://github.com/thegspiro/the-logbook/pull/3634)** (branch
+`claude/security-review-medical-supplies`) — Feature 23 (Medical supplies),
+pass 16, a watchdog pickup. PR #3633 (Feature 22, Grants & fundraising,
+pass 10) had already merged, docs-only — not independently recordable, so
+only its Open PR row needed clearing, which rode along in this PR's commit.
+**0 fixed, 0 new findings on `main`** — re-verified the substantial delta
+since pass 15 (a new lot-recall lookup route, Next-expiry/uncounted-position
+tracking, truck lots in the lot export, the repo-wide numeric-bounds
+sweep), all already correctly org/domain-scoped. One finding (MSUP-28, MED)
+flagged as a review comment on the open, unmerged sibling PR #3627 ("Medical
+supplies: record lot recalls"), which is not on `main` and not counted in
+this pass's own totals.
+
+Full writeup: `docs/security-review/MSUP-23-medical-supplies.md`'s
+**Pass 16** section.
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes) — re-check `search_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3633's docs-only merge, Feature 22, Grants & fundraising, pass 10), preserved for history</summary>
+
 **None.** PR #3633 (Feature 22, Grants & fundraising, pass 10) merged
 docs-only (`docs/security-review/GF-22-grants-fundraising.md` and
 `PROGRESS.md` only — confirmed by `git show --stat` on its merge commit,
@@ -23,6 +46,8 @@ docs-only (`docs/security-review/GF-22-grants-fundraising.md` and
 Row 22 stays ✅. This pass (Feature 23, Medical supplies, pass 16) rides
 this clearing along with its own commit rather than opening a PR for it
 alone.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 10, PR #3633, merged docs-only), preserved for history</summary>
