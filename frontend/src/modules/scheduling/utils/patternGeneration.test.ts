@@ -46,4 +46,11 @@ describe('reportGeneration', () => {
     reportGeneration({ shifts_created: 3 });
     expect(mockError).not.toHaveBeenCalled();
   });
+
+  it('reports every member the backend could not seat', () => {
+    reportGeneration({ shifts_created: 1, seat_warnings: ['2026-10-04: Jo not seated (seat full)'] });
+    expect(mockError).toHaveBeenCalledWith('One member was not seated: 2026-10-04: Jo not seated (seat full)', {
+      duration: 8000,
+    });
+  });
 });

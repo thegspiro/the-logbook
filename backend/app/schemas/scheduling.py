@@ -1001,6 +1001,9 @@ class ShiftTemplateUpdate(BaseModel):
     apparatus_type: Optional[str] = None
     apparatus_id: Optional[str] = None
     is_default: Optional[bool] = None
+    # A template in use is deactivated rather than deleted; sending True is how
+    # it comes back, which resumes the patterns it was holding.
+    is_active: Optional[bool] = None
     open_to_all_members: Optional[bool] = None
     # Omitting the key leaves the links alone; sending [] clears them. The
     # form owns this field, so it sends it on every save — an omitted key on
@@ -1073,6 +1076,9 @@ class ShiftPatternUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     assigned_members: Optional[Any] = None
+    # False pauses the pattern: neither the scheduled run nor manual generation
+    # makes new shifts from it until it is set True again.
+    is_active: Optional[bool] = None
 
 
 class ShiftPatternResponse(UTCResponseBase):

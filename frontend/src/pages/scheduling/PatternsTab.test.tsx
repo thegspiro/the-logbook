@@ -8,12 +8,14 @@ const mockGetPatterns = vi.fn();
 const mockGetTemplates = vi.fn();
 const mockGenerate = vi.fn();
 const mockCreatePattern = vi.fn();
+const mockUpdatePattern = vi.fn();
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getPatterns: (...a: unknown[]) => mockGetPatterns(...a) as unknown,
     getTemplates: (...a: unknown[]) => mockGetTemplates(...a) as unknown,
     generateShiftsFromPattern: (...a: unknown[]) => mockGenerate(...a) as unknown,
     createPattern: (...a: unknown[]) => mockCreatePattern(...a) as unknown,
+    updatePattern: (...a: unknown[]) => mockUpdatePattern(...a) as unknown,
   },
 }));
 
@@ -70,6 +72,8 @@ beforeEach(() => {
   mockGenerate.mockResolvedValue({ shifts_created: 11 });
   mockCreatePattern.mockReset();
   mockCreatePattern.mockResolvedValue({ ...PATTERN, id: 'pat-2' });
+  mockUpdatePattern.mockReset();
+  mockUpdatePattern.mockResolvedValue(PATTERN);
   mockToastSuccess.mockReset();
   mockToastError.mockReset();
 });
@@ -406,5 +410,29 @@ describe('PatternsTab with a pattern held by an inactive template', () => {
     );
     expect(held).toHaveLength(1);
     expect(held[0]).toHaveTextContent('Day Shift A');
+  });
+
+  it('does not offer Generate on the held pattern, which the server would refuse', async () => {
+    renderWithRouter(<PatternsTab />);
+
+    expect(await screen.findByRole('button', { name: 'Generate shifts from A-Shift 24/48' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Generate shifts from B-Shift 24/48' })).toBeEnabled();
+  });
+});
+
+describe('PatternsTab pausing a pattern', () => {
+  it('pauses an active pattern and does not offer Generate on a paused one', async () => {
+    const user = userEvent.setup();
+    mockGetPatterns.mockReset();
+    mockGetPatterns.mockResolvedValueOnce([PATTERN]).mockResolvedValue([{ ...PATTERN, is_active: false }]);
+    renderWithRouter(<PatternsTab />);
+
+    await screen.findByRole('button', { name: 'Generate shifts from A-Shift 24/48' });
+    // The first pattern opens on load, so its Pause button is already showing.
+    await user.click(screen.getByRole('button', { name: 'Pause A-Shift 24/48' }));
+
+    expect(mockUpdatePattern).toHaveBeenCalledWith('pat-1', { is_active: false });
+    expect(await screen.findByRole('button', { name: 'Resume A-Shift 24/48' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate shifts from A-Shift 24/48' })).toBeDisabled();
   });
 });
