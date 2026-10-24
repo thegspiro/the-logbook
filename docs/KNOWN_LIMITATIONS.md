@@ -168,9 +168,13 @@ and an owner may want to revisit each:
   real tenant. Two behaviours rest on documentation alone: that a cloud-only
   user's `extensionAttribute15` can be set in the request that creates it
   (the tag that tells a retry its own account from someone else's), and the
-  shape of Graph's "already exists" and on-premises errors. A department's
-  first conversion is the first real test; **Test** checks credentials,
-  license and groups beforehand but creates nothing.
+  shape of Graph's "already exists" and on-premises errors. A third, added
+  2026-10-23: that Graph reports a group's `assignedLicenses` to this
+  application, which is how a licensing group is told apart and left alone on
+  departure; if it does not, every group is left alone. The wiki's
+  "Verifying Against a Real Tenant" checklist exercises all three and the
+  rest of the integration, step by step; until a department has run it, its
+  first conversion is the first real test.
 - **The User Administrator role may be more than is needed.** Microsoft's
   documentation does not say whether resetting a password with the
   `User-PasswordProfile.ReadWrite.All` application permission also needs a
@@ -185,10 +189,16 @@ and an owner may want to revisit each:
   there. A tenant that already uses Exchange custom attribute 15 for every
   user (in a dynamic-group rule, say) will see The Logbook's value on new
   members' accounts instead.
-- **Client secrets expire.** An Entra ID secret lasts at most 24 months, and
-  The Logbook cannot read its expiry date without a further permission. When
-  it lapses, creation and blocking fail with "The client secret has expired"
-  until a new one is entered. A certificate is not supported.
+- **Client secrets expire, and the date is typed in.** An Entra ID secret
+  lasts at most 24 months. Reading its expiry from Graph would need
+  Application.Read.All, which can read every app registration in the tenant,
+  so an administrator records the date in the integration's settings instead
+  (owner decision, 2026-10-23). With a date recorded, the Integrations card
+  says so from 30 days out and the administrators' morning email warns at 30
+  days, at 7 and on the day. Without one, or with a stale one after the secret
+  is replaced, nothing warns: creation and blocking simply fail with "The
+  client secret has expired" until a new one is entered. A certificate is not
+  supported.
 - **One directory per department.** Google Workspace and Microsoft 365 cannot
   both be connected. Switching moves nothing: records for the old directory
   stay, and their suspensions wait until it is connected again.
@@ -202,15 +212,37 @@ converted to a member and suspends it when the member is dropped or deleted
 (`wiki/Integration-Google-Workspace.md`). Each of these is a deliberate
 choice an owner may want to revisit:
 
-- **Retirement keeps the account.** Only a drop or a delete suspends it; a
-  department may let retirees keep their address. Retired, on-leave, inactive
-  and Logbook-suspended members keep a working Google account.
+- **Retirement keeps the account unless the department opts in.** A drop or a
+  delete always suspends it. Retiring does only when the integration's
+  "suspend when a member retires" setting is on (off by default; owner
+  decision, 2026-10-23), and only for members who retire while it is on:
+  turning it on does not reach back to members already retired, and turning
+  it off does not lift suspensions it caused. On-leave, inactive and
+  Logbook-suspended members always keep a working account.
 - **Suspended, never deleted.** A departed member's account keeps its mailbox
   and its Workspace license until an administrator deletes it in Google.
+- **Long-suspended accounts are listed, not unlicensed.** The daily departure
+  check marks an account still in the directory 90 days after its suspension;
+  the attention list shows it and the morning email names it once (owner
+  decision, 2026-10-23). Nothing is removed. An account deleted in the
+  directory is unmarked only when its record holds the directory's id; one
+  matched by address alone stays listed until the member returns.
 - **A permanent delete cannot be retried.** The account record goes with the
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
-- **No rename.** A member's name change in The Logbook does not reach Google.
+- **A rename changes the name, never the address.** A member's first or last
+  name change reaches an account The Logbook created (given and family name;
+  Microsoft 365's display name too), but the email address and sign-in name
+  stay as they were. An existing account The Logbook only linked to is never
+  renamed, a Microsoft 365 account synced from Active Directory is renamed
+  there, and a departed member's account keeps its name until they return.
+  Names changed before this was added are not sent.
+- **Groups follow the configuration, not history.** A departure takes an
+  account The Logbook created out of the groups configured _now_, and a return
+  puts it back in them; the record does not keep which groups the account
+  joined at creation. A Microsoft 365 group that assigns licenses is never
+  touched (owner decision, 2026-10-23), nor is one whose licenses Graph does
+  not report. Members who left before this was added keep their groups.
 - **A departed member's account cannot be kept on.** The daily departure check
   (owner decision, 2026-10-20) suspends again any departed member's account
   found active in the directory, every morning, with no exemption: an

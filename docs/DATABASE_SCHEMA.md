@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**317 tables · 5247 columns · 1072 foreign keys**
+**317 tables · 5250 columns · 1072 foreign keys**
 
 ---
 
@@ -148,7 +148,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`directory_account_provisions`](#directory_account_provisions) | `DirectoryAccountProvision` | 23 | A member's directory account, as The Logbook created or found it |
+| [`directory_account_provisions`](#directory_account_provisions) | `DirectoryAccountProvision` | 26 | A member's directory account, as The Logbook created or found it |
 
 ### Documents
 
@@ -2121,6 +2121,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `external_user_id` | VARCHAR(64) | yes |  |  |  |
 | `credentials_sent` | BOOL | no |  | `0` |  |
 | `pending_groups` | JSON | yes |  |  |  |
+| `pending_group_removals` | JSON | yes |  |  |  |
 | `license_pending` | BOOL | no |  | `0` |  |
 | `managed_on_premises` | BOOL | no |  | `0` |  |
 | `last_error` | TEXT | yes |  |  |  |
@@ -2132,6 +2133,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `suspended_at` | DATETIME | yes |  |  |  |
 | `suspension_error` | TEXT | yes |  |  |  |
 | `suspension_requested_at` | DATETIME | yes |  |  |  |
+| `name_pending` | BOOL | no |  | `0` |  |
+| `long_suspended_since` | DATETIME | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |

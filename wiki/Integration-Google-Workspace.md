@@ -143,12 +143,37 @@ integration itself uses the standard `/api/v1/integrations/{id}/…` routes.
 
 ## When a Member Leaves or Returns
 
-| What happens in The Logbook                                      | Google account                                 |
-| ---------------------------------------------------------------- | ---------------------------------------------- |
-| Status changed to dropped (voluntary or involuntary)             | Suspended                                      |
-| Member deleted (soft or permanent)                               | Suspended                                      |
-| Drop undone, rejoin from dropped, or archived member reactivated | Unsuspended — only if The Logbook suspended it |
-| Retired, on leave, inactive, suspended in The Logbook            | Unchanged                                      |
+| What happens in The Logbook                                      | Google account                                                                                                                            |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Status changed to dropped (voluntary or involuntary)             | Suspended                                                                                                                                 |
+| Member deleted (soft or permanent)                               | Suspended                                                                                                                                 |
+| Drop undone, rejoin from dropped, or archived member reactivated | Unsuspended — only if The Logbook suspended it                                                                                            |
+| Retired                                                          | Unchanged, unless the department turns on **Suspend the account when a member retires**: then suspended, and unsuspended when they return |
+| On leave, inactive, suspended in The Logbook                     | Unchanged                                                                                                                                 |
+
+**Suspend the account when a member retires** is in the integration's settings
+and is off by default. It applies to members who retire while it is on:
+turning it on does not suspend members already retired, and turning it off
+does not unsuspend any. A retired member who returns to active (or moves to
+inactive) gets their account back whatever the setting says by then, if The
+Logbook suspended it. While it is on, the daily departure check also covers
+retired members.
+
+**Name changes.** When a member's first or last name changes, an account The
+Logbook created is renamed to match, right after the change is saved (the
+15-minute sweep retries a failure). The address is never changed, an existing
+account The Logbook only linked to is never renamed, and a departed member's
+account keeps its name until they return.
+
+**Groups.** When the departure suspends an account The Logbook created, it is
+also taken out of the groups configured under **Add new members to these
+groups**, so a suspended mailbox stops receiving the department's mail. When
+the member returns it is put back in them. A group it could not be taken out
+of stays on its record: the 15-minute sweep retries it, the member's **Retry**
+does too, and after a day it is listed under **N need attention** as "Left, but
+still in a group". The groups are the ones configured now; The Logbook does
+not record which groups an account joined when it was created. An existing
+account The Logbook only linked to keeps its groups.
 
 Both accounts The Logbook created and existing accounts it linked to are
 suspended. If an account was already suspended in Google when the member left,
@@ -196,12 +221,14 @@ Workspace card on **Integrations** shows **N need attention**. It opens a list
 of those members, each linked to their profile (where the reason and **Retry**
 are), most urgent first:
 
-| Listed as                                    | Means                                                                                  |
-| -------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Left, but the account is not suspended       | A departure's suspension Google has not taken yet                                      |
-| Returned, but the account is still suspended | A return's unsuspension Google has not taken yet                                       |
-| Account not created                          | Creation failed, or has been "being created" for over an hour with no answer           |
-| Account setup unfinished                     | The account exists but a group was not added, or its password never reached the member |
+| Listed as                                      | Means                                                                                                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Left, but the account is not suspended         | A departure's suspension Google has not taken yet                                                                                            |
+| Returned, but the account is still suspended   | A return's unsuspension Google has not taken yet                                                                                             |
+| Account not created                            | Creation failed, or has been "being created" for over an hour with no answer                                                                 |
+| Account setup unfinished                       | The account exists but a group was not added, or its password never reached the member                                                       |
+| Left, but still in a group                     | Suspended, but a group would not let the account go; the sweep keeps trying                                                                  |
+| Suspended over 90 days, still in the directory | A departed member's account the daily check still finds 90 days after its suspension: it keeps its license until it is deleted or unlicensed |
 
 A member who has left is listed only for their suspension: creating or
 finishing their account is not wanted. One case is listed for a person to
@@ -218,7 +245,11 @@ Anything waiting over a day is also emailed to every active member holding
 `admin.access`, once each morning while it lasts
 (`google_workspace_attention_digest`, 7:35). The email leads with departed
 members whose account was found turned back on that morning, then those whose
-account still works. It is filed under **Membership and store
+account still works. It also names, once, each departed member whose account
+the daily check has just found still in the directory 90 days after its
+suspension. Those are listed for information and never count as overdue; The
+Logbook deletes and unlicenses nothing, and the entry goes away when the
+account is deleted in the directory or the member returns. The email is filed under **Membership and store
 administration** in each member's email preferences, so an administrator can
 turn it off for themselves.
 
@@ -257,5 +288,5 @@ organizational unit (for example `/Logbook Test`) and a test applicant:
 
 ## Not Covered
 
-- Deleting the Google account, or freeing its license, when a member leaves — suspension keeps both.
-- Renaming the account when a member's name changes.
+- Deleting the Google account, or freeing its license, when a member leaves — suspension keeps both. Accounts still suspended 90 days on are listed under **N need attention** instead.
+- Changing the account's address when a member's name changes; only the name changes.
