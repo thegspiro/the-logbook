@@ -749,6 +749,84 @@ Re-read directly against current source, not taken from pass 10's table:
   filtered to the dashboard service's own export — zero hits, re-checked
   this pass). Delete-or-implement, unchanged since 2026-08-08.
 
+## Addendum to pass 11 — a second, independent watchdog session raced this same pass concurrently
+
+A second watchdog session worked this same rotation slot at the same time
+(both ran Step 0's `search_pull_requests`/`list_pull_requests` check before
+either had pushed, so neither saw the other's in-flight branch). Rather than
+open a duplicate, competing PR, that session's one genuinely new finding is
+folded into this PR as a follow-up commit, per this rotation's own
+"Medical supplies pass 16" precedent for exactly this situation.
+
+### RPT6-29-3 — LOW — Member Roster report's own Active/Inactive tally counted a probationary member as inactive — ✅ FIXED
+
+**What:** the repo-wide probationary-account-status sweep (`8a57d069`,
+CLAUDE.md Pitfall #32) moved every `User.status == UserStatus.ACTIVE`
+**query filter** in this feature's files to
+`User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, but `_generate_member_roster`
+(`reports_service.py`) has no status filter at all — it lists every member
+and classifies each into the report's own `active_members`/
+`inactive_members` tallies with a **local-variable** comparison,
+`is_active = status_val == UserStatus.ACTIVE.value`. The sweep's own
+detector (`tests/test_account_status_gates.py`'s `_LITERAL_ACTIVE` regex,
+which matches `User.status`/`user.status` directly) cannot pattern-match a
+local variable holding the status string, so this site was never on the
+sweep's list and survived it untouched.
+
+**Where:** `app/services/reports_service.py`, `_generate_member_roster`
+(pre-fix at line 233).
+
+**Failure scenario:** any `reports.view` holder runs the Member Roster
+report. Every probationary member is listed correctly in `members[]` with
+`status: "probationary"`, but the report's own "Active"/"Inactive" stat
+cards (`frontend/src/modules/reports/components/renderers/
+MemberRosterRenderer.tsx:44-45`) count that same member under **Inactive**
+— understating current headcount on the one screen built to answer that
+question. No row is hidden (unlike the query-filter shape Pitfall #32
+usually describes); only the summary tally is wrong.
+
+**Impact:** data-integrity/correctness, not an access-control bypass or a
+cross-tenant leak. Severity LOW. `grep -rn "== UserStatus.ACTIVE.value"
+app/` finds only this one site in the whole backend.
+
+**Fix:** `is_active` now checks membership in `{s.value for s in
+ACTIVE_ACCOUNT_STATUSES}` rather than equality with the single `ACTIVE`
+value — the same rule the rest of this file already applies, extended to
+the one call shape the existing sweep's regex can't see.
+`test_account_status_gates.py`'s `_LITERAL_ACTIVE` regex itself is left
+untouched: it is a shared, repo-wide test outside this feature's files, and
+generalizing it to also catch an arbitrarily-named local variable risks
+false positives across the 300+ files it already sweeps clean —
+flagging the gap here rather than widening someone else's detector for a
+one-site fix.
+
+**Guard test:** `backend/tests/test_reports_service.py::
+TestMemberRosterActiveTally::test_probationary_member_counts_as_active_not_inactive`
+— three mock users (active, probationary, suspended); asserts
+`active_members == 2`, `inactive_members == 1`, and that each member's own
+`status` field is still reported verbatim (proving the fix changes only the
+tally, not the per-row data). Confirmed red against the pre-fix code
+(`active_members == 1`) before the fix, green after (CLAUDE.md Pitfall #37).
+
+**Completion gate for this addendum:**
+
+| Check                                                                                                                                                                                                                              | Result                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.3.0`, pip-installed to match CI)                                                                                                                                                         | ✅ 0 violations                              |
+| `black --check app/ tests/ alembic/` (`black==26.5.1`, pip-installed to match CI)                                                                                                                                                  | ✅ 2612 files unchanged                      |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`, pip-installed to match CI)                                                                                                                                              | ✅ clean                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                  | ✅ 650 revisions, single head `a8c3b50b6d9b` |
+| `pytest tests/test_reports_service.py -k MemberRosterActiveTally` against the pre-fix code                                                                                                                                         | ✅ fails red (`active_members == 1`, not 2)  |
+| `pytest tests/test_reports_service.py -k MemberRosterActiveTally` after the fix                                                                                                                                                    | ✅ 1 passed                                  |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report" -m "not integration and not slow and not docker"` | ✅ 922 passed, 1 skipped (env-only)          |
+| `pytest tests/test_account_status_gates.py`                                                                                                                                                                                        | ✅ 12 passed                                 |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                 | ✅ 0 errors                                  |
+| `cd frontend && npm run lint`                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings (exit 0)             |
+
+Findings for the addendum: 1 fixed (RPT6-29-3, LOW). Combined with the rest
+of pass 11 above: 1 fixed, 1 documentation correction, 0 new unfixed
+findings.
+
 ## Completion gate (pass 11)
 
 | Check                                                                                                                                                                                                                              | Result                                                             |
