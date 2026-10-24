@@ -57,12 +57,24 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
   };
+  // The badge printed the stored code ("in progress", "pass"); these are the
+  // words, and an unknown status still reads as itself.
+  const labels: Record<string, string> = {
+    draft: 'Draft',
+    in_progress: 'In progress',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    voided: 'Voided',
+    pass: 'Passed',
+    fail: 'Failed',
+    incomplete: 'Incomplete',
+  };
 
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}
     >
-      {status.replace('_', ' ')}
+      {labels[status] ?? status.replace(/_/g, ' ')}
     </span>
   );
 };

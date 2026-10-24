@@ -32,7 +32,7 @@ import toast from 'react-hot-toast';
 import type { Applicant, ChecklistConfig, MultiApprovalConfig, StageHistoryEntry } from '../types';
 import { StepProgressStatus } from '../types';
 import { approverRoleLabel, isSafeUrl, getInitials } from '../utils';
-import { STAGE_TYPE_ICONS } from '../constants';
+import { APPLICANT_STATUS_LABELS, STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { blankToNull } from '../../../utils/formValues';
 import TargetRolePicker from './TargetRolePicker';
@@ -310,7 +310,7 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                       {applicant.first_name} {applicant.last_name}
                     </h2>
                     <p className="text-theme-text-muted text-sm capitalize">
-                      {applicant.status.replace('_', ' ')} &middot; {applicant.target_membership_type} member
+                      {APPLICANT_STATUS_LABELS[applicant.status]} &middot; {applicant.target_membership_type} member
                     </p>
                   </div>
                 </div>

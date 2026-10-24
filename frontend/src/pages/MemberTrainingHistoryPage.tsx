@@ -28,6 +28,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
 import { useDialog } from '../hooks/useDialog';
+import { getTrainingStatusLabel } from '../utils/trainingColors';
 
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
@@ -629,7 +630,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                                 training.status
                               )}`}
                             >
-                              {training.status.replace('_', ' ')}
+                              {getTrainingStatusLabel(training.status)}
                             </span>
                           )}
                           {!training.voided_at && isCertificationExpired(training.expiration_date, tz) && (

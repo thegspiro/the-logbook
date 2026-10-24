@@ -4,6 +4,7 @@ import { formatDate } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { TrainingRecord, ComplianceSummary } from '../../types/training';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../../utils/certificationExpiry';
+import { getTrainingStatusLabel } from '../../utils/trainingColors';
 
 interface TrainingSectionProps {
   userId: string;
@@ -187,7 +188,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                       training.status
                     )}`}
                   >
-                    {training.status.replace('_', ' ')}
+                    {getTrainingStatusLabel(training.status)}
                   </span>
                   {isExpired(training, tz) && (
                     <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 dark:bg-red-500/20 dark:text-red-400">

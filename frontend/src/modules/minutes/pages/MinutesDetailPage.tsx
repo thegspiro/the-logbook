@@ -75,6 +75,7 @@ import { motionMakers } from '../utils/motionMakers';
 import { emptyVoteDraft, voteDraftPayload } from '../utils/voteDraft';
 import type { VoteDraft } from '../utils/voteDraft';
 import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
+import { actionItemStatusLabel } from '../utils/actionItemStatus';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -1751,7 +1752,7 @@ export const MinutesDetailPage: React.FC = () => {
                         <span
                           className={`rounded-sm px-2 py-0.5 text-xs font-medium ${ACTION_STATUS_BADGES[item.status]}`}
                         >
-                          {item.status.replace('_', ' ')}
+                          {actionItemStatusLabel(item.status)}
                         </span>
                         <span className={`rounded-sm px-2 py-0.5 text-xs ${PRIORITY_BADGES[item.priority]}`}>
                           {item.priority}

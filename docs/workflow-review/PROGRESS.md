@@ -224,12 +224,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   while the two charts and their totals are now whole local days; read from
   code (W78).
 
-- **Any screen printing a status** — ten screens still print a stored code
-  with `status.replace('_', ' ')`, which also replaces only the first
-  underscore: member list, applicant pipeline, action items, minutes, member
-  training history and profile, `MyTrainingHistory`, `MobileItemCard`. W79
-  fixed My Training only (W79-5).
-
 ## Log
 
 ### W79 — Phone pass: W08, W19, W24, W33, W39 and W70 at 390×844 — 2026-10-23

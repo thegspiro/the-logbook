@@ -15,7 +15,7 @@ import { TRAINING_TYPE_LABELS } from '../../constants/enums';
 import { formatDate } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { getTrainingStatusColor } from '../../utils/trainingColors';
+import { getTrainingStatusColor, getTrainingStatusLabel } from '../../utils/trainingColors';
 import { useTimezone } from '../../hooks/useTimezone';
 import type {
   MemberVisibility,
@@ -129,7 +129,7 @@ const YearGroup: React.FC<{
                           </div>
                         ) : (
                           <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(r.status)}`}>
-                            {r.status.replace('_', ' ')}
+                            {getTrainingStatusLabel(r.status)}
                           </span>
                         )}
                       </td>
