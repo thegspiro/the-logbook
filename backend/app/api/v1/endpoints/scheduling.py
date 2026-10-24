@@ -573,7 +573,18 @@ async def _member_visible_shifts(
         str(current_user.organization_id),
         [str(shift.id) for shift in shifts],
     )
-    return [shift for shift in shifts if eligible.get(str(shift.id))]
+    # The member's own seats stay visible whatever their eligibility, as the
+    # detail check below already allows.
+    seated = await service.member_seated_shift_ids(
+        current_user.id, current_user.organization_id, [shift.id for shift in shifts]
+    )
+    return [
+        shift
+        for shift in shifts
+        if eligible.get(str(shift.id))
+        or str(shift.id) in seated
+        or _is_shift_officer(shift, current_user)
+    ]
 
 
 async def _ensure_member_can_view_shift(
@@ -590,11 +601,7 @@ async def _ensure_member_can_view_shift(
             ShiftAssignment.organization_id == str(current_user.organization_id),
             ShiftAssignment.user_id == str(current_user.id),
             ShiftAssignment.assignment_status.in_(
-                [
-                    AssignmentStatus.ASSIGNED,
-                    AssignmentStatus.CONFIRMED,
-                    AssignmentStatus.PENDING,
-                ]
+                SchedulingService.SEATED_ASSIGNMENT_STATUSES
             ),
         )
     )
