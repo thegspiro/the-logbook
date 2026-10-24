@@ -147,11 +147,14 @@ async def update_training_module_config(
         )
 
     service = TrainingModuleConfigService(db)
-    config = await service.update_config(
-        organization_id=current_user.organization_id,
-        updated_by=str(current_user.id),
-        **requested,
-    )
+    try:
+        config = await service.update_config(
+            organization_id=current_user.organization_id,
+            updated_by=str(current_user.id),
+            **requested,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     return config
 
 

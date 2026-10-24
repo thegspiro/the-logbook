@@ -472,10 +472,12 @@ class User(Base):
     )  # When membership tier last changed
 
     # Status
-    status: Mapped[Optional[UserStatus]] = mapped_column(
+    status: Mapped[UserStatus] = mapped_column(
         Enum(UserStatus, values_callable=lambda x: [e.value for e in x]),
         default=UserStatus.ACTIVE,
         index=True,
+        nullable=False,
+        server_default="active",
     )
     status_changed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)

@@ -56,6 +56,7 @@ from app.services.training_module_config_service import (
 from app.services.training_program_service import TrainingProgramService
 from app.utils.call_type_matching import matching_call_types
 from app.utils.member_names import format_display_name
+from app.utils.model_updates import reject_null_for_required
 from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import resolve_org_today
 
@@ -1513,6 +1514,11 @@ class ShiftCompletionService:
             raise ValueError("Report not found in this organization")
         if report.officer_id != officer_id:
             raise ValueError("Only the filing officer can update this report")
+        # Before the draft-regression check, which skips a None review_status
+        # and would let it reach the column.
+        reject_null_for_required(
+            report, {f: v for f, v in updates.items() if f in UPDATABLE_FIELDS}
+        )
 
         was_draft = report.review_status == "draft"
         was_released = report.review_status == "approved"
