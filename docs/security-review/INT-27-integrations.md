@@ -1,6 +1,194 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-20 (pass 8, this PR), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 8); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-24 (pass 9, this PR), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 9); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 9 (2026-10-24) — directory-account rename/retirement/group-removal/long-suspension and the MS 365 secret-expiry warning; 0 fixes, 0 new findings
+
+Watchdog pickup. The dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was not reachable. PR #3640 (Feature 26, Forms, pass 9) was found open, CI
+green on its head commit, `mergeable_state: clean`, and with no unresolved
+review thread (the two Codex bot comments were the bot's own usage-limit
+failure, not findings) — merged by this same watchdog run before starting
+this pass. A fresh `search_pull_requests` (`head:claude/security-review-`,
+state:open) then returned 0, and row 27 (Integrations) was confirmed the next
+`⬜` row in `PROGRESS.md`'s rotation table on a freshly fetched `main`
+(`2d000c36`, the merge of #3640).
+
+**Baseline `8fb7eba1` (PR #3467's merge, pass 8).** `git diff 8fb7eba1..HEAD`,
+scoped to this feature's actual files (not `git log`, which undercounts —
+Pitfall from pass 6), shows five real feature commits landed since then, all
+read in full against every `CHECKLIST.md` dimension:
+
+| Commit     | What                                                                                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ece6c10b` | A per-directory-integration `suspend_on_retirement` switch (off by default): retiring suspends/blocks the account exactly as a drop does, for members who retire while it is on                                               |
+| `0d5b81f3` | A departure now also takes an account The Logbook created out of the integration's configured groups (never a Microsoft 365 group that assigns licenses, nor one whose licenses Graph does not report); a return puts it back |
+| `7ac97a39` | The daily departure check marks (`long_suspended_since`) an account still in the directory more than 90 days after its suspension; listed on the attention list and named once in the morning email — nothing is auto-removed |
+| `88f385a5` | A member's first/last name change reaches an account The Logbook created (`name_pending`, staged in the same transaction, sent after commit, retried by the 15-minute sweep); the address is never changed                    |
+| `ff9e1d21` | An administrator records the Microsoft 365 client secret's Entra ID expiry date; the Integrations card and the morning email warn at 30/7/0 days                                                                              |
+
+A sixth commit, `b4b0ea8a`, is a correctness-only fix (the secret-days-left
+card now counts from the department's own date via `resolve_org_today`
+rather than the server's UTC date) plus an unrelated MFA test-clock fix
+(already reviewed/merged on PR #3616/#3640) — no access-control change.
+`8b0ba129` (MFA step-up, repo-wide) added `require_stepup` to
+`connect_integration`/`disconnect_integration`/`update_integration` — a
+hardening addition reviewed below, not a regression. `b2858211` (drops the
+dead `ICalConfig.include_shifts` field) is a Pitfall #19 cleanup with no
+new surface. No other commit in the window touches this feature's files.
+
+### Read in full
+
+**`backend/app/api/v1/endpoints/integrations.py` (+58 L).** The new
+`_credential_days_left`/`_integration_to_dict(..., today=...)` plumbing reads
+the Microsoft 365 secret-expiry date (never a secret value) and is computed
+from `resolve_org_today(db, integration.organization_id)` — the integration's
+own `organization_id`, not request input, at every one of the four call
+sites (`list_integrations`, `get_integration`, `connect_integration`,
+`update_integration`, `retry_integration_sync`). `require_stepup` (checklist
+§1) is now a dependency on connect/disconnect/update, declared _after_
+`require_permission("integrations.manage")` in the parameter list — matching
+`require_stepup`'s own docstring ("add it after the permission dependency, so
+a caller who lacks the permission is told that rather than asked to
+re-verify"); FastAPI resolves route dependencies in declared order, so the
+permission check still runs first. `require_stepup` itself
+(`app/api/dependencies.py:463`) is shared, repo-wide infrastructure (added by
+`8b0ba129`), server-side-stamped on the session row, never trusting a
+client-supplied header beyond carrying the token to the stamp lookup — spot
+checked here as a consumer, not re-reviewed as its own threat model (it has
+no dedicated file in this feature's scope).
+
+**`backend/app/models/directory_account.py` / `directory_account_departure.py`
+(+22 L / +140 L, net).** `DIRECTORY_INTEGRATION_TYPES`,
+`SUSPEND_ON_RETIREMENT_KEY`, `suspends_retired()`,
+`_department_suspends_retired()` (org-scoped: filters
+`organization_id`/`integration_type.in_(DIRECTORY_INTEGRATION_TYPES)`/`enabled`/
+`status == "connected"`), `_stage_rename()` (filters `user_id` **and**
+`organization_id`, same as the existing `_stage()`), and the `before_flush`
+hook's new first/last-name-change branch and retired-status branch were all
+read in full. Every query added here carries the same org filter the
+existing suspension-staging code already used — no new unscoped by-id path.
+
+**`backend/app/services/directory_account_service.py` (+469 L / -17 L).**
+`_follow_groups`/`_leave_groups` (group removal/rejoin), `sync_name`
+(rename), `sync_pending_names`/`retry_group_removals` (the 15-minute sweep's
+new retries), `check_departed_suspensions`'s `long_suspended_since` tracking,
+and `_attention_issue`'s two new issue types — all read in full. Every
+per-record operation goes through the existing `_load(organization_id,
+user_id=..., lock=True)`, which filters `organization_id` and takes
+`FOR UPDATE` (checklist §3, Pitfall #27); `check_departed_suspensions` and
+`attention_items` (the two multi-row queries) both `JOIN`
+`DirectoryAccountProvision`↔`User` and filter `organization_id` on **both**
+sides of the join. `pending_group_removals` (JSON list column) is always
+reassigned whole (`row.pending_group_removals = remaining or None`), never
+mutated in place, so Pitfall #12 does not apply. `sync_pending_names()` and
+`retry_group_removals()` are unscoped _sweeps_ — by design, like the
+pre-existing `sync_pending_suspensions()` they sit beside — iterating every
+organization's own rows from a scheduled task, never from a caller-reachable
+endpoint.
+
+**Connector methods (`google_workspace_service.py` +35 L,
+`microsoft_365_service.py` +75 L).** `update_name`/`remove_from_group` on
+both. Google's `update_name` sends `{"name": {...}}` as a JSON body (no
+string interpolation into a URL or query). Microsoft 365's `update_name` and
+`remove_from_group` both `quote(..., safe='')` every path segment
+(`user_key`, `group_id`, `account.id`) before building the Graph REST path —
+the same pattern this feature's existing connector code already uses
+elsewhere. `remove_from_group`'s "leave a licensing group alone" check reads
+`assignedLicenses` from Graph's own group object (added to `GROUP_FIELDS`),
+never guessed. `client_secret_days_left`/`client_secret_warning_level`
+(`microsoft_365_service.py`) read only the `client_secret_expires_on` config
+key (a date, not a secret) and do no I/O.
+
+**`backend/app/services/google_workspace_attention_digest.py` (+163 L,
+net).** `_recently_reactivated`/`_newly_long_suspended` both filter
+`User.organization_id`/`DirectoryAccountProvision.organization_id` on the
+join. Every member name/email/URL interpolated into the HTML email body
+(`_secret_section`, `_long_suspended_section`, `_reactivated_section`) goes
+through `html.escape()` first — re-verified by direct read, not assumed from
+the existing pattern. `_record_digest` still deep-copies
+`organization.settings` before mutating the nested dict and reassigns the
+column whole (Pitfall #12, unchanged mechanism, now also storing
+`secret_expiry_warned`).
+
+**`backend/app/services/scheduled_tasks.py`.** Only the
+`run_directory_account_departure_check` (new, routed through the existing
+`_for_each_org` per-organization helper) and `run_google_workspace_suspension_sync`
+(now also calling `retry_group_removals()`/`sync_pending_names()`) hunks are
+this feature's; the much larger diff in this shared file (NFC tap purge,
+inventory low-stock alert links, a scheduled-email row-lock fix) belongs to
+Features 11/13/31 and is out of this feature's declared scope.
+
+**Frontend (`IntegrationsPage.tsx`, +~70 L net; `IntegrationsPage.test.tsx`,
++128 L).** The two new `suspend_on_retirement` checkboxes and the
+`client_secret_expires_on` date input use controlled React state, not
+`??`-coerced form values; `credential_days_left`/`credential_expiring` are
+rendered as plain JSX text (React-escaped), never through
+`dangerouslySetInnerHTML`. No new `window.confirm`/`alert`/`prompt`. New
+tests cover the added fields and the expiry badge.
+
+### Schema & migration notes
+
+Three new migrations since pass 8, all guarding the table's existence first
+(Pitfall #26) and all previously shipped with their own migration tests
+(re-run below): `6c0e79521d14` (`pending_group_removals`, nullable JSON),
+`26683fe99719` (`long_suspended_since`, nullable `DateTime(timezone=True)`),
+`c561cf7730ce` (`name_pending`, `NOT NULL` with `server_default="0"` —
+Pitfall #35 correctly applied). `validate_migrations.py --strict`: 650
+revisions, single head `a8c3b50b6d9b`, PASSED.
+
+### Route surface re-enumerated — unchanged
+
+`integrations.py` 11, `salesforce_sync.py` 9, `calcom_sync.py` 1,
+`mcp_keys.py` 4, `google_workspace.py` 4, `google_calendar_oauth.py` 2,
+`outlook_calendar_oauth.py` 2, `app/api/public/calendar.py` 2,
+`integrations_webhook.py` 2, `salesforce_webhook.py` 1 — identical to pass
+8's count; no new endpoint added this pass (every new mechanism above is
+reached through existing routes, the scheduler, or a session-level hook).
+`check_route_permissions.py --strict`: 274 application routes, 0
+errors/warnings.
+
+### Re-verified from passes 1–8 (all hold)
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist): unchanged, still an
+  explicit owner decision.
+- **INT-11** (Salesforce "clear the refresh token"): confirmed FIXED since
+  pass 8, unchanged.
+- INT-2, INT-3, INT-4, INT-6, INT-8; SOQL injection defense, instance-URL
+  domain pinning, secret handling, webhook replay dedup, module gating, the
+  DNS-rebinding transport pin, the wall-clock deadline, Retry Sync's
+  lock-then-read ordering, the PayPal backfill's idempotency: none of the
+  files carrying them changed since pass 8 per the diff above.
+- **LIKE-pattern usage, CSV export**: none in this feature's scope, same as
+  every prior pass.
+- **`docs/KNOWN_LIMITATIONS.md`**: the Microsoft 365 and Google Workspace
+  entries already correctly document every owner decision this pass's
+  commits made (`suspend_on_retirement` off-by-default, secret-expiry
+  manual entry, long-suspension listing-only, rename scope) — all dated
+  2026-10-23, matching the commits; nothing to add or correct.
+
+## Guard tests added
+
+None by this pass — every new mechanism shipped with its own dedicated test
+file before this pass started (`test_directory_retirement.py`,
+`test_directory_group_removal.py`, `test_directory_long_suspended.py`,
+`test_directory_rename.py`, `test_microsoft_365_secret_expiry.py`), all
+re-run as part of the scoped suite below and confirmed passing.
+
+## Completion gate (pass 9)
+
+| Check                                                                                                                                                                                                                                                | Result                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                        | ✅ 0 violations                                                                                                                              |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                 | ✅ 2610 files unchanged                                                                                                                      |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)                                                                                                                                                                                          | ✅ clean                                                                                                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                    | ✅ 650 revisions, single head `a8c3b50b6d9b`, PASSED                                                                                         |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                | ✅ 274 routes, 0 errors/warnings                                                                                                             |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar or outlook or directory_account or microsoft_365 or directory"`) | ✅ 8397 passed, 22 skipped (environment-only — `pywebpush`, Docker daemon/registry, opt-in API-contract suite, no-timezone-tables), 0 failed |
+| `npm run typecheck` (frontend)                                                                                                                                                                                                                       | ✅ 0 errors                                                                                                                                  |
+| `npm run lint` (frontend)                                                                                                                                                                                                                            | ✅ exit 0, 0 warnings                                                                                                                        |
 
 ---
 

@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3641](https://github.com/thegspiro/the-logbook/pull/3641)** (branch
+`claude/security-review-integrations`) — Feature 27
+(Integrations), pass 9, a watchdog pickup. PR #3640 (Feature 26, Forms, pass 9) had already merged with no open rotation PR behind it — confirmed via
+`list_pull_requests` (state=open) and `search_pull_requests`
+(`head:claude/security-review-`, both empty) immediately before starting —
+and row 27 (Integrations) was confirmed the next `⬜` row. **0 fixed, 0 new
+findings** — five real feature commits since pass 8 (a per-integration
+`suspend_on_retirement` switch, group removal on departure, a 90-day
+long-suspension marker, a member-rename sync to the directory account, and
+a Microsoft 365 client-secret-expiry warning) were read in full and found
+clean: every by-id and multi-row query org-scoped, the JSON
+`pending_group_removals` column always reassigned whole, every value
+interpolated into the attention-digest email HTML escaped, and the new
+`require_stepup` dependency on connect/disconnect/update correctly ordered
+after the permission check. Route count re-enumerated at the same total as
+pass 8; no new endpoint.
+
+Full writeup: `docs/security-review/INT-27-integrations.md`'s **Pass 9**
+section.
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
+IP) — re-check `search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3640, Feature 26, Forms, pass 9, merged), preserved for history</summary>
+
 **PR [#3640](https://github.com/thegspiro/the-logbook/pull/3640)** (branch
 `claude/security-review-forms`) —
 Feature 26 (Forms), pass 9, a watchdog pickup. PR #3638 (Feature 25,
@@ -37,6 +63,8 @@ Full writeup: `docs/security-review/FORM-26-forms.md`'s **Pass 9** section.
 
 Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
 re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3638, Feature 25, Messaging & notifications, pass 9, merged), preserved for history</summary>
@@ -21214,7 +21242,7 @@ this iteration's commit" rule.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
@@ -21229,6 +21257,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 27 (Integrations, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`
+returned no other running session). PR #3640 (Feature 26, Forms, pass 9)
+had already merged; a fresh `search_pull_requests`
+(`head:claude/security-review-`, state=open) and `list_pull_requests`
+(state=open) both returned no rotation PR, and row 27 (Integrations) was
+confirmed the next `⬜` row in the rotation table on a freshly fetched
+`main` (`2d000c36`).
+
+Baseline `8fb7eba1` (PR #3467's merge, pass 8). `git diff 8fb7eba1..HEAD`
+scoped to this feature's own files shows five real feature commits: a
+per-directory-integration `suspend_on_retirement` switch (off by default,
+retiring suspends/blocks the account as a drop does for members who retire
+while it is on); a departure now also takes an account The Logbook created
+out of the integration's configured groups (never a Microsoft 365 group
+that assigns licenses), and a return puts it back; the daily departure
+check marks an account still in the directory more than 90 days after its
+suspension (listed, never auto-removed); a member rename reaches an
+account The Logbook created (address never changed); and an administrator
+can record the Microsoft 365 client secret's Entra ID expiry date, warned
+at 30/7/0 days. All five read in full against every `CHECKLIST.md`
+dimension. **0 new findings** — every by-id and multi-row query is
+org-scoped (including the two new multi-row `JOIN`s in
+`check_departed_suspensions`/`attention_items`/the attention digest), the
+new `pending_group_removals` JSON column is always reassigned whole
+(Pitfall #12 n/a), every value interpolated into the attention-digest
+email HTML is `html.escape`d, the Microsoft 365 connector methods
+URL-quote every path segment, and the new `require_stepup` dependency on
+connect/disconnect/update is correctly ordered after the permission check.
+Route count re-enumerated identical to pass 8; no new endpoint.
+
+Full writeup: `docs/security-review/INT-27-integrations.md`'s **Pass 9**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (isort
+pinned to CI's 9.0.1) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 650 revisions, single head
+`a8c3b50b6d9b`; `check_route_permissions.py --strict` — 274 routes, 0
+errors/warnings; `pytest tests/ -q -k "integration or salesforce or calcom
+or documenso or paypal or webhook or connector or mcp_key or
+google_calendar or google_workspace or ical or calendar or outlook or
+directory_account or microsoft_365 or directory"` — 8397 passed, 22
+skipped (environment-only), 0 failed; frontend `npm run typecheck` clean;
+`npm run lint` clean (exit 0).
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit
+& IP) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-10-24 — Feature 26 (Forms, pass 9) — watchdog pickup, 0 fixed, 0 new findings
 
