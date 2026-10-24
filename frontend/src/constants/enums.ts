@@ -33,6 +33,14 @@ export const InventoryNfcTagStatus = {
 } as const;
 export type InventoryNfcTagStatus = (typeof InventoryNfcTagStatus)[keyof typeof InventoryNfcTagStatus];
 
+/** What an inventory NFC tag is stuck to. A tag moves only within its kind. */
+export const InventoryNfcTagKind = {
+  ITEM: 'item',
+  STORAGE_AREA: 'storage_area',
+  COMPARTMENT: 'compartment',
+} as const;
+export type InventoryNfcTagKind = (typeof InventoryNfcTagKind)[keyof typeof InventoryNfcTagKind];
+
 /**
  * What a logged NFC tap did: identified an item, moved it onto a shelf, or
  * found it during a shelf audit.
