@@ -1,5 +1,25 @@
 # Screenshot currency
 
+## Queued by the October 23 – 24 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
+Nothing was captured by this pass. Guide 02 carries a
+visible "screenshot to be captured" note where the first picture goes.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 02 | Progress dialog with **Mark pipeline complete** and its reason prompt; the **Completed by hand: <reason>** line | Create |
+| 02 | A pipeline or phase showing **No active requirements** instead of a percentage; a requirement tagged **Inactive — not currently required** | Create |
+| 02 | Deactivate-pipeline confirmation naming how many members will be withdrawn | Create |
+| 05 | Folded product row with the **Rename** action (inventory.manage) | Create |
+| 05 | Equipment-check builder crew-view phone previews (new shared frame) and the full-size view | Replace |
+| 03 | Pattern form and template card with the inactive-template notice | Create (check whether 03 already has one) |
+| 11 | Budget picker showing "(inactive category)" and the **Inactive through** badge | Check against existing shots |
+| 11 | Expense report page: **Add line** button icon beside its label | Re-check |
+| 02, 03, 04, 09 | Training, Scheduling and Events pages with the shared section header and status badges moved out of the heading | Re-check any full-page shot |
+| 04 | Event detail title row: name on one line, actions wrapped beneath | Re-check |
+| 16 | Microsoft 365 card with the secret-expiry countdown; Google/Microsoft settings with the retirement switch | Create (live-only; demo cannot connect, mark NOT POSSIBLE if so) |
+
 ## Queued by the October 22 – 23 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).

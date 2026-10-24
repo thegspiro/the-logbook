@@ -5,6 +5,41 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 23 – 24, 2026
+
+Merged to `main` since `b92a4add` (2026-10-23 12:31 UTC) through `c1fc4894`
+(2026-10-24). Security-review passes (scheduling, equipment-check, events-requests,
+training-core, training-extended, skills-testing, compliance, admin-hours,
+grants-fundraising, medical-supplies; all "0 fixed") are in
+`docs/security-review/PROGRESS.md`. pypdf 6.21.2 (three CVEs) landed on every open
+branch. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                                                | Guide                                               | Disposition                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------- |
+| **Mark pipeline complete** (reason required, audited, stored as `completion_reason`, officer-only); progress dialog officer actions need `training.manage`; migration `a0195b397bf3`                                                                                                                  | 02                                                  | Added (new section)                       |
+| Pipelines: empty required set completes nobody (**No active requirements**), inactive requirements/prerequisites ignored and recalculated, inactive items carry no due date, deactivating from the edit form withdraws members, probationary auto-enrollment checks prerequisites and emails officers | 02                                                  | Added (new section)                       |
+| Training waiver may have no end date on upgraded databases (migration `f938324f8081`); 99 columns made NOT NULL in the models                                                                                                                                                                         | `UPGRADING`, `KNOWN_LIMITATIONS`                    | Written with the change                   |
+| Finance: reimburse a purchase by check; correct or withdraw a draft; cancel a report or check request; approver shown before submit; charges refused under an inactive category or ancestor                                                                                                           | 11, `FINANCE_MODULE`                                | Written with the change                   |
+| Shift patterns stop generating from an inactive template                                                                                                                                                                                                                                              | 03                                                  | Written with the change                   |
+| Renaming a variant product carries onto every size                                                                                                                                                                                                                                                    | 05                                                  | Added                                     |
+| Medical supplies: truck positions in the Supplies to Replace email, lot export and uncounted count                                                                                                                                                                                                    | `MEDICAL_SUPPLIES_MODULE`, 05                       | Written with the change                   |
+| Google/Microsoft accounts: suspend on retirement (opt-in), removal from groups, name changes, 90-day stale list, client secret expiry warning, live-tenant checklist                                                                                                                                  | 16, wiki Integration pages                          | Added to 16; wiki written with the change |
+| Storage: one interface for remote platforms; a department's Google Shared Drive (steps 1 and 2)                                                                                                                                                                                                       | `FILE_STORAGE_HARDENING`, `KNOWN_LIMITATIONS`       | Written with the change                   |
+| Backups encrypt to an offline certificate and a server drill key                                                                                                                                                                                                                                      | `BACKUP`, `UPGRADING`, wiki Security-Encryption     | Written with the change                   |
+| Built-in rank codes locked                                                                                                                                                                                                                                                                            | 08                                                  | Written with the change                   |
+| Training, Events and Scheduling pages use the shared section header; badges out of the training heading; event name stays on one line beside its actions                                                                                                                                              | 02, 03, 04, 09                                      | No wording change; screenshots queued     |
+| Crew-view phone preview in the equipment-check builder: one shared phone frame, count rows stack by width, expand to full size                                                                                                                                                                        | 05                                                  | Screenshot queued                         |
+| Expense report **Add line** icon beside its label; Finance route preview no longer crashes the form on a bad answer                                                                                                                                                                                   | 11                                                  | Layout/bug fix; screenshot re-check       |
+| Membership pipeline routes without `{prospect_id}` guarded; caller's own application hidden from the duplicate-email check (MP-34); `200` with `null` for an event with no training approval or session                                                                                               | `KNOWN_LIMITATIONS`, wiki Module-Training-Developer | Written with the change                   |
+| Log text sinks escape line breaks; `CLAUDE.md` rules 33–37                                                                                                                                                                                                                                            | developer rules                                     | Written with the change                   |
+
+**Screenshots to create:** the **Mark pipeline complete** reason prompt and the
+"Completed by hand" line (02), **No active requirements** in a progress view (02),
+the variant **Rename** action (05). **Re-check:** Training, Events and Scheduling
+full-page shots (section header), the Event detail title row, the equipment-check
+builder phone previews, and the expense report Add line button. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 22 – 23, 2026
 
 Merged to `main` since `68c22b0f` (2026-10-22 12:53 UTC) through `b92a4add`
