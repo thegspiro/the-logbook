@@ -468,13 +468,15 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `knowledge-tests`   | Knowledge Tests (Setup)       |
 | `compliance`        | Compliance Matrix             |
 | `expiring-certs`    | Expiring Certs                |
-| `pipelines`         | Pipelines                     |
+| `pipelines`         | Programs                      |
 | `shift-reports`     | Shift Reports                 |
 | `integrations`      | Integrations                  |
 | `import`            | Import Past Training          |
 | `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
+
+> The **Programs** tab (`pipelines`) lists the department's existing programs. Its New Pipeline button opens the create wizard in the same tab at `&view=new`; selecting Programs in the hub nav returns to the list.
 
 > The **Training Waivers** tab (within Officer Dashboard) shows all training waivers with summary cards, status filtering, and source tracking (Auto LOA vs Manual).
 >
@@ -506,7 +508,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 - `/training/submissions` → `/training/admin?tab=submissions`
 - `/training/requirements` → `/training/admin?tab=requirements`
 - `/training/sessions/new` → `/training/admin?tab=sessions`
-- `/training/programs/new` → `/training/admin?tab=pipelines`
+- `/training/programs/new` → `/training/admin?page=curriculum&tab=pipelines&view=new`
 - `/training/shift-reports` → `/training/admin?tab=shift-reports`
 - `/training/integrations` → `/training/admin?tab=integrations`
 

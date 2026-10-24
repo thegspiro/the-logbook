@@ -58,7 +58,7 @@ const TABLET_ROUTES = [
   '/inventory/my-equipment',
   '/apparatus-basic',
   '/facilities',
-  '/training/admin?page=setup&tab=pipelines',
+  '/training/admin?page=curriculum&tab=pipelines&view=new',
   '/inventory/admin/setup',
   '/inventory/admin/pool',
 ];

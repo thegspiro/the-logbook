@@ -538,7 +538,19 @@ describe('TrainingProgramsPage', () => {
 
     expect(await screen.findByText('No programs yet')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Create Your First Pipeline/i }));
-    expect(mockNavigate).toHaveBeenCalledWith('/training/programs/new');
+    expect(mockNavigate).toHaveBeenCalledWith('/training/admin?page=curriculum&tab=pipelines&view=new');
+  });
+
+  // Embedded as the hub's Programs tab, the hub supplies the title and trail.
+  it('lists programs without its own title or trail when embedded in the hub', async () => {
+    mockHasPermission = true;
+    window.history.replaceState({}, '', '/training/admin?page=curriculum&tab=pipelines');
+    renderWithRouter(<TrainingProgramsPage embedded />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /New Pipeline/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/training/admin?page=curriculum&tab=pipelines&view=new');
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: /breadcrumb/i })).not.toBeInTheDocument();
   });
   describe('importing a program file', () => {
     const programFile = { program: { name: 'Recruit School' }, phases: [] };
