@@ -11,7 +11,7 @@ import { Link } from 'react-router';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import type { EventListItem } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
-import { formatTime, formatDateCustom } from '../utils/dateFormatting';
+import { formatCalendarDate, formatTime } from '../utils/dateFormatting';
 
 interface CalendarViewProps {
   events: EventListItem[];
@@ -212,7 +212,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
                 key={`${dateKey}-${index}`}
                 onClick={() => setSelectedDate(isSelected ? null : dateKey)}
                 className={`border-theme-surface-border focus:ring-theme-focus-ring relative min-h-[72px] border-r border-b p-1.5 text-left transition-colors focus:ring-2 focus:outline-none focus:ring-inset sm:min-h-[88px] sm:p-2 ${isCurrentMonth ? 'bg-theme-surface' : 'bg-theme-surface-secondary'} ${isSelected ? 'bg-red-50 ring-2 ring-red-500/50 ring-inset dark:bg-red-500/10' : ''} ${!isSelected ? 'hover:bg-theme-surface-hover' : ''} `}
-                aria-label={`${formatDateCustom(date, { month: 'long', day: 'numeric', year: 'numeric' }, timezone)}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}` : ''}`}
+                aria-label={`${formatCalendarDate(dateKey, { month: 'long', day: 'numeric', year: 'numeric' })}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}` : ''}`}
               >
                 <span
                   className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${isToday ? 'bg-red-800 text-white' : ''} ${!isToday && isCurrentMonth ? 'text-theme-text-primary' : ''} ${!isToday && !isCurrentMonth ? 'text-theme-text-muted' : ''} `}
@@ -249,16 +249,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
       {selectedDate && (
         <div className="card p-4">
           <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">
-            {formatDateCustom(
-              selectedDate + 'T12:00:00',
-              {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              },
-              timezone
-            )}
+            {formatCalendarDate(selectedDate, {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })}
           </h3>
 
           {selectedEvents.length === 0 ? (

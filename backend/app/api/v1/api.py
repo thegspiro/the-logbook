@@ -36,6 +36,8 @@ from app.api.v1.endpoints import (
     facilities,
     finance,
     forms,
+    google_calendar_oauth,
+    google_workspace,
     grants,
     integrations,
     inventory,
@@ -64,12 +66,14 @@ from app.api.v1.endpoints import (
     messages,
     minutes,
     minutes_records,
+    nfc_activity,
     nfc_tags,
     notifications,
     officers,
     operational_ranks,
     org_chart,
     organizations,
+    outlook_calendar_oauth,
     platform_analytics,
     reports,
     roles,
@@ -158,6 +162,9 @@ api_router.include_router(locations.router, prefix="/locations", tags=["location
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(nfc_tags.router, prefix="/nfc-tags", tags=["nfc-tags"])
+api_router.include_router(
+    nfc_activity.router, prefix="/nfc-activity", tags=["nfc-activity"]
+)
 api_router.include_router(
     organizations.router, prefix="/organization", tags=["organization"]
 )
@@ -454,6 +461,18 @@ api_router.include_router(
     dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(
+    google_calendar_oauth.router,
+    prefix="/integrations/google-calendar",
+    tags=["integrations"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    outlook_calendar_oauth.router,
+    prefix="/integrations/outlook",
+    tags=["integrations"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
     calcom_sync.router,
     prefix="/integrations/calcom",
     tags=["calcom"],
@@ -475,6 +494,12 @@ api_router.include_router(
     mcp_oauth.router,
     prefix="/mcp-oauth",
     tags=["claude-mcp"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    google_workspace.router,
+    prefix="/integrations/google-workspace",
+    tags=["google-workspace"],
     dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(

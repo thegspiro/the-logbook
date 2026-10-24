@@ -17,7 +17,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_permission, require_stepup
 from app.core.audit import (
     audit_logger,
     get_audit_log_status,
@@ -30,8 +30,11 @@ from app.core.database import get_db
 from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
-from app.models.user import User
-from app.schemas.security_alert import SecurityAlertResolveRequest
+from app.models.user import Organization, User
+from app.schemas.security_alert import (
+    SecurityAlertResolveRequest,
+    WeeklyReportSettings,
+)
 from app.services.security_monitoring import (
     ALERT_ACTION_ALREADY,
     ALERT_STATES,
@@ -399,6 +402,7 @@ async def rehash_audit_chain(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.export")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Recompute the audit log hash chain
@@ -564,6 +568,7 @@ async def export_audit_logs(
     limit: int = Query(1000, ge=1, le=10000, description="Max entries to export"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.export")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Export audit logs for backup and compliance purposes
@@ -768,3 +773,80 @@ async def trigger_manual_security_check(
             else "requires_attention"
         ),
     }
+
+
+async def _weekly_report_view(db: AsyncSession, organization: Organization) -> dict:
+    from app.services.security_weekly_report import read_schedule, resolve_recipients
+    from app.utils.org_timezone import reporting_timezone
+
+    schedule = read_schedule(organization)
+    recipients, fallback = await resolve_recipients(db, organization)
+    return {
+        "enabled": schedule.enabled,
+        "weekday": schedule.weekday,
+        "hour": schedule.hour,
+        "last_sent_at": (
+            schedule.last_sent_at.isoformat() if schedule.last_sent_at else None
+        ),
+        "timezone": getattr(reporting_timezone(organization), "key", "UTC"),
+        "recipient_count": len(recipients),
+        "recipients_are_fallback": fallback,
+    }
+
+
+async def _load_own_organization(db: AsyncSession, current_user: User) -> Organization:
+    organization = (
+        await db.execute(
+            select(Organization).where(Organization.id == current_user.organization_id)
+        )
+    ).scalar_one_or_none()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return organization
+
+
+@router.get("/weekly-report")
+async def get_weekly_report_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("security.manage", "settings.manage")
+    ),
+):
+    """The weekly security report's switch, schedule and who receives it."""
+    organization = await _load_own_organization(db, current_user)
+    return await _weekly_report_view(db, organization)
+
+
+@router.put("/weekly-report")
+async def update_weekly_report_settings(
+    data: WeeklyReportSettings,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("security.manage", "settings.manage")
+    ),
+):
+    """Turn the weekly security report on or off and choose its day and hour."""
+    from app.services.security_weekly_report import write_schedule
+
+    organization = await _load_own_organization(db, current_user)
+    write_schedule(
+        organization, enabled=data.enabled, weekday=data.weekday, hour=data.hour
+    )
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="security_weekly_report_updated",
+        event_category="security",
+        severity="info",
+        event_data={
+            "enabled": data.enabled,
+            "weekday": data.weekday,
+            "hour": data.hour,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+    )
+    return await _weekly_report_view(db, organization)

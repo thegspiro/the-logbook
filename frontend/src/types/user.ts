@@ -184,10 +184,14 @@ export interface EmailServiceSettings {
 
 export interface FileStorageSettings {
   platform: string;
-  // Google Drive
-  google_drive_client_id?: string;
-  google_drive_client_secret?: string;
+  // Google Drive: a service account writing to a Shared Drive
+  google_drive_service_account_key?: string;
+  google_drive_shared_drive_id?: string;
   google_drive_folder_id?: string;
+  /** Unused since Google Drive signs in with a service account. */
+  google_drive_client_id?: string;
+  /** Unused since Google Drive signs in with a service account. */
+  google_drive_client_secret?: string;
   // OneDrive / SharePoint
   onedrive_tenant_id?: string;
   onedrive_client_id?: string;
@@ -201,6 +205,35 @@ export interface FileStorageSettings {
   s3_endpoint_url?: string;
   // Local
   local_storage_path?: string;
+}
+
+/**
+ * Where the department's new files go, as the server decided it
+ * (`GET /organization/settings/file-storage/status`). Saving S3 settings does
+ * not move uploads to the bucket: a connection test has to pass with exactly
+ * those settings first, and editing them afterwards sends uploads back to the
+ * server's disk until the test is run again.
+ */
+export interface FileStorageStatus {
+  platform: string;
+  /** Null when the saved platform is not one this installation can connect to. */
+  platform_label: string | null;
+  platform_short_label: string | null;
+  container_noun: string | null;
+  container: string | null;
+  platform_connectable: boolean;
+  /** The platforms this installation can switch files to, by label. */
+  available_platforms: string[];
+  /** `'local'`, or the remote platform's setting value (such as `'s3'`). */
+  new_files_go_to: string;
+  location: Record<string, unknown>;
+  bucket: string | null;
+  endpoint_url: string | null;
+  activated_at: string | null;
+  changed_since_test: boolean;
+  problem: string | null;
+  s3_problem: string | null;
+  private_endpoints_allowed: boolean;
 }
 
 /**
@@ -315,6 +348,14 @@ export interface ArchivedMember {
   rank?: string;
   archived_at?: string;
   status_change_reason?: string;
+}
+
+/** `GET /users/{id}/status-change` — the member's most recent status change, as recorded. */
+export interface StatusChangeRecord {
+  user_id: string;
+  status: string;
+  status_changed_at: string | null;
+  status_change_reason: string | null;
 }
 
 /** `POST /users/{id}/reactivate` — the archived member restored to active. */
@@ -437,6 +478,8 @@ export interface RejoinServiceOptions {
 export interface MemberStatusChangeRequest extends RejoinServiceOptions {
   new_status: string;
   reason?: string | undefined;
+  /** The day a member left (YYYY-MM-DD); read only when the change takes them out of membership. Defaults to today. */
+  separation_date?: string | undefined;
   send_property_return_email?: boolean | undefined;
   return_deadline_days?: number | undefined;
   custom_instructions?: string | undefined;
@@ -582,14 +625,28 @@ export interface ConsentRoster {
   members: ConsentRosterMember[];
 }
 
+/** Rows in one table that a permanent delete removes with the member. */
+export interface DeletionImpactRecord {
+  table: string;
+  label: string;
+  count: number;
+}
+
 export interface DeletionImpact {
   user_id: string;
   full_name?: string;
   display_name?: string;
   status: UserStatus;
   training_records: number;
+  /** Assigned items and pool issuances still held; returned to stock on a permanent delete. */
   inventory_items: number;
+  /** Items checked out to the member; checked back in on a permanent delete. */
+  checked_out_items?: number;
+  /** Uploaded documents; kept, with the uploader cleared. */
   documents: number;
+  /** Every table whose rows go with the member, largest first, derived server-side from the schema. */
+  removed_records?: DeletionImpactRecord[];
+  /** Rows a permanent delete removes outright — the sum of removed_records. */
   total_records: number;
 }
 

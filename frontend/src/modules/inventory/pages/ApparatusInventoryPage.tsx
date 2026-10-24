@@ -19,10 +19,9 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import {
   AlertTriangle,
-  ArrowLeft,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -30,7 +29,7 @@ import {
   PackageCheck,
   PackageX,
   Repeat,
-  Truck,
+  Boxes,
   Undo2,
   X,
 } from 'lucide-react';
@@ -51,6 +50,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 /** One entry in the apparatus picker. */
 interface FleetOption {
@@ -84,7 +84,6 @@ const FILTER_PREDICATES: Record<InventoryFilter, (item: ApparatusInventoryItem) 
 };
 
 const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparatusId }) => {
-  const navigate = useNavigate();
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   // Swapping stock and withdrawing a restock report are manage-gated on the
@@ -350,7 +349,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 </span>
               )}
               {item.targetQuantity != null && (
-                <span className={item.isShort ? 'font-medium text-orange-600 dark:text-orange-400' : ''}>
+                <span className={item.isShort ? 'font-medium text-orange-700 dark:text-orange-400' : ''}>
                   {item.quantityOnTruck ?? item.targetQuantity} of {item.targetQuantity}
                   {item.unitOfMeasure ? ` ${item.unitOfMeasure}` : ''} aboard
                 </span>
@@ -421,7 +420,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 type="button"
                 disabled={busy}
                 onClick={() => setUsedTarget(item)}
-                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50"
+                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-orange-700 hover:text-orange-700 disabled:opacity-50 dark:text-orange-600"
               >
                 {/* On a counted position the minus button is what records use,
                     so this is the place to say *why* — damaged, contaminated,
@@ -496,7 +495,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   ) : null;
 
   return (
-    <div className={embedded ? '' : 'mx-auto max-w-4xl px-4 py-6'}>
+    <div className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-6'}>
       {embedded ? (
         <div className="mb-3 space-y-1">
           <p className="text-theme-text-muted text-sm">
@@ -506,28 +505,11 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
         </div>
       ) : (
         <>
-          <div className="mb-4">
-            <div className="flex min-w-0 items-start gap-2">
-              <button
-                type="button"
-                onClick={() => void navigate('/scheduling')}
-                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mt-0.5 shrink-0 rounded-lg p-1.5 transition-colors"
-                aria-label="Back to Scheduling"
-                title="Back to Scheduling"
-              >
-                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-              </button>
-              <div>
-                <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-                  <Truck className="h-6 w-6" aria-hidden="true" />
-                  Apparatus Inventory
-                </h1>
-                <p className="text-theme-text-muted mt-1 text-sm">
-                  Record what you used when you use it, and put fresh stock in the bracket. No check required.
-                </p>
-              </div>
-            </div>
-          </div>
+          <OperationsPageHeader
+            icon={Boxes}
+            title="Apparatus Inventory"
+            subtitle="Record what you used when you use it, and put fresh stock in the bracket. No check required."
+          />
 
           <div className="mb-4">
             <label htmlFor="apparatus-select" className="text-theme-text-secondary mb-1 block text-xs">

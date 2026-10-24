@@ -26,7 +26,7 @@ import type { ShiftRecord, ShiftAttendanceRecord } from '../../modules/schedulin
 import type { ExchangeCandidate } from '../../modules/scheduling/types';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
 import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
@@ -35,6 +35,9 @@ import { useSchedulingStore } from '../../modules/scheduling/store/schedulingSto
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { CalendarSubscribeCard } from './CalendarSubscribeCard';
 import { MyHoursSummary } from './MyHoursSummary';
+
+/** How many upcoming shifts the swap "Specific shift" picker reads. */
+const SWAP_TARGET_LIMIT = 50;
 
 interface SwapFormState {
   mode: 'open' | 'shift' | 'exchange';
@@ -50,9 +53,11 @@ const exchangeKey = (c: ExchangeCandidate) => `${c.shift_id}:${c.user_id}`;
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
+  /** Bumped by the page when the shift panel changes a shift, so this list re-reads. */
+  refreshKey?: number;
 }
 
-export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
+export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKey = 0 }) => {
   const tz = useTimezone();
   const platoon = useAuthStore((s) => s.user?.platoon);
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
@@ -77,6 +82,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const [swapForm, setSwapForm] = useState<SwapFormState>(EMPTY_SWAP_FORM);
   const [submittingSwap, setSubmittingSwap] = useState(false);
   const [availableShifts, setAvailableShifts] = useState<ShiftRecord[]>([]);
+  const [availableShiftsLoading, setAvailableShiftsLoading] = useState(false);
+  const [availableShiftsTruncated, setAvailableShiftsTruncated] = useState(false);
   // Exchange picker: seats the server says both members qualify for. `null`
   // until loaded, so "loading" and "nobody qualifies" read differently.
   const [exchangeCandidates, setExchangeCandidates] = useState<ExchangeCandidate[] | null>(null);
@@ -123,7 +130,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [loadData, refreshKey]);
 
   const handleConfirm = async (assignmentId: string) => {
     setConfirmingId(assignmentId);
@@ -185,14 +192,42 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     setExchangeCandidates(null);
     setExchangeError(null);
     setShowSwapModal(true);
+    setAvailableShifts([]);
+    setAvailableShiftsTruncated(false);
+    setAvailableShiftsLoading(true);
     // Load available shifts for the picker
     try {
       const today = getTodayLocalDate(tz);
-      const data = await schedulingService.getShifts({ start_date: today, limit: 50 });
-      // Filter out the current shift
-      setAvailableShifts(data.shifts.filter((s) => s.id !== assignment.shift_id));
+      const data = await schedulingService.getShifts({ start_date: today, limit: SWAP_TARGET_LIMIT });
+      // A cancelled shift is not happening, and a shift the member already
+      // holds a seat on is not one they can swap into. The server files both
+      // without complaint, so the request would reach an officer's queue only
+      // to be refused there.
+      const alreadyOn = new Set(
+        assignments
+          .filter((a) => a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED)
+          .map((a) => a.shift_id)
+      );
+      const shifts = data.shifts.filter(
+        (s) => s.id !== assignment.shift_id && s.status !== 'cancelled' && !alreadyOn.has(s.id)
+      );
+      setAvailableShifts(shifts);
+      setAvailableShiftsTruncated(data.total > data.shifts.length);
+      // "Specific Shift" may have been chosen while the list was in flight,
+      // which left it on the 'pick' placeholder; an unchosen target would be
+      // filed as an open giveaway, so settle it on the first shift now.
+      const first = shifts[0];
+      if (first) {
+        setSwapForm((p) =>
+          p.mode === 'shift' && (p.target_shift_id === 'pick' || !p.target_shift_id)
+            ? { ...p, target_shift_id: first.id }
+            : p
+        );
+      }
     } catch {
       // Non-critical — user can still submit open swap
+    } finally {
+      setAvailableShiftsLoading(false);
     }
   };
 
@@ -213,10 +248,22 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   const selectedExchange = exchangeCandidates?.find((c) => exchangeKey(c) === swapForm.exchange_key);
 
+  const targetShiftChosen = availableShifts.some((s) => s.id === swapForm.target_shift_id);
+  const swapBlockedReason =
+    swapForm.mode === 'shift' && !targetShiftChosen
+      ? availableShiftsLoading
+        ? 'Loading shifts — choose one before submitting.'
+        : 'No upcoming shift is available to ask for. Choose Open Swap instead.'
+      : null;
+
   const handleSwapRequest = async () => {
     if (!swapAssignment) return;
     if (swapForm.mode === 'exchange' && !selectedExchange) {
       toast.error('Choose who to exchange with');
+      return;
+    }
+    if (swapBlockedReason) {
+      toast.error(swapBlockedReason);
       return;
     }
     setSubmittingSwap(true);
@@ -226,7 +273,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         requesting_shift_id:
           swapForm.mode === 'exchange'
             ? selectedExchange?.shift_id
-            : swapForm.mode === 'shift' && swapForm.target_shift_id && swapForm.target_shift_id !== 'pick'
+            : swapForm.mode === 'shift'
               ? swapForm.target_shift_id
               : undefined,
         target_user_id: swapForm.mode === 'exchange' ? selectedExchange?.user_id : undefined,
@@ -400,19 +447,19 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           <div className="bg-theme-input-bg flex rounded-lg p-1">
             <button
               onClick={() => setView('upcoming')}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'upcoming' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'upcoming' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Upcoming ({upcoming.length})
             </button>
             <button
               onClick={() => setView('past')}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'past' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'past' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Past ({past.length})
             </button>
             <button
               onClick={() => setView('hours')}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'hours' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'hours' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Hours
             </button>
@@ -549,12 +596,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             {displayList.map((assignment) => {
               const shift = assignment.shift;
               const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
-              const shiftDate = shift ? new Date(shift.shift_date + 'T12:00:00') : null;
+              // A calendar date, not an instant: formatted as written, so a viewer
+              // whose browser is hours from the department still sees its day.
+              const shiftDay = shift?.shift_date
+                ? formatCalendarDate(shift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })
+                : null;
               // Every row carries the same four actions, so each needs the
               // shift in its name or a screen reader hears "Confirm" per row
               // with nothing to tell them apart.
-              const when = shiftDate
-                ? `${formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}${shift?.start_time ? `, ${formatTime(shift.start_time, tz)}` : ''}`
+              const when = shiftDay
+                ? `${shiftDay}${shift?.start_time ? `, ${formatTime(shift.start_time, tz)}` : ''}`
                 : 'an unknown date';
 
               return (
@@ -574,7 +625,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                             checked={selectedIds.has(assignment.id)}
                             onChange={() => toggleSelection(assignment.id)}
                             className="border-theme-input-border h-4 w-4 shrink-0 rounded text-violet-600 focus:ring-violet-500"
-                            aria-label={`Select shift for ${shiftDate ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'unknown date'}`}
+                            aria-label={`Select shift for ${shiftDay ?? 'unknown date'}`}
                           />
                         )}
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
@@ -582,9 +633,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       </div>
                       <div className="min-w-0">
                         <p className="text-theme-text-primary truncate text-sm font-semibold sm:text-base">
-                          {shiftDate
-                            ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz)
-                            : 'Unknown Date'}
+                          {shiftDay ?? 'Unknown Date'}
                         </p>
                         <p className="text-theme-text-secondary text-xs sm:text-sm">
                           {shift?.start_time
@@ -623,7 +672,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                             if (att.checked_out_at && att.duration_minutes) {
                               const hrs = formatHours(att.duration_minutes / 60);
                               return (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium whitespace-nowrap text-green-700 dark:text-green-400">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium whitespace-nowrap text-green-800 dark:text-green-400">
                                   <Clock className="h-3 w-3" aria-hidden="true" /> {hrs}h worked
                                 </span>
                               );
@@ -750,7 +799,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
               <p className="text-theme-text-secondary mt-1 text-sm">
                 {swapAssignment?.shift?.shift_date
-                  ? `Ask to swap your shift on ${formatDateCustom(swapAssignment.shift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz)}`
+                  ? `Ask to swap your shift on ${formatCalendarDate(swapAssignment.shift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}`
                   : 'Ask to swap your shift'}
               </p>
             </div>
@@ -836,11 +885,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       >
                         {exchangeCandidates.map((c) => (
                           <option key={exchangeKey(c)} value={exchangeKey(c)}>
-                            {formatDateCustom(
-                              c.shift_date + 'T12:00:00',
-                              { weekday: 'short', month: 'short', day: 'numeric' },
-                              tz
-                            )}
+                            {formatCalendarDate(c.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}
                             {c.start_time ? ` ${formatTime(c.start_time, tz)}` : ''} — {c.user_name || 'Member'}
                             {c.position ? ` (${positionLabel(c.position)})` : ''}
                           </option>
@@ -870,14 +915,13 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                   >
                     {availableShifts.length === 0 && (
                       <option value="pick" disabled>
-                        Loading shifts...
+                        {availableShiftsLoading ? 'Loading shifts...' : 'No shifts available'}
                       </option>
                     )}
                     {availableShifts.map((s) => {
-                      const d = new Date(s.shift_date + 'T12:00:00');
                       return (
                         <option key={s.id} value={s.id}>
-                          {formatDateCustom(d, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}{' '}
+                          {formatCalendarDate(s.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
                           {formatTime(s.start_time, tz)}
                           {s.end_time ? ` - ${formatTime(s.end_time, tz)}` : ''}
                           {s.apparatus_unit_number ? ` (${s.apparatus_unit_number})` : ''}
@@ -885,6 +929,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       );
                     })}
                   </select>
+                  {availableShiftsTruncated && (
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Only the next {SWAP_TARGET_LIMIT} shifts are listed; shifts further out are not shown.
+                    </p>
+                  )}
                 </div>
               )}
               <div>
@@ -901,7 +950,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 />
               </div>
             </div>
-            <div className="border-theme-surface-border flex justify-end gap-3 border-t p-6">
+            <div className="border-theme-surface-border flex flex-wrap items-center justify-end gap-3 border-t p-6">
+              {swapBlockedReason && (
+                <p id="swap-blocked-reason" className="text-theme-text-muted mr-auto text-sm">
+                  {swapBlockedReason}
+                </p>
+              )}
               <button
                 onClick={() => setShowSwapModal(false)}
                 className="text-theme-text-secondary touch:min-h-11 px-4 py-2"
@@ -912,8 +966,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 onClick={() => {
                   void handleSwapRequest();
                 }}
-                disabled={submittingSwap || (swapForm.mode === 'exchange' && !selectedExchange)}
-                className="touch:min-h-11 rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-50"
+                disabled={
+                  submittingSwap || (swapForm.mode === 'exchange' && !selectedExchange) || swapBlockedReason !== null
+                }
+                aria-describedby={swapBlockedReason ? 'swap-blocked-reason' : undefined}
+                className="touch:min-h-11 rounded-lg bg-violet-700 px-4 py-2 text-white hover:bg-violet-800 disabled:opacity-50"
               >
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}
               </button>
@@ -980,7 +1037,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               </div>
               {timeOffConflicts.length > 0 && (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                   <div className="text-sm text-amber-700 dark:text-amber-300">
                     <p className="font-medium">
                       You have {timeOffConflicts.length} shift{timeOffConflicts.length > 1 ? 's' : ''} during this
@@ -990,11 +1047,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       {timeOffConflicts.map((a) => (
                         <li key={a.id}>
                           {a.shift?.shift_date
-                            ? formatDateCustom(
-                                a.shift.shift_date + 'T12:00:00',
-                                { weekday: 'short', month: 'short', day: 'numeric' },
-                                tz
-                              )
+                            ? formatCalendarDate(a.shift.shift_date, {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                              })
                             : 'Unknown date'}
                           {a.shift?.start_time ? ` at ${formatTime(a.shift.start_time, tz)}` : ''}
                         </li>
@@ -1017,7 +1074,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                   void handleTimeOffRequest();
                 }}
                 disabled={submittingTimeOff || !timeOffForm.start_date}
-                className="touch:min-h-11 rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-50"
+                className="touch:min-h-11 rounded-lg bg-violet-700 px-4 py-2 text-white hover:bg-violet-800 disabled:opacity-50"
               >
                 {submittingTimeOff ? 'Submitting...' : 'Submit Request'}
               </button>

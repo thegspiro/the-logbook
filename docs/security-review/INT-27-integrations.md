@@ -1,6 +1,610 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-24 (pass 9, this PR), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 9); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 9 (2026-10-24) — directory-account rename/retirement/group-removal/long-suspension and the MS 365 secret-expiry warning; 0 fixes, 0 new findings
+
+Watchdog pickup. The dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was not reachable. PR #3640 (Feature 26, Forms, pass 9) was found open, CI
+green on its head commit, `mergeable_state: clean`, and with no unresolved
+review thread (the two Codex bot comments were the bot's own usage-limit
+failure, not findings) — merged by this same watchdog run before starting
+this pass. A fresh `search_pull_requests` (`head:claude/security-review-`,
+state:open) then returned 0, and row 27 (Integrations) was confirmed the next
+`⬜` row in `PROGRESS.md`'s rotation table on a freshly fetched `main`
+(`2d000c36`, the merge of #3640).
+
+**Baseline `8fb7eba1` (PR #3467's merge, pass 8).** `git diff 8fb7eba1..HEAD`,
+scoped to this feature's actual files (not `git log`, which undercounts —
+Pitfall from pass 6), shows five real feature commits landed since then, all
+read in full against every `CHECKLIST.md` dimension:
+
+| Commit     | What                                                                                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ece6c10b` | A per-directory-integration `suspend_on_retirement` switch (off by default): retiring suspends/blocks the account exactly as a drop does, for members who retire while it is on                                               |
+| `0d5b81f3` | A departure now also takes an account The Logbook created out of the integration's configured groups (never a Microsoft 365 group that assigns licenses, nor one whose licenses Graph does not report); a return puts it back |
+| `7ac97a39` | The daily departure check marks (`long_suspended_since`) an account still in the directory more than 90 days after its suspension; listed on the attention list and named once in the morning email — nothing is auto-removed |
+| `88f385a5` | A member's first/last name change reaches an account The Logbook created (`name_pending`, staged in the same transaction, sent after commit, retried by the 15-minute sweep); the address is never changed                    |
+| `ff9e1d21` | An administrator records the Microsoft 365 client secret's Entra ID expiry date; the Integrations card and the morning email warn at 30/7/0 days                                                                              |
+
+A sixth commit, `b4b0ea8a`, is a correctness-only fix (the secret-days-left
+card now counts from the department's own date via `resolve_org_today`
+rather than the server's UTC date) plus an unrelated MFA test-clock fix
+(already reviewed/merged on PR #3616/#3640) — no access-control change.
+`8b0ba129` (MFA step-up, repo-wide) added `require_stepup` to
+`connect_integration`/`disconnect_integration`/`update_integration` — a
+hardening addition reviewed below, not a regression. `b2858211` (drops the
+dead `ICalConfig.include_shifts` field) is a Pitfall #19 cleanup with no
+new surface. No other commit in the window touches this feature's files.
+
+### Read in full
+
+**`backend/app/api/v1/endpoints/integrations.py` (+58 L).** The new
+`_credential_days_left`/`_integration_to_dict(..., today=...)` plumbing reads
+the Microsoft 365 secret-expiry date (never a secret value) and is computed
+from `resolve_org_today(db, integration.organization_id)` — the integration's
+own `organization_id`, not request input, at every one of the four call
+sites (`list_integrations`, `get_integration`, `connect_integration`,
+`update_integration`, `retry_integration_sync`). `require_stepup` (checklist
+§1) is now a dependency on connect/disconnect/update, declared _after_
+`require_permission("integrations.manage")` in the parameter list — matching
+`require_stepup`'s own docstring ("add it after the permission dependency, so
+a caller who lacks the permission is told that rather than asked to
+re-verify"); FastAPI resolves route dependencies in declared order, so the
+permission check still runs first. `require_stepup` itself
+(`app/api/dependencies.py:463`) is shared, repo-wide infrastructure (added by
+`8b0ba129`), server-side-stamped on the session row, never trusting a
+client-supplied header beyond carrying the token to the stamp lookup — spot
+checked here as a consumer, not re-reviewed as its own threat model (it has
+no dedicated file in this feature's scope).
+
+**`backend/app/models/directory_account.py` / `directory_account_departure.py`
+(+22 L / +140 L, net).** `DIRECTORY_INTEGRATION_TYPES`,
+`SUSPEND_ON_RETIREMENT_KEY`, `suspends_retired()`,
+`_department_suspends_retired()` (org-scoped: filters
+`organization_id`/`integration_type.in_(DIRECTORY_INTEGRATION_TYPES)`/`enabled`/
+`status == "connected"`), `_stage_rename()` (filters `user_id` **and**
+`organization_id`, same as the existing `_stage()`), and the `before_flush`
+hook's new first/last-name-change branch and retired-status branch were all
+read in full. Every query added here carries the same org filter the
+existing suspension-staging code already used — no new unscoped by-id path.
+
+**`backend/app/services/directory_account_service.py` (+469 L / -17 L).**
+`_follow_groups`/`_leave_groups` (group removal/rejoin), `sync_name`
+(rename), `sync_pending_names`/`retry_group_removals` (the 15-minute sweep's
+new retries), `check_departed_suspensions`'s `long_suspended_since` tracking,
+and `_attention_issue`'s two new issue types — all read in full. Every
+per-record operation goes through the existing `_load(organization_id,
+user_id=..., lock=True)`, which filters `organization_id` and takes
+`FOR UPDATE` (checklist §3, Pitfall #27); `check_departed_suspensions` and
+`attention_items` (the two multi-row queries) both `JOIN`
+`DirectoryAccountProvision`↔`User` and filter `organization_id` on **both**
+sides of the join. `pending_group_removals` (JSON list column) is always
+reassigned whole (`row.pending_group_removals = remaining or None`), never
+mutated in place, so Pitfall #12 does not apply. `sync_pending_names()` and
+`retry_group_removals()` are unscoped _sweeps_ — by design, like the
+pre-existing `sync_pending_suspensions()` they sit beside — iterating every
+organization's own rows from a scheduled task, never from a caller-reachable
+endpoint.
+
+**Connector methods (`google_workspace_service.py` +35 L,
+`microsoft_365_service.py` +75 L).** `update_name`/`remove_from_group` on
+both. Google's `update_name` sends `{"name": {...}}` as a JSON body (no
+string interpolation into a URL or query). Microsoft 365's `update_name` and
+`remove_from_group` both `quote(..., safe='')` every path segment
+(`user_key`, `group_id`, `account.id`) before building the Graph REST path —
+the same pattern this feature's existing connector code already uses
+elsewhere. `remove_from_group`'s "leave a licensing group alone" check reads
+`assignedLicenses` from Graph's own group object (added to `GROUP_FIELDS`),
+never guessed. `client_secret_days_left`/`client_secret_warning_level`
+(`microsoft_365_service.py`) read only the `client_secret_expires_on` config
+key (a date, not a secret) and do no I/O.
+
+**`backend/app/services/google_workspace_attention_digest.py` (+163 L,
+net).** `_recently_reactivated`/`_newly_long_suspended` both filter
+`User.organization_id`/`DirectoryAccountProvision.organization_id` on the
+join. Every member name/email/URL interpolated into the HTML email body
+(`_secret_section`, `_long_suspended_section`, `_reactivated_section`) goes
+through `html.escape()` first — re-verified by direct read, not assumed from
+the existing pattern. `_record_digest` still deep-copies
+`organization.settings` before mutating the nested dict and reassigns the
+column whole (Pitfall #12, unchanged mechanism, now also storing
+`secret_expiry_warned`).
+
+**`backend/app/services/scheduled_tasks.py`.** Only the
+`run_directory_account_departure_check` (new, routed through the existing
+`_for_each_org` per-organization helper) and `run_google_workspace_suspension_sync`
+(now also calling `retry_group_removals()`/`sync_pending_names()`) hunks are
+this feature's; the much larger diff in this shared file (NFC tap purge,
+inventory low-stock alert links, a scheduled-email row-lock fix) belongs to
+Features 11/13/31 and is out of this feature's declared scope.
+
+**Frontend (`IntegrationsPage.tsx`, +~70 L net; `IntegrationsPage.test.tsx`,
++128 L).** The two new `suspend_on_retirement` checkboxes and the
+`client_secret_expires_on` date input use controlled React state, not
+`??`-coerced form values; `credential_days_left`/`credential_expiring` are
+rendered as plain JSX text (React-escaped), never through
+`dangerouslySetInnerHTML`. No new `window.confirm`/`alert`/`prompt`. New
+tests cover the added fields and the expiry badge.
+
+### Schema & migration notes
+
+Three new migrations since pass 8, all guarding the table's existence first
+(Pitfall #26) and all previously shipped with their own migration tests
+(re-run below): `6c0e79521d14` (`pending_group_removals`, nullable JSON),
+`26683fe99719` (`long_suspended_since`, nullable `DateTime(timezone=True)`),
+`c561cf7730ce` (`name_pending`, `NOT NULL` with `server_default="0"` —
+Pitfall #35 correctly applied). `validate_migrations.py --strict`: 650
+revisions, single head `a8c3b50b6d9b`, PASSED.
+
+### Route surface re-enumerated — unchanged
+
+`integrations.py` 11, `salesforce_sync.py` 9, `calcom_sync.py` 1,
+`mcp_keys.py` 4, `google_workspace.py` 4, `google_calendar_oauth.py` 2,
+`outlook_calendar_oauth.py` 2, `app/api/public/calendar.py` 2,
+`integrations_webhook.py` 2, `salesforce_webhook.py` 1 — identical to pass
+8's count; no new endpoint added this pass (every new mechanism above is
+reached through existing routes, the scheduler, or a session-level hook).
+`check_route_permissions.py --strict`: 274 application routes, 0
+errors/warnings.
+
+### Re-verified from passes 1–8 (all hold)
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist): unchanged, still an
+  explicit owner decision.
+- **INT-11** (Salesforce "clear the refresh token"): confirmed FIXED since
+  pass 8, unchanged.
+- INT-2, INT-3, INT-4, INT-6, INT-8; SOQL injection defense, instance-URL
+  domain pinning, secret handling, webhook replay dedup, module gating, the
+  DNS-rebinding transport pin, the wall-clock deadline, Retry Sync's
+  lock-then-read ordering, the PayPal backfill's idempotency: none of the
+  files carrying them changed since pass 8 per the diff above.
+- **LIKE-pattern usage, CSV export**: none in this feature's scope, same as
+  every prior pass.
+- **`docs/KNOWN_LIMITATIONS.md`**: the Microsoft 365 and Google Workspace
+  entries already correctly document every owner decision this pass's
+  commits made (`suspend_on_retirement` off-by-default, secret-expiry
+  manual entry, long-suspension listing-only, rename scope) — all dated
+  2026-10-23, matching the commits; nothing to add or correct.
+
+## Guard tests added
+
+None by this pass — every new mechanism shipped with its own dedicated test
+file before this pass started (`test_directory_retirement.py`,
+`test_directory_group_removal.py`, `test_directory_long_suspended.py`,
+`test_directory_rename.py`, `test_microsoft_365_secret_expiry.py`), all
+re-run as part of the scoped suite below and confirmed passing.
+
+## Completion gate (pass 9)
+
+| Check                                                                                                                                                                                                                                                | Result                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                        | ✅ 0 violations                                                                                                                              |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                 | ✅ 2610 files unchanged                                                                                                                      |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)                                                                                                                                                                                          | ✅ clean                                                                                                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                    | ✅ 650 revisions, single head `a8c3b50b6d9b`, PASSED                                                                                         |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                | ✅ 274 routes, 0 errors/warnings                                                                                                             |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar or outlook or directory_account or microsoft_365 or directory"`) | ✅ 8397 passed, 22 skipped (environment-only — `pywebpush`, Docker daemon/registry, opt-in API-contract suite, no-timezone-tables), 0 failed |
+| `npm run typecheck` (frontend)                                                                                                                                                                                                                       | ✅ 0 errors                                                                                                                                  |
+| `npm run lint` (frontend)                                                                                                                                                                                                                            | ✅ exit 0, 0 warnings                                                                                                                        |
+
+---
+
+## Pass 8 (2026-10-20) — directory-account engine generalized, Microsoft 365 added, Outlook calendar OAuth connect; 0 fixes, 0 new findings; one stale finding corrected (INT-11 closed)
+
+Step 0: `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results immediately before starting, and again immediately before
+branching — PR #3458 (Feature 26, Forms, pass 8) had just merged with nothing
+started for Feature 27 since.
+
+**Real delta since pass 7's baseline (`715c4b3f`, PR #3375):** four real
+(non-merge-noise) commits touch this feature's scope — a fifth, `381e8ffc`,
+is a merge bringing in history already reviewed on a long-lived branch,
+confirmed by its reported file sizes matching pass 7's own documented state
+exactly, so it is not a real delta:
+
+| Commit                           | What                                                                                                                                                                                                                                                                 | Disposition                                                                               |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `24061bc6`                       | Outlook calendar publishing via a Microsoft sign-in (OAuth + PKCE), extracting the shared state/nonce/PKCE machinery into a new `calendar_oauth_common.py` and refactoring Google Calendar's OAuth onto the same module                                              | Read in full, clean                                                                       |
+| `b1ae3236`                       | Generalizes the Google-only provisioning engine into a provider-neutral `directory_account_service.py` (`google_workspace_provisioning_service.py` → renamed; `models/google_workspace*.py` → `models/directory_account*.py`; `google_user_id` → `external_user_id`) | Read in full, clean                                                                       |
+| `d5c8f664`                       | Adds Microsoft 365 as the second directory provider (Microsoft Graph via the client-credentials flow)                                                                                                                                                                | Read in full, clean                                                                       |
+| `86387e0e` (workflow-review W73) | `integrations.py` gains `_missing_required_fields`, refusing a connect that leaves a required setting neither sent nor stored (and flags, per W73-5/Pitfall #19, that the separate "iCalendar (ICS)" catalog entry is a switch with no reader)                       | Correctness fix already reviewed by workflow-review; re-verified no access-control change |
+
+### The directory-account engine, generalized — read in full
+
+`directory_account_service.py` (1202 L), `models/directory_account.py` (134
+L) and `models/directory_account_departure.py` (233 L, the session-level
+`before_flush`/`after_commit` hook, now provider-neutral). Every by-id path
+still filters `organization_id` and (`user_id` or `provision_id`) in one
+query (`_load`, 14a) — re-verified for `get_for_user`, `provision`, `retry`
+and `suspend_detached`. `link_existing_members` takes no client-supplied FK:
+it matches the org's own member roster against the directory's own listing,
+links one account to at most one member (an address matching two members
+links neither — owner decision, 2026-10-17), and a repeated run with
+`expected` set refuses rather than linking a roster that changed underneath
+it. The departure hook's hard-delete capture (`_capture_before_hard_delete`)
+and the Session-level `before_flush`/`after_commit` pair are unchanged in
+mechanism from pass 7's review of the Google-only version — generalizing to
+a `provider` column changed no query shape.
+
+### Microsoft 365 — new provider, read in full
+
+`microsoft_365_service.py` (593 L). Client-credentials OAuth reuses
+`app/utils/microsoft_oauth.py` (shared with Microsoft 365 SMTP, now gaining
+an optional scope parameter — SMTP keeps its Exchange default, confirmed by
+reading the diff). Every Graph call goes through `create_integration_client`
+(the SSRF-pinned, deadline-bounded transport this feature's other connectors
+already use — not a second, unreviewed HTTP path). OData `$filter` values are
+escaped via `_odata_string` (doubles embedded single quotes) before being
+interpolated into a filter string, mirroring this feature's existing SOQL
+defense for Salesforce. A paging `@odata.nextLink` is only followed when it
+starts with the fixed `GRAPH_BASE + "/"` — a response cannot redirect the
+bearer-token-bearing request elsewhere. Error translation (`_translate`)
+classifies by HTTP status and Graph's own `error.code`/`error.message` but
+never echoes either back to the caller — matching this feature's existing
+rule that provider error bodies are not shown or logged verbatim. Accounts
+are tagged with `member_id` in `extensionAttribute15` at creation (one
+request, so a retry's "already exists" can be told from a stranger's
+account at the address without a second call). On-premises-synced accounts
+are never blocked or reset through Graph (`Microsoft365ManagedOnPremisesError`).
+`Microsoft365Config` (`schemas/integration.py`): `extra="forbid"`;
+`client_secret` length/control-character capped and already in
+`SECRET_CONFIG_KEYS` (shared key, pre-existing — encrypted at rest, never
+echoed back); `tenant_id`/`client_id` validated through the existing
+`microsoft_oauth` validators; `domain`/`usage_location`/`license_sku_id`
+regex-checked; `groups` deduplicated and capped at 20.
+`_require_directory_admin` (renamed from `_require_google_workspace_admin`)
+and `_check_directory_ready` (renamed from `_check_google_workspace_ready`)
+apply the same `admin.access` gate and domain/credential/single-directory
+checks to both providers uniformly — confirmed by direct read, not inferred
+from the rename.
+
+### Outlook Calendar OAuth connect — new, read in full
+
+`outlook_calendar_oauth.py` (229 L) mirrors `google_calendar_oauth.py`'s
+structure exactly, both now built on the shared `calendar_oauth_common.py`
+(422 L). A connect attempt is bound three ways, each checked by
+`open_callback`: (1) a signed, 10-minute-TTL JWT `state` (HS256,
+`settings.SECRET_KEY`) naming the organization, integration, administrator
+and a random nonce, with a per-provider `purpose` claim so one provider's
+state cannot complete the other's attempt; (2) the nonce double-submitted
+through an httpOnly, `SameSite=Lax`, path-scoped cookie (`secrets.compare_digest`,
+constant-time) — `_COOKIE_PATH` ends in a slash per Pitfall #6 and covers
+only this router; (3) the same nonce, administrator id and PKCE verifier
+stored as a single pending attempt on the integration row, consumed
+(removed) and committed _before_ any network call, so a replayed state finds
+nothing to use and a lock is never held across the token exchange. Token
+exchange (`exchange_code`) binds the redirect_uri to the one used at
+`/oauth/start`, requires PKCE's `code_verifier`, goes through
+`create_integration_client`, and never echoes Microsoft's error body.
+`_account_email` reads the ID token's claims unverified (per OIDC Core
+3.1.3.7 — received directly from the token endpoint over TLS) but still
+checks `aud` against the client id and `iss` against the Microsoft identity
+platform v2 issuer pattern before trusting it, and uses it only as a display
+label. `may_still_manage` re-checks the administrator still holds
+`integrations.manage` at callback time, not just at `/oauth/start`. The
+callback route itself is intentionally unauthenticated (Microsoft redirects
+the bare browser back, whose session may have lapsed); every other check
+above is the compensating control (checklist §1).
+
+### Checked, no new finding
+
+- **New migrations** (`73594b326e68`, `d3bb8f81ed07`): both guard the
+  table's existence first (Pitfall #26); no new `ondelete="SET NULL"` column
+  (the one FK, `created_by`, was already `nullable=True` from pass 7).
+  `validate_migrations.py --strict`: single head, confirmed below.
+- **Route surface re-enumerated programmatically**: `integrations.py` 11
+  (unchanged), `salesforce_sync.py` 9, `calcom_sync.py` 1, `mcp_keys.py` 4,
+  `google_workspace.py` 4 (unchanged), `google_calendar_oauth.py` 2
+  (unchanged — refactored internals only), **`outlook_calendar_oauth.py` 2
+  (new)**, `app/api/public/calendar.py` 2, `integrations_webhook.py` 2,
+  `salesforce_webhook.py` 1. Net **+2 routes** since pass 7, both the new
+  Outlook OAuth pair reviewed above; every other file's count is unchanged.
+- **LIKE-pattern usage, CSV export**: none in this feature's scope, same as
+  every prior pass.
+- **Frontend** (`IntegrationsPage.tsx`, `calendarProviders.ts` — new, 83 L):
+  no `window.confirm`/`alert`/`prompt`, no `dangerouslySetInnerHTML`, no bare
+  `??` on an optional form value anywhere touched this pass; error codes
+  returned from a failed OAuth connect are mapped through a fixed
+  `Record<string, string>` (`calendarConnectError`), never interpolated into
+  markup.
+
+### Correction to a standing finding — INT-11 is FIXED, not open
+
+**INT-11** ("Salesforce 'clear the refresh token' has no reachable UI
+control") was carried forward as **OPEN** through passes 6 and 7, including
+pass 7's explicit note that "no clear control added this pass." Checking the
+actual commit pass 7 reviewed (`715c4b3f`) directly —
+`git show 715c4b3f:frontend/src/pages/IntegrationsPage.tsx` — shows
+`handleSwitchSalesforceToClientCredentials` already present at that exact
+commit: a confirmed (`useConfirm()`, not `window.confirm`), reachable button
+that calls `updateIntegration(id, {refresh_token: ''})`, which the backend
+treats as "switch to the client-credentials flow" and discards the stored
+tokens. It remains present and wired to a button
+(`IntegrationsPage.tsx:2663`) today. This was a review error repeated across
+two passes — the control was never actually missing — not a code
+regression introduced and later fixed. **INT-11 is now marked ✅ FIXED.**
+
+### Re-verified from passes 1–7 (all hold)
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist): unchanged, still
+  an explicit owner decision.
+- INT-2, INT-3, INT-4, INT-6, INT-8; SOQL injection defense, instance-URL
+  domain pinning, secret handling, webhook replay dedup, module gating, the
+  DNS-rebinding transport pin, the wall-clock deadline, Retry Sync's
+  lock-then-read ordering, the PayPal backfill's idempotency: none of the
+  files carrying them changed since pass 7 per the diff above; re-confirmed
+  by direct read where this pass's own changes touched the same file.
+- **W73-5 / `KNOWN_LIMITATIONS.md`** ("Integrations — Connecting iCalendar
+  (ICS) Does Nothing"): re-confirmed open, owner-decision item, unchanged —
+  and distinct from the working, pass-7-reviewed department iCalendar feed
+  (`/org/{token}.ics`), which is unaffected.
+
+**Route surface**: see the enumeration above — net +2 since pass 7.
+
+## Schema & migration notes (pass 8)
+
+Two migrations since pass 7: `73594b326e68` (renames
+`google_account_provisions` → `directory_account_provisions`, adds
+`provider` `NOT NULL DEFAULT 'google'`), `d3bb8f81ed07` (`license_pending`,
+`managed_on_premises`, both `NOT NULL DEFAULT 0`). Both guard the table's
+existence before touching it (Pitfall #26); the rename migration also
+guards against a `create_all`-built empty table already sitting under the
+new name, and its downgrade deletes non-Google rows first since the old
+table has no `provider` column to read them back correctly.
+`validate_migrations.py --strict`: 631 revisions, single head
+`ca0c2111466f`, PASSED.
+
+## Guard tests added
+
+None by this pass — every new mechanism above shipped with its own test
+coverage before this pass started (`test_directory_account_provisions_migration.py`,
+`test_directory_account_flags_migration.py`, `test_outlook_calendar_connect.py`,
+`test_google_workspace_provisioning.py`); re-run as part of the scoped suite
+below and confirmed still passing.
+
+## Completion gate (pass 8)
+
+| Check                                                                                                                                                                                                                                   | Result                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                           | ✅ 0 violations                                                                                                                              |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                    | ✅ 2476 files unchanged                                                                                                                      |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)                                                                                                                                                                             | ✅ clean                                                                                                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                       | ✅ 631 revisions, single head, PASSED                                                                                                        |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar or outlook or directory_account or microsoft_365"`) | ✅ 7573 passed, 22 skipped (environment-only — `pywebpush`, Docker daemon/registry, opt-in API-contract suite, no-timezone-tables), 0 failed |
+| `npm run typecheck` (frontend)                                                                                                                                                                                                          | ✅ 0 errors                                                                                                                                  |
+| `npm run lint` (frontend)                                                                                                                                                                                                               | ✅ exit 0, 0 warnings                                                                                                                        |
+
+---
+
+## Pass 7 (2026-10-17) — a whole previously-unreviewed sub-feature (Google Workspace account provisioning) read in full; 0 new findings
+
+Step 0: `list_pull_requests` (state=open) returned no PR whose head branch
+starts with `claude/security-review-` before this pass began — PR #3374
+(Feature 26, Forms, pass 7) had just merged with nothing started for
+Feature 27 since.
+
+**Real delta since pass 6's baseline (`7f521f66`, PR #2988):** `git diff
+7f521f66..HEAD` against every file this feature owns (plus the files found
+below) shows `integrations.py` 1119→1627 L (+2 routes: the department
+iCalendar feed's token issue/rotate), `app/api/public/calendar.py` +172 L
+(a second, new public feed), `app/services/integration_services/ical_service.py`
++48 L (the new feed's HMAC token digest), three new calendar connector files
+(`calendar_common.py`, `google_calendar_oauth_service.py`,
+`google_workspace_service.py`), `outlook_calendar_service.py` substantially
+rewritten (now OAuth-based, was API-key based), and three new migrations
+(`c869ec90a41b` calendar sync mappings, `61dfbcc23cba` Google Workspace
+provisioning records, `64bf75298e89` a timestamp column on the latter).
+
+**Read in full, newly, because `grep -rln "GoogleAccountProvision"
+backend/app/` turned up a sub-feature no prior pass's file list names and
+no dedicated findings doc covers:** `app/api/v1/endpoints/google_workspace.py`
+(227 L, 4 routes — entirely new, first commit `90b69e62`),
+`app/services/google_workspace_provisioning_service.py` (1052 L — the
+account-creation/retry/link-existing/suspension-reconciliation logic),
+`app/models/google_workspace_departure.py` (226 L — the session-level
+`before_flush`/`after_commit` hook that stages a suspend/unsuspend the
+instant any path moves `User.status`/`deleted_at` across the departed
+line), and `app/services/google_workspace_attention_digest.py` (182 L — the
+daily "needs attention" email). This is the Google Workspace integration's
+entire per-member account lifecycle; `GOOGLE_WORKSPACE_INTEGRATION`'s own
+connect/disconnect/patch surface on `integrations.py` was already in pass
+6's scope and is re-verified below, not re-derived.
+
+**Read in full:** the new/changed files above, plus `app/api/public/calendar.py`
+in full (both routes) and `app/services/integration_services/ical_service.py`
+in full. **Spot-verified against pass 6's documented state** (file sizes
+and `git log --since` confirm no commit touched them between 2026-10-07 and
+today): `salesforce_sync.py`, `calcom_sync.py`, `mcp_keys.py`, the three
+webhook files, `models/integration.py`, `schemas/integration.py`'s
+pre-existing classes, `paypal_backfill_service.py`, `integration_health.py`.
+**Out of scope, per pass 6's own established precedent** (dedicated,
+contemporaneous review elsewhere): `app/mcp/oauth.py` and the
+`registry.py`/`principal.py` wiring
+([`MCPO-27-mcp-oauth-server.md`](./MCPO-27-mcp-oauth-server.md)); the MCP
+write tools added since pass 6 (`mcp/tools/medical_supplies.py` and the
+`meetings.py`/`scheduling.py`/`elections.py`/`training.py`/`inventory.py`/
+`documents.py` tool diffs) are each that feature's own write-surface, not
+re-derived here (the pass-5 catch-up that temporarily reviewed MCP write
+tools from this rotation was a one-time gap-fill, not a standing scope
+addition — MCPO-27 and each feature's own pass now cover their own tools).
+
+### Department iCalendar feed (`/org/{token}.ics`) — new, clean
+
+Checklist §1 (intentionally public, token-scoped): the route carries no
+auth dependency by design — calendar apps cannot send cookies — and is
+compensated by an unguessable 48-byte `secrets.token_urlsafe` token,
+checked for a plausible shape (`_plausible_token`, 32–64 chars) **before**
+any DB work, then matched against a stored SHA-256 digest with
+`hmac.compare_digest` (constant-time) rather than a value lookup. A 429
+rate limit (60/min/IP) sits in front of the DB-heavy feed generation.
+Checklist §3/§5 (tenant isolation / exposure): the row found by the token
+carries its own `organization_id`, and `_org_feed_event` is an explicit
+allowlist (title, times, location **name**, type, a link) — no description,
+attendees, RSVPs, custom fields or organizer, so the feed cannot leak more
+than what an anonymous link is meant to carry even though it is served
+with no per-request auth. Checklist §4 (injection): `_escape_ics` folds
+every line-break variant to `\n` (an un-escaped bare `\r` is the known
+ICS-injection vector — a parser that treats a lone CR as a line end lets a
+crafted event title/description inject arbitrary calendar properties) and
+the new `URL:` property strips line breaks without comma/semicolon
+escaping, correctly: `URL` is a `URI` value type under RFC 5545, not
+`TEXT`, so that escaping does not apply to it. The feed is bounded
+(`ORG_FEED_MAX_EVENTS = 2000`, a 30-day-past/365-day-future window).
+Token issue/rotate (`GET`/`POST .../ical-feed{,/rotate}`) are both gated on
+`integrations.manage` and resolve through `_get_org_integration(...,
+lock=True)`, filtering `id` and `organization_id` in one query (14a).
+
+### Google Workspace account provisioning — a whole sub-feature, reviewed for the first time
+
+**Endpoints** (`google_workspace.py`, registered at
+`/integrations/google-workspace`, module-gated on `integrations`):
+`GET /members/{user_id}` and `POST /members/{user_id}/retry` require
+`members.manage`; `GET /attention` requires `integrations.manage`;
+`POST /link-existing` requires **both** `integrations.manage` and
+`admin.access` — correctly, since a linked account is one the department
+will later suspend on the member's behalf (same owner-decided bar as
+connecting the integration). Retry and link-existing are both
+rate-limited (`check_rate_limit`, 10/min and 20/min respectively) ahead of
+their Google calls. Every lookup goes through the service's `_load()`
+helper, which filters `organization_id` **and** (`user_id` or
+`provision_id`) in the same `select()` — 14a satisfied for all four
+routes, including the two that take a client-supplied `user_id` straight
+from the path. No response schema (`GoogleAccountResponse`) carries a
+password or the service-account key; a reset password is only ever
+emailed (`send_credentials_email`), never returned in the API response —
+confirmed by reading `_to_response()`'s explicit field list. Google
+Workspace's own connect/disconnect/patch on `integrations.py` already
+carries `_require_google_workspace_admin` (requires `admin.access` in
+addition to `integrations.manage`, since the service-account key is
+domain-wide) and `_check_google_workspace_ready` (refuses a config that
+could never create an account — no key, or the configured domain doesn't
+match an enabled department-email domain); both re-verified intact,
+unchanged since pass 6 introduced them.
+
+**The departure hook** (`google_workspace_departure.py`) is a
+`Session`-level `before_flush`/`after_commit` pair, not a new externally
+reachable surface: it watches every flush for a `User` whose
+`status`/`deleted_at` crosses the departed line (dropped, archived, or
+hard-deleted) from _any_ code path — "status endpoint, undo-drop,
+reactivation, auto-archive, soft and hard delete, anonymization… and any
+future path" per its own docstring — and stages a suspend/unsuspend
+request on that member's `GoogleAccountProvision` row inside the same
+transaction, so no caller can forget to do it. Google itself is never
+called from inside that transaction; the actual suspend/unsuspend runs
+from an `after_commit` background task (same pattern the audit chain's
+sealer uses), with the `google_workspace_suspension_sync` scheduled task
+as the backstop and `after_soft_rollback` clearing staged work a rolled-back
+transaction never committed. A hard delete is handled specially
+(`_capture_before_hard_delete`): the account row is `ON DELETE CASCADE`,
+so it would be gone before the suspend could read it, and the service
+captures the Google-side key (`google_user_id` or `primary_email`) before
+the delete commits. No new finding — this is a correctness/invariant
+mechanism, not a new attacker-reachable endpoint, and its one externally
+visible effect (a suspend eventually happening) is strictly narrower than
+what the triggering endpoints (drop/delete/archive) already required.
+
+**The attention digest** (`google_workspace_attention_digest.py`) sends at
+most one email per department per day, only to members holding
+`admin.access` (`_administrators`, same permission the rest of this
+sub-feature uses as its bar), and only for items its own list already
+reports overdue — it calls `GoogleWorkspaceProvisioningService.attention_items()`
+rather than re-deriving the overdue computation, with its own docstring
+citing Pitfall #29 for exactly that reason. Every interpolated value in the
+HTML body (`member_name`, `primary_email`, `label`, `detail`, and both
+URLs) is `html.escape`d. The "last sent" marker is written back via
+`copy.deepcopy(organization.settings or {})` before reassignment — Pitfall
+#12's correct pattern for a nested JSON-column mutation, not a shallow
+`dict()` copy.
+
+### Checked, no new finding
+
+- **New migrations**: all three guard the table/column's existence before
+  touching it (`c869ec90a41b` returns early if `integrations` itself
+  doesn't exist yet — a `create_all`-only table, Pitfall #26 — before even
+  checking for its own table; `61dfbcc23cba` and `64bf75298e89` guard the
+  same way). `61dfbcc23cba`'s one `ondelete="SET NULL"` column
+  (`created_by`) is `nullable=True` (Pitfall #2). `64bf75298e89`'s backfill
+  only stamps rows already `suspension_settled = 0`, matching its own
+  docstring's reasoning for why `updated_at` can't substitute.
+  `validate_migrations.py --strict`: single head, confirmed below.
+- **New calendar connectors use the hardened transport**: both
+  `outlook_calendar_service.py` and `google_calendar_oauth_service.py`
+  default their `client_factory` parameter to `create_integration_client`
+  (confirmed by direct read of both files' constructors) — the same
+  SSRF-pinning, deadline-bounded, response-size-capped transport INT-1/7/9
+  closed for this feature's other connectors, not a second, unreviewed
+  HTTP path.
+- **`GoogleWorkspaceConfig` schema** (`schemas/integration.py`): `extra="forbid"`;
+  `service_account_key` is size-capped (`_MAX_SERVICE_ACCOUNT_KEY_BYTES`),
+  parsed as JSON, and checked for `type == "service_account"` plus the
+  three fields Google's own client library requires, so a malformed or
+  non-service-account upload is rejected by the schema, not the connector
+  at call time. `service_account_key` is in `SECRET_CONFIG_KEYS`
+  (`schemas/integration.py:422`) alongside the existing set, so it is
+  encrypted at rest and never echoed back on read, same as every other
+  secret this feature stores.
+- **Frontend** (`IntegrationsPage.tsx`, +606 L since pass 6): the new
+  `service_account_key: gwsServiceAccountKey || undefined` follows the
+  `||`-not-`??` form (Pitfall #1); no `dangerouslySetInnerHTML`, no
+  `window.confirm`/`alert`/`prompt` introduced.
+- **LIKE-pattern usage, CSV export**: none in this feature's scope, same
+  as every prior pass.
+
+### Re-verified from passes 1–6 (all hold)
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist in
+  `app/utils/url_validator.py`): unchanged, still an explicit owner
+  decision.
+- **INT-11** (Salesforce "clear the refresh token" has no reachable UI
+  control): **still open, unchanged.** `IntegrationsPage.tsx:708` (moved
+  from pass 6's `:593` as the file grew) still builds
+  `refresh_token: sfRefreshToken || undefined`; no clear control added
+  this pass.
+- Every other pass 1–6 finding (INT-2, INT-3, INT-4, INT-6, INT-8; SOQL
+  injection defense, instance-URL domain pinning, secret handling, webhook
+  replay dedup, module gating, the DNS-rebinding transport pin, the
+  wall-clock deadline, Retry Sync's lock-then-read ordering, the PayPal
+  backfill's idempotency): none of the files carrying them changed since
+  pass 6 per the diff above; re-confirmed by direct read where this pass's
+  own changes touched the same file (`integrations.py`), unchanged
+  elsewhere.
+
+**Route surface**: `integrations.py` 9→11 (+2: `ical-feed`,
+`ical-feed/rotate`, both `integrations.manage` + id-and-org filtered).
+`app/api/public/calendar.py` 1→2 (+1: `/org/{token}.ics`, public,
+token-scoped — see above). `google_workspace.py`: 0→4, new this pass, all
+four gated as described above. `salesforce_sync.py` (9), `calcom_sync.py`
+(1), `mcp_keys.py` (4), the three non-calendar public webhook files (4)
+unchanged from pass 6's count.
+
+## Schema & migration notes (pass 7)
+
+Three migrations since pass 6: `c869ec90a41b` (`calendar_sync_mappings`),
+`61dfbcc23cba` (`google_account_provisions`), `64bf75298e89`
+(`google_account_provisions.suspension_requested_at`, backfilled for rows
+already `suspension_settled = 0`). `validate_migrations.py --strict`: 612
+revisions, single head `c87efd81c5aa`, PASSED.
+
+## Guard tests added
+
+None by this pass — every new mechanism above already shipped with its own
+test coverage before this pass started; re-run as part of the scoped suite
+below and confirmed still passing.
+
+## Completion gate (pass 7)
+
+| Check                                                                                                                                                                                  | Result                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                          | ✅ 0 violations                                                                                                          |
+| `black --check app/ tests/ alembic/`                                                                                                                                                   | ✅ 2400 files unchanged                                                                                                  |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)                                                                                                                            | ✅ clean                                                                                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                      | ✅ 612 revisions, single head, PASSED                                                                                    |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar"`) | ✅ 6980 passed, 21 skipped (environment-only — `pywebpush`, Docker daemon/registry, opt-in API-contract suite), 0 failed |
+| `npm run typecheck` (frontend)                                                                                                                                                         | ✅ 0 errors                                                                                                              |
+| `npm run lint` (frontend)                                                                                                                                                              | ✅ exit 0, 0 warnings                                                                                                    |
 
 ---
 

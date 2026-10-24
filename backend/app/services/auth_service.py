@@ -74,6 +74,16 @@ AUTH_FAILURE_NO_PASSWORD = "no_password"
 AUTH_FAILURE_ACCOUNT_LOCKED = "account_locked"
 AUTH_FAILURE_INVALID_PASSWORD = "invalid_password"
 
+# AuthService.last_password_change_failure values: which control refused a
+# self-service password change, for the audit trail. The member is shown the
+# message instead; the password itself is never recorded.
+PASSWORD_CHANGE_FAILURE_INVALID_CURRENT = "invalid_current_password"
+PASSWORD_CHANGE_FAILURE_MINIMUM_AGE = "minimum_age"
+PASSWORD_CHANGE_FAILURE_WEAK = "weak_password"
+PASSWORD_CHANGE_FAILURE_BREACHED = "breached_password"
+PASSWORD_CHANGE_FAILURE_REUSED = "password_reused"
+PASSWORD_CHANGE_FAILURE_SAME_AS_CURRENT = "same_as_current"
+
 
 async def _check_password_history(
     db: AsyncSession, user_id: str, new_password: str
@@ -131,6 +141,69 @@ async def _has_password_history(db: AsyncSession, user_id: str) -> bool:
     return result.first() is not None
 
 
+def _as_utc(value: object) -> Optional[datetime]:
+    """A timestamp read from a session row, as an aware UTC datetime.
+
+    ``None`` for anything that is not a datetime, so a check that cannot read a
+    column declines to end the session instead of raising.
+    """
+    if not isinstance(value, datetime):
+        return None
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def session_limits(kiosk: bool) -> Tuple[int, int]:
+    """``(idle_minutes, absolute_hours)`` for a standard or a kiosk session.
+
+    0 means the limit is off. Shared with ``GET /auth/session-settings`` so the
+    browser's timer and the server's enforcement read one definition.
+    """
+    if kiosk:
+        return (
+            settings.SESSION_KIOSK_IDLE_TIMEOUT_MINUTES,
+            settings.SESSION_KIOSK_ABSOLUTE_MAX_HOURS,
+        )
+    return settings.HIPAA_SESSION_TIMEOUT_MINUTES, settings.SESSION_ABSOLUTE_MAX_HOURS
+
+
+def session_ends_at(session: UserSession, kiosk: bool) -> Optional[datetime]:
+    """When the absolute lifetime ends, or ``None`` when that cap is off."""
+    _, absolute_limit = session_limits(kiosk)
+    started = _as_utc(session.created_at)
+    if absolute_limit <= 0 or started is None:
+        return None
+    return started + timedelta(hours=absolute_limit)
+
+
+def session_end_reason(
+    session: UserSession, now: datetime, kiosk: bool = False
+) -> Optional[str]:
+    """Why a session must end now: ``"idle"``, ``"absolute"`` or ``None``.
+
+    Both limits are measured server-side from stamps the server wrote, so a
+    client cannot lengthen either by what it sends. A limit set to 0 is off.
+    ``kiosk`` selects the longer kiosk limits; the caller passes it only after
+    confirming the flag is set AND the user still holds the permission.
+    """
+    idle_limit, absolute_limit = session_limits(kiosk)
+    last_active = _as_utc(session.last_activity)
+    if (
+        idle_limit > 0
+        and last_active is not None
+        and (now - last_active).total_seconds() / 60 > idle_limit
+    ):
+        return "idle"
+
+    started = _as_utc(session.created_at)
+    if (
+        absolute_limit > 0
+        and started is not None
+        and (now - started).total_seconds() / 3600 > absolute_limit
+    ):
+        return "absolute"
+    return None
+
+
 class AuthService:
     """Service for authentication operations"""
 
@@ -138,6 +211,39 @@ class AuthService:
         self.db = db
         # Set by authenticate_user when it refuses a sign-in.
         self.last_auth_failure: Optional[AuthFailure] = None
+        # Set by change_password when it refuses a change.
+        self.last_password_change_failure: Optional[str] = None
+        # Set by reset_password_with_token to the member whose password the
+        # token reset, so the audit row names them.
+        self.last_reset_user: Optional[User] = None
+
+    async def holds_kiosk_session(self, session: UserSession) -> bool:
+        """Whether ``session`` is a kiosk session the user may still run.
+
+        The flag is not trusted by itself: a member whose permission was
+        revoked after they enabled it drops back to the standard limits on
+        the next request. Only kiosk sessions pay for the extra query.
+        """
+        if not session.is_kiosk:
+            return False
+        # Imported here: api.dependencies imports this module.
+        from app.api.dependencies import user_has_permission
+
+        result = await self.db.execute(
+            select(User)
+            .where(User.id == str(session.user_id))
+            .where(User.deleted_at.is_(None))
+            .options(selectinload(User.roles))
+        )
+        user = result.scalar_one_or_none()
+        return user is not None and user_has_permission(user, "security.kiosk_session")
+
+    async def get_session_for_token(self, token: str) -> Optional[UserSession]:
+        """The session row an access token belongs to, if any."""
+        result = await self.db.execute(
+            select(UserSession).where(UserSession.token == token)
+        )
+        return result.scalar_one_or_none()
 
     async def authenticate_user(
         self, username: str, password: str
@@ -411,6 +517,10 @@ class AuthService:
             # timezone and may differ from UTC — causing the idle timeout
             # check to see a phantom offset (e.g. 300m for UTC-5).
             last_activity=datetime.now(timezone.utc),
+            # Python-side UTC for the same reason as last_activity: the absolute
+            # lifetime is measured from this instant, and MySQL's now() follows
+            # the DB session timezone.
+            created_at=datetime.now(timezone.utc),
         )
 
         self.db.add(session)
@@ -474,6 +584,23 @@ class AuthService:
                 # stolen/rotated tokens would keep working. Only SELECTs have
                 # run on this session before this point, so the commit cannot
                 # persist unrelated pending work.
+                await self.db.commit()
+                return None, None
+
+            # A session past its idle or absolute limit cannot be renewed. This
+            # is an ordinary "sign in again", not a replay: the row is found and
+            # removed here, so the 401 it becomes never reaches the branch above
+            # that revokes every session the member has.
+            ended = session_end_reason(
+                session,
+                datetime.now(timezone.utc),
+                kiosk=await self.holds_kiosk_session(session),
+            )
+            if ended:
+                logger.info(
+                    f"Refresh refused for user {user_id}: session {ended} limit reached"
+                )
+                await self.db.delete(session)
                 await self.db.commit()
                 return None, None
 
@@ -702,6 +829,10 @@ class AuthService:
 
         Args:
             token: Access token
+            touch_activity: Record this request as user activity for the idle
+                timer. A background poll passes False: it is not evidence a
+                person is present, and counting it kept every open tab alive
+                forever.
 
         Returns:
             True if successful, False otherwise
@@ -745,6 +876,7 @@ class AuthService:
         """
         # Verify current password. An account with no hash (SSO-only) has no
         # current password to match, so it is refused here like a wrong one.
+        self.last_password_change_failure = None
         current_hash = user.password_hash
         current_valid, _ = (
             verify_password(current_password, current_hash)
@@ -752,6 +884,7 @@ class AuthService:
             else (False, None)
         )
         if not current_hash or not current_valid:
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_INVALID_CURRENT
             return (
                 False,
                 "Current password is incorrect. Please verify your existing password and try again.",
@@ -780,6 +913,7 @@ class AuthService:
             )
             age = (datetime.now(timezone.utc) - pwd_changed).days
             if age < min_age_days:
+                self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_MINIMUM_AGE
                 return False, (
                     f"Password was changed recently. You must wait at least "
                     f"{min_age_days} day(s) before changing your password again."
@@ -788,14 +922,17 @@ class AuthService:
         # Validate new password strength
         is_valid, error_msg = validate_password_strength(new_password)
         if not is_valid:
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_WEAK
             return False, error_msg
 
         is_valid, error_msg = await check_password_not_breached(new_password)
         if not is_valid:
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_BREACHED
             return False, error_msg
 
         # Check password history (HIPAA §164.312(d))
         if await _check_password_history(self.db, str(user.id), new_password):
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_REUSED
             return False, (
                 f"This password was used recently. You cannot reuse any of your "
                 f"last {settings.HIPAA_PASSWORD_HISTORY_COUNT} passwords."
@@ -804,6 +941,7 @@ class AuthService:
         # Also check against current password
         same_as_current, _ = verify_password(new_password, current_hash)
         if same_as_current:
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_SAME_AS_CURRENT
             return False, "New password must be different from your current password."
 
         # Save current password to history before changing
@@ -830,7 +968,9 @@ class AuthService:
 
         return True, None
 
-    async def get_user_from_token(self, token: str) -> Optional[User]:
+    async def get_user_from_token(
+        self, token: str, touch_activity: bool = True
+    ) -> Optional[User]:
         """
         Get user from access token with server-side session validation.
 
@@ -885,36 +1025,24 @@ class AuthService:
                 logger.debug("Token rejected: session expired")
                 return None
 
-            # HIPAA §164.312(a)(2)(iii): Server-side idle timeout.
-            # If the session has not been active within the configured
-            # timeout window, reject it to enforce automatic logoff.
-            idle_timeout = settings.HIPAA_SESSION_TIMEOUT_MINUTES
-            if idle_timeout > 0 and session.last_activity:
-                last_active = (
-                    session.last_activity.replace(tzinfo=timezone.utc)
-                    if session.last_activity.tzinfo is None
-                    else session.last_activity
-                )
-                idle_minutes = (
-                    datetime.now(timezone.utc) - last_active
-                ).total_seconds() / 60
-                if idle_minutes > idle_timeout:
-                    logger.info(
-                        f"Session idle timeout: {idle_minutes:.0f}m > "
-                        f"{idle_timeout}m limit"
-                    )
-                    await self.db.delete(session)
-                    # Use commit() instead of flush() so the deletion persists.
-                    # Returning None causes get_current_user to raise HTTPException,
-                    # which triggers a rollback in get_session() — undoing any
-                    # flush()'d changes. Without commit(), the zombie session
-                    # would survive and keep blocking authentication.
-                    await self.db.commit()
-                    return None
+            # HIPAA §164.312(a)(2)(iii): server-side automatic logoff, plus an
+            # absolute lifetime. The row is rejected but NOT deleted here: the
+            # browser's next move is a refresh with this session's refresh
+            # token, and refresh needs to find the row to answer "sign in
+            # again". Deleting it made that refresh look like a replayed token
+            # and revoked every other session the member had.
+            ended = session_end_reason(
+                session,
+                datetime.now(timezone.utc),
+                kiosk=await self.holds_kiosk_session(session),
+            )
+            if ended:
+                logger.info(f"Session {ended} limit reached; token rejected")
+                return None
 
-            # Touch session activity timestamp for idle tracking
-            session.last_activity = datetime.now(timezone.utc)
-            await self.db.flush()
+            if touch_activity:
+                session.last_activity = datetime.now(timezone.utc)
+                await self.db.flush()
 
             result = await self.db.execute(
                 select(User)
@@ -1049,9 +1177,13 @@ class AuthService:
         """
         Reset a user's password using a valid reset token.
 
+        On success ``last_reset_user`` holds the member whose password was
+        reset; it stays ``None`` on every refusal.
+
         Returns:
             Tuple of (success, error_message)
         """
+        self.last_reset_user = None
         # SEC-01: Validate token format/length before hashing
         if not raw_token or len(raw_token) > 256:
             return (
@@ -1125,5 +1257,6 @@ class AuthService:
 
         await self.db.commit()
         logger.info("Password successfully reset via token")
+        self.last_reset_user = user
 
         return True, None

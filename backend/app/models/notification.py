@@ -242,7 +242,9 @@ class NotificationLog(Base):
     )
     read: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    pinned: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    pinned: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     error: Mapped[Optional[str]] = mapped_column(Text)
 
     # Navigation
@@ -394,7 +396,9 @@ class DepartmentMessage(Base):
     # Display
     is_pinned: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
-    is_persistent: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    is_persistent: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     requires_acknowledgment: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False
     )

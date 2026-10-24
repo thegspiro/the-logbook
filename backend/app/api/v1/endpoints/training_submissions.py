@@ -5,8 +5,6 @@ Handles self-reported training from members, officer review/approval,
 and self-report configuration management.
 """
 
-import asyncio
-import os
 from datetime import date, datetime, timezone
 
 from fastapi import (
@@ -64,7 +62,6 @@ from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import (
     FileRules,
     StorageArea,
-    stored_file_response,
 )
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.training_submission_service import (
@@ -105,11 +102,14 @@ async def update_self_report_config(
         previous_retention = (
             await service.get_config(current_user.organization_id)
         ).attachment_retention_days
-    config = await service.update_config(
-        organization_id=current_user.organization_id,
-        updated_by=current_user.id,
-        **changes,
-    )
+    try:
+        config = await service.update_config(
+            organization_id=current_user.organization_id,
+            updated_by=current_user.id,
+            **changes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     # Shortening the period deletes certificate files on the next sweep, so
     # who set it, and from what, is kept with the rest of the audit trail.
     if (
@@ -200,7 +200,7 @@ async def create_submission_with_attachment(
             # submission — and for an auto-approved one its training record —
             # durably references this path. An orphaned file is recoverable;
             # a record whose evidence was deleted out from under it is not.
-            await asyncio.to_thread(_remove_quietly, stored["file_path"])
+            await file_storage.delete_quietly(stored["file_path"])
             raise
         return submission
 
@@ -564,7 +564,7 @@ async def delete_submission(
         )
 
         for path in stored_paths:
-            await asyncio.to_thread(_remove_quietly, path)
+            await file_storage.delete_quietly(path)
 
 
 # ==================== Officer Review ====================
@@ -770,13 +770,6 @@ async def _load_submission_for_attachment(
     return submission
 
 
-def _remove_quietly(path: str) -> None:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
-
-
 def _confined_path(attachment, organization_id) -> str | None:
     """Real path of a stored attachment, or None if it escapes the org's area.
 
@@ -871,7 +864,7 @@ async def upload_submission_attachment(
         await db.commit()
         await db.refresh(submission)
     except Exception as e:
-        await asyncio.to_thread(_remove_quietly, attachment["file_path"])
+        await file_storage.delete_quietly(attachment["file_path"])
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     return {
@@ -915,7 +908,7 @@ async def download_submission_attachment(
     if not real_path or not isinstance(attachment, dict):
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
-    if not await asyncio.to_thread(os.path.isfile, real_path):
+    if not await file_storage.exists(real_path):
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
     filename = download_names.descriptive_filename(
@@ -928,7 +921,7 @@ async def download_submission_attachment(
         fallback=download_names.original_stem(attachment.get("file_name"))
         or "certificate",
     )
-    return stored_file_response(
+    return await file_storage.file_response(
         real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
         filename=filename,
@@ -986,4 +979,4 @@ async def delete_submission_attachment(
 
     removed_path = _confined_path(removed, submission.organization_id)
     if removed_path:
-        await asyncio.to_thread(_remove_quietly, removed_path)
+        await file_storage.delete_quietly(removed_path)

@@ -1,9 +1,291 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), pass 9 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), pass 11 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 11 (2026-10-22, watchdog pickup) — 0 fixed, 0 new findings
+
+Watchdog pickup: Step 0 confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) that no security-review PR
+was open, and `ListAgents` found no other reachable session. PR #3556
+(Feature 01, Auth & session lifecycle, pass 11) had just merged — not
+docs-only (it carried a real `auth_service.py`/`dependencies.py` fix plus a
+`consent_service.py` Pitfall #32 fix), so it has its own Log entry in
+`AUTH-01-auth-session.md`; nothing further to record from it here beyond
+clearing the **Open PR** row. Row 02 (Permissions & roles) was confirmed the
+next `⬜` by reading the rotation table directly off fresh `origin/main`.
+
+**Baseline:** `4838c5b2` (PR #3398's merge, pass 10). **Head:** current
+`main` (`96b0c924`, PR #3556's merge). 604 commits between them. Of the
+twelve files this feature tracks (`dependencies.py`, `core/permissions.py`,
+`roles.py` + `role_service.py`, `operational_ranks.py` +
+`operational_rank_service.py`, `officers.py` + `officer_service.py`,
+`org_chart.py` + `org_chart_service.py`, `admin_continuity_service.py`, and
+the rank/role-assignment handlers in `users.py`), confirmed individually by
+`git diff --stat` against every tracked path (not assumed from a commit-log
+skim): seven carry a real diff — `dependencies.py`, `core/permissions.py`,
+`role_service.py`, `operational_ranks.py`, `operational_rank_service.py`,
+`org_chart_service.py`, and `admin_continuity_service.py`. `users.py` also
+has a large diff (+287/-24), but every hunk falls inside `create_member`,
+`_enforce_account_reset_ceiling`, `update_user_profile`, `delete_user`, and
+`get_deletion_impact` — all new directory-account-provisioning logic
+(Google Workspace/Microsoft 365 account creation, department email,
+inventory return on deletion). None of it touches this file's
+rank/role-assignment handlers (`get_user_roles`, `assign_user_roles`,
+`add_role_to_user`, `remove_role_from_user`, `get_user_with_roles`, lines
+1041-1670), which carry zero diff and are confirmed byte-identical to pass 10. The directory-account feature is Feature 07's (Users & organizations)
+territory by principal-code assignment and is left for that feature's own
+pass, consistent with prior passes' practice of noting a caller's dependency
+on another feature's file without reviewing that file's own logic here
+(see pass 9's `release_position_from_folders` note). `roles.py`,
+`officers.py`, and `org_chart.py` are byte-identical to pass 10.
+
+### The seven changed files, reviewed
+
+- **`dependencies.py`** wires `touch_activity=request.headers.get(
+"x-background-request") != "1"` into `get_current_user`'s call to
+  `auth_service.get_user_from_token` — the server half of
+  `BACKGROUND_REQUEST_CONFIG`. Already audited end-to-end by this same
+  rotation's Feature 00 (Cross-cutting baseline, pass 11), Feature 34
+  (Frontend shared, pass 10), and Feature 01's own pass-11 review of this
+  exact call site (PR #3556). Re-confirmed here only because `dependencies.py`
+  is also tracked by this feature: the change is confined to the token/session
+  path and touches no permission or role logic, so there is nothing
+  feature-02-specific to add.
+- **`core/permissions.py`** adds `RANK_MIRRORING_POSITION_SLUGS` (a frozenset
+  mirroring `OPERATIONAL_RANKS`' keys) and `position_mirrors_rank(slug,
+is_system)` — a pure, read-only predicate with no database access and no
+  permission-string change. Consumed by `Position.mirrors_rank`
+  (`models/user.py:874-882`), which is only ever read (surfaced in
+  `RoleManagementService.list_roles`'s payload and the frontend's
+  `mirrorsRank()` helper, which filters these positions out of assignment
+  pickers so a volunteer isn't shown a position that duplicates their Rank
+  field). Traced the whole path: nothing writes through this property, no
+  endpoint branches its authorization on it, and it carries no seeded grant
+  of its own — CLAUDE.md Pitfall #23 (a seeded rank grant reaching the
+  database through a position) does not apply here because this change adds
+  no grant; it only labels positions that already mirror a rank's existing
+  grant, which is why no migration accompanies it. Verified no new route and
+  no new permission string anywhere in the diff.
+- **`role_service.py` — two independent new guards on `delete_role`, both
+  read before any write:**
+  - `assert_position_not_sole_box_reviewer` (`suggestion_service.py:207-247`)
+    refuses the delete if the position is the sole reviewer of an open
+    suggestion box. Org-scoped (`SuggestionBox.organization_id ==
+str(organization_id)`), and the query is `.with_for_update()` — locked so
+    a concurrent edit to a box's reviewer list cannot slip between this check
+    and the delete (the same Pitfall #27 shape as a capacity check).
+  - `release_role_from_messages` (`messaging_service.py:96-134`) strips the
+    role's id and name out of every `DepartmentMessage.target_roles` list in
+    the org before the role is deleted, so a later edit to the message does
+    not try to re-send to an id that resolves to nobody. Org-scoped
+    (`DepartmentMessage.organization_id == str(organization_id)`), rows
+    `.with_for_update()`-locked, and the column is replaced with a new list
+    (`kept = [...]`) rather than mutated in place — Pitfall #12 compliant, and
+    the code comment says so directly.
+  - Both guards run, and `release_role_from_messages`'s count is folded into
+    the existing audit payload (`removed_from_message_audiences`), before
+    the role row is deleted — consistent with the function's existing
+    `release_position_from_folders` guard from pass 9.
+- **`operational_ranks.py`** — `update_rank`'s call site now passes
+  `actor_id`, `actor_username`, and `ip_address` (via the existing
+  `get_client_ip` helper) through to the service so the new rename-audit
+  event (below) can be attributed. No permission-gate change; the route's
+  existing `require_permission("settings.manage", "members.manage")` OR-gate
+  is untouched.
+- **`operational_rank_service.py` — a rank-code rename now propagates to
+  every store that references the code, in the same transaction:**
+  - `get_rank(..., for_update=True)` locks the rank row before a rename, so
+    two concurrent renames (or a rename racing a delete) cannot both decide
+    from the same pre-rename snapshot.
+  - `_move_rank_references` updates `User.rank` and `OrgChartNode.rank_code`
+    (plain `UPDATE ... WHERE organization_id == organization_id AND
+<column> == old_code`, both org-scoped) and rewrites the JSON-list
+    membership of `TrainingRequirement.required_roles` and
+    `InventoryImpactPlan.filters["ranks"]` wherever `old_code` appears,
+    org-scoped on both (`TrainingRequirement.organization_id ==
+organization_id`, `InventoryImpactPlan.organization_id ==
+organization_id`), both rows locked with `.with_for_update()` before the
+    rewrite. The `TrainingRequirement` list is reassigned with
+    `flag_modified()`; the `InventoryImpactPlan.filters` dict is
+    `copy.deepcopy()`'d before the nested `"ranks"` key is replaced and
+    `flag_modified()` is called — both the correct Pitfall #12 patterns for a
+    top-level reassign vs. a nested-key edit, and both are exercised by
+    `_renamed_code_list`'s own dedup/order-preserving logic (verified by
+    reading it: returns `None`, meaning "no match, skip" when `old_code`
+    is absent, so an unrelated requirement/plan is never touched or
+    unnecessarily flagged modified).
+  - The rename is now `log_audit_event`'d (`operational_rank.code_renamed`,
+    severity `warning`, carrying the old/new codes and a per-store count of
+    rows moved) — previously a silent `UPDATE` with no audit trail at all.
+  - `delete_rank` gained a parallel guard: an orphan check against
+    `OrgChartNode.rank_code`, org-scoped, naming the blocking seats in the
+    error, mirroring the existing member-count guard immediately above it.
+  - Confirmed deliberately unmoved: `training_records.rank_at_completion`
+    (a historical snapshot), audit rows, and onboarding's IT-contact-list
+    copies — the docstring states this and it matches the stated invariant
+    (history must not be rewritten by a later rename).
+- **`org_chart_service.py` and `admin_continuity_service.py`** — both are the
+  CLAUDE.md Pitfall #32 fix (`User.status == UserStatus.ACTIVE` →
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`), applied to `is_administrator`,
+  `_active_members_locked`, and three membership-lookup queries in
+  `org_chart_service.py` (seat-holder lookup, rank-based lookup, and the
+  org's full active-member query). All four already-existing org scoping
+  filters (`User.organization_id == organization_id`) are untouched by the
+  diff — confirmed by reading each hunk, not inferred from the import change
+  alone. This closes the same class of bug Pitfall #32 names: a probationary
+  member was previously invisible to "who can administer this org" and to
+  org-chart seat/rank-based holder lookups, which is a correctness fix in
+  the safer direction (more members counted as current, not fewer), not a
+  new permission or a widened grant.
+
+### Re-verified, not re-derived
+
+- **Route inventory** — re-enumerated directly against the four endpoint
+  files: `roles.py` (13), `operational_ranks.py` (7), `officers.py` (3),
+  `org_chart.py` (5) — 28 routes total, unchanged from pass 10, and all four
+  files are byte-identical to pass 10 (`git diff --stat` zero lines each).
+  Same gates as pass 10: OR-gate `settings.manage`/`members.manage` on
+  `operational_ranks.py`'s four mutating routes plus the independent
+  `settings.manage`-only `_refuse_ordering` gate on `sort_order`/`/reorder`;
+  `officers.py` on `settings.manage`/`organization.update_settings`;
+  `org_chart.py`'s `GET ""` auth-only by design, its four mutations on
+  `orgchart.manage`/`settings.manage`.
+- **OR-gate alternatives** — `members.manage` and
+  `organization.update_settings` re-confirmed not seeded to `member` or
+  `firefighter` across all `DEFAULT_POSITIONS` entries; unchanged since pass
+  10 because `core/permissions.py`'s only diff this pass is the new,
+  grant-free `position_mirrors_rank` helper.
+- **PERM-1, PERM-2 (fixed), PERM-5 and PERM-9 (both closed)** — re-checked by
+  direct read rather than trusted from this doc's own prior text:
+  `operational_ranks.py:170` (`/validate` still gated
+  `settings.manage`/`members.manage`), `admin_continuity_service.py`'s "LAST
+  WILDCARD HOLDER" guard (module docstring + `ADMIN_PERMISSION =
+"members.manage"` + `is_administrator`) is present and, per the point
+  above, now evaluates current status more broadly rather than being
+  weakened. This file's own "Route inventory" static section (corrected at
+  pass 9) still matches current code.
+
+No finding this pass. Rotation row 02 moves to `✅`.
+
+### Completion gate (pass 11)
+
+| Check                                                                            | Result                                                    |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                  | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/` (26.5.1, CI's pin)                          | ✅ 2555 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                      | ✅ clean                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                | ✅ single head `e5f9bb066e07`, 639 revisions              |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                | ✅ 273 routes, 0 errors, 0 warnings                       |
+| standing guard suite (8 files, incl. `test_rank_mirroring_positions.py`)         | ✅ 198 passed                                             |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart"`) | ✅ 1466 passed, 1 skipped (environment-only: `pywebpush`) |
+| `cd frontend && npm run typecheck`                                               | ✅ 0 errors                                               |
+| `npm run lint` (whole repo, backend + frontend)                                  | ✅ 0 errors, 0 warnings                                   |
+
+No source file needed a fix this pass.
+
+---
+
+## Pass 10 (2026-10-18, watchdog pickup) — 0 fixed, 0 new findings
+
+Watchdog pickup: Step 0 confirmed via `search_pull_requests` that no
+`claude/security-review-*` PR was open anywhere on the repo, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`. The prior iteration (Feature 01, Auth & session lifecycle,
+pass 10, PR #3397) merged clean. Rotation row 02 was the next `⬜`.
+
+**Baseline:** `eee8be13` (PR #3212's merge, pass 9). **Head:** current
+`main` (`ccb4b805`, PR #3397's merge). 620 commits (320 non-merge) between
+them. Of the twelve files this feature tracks (`dependencies.py`,
+`core/permissions.py`, `roles.py` + `role_service.py`,
+`operational_ranks.py` + `operational_rank_service.py`, `officers.py` +
+`officer_service.py`, `org_chart.py` + `org_chart_service.py`,
+`admin_continuity_service.py`, and the rank/role-assignment handlers in
+`users.py`), confirmed by `git diff --stat` against every tracked path
+individually (not assumed from a commit-log skim) — only two carry any
+diff at all: `role_service.py` (+2/-2) and `operational_rank_service.py`
+(+9/-7). The other ten are byte-identical to pass 9's baseline.
+
+### The two changed files, reviewed
+
+Both diffs are from the same class of change: mypy-driven null-safety
+hardening, not new logic.
+
+- **`role_service.py`:**
+  - `changes = {}` gained an explicit `Dict[str, Dict[str, Any]]`
+    annotation — no behavior change.
+  - `clone_role`'s `priority=source.priority` became
+    `priority=source.priority or 0`. `Role.priority` is
+    `Mapped[Optional[int]]` ("Higher priority = more powerful",
+    `app/models/user.py:764`) — a cloned role whose source had a `None`
+    priority now gets `0` instead of propagating `None`. `0` is the
+    **lowest** end of this scale, so this cannot escalate a cloned role's
+    effective priority; it only prevents a `None` from reaching whatever
+    numeric comparison/ordering consumes `priority` downstream. Verified
+    safe, not a finding.
+- **`operational_rank_service.py`:**
+  - `seed_defaults`'s existing-row guard changed `result.scalar() > 0` to
+    `(result.scalar() or 0) > 0` — defends the same `COUNT(*)` check
+    against a `None` scalar the same way pass 9 found in `role_service.py`'s
+    sibling `remove_role_from_user` (`rows_affected()`) and Feature 01 pass
+    9 found in `auth_service.py`. Same narrowing-not-widening direction:
+    a `None` now reads as "0 existing rows" (seed proceeds) rather than
+    raising `TypeError` — not a path that can be reached with a non-empty
+    table, since `COUNT(*)` only returns `None` if the query itself errors
+    before returning a row, which SQLAlchemy would surface as an exception
+    rather than a bare `None` in practice; the hardening is defensive, not
+    closing a live hole.
+  - `validate_ranks`' member-lookup loop renamed its loop variable `row` to
+    `member_row` throughout (five reference sites) — pure rename, confirmed
+    by reading all five call sites; the logic (compare each member's stored
+    `rank` string against the canonical code map, flag mismatches) is
+    unchanged.
+
+Neither file's permission gate, org-scoping, or audit-logging surface is
+touched. No new route, no permission-string change, no migration.
+
+### Re-verified, not re-derived
+
+- **Route inventory** — re-enumerated directly against the four endpoint
+  files (`roles.py`, `operational_ranks.py`, `officers.py`,
+  `org_chart.py`), all four confirmed byte-identical to pass 9 via
+  `git diff --stat` (zero lines). Same 28 routes, same gates as pass 9:
+  `roles.py` (13), `operational_ranks.py` (7, OR-gate
+  `settings.manage`/`members.manage` on the four mutating routes, the
+  independent `settings.manage`-only `_refuse_ordering` gate on
+  `sort_order`/`/reorder`), `officers.py` (3, `settings.manage`/
+  `organization.update_settings`), `org_chart.py` (5, `GET ""` auth-only by
+  design, four mutations on `orgchart.manage`/`settings.manage`).
+- **OR-gate alternatives** — `members.manage` and
+  `organization.update_settings` re-confirmed not seeded to `member` or
+  `firefighter` across all `DEFAULT_POSITIONS` entries; unchanged since
+  pass 9 because `core/permissions.py` carries zero diff since baseline.
+- **PERM-1, PERM-2 (fixed), PERM-5 and PERM-9 (both closed)** all
+  byte-identical to their pass-9 state (`operational_ranks.py`,
+  `admin_continuity_service.py`, and this file's own "Route inventory"
+  section all carry zero diff since `eee8be13`).
+
+No finding this pass. Rotation row 02 moves to `✅`.
+
+### Completion gate (pass 10)
+
+| Check                                                                            | Result                                                                             |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                  | ✅ 0 violations                                                                    |
+| `black --check app/ tests/ alembic/` (26.5.1, CI's pin)                          | ✅ 2426 files unchanged                                                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                      | ✅ clean                                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                | ✅ single head `1117b642643b`, 618 revisions                                       |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                | ✅ 270 routes, 0 errors, 0 warnings                                                |
+| standing guard suite (12 files, run directly)                                    | ✅ 224 passed                                                                      |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart"`) | ✅ 1379 passed, 1 skipped (environment-only: `py_vapid`/`pywebpush` not installed) |
+| `cd frontend && npm run typecheck`                                               | ✅ 0 errors                                                                        |
+| `cd frontend && npm run lint`                                                    | ✅ 0 errors, 0 warnings (no frontend files touched this pass)                      |
+
+No source file needed a fix this pass.
 
 ---
 

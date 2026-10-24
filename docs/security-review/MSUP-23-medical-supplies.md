@@ -3,7 +3,415 @@
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
 #1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076),
 2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
-#2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, this PR)
+#2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, PR #2981),
+2026-10-17 (pass 14, PR #3352), 2026-10-20 (pass 15, PR #3455),
+2026-10-24 (pass 16, this PR)
+
+## Pass 16 (2026-10-24) — 0 fixed, 0 new findings
+
+**Watchdog run.** `search_pull_requests` (`head:claude/security-review-`)
+returned no open PR before this pass began; row 23 (MSUP) was confirmed as
+the first ⬜ row in `docs/security-review/PROGRESS.md`'s rotation table on a
+freshly fetched `main` (head `dbf2d64b`, carrying PR #3633's merge, Feature
+22 Grants & fundraising pass 10).
+
+**Scope check — re-enumerated by AST, not diffed.** Walked every
+`@router.` decorator in `medical_supplies.py` directly rather than trusting
+the previous pass's count (per this skill's "re-enumerate every pass" rule):
+**26 routes**, up from pass 15's 25. Diffing the two function-name sets
+(pass 15's commit `dce89db1` vs. current) shows exactly one addition —
+`search_medical_lots` (`GET /lots/search`) — and no removal.
+
+`git log dce89db1..origin/main` restricted to this feature's own paths
+(`backend/app/api/v1/endpoints/medical_supplies.py`,
+`backend/app/mcp/tools/medical_supplies.py`,
+`frontend/src/modules/medical-supplies/`, plus the shared
+`inventory_service.py` / `equipment_check_service.py` methods the router
+calls, and `scheduled_tasks.py`'s medical-supply alert email) found six
+substantive commits since pass 15, all reviewed in full below:
+
+- `c75e0cea` — **the lot recall lookup**, `GET /lots/search`
+  (`inventory.view_medical`/`inventory.view`; `lot_number` query param,
+  `min_length=2`). Added `InventoryService.find_lots_by_number` (shelf half)
+  and `EquipmentCheckService.apparatus_expiring_stock`'s new `lot_number`
+  filter (truck half).
+- `6b952406` — truck rows in the Expiring tab and the lookup gain a
+  "Swap or restock" link to Inventory's own apparatus-inventory page;
+  display-only, no new backend surface.
+- `048d189b` — a Low stock tab, reusing the existing `low_stock` filter;
+  the daily low-stock email links medical rows to `?tab=low`. No new route.
+- `54a04340`, `4e1ff7ac` — sort-by-next-expiry on the items list/export,
+  an uncounted-positions filter/count, and truck lots added to the lot
+  export and the look-ahead window widened to 30/60/90 days. No new route;
+  extends `get_items_page`'s existing `sort_values` mechanism and the two
+  CSV exports.
+- `b3e72495` — the weekly "Supplies to Replace" email gains a
+  "Not yet counted on apparatus" table via the new
+  `EquipmentCheckService.uncounted_supply_positions`.
+
+Confirmed empty beyond that: no commits since `dce89db1` touch
+`app/mcp/tools/medical_supplies.py` specifically (the one hit in the path
+list, `de919551`, is a merge commit with no content change on that file —
+checked via `git show --stat`).
+
+**The one new route, read end to end:**
+
+- `search_medical_lots` (`medical_supplies.py:2304-2351`) carries
+  `require_permission("inventory.view_medical", "inventory.view")`, matching
+  every other read route on this router. The caller's `lot_number` is
+  stripped and re-checked for `len < 2` server-side (the `Query(...,
+min_length=2)` constraint is additionally enforced in code, not trusted to
+  FastAPI validation alone).
+- **Injection (§4):** `InventoryService.find_lots_by_number`
+  (`inventory_service.py:9846-9888`) builds its `ilike` with
+  `like_pattern(needle)` and `escape=LIKE_ESCAPE_CHAR` — Pitfall #25
+  respected. `EquipmentCheckService.apparatus_expiring_stock`'s new
+  `lot_number` branch (`equipment_check_service.py:4382-4399`) does the
+  same, on both halves of its `or_()` (the position's own `lot_number` and
+  the `CheckItemDeployedLot` subquery), and additionally re-checks the match
+  in Python (`_wanted`'s `needle in str(number).casefold()`) before a row is
+  emitted — the "matched_field" corollary the tenancy rule calls for,
+  applied even though the SQL side is already escaped.
+- **Tenant isolation (§3):** `find_lots_by_number` filters
+  `InventoryLot.organization_id == organization_id` directly.
+  `apparatus_expiring_stock`'s position query filters
+  `EquipmentCheckTemplate.organization_id` and `InventoryItem.organization_id`
+  in its `position_filters` list (unchanged by this delta — the new filter
+  only appends to that list, it does not replace it), and the
+  `CheckItemDeployedLot` subquery the lot-number branch adds filters
+  `CheckItemDeployedLot.organization_id == organization_id` on its own,
+  rather than relying on the outer query's scope — re-read directly, not
+  assumed. Both halves are also domain-pinned: the route passes
+  `MEDICAL_ITEM_TYPES` through to each, so a gear officer's recall lookup
+  (if they also held `inventory.view`) still could not surface a medical
+  item through this path, and vice versa.
+- **Abuse resistance (§6):** no new unbounded surface — `find_lots_by_number`
+  has no `limit`, but a lot number is typed by a human (≥2 chars) and the
+  practical result size is bounded by how many lots a department holds for
+  one number; not treated as a new instance of MSUP-4/MSUP-11 (those are
+  about unfiltered "list everything" routes with no search term at all).
+- **Data exposure (§5):** the row shape (`MedicalExpiringStockRow`) is the
+  same one `/expiring-stock` already returns — department stock locations
+  and lot numbers, not PII/PHI — so no new `UNCACHEABLE_PREFIXES` need and
+  none of this module's routes are listed there today, consistent with
+  every prior pass.
+
+**The email delta (`b3e72495`), checked for notification-channel and
+escaping rules:** the new "Not yet counted" section renders through
+`_html.escape()` on both the item name+size string and each path segment
+before joining with a literal `&rsaquo;` entity — no raw interpolation.
+`unseen = uncounted if DOMAIN_MEDICAL in domains else []` gates the section
+to medical-domain recipients only, matching the existing split this doc's
+pass 15 re-confirmed. Email-only, no SMS path added — Pitfall #18 unaffected.
+(Noted, not a security finding: a department whose _only_ outstanding item
+is uncounted positions does not get this week's email at all, because the
+function's early-return guard (`if not emails or (not deployed and not
+rows): continue`) does not consider `uncounted`. That is a product/completeness
+question for `docs/app-review/`, not a vulnerability — raised here only so it
+is not lost.)
+
+**Re-verified directly, not re-cited from pass 15's prose:**
+
+- All 26 routes carry `Depends(require_permission(...))`, confirmed by an
+  AST walk cross-referencing decorator count against `require_permission(`
+  occurrences per function (26/26), domain-first throughout.
+- `get_items_page`'s `sort_by` stays allowlisted
+  (`InventoryService._SORTABLE_COLUMNS`, `inventory_service.py:2193-2201`);
+  an unrecognized key (including anything the new `next_expiry` sort-values
+  path or the CSV export's `sort_by` query param could pass) falls through
+  `_sort_expression` to a name-sort rather than reaching an unvalidated
+  column — no SQL-injection or arbitrary-column-read surface was opened by
+  the new sort/export options.
+- Both CSV export routes (`items/export`, `lots/export`) still build through
+  `SafeCsvWriter`, including the newly appended "On Apparatus", "Uncounted
+  Positions", "Next Expiry"/"Next Expiry Where" and "Kept on Apparatus Only"
+  columns — no bare `csv.writer` introduced.
+- MSUP-4 (`InventoryService.get_expiring_lots`, no row cap — now at
+  `inventory_service.py:9891-9897`) and MSUP-11 (`InventoryService.list_lots`,
+  no row cap — now at `inventory_service.py:9305-9318`) re-checked at their
+  current signatures: still open, unchanged, still owner-accepted
+  (`docs/KNOWN_LIMITATIONS.md`, 2026-10-05). Line numbers moved only because
+  the file grew; neither method gained a `limit`/pagination parameter.
+- No new `ondelete="SET NULL"` column, no new JSON column, no new seeded
+  grant touching this feature. `inventory_lot_recalls` (a new table) belongs
+  to **PR #3627**, "Medical supplies: record lot recalls" — **open, not
+  merged**, `mergeable_state: clean` as of this check — so it is not yet
+  part of `main` and out of scope for this pass; flagged below as a note
+  for whichever pass picks the rotation up after it lands, since it adds
+  three new write/read routes (`GET /recalls`, `POST /recalls`,
+  `POST /recalls/{id}/lift`) this findings file has not yet reviewed.
+
+**0 new findings.** No source file was modified by this pass — the full
+delta since pass 15 was already merged to `main` by other, non-rotation
+work and is reviewed clean above. MSUP-4 and MSUP-11 remain the only open,
+flagged items; MSUP-1 through MSUP-27 all re-verified intact.
+
+### Completion gate (pass 16)
+
+| Check                                                      | Result                                                                                                                |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                              | ✅ clean                                                                                                              |
+| `black --check app/ tests/ alembic/`                       | ✅ clean — 2606 files unchanged                                                                                       |
+| `isort --check-only app/ tests/ alembic/`                  | ✅ clean                                                                                                              |
+| `python3 scripts/validate_migrations.py --strict`          | ✅ 649 revisions, single head `a0195b397bf3`                                                                          |
+| `pytest tests/ -q -k "medical_supplies or medical_supply"` | ✅ 203 passed, 1 pre-existing skip (unrelated)                                                                        |
+| `cd frontend && npm run typecheck`                         | ✅ 0 errors (after `npm ci` from repo root — this sandbox's `node_modules/` was empty; no `package-lock.json` change) |
+| `cd frontend && npm run lint`                              | ✅ (see PR body)                                                                                                      |
+
+## Pass 15 (2026-10-20) — 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** Re-checked `search_pull_requests`
+(`head:claude/security-review-`) immediately before starting: no open
+security-review PR existed. Confirmed row 23 (MSUP) was the first ⬜ row in
+`docs/security-review/PROGRESS.md`'s rotation table.
+
+**Scope check.** `git log dfa2d748..origin/main` restricted to this feature's
+own files (`backend/app/api/v1/endpoints/medical_supplies.py`,
+`backend/app/mcp/tools/medical_supplies.py`,
+`frontend/src/modules/medical-supplies/`, plus the shared
+`inventory_service.py`/`equipment_check_service.py` methods this router
+calls) found one substantive commit since pass 14: `dce89db1`, "Medical
+Supplies: truck stock in Next expiry, apparatus-only in CSV, old lots left
+out" (merged via PR #3356, landed after pass 14 closed). Read in full,
+diff and resulting code:
+
+- **Next expiry now counts the trucks.** `_soonest_aboard` /
+  `_set_next_expiry` (`medical_supplies.py:521-566`) take the soonest of the
+  shelf (`next_lot_expirations`) and the apparatus
+  (`EquipmentCheckService.apparatus_expiring_stock`, now accepting
+  `item_ids` and an open `days_ahead=None` window) and report
+  `next_expiration_location` / `next_expiration_where`.
+  `apparatus_expiring_stock` keeps its existing
+  `EquipmentCheckTemplate.organization_id == organization_id` /
+  `InventoryItem.organization_id == organization_id` filters
+  (`equipment_check_service.py:4113-4150`) — the new `item_ids` filter is
+  additive, not a replacement, so org scoping is unchanged.
+- **CSV gains "Kept on Apparatus Only".** Export writes Yes/No
+  (`_medical_export_row`); the template offers the column; the import
+  (`_parse_medical_extras`) accepts Yes/No/Y/N/True/False/1/0 and **refuses**
+  any other value rather than defaulting to No — consistent with the
+  existing refuse-don't-guess pattern on this same parser's other fields.
+  An apparatus-only row is correctly blocked from also carrying lot columns,
+  and a lot row cannot name a supply already marked apparatus-only
+  (`item_ids_kept_in_stock`, itself org- and domain-scoped at
+  `inventory_service.py:9687-9704`).
+- **Old shelf lots of an apparatus-only supply are excluded** from the
+  expiring list, the tiles and Next expiry via the new
+  `InventoryService._shelf_lots_count` filter
+  (`inventory_service.py:2156-2172`), applied in both `get_expiring_lots`
+  and `next_lot_expirations`. The filter's own subquery
+  (`_category_ids_of_type`) is independently org-scoped
+  (`InventoryCategory.organization_id == str(organization_id)`) rather than
+  relying on the outer query alone — re-read directly per Pitfall #14's
+  "resolve through an org-scoped parent" shape, not assumed from the
+  docstring.
+- No schema or migration change (`InventoryItem.apparatus_only` and
+  `also_called` predate this commit); `InventoryItemResponse` gained two new
+  `Optional` fields (`next_expiration_location: Literal["shelf",
+"apparatus"] | None`, `next_expiration_where: str | None`), both
+  transient/computed, never persisted, so no Pitfall #12 JSON-mutation
+  concern and no new PII/PHI exposure (department stock locations, not
+  member data).
+- Frontend side (`MedicalSuppliesPage.tsx`, `MedicalImportExportModal.tsx`,
+  `eventServices.ts`'s shared `InventoryItem` type) is additive display of
+  the two new fields through JSX (auto-escaped) and copy-only changes; no
+  new form field, so no `||`/`??` coercion surface was added.
+
+**Re-verified against all seven CHECKLIST.md dimensions on the full current
+file** (not just the delta), reading `medical_supplies.py` end to end
+(2190 lines) plus its service-layer call targets:
+
+- **Authentication/authorization:** all 25 routes still carry
+  `Depends(require_permission(...))`, domain-first
+  (`inventory.manage_medical`/`inventory.view_medical` OR'd against the
+  broad `inventory.manage`/`inventory.view`) — re-counted by direct read,
+  matching pass 14's count.
+- **Tenant isolation (XC-3):** every by-id route resolves its target through
+  `_require_medical_item`/`_require_medical_category`/`lot_in_domain` before
+  acting, and the mutating service calls repeat the domain/org check under
+  the row's own lock via `required_item_types=MEDICAL_ITEM_TYPES`
+  (`update_item`, `retire_item`, `update_lot`, `add_lot`, `add_lots_bulk`,
+  `delete_lot`) — the MSUP-25 pattern, still intact.
+- **XC-1:** `move_items_to`, CSV-imported category/vendor names, and
+  `receive_medical_delivery`'s bulk item-id list are all validated in-org/
+  in-domain before any write (`items_in_domain` checked once for the whole
+  delivery before the loop, matching the capacity-locking rule's "lock once,
+  not per row" shape for abuse resistance, not a literal capacity cap here).
+- **Injection:** no raw `csv.writer` (`SafeCsvWriter` throughout); no new
+  `.like()`/`.ilike()` call site introduced by the delta; the general
+  `get_items` search path remains the one already covered by
+  `tests/test_like_escaping.py`'s repo-wide sweep.
+- **Abuse resistance:** no new unbounded list surface — the one unbounded
+  pattern touched by this delta (`get_expiring_lots`) is the pre-existing,
+  already-flagged MSUP-4, not a new instance.
+- **Notifications (Pitfall #18):** confirmed the low-stock alert
+  (`scheduled_tasks.py::run_inventory_low_stock_alerts`,
+  `_stock_alert_audiences`) remains email-only, with no SMS path anywhere
+  in `inventory_service.py`/`medical_supplies.py`, and correctly splits
+  recipients by domain (`DOMAIN_GEAR`/`DOMAIN_MEDICAL`, resolved from each
+  user's own permissions, org-scoped) so a medical-only officer's email
+  never carries gear rows and vice versa — unchanged by this pass's delta,
+  re-read directly to confirm it still holds.
+- **Date handling:** `expiration_date`/`received_date` stay plain `date`
+  columns (no time component, correctly) and every "today" comparison goes
+  through `resolve_org_today()` (the department's timezone), including the
+  new truck-stock comparisons — no raw `date.today()` introduced.
+
+**0 new findings.** MSUP-4 (`get_expiring_lots`, no row cap,
+`inventory_service.py:9439-9478`) and MSUP-11 (`list_lots`, no row cap,
+`inventory_service.py:8977-8990`) re-checked at their current line numbers
+and remain open, unchanged — both are owner-accepted (2026-10-05, see
+`docs/KNOWN_LIMITATIONS.md`), not re-opened for a fix here. No stale-finding
+corrections needed this pass — MSUP-15's pass-14 correction still holds on
+re-read.
+
+### Completion gate (pass 15)
+
+| Check                                                      | Result                                       |
+| ---------------------------------------------------------- | -------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                              | ✅ clean                                     |
+| `black --check app/ tests/ alembic/`                       | ✅ clean — 2476 files unchanged              |
+| `isort --check-only app/ tests/ alembic/`                  | ✅ clean                                     |
+| `python3 scripts/validate_migrations.py --strict`          | ✅ 631 revisions, single head `ca0c2111466f` |
+| `pytest tests/ -q -k "medical_supplies or medical_supply"` | ✅ 162 passed, 1 pre-existing skip           |
+| `cd frontend && npm run typecheck`                         | ✅ 0 errors                                  |
+| `cd frontend && npm run lint`                              | ✅ (see PR body)                             |
+
+No source file was modified by this pass — it is a re-verification pass; the
+one real delta since pass 14 (commit `dce89db1`) was already merged to `main`
+by other work and reviewed clean above.
+
+MSUP-4 and MSUP-11 remain the only open, flagged items. MSUP-1 through
+MSUP-27 all re-verified intact at their current citations.
+
+## Pass 14 (2026-10-17) — 0 fixed, 0 new findings, 1 stale-finding correction (watchdog pickup)
+
+**Watchdog pickup.** PR #3339 (Feature 22, Grants & fundraising, pass 8)
+merged 2026-10-16 23:11 UTC with nothing started for Feature 23 in the ~2.5
+hours since — confirmed via `list_pull_requests` (state=open, empty) and
+`search_pull_requests` (`head:claude/security-review-`, empty) that no
+security-review PR was open before this pass began.
+
+**Scope check.** `git log df5f0b3c..origin/main` restricted to this
+feature's own files (`backend/app/api/v1/endpoints/medical_supplies.py`,
+`backend/app/mcp/tools/medical_supplies.py`,
+`frontend/src/modules/medical-supplies/`) found substantial real delta since
+pass 13 — this is not a near-zero-delta pickup:
+
+- **A supply can be kept on the apparatus only** (`InventoryItem.apparatus_only`),
+  with the department's stock figure now counting shelf **and** truck stock
+  together for medical supplies specifically (gear still judges the shelf
+  alone) — `InventoryService.stock_breakdown`
+  (`inventory_service.py:8561-8604`).
+- **CSV import/export** for medical items and lots, plus an import template,
+  sharing the general inventory import's row parser (`_coerce_csv_row`) so a
+  column cannot mean two things on the two pages.
+- **Permanent category delete** (`DELETE /categories/{id}`), with an optional
+  `move_items_to` to relocate items first.
+- **Bulk retire** (`POST /items/bulk-retire`), sort/filter/list-by-category on
+  `GET /items`, and a storage-options read (`GET /storage-options`) so a
+  medical-only officer can file and find supplies without general inventory
+  access.
+- **An opt-in MCP read switch** (`backend/app/mcp/tools/medical_supplies.py`)
+  sharing summary/list/low-stock/expiring-lot data with Claude, gated behind
+  the organization's own module+permission+MCP-switch checks.
+- Fuzzy catalog matching and an "Also called" aliases field, shared with the
+  general inventory's checklist-linking flow.
+
+**Reviewed against all seven CHECKLIST.md dimensions, reading the real code
+rather than spot-checking:**
+
+- **Route count: 15 → 25, re-enumerated individually, not regex-counted.**
+  All 25 carry `Depends(require_permission(...))` — confirmed by both a
+  direct read of every route (this pass) and `grep -c` agreement between
+  `@router.` decorators (25) and `require_permission(` calls (25). Every
+  write route stays domain-first: `inventory.manage_medical` OR'd against
+  the broad `inventory.manage`, matching every prior pass.
+- **XC-3 (tenant isolation) and the domain pin, on every new by-id route:**
+  `delete_medical_category` resolves both the target and (when given)
+  `move_items_to` through `_require_medical_category` before calling
+  `delete_category_permanently`, which itself re-checks
+  `organization_id`/`item_type` under a row lock
+  (`inventory_service.py:1090-1208`) — both category rows locked in id order
+  (no deadlock), and the item/child counts are locking reads per Pitfall
+  #27, because the route's own preflight already opened this transaction's
+  snapshot. `bulk_retire_medical_items` and `receive_medical_delivery` both
+  resolve their whole id list through `items_in_domain` in one query before
+  writing anything, so a partially-received shipment or a spurious bulk
+  failure can't come from checking one id at a time.
+- **XC-1 (client-supplied FK validation):** `move_items_to` is validated
+  in-domain before use; the CSV import validates every category/vendor match
+  against the caller's own org before storing it, and a category name that
+  belongs to a gear/uniform category on the same org is refused for the row
+  rather than silently duplicated.
+- **Abuse resistance:** `ItemBulkRetireRequest.item_ids` and
+  `InventoryLotBulkCreate.entries` are both capped at 200
+  (`schemas/inventory.py:916`, `:1409`); the CSV import is read through
+  `read_upload_limited` (10MB cap) and `reject_if_malicious` before parsing,
+  matching the general inventory import.
+- **Injection & untrusted output:** all three new CSV export/template routes
+  use `SafeCsvWriter`, never bare `csv.writer`.
+- **Data exposure, MCP tool:** `backend/app/mcp/tools/medical_supplies.py` is
+  read-only (no write tool registered for this module at all — a reorder
+  request is refused "whatever the switch says", per the module's own
+  docstring) and every tool is registered through `logbook_tool` with
+  `gate="medical_supplies"` and an explicit `permissions` tuple matching the
+  page's own view routes. Read `gate_allows()`
+  (`app/mcp/registry.py:90-117`) directly: it requires the org's module
+  enablement, the connected member's own permission, **and** the org's MCP
+  switch (`principal.expose_medical_supplies`) — all three, not an OR — so
+  an OAuth-connected member with no view permission gets refused before the
+  org's switch is even consulted. Every new helper the MCP tools and the
+  page's new list extras call (`stock_breakdown`, `storage_paths_for`,
+  `item_ids_stored_in`, `item_ids_kept_in_stock`, `apparatus_places_for_items`,
+  `apparatus_expiring_stock`) filters `organization_id` on every join,
+  re-read directly rather than assumed from their docstrings.
+- **Schema & migration integrity:** `apparatus_only`, `also_called` and the
+  category-delete path all read as additive, org-scoped changes with no new
+  `ondelete="SET NULL"` column; `validate_migrations.py --strict` below
+  confirms a single head with no duplicate revision ids.
+
+**0 new findings.**
+
+**Stale-finding correction: MSUP-15 is now FIXED, not open.** Pass 13 (and
+every pass since pass 11) carried MSUP-15 as open — "the general inventory
+`ItemFormModal.tsx`'s Quantity field has no lot-stocked awareness, unlike
+this module's own `MedicalItemFormModal.tsx`." Reading the file now
+(`frontend/src/modules/inventory/components/ItemFormModal.tsx:297,446,1043`)
+shows it has since gained exactly that: `isLotStocked` reads
+`editItem?.is_lot_stocked`, the Quantity field under it is suppressed when
+true, `quantity` is sent as `undefined` rather than a stale number on save,
+and a read-only line reports `editItem?.lot_stock` with the same
+"adjust by receiving a delivery or editing the item's lots" guidance
+`MedicalItemFormModal.tsx` already gave. This repo's git history has a known
+reshaping artifact (noted in pass 13) that makes `git log -L`/blame on this
+file unreliable for dating the change precisely; what is confirmed directly
+against current code is that the gap pass 11 found no longer exists. MSUP-4
+(`get_expiring_lots` has no row cap,
+`inventory_service.py:9413-9453`) and MSUP-11 (`list_lots` has no row cap,
+`inventory_service.py:8951-8964`) were re-checked at their current line
+numbers and remain open, unchanged — both re-flagged as owner decisions, not
+fixed here.
+
+### Completion gate (pass 14)
+
+| Check                                                                   | Result                                                                                                                                        |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                           | ✅ clean                                                                                                                                      |
+| `black --check app/ tests/ alembic/`                                    | ✅ clean — 2391 files unchanged                                                                                                               |
+| `isort --check-only app/ tests/ alembic/`                               | ✅ clean                                                                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`                       | ✅ 611 revisions, single head `64bf75298e89`                                                                                                  |
+| `pytest tests/ -q -k "medical_supplies or medical_supply or inventory"` | ✅ 1484 passed, 1 pre-existing skip                                                                                                           |
+| `cd frontend && npm run typecheck`                                      | ✅ 0 errors (after `npm ci` — this sandbox's `node_modules/` was missing unrelated packages, e.g. `@tiptap/*`; no `package-lock.json` change) |
+| `cd frontend && npm run lint`                                           | ✅ 0 errors, 0 warnings                                                                                                                       |
+
+No source file was modified by this pass itself — this pass is a
+re-verification plus the MSUP-15 doc correction above; the new surface it
+reviewed was all already merged to `main` by other work.
+
+MSUP-4 and MSUP-11 remain the only open, flagged items. MSUP-15 is now
+fixed (this pass). MSUP-25 remains fixed (pass 13). MSUP-1 through MSUP-27
+all re-verified intact at their current citations.
 
 ## Pass 13 (2026-10-07) — 0 fixed by this pass, 0 new findings (watchdog pickup)
 

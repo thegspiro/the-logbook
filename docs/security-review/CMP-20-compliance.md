@@ -2,12 +2,433 @@
 
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
-(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7) · **PR:** #1902 (pass 1, merged),
+(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
+2026-10-19 (pass 9), 2026-10-24 (pass 10) ·
+**PR:** #1902 (pass 1, merged),
 [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
 #2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
 (pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
 (pass 5, merged), [#2869](https://github.com/thegspiro/the-logbook/pull/2869)
-(pass 6, merged), pass 7 (this PR)
+(pass 6, merged), [#2977](https://github.com/thegspiro/the-logbook/pull/2977)
+(pass 7, merged), [#3330](https://github.com/thegspiro/the-logbook/pull/3330)
+(pass 8, merged), [#3449](https://github.com/thegspiro/the-logbook/pull/3449)
+(pass 9, merged), pass 10 (this PR)
+
+## Pass 10 (2026-10-24)
+
+**Watchdog pickup for the security-review rotation** (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3630 (Feature 19, Skills testing, pass 10)
+had already merged. Rotation row 20 (Compliance) was confirmed the next
+`⬜` by reading `PROGRESS.md`'s table directly on a freshly fetched `main`.
+
+**Not a zero-delta pass, but every change is work already done elsewhere —
+0 fixes applied by this pass, 0 new findings.** Baseline `4f346dab` (pass
+9's merge, PR #3449). `git diff --stat` across all eight files this feature
+declares in scope shows real movement in six of them:
+
+- **`compliance_officer_service.py` and `training_compliance.py` — the
+  repo-wide Pitfall #32 sweep (`8a57d069`, 2026-10-20), already landed
+  before this pass began.** Every `User.status == UserStatus.ACTIVE` in
+  this feature's own query sites (`ISOReadinessService`,
+  `ContributedHoursService`, `AnnualComplianceReportService`,
+  `compute_org_compliance_tally`, `grade_org_members`) is now
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`. Verified by grepping both
+  files for `UserStatus.ACTIVE` and `.status ==` directly: zero hits remain
+  outside the unrelated `TrainingStatus`/`AdminHoursEntryStatus`/
+  `ExternalShiftHoursStatus` comparisons, and `tests/test_account_status_gates.py`
+  (its AST sweep over all of `app/`, not just this feature) confirms the
+  only standing exception anywhere in the codebase is the admin hub's
+  `_members_active` tile. **This closes a real gap this rotation had not
+  previously flagged**: a member an officer set to Probationary was
+  silently excluded from the ISO-readiness roster, contributed-hours
+  tally, annual compliance report and every department-wide compliance
+  percentage — undercounting the denominator rather than leaking anything
+  cross-tenant, but still a wrong figure. `docs/KNOWN_LIMITATIONS.md`'s
+  "Probationary counts as active only where `User.is_active` is read" entry
+  named this feature's own files among the still-open sites; corrected in
+  this pass (below) now that the sweep is verified complete.
+- **`compliance_config.py` (endpoint) — audit logging added
+  (unauthored commit landed between passes, not from this pass).**
+  `delete_compliance_profile` and `delete_compliance_report` now call
+  `log_audit_event` (`compliance_profile_deleted`/`compliance_report_deleted`,
+  category `training`, severity `warning`) after the delete, carrying the
+  id and the now-deleted row's own name/period label. The service methods
+  (`delete_profile`/`delete_report` in `compliance_config_service.py`)
+  were widened from `-> None` to `-> str` purely to hand that label back for
+  the log entry; the org-scoping query each already ran
+  (`ComplianceProfile` joined to `ComplianceConfig.organization_id`;
+  `ComplianceReport.organization_id` directly) is byte-identical —
+  confirmed by reading both functions in full, not inferred from the
+  return-type change. Positive for dimension 5 (data exposure / audit
+  trail): a profile or report deletion is now attributable.
+- **`compliance_officer.py` and `schemas/compliance_config.py` — the
+  repo-wide numeric-bounds hardening sweep** (`74638250`, "bound every
+  numeric request field to its column range"), already landed. `year` on
+  `AnnualReportExportRequest`, `priority` on `ComplianceProfileBase`/
+  `ComplianceProfileUpdate`, and `required_hours` on
+  `AdminHoursRequirementItem` now carry `ge=INT32_MIN`/`le=INT32_MAX` or
+  `le=FLOAT32_MAX` from `app/schemas/column_bounds.py`, closing an
+  unbounded-integer-to-the-database path this rotation had not previously
+  flagged as a finding for this feature specifically (dimension 6, abuse
+  resistance). No behavior change for any value an officer would plausibly
+  enter.
+- **`scheduled_tasks.py` — 181 insertions, none of them
+  `compliance_member_notices`.** The large diff is entirely other
+  features' scheduled-task work (directory account re-suspension, medical
+  supplies low-stock/recall emails, a scheduled-email row lock). Re-grepped
+  `compliance_member_notices` directly rather than trusting the stat: still
+  registered in `TASK_RUNNERS`, `TASK_INTERVALS_SECONDS` (86400) and
+  `SCHEDULE`, unchanged function body.
+- **Frontend — cosmetic only.** `ComplianceRequirementsConfigPage.tsx`
+  adopted the shared `TrainingPageHeader` component and two contrast-ratio
+  class fixes (`yellow-600`→`yellow-700`, `green-600`→`green-700` dark-mode
+  text, consistent with CLAUDE.md's AA/AAA contrast note); its
+  `handleDeleteProfile` now takes the full profile object to name it in the
+  confirm dialog and describe the actual fallback behavior (requirement
+  profile fallback) instead of a generic warning — a UX improvement, not a
+  security change. `training.ts` gained unrelated types for other
+  features (prerequisite-pipeline deactivation, enrollment completion
+  reason, cert-alert settings); `AnnualReportRequirement` — the type CMP4-4
+  named — is byte-for-byte unchanged.
+
+### Standing items re-verified, all still hold
+
+- **CMP2-1 — still ✅ FIXED**, re-verified against current code:
+  `compliance_member_notices.py` is unchanged since pass 8/9; still the
+  only reader of `notify_days_before_deadline`/`notify_non_compliant_members`
+  outside `schemas/`/`models/`; still registered in the scheduler (above).
+- **CS-8 (attestation dual control) — OPEN by design, unchanged.** Route
+  re-enumeration below confirms `create_attestation`/`get_attestations`
+  remain the only two routes touching an attestation.
+- **CS-9 residual, `grace_period_days` unwired — unchanged.** A fresh
+  `grep -rn "grace_period_days" backend/app` hits only the two declaration
+  files (`schemas/compliance_config.py:120,160`,
+  `models/compliance_config.py:99`); no reader exists.
+
+### Route re-enumeration
+
+`compliance_config.py` (12 routes) + `compliance_officer.py` (8 routes) =
+20/20, re-enumerated by AST walk (not a re-read of prior prose) and
+cross-checked against a fresh `grep` for each route's
+`Depends(require_permission(...))` argument. Byte-for-byte the same
+permission strings as pass 9 — no broadened grant, no route on bare
+`get_current_user`. Every by-id write (`update_compliance_profile`,
+`delete_compliance_profile` via `profile_id`; `delete_compliance_report`,
+`email_compliance_report`, `get_compliance_report` via `report_id`) still
+passes `organization_id=current_user.organization_id` into the service
+layer alongside the client-supplied id; `delete_profile`/`delete_report`'s
+org-scoping queries, read in full above, are unchanged.
+
+### Documentation correction (not a code change)
+
+`docs/KNOWN_LIMITATIONS.md`'s "Probationary counts as active only where
+`User.is_active` is read" entry still read "Pending an owner decision per
+site," naming training compliance and the compliance officer views among
+the sites still excluding probationary members. Per the Pitfall #32 sweep
+verified above and `tests/test_account_status_gates.py`'s repo-wide
+allowlist (one entry, not this feature's files), the owner decided this
+for every site: marked ✅ Resolved, with the one remaining literal
+comparison (the admin hub's paired Active/Probationary tiles) named
+explicitly rather than left implied.
+
+### 0 fixes needed by this pass itself, 0 new findings
+
+Both substantive changes in this pass's delta (the status-gate sweep, the
+numeric-bounds hardening) were already fixed by other work before the pass
+began; this pass's own contribution is verifying each against current code
+rather than trusting the diff stat or commit message, re-enumerating the
+route and org-scoping surface fresh, and correcting a stale
+`KNOWN_LIMITATIONS.md` claim this feature's own files disprove.
+
+## Completion gate (pass 10)
+
+| Check                                                                                                                                                                                                    | Result                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                            | ✅ 0 violations                                            |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                     | ✅ 2606 files unchanged                                    |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                | ✅ clean                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                        | ✅ 649 revisions, single head `a0195b397bf3`               |
+| `pytest tests/ -q -k "compliance or attestation"`                                                                                                                                                        | ✅ 588 passed, 1 pre-existing skip (up from 578 in pass 9) |
+| `pytest tests/test_compliance_member_notices.py tests/test_compliance_grace_period_is_unwired.py tests/test_training_compliance.py tests/test_my_training_records.py tests/test_account_status_gates.py` | ✅ 159 passed                                              |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                    | ✅ 273 routes, 0 errors/warnings                           |
+| `cd frontend && npm run typecheck`                                                                                                                                                                       | ✅ 0 errors                                                |
+| `cd frontend && npm run lint`                                                                                                                                                                            | ✅ 0 errors/warnings (`--max-warnings 10`)                 |
+| 8 compliance-scoped frontend test files                                                                                                                                                                  | ✅ 132 passed (up from 131 in pass 9)                      |
+
+## Pass 9 (2026-10-19)
+
+**Watchdog pickup for the security-review rotation** (`/loop 30m /security-review`):
+no open PR's head branch starts with `claude/security-review-`
+(`search_pull_requests`, 0 results among open PRs) and the dedicated loop
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`).
+PR #3448 (Feature 19, Skills testing, pass 9) had just merged, docs-only.
+Rotation row 20 (Compliance) was the next pending feature.
+
+**0 fixes applied, 0 new findings — a true zero-delta pass on backend code.**
+Baseline `5fabde43` (pass 8's merge commit, PR #3330). `git diff --stat`
+across every file this feature declares in scope — both endpoint routers
+(`compliance_config.py`, `compliance_officer.py`), both services
+(`compliance_config_service.py`, `compliance_officer_service.py`), the
+pass-8-added sender (`compliance_member_notices.py`), the model, the schema,
+and the shared `training_compliance.py` helper — is **empty**: zero commits
+touched any of them since pass 8's merge.
+
+One frontend file in the pass-8 scope list did change:
+`frontend/src/types/training.ts` (+4/-1, three commits,
+`9b4fcff2`/`67e7bf74`/`9fa7da69`) — all three are Feature 17/18's own
+training-session and external-sync-import work (`TrainingSessionCreate.
+instructor_id`, `ExternalTrainingSyncLog.sync_type` gaining `'upload'`,
+`ExternalTrainingImport.credit_hours`). Confirmed `AnnualReportRequirement`
+(the type CMP4-4 named) is byte-for-byte unchanged in this diff — the only
+type this feature's own screens read. No new finding.
+
+### Standing items re-verified, all still hold
+
+- **CMP2-1 — still ✅ FIXED, re-verified against current code, not re-cited.**
+  `compliance_member_notices.py` (added pass 8, zero-delta since) is still the
+  only reader of `notify_days_before_deadline`/`notify_non_compliant_members`
+  outside `schemas/`/`models/`; still registered in `TASK_RUNNERS`/
+  `TASK_INTERVALS_SECONDS`/`SCHEDULE` in `scheduled_tasks.py` (re-grepped
+  directly, not assumed from the zero diff on the sender file itself — the
+  registration lives in a different file this feature does not declare in
+  scope, so it was checked rather than inferred).
+- **CS-8 (attestation dual control) — OPEN by design, unchanged.** Route
+  enumeration below confirms `create_attestation`/`get_attestations` remain
+  the only two routes touching an attestation; no update or delete route
+  exists.
+- **CS-9 residual (monthly windowing, recipient allow-list,
+  `records_with_certification` mislabel) — unchanged from pass 8.**
+  `compliance_config_service.py` (windowing, allow-list) and
+  `compliance_officer_service.py` (the mislabel) are both in the zero-diff
+  set above.
+- **`grace_period_days` still unwired, still correctly labeled.** Zero reader
+  sites outside `schemas/`/`models/` — re-swept with a fresh
+  `grep -rn "grace_period_days" backend/app` (hits only the two declaration
+  files); `test_compliance_grace_period_is_unwired.py` passes (146/146 in the
+  targeted run below).
+
+### Route re-enumeration
+
+`compliance_config.py` (12 routes) + `compliance_officer.py` (8 routes) =
+20/20, byte-for-byte unchanged from pass 8 (confirmed by re-reading both
+files in full and re-grepping every `def` for its `Depends(require_permission(
+...))` parameter — not reused from the prior pass's count). No route relies on
+bare `get_current_user`; no permission string broadened. Every by-id write
+(`update_compliance_profile`, `delete_compliance_profile` via `profile_id`;
+`delete_compliance_report`, `email_compliance_report`, `get_compliance_report`
+via `report_id`) still passes `organization_id=current_user.organization_id`
+into the service layer alongside the client-supplied id.
+
+### 0 fixes, 0 new findings
+
+Everything in this pass's delta (one frontend types file, zero backend files)
+is unrelated to this feature's own security surface. This pass's contribution
+is re-verifying the four standing items above against current code — not
+re-citing pass 8's prose — and re-enumerating the route and org-scoping
+surface fresh rather than trusting last pass's count.
+
+## Completion gate (pass 9)
+
+| Check                                                                                                                                                                 | Result                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                         | ✅ 0 violations                                            |
+| `black --check app/ tests/ alembic/`                                                                                                                                  | ✅ 2471 files unchanged                                    |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                             | ✅ clean                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                     | ✅ 631 revisions, single head `ca0c2111466f`               |
+| `pytest tests/ -q -k "compliance or attestation"`                                                                                                                     | ✅ 578 passed, 1 pre-existing skip (up from 546 in pass 8) |
+| `pytest tests/test_compliance_member_notices.py tests/test_compliance_grace_period_is_unwired.py tests/test_training_compliance.py tests/test_my_training_records.py` | ✅ 146 passed                                              |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                 | ✅ 273 routes, 0 errors/warnings                           |
+| `cd frontend && npm run typecheck`                                                                                                                                    | ✅ 0 errors                                                |
+| `cd frontend && npm run lint`                                                                                                                                         | ✅ 0 errors/warnings (`--max-warnings 10`)                 |
+| 8 compliance-scoped frontend test files                                                                                                                               | ✅ 131 passed                                              |
+
+## Pass 8 (2026-10-16)
+
+**Routine pickup** — Feature 20 was the first `⬜` in the Rotation table after
+Feature 19 (Skills testing, pass 8, PR #3307) merged with nothing started
+since; confirmed via `list_pull_requests` (state=open) and a
+`head:claude/security-review-` search that no security-review PR or branch
+was open.
+
+**Not a zero-delta pass.** Ten real (non-merge) commits touched this
+feature's declared surface since pass 7's merge (`db6716d37`, PR #2977):
+
+- **`afd687449`, 2026-10-11 — CMP2-1 now FIXED.** Pass 1 through 7 each
+  re-confirmed `notify_days_before_deadline`/`notify_non_compliant_members`
+  as write-only (CLAUDE.md Pitfall #19), with the config screen honestly
+  labeled "Not yet active." The owner's decision (build the sender,
+  email-first) is now implemented: a new daily scheduled task,
+  `compliance_member_notices` (`app/services/compliance_member_notices.py`,
+  registered in `TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`/`SCHEDULE`, run
+  per-org through the existing `_for_each_org` helper in
+  `scheduled_tasks.py`), reads both settings independently and sends email
+  only (`EmailKind.TRAINING_REMINDERS`, honouring a member's opt-out unless
+  the department requires it). Verified directly rather than trusted from
+  the commit message:
+  - **Org-scoped throughout.** `send_member_compliance_notices(db, org)` is
+    called once per `Organization` row from `_for_each_org` (already
+    filtered to active orgs); it loads that org's own `ComplianceConfig`
+    (`_load_config`, `ComplianceConfig.organization_id == org_id`) and grades
+    members through the new `training_compliance.grade_org_members(db,
+org_id, today, config)`, which queries `User`/`TrainingRequirement`
+    filtered on `organization_id == org_id` and passes that same
+    `org_id`/`member_ids` list into every downstream loader
+    (`load_graded_records`, `load_credited_shift_dates`,
+    `fetch_org_waivers`). The sent-log dedup query
+    (`_sent_logs`) filters `NotificationLog.organization_id == org_id`
+    **and** `recipient_id.in_(ids)` where `ids` come only from that org's own
+    graded members — no cross-tenant read is possible through this path.
+  - **Same evaluator as every other compliance screen** (CLAUDE.md Pitfall
+    #29): `grade_org_members` is a new entry point onto the existing
+    `ComplianceGrading.from_config`/`for_member`/`classify`,
+    `evaluate_member_requirement_detail` and `tally_standing` — the same
+    calls `compute_org_compliance_tally` and the matrix use — so a member's
+    "non_compliant" in this email is the same standing the dashboard and
+    matrix show, not a re-derived one.
+  - **HTML-escaped.** `_requirement_rows` passes every requirement name and
+    detail string through `html.escape()` before interpolating into the
+    email body; `_subject_safe` collapses whitespace (incl. newlines) out of
+    the subject line before it reaches the mail header.
+  - **Idempotent, not a spam vector.** A reminder is keyed by `(requirement,
+deadline, offset)` and a non-compliance notice by the unmet
+    `(requirement, window)` set, both read back from `NotificationLog` before
+    sending, so a second run the same day (or a scheduler restart) sends
+    nothing new; `reminder_offsets()` reads the free-form stored JSON
+    defensively (whole ints, 0–365 days, non-bool) rather than trusting it.
+  - **No new model/table, no migration** — `NotificationLog` (existing) is
+    the only table written. Frontend half (`ComplianceRequirementsConfigPage.tsx`)
+    replaces the "Not yet active" warning with a description of how the
+    emails go out; `grace_period_days`'s own separate "Not yet active" notice
+    (a sibling field this commit did not touch) is unchanged, still correctly
+    unwired, still guarded by `test_compliance_grace_period_is_unwired.py`.
+  - Mirrored into `docs/KNOWN_LIMITATIONS.md` already (by the owning commit,
+    row "Compliance: 'notify non-compliant members'..."), re-verified here
+    against current code rather than re-cited.
+
+- **A stale finding corrected, not a code fix — the attestation-history
+  over-fetch was already resolved two and a half months before pass 7 said
+  it was still open.** Pass 7's "Standing items still open, unchanged"
+  section (and the `KNOWN_LIMITATIONS.md` row it mirrors, "Compliance:
+  reporting correctness...") both stated that `get_attestation_history`
+  "over-fetches globally, blocked on the deferred `audit_logs.organization_id`
+  column." Reading `compliance_officer_service.py:502-508` directly shows the
+  query already has `.where(AuditLog.organization_id ==
+str(organization_id))` — not a global fetch filtered in Python. `git log
+-L` on that exact range identifies the fix as `d07a51821`, "Add
+  organization_id to the audit log with org-scoped reads," dated **2026-07-30
+  — before pass 1 of this very rotation (2026-08-26).** `docs/module-audit/
+compliance-skills.md` already had this right ("✅ Unblocked...
+  `audit_logs.organization_id` exists..., resolved 2026-07-30"); the
+  discrepancy was confined to this file and `KNOWN_LIMITATIONS.md`, which
+  both repeated the original finding's wording across six passes without
+  re-reading the code it described. **Fixed in this pass**: the
+  `KNOWN_LIMITATIONS.md` cell is corrected in place (not re-dated as a new
+  resolution — it names the 2026-07-30 commit that actually fixed it) and
+  this doc no longer carries the stale claim. No code change; this is a
+  documentation-accuracy fix caught by this pass's "re-verify by direct code
+  read, not by trusting prior prose" discipline.
+
+- **Six more commits reviewed, no new finding** — real feature work landed
+  in the shared `training_compliance.py` (consumed by Training
+  core/extended, Feature 17/18, already ✅ in this rotation, not by this
+  feature's own endpoints) and three mechanical mypy/typing commits touched
+  `compliance_officer_service.py`, `compliance_config_service.py`,
+  `models/compliance_config.py`:
+  - `52f05fad0` (rolling-hours calendar-month windows + `monthly_hours()`
+    breakdown) and `624f4566a` (`next_window_opens()` for a My Training
+    split) add pure functions to `training_compliance.py` — no DB query, no
+    org-scoping concern of their own; the records/window dates they operate
+    on are supplied by an already-scoped caller. Read in full; business-logic
+    only.
+  - `871ed7d0c` (RPT2-29-2, saved/scheduled reports) touches this feature's
+    file list only via a one-line mypy return-type annotation in
+    `compliance_member_notices._reminded` — confirmed no behavioral diff.
+  - `265a26be3`, `c1b61de67`, `17e289411`, `99a573420` (the mypy-ratchet
+    batches) convert `Column()`/`relationship()` to typed
+    `Mapped`/`mapped_column()` in `models/compliance_config.py` and narrow
+    `Optional[...]` return types in `compliance_config_service.py`/
+    `compliance_officer_service.py`/`training_compliance.py`. Every diff
+    hunk read directly: no query, no filter, no permission string changed —
+    annotation-only, consistent with this rotation's prior treatment of the
+    same batches in other features.
+  - New endpoint discovered while tracing the My Training split,
+    `GET /my-training/records` (`training_module_config.py`, Feature
+    17/18's file, not this feature's declared surface) — checked anyway
+    since it is new and carries a `search` parameter: self-scoped
+    (`TrainingRecord.user_id == current_user.id` **and**
+    `organization_id == current_user.organization_id`) and its `search`
+    filter already goes through `like_pattern()` +
+    `escape=LIKE_ESCAPE_CHAR` (Pitfall #25). No finding; noted for the
+    record since it was read, not because it is in scope.
+
+### Standing items re-verified, all still hold
+
+- **CMP2-1 — now ✅ FIXED** (see above; was "OPEN by design" every prior pass).
+- **CS-8 (attestation dual control, pass 1's original finding) — OPEN by
+  design, unchanged.** `create_attestation`/`get_attestation_history` remain
+  the only two routes (`POST`/`GET /attestations`); no update or delete
+  route exists, so a filed attestation is immutable except through the
+  audit log it is written as. This is pass 1's CS-8 and is **not** the same
+  as CS-8-b (pass 7), which closed the separate "officer could attest any
+  self-chosen percentage" gap by having the server compute the figure.
+- **CS-9 residual (monthly windowing, recipient allow-list,
+  `records_with_certification` mislabel) — unchanged from pass 7**: monthly
+  windowing and the recipient allow-list were both already fixed (pass 7 and
+  earlier); the mislabel is left as ambiguous-intent by design.
+- **`grace_period_days` still unwired, still correctly labeled** — zero
+  reader sites outside `schemas/`/`models/` (re-swept), UI notice and guard
+  test (`test_compliance_grace_period_is_unwired.py`) both present and
+  passing.
+
+### Route re-enumeration
+
+`compliance_config.py` (12 routes) + `compliance_officer.py` (8 routes) =
+20/20, byte-for-byte unchanged from pass 7 (confirmed by re-reading both
+files in full, not diffing). Every route carries
+`Depends(require_permission(...))` or (for the two attestation routes and
+`get_iso_readiness`/annual-report family, all `training.manage`-gated) an
+explicit permission string; no broadened grant anywhere; every by-id
+operation (`profile_id`, `report_id`) passes `organization_id =
+current_user.organization_id` into the service layer.
+
+### 1 fix verified end-to-end (CMP2-1, landed before this pass began), 1
+
+stale documentation claim corrected, 0 new code findings
+
+Everything substantive in this pass's delta was already fixed by other work
+before the pass began. This pass's own contribution: verifying CMP2-1's fix
+against current code rather than trusting its commit message or the
+`KNOWN_LIMITATIONS.md` row it already updated; catching and correcting a
+finding (attestation-history over-fetch) that six consecutive prior passes
+had carried forward as open when it had been fixed before the rotation's
+own first pass; and reviewing the six remaining commits (rolling-hours,
+My Training split, mypy batches) for anything security-relevant, finding
+nothing.
+
+## Completion gate (pass 8)
+
+| Check                                                                                                                                                                 | Result                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                         | ✅ 0 violations                                                                                                                                |
+| `black --check app/ tests/ alembic/`                                                                                                                                  | ✅ 2360 files unchanged                                                                                                                        |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                             | ✅ clean                                                                                                                                       |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                     | ✅ 607 revisions, single head `f236c56b1b49`                                                                                                   |
+| `pytest tests/ -q -k "compliance or attestation"`                                                                                                                     | ✅ 546 passed, 1 pre-existing skip (up from 490 in pass 7, matching new coverage)                                                              |
+| `pytest tests/test_compliance_member_notices.py tests/test_compliance_grace_period_is_unwired.py tests/test_training_compliance.py tests/test_my_training_records.py` | ✅ 146 passed                                                                                                                                  |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                 | ✅ 270 routes, 0 errors/warnings (up from 251 in pass 7, from other features' new routes)                                                      |
+| `cd frontend && npm run typecheck`                                                                                                                                    | ✅ 0 errors (after `npm ci` from repo root — sandbox's `node_modules` predated the `@tiptap/*` dependency; environment fix, not a code defect) |
+| `cd frontend && npm run lint`                                                                                                                                         | ✅ 0 errors/warnings (`--max-warnings 10`)                                                                                                     |
+| 8 compliance-scoped frontend test files                                                                                                                               | ✅ 131 passed                                                                                                                                  |
+
+**Environment note:** this sandbox's `frontend/node_modules` was missing
+`@tiptap/react`/`@tiptap/starter-kit`/`@tiptap/pm` (declared in
+`package.json`, not installed), failing `npm run typecheck` on an unrelated
+rich-text-editor component with no connection to this feature. Fixed by
+`npm ci` from the repo root (never `rm package-lock.json && npm install`,
+per CLAUDE.md) — resolved cleanly, 673 packages added, no lockfile change.
 
 ## Pass 7 (2026-10-07)
 

@@ -31,6 +31,8 @@ export const PurchaseRequestStatus = {
   ORDERED: 'ordered',
   RECEIVED: 'received',
   PAID: 'paid',
+  /** Bought by the requester and paid back through an expense report. */
+  REIMBURSED: 'reimbursed',
   CANCELLED: 'cancelled',
 } as const;
 export type PurchaseRequestStatus = (typeof PurchaseRequestStatus)[keyof typeof PurchaseRequestStatus];
@@ -146,6 +148,27 @@ export const ApprovalEntityType = {
 } as const;
 export type ApprovalEntityType = (typeof ApprovalEntityType)[keyof typeof ApprovalEntityType];
 
+/** One step a request would wait on, named as its timeline would name it. */
+export interface ApprovalRouteStep {
+  name: string;
+  stepOrder: number;
+  stepType: ApprovalStepType;
+  /** Who the step waits on; null on a notification step. */
+  assigneeLabel?: string | null;
+  /** The amount falls under the step's auto-approve limit. */
+  autoApproved: boolean;
+}
+
+/** Who a request would wait on if it were submitted now (`GET /finance/approval-chains/route-preview`). */
+export interface ApprovalRoutePreview {
+  chainName?: string | null;
+  /** No chain applies: a finance approver decides by hand. */
+  manual: boolean;
+  steps: ApprovalRouteStep[];
+  /** At or over the department's dual-approval threshold. */
+  secondApproverRequired: boolean;
+}
+
 // =============================================================================
 // Status Badge Color Mappings (Tailwind classes)
 // =============================================================================
@@ -158,7 +181,8 @@ export const PURCHASE_REQUEST_STATUS_COLORS: Record<string, string> = {
   denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
   ordered: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
   received: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
+  reimbursed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
@@ -168,7 +192,7 @@ export const EXPENSE_REPORT_STATUS_COLORS: Record<string, string> = {
   pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
@@ -178,7 +202,7 @@ export const CHECK_REQUEST_STATUS_COLORS: Record<string, string> = {
   pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  issued: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  issued: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   voided: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
@@ -336,6 +360,12 @@ export interface BudgetCategory {
   chargePositionIds?: string[];
   /** Category names from the top-level category down to this one. */
   path?: string[];
+  /**
+   * The inactive ancestor that closes this otherwise-active category to new
+   * charges, budget lines and proposals, as the backend resolved it; null when
+   * nothing above it is inactive (or it is inactive itself).
+   */
+  inactiveThrough?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -566,13 +596,21 @@ export interface FinanceNamedOption {
 
 /**
  * A budget line as the request forms offer it — `GET /finance/budgets/options`.
- * All a member holding only `finance.request` sees of a budget.
+ * All a member holding only `finance.request` sees of a budget: the name, and
+ * no amount. `amountRemaining` is null unless the server allows the caller to
+ * see it (`finance.view` / `finance.manage`, or the line's owner).
  */
 export interface BudgetOption {
   id: string;
   /** Category name, plus the station when the line has one. */
   label: string;
-  amountRemaining: MonetaryAmount;
+  amountRemaining: MonetaryAmount | null;
+  /**
+   * False when the line's category is inactive. Such a line takes no new
+   * charges (the server refuses it), so a picker shows it only as a
+   * request's existing selection — see `selectableBudgetOptions`.
+   */
+  categoryActive: boolean;
 }
 
 /** An active or draft fiscal year — `GET /finance/fiscal-years/options`. */
@@ -965,9 +1003,26 @@ export interface PurchaseRequest extends FunctionalClassFields, FundFields {
   receiptFileUrl?: string | null;
   apparatusId?: string;
   facilityId?: string;
+  /** The expense report claiming this purchase back for the requester, while one does (detail responses only). */
+  reimbursementReportId?: string | null;
+  reimbursementReportNumber?: string | null;
+  reimbursementReportStatus?: ExpenseReportStatus | null;
   createdAt: string;
   updatedAt: string;
   approvalSteps: ApprovalStepRecord[];
+}
+
+/** Claiming back an approved purchase; each field defaults to the request's own. */
+export interface ReimbursementReportPayload {
+  amount?: MonetaryAmount | undefined;
+  dateIncurred?: string | undefined;
+  merchant?: string | undefined;
+}
+
+/** Paying an approved expense report by check, to the member who filed it. */
+export interface ReimbursementCheckPayload {
+  payeeAddress?: string | undefined;
+  memo?: string | undefined;
 }
 
 export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
@@ -985,6 +1040,16 @@ export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
   /** Submitted after the department's substantiation deadline; decided at submission. */
   substantiatedLate?: boolean;
   createdAt: string;
+}
+
+/** An edit to a draft report's line: omit a field to leave it, null to clear an optional one. */
+export interface ExpenseLineItemUpdatePayload {
+  description?: string | undefined;
+  amount?: MonetaryAmount | undefined;
+  dateIncurred?: string | undefined;
+  expenseType?: ExpenseType | undefined;
+  merchant?: string | null | undefined;
+  fundCampaignId?: string | null | undefined;
 }
 
 export interface ExpenseReport {
@@ -1028,6 +1093,15 @@ export interface ExpenseReport {
   awaitingLateAcknowledgement?: boolean;
   /** How far its lines would take their restricted funds past what they have left, until approved (detail responses only). */
   fundShortfall?: MonetaryAmount | null;
+  /** The purchase request this report claims back. */
+  purchaseRequestId?: string | null;
+  purchaseRequestNumber?: string | null;
+  /** The check paying the member, while one does (detail responses only). */
+  reimbursementCheckId?: string | null;
+  reimbursementCheckNumber?: string | null;
+  reimbursementCheckStatus?: CheckRequestStatus | null;
+  /** What a check would pay: the total less what a cash advance covered (detail responses only). */
+  amountOwed?: MonetaryAmount | null;
   createdAt: string;
   updatedAt: string;
   lineItems: ExpenseLineItem[];
@@ -1067,6 +1141,9 @@ export interface CheckRequest extends FunctionalClassFields, FundFields {
   qbExportedAt?: string | null;
   /** When the reversing entry for a void went to QuickBooks. */
   qbVoidExportedAt?: string | null;
+  /** The expense report this check reimburses the member for; it charges no budget line or fund itself. */
+  expenseReportId?: string | null;
+  expenseReportNumber?: string | null;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -1220,6 +1297,10 @@ export const ExportReadinessStatus = {
   DUPLICATE_MAPPINGS: 'duplicate_mappings',
   /** Posts to Accounts Payable or Receivable, which QuickBooks' import needs a Name for. */
   PAYABLE_RECEIVABLE: 'payable_receivable',
+  /** An account name starts with =, +, - or @, which the export's formula escaping would alter. */
+  UNSAFE_ACCOUNT_NAME: 'unsafe_account_name',
+  /** An account the uploaded chart of accounts does not list (see `accountsNotInChart`). */
+  NOT_IN_CHART: 'not_in_chart',
 } as const;
 export type ExportReadinessStatus = (typeof ExportReadinessStatus)[keyof typeof ExportReadinessStatus];
 
@@ -1235,6 +1316,8 @@ export interface ExportReadinessCategory {
   /** The ancestor category each account came from, when this one has none of its own. */
   accountInheritedFrom?: string | null;
   offsetInheritedFrom?: string | null;
+  /** With `not_in_chart`: the accounts the uploaded chart of accounts lacks. */
+  accountsNotInChart?: string[];
   mappingIds: string[];
 }
 
@@ -1244,6 +1327,8 @@ export interface ExportRunPayload {
   dateRangeEnd: string;
   /** Send again payments an earlier export already carried. */
   includeExported: boolean;
+  /** Send them even where their file was confirmed as imported (otherwise a 409, `LB-FIN-001`). */
+  confirmReimport?: boolean;
 }
 
 export interface ExportReadiness {
@@ -1252,6 +1337,21 @@ export interface ExportReadiness {
   unmatchedMappingIds: string[];
   dues?: DuesExportReadiness;
   advances?: AdvanceExportReadiness;
+  /** Whether account names are checked against an uploaded chart of accounts. */
+  chartUploaded?: boolean;
+}
+
+/** One account of the uploaded QuickBooks chart of accounts. */
+export interface QuickBooksChartAccount {
+  name: string;
+  accountType?: string | null;
+}
+
+/** `GET /finance/export/chart-of-accounts`; `uploadedAt` is null while none is on file. */
+export interface QuickBooksChart {
+  uploadedAt?: string | null;
+  uploadedByName?: string | null;
+  accounts: QuickBooksChartAccount[];
 }
 
 export const AdvanceExportStatus = {
@@ -1259,6 +1359,8 @@ export const AdvanceExportStatus = {
   NO_ADVANCES_ACCOUNT: 'no_advances_account',
   NO_CASH_ACCOUNT: 'no_cash_account',
   PAYABLE_RECEIVABLE: 'payable_receivable',
+  UNSAFE_ACCOUNT_NAME: 'unsafe_account_name',
+  NOT_IN_CHART: 'not_in_chart',
 } as const;
 export type AdvanceExportStatus = (typeof AdvanceExportStatus)[keyof typeof AdvanceExportStatus];
 
@@ -1269,6 +1371,7 @@ export interface AdvanceExportReadiness {
   advancesAccount?: string | null;
   /** The bank account advances are paid from and returned to. */
   cashAccount?: string | null;
+  accountsNotInChart?: string[];
 }
 
 /** `PUT /finance/export/advance-accounts`; null clears one. */
@@ -1282,6 +1385,8 @@ export const DuesExportStatus = {
   NO_INCOME: 'no_income',
   NO_DEPOSIT: 'no_deposit',
   PAYABLE_RECEIVABLE: 'payable_receivable',
+  UNSAFE_ACCOUNT_NAME: 'unsafe_account_name',
+  NOT_IN_CHART: 'not_in_chart',
 } as const;
 export type DuesExportStatus = (typeof DuesExportStatus)[keyof typeof DuesExportStatus];
 
@@ -1296,6 +1401,7 @@ export interface DuesScheduleExport {
   incomeSource?: 'schedule' | 'default' | null;
   depositAccount?: string | null;
   depositSource?: 'schedule' | 'default' | null;
+  accountsNotInChart?: string[];
 }
 
 export interface DuesExportReadiness {
@@ -1397,6 +1503,10 @@ export interface ExportLog {
   status: string;
   errorMessage?: string | null;
   completedAt?: string | null;
+  /** When the Treasurer confirmed the file was imported into QuickBooks. */
+  importedAt?: string | null;
+  importedBy?: string | null;
+  importedByName?: string | null;
 }
 
 export interface FinanceDashboard {

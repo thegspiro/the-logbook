@@ -1,7 +1,7 @@
 # Security Review 19 — Skills Testing
 
-**Prefix:** `SKT` · **Iteration:** 19 · **Reviewed:** 2026-08-26 (pass 1) ·
-**PR:** [#1901](https://github.com/thegspiro/the-logbook/pull/1901) (pass 1)
+**Prefix:** `SKT` · **Iteration:** 19 · **Reviewed:** 2026-10-19 (pass 9) ·
+**PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `app/api/v1/endpoints/skills_testing.py` (29 routes, 3,723 L — grown
 2.6x from 1,412 L at the last module-audit pass), `app/services/skills_testing_service.py`
@@ -2071,3 +2071,543 @@ feature, 1 cross-feature scope gap flagged for the rotation
 (`knowledge_tests.py`, unowned and unreviewed). Every standing flag this
 feature carried into pass 7 is now closed; no open findings remain in
 `SKT-19-skills-testing.md`.**
+
+---
+
+## Pass 8 (2026-10-16)
+
+**Prefix:** `SKT8` · **PR:** recorded in `PROGRESS.md`'s Open PR row.
+Watchdog pickup — the dedicated `/loop 30m /security-review` session had no
+open PR or branch for this feature at pickup time (confirmed via
+`gh api repos/.../pulls?state=open`, not the tracker); PR #3302 (Feature 18,
+Training extended, pass 8) had already merged with nothing started since.
+
+**Scope check.** Diffed the current tree against `0066c60c9` (the pass-7
+merge commit for PR #2976), fetched directly by SHA since this checkout's
+default shallow clone does not reach it:
+
+```
+backend/app/api/v1/endpoints/skills_testing.py  | 30 +++++++++++---------------  (13+/17-)
+backend/app/services/skills_testing_service.py  | 161 +++++++++++++++++++++++--  (151+/10-)
+backend/app/schemas/skills_testing.py           | 10 ++++++++++
+backend/app/models/skills_testing.py            | 182 ++++++++++++++++++++++-------------  (116+/66-)
+```
+
+Read every diff directly, not summarized from a commit message.
+
+- **Endpoint file:** cosmetic mypy-narrowing (an `if`-assigned local given an
+  explicit type instead of returning the expression directly; a `bool(...)`
+  cast on `test.is_practice`) plus a real DRY fix — `_apply_test_filters`'s
+  review-queue predicate and `get_testing_summary`'s pending-validation count
+  now both call one new `pending_validation_criteria(organization_id)`
+  helper instead of each hand-writing the same four-clause filter, closing
+  the exact "two places compute the same rule and can drift" shape Pitfall
+  #29 warns about (there was no drift today — the two clause lists were
+  identical before this change — but the extraction means a future edit to
+  one can no longer silently miss the other). `create_template`/
+  `duplicate_template` gained `valid_for_months=...` passthroughs for the
+  schema field below.
+- **Service/schema/model files:** a genuine new feature, **skill expiration
+  tracking**. `SkillTemplate.valid_for_months` (nullable `Integer`, migration
+  `a17a47c5a871` — table-existence-guarded, confirmed by reading it directly)
+  is how long a passing official test stays valid; `skill_test_expiration()`
+  computes the lapse date with `dateutil.relativedelta` (clamped to a
+  shorter month correctly: Jan 31 + 1 month = Feb 28, not an invalid date);
+  `member_skill_expirations()` lists a member's own upcoming lapses. The rest
+  of the models diff is mechanical `Column` → `Mapped`/`mapped_column`
+  typing (part of the repo-wide mypy remediation effort), read in full and
+  confirmed behavior-neutral — every `nullable`/`ondelete`/`server_default`
+  is unchanged, so Pitfall #2 is not newly at risk.
+
+**New surface reviewed against the checklist, not accepted from its own
+test file's coverage:**
+
+- **Tenant isolation.** `member_skill_expirations(db, organization_id,
+user_id, ...)` takes both ids as plain parameters (never a client-supplied
+  id from the route it is reached through — see below) and filters
+  `SkillTest.organization_id == organization_id` **and**
+  `SkillTemplate.organization_id == organization_id` on the join, not just
+  one side. Confirmed by reading the query directly.
+- **Self-scoping, at the one caller.** The only call site
+  (`app/api/v1/endpoints/training_module_config.py:503`, `GET
+/training/my-training` — outside this feature's declared scope, read anyway
+  since it is this function's only consumer) passes
+  `org_id = str(current_user.organization_id)` and `user_id =
+str(current_user.id)` — the caller's own identity, not a path/query
+  parameter. There is no route anywhere that lets one member request another
+  member's expirations through this function.
+- **Disclosure gating, not merely a cosmetic filter.** Before an entry is
+  built, `resolve_result_view(...)` is called with the member's own id and
+  the entry is skipped unless the result is `view in (SCORES, FULL)` —
+  reusing the same disclosure machinery `list_tests`/`get_test` depend on,
+  not a parallel reimplementation (Pitfall #29's "do not re-derive" rule).
+  Confirmed this actually withholds data, not just computes it and discards
+  it: `test_a_withheld_result_is_not_announced_by_its_expiry` and
+  `test_a_result_awaiting_release_is_not_listed` in
+  `tests/test_skill_test_expirations.py` both construct a test whose
+  disclosure/release policy would hide it and assert the expirations list
+  comes back empty, i.e. the query that would reveal the pass date is never
+  exposed, not redacted after the fact.
+- **`is_officer` is the one existing short-circuit, applied consistently.**
+  `resolve_result_view` returns `FULL` unconditionally when `is_officer` is
+  true, same as every other caller in this file — an officer viewing their
+  own "My Training" page sees their own result in full regardless of the
+  org's disclosure policy, which is the documented, pre-existing behavior
+  ("the policy exists to govern what the person _being evaluated_ sees, not
+  to hide an officer's own record-keeping from them"), not a new gap this
+  feature introduces.
+- **Bounded, not a scan.** The query is `WHERE organization_id = ... AND
+candidate_id = ...` — one member's rows, not an org-wide table — so dimension
+  6 (abuse resistance) does not apply the way it did to the pre-paging
+  `list_tests`/`export_tests_csv`/`list_templates` (SKT3-2).
+- **`today` is server-resolved, not client-supplied** — `resolve_org_today`
+  at the one caller, confirmed by reading its assignment; a caller cannot
+  skew "days until expiry" by sending an arbitrary date.
+
+**No finding.** The new surface was built against this feature's own
+established disclosure and org-scoping machinery rather than beside it, and
+the one DRY fix in the endpoint file closes a latent two-copies-of-one-rule
+risk before it had the chance to drift, rather than after.
+
+### Re-verification of pass 1–7 fixes
+
+Read the current code directly for each, not re-cited from any prior
+write-up:
+
+- **SKT-1** — `update_template` still routes through `apply_updates` inside a
+  `try/except ValueError`.
+- **SKT-2 / SKT-3 / create_test's SoD / validate_test's SoD** — all four
+  `assert_different_person(...)` call sites still present
+  (`skills_testing.py:1574` `create_test`, `:2402` `validate_test`, `:3049`
+  `void_test`, `:3219` `return_test_for_correction` — line numbers shifted by
+  this pass's own typing/helper diff, same four functions as every prior
+  pass).
+- **SKT-4** — `lock_attempt_capacity` (`skills_testing_service.py:752`) still
+  locks `TrainingRequirement` with `.with_for_update()`; the `spent` count in
+  `assert_attempts_remaining` still carries `.with_for_update(of=SkillTest)`
+  (`:891`); `validate_test` still calls `lock_attempt_capacity` (confirmed at
+  `skills_testing.py:2350`) ahead of `_lock_test_for_transition`'s per-test
+  lock.
+- **SKT2-1** — zero `is_practice ==` comparisons (`grep -c` returns 0); still
+  `.is_(...)` throughout both files.
+- **SKT3-1** — `add_test_viewer` still rejects naming both the candidate and
+  the examiner before the existing-grant lookup.
+- **SKT3-2 / SKT4-1 / SKT4-2 / SKT4-3 / SKT4-7** — all five re-confirmed
+  fixed and unchanged since pass 7 (paging/export bounds, item caps on
+  sheets and results, summary figures gated to officers, `update_test`
+  refusing to set an outcome directly) — no commit in this pass's diff
+  touches any of their call sites.
+- **SKT4-4 / SKT4-5 / SKT4-6 / SKT5-1** — the email disclosure guard, the
+  enum `field_validator`s + `max_length` caps + fail-closed resolution, the
+  voided-before-validation redaction (status, the four void fields, and
+  `pending_validation` all flipped together), and the `waive_reason` scrub
+  in the `scores` view are all still present, re-grepped directly.
+
+All twelve standing guard-test files from passes 1–7 re-run clean (see
+completion gate). **Route surface re-enumerated with a fresh AST walk**
+(script written this pass, not a re-read of any prior table — every
+`@router.<verb>` decorator plus every `Depends(...)` default among its
+function's arguments): **29/29 routes**, identical paths, methods and gates
+to every prior pass's table — no new route, no new permission string.
+**Org-scoping re-swept**: 87 `select(` call sites (unchanged count from pass
+7 — this pass's diff adds no new query), every one either carries an
+`organization_id` filter or resolves through an already-org-scoped parent
+row, matching pass 7's sweep exactly (including the one deliberate
+exception, the client-minted-id lookup, re-confirmed unchanged).
+
+### Cross-feature scope note (not reviewed this pass — tracked for the rotation)
+
+`docs/KNOWN_LIMITATIONS.md`'s "Training — Online Knowledge Tests Have No
+Owning Feature In The Security Rotation" entry (filed by this feature's pass 7) is still accurate as of TR-17 pass 8 (2026-10-16): that pass's own
+declared nine-file scope list still does not name
+`knowledge_tests.py`/`knowledge_test.py`. No action taken here — this
+remains a rotation-process gap for Feature 17 or 18's next pass to pick up,
+not a defect in this feature's own files.
+
+### Corrections to prior write-ups
+
+None. Passes 1–7's findings, fixes, and flagged items are all re-verified
+intact above; nothing in this pass contradicts anything a prior pass
+recorded.
+
+## Guard tests added
+
+None by this pass — the one real feature in scope (`valid_for_months`/skill
+expirations) landed already guard-tested
+(`tests/test_skill_test_expirations.py`, 20 tests covering the expiry
+arithmetic, the schema bounds, and — read in full above —
+`TestMemberSkillExpirations`'s org-scoping, disclosure-gating, and
+newest-pass-wins coverage). This pass found a stale local database (the
+session's MariaDB had been built against an older migration head, before
+`a17a47c5a871` added `valid_for_months`) rather than a code defect; running
+`alembic upgrade head` + `scripts/repair_schema.py` resolved it, and every
+test that had errored on the missing column passed afterward with no code
+change. Not a finding, since nothing in the application or its migrations
+was wrong — the review environment's database was simply behind.
+
+## Completion gate (pass 8)
+
+| Check                                                 | Result                                                                                 |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations (`flake8==7.3.0`, CI's pin, reinstalled to match)                      |
+| `black --check app/ tests/ alembic/`                  | ✅ 2356 files unchanged (`black==26.5.1`, CI's pin, reinstalled to match)              |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean (`isort==9.0.1`, CI's pin, reinstalled to match)                              |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 606 revisions, single head `361a40316340`                                           |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 270 routes, 0 errors/warnings                                                       |
+| `pytest tests/ -q -k "skill or skt"`                  | ✅ 565 passed, 1 skipped (pre-existing optional-dependency skip), up from pass 7's 512 |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors (`npm ci` run first — this worktree had no `node_modules` at all)          |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                                          |
+
+No source file is modified by this pass — the one feature commit in scope
+(skill expiration tracking) was already on `main`, already guard-tested, and
+reviewed clean against all seven checklist dimensions above. This pass's own
+diff is documentation only (this findings file, `PROGRESS.md`).
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** One real
+feature landed in this feature's files since pass 7 (`valid_for_months`/skill
+expirations) and was read in full rather than assumed safe from its own test
+coverage; it is correctly org-scoped, self-scoped at its one caller, gated by
+the existing disclosure machinery, and bounded to one member's rows. The
+route surface (29/29), the org-scoping sweep (87/87), and all standing
+fixes from passes 1–7 were re-verified directly against current code. No
+open findings remain in this feature.
+
+## Pass 9 (2026-10-19) — watchdog pickup, true zero delta, 0 new findings
+
+**Prefix:** `SKT9` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`-equivalent `list_pull_requests`
+check, 0 results) and the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via `ListAgents`. PR
+#3444 (Feature 18, Training extended, pass 9) had just merged, docs-only, and
+is not independently recordable. Rotation row 19 (Skills testing) was the
+next pending feature.
+
+### Scope check — zero delta since pass 8
+
+Pass 8 (PR #3307) diffed against base commit `cef8a679` and found no finding;
+this pass diffs against that **same** commit (PR #3307 made no application
+source change — its own diff was documentation only, confirmed by reading
+the PR body directly), since it is the most recent commit at which this
+feature's files are known-reviewed-clean.
+
+```
+git diff cef8a67945932ab59cf63f7a2bf9e948e5a393dc..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Empty output — byte-identical across all four declared scope files. 504
+commits landed on `main` in that window across the rest of the application;
+zero touched any of these four files. Also checked this feature's one
+external caller noted at pass 8, `training_module_config.py`'s
+`GET /training/my-training` (the sole consumer of `member_skill_expirations`):
+also zero commits since the same baseline. This is a stronger result than a
+"near-zero delta" pass — nothing to diff, read, or re-verify line-by-line
+beyond confirming the baseline itself is still what pass 8 said it was.
+
+### Re-verification, by direct grep against current code (not re-cited)
+
+Since the files are provably unchanged, every standing mechanism pass 8
+confirmed is unchanged by construction. Spot-confirmed anyway, directly
+against current line numbers (all match pass 8's own citations exactly,
+consistent with the zero diff):
+
+- **SKT-1** — `update_template` still routes through `apply_updates`.
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` still present at `skills_testing.py:1574`
+  (`create_test`), `:2402` (`validate_test`), `:3049` (`void_test`), `:3219`
+  (`return_test_for_correction`) — identical line numbers to pass 8's
+  citation.
+- **SKT-4** — `lock_attempt_capacity` (`skills_testing_service.py:752`) still
+  locks with `.with_for_update()`; the capacity count's own
+  `.with_for_update(of=SkillTest)` still at `:891`; `validate_test` still
+  calls `lock_attempt_capacity` ahead of the per-test lock
+  (`skills_testing.py:2350`).
+- **SKT2-1** — zero `is_practice ==` comparisons (`grep -c`), `.is_(...)`
+  throughout.
+- **SKT3-1** — `add_test_viewer` still rejects naming both candidate and
+  examiner before the grant lookup.
+- **SKT3-2 / SKT4-1 / SKT4-2 / SKT4-3 / SKT4-7 / SKT4-4 / SKT4-5 / SKT4-6 /
+  SKT5-1** — all re-confirmed present (paging/export bounds, item caps,
+  officer-gated summary figures, `update_test`'s outcome-setting refusal,
+  the email disclosure guard, enum `field_validator`s with `max_length`
+  caps and fail-closed resolution, voided-before-validation redaction,
+  `waive_reason` scrub in the `scores` view).
+- **Pass 8's own new surface** (skill expiration tracking —
+  `valid_for_months`, `skill_test_expiration()`, `member_skill_expirations()`)
+  — unchanged; its 20 guard tests in `tests/test_skill_test_expirations.py`
+  still collected and passing (see gate below), including the two
+  disclosure-withholding tests pass 8 named directly.
+
+**Route surface.** Fresh AST walk (every `@router.get/post/put/patch/delete`
+decorator plus its function's `Depends(...)` defaults, written this pass, not
+reused from any prior script): **29/29 routes**, 0 with no auth dependency —
+identical count to passes 7–8.
+
+**Org-scoping sweep.** `grep -c "select("` across the two backend files:
+**87** in `skills_testing.py` (unchanged from pass 8's cited count) + 6 in
+`skills_testing_service.py` = 93 total call sites; the endpoint-file count
+(87) is the one pass 7/8 tracked and it is unchanged. Since the files are
+provably byte-identical to the pass-8-reviewed state, every one of these is
+still org-filtered or resolves through an already-org-scoped parent, exactly
+as pass 8 verified by direct read.
+
+### Cross-feature scope note (unchanged, not this feature's to fix)
+
+`docs/KNOWN_LIMITATIONS.md`'s "Training — Online Knowledge Tests Have No
+Owning Feature In The Security Rotation" entry is still accurate:
+`knowledge_tests.py`/`knowledge_test.py` still carry no declared owning
+feature in the rotation (checked against Feature 17's pass 9 scope, PR #3440,
+and Feature 18's pass 9 scope, PR #3444 — neither names these files). No
+action taken here; this remains a rotation-process gap for Feature 17 or 18
+to pick up, not a defect in Feature 19's own files.
+
+### Corrections to prior write-ups
+
+None.
+
+## Guard tests added
+
+None — no code change in scope.
+
+## Completion gate (pass 9)
+
+| Check                                                        | Result                                                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations (`flake8==7.3.0`, CI's pin)                                                 |
+| `black --check app/ tests/ alembic/`                         | ✅ 2471 files unchanged (`black==26.5.1`, CI's pin)                                         |
+| `isort --check-only app/ tests/ alembic/`                    | ✅ clean (`isort==9.0.1`, CI's pin)                                                         |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 631 revisions, single head `ca0c2111466f`                                                |
+| `python3 scripts/check_route_permissions.py --strict` (root) | ✅ 273 routes, 0 errors, 0 warnings                                                         |
+| `pytest tests/ -q -k "skill or skt"`                         | ✅ 565 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) — identical to pass 8 |
+| `cd frontend && npm run typecheck`                           | ✅ 0 errors                                                                                 |
+| `cd frontend && npm run lint`                                | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                                               |
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** A true
+zero-delta pass — no commit touched any of the four declared scope files, or
+the feature's one external caller, since pass 8's reviewed baseline. Every
+standing fix from passes 1–8 re-confirmed present at identical line numbers.
+Route surface (29/29) and org-scoping sweep (87 endpoint-file call sites)
+unchanged. No open findings remain in this feature.
+
+---
+
+## Pass 10 (2026-10-24) — watchdog pickup
+
+**Prefix:** `SKT10` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results) and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`. PR #3629 (Feature 18, Training extended, pass 10) had just
+merged. Rotation row 19 (Skills testing) was confirmed the next `⬜` by
+reading `PROGRESS.md` directly.
+
+### Scope check — real delta since pass 9
+
+Pass 9 found the feature's four declared backend files byte-identical back to
+`cef8a679` (pass 8's reviewed baseline). This pass diffs against that same
+commit:
+
+```
+git diff cef8a679..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Real diff this time: 69 insertions / 19 deletions across the endpoint,
+schema, and model files (`skills_testing_service.py` unchanged). All of it
+read directly, not from a commit message.
+
+### Changes reviewed (all traced safe, 0 fixes needed)
+
+- **`SkillTest.examiner_id` relaxed to nullable, `ondelete` CASCADE → SET
+  NULL** (`models/skills_testing.py`) — part of a cross-cutting change
+  (commit `78a6a57e`, migration `cbe0de50f202`) keeping a candidate's test
+  record when the examiner who scored it is later permanently deleted.
+  Correctly Pitfall #2-compliant (nullable paired with SET NULL), and the
+  migration itself (`20261021_1421_cbe0de50f202_attribution_fks_set_null_on_member_.py`)
+  guards table existence (Pitfall #26), is idempotent, and only restores
+  `NOT NULL` on downgrade when no row actually holds a NULL. This feature's
+  own files were swept for every place that assumed a non-null
+  `examiner_id`/`examiner`:
+  - Every `select(User).where(User.id == test.examiner_id)` call site
+    (10 of them) already uses `scalar_one_or_none()`, which safely resolves
+    to `None` when `examiner_id` is `None` (no row matches `User.id ==
+NULL`) — no crash, no unhandled exception.
+  - `_build_test_response` already guarded `examiner_name=... if examiner
+else None`; `list_tests`' batch name-lookup and CSV export's `name_of()`
+    helper are typed `str | None` and return `""`/`None` rather than
+    indexing a dict with `None`.
+  - The four `assert_different_person` separation-of-duties checks (SKT-2,
+    SKT-3, and the two on create/validate) all compare against
+    `test.candidate_id`, never `examiner_id` — unaffected by the
+    nullability change.
+  - `resolve_result_view`'s examiner-FULL-disclosure branch
+    (`str(test.examiner_id) == uid`) and `add_test_viewer`'s SKT3-1
+    self-dealing guard (`str(viewer.id) == str(test.examiner_id)`) both
+    fail safe on `None` — `str(None)` is the literal string `"None"`, which
+    never equals a real UUID, so a test with a deleted examiner simply
+    grants no one that branch's privilege rather than mismatching open.
+  - `_authorize_test_write`'s examiner-self-service branch
+    (`test.examiner_id == str(user.id)`) also fails closed on `None`: once
+    an examiner is deleted, only `training.manage` can still write the test
+    (the officer short-circuit above it), which is a narrowing of access,
+    not a widening — correct fail-direction.
+  - `email_test_results` (the one call site this cross-cutting commit
+    itself touched inside this feature) renders "Former member" when
+    `test.examiner_id is None`, distinct from "Unknown" (examiner_id present
+    but the `User` row query somehow came back empty) — a real distinction,
+    not cosmetic.
+- **`search_candidates`'s `User.status == UserStatus.ACTIVE` →
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`** — the repo-wide Pitfall #32
+  sweep reaching this feature's one remaining literal-status comparison.
+  Correct: a probationary member is a current member and belongs in the
+  examiner/viewer-grant candidate search.
+- **New `_assert_skills_testing_offered` gate on `create_test`**
+  (`skills_testing.py`) — refuses `POST /tests` with a 409 when the
+  department's `practical_skills_method` (read via the already-reviewed,
+  org-scoped `get_practical_skills_method`, filtered on
+  `TrainingModuleConfig.organization_id`) is `"shift_signoffs"`. Not a
+  security control — a business-rule gate between two product workflows,
+  and its fail direction is the safe one (an unset/unrecognized method
+  reads as Skills Testing, i.e. the gate does _not_ fire, same as every
+  other reader of this column). Validating, releasing, voiding, returning
+  and every read path are deliberately left unguarded by this check per its
+  own docstring, so a test already open when a department switches methods
+  is never left stuck half-scored. No tenant-isolation or auth concern:
+  the check runs after the existing in-org visibility/create authorization,
+  purely narrows one more case to a 409.
+- **Column-bounds hardening** (`schemas/skills_testing.py`) —
+  `le=INT32_MAX`/`le=FLOAT32_MAX` added to `sort_order`, `passing_score`,
+  `time_limit_seconds`, `score`, and `elapsed_seconds` — defensive only,
+  same pattern as TRX-18's identical sweep on the sibling training schemas;
+  narrows a silent DB-level truncation into a clean 422.
+- **`list_tests`'s batch name lookup** — `{i for t, _ in page for i in
+(t.candidate_id, t.examiner_id) if i}` now filters falsy ids before the
+  batch `User` fetch, and the per-row examiner lookup is guarded
+  (`if t.examiner_id else None`) — both are the frontend-visible half of
+  the nullable-examiner change, not a new independent code path.
+
+**Frontend — 16 files changed, all consistent with the same backend
+change plus an AA/AAA contrast and touch-target sweep.** Traced each diff
+directly:
+
+- **`attributionName(name, id)`** (`utils/memberName.ts`, a shared,
+  already-existing helper — not new to this pass) renders a stored name,
+  else `"Former member"` when the id is `null`, else `"Unknown"` — the
+  frontend mirror of the backend's new None-examiner handling. Used at
+  every `examiner_name` display site this pass touched
+  (`MySkillTestsList.tsx`, `ActiveSkillTestPage.tsx`,
+  `MySkillTestResultPage.tsx`, `SkillsTestingPage.tsx`). Plain string
+  interpolation into JSX text content (React-escaped), not
+  `dangerouslySetInnerHTML` — no injection surface.
+- **`SkillsTestingRoute.tsx`** (gates the module's routes on
+  `practicalSkillsStore`) had its own doc comment corrected to say the
+  _server_ refuses opening a new test for a sign-offs department — this
+  route guard was already documented as "not an access control" and
+  remains exactly that; no behavior change, a comment-accuracy fix only.
+- **`practicalSkillsStore.ts`** reads `trainingModuleConfigService` from
+  the shared `services/api.ts` client (`withCredentials`, CSRF
+  interceptor) — not a bespoke per-module axios instance, so Pitfall #7
+  does not apply.
+- **Header/breadcrumb rollout** (`TrainingPageHeader` on
+  `MySkillTestResultPage.tsx`/`SkillTemplateBuilderPage.tsx`) and an
+  AA/AAA contrast shade bump (`green-600`→`green-700`,
+  `amber-600`→`amber-700`, `yellow-600`→`yellow-700` across
+  `ActiveSkillTestPage.tsx`/`SkillsTestingPage.tsx`) plus
+  `touch:min-h-11`/`aria-label`/`aria-expanded` additions on
+  `SkillTemplateBuilderPage.tsx`'s icon-only buttons — cosmetic/
+  accessibility, no new API call, input, or data-exposure surface.
+- **Standard banned-pattern sweep, all 16 changed files: zero hits** for
+  `window.confirm`/`alert`/`prompt` (two comment mentions found are
+  explanatory prose about _not_ using them), `dangerouslySetInnerHTML`,
+  banned `.toLocale*`/`date-fns`/`new Date().toISOString().slice`, a bare
+  `fetch(`, and `localStorage`/`sessionStorage`.
+
+### Re-verification of standing fixes
+
+Re-read directly against current line numbers (all moved slightly from
+pass 9's citations, consistent with the real diff above, not re-cited from
+any prior write-up):
+
+- **SKT-1** — `update_template` still routes through `apply_updates`.
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present on `create_test`, `validate_test`,
+  `void_test`, `return_test_for_correction`, each still checked against
+  `candidate_id` before any mutation.
+- **SKT-4** — `lock_attempt_capacity` still locks `TrainingRequirement`
+  with `.with_for_update()`; the capacity count still carries
+  `.with_for_update(of=SkillTest)`; `validate_test` still acquires the
+  capacity lock ahead of the per-test row lock.
+- **SKT2-1** — zero `is_practice ==` comparisons; `.is_(...)` throughout.
+- **SKT3-1/SKT3-2** — `add_test_viewer` still rejects naming both
+  candidate and examiner; `list_tests`' pagination/cap (SKT3-2's owner-
+  accepted fix) is unchanged.
+- **SKT4-1 through SKT4-7, SKT5-1** — all re-confirmed present (item caps,
+  officer-gated summary figures, `update_test`'s outcome-setting refusal,
+  the email disclosure guard, enum validators with bounds, voided-before-
+  validation redaction, `waive_reason` scrub).
+
+**Route surface.** Fresh AST walk (`ast.parse` over every
+`@router.get/post/put/patch/delete` decorator and its function's
+`Depends(...)` defaults): **29/29 routes**, 0 with no recognized auth
+dependency — identical count to passes 7–9.
+
+**Org-scoping.** Every `select(SkillTest)`/`select(SkillTemplate)`/
+`select(SkillTestViewer)`/`select(User)` call site touched by this pass's
+diff was checked by hand (not assumed from the "unchanged" files): all
+either filter `organization_id` directly or resolve through an
+already-org-scoped parent (`test`/`template` fetched org-scoped earlier in
+the same function). `search_candidates`'s widened status filter adds no new
+cross-tenant surface — it is still scoped to
+`User.organization_id == current_user.organization_id` on the same line.
+
+### Findings
+
+**0 new findings.** The cross-cutting attribution-FK change and the new
+practical-skills gate were both already implemented correctly and
+consistently across backend and frontend before this pass began; nothing
+needed fixing. No standing finding reopened.
+
+### Guard tests added
+
+None — no defect found to guard against. The cross-cutting migration
+(`cbe0de50f202`) and its own tests belong to the commit that introduced
+them, outside this feature's declared scope.
+
+### Completion gate (pass 10)
+
+| Check                                                             | Result                                                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.3.0`, CI's pin)         | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/` (`black==26.5.1`)            | ✅ 2606 files unchanged                                               |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`)        | ✅ clean                                                              |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 649 revisions, single head `a0195b397bf3`                          |
+| `python3 scripts/check_route_permissions.py --strict` (root)      | ✅ 273 routes, 0 errors, 0 warnings                                   |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13 -m pytest`) | ✅ 579 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `cd frontend && npm run typecheck`                                | ✅ 0 errors                                                           |
+| `cd frontend && npm run lint`                                     | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                         |
+
+**Environment note, not a finding:** this sandbox resolves plain `python3`/
+`pip`/`flake8`/`black`/`isort` to a mix of Python 3.11 and 3.13 installs
+with mismatched package sets (`python3 -m pytest` failed with
+`ModuleNotFoundError: sqlalchemy`; a bare `flake8` on `PATH` resolved to an
+unpinned 7.4.1 ahead of the correctly CI-pinned 7.3.0 at
+`/usr/local/bin/flake8`). The backend itself runs under 3.13
+(`python3.13`); every check above was re-run against the explicit
+3.13 interpreter/binary before being recorded. Noted so a future pass in
+the same sandbox doesn't misreport a phantom failure or trust an
+unpinned linter's silence.
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** Real
+delta since pass 9 (69/19 lines across endpoint/schema/model files, 16
+frontend files), all traced to a single, already-correct cross-cutting
+change plus independent cosmetic/defensive sweeps. No open findings
+remain in this feature.

@@ -50,6 +50,11 @@ interface ResourceSectionProps<T extends { id: string }> {
   update: (id: string, values: Record<string, string>) => Promise<unknown>;
   toForm: (item: T) => Record<string, string>;
   remove: (id: string) => Promise<void>;
+  /**
+   * What the delete takes with it, when that is more than the record itself —
+   * stated in the confirmation, ahead of "This cannot be undone."
+   */
+  deleteConsequence?: string;
   renderSummary: (item: T) => React.ReactNode;
 }
 
@@ -66,6 +71,7 @@ function ResourceSection<T extends { id: string }>({
   update,
   toForm,
   remove,
+  deleteConsequence,
   renderSummary,
 }: ResourceSectionProps<T>) {
   const { confirm } = useConfirm();
@@ -116,7 +122,7 @@ function ResourceSection<T extends { id: string }>({
   const handleDelete = async (item: T) => {
     const accepted = await confirm({
       title: `Delete ${itemName.toLowerCase()}`,
-      message: 'This cannot be undone.',
+      message: deleteConsequence ? `${deleteConsequence} This cannot be undone.` : 'This cannot be undone.',
       confirmLabel: 'Delete',
       variant: 'danger',
     });
@@ -443,6 +449,8 @@ export function UtilitiesSection({ facilityId, canDelete, canCreate, canEdit }: 
         meter_number: item.meterNumber ?? '',
       })}
       remove={(id) => facilitiesService.deleteUtilityAccount(id)}
+      // facility_utility_readings cascade on the account's delete.
+      deleteConsequence="Its meter readings are deleted with it."
       fields={[
         { key: 'utility_type', label: 'Utility type', required: true, type: 'select', options: UTILITY_TYPES },
         { key: 'provider_name', label: 'Provider', required: true },

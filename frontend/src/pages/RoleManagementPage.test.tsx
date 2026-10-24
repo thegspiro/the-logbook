@@ -240,6 +240,39 @@ describe('RoleManagementPage', () => {
     });
   });
 
+  describe('the name sent', () => {
+    beforeEach(() => {
+      vi.mocked(roleService.createRole).mockReset();
+      vi.mocked(roleService.createRole).mockResolvedValue({ ...role, id: 'role-2', name: 'Report Reader' });
+      vi.mocked(roleService.updateRole).mockReset();
+      vi.mocked(roleService.updateRole).mockResolvedValue(role);
+    });
+
+    it('trims the name of a new role', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
+      await user.type(screen.getByLabelText('Role Name'), '  Report Reader  ');
+      await user.click(screen.getByRole('button', { name: 'Create Role' }));
+
+      await waitFor(() => expect(roleService.createRole).toHaveBeenCalledTimes(1));
+      expect(roleService.createRole).toHaveBeenCalledWith(expect.objectContaining({ name: 'Report Reader' }));
+    });
+
+    it('does not resend an unchanged name that only gained surrounding spaces', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.type(screen.getByLabelText('Role Name'), '  ');
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      await waitFor(() => expect(roleService.updateRole).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(roleService.updateRole).mock.calls[0]?.[1]).toMatchObject({ name: undefined });
+    });
+  });
+
   it('does not describe priority as authority', async () => {
     const user = userEvent.setup();
     renderWithRouter(<RoleManagementPage />);
@@ -254,5 +287,48 @@ describe('RoleManagementPage', () => {
     renderWithRouter(<RoleManagementPage />);
 
     expect(await screen.findByText('events.view')).toBeInTheDocument();
+  });
+});
+
+describe('RoleManagementPage deleting a role', () => {
+  beforeEach(() => {
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([{ ...role, user_count: 4 }]);
+    vi.mocked(roleService.getPermissionsByCategory).mockReset();
+    vi.mocked(roleService.getPermissionsByCategory).mockResolvedValue([]);
+    vi.mocked(roleService.deleteRole).mockReset();
+  });
+
+  it('says how many members hold the role, and deletes nothing when kept', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<RoleManagementPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('4 members hold it and will lose its permissions.');
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it' }));
+    expect(roleService.deleteRole).not.toHaveBeenCalled();
+  });
+});
+
+describe('RoleManagementPage — positions that mirror a rank', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(roleService.getPermissionsByCategory).mockResolvedValue([]);
+  });
+
+  // The member screens leave these positions out, so this page — where their
+  // stored grants are edited — is where an administrator learns why.
+  it('marks the mirror, and only the mirror', async () => {
+    vi.mocked(roleService.getRoles).mockResolvedValue([
+      memberRole,
+      { ...fixedSystemRole, id: 'captain-role', name: 'Captain', slug: 'captain', mirrors_rank: true },
+    ]);
+    renderWithRouter(<RoleManagementPage />);
+
+    expect(await screen.findByText('Mirrors a rank')).toBeInTheDocument();
+    expect(screen.getAllByText('Mirrors a rank')).toHaveLength(1);
+    expect(screen.getByText(/Carries the Captain rank’s access/)).toBeInTheDocument();
   });
 });

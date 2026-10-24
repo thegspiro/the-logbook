@@ -33,6 +33,14 @@ export const InventoryNfcTagStatus = {
 } as const;
 export type InventoryNfcTagStatus = (typeof InventoryNfcTagStatus)[keyof typeof InventoryNfcTagStatus];
 
+/** What an inventory NFC tag is stuck to. A tag moves only within its kind. */
+export const InventoryNfcTagKind = {
+  ITEM: 'item',
+  STORAGE_AREA: 'storage_area',
+  COMPARTMENT: 'compartment',
+} as const;
+export type InventoryNfcTagKind = (typeof InventoryNfcTagKind)[keyof typeof InventoryNfcTagKind];
+
 /**
  * What a logged NFC tap did: identified an item, moved it onto a shelf, or
  * found it during a shelf audit.
@@ -123,12 +131,39 @@ export const NfcCheckInStatus = {
 } as const;
 export type NfcCheckInStatus = (typeof NfcCheckInStatus)[keyof typeof NfcCheckInStatus];
 
+/** Which kind of reader a card tap came through: a staffed station or a room's public kiosk. */
+export const NfcTapSource = {
+  STATION: 'station',
+  KIOSK: 'kiosk',
+} as const;
+export type NfcTapSource = (typeof NfcTapSource)[keyof typeof NfcTapSource];
+
 /** Badge classes per card status, matching the status-colour maps below. */
 export const NFC_CARD_STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   suspended: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   lost: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
   revoked: 'bg-theme-surface-secondary text-theme-text-secondary',
+};
+
+/**
+ * A member's Google Workspace account, created when they were converted from
+ * an applicant. `linked_existing`: the address already belonged to an account,
+ * which The Logbook recorded and never modified.
+ */
+export const GoogleAccountStatus = {
+  PENDING: 'pending',
+  CREATED: 'created',
+  LINKED_EXISTING: 'linked_existing',
+  FAILED: 'failed',
+} as const;
+export type GoogleAccountStatus = (typeof GoogleAccountStatus)[keyof typeof GoogleAccountStatus];
+
+export const GOOGLE_ACCOUNT_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  created: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  linked_existing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
 // ============================================
@@ -146,6 +181,18 @@ export const UserStatus = {
   ARCHIVED: 'archived',
 } as const;
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
+
+/**
+ * Statuses whose holder is a current member: signs in, is scheduled, trains.
+ * Mirrors `ACTIVE_ACCOUNT_STATUSES` in `backend/app/models/user.py`. A
+ * probationary member is on the roster today, not a former one, so a list of
+ * who takes part asks `isActiveAccount`, never `status === UserStatus.ACTIVE`.
+ */
+export const ACTIVE_ACCOUNT_STATUSES: readonly UserStatus[] = [UserStatus.ACTIVE, UserStatus.PROBATIONARY];
+
+export function isActiveAccount(status: string | null | undefined): boolean {
+  return !!status && (ACTIVE_ACCOUNT_STATUSES as readonly string[]).includes(status);
+}
 
 /** Statuses in which a member is away from the department (time not counted as service). */
 export const SEPARATED_STATUSES: readonly UserStatus[] = [
@@ -193,6 +240,24 @@ export const ElectionStatus = {
   CANCELLED: 'cancelled',
 } as const;
 export type ElectionStatus = (typeof ElectionStatus)[keyof typeof ElectionStatus];
+
+/** Lifecycle of a background ballot send (backend BallotSendJobStatus). */
+export const BallotSendJobStatus = {
+  QUEUED: 'queued',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+} as const;
+export type BallotSendJobStatus = (typeof BallotSendJobStatus)[keyof typeof BallotSendJobStatus];
+
+/** What a background send mails (backend BallotSendJobKind). */
+export const BallotSendJobKind = {
+  BALLOTS: 'ballots',
+  REMINDER: 'reminder',
+  PACKAGE: 'package',
+  ANNOUNCEMENT: 'announcement',
+} as const;
+export type BallotSendJobKind = (typeof BallotSendJobKind)[keyof typeof BallotSendJobKind];
 
 // ============================================
 // RSVP Status
@@ -572,16 +637,16 @@ export const ASSIGNMENT_STATUS_COLORS: Record<string, string> = {
   assigned: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   confirmed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
   no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
   // Synthetic status for past shifts derived from attendance records when no
   // ShiftAssignment row exists (e.g. walk-on attendance).
-  completed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
+  completed: 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border-emerald-500/20',
 };
 
 export const REQUEST_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
   approved: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
@@ -589,7 +654,7 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
 
 /** Shift history import: a draft under review, or committed to the schedule. */
 export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  draft: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
   committed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
 };
 
@@ -603,8 +668,8 @@ export const HISTORY_IMPORT_RESOLUTION_COLORS: Record<string, string> = {
   mapped: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   create: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   conflict: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  ambiguous: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  unmatched: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  ambiguous: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
+  unmatched: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
 };
 
 // ============================================
@@ -657,11 +722,11 @@ export const IP_EXCEPTION_STATUS_LABELS: Record<string, string> = {
 };
 
 export const IP_EXCEPTION_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
   approved: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   rejected: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   expired: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
-  revoked: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  revoked: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
 };
 
 // ============================================
@@ -686,8 +751,8 @@ export const IP_EXCEPTION_USE_CASE_LABELS: Record<string, string> = {
 
 export const COUNTRY_RISK_LEVEL_COLORS: Record<string, string> = {
   low: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
+  high: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
   critical: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
 };
 
@@ -871,7 +936,7 @@ export const CONSENT_STATUS_LABELS: Record<ConsentStatus, string> = {
 export const CONSENT_STATUS_COLORS: Record<ConsentStatus, string> = {
   granted: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  not_answered: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+  not_answered: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20',
 };
 
 // ============================================

@@ -4,9 +4,10 @@
  * Handles all API calls for the Scheduling module.
  */
 
-import { AxiosError } from 'axios';
+import { AxiosError, type AxiosRequestConfig } from 'axios';
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray, expectArray } from '../../../utils/asArray';
+import { readDeleteOutcome, type DeleteOutcome } from '../../../utils/deleteOutcome';
 import type {
   Assignment,
   SwapRequest as SchedulingSwapRequest,
@@ -736,15 +737,18 @@ const api = createApiClient();
 // ============================================
 
 export const schedulingService = {
-  async getShifts(params?: {
-    start_date?: string;
-    end_date?: string;
-    skip?: number;
-    limit?: number;
-  }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
+  async getShifts(
+    params?: {
+      start_date?: string;
+      end_date?: string;
+      skip?: number;
+      limit?: number;
+    },
+    config?: AxiosRequestConfig
+  ): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
     const response = await api.get<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }>(
       '/scheduling/shifts',
-      { params }
+      { params, ...config }
     );
     return { ...response.data, shifts: asArray(response.data?.shifts).map(normalizeShift) };
   },
@@ -869,18 +873,18 @@ export const schedulingService = {
     return response.data;
   },
 
-  async getWeekCalendar(weekStart?: string): Promise<ShiftRecord[]> {
+  async getWeekCalendar(weekStart?: string, config?: AxiosRequestConfig): Promise<ShiftRecord[]> {
     const params: Record<string, string> = {};
     if (weekStart) params.week_start = weekStart;
-    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params });
+    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params, ...config });
     return asArray(response.data).map(normalizeShift);
   },
 
-  async getMonthCalendar(year?: number, month?: number): Promise<ShiftRecord[]> {
+  async getMonthCalendar(year?: number, month?: number, config?: AxiosRequestConfig): Promise<ShiftRecord[]> {
     const params: Record<string, number> = {};
     if (year) params.year = year;
     if (month) params.month = month;
-    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params });
+    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params, ...config });
     return asArray(response.data).map(normalizeShift);
   },
 
@@ -1129,9 +1133,13 @@ export const schedulingService = {
 
   // Swap Requests
   /** Swaps the caller is a participant in — what is waiting on them. */
-  async getMySwapRequests(status?: 'pending' | 'approved' | 'denied' | 'cancelled'): Promise<SchedulingSwapRequest[]> {
+  async getMySwapRequests(
+    status?: 'pending' | 'approved' | 'denied' | 'cancelled',
+    config?: AxiosRequestConfig
+  ): Promise<SchedulingSwapRequest[]> {
     const response = await api.get<PaginatedResponse<SchedulingSwapRequest>>('/scheduling/swap-requests', {
       params: { mine: true, ...(status ? { status } : {}) },
+      ...config,
     });
     return asArray(response.data?.items);
   },
@@ -1209,8 +1217,10 @@ export const schedulingService = {
     const response = await api.patch<ShiftTemplateRecord>(`/scheduling/templates/${templateId}`, data);
     return response.data;
   },
-  async deleteTemplate(templateId: string): Promise<void> {
-    await api.delete(`/scheduling/templates/${templateId}`);
+  /** Deletes an unused template; one a shift or pattern names is deactivated instead. */
+  async deleteTemplate(templateId: string): Promise<DeleteOutcome> {
+    const response = await api.delete(`/scheduling/templates/${templateId}`);
+    return readDeleteOutcome(response);
   },
 
   // Patterns
@@ -1265,8 +1275,15 @@ export const schedulingService = {
     const response = await api.patch<BasicApparatusRecord>(`/scheduling/apparatus/${apparatusId}`, data);
     return normalizeApparatus(response.data);
   },
-  async deleteBasicApparatus(apparatusId: string): Promise<void> {
-    await api.delete(`/scheduling/apparatus/${apparatusId}`);
+  /** Undoes a delete that deactivated a vehicle in use; nothing it was removed from is restored. */
+  async reactivateBasicApparatus(apparatusId: string): Promise<BasicApparatusRecord> {
+    const response = await api.post<BasicApparatusRecord>(`/scheduling/apparatus/${apparatusId}/reactivate`);
+    return normalizeApparatus(response.data);
+  },
+  /** Deletes an unused vehicle; one that templates, shifts or call records name is deactivated instead. */
+  async deleteBasicApparatus(apparatusId: string): Promise<DeleteOutcome> {
+    const response = await api.delete(`/scheduling/apparatus/${apparatusId}`);
+    return readDeleteOutcome(response);
   },
 
   // --- Apparatus Options (unified vehicle picker for templates) ---

@@ -56,6 +56,7 @@ def test_repeated_decimal_payments_add_without_binary_drift() -> None:
 @pytest.mark.parametrize("amount", [Decimal("10.00"), Decimal("20.00")])
 async def test_approval_amount_range_includes_exact_boundaries(amount: Decimal) -> None:
     chain = SimpleNamespace(
+        id="chain-1",
         applies_to=ApprovalEntityType.PURCHASE_REQUEST,
         min_amount=Decimal("10.00"),
         max_amount=Decimal("20.00"),
@@ -81,11 +82,13 @@ async def test_dues_summary_totals_use_decimal() -> None:
             amount_due=Decimal("0.10"),
             amount_paid=Decimal("0.10"),
             status=DuesStatus.PAID,
+            due_date=None,
         ),
         SimpleNamespace(
             amount_due=Decimal("0.20"),
             amount_paid=Decimal("0.20"),
             status=DuesStatus.PAID,
+            due_date=None,
         ),
     ]
     result = MagicMock()
@@ -127,7 +130,8 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
     db.scalar.side_effect = [1, 0, 0, 0, 0, 0, 0]
     org = MagicMock()
     org.scalar_one_or_none.return_value = SimpleNamespace(timezone="UTC")
-    db.execute.side_effect = [org, purchases]
+    # The reimbursement checks in the period and their voids come first.
+    db.execute.side_effect = [empty, empty, org, purchases]
 
     service = FinanceService(db)
     # Account resolution has its own database-backed tests.

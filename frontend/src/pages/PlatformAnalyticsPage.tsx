@@ -276,9 +276,9 @@ interface StatCardProps {
 
 const colorMap: Record<string, string> = {
   blue: 'text-blue-600',
-  green: 'text-green-600',
+  green: 'text-green-700 dark:text-green-600',
   red: 'text-red-600',
-  yellow: 'text-yellow-600',
+  yellow: 'text-yellow-700 dark:text-yellow-600',
   purple: 'text-purple-600',
 };
 
@@ -358,7 +358,9 @@ const BarChart: React.FC<BarChartProps> = ({ data, color, label }) => {
       : `${label}: ${busyDays.map((d) => `${formatCalendarDate(d.date, { month: 'short', day: 'numeric' })} ${d.count}`).join(', ')}`;
 
   return (
-    <div className="overflow-x-auto" data-mobile-scroll-region>
+    // Focusable so a keyboard can scroll a chart wider than a phone; named
+    // after the chart, since the page holds two.
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={label} data-mobile-scroll-region>
       {/* The bar's percentage height needs a parent with a height of its own.
           The column it sat in was sized by its content, so every bar
           resolved to 0px and both charts drew nothing (W78-3); the column now

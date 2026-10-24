@@ -137,6 +137,22 @@ describe('GiveUpShiftModal', () => {
     await waitFor(() => expect(mockEndStanding).toHaveBeenCalledWith('claim-1', true));
   });
 
+  it('refreshes the board when the seat is released but the series cannot be ended', async () => {
+    // The seat is already gone on the server: a board still showing it, and a
+    // toast saying nothing was released, invite a retry that can only 404.
+    mockStandingClaim.mockResolvedValue({ id: 'claim-1', is_active: true });
+    mockEndStanding.mockRejectedValue(new Error('series locked'));
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+    await user.click(await screen.findByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: /release shift/i }));
+
+    await waitFor(() => expect(mockEndStanding).toHaveBeenCalledWith('claim-1', true));
+    expect(onChanged).toHaveBeenCalled();
+    expect(await screen.findByText(/you're off the/i)).toBeInTheDocument();
+  });
+
   it('lists who could cover, and will not send until one is picked', async () => {
     const user = userEvent.setup();
     renderModal();

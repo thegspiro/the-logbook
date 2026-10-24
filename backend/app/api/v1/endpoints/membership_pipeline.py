@@ -5,8 +5,6 @@ Endpoints for managing prospective member pipelines, prospects,
 step progression, and transfer to full membership.
 """
 
-import asyncio
-import os
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -94,17 +92,20 @@ from app.schemas.membership_pipeline import (
     TransferProspectRequest,
     TransferProspectResponse,
 )
+from app.services import file_storage_service as file_storage
 from app.services import membership_pipeline_service
 from app.services.email_service import welcome_email_can_send
 from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.services.membership_pipeline_service import (
+    DuplicateApplicantError,
     ElectionStageAmbiguousError,
     MembershipPipelineService,
+    describe_existing_applicant,
+    duplicate_applicant_message,
 )
 from app.utils import download_names
 from app.utils.org_timezone import resolve_scheduling_timezone
@@ -357,11 +358,18 @@ async def update_pipeline(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    pipeline = await service.update_pipeline(
-        str(pipeline_id),
-        current_user.organization_id,
-        data.model_dump(exclude_unset=True),
-    )
+    # apply_updates raises ValueError for a null aimed at a NOT NULL column
+    # (name, public_show_future_stages); unhandled, that was a 500.
+    try:
+        pipeline = await service.update_pipeline(
+            str(pipeline_id),
+            current_user.organization_id,
+            data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not pipeline:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
@@ -714,6 +722,18 @@ async def delete_step(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found"
         )
+    # Deleting a stage deletes every applicant's progress record for it, so
+    # the trail has to say who removed it.
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.step_deleted",
+        event_category="membership",
+        severity="warning",
+        event_data={"pipeline_id": str(pipeline_id), "step_id": str(step_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
+    )
 
 
 # ============================================
@@ -842,6 +862,7 @@ async def purge_inactive_prospects(
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Permanently delete inactive prospects from a pipeline, with their files.
@@ -849,6 +870,10 @@ async def purge_inactive_prospects(
     Only applications in the ``inactive`` status are deleted; any other id is
     skipped, and ``purged_count`` is the number actually deleted. With no
     ``prospect_ids``, every inactive application in the pipeline is purged.
+
+    The caller's own application is never purged, named or not: the body
+    carries ids the router's path-parameter guard cannot see, the same reason
+    both bulk routes filter explicitly.
 
     Requires `confirm: true` in the request body to execute.
 
@@ -870,6 +895,7 @@ async def purge_inactive_prospects(
             organization_id=current_user.organization_id,
             prospect_ids=prospect_ids,
             purged_by=current_user.id,
+            exclude_prospect_ids=hidden_prospect_ids,
         )
 
     # Irreversible deletion of applicant PII, so it is recorded -- by count
@@ -1064,6 +1090,7 @@ async def check_existing_members_for_prospect(
     current_user: User = Depends(
         require_permission("members.create", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Check if a prospective member matches any existing users in the organization.
@@ -1072,6 +1099,13 @@ async def check_existing_members_for_prospect(
     Returns any matches (active, archived, dropped, etc.) so leadership can
     decide whether to reactivate an archived member instead of creating a
     duplicate entry.
+
+    ``existing_applicant`` names the active applicant already holding this
+    email (name, pipeline, stage), or is null. It is reported separately from
+    ``matches`` because it is not a judgement call: ``POST /prospects``
+    refuses that email with a 409, so the form can say so before submitting.
+    It is null when the applicant is the caller: typing their own email must
+    not show them the pipeline and stage of their own application.
 
     **Requires permission: members.create or prospective_members.manage**
     """
@@ -1092,10 +1126,16 @@ async def check_existing_members_for_prospect(
         }
         for m in matches
     ]
+    existing_applicant = await service.find_existing_applicant(
+        organization_id=current_user.organization_id, email=email
+    )
+    if existing_applicant and existing_applicant["prospect_id"] in hidden_prospect_ids:
+        existing_applicant = None
     return {
         "has_matches": len(matches) > 0,
         "match_count": len(matches),
         "matches": safe_matches,
+        "existing_applicant": existing_applicant,
     }
 
 
@@ -1138,6 +1178,7 @@ async def create_prospect(
     current_user: User = Depends(
         require_permission("members.create", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Add a new prospective member manually.
@@ -1145,6 +1186,13 @@ async def create_prospect(
     Before creating, the system checks for existing members with the same
     email. If an archived member is found, a 409 Conflict is returned with
     the match details and a recommendation to reactivate instead.
+
+    If an active applicant already holds the email, a 409 Conflict names them
+    (name, pipeline, stage) and nothing is created or audited. The public
+    application form returns the existing applicant instead; this form must
+    not report "added" for a record it did not create.
+    When that applicant is the caller, the 409 says only that an active
+    application uses the email, without naming its pipeline or stage.
 
     **Requires permission: members.create or prospective_members.manage**
     """
@@ -1188,7 +1236,17 @@ async def create_prospect(
             organization_id=current_user.organization_id,
             data=prospect_data,
             created_by=current_user.id,
+            reject_duplicate=True,
         )
+    except DuplicateApplicantError as e:
+        # The caller's own application is refused without being described:
+        # naming its pipeline and stage would show them their own file.
+        detail = (
+            str(e)
+            if str(e.existing.id) in hidden_prospect_ids
+            else duplicate_applicant_message(describe_existing_applicant(e.existing))
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     except ValueError as e:
         # Rejected foreign keys (pipeline, referring member) are client errors.
         # Without this they reached the catch-all handler as a 500.
@@ -1926,6 +1984,55 @@ async def transfer_prospect(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+    # A Google Workspace account is created only once the member is durable,
+    # and the welcome email that carries its password waits for it.
+    send_after_commit = result.pop("_send_welcome_email", None)
+    provision_after_commit = result.pop("_provision_directory_account", None)
+    # Training officers hear about a skipped automatic enrollment only once
+    # the member it names exists. Its own guard: a mail failure is logged and
+    # never touches the conversion or the welcome email below.
+    notify_skip_after_commit = result.pop("_notify_enrollment_skipped", None)
+    if notify_skip_after_commit is not None:
+        await db.commit()
+        try:
+            await notify_skip_after_commit()
+        except Exception:
+            logger.exception(
+                f"Enrollment-skipped notice failed for prospect {prospect_id}"
+            )
+    if send_after_commit is not None or provision_after_commit is not None:
+        await db.commit()
+        # The member is committed: nothing after this point may turn the
+        # response into an error. What failed is on the account record, where
+        # the member's profile offers a retry.
+        try:
+            if send_after_commit is not None:
+                result["welcome_email_sent"] = bool(await send_after_commit())
+            if provision_after_commit is not None:
+                await provision_after_commit()
+            from app.services.directory_account_service import (
+                DirectoryAccountService,
+                provider_info,
+            )
+
+            row = await DirectoryAccountService(db).get_for_user(
+                str(result["user_id"]), str(current_user.organization_id)
+            )
+            if row is not None:
+                result["google_account"] = {
+                    "provider": row.provider,
+                    "provider_name": provider_info(row.provider).product,
+                    "status": row.status,
+                    "email": row.primary_email,
+                    "credentials_sent": bool(row.credentials_sent),
+                    "last_error": row.last_error,
+                }
+        except Exception:
+            logger.exception(
+                f"Post-conversion delivery failed for prospect {prospect_id}"
+            )
+            await db.rollback()
     return result
 
 
@@ -1990,14 +2097,6 @@ PROSPECT_DOCUMENT_RULES = FileRules(
     max_bytes=50 * 1024 * 1024,
     description="PDF, Word, JPEG, PNG, GIF",
 )
-
-
-def _remove_prospect_document_file(path: str) -> None:
-    """Best-effort cleanup of a stored file after a failed upload."""
-    try:
-        os.remove(path)
-    except OSError:
-        logger.warning(f"Failed to clean up prospect document file: {path}")
 
 
 @router.get(
@@ -2076,13 +2175,13 @@ async def add_prospect_document(
             uploaded_by=current_user.id,
         )
     except ValueError as e:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await file_storage.delete_quietly(stored_path)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await file_storage.delete_quietly(stored_path)
         raise
     if not doc:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await file_storage.delete_quietly(stored_path)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
@@ -2132,7 +2231,7 @@ async def download_prospect_document(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
-    if not os.path.exists(resolved_path):
+    if not await file_storage.exists(resolved_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document file not found on disk",
@@ -2143,8 +2242,8 @@ async def download_prospect_document(
     )
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return stored_file_response(
-        path=resolved_path,
+    return await file_storage.file_response(
+        resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(doc.created_at, tz),
             download_names.member_name_part(

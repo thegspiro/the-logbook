@@ -7,13 +7,22 @@
 
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
+  AdoptionProposal,
+  AgendaSyncPreview,
   MeetingMinutes,
   Motion,
   MotionCreate,
+  MotionUpdate,
   ActionItem,
   ActionItemAssignee,
   ActionItemCreate,
   MinutesStats,
+  MinutesPublishingStatus,
+  MinutesPublishResult,
+  MinutesReminderSettings,
+  MinutesSignature,
+  SignatureStatus,
+  ArchiveSearchResponse,
   MinutesSearchResult,
   MinutesListItem,
   AttendanceSuggestions,
@@ -83,6 +92,12 @@ export const minutesService = {
     return response.data;
   },
 
+  /** What a later meeting's passed acceptance motion implies for these minutes' adoption, if anything. */
+  async getAdoptionProposal(minutesId: string): Promise<AdoptionProposal | null> {
+    const response = await api.get<AdoptionProposal | null>(`/minutes-records/${minutesId}/adoption-proposal`);
+    return response.data ?? null;
+  },
+
   /** Take circulated minutes back to draft so suggestions can be worked in. */
   async recall(minutesId: string): Promise<MeetingMinutes> {
     const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/recall`);
@@ -102,14 +117,30 @@ export const minutesService = {
 
   // ── Publishing ──
 
-  async publishMinutes(minutesId: string): Promise<void> {
-    await api.post(`/minutes-records/${minutesId}/publish`);
+  async publishMinutes(minutesId: string): Promise<MinutesPublishResult> {
+    const response = await api.post<MinutesPublishResult>(`/minutes-records/${minutesId}/publish`);
+    return response.data;
+  },
+
+  async getPublishingStatus(minutesId: string): Promise<MinutesPublishingStatus> {
+    const response = await api.get<MinutesPublishingStatus>(`/minutes-records/${minutesId}/publishing`);
+    return response.data;
+  },
+
+  /** Take the public copy down. The library copy is untouched. */
+  async withdrawPublicCopy(minutesId: string): Promise<void> {
+    await api.delete(`/minutes-records/${minutesId}/public-posting`);
   },
 
   // ── Motions ──
 
   async addMotion(minutesId: string, data: MotionCreate): Promise<Motion> {
     const response = await api.post<Motion>(`/minutes-records/${minutesId}/motions`, data);
+    return response.data;
+  },
+
+  async updateMotion(minutesId: string, motionId: string, data: MotionUpdate): Promise<Motion> {
+    const response = await api.put<Motion>(`/minutes-records/${minutesId}/motions/${motionId}`, data);
     return response.data;
   },
 
@@ -150,6 +181,31 @@ export const minutesService = {
     return response.data;
   },
 
+  // ── Signatures ──
+
+  async getSignatureStatus(minutesId: string): Promise<SignatureStatus> {
+    const response = await api.get<SignatureStatus>(`/minutes-records/${minutesId}/signatures`);
+    return response.data;
+  },
+
+  /** Sign a slot: the name as typed and the signer's password, which is checked and never kept. */
+  async sign(minutesId: string, slotKey: string, signedName: string, password: string): Promise<MinutesSignature> {
+    const response = await api.post<MinutesSignature>(`/minutes-records/${minutesId}/signatures`, {
+      slot_key: slotKey,
+      signed_name: signedName,
+      password,
+    });
+    return response.data;
+  },
+
+  // ── Reminder settings ──
+
+  /** What the daily reminder task will do for this department. Written through the organization settings. */
+  async getReminderSettings(): Promise<MinutesReminderSettings> {
+    const response = await api.get<MinutesReminderSettings>('/minutes-records/settings');
+    return response.data;
+  },
+
   // ── Stats & Search ──
 
   async getStats(): Promise<MinutesStats> {
@@ -160,6 +216,14 @@ export const minutesService = {
   async search(query: string, limit = 20): Promise<MinutesSearchResult[]> {
     const response = await api.get<MinutesSearchResult[]>('/minutes-records/search', { params: { q: query, limit } });
     return asArray(response.data);
+  },
+
+  /** The words of titles, sections, motions and action items, grouped by minutes. */
+  async searchArchive(query: string, meetingType?: string): Promise<ArchiveSearchResponse> {
+    const response = await api.get<ArchiveSearchResponse>('/minutes-records/archive-search', {
+      params: { q: query, ...(meetingType ? { meeting_type: meetingType } : {}) },
+    });
+    return { ...response.data, hits: asArray(response.data.hits) };
   },
 
   // ── Roll call ──
@@ -310,6 +374,18 @@ export const minutesService = {
     const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/apply-outline`, {
       template_id: outlineId,
     });
+    return response.data;
+  },
+
+  /** What the meeting's agenda now asks of these minutes' sections. */
+  async getAgendaSync(minutesId: string): Promise<AgendaSyncPreview> {
+    const response = await api.get<AgendaSyncPreview>(`/minutes-records/${minutesId}/agenda-sync`);
+    return response.data;
+  },
+
+  /** Apply the chosen agenda changes (by the ids the preview gave) to draft minutes. */
+  async applyAgendaSync(minutesId: string, accept: string[]): Promise<MeetingMinutes> {
+    const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/agenda-sync`, { accept });
     return response.data;
   },
 

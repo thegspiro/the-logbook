@@ -9,6 +9,10 @@ const mockImportItemsCsv = vi.fn();
 const mockDownloadImportTemplate = vi.fn();
 
 vi.mock('../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   inventoryService: {
     importItemsCsv: (...args: unknown[]) => mockImportItemsCsv(...args) as unknown,
     downloadImportTemplate: (...args: unknown[]) => mockDownloadImportTemplate(...args) as unknown,
@@ -43,11 +47,12 @@ describe('ImportInventory', () => {
     expect(screen.getByText('Only .csv files are accepted')).toBeInTheDocument();
   });
 
-  it('renders back to inventory link', () => {
+  it('carries no back link of its own', () => {
     renderWithRouter(<ImportInventory />);
 
-    const backLink = screen.getByText('← Back to Inventory');
-    expect(backLink).toBeInTheDocument();
+    // The Operations section strip and trail replaced the header's
+    // "Back to Inventory"; a second way back would only repeat them.
+    expect(screen.queryByText('← Back to Inventory')).not.toBeInTheDocument();
   });
 
   it('renders the step instructions in order', () => {

@@ -368,3 +368,482 @@ engine, which added the 12 missing columns; all 25 then passed. This is an
 environment-setup action, not an application or migration fix, and is not
 part of this PR's diff — recorded here per CLAUDE.md's "no silent pass-over"
 rule rather than quietly working around it.
+
+---
+
+## Pass 9 (2026-10-17)
+
+**Prefix:** `RPT6` (unchanged) · **Rotation pass:** 9 · **Reviewed:** 2026-10-17 · **PR:** (this PR)
+
+PR #2994 (pass 8, `b40475bd`) merged with nothing started for the next
+feature since; this pass picked up Feature 29. Real delta since pass 8
+diffed directly against `b40475bd` across all ten scope files plus
+`frontend/src/modules/reports`:
+
+- **`feat(reports): send scheduled saved reports and add the saved-reports
+screen` (RPT2-29-2, resolved).** `RPT2-29-2` — `SavedReport` scheduling
+  fields stored and API-writable with no reader — is now fixed: a new daily
+  task `saved_report_delivery` (`app/services/saved_report_schedule.py`,
+  registered in `SCHEDULE`/`TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`) sends
+  each organization's due reports via the existing `_for_each_org` helper.
+  Read the new module in full: the PII gate
+  (`PII_REPORT_PERMISSIONS`) is enforced at both save time
+  (`_settle_schedule` in `reports.py`, calling `disallowed_pii_recipients`)
+  and send time (`_owner_may_run` re-checks the schedule's owner still holds
+  the report type's permission; `disallowed_pii_recipients` re-checks every
+  recipient is an active, non-deleted member of the _same organization_
+  holding that permission — both queries filter `organization_id`). Only a
+  numeric top-level summary (`_numeric_summary`) and a link ever reach the
+  email body; every interpolated value is `html.escape`d; no per-member row
+  is emailed. `email_recipients` is now `List[EmailStr]` on both
+  create/update schemas. `POST/PATCH /saved/{id}` and `DELETE /saved/{id}`
+  remain org-scoped by-id (checklist 14a, re-verified at
+  `reports.py:282-325`). External recipients are run through the existing
+  `audit_external_recipients` helper before sending. No new finding — this
+  closes RPT2-29-2 rather than opening anything.
+- **`Let members and departments customize the Department pulse cards`
+  (new surface, reviewed clean).** New `GET/PUT/DELETE
+/dashboard/pulse-layout` (self-scoped: no id in the path, reads/writes
+  only `current_user`'s own row) and `PUT/DELETE
+/dashboard/pulse-layout/default` (`settings.manage` OR
+  `organization.update_settings`, writing
+  `Organization.settings["dashboard_pulse"]` through the existing
+  `OrganizationService.update_organization_settings`, which already
+  `copy.deepcopy()`s before mutating — pitfall #12 satisfied). Verified the
+  commit message's central claim by reading `get_main_dashboard_widgets`
+  (unchanged by this commit): the pulse layout is read-order preference
+  only, and `GET /dashboard/widgets` is the sole gate on which cards a
+  caller's data can populate — a layout cannot make a card appear whose
+  block that endpoint did not return. `schemas/dashboard_pulse.py`'s
+  `PulseCardPreference`/`DashboardPulseLayout` use `extra="forbid"`, a
+  `Literal` allowlist of 8 card ids (unknown ids are dropped, not stored),
+  a 40-character title cap with a control-character rejection, and a
+  duplicate-card-id rejection; `normalize_pulse_layout` degrades any
+  malformed stored value to "not set" rather than raising (read on every
+  dashboard load). New `users.dashboard_pulse` column
+  (`a51a4e1d2443_add_user_dashboard_pulse.py`): nullable JSON, no FK
+  (pitfall #2 n/a), guards `_has_table`/`_has_column` (pitfall #26). Both
+  write handlers assign a fresh dict from `stored_layout()` rather than
+  mutating an existing one in place, so the plain JSON column change is
+  seen by SQLAlchemy without needing `flag_modified`. Department-level
+  writes are audit-logged (`log_audit_event`,
+  `organization_settings_updated`). No finding.
+- **Four smaller real changes, each reviewed and clean:** `fix(reports):
+read report date ranges on the department's calendar` (GF-24a) —
+  timezone-correctness only, org id already resolved by the caller before
+  reaching the changed date-math helpers, no query org-filter touched;
+  `feat(reports): warn on a range predating the tracking mode` (SCHED-14,
+  SCHED-15) — two additive, non-sensitive keys on the call-volume report
+  payload and a JSON-setting timestamp stamped from the existing
+  `update_scheduling_settings` write path, already org-scoped; `fix(inventory):
+low stock sums lots...` (W47-6) — the dashboard's low-stock widget gained
+  one additive `exclude_item_types` keyword on an already org-scoped call,
+  no new query; `fix(reports): keep the available-reports list an array on
+a malformed response` (RPT2-29-2, frontend) — a defensive `asArray()` on
+  the store, no backend change.
+- **mypy-cleanup commits** (`51c77a9c`, `c926b687`, `0d4d7c5a`, `0dfcd516`,
+  `f5ad6018`, `265a26be`) touching `dashboard.py`, `platform_analytics.py`,
+  `reports_service.py`, `attendance_dashboard_service.py`,
+  `dashboard_widget_service.py`: type annotations and `hasattr(...,
+"value") else str(...)` → `str(getattr(..., "value", ...))` rewrites,
+  each mechanically equivalent; spot-checked several for a dropped
+  `organization_id` filter or changed query shape — none found.
+- **Accessibility-only commits** (`fb70c06a`, `7770b180`, `b5c5f90e`,
+  `e8425b6e`) touching `ReportsPage.tsx`/`SavedReportsPage.tsx`: dialog
+  `aria-modal`/role/name, `aria-disabled` on busy buttons, heading levels —
+  no security relevance, confirmed by reading each diff.
+- **`f460cd48` (FORM-10) is the squash/rebase history-boundary artifact**
+  prior passes have already documented (its diff is "every file in this
+  feature added at once," 11226 insertions across 40 files, with no
+  resolvable parent) — not a real touch to this feature's scope, and its
+  actual subject (one-submission-per-person on forms) belongs to Feature 26
+  (Forms), already reviewed there.
+
+**Re-verification, not re-citation.** `RPT6-29-1` (pipeline_overview
+self-exposure) re-confirmed fixed by direct read of
+`_generate_pipeline_overview` and both `reports.py` endpoints that pass
+`hidden_prospect_ids` through. `RPT2-29-2` is now RESOLVED (above), so it
+moves out of "still flagged." Every other still-flagged item from pass 8
+(`LBL-29-2`, `LBL-29-4`, `RPT-5c`/`RPT-6`/`RPT-7`, `DASH-2`,
+`RPT5-29-1`/`RPT5-29-5`) re-confirmed unchanged by direct read — none
+re-litigated here. Route surface re-enumerated: 30 → 34 (+4:
+`/dashboard/pulse-layout` × 2 verbs self-scoped, `/dashboard/pulse-layout/default`
+× 2 verbs `settings.manage`-OR-gated); every route carries a recognized
+auth dependency.
+
+**Also discovered and fixed (unrelated to this feature's own code, but
+blocking the completion gate):** the Alembic chain had forked into two
+heads — `244b0fd07205` (ballot send jobs, a different pull request) and
+`d3bb8f81ed07` (directory account license flags, another). Neither
+revision's branch had seen the other when it merged, which is the same
+shape CLAUDE.md's migration-fork precedents describe. Resolved with a merge
+revision (`fccdac60063f`, `20261017_1330_fccdac60063f_merge_heads.py`),
+clean per `validate_migrations.py --strict`. The sandbox database was then
+behind both branches' new columns (`ballot_send_jobs.kind`, two
+`directory_account_provisions` flags); `alembic upgrade head` plus
+`scripts/repair_schema.py` brought it current, after which the four tests
+that had failed only on the missing `ballot_send_jobs.kind` column
+(`test_ballot_send_jobs.py` ×3, `test_w50_roster_frozen_roll.py` ×1 — none
+in this feature's own files) passed with no code change. This is an
+environment/migration-graph fix, not part of this feature's own diff, and
+is recorded per CLAUDE.md's "no silent pass-over" rule.
+
+## Completion gate (pass 9)
+
+| Check                                                                                                                                             | Result                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.3.0`, pinned)                                                                                           | ✅ 0 violations                                                                   |
+| `black --check app/ tests/ alembic/` (`black==26.5.1`, pinned)                                                                                    | ✅ 2416 files unchanged                                                           |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`, pinned, matches CI)                                                                    | ✅ clean                                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                 | ✅ 616 revisions, single head `fccdac60063f` (after the merge-revision fix above) |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline"` | ✅ **1291 passed**, 1 skipped (`pywebpush`, env-only)                             |
+| `pytest tests/` (full unit suite, `-m "not integration and not slow and not docker"`)                                                             | ✅ **15472 passed**, 4 skipped (env-only), 0 failed                               |
+| `cd frontend && npm run typecheck`                                                                                                                | ✅ 0 errors                                                                       |
+| `cd frontend && npm run lint`                                                                                                                     | ✅ 0 errors, 0 warnings                                                           |
+| `cd frontend && npx vitest run src/modules/reports`                                                                                               | ✅ **73 passed** (8 files)                                                        |
+
+Findings: 0 fixed in this feature's own code, 0 new, 1 standing finding
+(RPT2-29-2) resolved by regular engineering work and verified. No
+`KNOWN_LIMITATIONS.md` change needed — its RPT2-29-2 entry already carries
+a "✅ Resolved 2026-10-11" note matching the fix described above, checked
+against current code rather than taken on its own say-so, and needed no
+correction. Rotation row 29 → ✅. Next: Feature 30 (Onboarding).
+
+## Pass 10 (2026-10-20)
+
+**Prefix:** `RPT6` (unchanged) · **Rotation pass:** 10 · **Reviewed:**
+2026-10-20 · **PR:** (this PR)
+
+Baseline: pass 9's merge, PR #3379 (`11807edf`). `git log 11807edf..HEAD`
+restricted to this feature's backend scope files (`reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py` and
+their schemas/models, plus `reports_service.py`,
+`dashboard_widget_service.py`, `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`, `saved_report_schedule.py`)
+and `frontend/src/modules/reports` found exactly two real (non-merge)
+commits:
+
+- **`86882208` ("Count dashboard overdue dues by the dues screen's
+  rule").** `dashboard_widget_service.py`'s finance tile now counts
+  `MemberDues` rows via the shared `dues_overdue_clause(now)` (the same
+  predicate the Dues list, its filter and `mark_overdue_dues` already use)
+  instead of a hand-rolled `status IN (...) AND due_date < ...` that
+  double-counted part-paid records. Read in full: the query still filters
+  `MemberDues.organization_id == organization_id`; the change is a
+  predicate substitution for correctness, nothing touches scoping or
+  authorization. No finding.
+- **`5ef9c11e` (workflow-review W72, "reports — 3 fixed, 0 flagged").**
+  Adds an `admin_hours` entry to `get_available_reports()`'s catalog
+  (`reports_service.py`), fixes the Admin Hours report's per-row date to
+  use the org's local day instead of UTC
+  (`resolve_reporting_timezone`/`local_date`), and makes `ReportsPage.tsx`
+  actually call `/reports/available` to filter its fixed card list rather
+  than always offering every card. Re-verified from this feature's own
+  angle, not taken on the commit message's word: `admin_hours` was already
+  present in `PII_REPORT_PERMISSIONS`
+  (`saved_report_schedule.py:81` → `"admin_hours": "admin_hours.manage"`)
+  and `generate_report` already calls
+  `_enforce_report_pii_permission(current_user, request.report_type)`
+  (`reports.py:118`) before generating — so listing the catalog entry does
+  not open a new report type, it only lets `/available` (which already
+  filters `PII_REPORT_PERMISSIONS` entries by the caller's permission,
+  `reports.py:95-109`) and the frontend correctly show/hide a report that
+  was already gated server-side. The date fix and the frontend diffs
+  (`ExportControls.tsx`, `AdminHoursRenderer.tsx`, `SavedReportsPage.tsx`)
+  are touch-target/accessibility/label-formatting only — no
+  `dangerouslySetInnerHTML`, no new API call. No finding.
+
+**Re-verification, not re-citation.** Every standing item from pass 9
+(`LBL-29-2`, `LBL-29-4`, `RPT-5c`/`RPT-6`/`RPT-7`, `DASH-2`, `RPT5-29-1`/
+`RPT5-29-5`) re-confirmed unchanged by direct read this pass — none of this
+pass's two commits touch the files those findings cite
+(`labels.py`, `platform_analytics.py`, `dashboard.py`'s non-pulse routes,
+or `reports_service.py`'s `compliance_status`/`training_summary`/
+`_generate_inventory_status`/`apparatus_status` generators), so there is no
+new evidence to weigh and no re-litigation below. Route surface
+re-enumerated: unchanged at 7 + 3 + 1 + 12 + 12 = 35 routes across the five
+endpoint files; every route carries a recognized auth dependency
+(`require_permission`, `get_current_user`, or `get_current_active_user`).
+
+## Completion gate (pass 10)
+
+| Check                                                                                                                                                                                                                              | Result                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.3.0`, pinned)                                                                                                                                                                            | ✅ 0 violations                                      |
+| `black --check app/ tests/ alembic/` (`black==26.5.1`, pinned)                                                                                                                                                                     | ✅ clean                                             |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`, pinned, matches CI)                                                                                                                                                     | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                  | ✅ 631 revisions, single head `ca0c2111466f`         |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report" -m "not integration and not slow and not docker"` | ✅ **898 passed**, 1 skipped (`pywebpush`, env-only) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                 | ✅ 0 errors                                          |
+| `cd frontend && npm run lint`                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings                              |
+| `cd frontend && npx vitest run src/modules/reports`                                                                                                                                                                                | ✅ **77 passed** (9 files)                           |
+
+Findings: 0 fixed, 0 new, 0 standing findings changed. No
+`KNOWN_LIMITATIONS.md` change needed — nothing this pass found is an
+owner-decision item and RPT2-29-2's existing resolved note still matches
+current code. Rotation row 29 → ✅ (pending this PR's merge). Next: Feature
+30 (Onboarding).
+
+## Pass 11 (2026-10-24) — rotation lap 2; RPT5-29-1/RPT5-29-5 were already
+
+resolved and this file's own pass 9/10 sections had missed it
+
+**Prefix:** `RPT6` (unchanged) · **Rotation pass:** 11 · **Reviewed:**
+2026-10-24 · **PR:** (this PR)
+
+**Step 0:** `search_pull_requests` (`head:claude/security-review-`,
+state=open) → 0 results immediately before starting. `PROGRESS.md`'s table
+had every row ✅ as of the pass-11 watchdog note in
+`SEC-00-cross-cutting-baseline.md` and was reset to ⬜ for this lap; row 29
+was the first ⬜ row, confirmed by reading the table directly on a freshly
+fetched, unshallowed `main` (`597ad4f5`).
+
+**Baseline:** pass 10's merge, `886e21faf`. **Real delta since then**,
+diffed directly against all ten scope files plus `frontend/src/modules/reports`
+(`git log --oneline 886e21fa..HEAD -- <scope>`, excluding merge commits):
+
+- **`5b7ee3ca1` (app-review B16, `RPT2-1`/`RPT2-2`).** `analytics.py`'s
+  `/track` now bounds `metadata` to 4 KB and `/metrics`'s failure breakdown
+  keys on a plain, length-capped string (`_failure_reason`) instead of
+  whatever a client posted — a non-string or oversized `error_reason` could
+  previously 500 every later `/metrics` call for the organization. Read in
+  full: org-scoping untouched, no new query shape. Already fixed and
+  covered by `tests/test_analytics_endpoints_integration.py`
+  (re-run above, passing).
+- **`8a57d0699` (Pitfall #32 sweep).** `dashboard.py` (3 sites),
+  `attendance_dashboard_service.py` (1) and `reports_service.py` (5) moved
+  `User.status == UserStatus.ACTIVE` to
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, so a probationary member now
+  counts in the dashboard's active-member tiles, the attendance roster, and
+  every `ReportsService` population this file's own `active_result`
+  queries build. Every changed query still filters
+  `organization_id`/`org_id` on the same line — this is a predicate
+  widening, not a new tenancy surface. Covered by the repo-wide
+  `tests/test_account_status_gates.py` (re-run above, passing).
+- **`94c8d82d7`.** `update_saved_report`/`run_saved_report` added
+  `SavedReport.is_active.is_(True)` to their by-id, org-scoped lookup, so a
+  soft-deleted saved report can no longer be edited or re-run by id — a real
+  bug fix, still org-scoped, no new finding.
+- **`746382501`.** `labels.py`'s `LabelPrinterBody.dpi` and
+  `schemas/reports.py`'s `SavedReportCreate`/`Update.schedule_day` gained
+  `ge=INT32_MIN, le=INT32_MAX` — mechanical, part of the repo-wide numeric-
+  bounds sweep.
+- **`755011342`.** One line in `ReportsPage.tsx`, a contrast-only shade
+  change — no security relevance.
+- Three merge commits (`659acd468`, `b29ba6ee2`, `489f3f646`) carry no
+  content beyond the five commits above — confirmed by reading each one's
+  diff against its first parent.
+
+Route surface re-enumerated **by AST** this pass (not by re-reading the prior
+table): a small script walked every `@router.<verb>(...)`-decorated function
+across the five endpoint files and printed path, handler and every
+`Depends(...)` default. **35 routes** (7 + 3 + 1 + 12 + 12), unchanged from
+pass 10. Every route carries `get_db` plus one of
+`get_current_user`/`get_current_active_user`/`require_permission(...)`; the
+three with no permission beyond authentication
+(`track_event`, `get_label_preset`/`set_label_preset`,
+`list_label_printers`, `preview_labels`/`generate_labels`/`print_labels`) are
+exactly the ones already named in LBL-29-2 and the `_authorize_module`
+dynamic-permission design — re-confirmed by reading `_authorize_module`
+(`labels.py:65-75`) and its four call sites directly, not taken from the
+prior pass's table.
+
+### RPT6-29-2 — LOW (documentation/process) — RPT5-29-1 and RPT5-29-5 were fixed on 2026-10-11 but this file's pass 9 and pass 10 sections both recorded them as "still flagged, unchanged" — ✅ CORRECTED
+
+**What:** `28b65fb26` ("label the program-progress reports as such and grade
+grandfathered members (RPT5-29-1)"), merged 2026-10-11 — six days _before_
+pass 9 (2026-10-17) and _inside_ pass 9's own diffed window
+(`b40475bd2..11807edf2`, pass 8's merge to pass 9's merge) — rewrote
+exactly the two things RPT5-29-1/RPT5-29-5 were about:
+
+1. **Relabeled, per RPT5-29-1's own option (2).** `compliance_status` is now
+   titled "Program Requirement Progress" and `training_summary` "Training &
+   Program Progress Summary" (`reports_service.py:1610,1665`; ids, routes
+   and response shapes unchanged), with both descriptions and their
+   renderers saying plainly they measure program-enrollment progress, not
+   org-wide annual compliance.
+2. **Fixed the grandfathering gap RPT5-29-5 described.**
+   `_generate_training_summary`'s `requirement_breakdown` section
+   (`reports_service.py:396-465` at current line numbers) now calls
+   `requirement_applies_to_user`/`catch_up_deadline` per member/requirement
+   — read directly this pass — exactly as `_generate_compliance_status`
+   already did, so a grandfathered-exempt or still-catching-up member is no
+   longer counted as unmet. `tests/test_training_summary_program_progress.py`
+   (4 tests) and `frontend/.../programProgressLabels.test.tsx` (3 tests)
+   both re-run this pass, passing.
+
+`docs/KNOWN_LIMITATIONS.md`'s RPT5-29-1 entry already carries an accurate
+"✅ Resolved 2026-10-11" note dated the same day as the fix — so the
+_product_ record was never wrong. The miss is confined to this rotation's
+own findings file: pass 9's "real delta" enumeration listed the mypy-cleanup
+commits that touch nearby lines
+(`0d4d7c5a0`/`0dfcd5168`/`f5ad6018a`) but never surfaced `28b65fb26` itself,
+despite it being a direct, non-merge commit to `reports_service.py` inside
+the exact window pass 9 diffed — and then stated "RPT5-29-1/RPT5-29-5
+re-confirmed unchanged by direct read," which this pass's own re-read of the
+same lines shows was not true at the time it was written. Pass 10 then
+explicitly declined to re-open the question ("none of this pass's two
+commits touch the files those findings cite... so there is no
+re-litigation below"), carrying pass 9's miss forward unverified for a
+second pass.
+
+**Where:** `docs/security-review/RPT6-29-reports-analytics.md` — pass 9's
+and pass 10's "Still flagged" sections (unchanged, left as the historical
+record of what each pass believed); `backend/app/services/reports_service.py:1610,1665,396-465`
+(the fix itself); `28b65fb26` (the fix commit);
+`docs/KNOWN_LIMITATIONS.md`'s RPT5-29-1 entry (already correct).
+
+**Impact:** no security exposure of any kind — this was always a
+correctness/trust finding (two screens disagreeing), not a leak or an
+authorization gap, and it was already fixed in the code the whole time this
+rotation's own paperwork said otherwise. The impact is confined to this
+rotation's bookkeeping: a reader trusting pass 9/10's "still flagged" list
+over the actual source would believe an open item remained open for two
+passes after it closed.
+
+**Why re-verification (not re-citation) matters here:** this is the second
+time one of this rotation's intermediate passes has carried a stale claim
+forward without re-reading the cited lines (RPT6-29-1's own writeup
+contrasts with every prior pass having missed that defect too) — both are
+instances of the same root cause the skill's Step 3 already names ("A
+repeat pass re-enumerates too... reviewing only the files the diff lists").
+Pass 9's delta enumeration here was not wrong about which commits existed
+in its window; it simply did not read `reports_service.py`'s two relevant
+sections end to end against the _current_ text of its own open findings
+before writing "re-confirmed unchanged."
+
+**Fix:** none needed in application code. **Disposition: CORRECTED** — this
+pass's own "Still flagged" list below drops RPT5-29-1/RPT5-29-5. No
+`KNOWN_LIMITATIONS.md` change needed (already accurate).
+
+## Still flagged, re-confirmed unchanged (pass 11)
+
+Re-read directly against current source, not taken from pass 10's table:
+
+- **RPT2-29-2 (MEDIUM/policy) — RESOLVED, not re-opened.** Already fixed by
+  pass 9 (`saved_report_delivery` scheduled task); `enforced` on
+  `SavedReportResponse` is now `bool(r.is_scheduled)`
+  (`reports.py:156`), confirmed by direct read. Listed here only to record
+  that it was checked, not because it is open.
+- **LBL-29-2 (LOW/policy)** — `GET /label-printers` (`list_label_printers`)
+  still carries no permission dependency beyond `get_current_user`
+  (`labels.py`'s AST-enumerated dependency list this pass), a deliberate
+  documented design choice (LAN host/port/location only, no credentials).
+  Unchanged.
+- **LBL-29-4 (Informational)** — `LabelService.generate()`
+  (`label_service.py:562`) still has no count cap of its own, unlike
+  `LabelPrinterService`'s `MAX_LABELS_PER_JOB = 500`
+  (`label_printer_service.py:56,372`) on the print path; bounded only by
+  `LabelGenerateBody.ids`'s `max_length=2000`. Unchanged, flagged asymmetry.
+- **RPT-5c / RPT-6 / RPT-7** — `_generate_inventory_status`'s
+  `float(item.current_value)` (`reports_service.py:1114`, the codebase-wide
+  FIN-7 Decimal refactor), `apparatus_status.last_inspection_date`
+  hardcoded `None` (`reports_service.py:1044`, incomplete feature — the
+  field is populated correctly two report types over, at
+  `reports_service.py:1142-1143`, confirming this one is simply not wired
+  rather than broken), and the shared-requirement double-enrollment
+  completion-percentage-over-100% case — all re-confirmed unchanged by
+  direct read this pass.
+- **DASH-2 (LOW)** — `GET /dashboard/stats` / `dashboardService.getStats()`
+  still has zero frontend callers (`grep -rn "\.getStats()" frontend/src/`,
+  filtered to the dashboard service's own export — zero hits, re-checked
+  this pass). Delete-or-implement, unchanged since 2026-08-08.
+
+## Addendum to pass 11 — a second, independent watchdog session raced this same pass concurrently
+
+A second watchdog session worked this same rotation slot at the same time
+(both ran Step 0's `search_pull_requests`/`list_pull_requests` check before
+either had pushed, so neither saw the other's in-flight branch). Rather than
+open a duplicate, competing PR, that session's one genuinely new finding is
+folded into this PR as a follow-up commit, per this rotation's own
+"Medical supplies pass 16" precedent for exactly this situation.
+
+### RPT6-29-3 — LOW — Member Roster report's own Active/Inactive tally counted a probationary member as inactive — ✅ FIXED
+
+**What:** the repo-wide probationary-account-status sweep (`8a57d069`,
+CLAUDE.md Pitfall #32) moved every `User.status == UserStatus.ACTIVE`
+**query filter** in this feature's files to
+`User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, but `_generate_member_roster`
+(`reports_service.py`) has no status filter at all — it lists every member
+and classifies each into the report's own `active_members`/
+`inactive_members` tallies with a **local-variable** comparison,
+`is_active = status_val == UserStatus.ACTIVE.value`. The sweep's own
+detector (`tests/test_account_status_gates.py`'s `_LITERAL_ACTIVE` regex,
+which matches `User.status`/`user.status` directly) cannot pattern-match a
+local variable holding the status string, so this site was never on the
+sweep's list and survived it untouched.
+
+**Where:** `app/services/reports_service.py`, `_generate_member_roster`
+(pre-fix at line 233).
+
+**Failure scenario:** any `reports.view` holder runs the Member Roster
+report. Every probationary member is listed correctly in `members[]` with
+`status: "probationary"`, but the report's own "Active"/"Inactive" stat
+cards (`frontend/src/modules/reports/components/renderers/
+MemberRosterRenderer.tsx:44-45`) count that same member under **Inactive**
+— understating current headcount on the one screen built to answer that
+question. No row is hidden (unlike the query-filter shape Pitfall #32
+usually describes); only the summary tally is wrong.
+
+**Impact:** data-integrity/correctness, not an access-control bypass or a
+cross-tenant leak. Severity LOW. `grep -rn "== UserStatus.ACTIVE.value"
+app/` finds only this one site in the whole backend.
+
+**Fix:** `is_active` now checks membership in `{s.value for s in
+ACTIVE_ACCOUNT_STATUSES}` rather than equality with the single `ACTIVE`
+value — the same rule the rest of this file already applies, extended to
+the one call shape the existing sweep's regex can't see.
+`test_account_status_gates.py`'s `_LITERAL_ACTIVE` regex itself is left
+untouched: it is a shared, repo-wide test outside this feature's files, and
+generalizing it to also catch an arbitrarily-named local variable risks
+false positives across the 300+ files it already sweeps clean —
+flagging the gap here rather than widening someone else's detector for a
+one-site fix.
+
+**Guard test:** `backend/tests/test_reports_service.py::
+TestMemberRosterActiveTally::test_probationary_member_counts_as_active_not_inactive`
+— three mock users (active, probationary, suspended); asserts
+`active_members == 2`, `inactive_members == 1`, and that each member's own
+`status` field is still reported verbatim (proving the fix changes only the
+tally, not the per-row data). Confirmed red against the pre-fix code
+(`active_members == 1`) before the fix, green after (CLAUDE.md Pitfall #37).
+
+**Completion gate for this addendum:**
+
+| Check                                                                                                                                                                                                                              | Result                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.3.0`, pip-installed to match CI)                                                                                                                                                         | ✅ 0 violations                              |
+| `black --check app/ tests/ alembic/` (`black==26.5.1`, pip-installed to match CI)                                                                                                                                                  | ✅ 2612 files unchanged                      |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`, pip-installed to match CI)                                                                                                                                              | ✅ clean                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                  | ✅ 650 revisions, single head `a8c3b50b6d9b` |
+| `pytest tests/test_reports_service.py -k MemberRosterActiveTally` against the pre-fix code                                                                                                                                         | ✅ fails red (`active_members == 1`, not 2)  |
+| `pytest tests/test_reports_service.py -k MemberRosterActiveTally` after the fix                                                                                                                                                    | ✅ 1 passed                                  |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report" -m "not integration and not slow and not docker"` | ✅ 922 passed, 1 skipped (env-only)          |
+| `pytest tests/test_account_status_gates.py`                                                                                                                                                                                        | ✅ 12 passed                                 |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                 | ✅ 0 errors                                  |
+| `cd frontend && npm run lint`                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings (exit 0)             |
+
+Findings for the addendum: 1 fixed (RPT6-29-3, LOW). Combined with the rest
+of pass 11 above: 1 fixed, 1 documentation correction, 0 new unfixed
+findings.
+
+## Completion gate (pass 11)
+
+| Check                                                                                                                                                                                                                              | Result                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, pinned)                                                                                                                                                                            | ✅ 0 violations                                                    |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, pinned)                                                                                                                                                                    | ✅ 2612 files unchanged                                            |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, pinned, matches CI)                                                                                                                                                     | ✅ clean                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                  | ✅ 650 revisions, single head `a8c3b50b6d9b`                       |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report" -m "not integration and not slow and not docker"` | ✅ **921 passed**, 1 skipped (`pywebpush`, env-only)               |
+| `pytest tests/` (full unit suite, `-m "not integration and not slow and not docker"`)                                                                                                                                              | ✅ **17281 passed**, 4 skipped (env-only: `pywebpush`, `nginx` ×3) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                 | ✅ 0 errors                                                        |
+| `cd frontend && npm run lint`                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings (exit 0)                                   |
+| `cd frontend && npx vitest run src/modules/reports`                                                                                                                                                                                | ✅ **77 passed** (9 files)                                         |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                  | ✅ 275 routes, 0 errors, 0 warnings                                |
+
+Findings: 0 fixes to application code, 0 new security findings, 1
+documentation correction (RPT6-29-2, dropping a two-pass-old stale "still
+flagged" status for an item that was already fixed). No
+`KNOWN_LIMITATIONS.md` change needed. Rotation row 29 → ✅ (pending this
+PR's merge). Next: Feature 30 (Onboarding).

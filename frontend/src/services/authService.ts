@@ -13,7 +13,9 @@ import type {
   PasswordResetConfirm,
   PasswordResetRequest,
   PasswordResetRequestResponse,
+  KioskSessionResult,
   RegisterData,
+  SessionSettings,
   TokenResponse,
 } from '../types/auth';
 
@@ -76,6 +78,15 @@ export const authService = {
       { code },
       { headers: { 'Idempotency-Key': idempotencyKey } }
     );
+    return response.data;
+  },
+
+  /**
+   * Re-verify on this session so sensitive actions open for a few minutes.
+   * An authenticator code when MFA is enrolled, otherwise the password.
+   */
+  async stepUp(proof: { code?: string; password?: string }): Promise<{ verified: boolean; valid_for_minutes: number }> {
+    const response = await api.post<{ verified: boolean; valid_for_minutes: number }>('/auth/step-up', proof);
     return response.data;
   },
 
@@ -194,10 +205,21 @@ export const authService = {
   },
 
   /**
-   * Get session settings (timeout configuration)
+   * Get session settings (timeout configuration) for the current session
    */
-  async getSessionSettings(): Promise<{ session_timeout_minutes?: number }> {
-    const response = await api.get<{ session_timeout_minutes?: number }>('/auth/session-settings');
+  async getSessionSettings(): Promise<SessionSettings> {
+    const response = await api.get<SessionSettings>('/auth/session-settings');
+    return response.data;
+  },
+
+  /**
+   * Switch the current session to (or back from) the longer kiosk limits.
+   * Enabling needs the `security.kiosk_session` permission.
+   */
+  async setKioskSession(enabled: boolean): Promise<KioskSessionResult> {
+    const response = enabled
+      ? await api.post<KioskSessionResult>('/auth/session/kiosk')
+      : await api.delete<KioskSessionResult>('/auth/session/kiosk');
     return response.data;
   },
 };

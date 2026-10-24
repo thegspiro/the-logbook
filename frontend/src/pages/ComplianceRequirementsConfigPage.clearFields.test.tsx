@@ -47,6 +47,7 @@ const mockInitializeConfig = vi.fn();
 const mockGetAvailableRequirements = vi.fn();
 const mockListReports = vi.fn();
 const mockUpdateProfile = vi.fn();
+const mockDeleteProfile = vi.fn();
 
 vi.mock('../services/trainingServices', () => ({
   complianceConfigService: {
@@ -57,7 +58,7 @@ vi.mock('../services/trainingServices', () => ({
     listReports: (...args: unknown[]) => mockListReports(...args) as unknown,
     updateProfile: (...args: unknown[]) => mockUpdateProfile(...args) as unknown,
     createProfile: vi.fn(),
-    deleteProfile: vi.fn(),
+    deleteProfile: (...args: unknown[]) => mockDeleteProfile(...args) as unknown,
     generateReport: vi.fn(),
     deleteReport: vi.fn(),
     emailReport: vi.fn(),
@@ -126,7 +127,9 @@ async function renderLoaded() {
   window.history.pushState({}, '', '/training/compliance-config');
   renderWithRouter(<ComplianceRequirementsConfigPage />);
   await waitFor(() => {
-    expect(screen.getByText('Compliance Requirements Configuration')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Compliance Requirements Configuration' })
+    ).toBeInTheDocument();
   });
 }
 
@@ -363,5 +366,33 @@ describe('ComplianceRequirementsConfigPage — a refused save says why', () => {
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('at_risk_threshold must be less than'))
     );
+  });
+});
+
+describe('ComplianceRequirementsConfigPage — deleting a profile', () => {
+  beforeEach(() => {
+    mockGetConfig.mockReset();
+    mockGetConfig.mockResolvedValue(baseConfig);
+    mockGetAvailableRequirements.mockReset();
+    mockGetAvailableRequirements.mockResolvedValue({ requirements: [requirement] });
+    mockListReports.mockReset();
+    mockListReports.mockResolvedValue({ reports: [], total: 0 });
+    mockListCategories.mockReset();
+    mockListCategories.mockResolvedValue([]);
+    mockDeleteProfile.mockReset();
+    mockDeleteProfile.mockResolvedValue(undefined);
+  });
+
+  it('says members on the profile fall back to org-wide grading, and keeps it on cancel', async () => {
+    await renderLoaded();
+    await userEvent.click(screen.getByRole('button', { name: 'Profiles' }));
+    await userEvent.click(await screen.findByTitle('Delete'));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Delete compliance profile "Active Firefighter"?' });
+    expect(dialog).toHaveTextContent('organization-wide thresholds and requirements');
+    await userEvent.click(screen.getByRole('button', { name: 'Keep it' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockDeleteProfile).not.toHaveBeenCalled();
   });
 });

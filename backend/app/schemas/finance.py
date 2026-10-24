@@ -24,7 +24,8 @@ from app.models.finance import (
     FunctionalClass,
     PurchaseRequestPriority,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.utils.external_url import safe_external_url, validate_external_http_url
 
 # applies_to / step_type / approver_type / frequency / expense_type / mapping_type /
@@ -233,7 +234,7 @@ class BudgetCategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     parent_category_id: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     qb_account_name: Optional[str] = Field(None, max_length=200)
     owner_position_id: Optional[str] = None
     # Null inherits the parent category's (app/services/functional_expenses.py).
@@ -253,7 +254,7 @@ class BudgetCategoryUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     parent_category_id: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     is_active: Optional[bool] = None
     qb_account_name: Optional[str] = Field(None, max_length=200)
     # Omitted leaves the owner alone; an explicit null clears it.
@@ -291,6 +292,9 @@ class BudgetCategoryResponse(UTCResponseBase):
     charge_position_ids: list[str] = Field(default_factory=list)
     # Names from the top-level category down to this one.
     path: list[str] = Field(default_factory=list)
+    # The inactive ancestor that closes this category to new charges, lines
+    # and proposals while it is itself active; null otherwise.
+    inactive_through: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -320,7 +324,7 @@ class BudgetCreate(BaseModel):
 
     fiscal_year_id: str
     category_id: str
-    amount_budgeted: Decimal = Field(..., ge=0, decimal_places=2)
+    amount_budgeted: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
     notes: Optional[str] = None
     station_id: Optional[str] = None
     # None: the line inherits its category's owner.
@@ -336,7 +340,9 @@ class BudgetUpdate(BaseModel):
 
     model_config = _REQUEST_CONFIG
 
-    amount_budgeted: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    amount_budgeted: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
     notes: Optional[str] = None
     station_id: Optional[str] = None
     owner_position_id: Optional[str] = None
@@ -591,18 +597,23 @@ class BudgetRequestProposalOptionsResponse(BaseModel):
 
 
 class BudgetOptionResponse(BaseModel):
-    """A budget line as a request form offers it: a name and what is left.
+    """A budget line as a request form offers it: a name, and what is left
+    only for a caller allowed to see it.
 
     Deliberately not ``BudgetResponse``. ``finance.request`` holders see this
     and nothing more of the budget — the budgeted, spent and encumbered
-    figures stay behind ``finance.view``.
+    figures stay behind ``finance.view``, and so does ``amount_remaining``
+    unless the caller owns the line (it is None otherwise).
     """
 
     model_config = _RESPONSE_CONFIG
 
     id: str
     label: str
-    amount_remaining: Decimal
+    amount_remaining: Optional[Decimal] = None
+    # False when the line's category is inactive: still listed so a request
+    # already on the line can show it, never offered as a new choice.
+    category_active: bool = True
 
 
 class FiscalYearOptionResponse(BaseModel):
@@ -844,7 +855,7 @@ class ApprovalChainStepCreate(BaseModel):
         _enum_check(_APPROVER_TYPES, "approver_type")
     )
 
-    step_order: int = Field(..., ge=1)
+    step_order: int = Field(..., ge=1, le=INT32_MAX)
     name: str = Field(..., min_length=1, max_length=200)
     step_type: str = "approval"
     approver_type: Optional[str] = None
@@ -852,7 +863,9 @@ class ApprovalChainStepCreate(BaseModel):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: bool = False
-    auto_approve_under: Optional[Decimal] = Field(None, decimal_places=2)
+    auto_approve_under: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
     required: bool = True
 
 
@@ -868,7 +881,7 @@ class ApprovalChainStepUpdate(BaseModel):
         _enum_check(_APPROVER_TYPES, "approver_type")
     )
 
-    step_order: Optional[int] = Field(None, ge=1)
+    step_order: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     step_type: Optional[str] = None
     approver_type: Optional[str] = None
@@ -876,7 +889,9 @@ class ApprovalChainStepUpdate(BaseModel):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: Optional[bool] = None
-    auto_approve_under: Optional[Decimal] = Field(None, decimal_places=2)
+    auto_approve_under: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
     required: Optional[bool] = None
 
 
@@ -900,6 +915,14 @@ class ApprovalChainStepResponse(UTCResponseBase):
     created_at: datetime
 
 
+def _require_ordered_range(
+    min_amount: Optional[Decimal], max_amount: Optional[Decimal]
+) -> None:
+    """A chain's minimum cannot be above its maximum: no amount could fit it."""
+    if min_amount is not None and max_amount is not None and min_amount > max_amount:
+        raise ValueError("The minimum amount cannot be above the maximum amount")
+
+
 class ApprovalChainCreate(BaseModel):
     """Create an approval chain"""
 
@@ -912,11 +935,16 @@ class ApprovalChainCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: str
-    min_amount: Optional[Decimal] = Field(None, decimal_places=2)
-    max_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    min_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: bool = False
     steps: Optional[list[ApprovalChainStepCreate]] = None
+
+    @model_validator(mode="after")
+    def _check_range(self) -> "ApprovalChainCreate":
+        _require_ordered_range(self.min_amount, self.max_amount)
+        return self
 
 
 class ApprovalChainUpdate(BaseModel):
@@ -931,11 +959,44 @@ class ApprovalChainUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: Optional[str] = None
-    min_amount: Optional[Decimal] = Field(None, decimal_places=2)
-    max_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    min_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: Optional[bool] = None
     is_active: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _check_range(self) -> "ApprovalChainUpdate":
+        _require_ordered_range(self.min_amount, self.max_amount)
+        return self
+
+
+class ApprovalRouteStepResponse(BaseModel):
+    """One step a request would wait on, as its timeline would describe it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    name: str
+    step_order: int
+    step_type: str
+    # Who the step waits on; null on a notification step, which waits on
+    # nobody.
+    assignee_label: Optional[str] = None
+    # The amount falls under the step's auto-approve limit.
+    auto_approved: bool = False
+
+
+class ApprovalRoutePreviewResponse(BaseModel):
+    """Who a request would wait on if it were submitted now."""
+
+    model_config = _RESPONSE_CONFIG
+
+    chain_name: Optional[str] = None
+    # No chain applies: a finance approver decides by hand.
+    manual: bool
+    steps: list[ApprovalRouteStepResponse] = []
+    # At or over the department's dual-approval threshold.
+    second_approver_required: bool = False
 
 
 class ApprovalChainResponse(UTCResponseBase):
@@ -1348,7 +1409,7 @@ class PurchaseRequestCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
     vendor: Optional[str] = None
-    estimated_amount: Decimal = Field(..., gt=0, decimal_places=2)
+    estimated_amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     priority: str = "medium"
     notes: Optional[str] = None
     apparatus_id: Optional[str] = None
@@ -1369,8 +1430,12 @@ class PurchaseRequestUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     vendor: Optional[str] = None
-    estimated_amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
-    actual_amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    estimated_amount: Optional[Decimal] = Field(
+        None, gt=0, max_digits=12, decimal_places=2
+    )
+    actual_amount: Optional[Decimal] = Field(
+        None, gt=0, max_digits=12, decimal_places=2
+    )
     priority: Optional[str] = None
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
@@ -1432,6 +1497,11 @@ class PurchaseRequestResponse(UTCResponseBase):
     receipt_file_url: Optional[str] = None
     apparatus_id: Optional[str] = None
     facility_id: Optional[str] = None
+    # The expense report claiming this purchase back for the requester, while
+    # one does (app/services/finance_reimbursement.py; detail responses).
+    reimbursement_report_id: Optional[str] = None
+    reimbursement_report_number: Optional[str] = None
+    reimbursement_report_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
@@ -1472,7 +1542,7 @@ class ExpenseLineItemCreate(BaseModel):
     # payment spends; app/services/restricted_funds.py.
     fund_campaign_id: Optional[str] = None
     description: str = Field(..., min_length=1, max_length=500)
-    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     date_incurred: datetime
     # Typed as the enum so an unknown value is rejected with a 422 here rather
     # than reaching MySQL, where the column is an ENUM and the insert fails with
@@ -1485,6 +1555,26 @@ class ExpenseLineItemCreate(BaseModel):
     _check_receipt_url = field_validator("receipt_url", mode="before")(
         validate_external_http_url
     )
+
+
+class ExpenseLineItemUpdate(BaseModel):
+    """Edit a line on a draft expense report. Omitted fields are left alone;
+    null clears an optional one (description, amount, date and type cannot be
+    cleared)."""
+
+    model_config = _REQUEST_CONFIG
+
+    _check_expense_type = field_validator("expense_type", mode="before")(
+        _enum_check(_EXPENSE_TYPES, "expense_type")
+    )
+
+    budget_id: Optional[str] = None
+    fund_campaign_id: Optional[str] = None
+    description: Optional[str] = Field(None, min_length=1, max_length=500)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
+    date_incurred: Optional[datetime] = None
+    expense_type: Optional[ExpenseType] = None
+    merchant: Optional[str] = Field(None, max_length=300)
 
 
 class ExpenseLineItemResponse(UTCResponseBase):
@@ -1600,6 +1690,16 @@ class ExpenseReportResponse(UTCResponseBase):
     # have left, while it is not yet approved; null when it fits or charges
     # no fund (detail responses).
     fund_shortfall: Optional[Decimal] = None
+    # The purchase request this report claims back, and the check paying the
+    # member, while one does (app/services/finance_reimbursement.py; detail
+    # responses). ``amount_owed`` is what a check would pay: the total less
+    # what a cash advance already covered.
+    purchase_request_id: Optional[str] = None
+    purchase_request_number: Optional[str] = None
+    reimbursement_check_id: Optional[str] = None
+    reimbursement_check_number: Optional[str] = None
+    reimbursement_check_status: Optional[str] = None
+    amount_owed: Optional[Decimal] = None
     created_at: datetime
     updated_at: datetime
     line_items: list[ExpenseLineItemResponse] = []
@@ -1633,7 +1733,7 @@ class CheckRequestCreate(BaseModel):
     is_advance: bool = False
     payee_name: str = Field(..., min_length=1, max_length=300)
     payee_address: Optional[str] = None
-    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     memo: Optional[str] = None
     purpose: Optional[str] = None
     notes: Optional[str] = None
@@ -1650,12 +1750,12 @@ class CheckRequestUpdate(BaseModel):
     fund_campaign_id: Optional[str] = None
     payee_name: Optional[str] = Field(None, min_length=1, max_length=300)
     payee_address: Optional[str] = None
-    amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
     memo: Optional[str] = None
     purpose: Optional[str] = None
     notes: Optional[str] = None
     check_number: Optional[str] = None
-    check_date: Optional[datetime] = None
+    check_date: Optional[UTCDateTime] = None
 
 
 class CheckRequestResponse(UTCResponseBase):
@@ -1703,10 +1803,37 @@ class CheckRequestResponse(UTCResponseBase):
     qb_exported_at: Optional[datetime] = None
     # When the reversing entry for a void went to QuickBooks.
     qb_void_exported_at: Optional[datetime] = None
+    # The expense report this check reimburses the member for; the number is
+    # set on detail responses (app/services/finance_reimbursement.py).
+    expense_report_id: Optional[str] = None
+    expense_report_number: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+
+class ReimbursementReportCreate(BaseModel):
+    """Claim back an approved purchase the requester paid for themselves.
+
+    Each field defaults to the purchase request's own: its actual amount
+    (else its estimate), the day it was received or ordered, its vendor.
+    """
+
+    model_config = _REQUEST_CONFIG
+
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
+    date_incurred: Optional[UTCDateTime] = None
+    merchant: Optional[str] = Field(None, max_length=300)
+
+
+class ReimbursementCheckCreate(BaseModel):
+    """Pay an approved expense report by check, to the member who filed it."""
+
+    model_config = _REQUEST_CONFIG
+
+    payee_address: Optional[str] = Field(None, max_length=1000)
+    memo: Optional[str] = Field(None, max_length=500)
 
 
 # ============================================
@@ -1724,11 +1851,11 @@ class DuesScheduleCreate(BaseModel):
     )
 
     name: str = Field(..., min_length=1, max_length=200)
-    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     frequency: str
-    due_date: datetime
-    grace_period_days: int = Field(30, ge=0)
-    late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    due_date: UTCDateTime
+    grace_period_days: int = Field(30, ge=0, le=INT32_MAX)
+    late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     notes: Optional[str] = None
@@ -1752,11 +1879,11 @@ class DuesScheduleUpdate(BaseModel):
     )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
-    amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
     frequency: Optional[str] = None
-    due_date: Optional[datetime] = None
-    grace_period_days: Optional[int] = Field(None, ge=0)
-    late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    due_date: Optional[UTCDateTime] = None
+    grace_period_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     is_active: Optional[bool] = None
@@ -1847,7 +1974,7 @@ class MemberDuesPayment(BaseModel):
 
     model_config = _REQUEST_CONFIG
 
-    amount_paid: Decimal = Field(..., gt=0, decimal_places=2)
+    amount_paid: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
     notes: Optional[str] = None
@@ -1948,7 +2075,8 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     category_id: str
     category_name: str
     is_active: bool
-    # ready, no_account, no_offset, duplicate_mappings or payable_receivable
+    # ready, no_account, no_offset, duplicate_mappings, payable_receivable,
+    # unsafe_account_name (starts with =, +, - or @) or not_in_chart
     status: str
     account_name: Optional[str] = None
     # category (its own qb_account_name), mapping, or parent (inherited)
@@ -1958,6 +2086,8 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     # its own.
     account_inherited_from: Optional[str] = None
     offset_inherited_from: Optional[str] = None
+    # With not_in_chart: which of the two the uploaded chart lacks.
+    accounts_not_in_chart: list[str] = []
     mapping_ids: list[str]
 
 
@@ -1969,13 +2099,15 @@ class DuesScheduleExportResponse(UTCResponseBase):
     schedule_id: str
     name: str
     is_active: bool
-    # ready, no_income, no_deposit or payable_receivable
+    # ready, no_income, no_deposit, payable_receivable, unsafe_account_name
+    # or not_in_chart
     status: str
     income_account: Optional[str] = None
     # schedule (its own) or default (the department's)
     income_source: Optional[str] = None
     deposit_account: Optional[str] = None
     deposit_source: Optional[str] = None
+    accounts_not_in_chart: list[str] = []
 
 
 class DuesExportReadinessResponse(UTCResponseBase):
@@ -1994,12 +2126,14 @@ class AdvanceExportReadinessResponse(UTCResponseBase):
 
     model_config = _RESPONSE_CONFIG
 
-    # ready, no_advances_account, no_cash_account or payable_receivable
+    # ready, no_advances_account, no_cash_account, payable_receivable,
+    # unsafe_account_name or not_in_chart
     status: str = "no_advances_account"
     # The asset account an advance is owed on, and the bank account it is
     # paid from and returned to.
     advances_account: Optional[str] = None
     cash_account: Optional[str] = None
+    accounts_not_in_chart: list[str] = []
 
 
 class ExportReadinessResponse(UTCResponseBase):
@@ -2011,6 +2145,26 @@ class ExportReadinessResponse(UTCResponseBase):
     unmatched_mapping_ids: list[str]
     dues: DuesExportReadinessResponse = DuesExportReadinessResponse()
     advances: AdvanceExportReadinessResponse = AdvanceExportReadinessResponse()
+    # Whether account names are being checked against an uploaded chart.
+    chart_uploaded: bool = False
+
+
+class QuickBooksChartAccountResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    name: str
+    account_type: Optional[str] = None
+
+
+class QuickBooksChartResponse(UTCResponseBase):
+    """The QuickBooks chart of accounts the export checks names against."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # None while no chart is on file, when names are not checked.
+    uploaded_at: Optional[datetime] = None
+    uploaded_by_name: Optional[str] = None
+    accounts: list[QuickBooksChartAccountResponse] = []
 
 
 class DuesDefaultAccountsUpdate(BaseModel):
@@ -2110,7 +2264,7 @@ class AdvanceReturnCreate(BaseModel):
 
     amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     # Defaults to now.
-    returned_at: Optional[datetime] = None
+    returned_at: Optional[UTCDateTime] = None
     payment_method: Optional[str] = Field(None, max_length=50)
     reference: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = Field(None, max_length=5000)
@@ -2136,6 +2290,9 @@ class ExportRequest(BaseModel):
     # Send again payments an earlier export already carried. Off, the export
     # leaves them out so overlapping periods do not import twice.
     include_exported: bool = False
+    # Send them even where their file was confirmed as imported into
+    # QuickBooks; without it such a resend is refused (409).
+    confirm_reimport: bool = False
 
     @field_validator("date_range_start", "date_range_end")
     @classmethod
@@ -2184,6 +2341,10 @@ class ExportLogResponse(UTCResponseBase):
     status: str
     error_message: Optional[str] = None
     completed_at: Optional[datetime] = None
+    # When the Treasurer confirmed the file was imported into QuickBooks.
+    imported_at: Optional[datetime] = None
+    imported_by: Optional[str] = None
+    imported_by_name: Optional[str] = None
 
 
 # ============================================

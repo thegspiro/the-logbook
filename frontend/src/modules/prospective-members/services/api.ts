@@ -34,6 +34,7 @@ import type {
   BulkActionResult,
   ConvertApplicantRequest,
   ConvertApplicantResponse,
+  ConvertGoogleAccountOutcome,
   PendingSignOff,
   SignOffResult,
   ApplicantDocument,
@@ -44,6 +45,7 @@ import type {
   ElectionPackage,
   ElectionPackageCreate,
   ElectionPackageUpdate,
+  ExistingRecordCheck,
   StageHistoryEntry,
   BackendStepResponse,
   BackendPipelineResponse,
@@ -361,6 +363,7 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
       ? mapStepTypeToFrontend(data.current_step.step_type, data.current_step.action_type)
       : undefined,
     current_stage_config: (data.current_step?.config as StageConfig | null) ?? undefined,
+    current_stage_approver_labels: data.current_step?.approver_labels,
     current_stage_required: data.current_step?.required,
     stage_history: stageHistory,
     total_stages: (data.step_progress || []).length,
@@ -786,24 +789,13 @@ export const applicantService = {
     return mapProspectToApplicant(response.data);
   },
 
-  async deleteApplicant(applicantId: string): Promise<void> {
-    // Backend doesn't have a delete prospect endpoint; this may 404
-    await api.delete(`/prospective-members/prospects/${applicantId}`);
-  },
-
-  async checkExisting(
-    email: string,
-    firstName?: string,
-    lastName?: string
-  ): Promise<{ has_matches: boolean; match_count: number; matches: Array<{ status: string; match_type: string }> }> {
+  async checkExisting(email: string, firstName?: string, lastName?: string): Promise<ExistingRecordCheck> {
     const params: Record<string, string> = { email };
     if (firstName) params.first_name = firstName;
     if (lastName) params.last_name = lastName;
-    const response = await api.post<{
-      has_matches: boolean;
-      match_count: number;
-      matches: Array<{ status: string; match_type: string }>;
-    }>('/prospective-members/prospects/check-existing', null, { params });
+    const response = await api.post<ExistingRecordCheck>('/prospective-members/prospects/check-existing', null, {
+      params,
+    });
     return response.data;
   },
 
@@ -1069,6 +1061,7 @@ export const applicantService = {
       message?: string;
       membership_number?: string | null;
       welcome_email_sent?: boolean;
+      google_account?: ConvertGoogleAccountOutcome | null;
     }>(`/prospective-members/prospects/${applicantId}/transfer`, payload);
     return {
       applicant_id: applicantId,
@@ -1077,6 +1070,7 @@ export const applicantService = {
       message: response.data.message ?? 'Transfer successful',
       membership_number: response.data.membership_number || undefined,
       welcome_email_sent: response.data.welcome_email_sent ?? false,
+      google_account: response.data.google_account ?? undefined,
     };
   },
 

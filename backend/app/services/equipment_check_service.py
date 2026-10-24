@@ -9,7 +9,7 @@ import hashlib
 import json
 import math
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
@@ -34,7 +34,12 @@ from app.models.apparatus import (
     EquipmentCheckTemplate,
     TemplateChangeLog,
 )
-from app.models.inventory import InventoryItem, InventoryLot
+from app.models.inventory import (
+    InventoryCategory,
+    InventoryItem,
+    InventoryLot,
+    lot_key,
+)
 from app.models.training import (
     AssignmentStatus,
     Shift,
@@ -48,9 +53,15 @@ from app.models.user import Organization, User
 from app.services.auto_reorder_service import AutoReorderService
 from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
-from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
+from app.utils.check_types import (
+    COUNT,
+    EXPIRY,
+    LEVEL,
+    PRESENCE,
+    normalize_check_type,
+)
 from app.utils.model_updates import apply_updates
-from app.utils.name_matching import best_matches, normalize_name
+from app.utils.name_matching import EXACT, STRONG, best_matches, normalize_name
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import (
     local_day_start_utc,
@@ -59,6 +70,19 @@ from app.utils.org_timezone import (
     today_in,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# Keys on a submitted item that only validation writes: a replacement date the
+# crew entered on a line that takes one, already checked not to be past. The
+# leading underscore keeps them out of reach of a request body, which arrives
+# as a schema dump and cannot carry them.
+_REPLACEMENT_DATE = "_replacement_date"
+_REPLACEMENT_LOT = "_replacement_lot"
+
+# Calendar days a missed check stays on the member's own list. Seven was chosen
+# to sit with the fleet board's seven-date strip (DEFAULT_STRIP_DATES), though
+# that one counts duty dates; past it the miss leaves the member's list, while
+# the board and the compliance report go on counting it.
+MY_CHECKLISTS_OVERDUE_DAYS = 7
 
 
 class EquipmentCheckConflictError(ValueError):
@@ -91,6 +115,11 @@ class EquipmentCheckService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Catalog items whose truck count a crew changed in this request. A
+        # medical supply is judged low on shelf plus trucks, so a lower count
+        # can make it low; these are checked for a reorder once the change
+        # has committed (see _reorder_after_counts).
+        self._counted_inventory_ids: Set[str] = set()
 
     @staticmethod
     def is_check_completed(check: Optional[ShiftEquipmentCheck]) -> bool:
@@ -190,22 +219,36 @@ class EquipmentCheckService:
         if not str(value(template, "name", "")).strip():
             errors.append("template name is required")
 
+        def checkable_items(compartment: Any) -> List[Any]:
+            return [
+                item
+                for item in list(value(compartment, "items", []) or [])
+                if value(item, "check_type", "pass_fail") not in ("header", "text")
+            ]
+
+        # An inline group with nothing in it is not a defect a crew would meet:
+        # it renders as nothing, and the builder removes it on save. Flagging
+        # it would block a publish over an invisible row.
+        compartments = [
+            c
+            for c in compartments
+            if not (value(c, "is_inline", False) and not checkable_items(c))
+        ]
+
         operational = [c for c in compartments if not value(c, "is_header", False)]
         if not operational:
             errors.append("at least one operational compartment is required")
 
         for compartment in compartments:
+            is_inline = bool(value(compartment, "is_inline", False))
             label = str(value(compartment, "name", "")).strip()
-            if not label:
+            # Headingless by design, so there is no name to require.
+            if not label and not is_inline:
                 errors.append("every operational compartment needs a name")
             if value(compartment, "is_header", False):
                 continue
             items = list(value(compartment, "items", []) or [])
-            checkable = [
-                item
-                for item in items
-                if value(item, "check_type", "pass_fail") not in ("header", "text")
-            ]
+            checkable = checkable_items(compartment)
             if not checkable:
                 errors.append(
                     f'operational compartment "{label or "Untitled"}" has no checkable items'
@@ -230,6 +273,24 @@ class EquipmentCheckService:
                 ):
                     errors.append(
                         f'level item "{item_label or "Untitled"}" needs a minimum level'
+                    )
+                # A Date line with no date has nothing for the crew to confirm.
+                # A linked line is exempt: its dates come from the lots the
+                # inventory swap puts aboard, not from this column. So is a
+                # line with a dated lot aboard, because that is the date the
+                # form reads first.
+                if (
+                    check_type in ("expiry", "date_lot")
+                    and value(item, "expiration_date") is None
+                    and not value(item, "inventory_item_id")
+                    and not any(
+                        value(lot, "expiration_date")
+                        for lot in (value(item, "deployed_lots", []) or [])
+                    )
+                ):
+                    errors.append(
+                        f'date item "{item_label or "Untitled"}" needs an '
+                        "expiration date"
                     )
         return list(dict.fromkeys(errors))
 
@@ -299,10 +360,13 @@ class EquipmentCheckService:
         gloves, and the catalog already knows which. Read from the linked
         inventory item rather than stored again on the checklist, so a
         department that relabels a unit does not have to re-enter it on every
-        truck that carries it.
+        truck that carries it. A position with no catalog link shows its own
+        ``count_unit`` instead.
         """
         inv_ids = [i.inventory_item_id for i in items if i.inventory_item_id]
         if not inv_ids:
+            for item in items:
+                item.unit_of_measure = item.count_unit
             return
         # Org-scoped: inventory_item_id is a client-supplied FK, and an
         # unfiltered read here would render a foreign org's label (EC2-4).
@@ -314,8 +378,12 @@ class EquipmentCheckService:
         )
         units = {iid: unit for iid, unit in result.all()}
         for item in items:
+            # A linked position counts in the catalog's unit, because that is
+            # the unit a stock swap moves; its own count_unit is ignored.
             item.unit_of_measure = (
-                units.get(item.inventory_item_id) if item.inventory_item_id else None
+                units.get(item.inventory_item_id)
+                if item.inventory_item_id
+                else item.count_unit
             )
 
     async def list_templates(
@@ -587,6 +655,7 @@ class EquipmentCheckService:
             parent = await self._get_compartment(parent_id, organization_id)
             if not parent or parent.template_id != template_id:
                 raise ValueError("Parent compartment must belong to the same template")
+            self._refuse_inline_parent(parent)
 
         items_data = data.pop("items", None) or []
         # EC2-4: nested items carry the same client-supplied inventory_item_id /
@@ -633,6 +702,7 @@ class EquipmentCheckService:
             await self._validate_compartment_parent(
                 compartment, parent_id, organization_id
             )
+        await self._validate_inline_update(compartment, data)
 
         apply_updates(compartment, data, skip=self.PROTECTED_FIELDS)
 
@@ -902,13 +972,15 @@ class EquipmentCheckService:
         clone = CheckTemplateCompartment(
             id=generate_uuid(),
             template_id=source.template_id,
-            name=f"{source.name} (copy)",
+            # An inline group has no heading to suffix.
+            name="" if getattr(source, "is_inline", False) else f"{source.name} (copy)",
             description=source.description,
             sort_order=sort_order,
             image_url=source.image_url,
             is_header=source.is_header,
             container_type=source.container_type,
             is_sealed=source.is_sealed,
+            is_inline=getattr(source, "is_inline", False),
             parent_compartment_id=source.parent_compartment_id,
         )
         self.db.add(clone)
@@ -928,6 +1000,7 @@ class EquipmentCheckService:
                     required_quantity=item.required_quantity,
                     expected_quantity=item.expected_quantity,
                     critical_minimum_quantity=item.critical_minimum_quantity,
+                    count_unit=item.count_unit,
                     min_level=item.min_level,
                     level_unit=item.level_unit,
                     serial_number=item.serial_number,
@@ -1196,6 +1269,10 @@ class EquipmentCheckService:
         # and a null aimed at a NOT NULL column has to surface as a 400 instead
         # of a flush-time IntegrityError.
         apply_updates(item, data, skip=self.PROTECTED_FIELDS)
+        # A Date line always carries a date; an update that only clears the
+        # checkbox cannot turn one into a line with nothing to confirm.
+        if normalize_check_type(getattr(item, "check_type", None)) == EXPIRY:
+            item.has_expiration = True
 
         await self._advance_content_revision(original_template_id)
         if target_compartment:
@@ -1464,6 +1541,14 @@ class EquipmentCheckService:
         """
         if tmpl_item is not None:
             resolved = tmpl_item.expiration_date if tmpl_item.has_expiration else None
+            # A replacement the crew dated on this check is the unit now
+            # aboard. Read from the key only validation writes
+            # (_validate_and_normalize_observation), never from the submitted
+            # expiration_found, so an unvalidated or ineligible date cannot
+            # clear an expiry fail.
+            replaced = item_data.get(_REPLACEMENT_DATE)
+            if replaced is not None:
+                resolved = replaced
         else:
             resolved = item_data.get("expiration_date")
 
@@ -1506,9 +1591,11 @@ class EquipmentCheckService:
             # but a shortfall cannot be read off an item nobody is carrying.
             if item.get("status") == "not_applicable":
                 continue
-            req_qty = item.get("required_quantity")
+            floor = cls._pass_floor(
+                item.get("required_quantity"), item.get("critical_minimum_quantity")
+            )
             found_qty = item.get("quantity_found")
-            if req_qty is not None and found_qty is not None and found_qty < req_qty:
+            if floor is not None and found_qty is not None and found_qty < floor:
                 item["status"] = "fail"
 
         total = len(items_data)
@@ -1539,6 +1626,10 @@ class EquipmentCheckService:
         for item_data in items_data:
             tmpl_item_id = item_data.get("template_item_id")
             tmpl_item = template_items_map.get(tmpl_item_id) if tmpl_item_id else None
+            if tmpl_item is not None:
+                await self._apply_replacement_date(
+                    tmpl_item, item_data, organization_id, checked_by, check_id
+                )
             # A check is a recount. quantity_found is a crew standing at the
             # compartment counting, so it outranks whatever the running total
             # had drifted to, and it settles a shortfall report if the truck is
@@ -1559,14 +1650,18 @@ class EquipmentCheckService:
                 status=item_data.get("status", "not_checked"),
                 quantity_found=item_data.get("quantity_found"),
                 required_quantity=item_data.get("required_quantity"),
+                expected_quantity=item_data.get("expected_quantity"),
+                count_unit=item_data.get("count_unit"),
                 critical_minimum_quantity=item_data.get("critical_minimum_quantity"),
                 level_reading=item_data.get("level_reading"),
                 level_unit=item_data.get("level_unit"),
                 serial_number=item_data.get("serial_number"),
                 lot_number=item_data.get("lot_number"),
                 serial_found=None,
-                lot_found=None,
-                expiration_found=None,
+                # Only what validation accepted: a crew-dated replacement on a
+                # line that takes one (_validate_and_normalize_observation).
+                lot_found=item_data.get(_REPLACEMENT_LOT),
+                expiration_found=item_data.get(_REPLACEMENT_DATE),
                 updated_serial=False,
                 photo_urls=item_data.get("photo_urls"),
                 is_expired=item_data.get("is_expired", False),
@@ -1576,6 +1671,65 @@ class EquipmentCheckService:
             self.db.add(check_item)
             created.append(check_item)
         return created
+
+    async def _apply_replacement_date(
+        self,
+        template_item: CheckTemplateItem,
+        item_data: Dict[str, Any],
+        organization_id: str,
+        checked_by: Optional[str],
+        check_id: str,
+    ) -> None:
+        """Make a crew-dated replacement the line's date, and log who did it.
+
+        Without this the line kept its old date and failed every check after
+        the unit had been swapped, until an admin edited the checklist. The
+        change goes in the template's change log naming the member and the
+        check, because it alters what every later crew is told is aboard.
+
+        Deliberately does not advance the content revision: that unpublishes
+        the template, and a crew answering it is not an edit to its contents.
+        """
+        found = item_data.get(_REPLACEMENT_DATE)
+        if found is None or not self._takes_crew_replacement_date(template_item):
+            return
+        lot = item_data.get(_REPLACEMENT_LOT)
+        changes: Dict[str, Any] = {
+            "expiration_date": {
+                "old": (
+                    template_item.expiration_date.isoformat()
+                    if template_item.expiration_date
+                    else None
+                ),
+                "new": found.isoformat(),
+            },
+            "check_id": check_id,
+        }
+        if lot is not None and lot != template_item.lot_number:
+            changes["lot_number"] = {"old": template_item.lot_number, "new": lot}
+            template_item.lot_number = lot
+        template_item.expiration_date = found
+        template_item.has_expiration = True
+        # The snapshot was taken before the swap; it should record the unit
+        # this check left aboard.
+        item_data["expiration_date"] = found
+        if lot is not None:
+            item_data["lot_number"] = lot
+
+        template_id = await self.db.scalar(
+            select(CheckTemplateCompartment.template_id).where(
+                CheckTemplateCompartment.id == template_item.compartment_id
+            )
+        )
+        user = await self.db.get(User, checked_by) if checked_by is not None else None
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            template_item,
+            user,
+            action="replacement_dated",
+            changes=changes,
+        )
 
     def _reconcile_count_observation(
         self,
@@ -1594,6 +1748,9 @@ class EquipmentCheckService:
         """
         if normalize_check_type(template_item.check_type) != COUNT:
             return
+        linked = getattr(template_item, "inventory_item_id", None)
+        if linked:
+            self._counted_inventory_ids.add(str(linked))
         # Where lots are aboard the total has to be reconciled against them;
         # writing the scalar alone would be discarded, since their sum is what
         # every reader uses.
@@ -1747,6 +1904,8 @@ class EquipmentCheckService:
             # row so canonicalisation cannot accidentally use a client label.
             template_item._check_compartment_name = compartment_name
             items[str(template_item.id)] = template_item
+        # The unit a count was taken in is snapshotted onto each result.
+        await self._attach_unit_labels(organization_id, list(items.values()))
         return items
 
     @staticmethod
@@ -1802,6 +1961,22 @@ class EquipmentCheckService:
             item["quantity_found"] = None
         if check_type != LEVEL:
             item["level_reading"] = None
+        # A replacement date is an answer only a crew-dated line takes. Anywhere
+        # else it was always discarded, and still is — an older client may send
+        # one for a linked line, whose dates change only through a lot swap.
+        if not EquipmentCheckService._takes_crew_replacement_date(template_item):
+            item["expiration_found"] = None
+            item["lot_found"] = None
+        elif item.get("expiration_found") is None:
+            item["lot_found"] = None
+        elif item["expiration_found"] < today:
+            raise ValueError(
+                f'The replacement date entered for "{template_item.name}" has '
+                "already passed. Enter the date printed on the unit you put in."
+            )
+        else:
+            item[_REPLACEMENT_DATE] = item["expiration_found"]
+            item[_REPLACEMENT_LOT] = (item.get("lot_found") or "").strip() or None
 
         observation_passes: Optional[bool] = None
         if check_type == COUNT and item.get("quantity_found") is not None:
@@ -1814,9 +1989,12 @@ class EquipmentCheckService:
             # validated snapshot value. This assignment is intentionally
             # before either destination consumes the submission.
             item["quantity_found"] = quantity
-            target = EquipmentCheckService._target_quantity(template_item)
-            if target is not None:
-                observation_passes = quantity >= target
+            floor = EquipmentCheckService._pass_floor(
+                template_item.required_quantity,
+                template_item.critical_minimum_quantity,
+            )
+            if floor is not None:
+                observation_passes = quantity >= floor
         elif check_type == LEVEL and item.get("level_reading") is not None:
             reading = item["level_reading"]
             if isinstance(reading, bool) or not isinstance(reading, (int, float)):
@@ -1831,7 +2009,7 @@ class EquipmentCheckService:
             elif minimum is not None:
                 observation_passes = True
         elif check_type == EXPIRY:
-            expiration = (
+            expiration = item.get(_REPLACEMENT_DATE) or (
                 template_item.expiration_date if template_item.has_expiration else None
             )
             if expiration is not None:
@@ -1851,6 +2029,23 @@ class EquipmentCheckService:
                 f"Status 'pass' contradicts the authoritative "
                 f"{check_type} observation"
             )
+
+    @staticmethod
+    def _takes_crew_replacement_date(template_item: CheckTemplateItem) -> bool:
+        """Whether a crew may date the unit they put in on this line.
+
+        Only a Date line the inventory does not track. A linked line, or one
+        with lots recorded aboard, has its dates owned by the lot swap, which
+        also moves stock; a date typed on a check would bypass that and leave
+        the record of what is aboard disagreeing with the line.
+
+        Mirrors ``canRecordReplacementDate`` in the check form.
+        """
+        return (
+            normalize_check_type(getattr(template_item, "check_type", None)) == EXPIRY
+            and not getattr(template_item, "inventory_item_id", None)
+            and not EquipmentCheckService._deployed_lots(template_item)
+        )
 
     @classmethod
     def _failure_needs_note(
@@ -1879,6 +2074,15 @@ class EquipmentCheckService:
         if status not in ("fail", "out_of_service"):
             return False
         if quantity_found is not None or level_reading is not None:
+            return False
+        # Absent says what is wrong — it is not on the truck. Out of service on
+        # a presence line still needs one: it is there, so why can't it be used?
+        if (
+            status == "fail"
+            and template_item is not None
+            and normalize_check_type(getattr(template_item, "check_type", None))
+            == PRESENCE
+        ):
             return False
         if template_item is not None:
             dates = [
@@ -1960,22 +2164,26 @@ class EquipmentCheckService:
         result whose serial or lot disagrees with the authoritative row it
         claims to answer, and every report downstream reads the snapshot.
 
-        ``required_quantity`` is snapshotted through ``_target_quantity`` rather
-        than off the column, because the column is only half of what this
-        service means by a target: ``required_quantity or expected_quantity``.
-        Storing the raw value gave the service two definitions of "short" —
-        ``_compute_check_status`` and the recompute in ``update_check`` compared
-        against this snapshot, while ``_is_short`` and ``swap_item_lot``'s
-        submitter limits used the resolved one. A position carrying
-        ``required_quantity = 0`` beside a positive ``expected_quantity`` was
-        therefore short by one rule and full by the other, and the crew-facing
-        screens read the resolved rule while the filed record kept the raw one.
+        Two quantities are snapshotted because a count now answers two
+        questions. ``required_quantity`` is Min to Pass, taken raw off the
+        column: with ``critical_minimum_quantity`` it is the pass floor
+        ``_compute_check_status`` and the recompute on completion judge by.
+        ``expected_quantity`` is par as ``_target_quantity`` resolves it — the
+        same resolution ``_is_short`` and the swap limits use — so the filed
+        record and the crew-facing screens measure a shortfall the same way.
+        ``count_unit`` keeps what was counted, the way ``level_unit`` does.
         """
         item["item_name"] = template_item.name
         item["compartment_name"] = template_item._check_compartment_name
         item["check_type"] = template_item.check_type
-        item["required_quantity"] = EquipmentCheckService._target_quantity(
+        item["required_quantity"] = template_item.required_quantity
+        item["expected_quantity"] = EquipmentCheckService._target_quantity(
             template_item
+        )
+        item["count_unit"] = (
+            getattr(template_item, "unit_of_measure", None)
+            if normalize_check_type(template_item.check_type) == COUNT
+            else None
         )
         item["critical_minimum_quantity"] = template_item.critical_minimum_quantity
         item["level_unit"] = template_item.level_unit
@@ -2268,12 +2476,18 @@ class EquipmentCheckService:
                 "out_of_service": item_data.get("status") == "out_of_service",
             }
             found = item_data.get("quantity_found")
-            expected = item_data.get("required_quantity")
+            # Par, not the pass floor: "found 5, expected 10" is what the
+            # officer restocks to. Pre-snapshot rows have only the old target.
+            expected = item_data.get("expected_quantity")
+            if expected is None:
+                expected = item_data.get("required_quantity")
             crit = item_data.get("critical_minimum_quantity")
             if found is not None and expected is not None:
                 detail["expected"] = expected
                 detail["found"] = found
-            if crit is not None and found is not None and found <= crit:
+                if item_data.get("count_unit"):
+                    detail["unit"] = item_data["count_unit"]
+            if self._is_below_critical_minimum(found, crit, expected):
                 detail["critical_minimum"] = crit
                 critical_items.append(detail)
             else:
@@ -2297,6 +2511,7 @@ class EquipmentCheckService:
         except Exception:
             await self.db.rollback()
             raise
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def submit_standalone_check(
@@ -2401,6 +2616,7 @@ class EquipmentCheckService:
         except Exception:
             await self.db.rollback()
             raise
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def complete_incomplete_check(
@@ -2481,6 +2697,8 @@ class EquipmentCheckService:
                 existing.compartment_name = item_data["compartment_name"]
                 existing.check_type = item_data["check_type"]
                 existing.required_quantity = item_data["required_quantity"]
+                existing.expected_quantity = item_data["expected_quantity"]
+                existing.count_unit = item_data["count_unit"]
                 existing.critical_minimum_quantity = item_data[
                     "critical_minimum_quantity"
                 ]
@@ -2507,11 +2725,22 @@ class EquipmentCheckService:
                         item_data["quantity_found"],
                         organization_id,
                     )
-                # Lot metadata is inventory-owned. Ignore legacy/client
-                # observations when a saved incomplete check is resumed.
+                if tmpl_item is not None:
+                    await self._apply_replacement_date(
+                        tmpl_item,
+                        item_data,
+                        organization_id,
+                        checked_by,
+                        str(check.id),
+                    )
+                # Serials are inventory-owned. A replacement date survives only
+                # where validation kept it: a crew-dated line.
                 existing.serial_found = None
-                existing.lot_found = None
-                existing.expiration_found = None
+                if item_data.get(_REPLACEMENT_DATE) is not None:
+                    existing.lot_found = item_data.get(_REPLACEMENT_LOT)
+                    existing.expiration_found = item_data[_REPLACEMENT_DATE]
+                    if item_data.get(_REPLACEMENT_LOT):
+                        existing.lot_number = item_data["lot_number"]
                 existing.updated_serial = False
                 expiration = self._resolve_expiration({}, tmpl_item)
                 existing.expiration_date = expiration
@@ -2560,9 +2789,11 @@ class EquipmentCheckService:
             # _compute_check_status, which this mirrors.
             if item.status == "not_applicable":
                 continue
-            req_qty = item.required_quantity
+            floor = self._pass_floor(
+                item.required_quantity, item.critical_minimum_quantity
+            )
             found_qty = item.quantity_found
-            if req_qty is not None and found_qty is not None and found_qty < req_qty:
+            if floor is not None and found_qty is not None and found_qty < floor:
                 item.status = "fail"
 
         total = len(all_items)
@@ -2591,6 +2822,7 @@ class EquipmentCheckService:
             check.client_submission_id = data["client_submission_id"]
 
         await self.db.commit()
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def get_checks_for_shift(
@@ -2696,8 +2928,18 @@ class EquipmentCheckService:
         user_id: str,
         organization_id: str,
     ) -> List[Dict[str, Any]]:
-        """Get pending + recently completed checklists for a user."""
+        """Get a user's checklists: today and later, plus missed recent ones.
+
+        A shift dated within the last ``MY_CHECKLISTS_OVERDUE_DAYS`` stays on
+        the list only while one of its checks is unfiled. That is what lets My
+        Checklists mark a passed day overdue and the fleet board rank it first,
+        and it keeps an overnight shift's end-of-shift check reachable after
+        midnight. Older misses drop off the member's list; the fleet board and
+        the compliance report still count them.
+        """
         today = await resolve_org_today(self.db, organization_id)
+        now = datetime.now(timezone.utc)
+        earliest = today - timedelta(days=MY_CHECKLISTS_OVERDUE_DAYS)
         # Get user's active shift assignments with shift data. Same status
         # filter as the submit guard in submit_check: a declined/cancelled
         # assignment can't submit a check, so listing its checklists here
@@ -2708,7 +2950,7 @@ class EquipmentCheckService:
             .where(
                 ShiftAssignment.user_id == user_id,
                 Shift.organization_id == organization_id,
-                Shift.shift_date >= today,
+                Shift.shift_date >= earliest,
                 ShiftAssignment.assignment_status.in_(
                     [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
                 ),
@@ -2752,13 +2994,34 @@ class EquipmentCheckService:
                 existing_checks=checks_by_shift.get(str(assignment.shift_id), {}),
             )
             apparatus_name = apparatus_map.get(shift.apparatus_id or "", "")
+            is_past = shift.shift_date < today
+            ended = self._shift_has_ended(shift, today, now)
             for cl in shift_checklists:
+                if is_past and cl["is_completed"]:
+                    continue
+                cl["is_overdue"] = ended and not cl["is_completed"]
                 cl["shift_id"] = assignment.shift_id
                 cl["shift_date"] = shift.shift_date
                 cl["apparatus_name"] = apparatus_name
                 checklists.append(cl)
 
         return checklists
+
+    @staticmethod
+    def _shift_has_ended(shift: Shift, today: date, now: datetime) -> bool:
+        """Whether a shift is over, for marking its unfiled checks overdue.
+
+        Overdue is judged by the shift's end, not its date: an overnight shift
+        dated yesterday is still running at 2am, and its end-of-shift check is
+        not late yet. A shift with no recorded end falls back to its date, so it
+        turns overdue once its day has passed, as it did before.
+        """
+        if shift.end_time is None:
+            return shift.shift_date < today
+        end = shift.end_time
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        return end <= now
 
     async def get_my_checklist_history(
         self,
@@ -2971,6 +3234,7 @@ class EquipmentCheckService:
                     "shift_id": (check.shift_id if check else None),
                     "shift_date": (shift.shift_date if shift else None),
                     "status": item.status,
+                    "check_type": item.check_type,
                     "quantity_found": item.quantity_found,
                     "level_reading": item.level_reading,
                     "serial_number": item.serial_number,
@@ -3053,11 +3317,12 @@ class EquipmentCheckService:
                     # of four is the same shortfall as a crew reporting it.
                     and_(
                         CheckTemplateItem.quantity_on_truck.isnot(None),
+                        # Par as _target_quantity resolves it: the larger
+                        # of the two columns.
                         CheckTemplateItem.quantity_on_truck
-                        < func.coalesce(
-                            CheckTemplateItem.required_quantity,
-                            CheckTemplateItem.expected_quantity,
-                            0,
+                        < func.greatest(
+                            func.coalesce(CheckTemplateItem.required_quantity, 0),
+                            func.coalesce(CheckTemplateItem.expected_quantity, 0),
                         ),
                     ),
                 ),
@@ -3099,6 +3364,7 @@ class EquipmentCheckService:
                 )
             )
             item_names = {iid: name for iid, name in nres.all()}
+        paths = await self._compartment_paths({str(t.id) for (_, _, t) in rows})
 
         items: List[Dict[str, Any]] = []
         for item, comp, tmpl in rows:
@@ -3109,6 +3375,10 @@ class EquipmentCheckService:
                     "template_item_id": item.id,
                     "item_name": item.name,
                     "compartment_name": comp.name,
+                    # Outermost compartment first, as the checklist nests them
+                    # ("Main Compartment", "Jump Bag"); readers that show one
+                    # name keep using compartment_name.
+                    "compartment_path": paths.get(str(comp.id), [comp.name]),
                     "template_id": tmpl.id,
                     "template_name": tmpl.name,
                     "apparatus_id": tmpl.apparatus_id,
@@ -3288,14 +3558,64 @@ class EquipmentCheckService:
 
     @staticmethod
     def _target_quantity(item: CheckTemplateItem) -> Optional[int]:
-        """How many this position should hold, or None if it is not counted.
+        """Par: how many this position should hold, or None if not counted.
 
-        ``required_quantity`` is the state-mandated floor and outranks the
-        department's own ``expected_quantity`` where both are set — being short
-        of the legal minimum is the fact that matters.
+        Par is what a shortfall, a restock and a swap are measured against; it
+        is not what fails the line (``_pass_floor`` decides that). Where both
+        columns are set the larger wins, because restocking only up to a par
+        below Min to Pass would leave the position failing after the restock.
+        A template with only Min to Pass therefore has a par equal to it.
+
+        When neither is positive this keeps the old ``required or expected``
+        answer, so a position configured at 0 still reads as counted.
         """
+        positive = [v for v in (item.expected_quantity, item.required_quantity) if v]
+        if positive:
+            return max(positive)
         count: Optional[int] = item.required_quantity or item.expected_quantity
         return count
+
+    @staticmethod
+    def _pass_floor(
+        required_quantity: Optional[int], critical_minimum: Optional[int]
+    ) -> Optional[int]:
+        """The count below which a position fails, or None if nothing fails it.
+
+        Min to Pass fails the line, and so does Critical Min even when Min to
+        Pass is blank — the department chose that a count low enough to alert
+        leadership is never a pass. Par is deliberately absent: short of par
+        is a restock line, not a failure.
+
+        Results filed before par was snapshotted carry the old single target
+        (min, else par) in ``required_quantity``, so passing their snapshot
+        here re-judges them by the rule they were filed under.
+
+        The check form applies the same rule (``passFloor`` in
+        ``types/equipmentCheck.ts``); keep the two in step.
+        """
+        floors = [v for v in (required_quantity, critical_minimum) if v is not None]
+        return max(floors) if floors else None
+
+    @staticmethod
+    def _is_below_critical_minimum(
+        found: Optional[int], critical_minimum: Optional[int], target: Optional[int]
+    ) -> bool:
+        """Whether a counted position is short enough to be critical.
+
+        Strictly below the critical minimum: the minimum is the lowest
+        acceptable count, so holding exactly that many is at it, not below it.
+        And never once the count meets the target, so a full position is never
+        reported as critical whatever the template's minimum says.
+
+        The check form applies the same rule on screen
+        (``isBelowCriticalMinimum`` in ``types/equipmentCheck.ts``); keep the
+        two in step.
+        """
+        if critical_minimum is None or found is None:
+            return False
+        if target is not None and found >= target:
+            return False
+        return found < critical_minimum
 
     @staticmethod
     def _deployed_lots(item: CheckTemplateItem) -> List[CheckItemDeployedLot]:
@@ -3553,8 +3873,12 @@ class EquipmentCheckService:
                 "quantity_on_truck": item.quantity_on_truck,
             },
         )
+        state = self._restock_state(item)
+        if quantity_used and item.inventory_item_id:
+            self._counted_inventory_ids.add(str(item.inventory_item_id))
         await self.db.commit()
-        return self._restock_state(item)
+        await self._reorder_after_counts(organization_id, str(user.id))
+        return state
 
     @staticmethod
     def _retire_replaced_units(
@@ -3776,7 +4100,10 @@ class EquipmentCheckService:
             action="counted",
             changes={"from": previous, "to": quantity},
         )
+        if item.inventory_item_id:
+            self._counted_inventory_ids.add(str(item.inventory_item_id))
         await self.db.commit()
+        await self._reorder_after_counts(organization_id, str(user.id))
         return self._restock_state(item)
 
     async def clear_item_restock(
@@ -3920,6 +4247,7 @@ class EquipmentCheckService:
         if not rows:
             return []
 
+        paths = await self._compartment_paths({str(t.id) for (_, _, t) in rows})
         apparatus_ids = {t.apparatus_id for (_, _, t) in rows if t.apparatus_id}
         apparatus_names: Dict[str, str] = {}
         if apparatus_ids:
@@ -3941,6 +4269,12 @@ class EquipmentCheckService:
                     "template_item_id": item.id,
                     "item_name": item.name,
                     "compartment_name": compartment_name,
+                    # Outermost first, as the checklist nests them: "Main
+                    # Compartment › Jump Bag" rather than just the bag.
+                    "compartment_path": paths.get(
+                        str(item.compartment_id),
+                        [compartment_name] if compartment_name else [],
+                    ),
                     "template_id": tmpl.id,
                     "template_name": tmpl.name,
                     "apparatus_id": tmpl.apparatus_id,
@@ -3955,12 +4289,473 @@ class EquipmentCheckService:
                     "apparatus_type": tmpl.apparatus_type,
                     "lot_number": self._soonest_lot_number(item),
                     "serial_number": item.serial_number,
+                    # What the position should hold and what was last counted
+                    # aboard. A null count means nobody has counted since the
+                    # position was defined; the reader shows the target then.
+                    "target_quantity": self._target_quantity(item),
+                    "quantity_on_truck": item.quantity_on_truck,
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
                 }
             )
         return deployments
+
+    async def _compartment_paths(self, template_ids: set) -> Dict[str, List[str]]:
+        """``{compartment_id: [outermost name, ..., its own name]}`` for these
+        templates, read from the checklist's own nesting.
+
+        One query for every compartment of the templates involved, then a walk
+        up ``parent_compartment_id`` in memory. A repeated id ends the walk, so
+        a parent cycle a bad edit left behind cannot loop.
+        """
+        if not template_ids:
+            return {}
+        rows = await self.db.execute(
+            select(
+                CheckTemplateCompartment.id,
+                CheckTemplateCompartment.name,
+                CheckTemplateCompartment.parent_compartment_id,
+            ).where(CheckTemplateCompartment.template_id.in_(list(template_ids)))
+        )
+        nodes = {
+            str(cid): (name, str(pid) if pid else None) for cid, name, pid in rows.all()
+        }
+        paths: Dict[str, List[str]] = {}
+        for cid in nodes:
+            chain: List[str] = []
+            seen: set = set()
+            current: Optional[str] = cid
+            while current and current in nodes and current not in seen:
+                seen.add(current)
+                name, parent = nodes[current]
+                if name:
+                    chain.append(name)
+                current = parent
+            paths[cid] = list(reversed(chain))
+        return paths
+
+    async def apparatus_expiring_stock(
+        self,
+        organization_id: str,
+        item_types: Sequence[Any],
+        *,
+        days_ahead: Optional[int],
+        today: date,
+        item_ids: Optional[Iterable[str]] = None,
+        lot_number: Optional[str] = None,
+        include_undated: bool = False,
+        include_recalled: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Stock on the trucks that expires within ``days_ahead``, or has.
+
+        ``days_ahead=None`` drops the window, so every dated unit aboard is
+        returned; with ``item_ids`` that is how the supply list finds each
+        supply's soonest truck date.
+
+        ``lot_number`` turns this into the recall lookup: every unit aboard
+        whose lot number contains it (case-insensitive), dated or not and
+        whatever ``days_ahead`` says, since a recalled lot has to be found
+        wherever it is. Positions holding nothing are left out.
+
+        ``include_undated`` (with ``days_ahead=None``) also returns undated
+        units that carry a lot number, and leaves out positions holding
+        nothing, as the recall lookup does: every lot aboard, for the lot
+        export. A position with neither a lot number nor a date is still left
+        out, since it records no lot to list.
+
+        ``include_recalled`` also returns every unit under an active recall,
+        whatever its date, so the Expiring list shows what has to be pulled.
+        Every row carries ``recalled``.
+
+        One row per dated lot aboard a position (a position carrying three
+        boxes from two lots expires twice), and one per position with no lot
+        recorded whose own date falls in the window, carrying the position's
+        count. Only active templates, and only positions linked to an item of
+        ``item_types`` — the Medical Supplies page asks for its own domain.
+
+        Each row names where the units are, as the checklist does: the
+        apparatus (or "Any <type>", or the template) and the compartment path.
+        """
+        horizon = None if days_ahead is None else today + timedelta(days=days_ahead)
+        only = None if item_ids is None else {str(i) for i in item_ids}
+        if only is not None and not only:
+            return []
+        position_filters = [
+            EquipmentCheckTemplate.organization_id == organization_id,
+            EquipmentCheckTemplate.is_active.is_(True),
+            InventoryItem.organization_id == organization_id,
+            InventoryCategory.item_type.in_(list(item_types)),
+        ]
+        if only is not None:
+            position_filters.append(CheckTemplateItem.inventory_item_id.in_(only))
+        needle = (lot_number or "").strip().casefold() or None
+        if needle is not None:
+            pattern = like_pattern(needle)
+            position_filters.append(
+                or_(
+                    CheckTemplateItem.lot_number.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    CheckTemplateItem.id.in_(
+                        select(CheckItemDeployedLot.template_item_id).where(
+                            CheckItemDeployedLot.organization_id == organization_id,
+                            CheckItemDeployedLot.lot_number.ilike(
+                                pattern, escape=LIKE_ESCAPE_CHAR
+                            ),
+                        )
+                    ),
+                )
+            )
+
+        def _wanted(
+            when: Optional[date], number: Optional[str], is_recalled: bool
+        ) -> bool:
+            if include_recalled and is_recalled:
+                return True
+            if needle is not None:
+                return bool(number) and needle in str(number).casefold()
+            if include_undated and when is None:
+                return bool(number)
+            return when is not None and (horizon is None or when <= horizon)
+
+        positions = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem,
+                    InventoryItem.name,
+                    InventoryItem.size,
+                    EquipmentCheckTemplate.id,
+                    EquipmentCheckTemplate.name,
+                    EquipmentCheckTemplate.apparatus_id,
+                    EquipmentCheckTemplate.apparatus_type,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .join(
+                    InventoryItem,
+                    InventoryItem.id == CheckTemplateItem.inventory_item_id,
+                )
+                .join(
+                    InventoryCategory,
+                    InventoryCategory.id == InventoryItem.category_id,
+                )
+                .where(*position_filters)
+            )
+        ).all()
+        if not positions:
+            return []
+        recalled = await InventoryService(self.db).recalled_lot_keys(
+            organization_id, {str(r[0].inventory_item_id) for r in positions}
+        )
+        paths = await self._compartment_paths({str(r[3]) for r in positions})
+        apparatus_ids = {r[5] for r in positions if r[5]}
+        names: Dict[str, str] = {}
+        if apparatus_ids:
+            named = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            names = {str(aid): n for aid, n in named.all() if n}
+
+        rows: List[Dict[str, Any]] = []
+        for (
+            item,
+            item_name,
+            item_size,
+            tmpl_id,
+            tmpl_name,
+            app_id,
+            app_type,
+        ) in positions:
+            if app_id:
+                carrier = names.get(str(app_id)) or tmpl_name
+            elif app_type:
+                carrier = f"Any {app_type}"
+            else:
+                carrier = tmpl_name
+            where = " › ".join(
+                [carrier or "Checklist", *paths.get(str(item.compartment_id), [])]
+            )
+            base = {
+                "location": "apparatus",
+                # The vehicle, when the template names one, so a reader can
+                # open that truck's inventory; a template for an apparatus
+                # *type* has none.
+                "apparatus_id": str(app_id) if app_id else None,
+                "inventory_item_id": str(item.inventory_item_id),
+                "item_name": item_name,
+                "item_size": item_size,
+                "template_item_id": str(item.id),
+                "where": where,
+            }
+            lots = self._deployed_lots(item)
+            if lots:
+                for lot in lots:
+                    when = lot.expiration_date
+                    is_recalled = (
+                        base["inventory_item_id"],
+                        lot_key(lot.lot_number),
+                    ) in recalled
+                    if not _wanted(when, lot.lot_number, is_recalled):
+                        continue
+                    rows.append(
+                        {
+                            **base,
+                            "key": f"deployed:{lot.id}",
+                            "recalled": is_recalled,
+                            "lot_number": lot.lot_number,
+                            "expiration_date": when,
+                            "quantity": lot.quantity,
+                            "days_until_expiration": (
+                                (when - today).days if when else None
+                            ),
+                        }
+                    )
+                continue
+            when = item.expiration_date if item.has_expiration else None
+            is_recalled = (
+                base["inventory_item_id"],
+                lot_key(item.lot_number),
+            ) in recalled
+            if not _wanted(when, item.lot_number, is_recalled):
+                continue
+            held = self._on_truck(item) or 0
+            if (needle is not None or include_undated or is_recalled) and held <= 0:
+                continue
+            rows.append(
+                {
+                    **base,
+                    "key": f"position:{item.id}",
+                    "recalled": is_recalled,
+                    "lot_number": item.lot_number,
+                    "expiration_date": when,
+                    "quantity": held,
+                    "days_until_expiration": (when - today).days if when else None,
+                }
+            )
+        # Undated units (only the recall lookup returns any) sort last.
+        rows.sort(
+            key=lambda r: (
+                r["expiration_date"] is None,
+                r["expiration_date"] or date.max,
+                r["item_name"] or "",
+                r["where"],
+            )
+        )
+        return rows
+
+    async def apparatus_places_for_items(
+        self, organization_id: str, inventory_item_ids: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """For each inventory item: how many apparatus carry it, and where.
+
+        ``{item_id: {"count": int, "places": ["Medic 1 › Main › Jump Bag", ...]}}``
+        — the apparatus (or the type a template was written for) followed by
+        the checklist's compartment path, one entry per position, in apparatus
+        then compartment order. Counted over active templates, as
+        ``get_item_deployments`` lists them, so the row and the dialog it
+        opens agree. A template for an apparatus *type* counts once per type:
+        it is one place the supply is carried, even without a named truck.
+        """
+        ids = list({str(i) for i in inventory_item_ids})
+        if not ids:
+            return {}
+        rows = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem.inventory_item_id,
+                    CheckTemplateItem.compartment_id,
+                    EquipmentCheckTemplate.id,
+                    EquipmentCheckTemplate.name,
+                    EquipmentCheckTemplate.apparatus_id,
+                    EquipmentCheckTemplate.apparatus_type,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .where(
+                    CheckTemplateItem.inventory_item_id.in_(ids),
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.is_active.is_(True),
+                )
+            )
+        ).all()
+        if not rows:
+            return {}
+        paths = await self._compartment_paths({str(r[2]) for r in rows})
+        apparatus_ids = {r[4] for r in rows if r[4]}
+        names: Dict[str, str] = {}
+        if apparatus_ids:
+            named = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            names = {str(aid): n for aid, n in named.all() if n}
+
+        found: Dict[str, Dict[str, Any]] = {}
+        for item_id, compartment_id, tmpl_id, tmpl_name, app_id, app_type in rows:
+            if app_id:
+                key, carrier = (
+                    f"apparatus:{app_id}",
+                    names.get(str(app_id)) or tmpl_name,
+                )
+            elif app_type:
+                key, carrier = f"type:{app_type}", f"Any {app_type}"
+            else:
+                key, carrier = f"tmpl:{tmpl_id}", tmpl_name
+            entry = found.setdefault(str(item_id), {"carriers": set(), "places": []})
+            entry["carriers"].add(key)
+            entry["places"].append(
+                " › ".join(
+                    [carrier or "Checklist", *paths.get(str(compartment_id), [])]
+                )
+            )
+        return {
+            item_id: {
+                "count": len(entry["carriers"]),
+                "places": sorted(set(entry["places"]), key=str.lower),
+            }
+            for item_id, entry in found.items()
+        }
+
+    async def position_places(
+        self, organization_id: str, template_item_ids: Iterable[str]
+    ) -> Dict[str, Dict[str, Optional[str]]]:
+        """``{position_id: {"apparatus_id", "where"}}`` for checklist positions.
+
+        ``where`` names the position as the checklist does ("Medic 1 › Main
+        Compartment › Jump Bag"), and ``apparatus_id`` is the vehicle when the
+        template names one, so a screen can link to that truck's inventory. A
+        template for an apparatus *type* has none. Org-scoped through the
+        template; a position on an inactive template is left out, as it is
+        from every truck figure.
+        """
+        ids = list({str(i) for i in template_item_ids})
+        if not ids:
+            return {}
+        rows = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem.id,
+                    CheckTemplateItem.compartment_id,
+                    EquipmentCheckTemplate.id,
+                    EquipmentCheckTemplate.name,
+                    EquipmentCheckTemplate.apparatus_id,
+                    EquipmentCheckTemplate.apparatus_type,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .where(
+                    CheckTemplateItem.id.in_(ids),
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.is_active.is_(True),
+                )
+            )
+        ).all()
+        if not rows:
+            return {}
+        paths = await self._compartment_paths({str(r[2]) for r in rows})
+        apparatus_ids = {r[4] for r in rows if r[4]}
+        names: Dict[str, str] = {}
+        if apparatus_ids:
+            named = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            names = {str(aid): n for aid, n in named.all() if n}
+
+        found: Dict[str, Dict[str, Optional[str]]] = {}
+        for position_id, compartment_id, _tmpl_id, tmpl_name, app_id, app_type in rows:
+            if app_id:
+                carrier = names.get(str(app_id)) or tmpl_name
+            elif app_type:
+                carrier = f"Any {app_type}"
+            else:
+                carrier = tmpl_name
+            found[str(position_id)] = {
+                "apparatus_id": str(app_id) if app_id else None,
+                "where": " › ".join(
+                    [carrier or "Checklist", *paths.get(str(compartment_id), [])]
+                ),
+            }
+        return found
+
+    async def uncounted_supply_positions(
+        self, organization_id: str, item_types: Sequence[Any]
+    ) -> List[Dict[str, Any]]:
+        """Every position no crew has counted, for supplies of ``item_types``.
+
+        ``[{"item_name", "item_size", "apparatus_id", "where"}]``, by place
+        then supply. "Uncounted" is ``InventoryService._ready_positions``'s
+        rule — the positions the Medical Supplies page lists under Not yet
+        counted — so the email and the page name the same positions.
+        """
+        inventory = InventoryService(self.db)
+        item_ids = await inventory.item_ids_with_uncounted_positions(
+            organization_id, item_types
+        )
+        if not item_ids:
+            return []
+        unseen = await inventory.uncounted_positions(organization_id, item_ids)
+        places = await self.position_places(
+            organization_id, [p for ids in unseen.values() for p in ids]
+        )
+        labels = {
+            str(item_id): (name, size)
+            for item_id, name, size in (
+                await self.db.execute(
+                    select(
+                        InventoryItem.id, InventoryItem.name, InventoryItem.size
+                    ).where(
+                        InventoryItem.id.in_(list(unseen)),
+                        InventoryItem.organization_id == organization_id,
+                    )
+                )
+            ).all()
+        }
+        rows: List[Dict[str, Any]] = []
+        for item_id, positions in unseen.items():
+            name, size = labels.get(item_id, (None, None))
+            for position in positions:
+                place = places.get(position)
+                if place is None:
+                    continue
+                rows.append(
+                    {
+                        "item_name": name,
+                        "item_size": size,
+                        "apparatus_id": place["apparatus_id"],
+                        "where": place["where"],
+                    }
+                )
+        rows.sort(
+            key=lambda r: (str(r["where"]).lower(), str(r["item_name"] or "").lower())
+        )
+        return rows
 
     async def swap_item_lot(
         self,
@@ -4106,6 +4901,15 @@ class EquipmentCheckService:
             # Deploying expired stock would fail the item on the next check and
             # put expired supplies in service; refuse rather than record it.
             raise ValueError("This stock lot has expired and cannot be deployed")
+        if (
+            str(lot.inventory_item_id),
+            lot_key(lot.lot_number),
+        ) in await InventoryService(self.db).recalled_lot_keys(
+            organization_id, [str(lot.inventory_item_id)]
+        ):
+            # A recalled lot is pulled, not deployed: putting it on a truck is
+            # exactly what recording the recall exists to stop.
+            raise ValueError("This stock lot is recalled and cannot be deployed")
 
         lot_id_value = str(lot.id)
         previous = {
@@ -4294,10 +5098,48 @@ class EquipmentCheckService:
         )
         return result
 
+    async def _reorder_after_counts(
+        self, organization_id: str, requested_by: Optional[str]
+    ) -> None:
+        """File reorders for medical supplies a committed recount left low.
+
+        A medical supply is low on its department-wide total — shelf plus
+        trucks (InventoryService.stock_breakdown) — so stock used off a truck
+        lowers it as surely as a swap lowers the shelf, and usage only shows up
+        when a crew records a lower count. Gear is still judged on the shelf
+        alone, which a truck count cannot move, so it is left out and its
+        reorders keep coming from swaps only.
+
+        One open request per item (AutoReorderService), so checking an item
+        that was already low, or already ordered, files nothing.
+        """
+        ids = sorted(self._counted_inventory_ids)
+        self._counted_inventory_ids = set()
+        if not ids:
+            return
+        try:
+            medical = await InventoryService(self.db)._medical_item_ids(
+                organization_id, ids
+            )
+        except Exception as exc:
+            logger.error(
+                "Auto reorder lookup after a count in org {} failed: {}",
+                organization_id,
+                exc,
+            )
+            return
+        for inventory_item_id in sorted(medical):
+            await self._raise_low_stock_reorder(
+                organization_id, inventory_item_id, requested_by
+            )
+
     async def _raise_low_stock_reorder(
         self, organization_id: str, inventory_item_id: str, requested_by: Optional[str]
     ) -> None:
-        """File a reorder if the swap left shelf stock at its reorder point.
+        """File a reorder if the item's ready stock is at its reorder point.
+
+        Ready stock is the shelf, plus the trucks for a medical supply (see
+        InventoryService.stock_breakdown).
 
         Runs in a session of its own. ``rollback()`` expires every object a
         session holds regardless of ``expire_on_commit``, so rolling back the
@@ -4692,6 +5534,7 @@ class EquipmentCheckService:
         *,
         user_id: str,
         user_name: str,
+        source: str = "catalog_link_report",
     ) -> Dict[str, Any]:
         """Apply a reviewed set of links that may span many templates.
 
@@ -4787,7 +5630,7 @@ class EquipmentCheckService:
                 entity_name=item.name,
                 changes={
                     "inventory_item_id": {"old": None, "new": item.inventory_item_id},
-                    "source": "catalog_link_report",
+                    "source": source,
                 },
             )
             linked += 1
@@ -4819,6 +5662,172 @@ class EquipmentCheckService:
             "skipped": len(skipped),
             "skipped_positions": skipped,
         }
+
+    async def auto_link_report(
+        self,
+        organization_id: str,
+        *,
+        user_id: str,
+        user_name: str,
+    ) -> Dict[str, Any]:
+        """Link every unlinked position whose catalog match is clear enough.
+
+        Built on the department-wide report, so it links exactly what a person
+        would have seen suggested there. A name group is linked when its best
+        suggestion is ``exact`` or ``strong`` *and* beats the runner-up. Exact
+        and strong was the department's call: strong takes in "also called"
+        names and subset matches, which are usually right and occasionally
+        need fixing by hand.
+
+        The runner-up rule is what keeps "occasionally" from becoming a coin
+        toss. "Oxygen Mask" is a subset of both "Oxygen Mask Adult" and
+        "Oxygen Mask Pediatric" and scores the same against each; linking
+        either would be a guess, so a tied group is left on the report for a
+        person, together with everything weak or unmatched.
+
+        Writes through ``link_inventory_items_across_templates``, so it is all
+        or nothing and a position linked by hand in the meantime keeps its
+        link.
+        """
+        report = await self.get_link_report(organization_id, limit_per_group=2)
+
+        links: Dict[str, str] = {}
+        applied: List[Dict[str, Any]] = []
+        left_for_review = 0
+        for group in report["groups"]:
+            suggestions = group["suggestions"]
+            best = suggestions[0] if suggestions else None
+            runner_up = suggestions[1] if len(suggestions) > 1 else None
+            clear = (
+                best is not None
+                and best["confidence"] in (EXACT, STRONG)
+                and (runner_up is None or runner_up["score"] < best["score"])
+            )
+            if not clear or best is None:
+                left_for_review += group["position_count"]
+                continue
+            for position in group["positions"]:
+                links[str(position["template_item_id"])] = str(best["id"])
+            applied.append(
+                {
+                    "name": group["name"],
+                    "inventory_item_id": str(best["id"]),
+                    "inventory_item_name": best["name"],
+                    "confidence": best["confidence"],
+                    "matched_alias": best.get("matched_alias"),
+                    "position_count": group["position_count"],
+                    "positions": group["positions"],
+                }
+            )
+
+        if not links:
+            return {
+                "linked": 0,
+                "skipped": 0,
+                "skipped_positions": [],
+                "left_for_review": left_for_review,
+                "groups": [],
+            }
+
+        result = await self.link_inventory_items_across_templates(
+            organization_id,
+            links,
+            user_id=user_id,
+            user_name=user_name,
+            source="catalog_auto_link",
+        )
+        # A position somebody linked by hand in the meantime was not written,
+        # so it is neither reported as linked nor offered for undo: undoing it
+        # would clear a choice this pass never made.
+        skipped_ids = {str(p["template_item_id"]) for p in result["skipped_positions"]}
+        for entry in applied:
+            entry["positions"] = [
+                p
+                for p in entry["positions"]
+                if str(p["template_item_id"]) not in skipped_ids
+            ]
+            entry["position_count"] = len(entry["positions"])
+        return {
+            **result,
+            "left_for_review": left_for_review,
+            "groups": [entry for entry in applied if entry["positions"]],
+        }
+
+    async def unlink_inventory_items_across_templates(
+        self,
+        organization_id: str,
+        links: Dict[str, str],
+        *,
+        user_id: str,
+        user_name: str,
+        source: str = "catalog_auto_link_undo",
+    ) -> Dict[str, int]:
+        """Undo links the automatic pass made, position by position.
+
+        ``links`` maps template item id -> the inventory item it was linked
+        to. A position is cleared only while it still points at that item:
+        if someone has since re-linked it in the builder, that newer choice
+        is theirs and stays, counted in ``skipped``. This is the mirror of
+        the rule ``link_inventory_items_across_templates`` follows, and for
+        the same reason — the screen asking is showing a snapshot.
+
+        All or nothing, and every id is resolved through an org-scoped
+        template (XC-1), as on the link side.
+        """
+        if not links:
+            return {"unlinked": 0, "skipped": 0}
+
+        result = await self.db.execute(
+            select(CheckTemplateItem, EquipmentCheckTemplate.id)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.id.in_(list(links)),
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        found = {item.id: (item, template_id) for item, template_id in result.all()}
+        unknown = set(links) - set(found)
+        if unknown:
+            raise ValueError(
+                f"{len(unknown)} checklist item(s) were not found and nothing "
+                f"was unlinked"
+            )
+
+        unlinked = 0
+        skipped = 0
+        for item_id, expected in links.items():
+            item, template_id = found[item_id]
+            if str(item.inventory_item_id or "") != str(expected):
+                skipped += 1
+                continue
+            old = item.inventory_item_id
+            item.inventory_item_id = None
+            await self.log_template_change(
+                organization_id=organization_id,
+                template_id=template_id,
+                user_id=user_id,
+                user_name=user_name,
+                action="update",
+                entity_type="item",
+                entity_id=item_id,
+                entity_name=item.name,
+                changes={
+                    "inventory_item_id": {"old": old, "new": None},
+                    "source": source,
+                },
+            )
+            unlinked += 1
+
+        await self.db.commit()
+        return {"unlinked": unlinked, "skipped": skipped}
 
     # ------------------------------------------------------------------
     # Private Helpers
@@ -4979,6 +5988,7 @@ class EquipmentCheckService:
             parent = await self._get_compartment(parent_id, organization_id)
             if not parent or parent.template_id != template_id:
                 raise ValueError("Parent compartment must belong to the same template")
+            self._refuse_inline_parent(parent)
 
         compartment = CheckTemplateCompartment(
             id=generate_uuid(),
@@ -5022,7 +6032,12 @@ class EquipmentCheckService:
             is_header=source.is_header,
             container_type=source.container_type,
             is_sealed=source.is_sealed,
-            parent_compartment_id=parent_id,
+            is_inline=getattr(source, "is_inline", False),
+            # An inline group never sits inside a location; a legacy row that
+            # somehow does is not copied into one.
+            parent_compartment_id=(
+                None if getattr(source, "is_inline", False) else parent_id
+            ),
         )
         self.db.add(compartment)
         await self.db.flush()
@@ -5044,6 +6059,7 @@ class EquipmentCheckService:
                 required_quantity=item.required_quantity,
                 expected_quantity=item.expected_quantity,
                 critical_minimum_quantity=item.critical_minimum_quantity,
+                count_unit=item.count_unit,
                 min_level=item.min_level,
                 level_unit=item.level_unit,
                 serial_number=item.serial_number,
@@ -5080,7 +6096,54 @@ class EquipmentCheckService:
             parent = await self._get_compartment(current_id, organization_id)
             if not parent or parent.template_id != compartment.template_id:
                 raise ValueError("Parent compartment must belong to the same template")
+            if current_id == parent_id:
+                self._refuse_inline_parent(parent)
             current_id = parent.parent_compartment_id
+
+    @staticmethod
+    def _refuse_inline_parent(parent: CheckTemplateCompartment) -> None:
+        """An inline group is items on the checklist itself, not a place."""
+        if getattr(parent, "is_inline", False):
+            raise ValueError(
+                "A location cannot be stored inside items placed directly on "
+                "the checklist"
+            )
+
+    async def _validate_inline_update(
+        self, compartment: CheckTemplateCompartment, data: Dict[str, Any]
+    ) -> None:
+        """Hold an update to the inline shape the create schema enforces.
+
+        The update schema cannot check this on its own: whether a compartment
+        may become inline depends on what is already stored — a sealed bag, a
+        nested one, or one with locations inside it.
+        """
+
+        def merged(key: str) -> Any:
+            return data[key] if key in data else getattr(compartment, key, None)
+
+        if not merged("is_inline"):
+            return
+        if merged("is_header"):
+            raise ValueError("Items placed directly on a checklist cannot be a section")
+        if merged("is_sealed"):
+            raise ValueError("Items placed directly on a checklist cannot be sealed")
+        if merged("parent_compartment_id"):
+            raise ValueError(
+                "Items placed directly on a checklist cannot sit inside a location"
+            )
+        child = await self.db.scalar(
+            select(CheckTemplateCompartment.id)
+            .where(CheckTemplateCompartment.parent_compartment_id == compartment.id)
+            .limit(1)
+        )
+        if child is not None:
+            raise ValueError(
+                "A location with locations inside it cannot become items placed "
+                "directly on the checklist"
+            )
+        # Headingless by definition; see CheckTemplateCompartmentCreate.
+        data["name"] = ""
 
     async def _get_compartment(
         self, compartment_id: str, organization_id: str
@@ -5267,6 +6330,8 @@ class EquipmentCheckService:
                     line += " (out of service)"
                 if "expected" in ci and "found" in ci:
                     line += f" — expected {ci['expected']}, found {ci['found']}"
+                    if ci.get("unit"):
+                        line += f" {ci['unit']}"
                 if "critical_minimum" in ci:
                     line += f" (critical min: {ci['critical_minimum']})"
                 item_lines.append(line)
@@ -5274,8 +6339,13 @@ class EquipmentCheckService:
                 line = wi["name"]
                 if wi.get("out_of_service"):
                     line += " (out of service)"
+                elif normalize_check_type(wi.get("check_type")) == PRESENCE:
+                    # Missing from the truck, which is what the officer acts on.
+                    line += " (absent)"
                 if "expected" in wi and "found" in wi:
                     line += f" — expected {wi['expected']}, found {wi['found']}"
+                    if wi.get("unit"):
+                        line += f" {wi['unit']}"
                 item_lines.append(line)
             if item_lines:
                 message += "\n\nFailed items:\n" + "\n".join(
@@ -5350,6 +6420,9 @@ class EquipmentCheckService:
                                     f"Expected: {ci['expected']}, "
                                     f"Found: {ci['found']}"
                                 )
+                                # Admin-typed free text: escaped for HTML.
+                                if ci.get("unit"):
+                                    qty_info += " " + _esc(str(ci["unit"]))
                                 if "critical_minimum" in ci:
                                     qty_info += (
                                         f" (Critical min: " f"{ci['critical_minimum']})"
@@ -5374,6 +6447,9 @@ class EquipmentCheckService:
                                     f"Expected: {wi['expected']}, "
                                     f"Found: {wi['found']}"
                                 )
+                                # Admin-typed free text: escaped for HTML.
+                                if wi.get("unit"):
+                                    qty_info += " " + _esc(str(wi["unit"]))
                             status_label = (
                                 "Out of service"
                                 if wi.get("out_of_service")
@@ -5786,6 +6862,15 @@ class EquipmentCheckService:
                     "check_type": fi.check_type,
                     "status": fi.status,
                     "notes": fi.notes,
+                    "quantity_found": fi.quantity_found,
+                    # Par as filed; a result from before par was snapshotted
+                    # has only the single target it was judged by.
+                    "target_quantity": (
+                        fi.expected_quantity
+                        if fi.expected_quantity is not None
+                        else fi.required_quantity
+                    ),
+                    "count_unit": fi.count_unit,
                     "checked_by_name": (
                         user_map.get(str(check.checked_by), "Unknown")
                         if check and check.checked_by
@@ -5910,6 +6995,7 @@ class EquipmentCheckService:
                     "shift_id": (str(check.shift_id) if check else ""),
                     "shift_date": shift_date_val,
                     "status": item.status,
+                    "check_type": item.check_type,
                     "quantity_found": item.quantity_found,
                     "level_reading": item.level_reading,
                     "serial_number": item.serial_number,

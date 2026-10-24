@@ -259,6 +259,11 @@ services:
       PASSWORD_REQUIRE_NUMBERS: ${PASSWORD_REQUIRE_NUMBERS:-true}
       PASSWORD_REQUIRE_SPECIAL: ${PASSWORD_REQUIRE_SPECIAL:-true}
       HIPAA_SESSION_TIMEOUT_MINUTES: ${HIPAA_SESSION_TIMEOUT_MINUTES:-15}
+      SESSION_ABSOLUTE_MAX_HOURS: ${SESSION_ABSOLUTE_MAX_HOURS:-12}
+      SESSION_KIOSK_ABSOLUTE_MAX_HOURS: ${SESSION_KIOSK_ABSOLUTE_MAX_HOURS:-168}
+      SESSION_KIOSK_IDLE_TIMEOUT_MINUTES: ${SESSION_KIOSK_IDLE_TIMEOUT_MINUTES:-720}
+      MFA_GRACE_DAYS: ${MFA_GRACE_DAYS:-14}
+      STEPUP_WINDOW_MINUTES: ${STEPUP_WINDOW_MINUTES:-10}
       HIPAA_PASSWORD_HISTORY_COUNT: ${HIPAA_PASSWORD_HISTORY_COUNT:-12}
       HIPAA_MINIMUM_PASSWORD_AGE_DAYS: ${HIPAA_MINIMUM_PASSWORD_AGE_DAYS:-1}
       HIPAA_MAXIMUM_PASSWORD_AGE_DAYS: ${HIPAA_MAXIMUM_PASSWORD_AGE_DAYS:-90}
@@ -270,6 +275,7 @@ services:
       AUDIT_SHIP_WEBHOOK_URL: ${AUDIT_SHIP_WEBHOOK_URL:-}
       AUDIT_SHIP_BATCH_SIZE: ${AUDIT_SHIP_BATCH_SIZE:-500}
       AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION: ${AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION:-false}
+      S3_ALLOW_PRIVATE_ENDPOINT: ${S3_ALLOW_PRIVATE_ENDPOINT:-false}
       AUDIT_ALLOW_CHAIN_REHASH: ${AUDIT_ALLOW_CHAIN_REHASH:-false}
       RETENTION_BLOCKED_ATTEMPTS_DAYS: ${RETENTION_BLOCKED_ATTEMPTS_DAYS:-365}
       PIPELINE_ATTENDANCE_SETTLE_DAYS: ${PIPELINE_ATTENDANCE_SETTLE_DAYS:-7}
@@ -372,6 +378,12 @@ services:
       AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:-}
       AUTHENTIK_REDIRECT_URI: ${AUTHENTIK_REDIRECT_URI:-}
       AUTHENTIK_ALLOWED_DOMAINS: ${AUTHENTIK_ALLOWED_DOMAINS:-}
+      # Google Calendar / Outlook publishing. Each redirect URI must match its
+      # OAuth client (Google, or the Azure AD app); blank derives it from the
+      # request.
+      CALENDAR_SYNC_ENABLED: ${CALENDAR_SYNC_ENABLED:-false}
+      GOOGLE_CALENDAR_REDIRECT_URI: ${GOOGLE_CALENDAR_REDIRECT_URI:-}
+      MICROSOFT_CALENDAR_REDIRECT_URI: ${MICROSOFT_CALENDAR_REDIRECT_URI:-}
       # Claude (MCP) member sign-in: the OAuth 2.1 authorization server. Off
       # unless enabled AND the issuer is an https:// origin.
       MCP_OAUTH_ENABLED: ${MCP_OAUTH_ENABLED:-false}
@@ -387,6 +399,10 @@ services:
       SECURITY_TXT_POLICY_URL: ${SECURITY_TXT_POLICY_URL:-https://github.com/thegspiro/the-logbook/blob/main/SECURITY.md}
 
       # Error tracking
+      # Sentry sends error reports to a third party. Leave it off unless a signed
+      # Business Associate Agreement (BAA) is in place with Sentry: a report can
+      # carry member or health information, and sending PHI to a vendor without a
+      # BAA is a HIPAA violation if the department handles PHI.
       SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:

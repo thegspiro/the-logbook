@@ -379,6 +379,45 @@ class TestStartAndEndTimes:
         assert entry.shift_date == date(2025, 6, 3)
         assert entry.duration_minutes == 24 * 60
 
+    async def test_hours_that_round_to_no_minutes_are_refused_with_a_400(
+        self, db_session, org_and_member
+    ):
+        """0.005 hours passes the schema's ``gt=0`` but rounds to 0 minutes,
+        which the table's CHECK constraint rejects — at commit, as a 500."""
+        org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id)
+        member = await db_session.get(User, user_id)
+
+        with pytest.raises(HTTPException) as refused:
+            await endpoint.log_external_shift(
+                ExternalShiftHoursCreate(
+                    shift_date=date(2025, 6, 3),
+                    hours=0.005,
+                    external_apparatus_id=unit_id,
+                ),
+                db_session,
+                member,
+            )
+
+        assert refused.value.status_code == 400
+        assert "at least one minute" in refused.value.detail
+
+    async def test_times_seconds_apart_are_refused(self, db_session, org_and_member):
+        org_id, user_id = org_and_member
+        unit_id = await _unit(db_session, org_id)
+        start = datetime(2025, 6, 3, 11, 0, tzinfo=timezone.utc)
+
+        with pytest.raises(ValueError, match="at least one minute"):
+            await ExternalShiftHoursService(db_session).create(
+                org_id,
+                user_id,
+                ExternalShiftHoursCreate(
+                    start_at=start,
+                    end_at=start + timedelta(seconds=20),
+                    external_apparatus_id=unit_id,
+                ).model_dump(),
+            )
+
     async def test_future_start_is_refused(self, db_session, org_and_member):
         org_id, user_id = org_and_member
         unit_id = await _unit(db_session, org_id)

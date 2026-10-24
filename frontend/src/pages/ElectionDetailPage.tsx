@@ -4,7 +4,7 @@
  * Shows detailed information about an election including results.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
@@ -29,15 +29,19 @@ import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { EligibilityRoster } from '../modules/elections/components/EligibilityRoster';
 import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
+import { NominationsAnnouncementStatus } from '../modules/elections/components/NominationsAnnouncementStatus';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionBallot } from '../components/ElectionBallot';
 import { ElectionStatus, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
+import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
+import { Vote } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
+import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { groupVoidedVotes } from '../utils/electionForensics';
 import {
@@ -50,7 +54,9 @@ import {
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
 import NominationsPanel from '../components/election-detail/NominationsPanel';
-import RecordPaperBallotsModal from '../components/election-detail/RecordPaperBallotsModal';
+import RecordPaperBallotsModal, {
+  type RankedPaperBallotEntry,
+} from '../components/election-detail/RecordPaperBallotsModal';
 import PaperBallotBatchesPanel from '../components/election-detail/PaperBallotBatchesPanel';
 import LiveTurnoutPanel from '../components/election-detail/LiveTurnoutPanel';
 import CloneElectionModal from '../components/election-detail/CloneElectionModal';
@@ -105,6 +111,15 @@ export const ElectionDetailPage: React.FC = () => {
   const [ballotsMustBeResent, setBallotsMustBeResent] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [isSendingEmails, setIsSendingEmails] = useState(false);
+  // Stops the ballot-send poll when the page goes away; the send itself runs
+  // on the server and finishes regardless.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
   const [lastSkippedDetails, setLastSkippedDetails] = useState<Array<{ name: string; reason: string }>>([]);
   // Both the ballot send and the reminder send feed the skipped banner; the
@@ -292,27 +307,58 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       // PATCH is applied with exclude_unset: an omitted key leaves the old
       // link in place, so every "clear" position must be an explicit null.
-      const updateData: Pick<ElectionUpdate, 'meeting_id' | 'event_id' | 'meeting_date'> = {};
+      const updateData: Pick<ElectionUpdate, 'meeting_id' | 'event_id' | 'meeting_date' | 'start_date' | 'end_date'> =
+        {};
+      let meetingTimes: MeetingWindow = { start: null, end: null };
       if (source === 'meeting') {
         const meeting = availableMeetings.find((m) => m.id === id);
         updateData.meeting_id = id;
         updateData.event_id = null;
         updateData.meeting_date = meeting?.meeting_date ?? null;
+        if (meeting) meetingTimes = meetingWindow(meeting);
       } else if (source === 'event') {
         const event = upcomingEvents.find((e) => e.id === id);
         updateData.meeting_id = null;
         updateData.event_id = id;
         updateData.meeting_date = event?.start_datetime ?? null;
+        if (event) meetingTimes = eventWindow(event, tz);
       } else {
         updateData.meeting_id = null;
         updateData.event_id = null;
         updateData.meeting_date = null;
       }
 
+      // Voting runs during the meeting it is linked to, so the window follows
+      // the meeting's — but only while the dates can still change (the server
+      // refuses a start date once voting opens), and only to a start still
+      // ahead. Without an end time the election keeps its current length.
+      const datesEditable = election.status === ElectionStatus.DRAFT || election.status === ElectionStatus.NOMINATIONS;
+      const start = meetingTimes.start ? localToUTC(meetingTimes.start, tz) : '';
+      const aligned = datesEditable && !!start && new Date(start).getTime() > Date.now();
+      if (aligned) {
+        const currentLength = new Date(election.end_date).getTime() - new Date(election.start_date).getTime();
+        updateData.start_date = start;
+        updateData.end_date = meetingTimes.end
+          ? localToUTC(meetingTimes.end, tz)
+          : new Date(new Date(start).getTime() + (currentLength > 0 ? currentLength : 60 * 60 * 1000)).toISOString();
+      }
+
       const updated = await electionService.updateElection(electionId, updateData);
       setElection(updated);
       setShowMeetingSelector(false);
-      toast.success('Meeting link updated');
+      if (aligned) {
+        toast.success(
+          `Meeting linked. Voting now runs ${formatDateTime(updated.start_date, tz)} – ${formatDateTime(updated.end_date, tz)}.`
+        );
+      } else if (source && datesEditable) {
+        toast.success(
+          meetingTimes.start
+            ? 'Meeting linked. Dates unchanged because the meeting has already started.'
+            : 'Meeting linked. Dates unchanged because the meeting has no start time.'
+        );
+      } else {
+        toast.success('Meeting link updated');
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update meeting link'));
     }
@@ -495,16 +541,18 @@ export const ElectionDetailPage: React.FC = () => {
 
   const handleRecordPaperBallots = async (
     entries: Array<{ candidate_id: string; count: number }>,
+    rankedBallots: RankedPaperBallotEntry[],
     notes: string,
     allowOverCount: boolean,
     ballotsCast: number | undefined
   ) => {
-    if (!electionId || entries.length === 0) return;
+    if (!electionId || (entries.length === 0 && rankedBallots.length === 0)) return;
     try {
       setIsRecordingPaper(true);
       setPaperBallotsError(null);
       const result = await electionService.recordManualBallots(electionId, {
         entries,
+        ranked_ballots: rankedBallots.length > 0 ? rankedBallots : undefined,
         notes: notes.trim() || undefined,
         allow_over_count: allowOverCount || undefined,
         ballots_cast: ballotsCast,
@@ -699,20 +747,28 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  /** Emails the pre-meeting package PDF to the secretary-edited list. */
+  /** Emails the pre-meeting package PDF to the secretary-edited list, one message per address. */
   const handleSendPackage = async (recipientEmails: string[], message: string, includeFullRoster: boolean) => {
     if (!electionId || recipientEmails.length === 0) return;
 
     try {
       setIsSendingPackage(true);
       setPackageError(null);
-      const result = await electionService.sendPreMeetingPackage(electionId, {
+      const job = await electionService.startPackageSendJob(electionId, {
         recipient_emails: recipientEmails,
         message: message.trim() || undefined,
         include_full_roster: includeFullRoster,
       });
+      const result = await electionService.waitForBallotSendJob(electionId, job.id, () => !isMountedRef.current);
+      if (!result) return;
       setShowPackageModal(false);
-      toast.success(result.message);
+      // A partly delivered package names the addresses it missed; that needs
+      // to stay on screen long enough to be read, not flash past as a success.
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message, { duration: 15000 });
+      }
     } catch (err: unknown) {
       setPackageError(describePackageSendError(err, recipientEmails, 'Failed to send pre-meeting package'));
     } finally {
@@ -773,12 +829,14 @@ export const ElectionDetailPage: React.FC = () => {
       setIsSendingEmails(true);
       setSendEmailError(null);
 
-      const response = await electionService.sendBallotEmail(electionId, {
+      const job = await electionService.startBallotSendJob(electionId, {
         subject: payload.subject.trim() || undefined,
         message: payload.message.trim() || undefined,
         include_ballot_link: true,
         send_eligibility_summary: payload.sendEligibilitySummary,
       });
+      const response = await electionService.waitForBallotSendJob(electionId, job.id, () => !isMountedRef.current);
+      if (!response) return;
 
       setShowSendEmailModal(false);
       void fetchElection(); // Refresh to update email_sent status
@@ -860,9 +918,11 @@ export const ElectionDetailPage: React.FC = () => {
       // Dedicated endpoint: the server recomputes the non-voter list at
       // send time (no stale client-side list) and stamps reminder_sent_at,
       // which suppresses the automatic pre-close reminder.
-      const response = await electionService.remindNonVoters(electionId, {
+      const job = await electionService.startReminderSendJob(electionId, {
         message: message || 'This is a reminder to cast your vote. The voting window will be closing soon.',
       });
+      const response = await electionService.waitForBallotSendJob(electionId, job.id, () => !isMountedRef.current);
+      if (!response) return;
 
       setShowRemindModal(false);
       // The server stamps reminder_sent_at on a delivered send; the stamp and
@@ -997,22 +1057,19 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // Explicit items rather than a generated trail: the URL is /elections/:id, and
-  // the generator skips the id, which would leave a single "Elections" crumb —
-  // and a one-crumb generated trail renders nothing at all. Defined once so it
-  // reaches the loading and not-found branches too; before this they offered no
-  // route away from the page whatsoever, not even the "Back to Elections" link
-  // the loaded branch carries.
+  // The loading and not-found branches have no record to head, so they keep an
+  // explicit trail as their way out; the loaded branch's trail comes from the
+  // Governance header. Explicit rather than generated: the URL is
+  // /elections/:id, and the generator skips the id, which would leave a single
+  // "Elections" crumb — and a one-crumb generated trail renders nothing at all.
   const trail = [{ label: 'Elections', path: '/elections' }, { label: election?.title || 'Election' }];
 
   if (loading) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <Breadcrumbs items={trail} />
-          <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
-            <div className="text-theme-text-muted">Loading election...</div>
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <Breadcrumbs items={trail} />
+        <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+          <div className="text-theme-text-muted">Loading election...</div>
         </div>
       </div>
     );
@@ -1020,12 +1077,10 @@ export const ElectionDetailPage: React.FC = () => {
 
   if (error || !election) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <Breadcrumbs items={trail} />
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
-            <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <Breadcrumbs items={trail} />
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
+          <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
         </div>
       </div>
     );
@@ -1061,37 +1116,37 @@ export const ElectionDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
-
-        {/* Header */}
-        <div className="mb-6">
-          <div className="mb-2 flex items-center">
-            <Link to="/elections" className="mr-2 text-blue-600 hover:text-blue-700">
-              &larr; Back to Elections
-            </Link>
-          </div>
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <h2 className="text-theme-text-primary min-w-0 text-2xl font-bold break-words">{election.title}</h2>
-                {election.is_runoff && (
-                  <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
-                    Runoff Round {election.runoff_round}
-                  </span>
-                )}
-              </div>
-              {election.is_runoff && election.parent_election_id && (
-                <Link
-                  to={`/elections/${election.parent_election_id}`}
-                  className="text-sm text-blue-600 hover:text-blue-700"
-                >
-                  &larr; View original election
-                </Link>
+    <div className="mx-auto max-w-7xl">
+      <div>
+        <GovernancePageHeader
+          icon={Vote}
+          breadcrumbLabel={election.title}
+          title={
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words">{election.title}</span>
+              {election.is_runoff && (
+                <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
+                  Runoff Round {election.runoff_round}
+                </span>
               )}
-              {election.description && <p className="text-theme-text-secondary mt-2">{election.description}</p>}
-            </div>
+            </span>
+          }
+          subtitle={
+            election.is_runoff || election.description ? (
+              <>
+                {election.is_runoff && election.parent_election_id && (
+                  <Link
+                    to={`/elections/${election.parent_election_id}`}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    &larr; View original election
+                  </Link>
+                )}
+                {election.description && <p className="text-theme-text-secondary mt-2">{election.description}</p>}
+              </>
+            ) : undefined
+          }
+          actions={
             <span
               className={`inline-flex shrink-0 rounded-full px-3 py-1 text-sm leading-5 font-semibold ${getStatusBadgeClass(
                 election.status
@@ -1099,8 +1154,8 @@ export const ElectionDetailPage: React.FC = () => {
             >
               {election.status}
             </span>
-          </div>
-        </div>
+          }
+        />
 
         {/* Election Lifecycle Stepper */}
         {election.status !== ElectionStatus.CANCELLED && (
@@ -1156,7 +1211,7 @@ export const ElectionDetailPage: React.FC = () => {
                         >
                           {step.label}
                         </div>
-                        <div className="text-theme-text-muted text-xs">{step.description}</div>
+                        <div className="text-theme-text-muted sr-only text-xs lg:not-sr-only">{step.description}</div>
                       </div>
                     </div>
                   </React.Fragment>
@@ -1237,7 +1292,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
                         Every ballot link already sent was invalidated because the ballot changed
                       </h3>
-                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         The links in the ballot emails sent{' '}
                         {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} showed the old
                         ballot, so they no longer work.{' '}
@@ -1251,7 +1306,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
                         Every ballot link already sent was invalidated by the rollback
                       </h3>
-                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         Reopening regenerated the anonymity salt, so the links in the ballot emails sent{' '}
                         {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} no longer
                         work. Resend ballots so members can vote.
@@ -1277,7 +1332,7 @@ export const ElectionDetailPage: React.FC = () => {
                   {lastSkippedDetails.length} member(s) skipped when sending{' '}
                   {lastSkippedSource === 'reminders' ? 'reminders' : 'ballots'}
                 </h3>
-                <p className="mt-1 mb-2 text-xs text-amber-600 dark:text-amber-400">
+                <p className="mt-1 mb-2 text-xs text-amber-700 dark:text-amber-400">
                   These members were not sent a {lastSkippedSource === 'reminders' ? 'reminder' : 'ballot'}, for the
                   reason shown. To let one of them vote, add a voter override on the Overrides tab.
                 </p>
@@ -1285,7 +1340,7 @@ export const ElectionDetailPage: React.FC = () => {
                   {lastSkippedDetails.map((d, i) => (
                     <li key={i} className="flex gap-2">
                       <span className="shrink-0 font-medium">{d.name}:</span>
-                      <span className="text-amber-600 dark:text-amber-400">{d.reason}</span>
+                      <span className="text-amber-700 dark:text-amber-400">{d.reason}</span>
                     </li>
                   ))}
                 </ul>
@@ -1293,7 +1348,7 @@ export const ElectionDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setLastSkippedDetails([])}
-                className="ml-4 shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
+                className="ml-4 shrink-0 text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
                 aria-label="Dismiss skipped voters banner"
               >
                 &times;
@@ -1464,6 +1519,7 @@ export const ElectionDetailPage: React.FC = () => {
                       : ''
                 }
                 onChange={(e) => void handleMeetingChange(e.target.value)}
+                aria-label="Linked meeting or event"
                 className="form-input shadow-xs"
               >
                 <option value="">No linked meeting</option>
@@ -1631,9 +1687,12 @@ export const ElectionDetailPage: React.FC = () => {
                     </>
                   )}
 
+                  {/* A ballot built only in the Ballot Builder (motions, membership
+                      votes) has no plain positions but still prints: the server
+                      accepts positions or ballot items, and so does the button. */}
                   {election.status !== ElectionStatus.CLOSED &&
                     election.status !== ElectionStatus.CANCELLED &&
-                    (election.positions?.length ?? 0) > 0 && (
+                    ((election.positions?.length ?? 0) > 0 || (election.ballot_items?.length ?? 0) > 0) && (
                       <button
                         onClick={() => {
                           void handleDownloadPrintableBallot();
@@ -1727,7 +1786,7 @@ export const ElectionDetailPage: React.FC = () => {
                     {election.status === ElectionStatus.OPEN && election.email_sent && (
                       <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
                         <svg
-                          className="h-4 w-4 text-green-600"
+                          className="h-4 w-4 text-green-700 dark:text-green-600"
                           fill="currentColor"
                           viewBox="0 0 20 20"
                           aria-hidden="true"
@@ -1888,7 +1947,16 @@ export const ElectionDetailPage: React.FC = () => {
 
               {/* Tab: Nominations */}
               {activeTab === 'nominations' && election.status !== ElectionStatus.CANCELLED && (
-                <div className="mb-6">
+                <div className="mb-6 space-y-4">
+                  {canManage && election.nominations_announcement && (
+                    <NominationsAnnouncementStatus
+                      electionId={electionId}
+                      announcement={election.nominations_announcement}
+                      onFinished={() => {
+                        void fetchElection();
+                      }}
+                    />
+                  )}
                   <NominationsPanel
                     electionId={electionId}
                     election={election}
@@ -2361,7 +2429,7 @@ export const ElectionDetailPage: React.FC = () => {
                                           entry.severity === 'critical'
                                             ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                                             : entry.severity === 'warning'
-                                              ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                                              ? 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400'
                                               : 'bg-theme-surface-secondary text-theme-text-muted'
                                         }`}
                                       >
@@ -2463,11 +2531,12 @@ export const ElectionDetailPage: React.FC = () => {
           <RecordPaperBallotsModal
             candidates={paperCandidates}
             ballotItems={election.ballot_items}
+            votingMethod={election.voting_method}
             recording={isRecordingPaper}
             error={paperBallotsError}
             attestationsRequired={featureFlags.paper_ballot_attestations_required}
-            onSubmit={(entries, notes, allowOverCount, ballotsCast) => {
-              void handleRecordPaperBallots(entries, notes, allowOverCount, ballotsCast);
+            onSubmit={(entries, rankedBallots, notes, allowOverCount, ballotsCast) => {
+              void handleRecordPaperBallots(entries, rankedBallots, notes, allowOverCount, ballotsCast);
             }}
             onClose={() => {
               setShowPaperBallotsModal(false);

@@ -42,12 +42,12 @@ export const StoreWindowCard: React.FC<StoreWindowCardProps> = ({ storefront, on
   /* A countdown that speaks every minute is unusable with a screen reader on.
      The hour bucket is what a member can act on, so only that is announced. */
   const hoursLeft = Number.isFinite(msRemaining) ? Math.ceil(msRemaining / 3_600_000) : null;
-  // Whole days counted down, as formatCountdown does for the visible figure:
-  // rounding up here announced "17 days" beside a countdown reading "16 days".
+  // Whole days, rounded down like the "14d left" pill beside it, which the
+  // same reader can see; rounding up here made one banner say 14 and 15.
   const daysLeft = Number.isFinite(msRemaining) ? Math.floor(msRemaining / 86_400_000) : null;
   const announcement = useMemo(() => {
     if (hoursLeft == null || hoursLeft <= 0) return '';
-    if (hoursLeft > 48 && daysLeft != null) return `Ordering closes in ${daysLeft} days`;
+    if (hoursLeft > 48) return `Ordering closes in ${daysLeft} days`;
     return `Ordering closes in about ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`;
   }, [hoursLeft, daysLeft]);
 

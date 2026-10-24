@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SchedulingPage from './SchedulingPage';
@@ -25,6 +25,8 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getMyShifts: vi.fn().mockResolvedValue([]),
     getOpenShifts: vi.fn().mockResolvedValue([]),
     getShift: vi.fn(),
+    createShift: vi.fn(),
+    getMySwapRequests: vi.fn().mockResolvedValue([]),
   },
   // A pure helper the create form calls on the template list; the real one just
   // flattens seats, so an empty list is a faithful stand-in for no template.
@@ -226,14 +228,13 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
-      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      const reportsTab = within(tabBar).getByRole('tab', { name: /Shift Reports/i });
-      await user.click(reportsTab);
+      const strip = await screen.findByRole('navigation', { name: 'Scheduling views' });
+      await user.click(within(strip).getByRole('link', { name: /Shift Reports/i }));
 
       // Assert on the tab's body, not its label: the labels stay in the DOM
       // either way, which is what let the snap-back through before.
       expect(await screen.findByTestId('shift-reports-tab')).toBeInTheDocument();
-      expect(reportsTab).toHaveAttribute('aria-selected', 'true');
+      expect(within(strip).getByRole('link', { name: /Shift Reports/i })).toHaveAttribute('aria-current', 'page');
       expect(window.location.search).toContain('tab=shift-reports');
     });
 
@@ -241,31 +242,31 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
-      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      const reportsTab = within(tabBar).getByRole('tab', { name: /Shift Reports/i });
-      await user.click(reportsTab);
+      const strip = await screen.findByRole('navigation', { name: 'Scheduling views' });
+      await user.click(within(strip).getByRole('link', { name: /Shift Reports/i }));
       await screen.findByTestId('shift-reports-tab');
 
-      const scheduleTab = within(tabBar).getByRole('tab', { name: 'Schedule' });
-      await user.click(scheduleTab);
+      // The Schedule link is the bare /scheduling: a missing ?tab= has to
+      // select Schedule, or the link would leave the last view on screen.
+      await user.click(within(strip).getByRole('link', { name: 'Schedule' }));
 
       await waitFor(() => expect(screen.queryByTestId('shift-reports-tab')).not.toBeInTheDocument());
-      expect(scheduleTab).toHaveAttribute('aria-selected', 'true');
+      expect(within(strip).getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
       expect(window.location.search).not.toContain('tab=');
     });
 
-    it('supports arrow-key navigation between scheduling views', async () => {
+    it('keeps the calendar on the same date after visiting another view', async () => {
+      window.history.replaceState({}, '', '/scheduling?view=month&date=2026-08-13');
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
-      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      const scheduleTab = within(tabBar).getByRole('tab', { name: 'Schedule' });
-      scheduleTab.focus();
-      await user.keyboard('{ArrowRight}');
+      const strip = await screen.findByRole('navigation', { name: 'Scheduling views' });
+      await user.click(within(strip).getByRole('link', { name: 'My Shifts' }));
+      await waitFor(() => expect(window.location.search).toContain('tab=my-shifts'));
+      await user.click(within(strip).getByRole('link', { name: 'Schedule' }));
 
-      const myShiftsTab = within(tabBar).getByRole('tab', { name: 'My Shifts' });
-      expect(myShiftsTab).toHaveAttribute('aria-selected', 'true');
-      expect(window.location.search).toContain('tab=my-shifts');
+      expect(await screen.findByRole('heading', { name: 'August 2026' })).toBeInTheDocument();
+      expect(window.location.search).toContain('date=2026-08-13');
     });
 
     it('should honour a ?tab= deep link on first render', async () => {
@@ -284,9 +285,9 @@ describe('SchedulingPage', () => {
 
       renderWithRouter(<SchedulingPage />);
 
-      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      expect(within(tabBar).getByRole('tab', { name: 'Schedule' })).toHaveAttribute('aria-selected', 'true');
-      expect(within(tabBar).queryByRole('tab', { name: /Equipment Checks/i })).not.toBeInTheDocument();
+      const strip = await screen.findByRole('navigation', { name: 'Scheduling views' });
+      expect(within(strip).getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
+      expect(within(strip).queryByRole('link', { name: /Equipment Checks/i })).not.toBeInTheDocument();
     });
 
     it('restores and preserves the selected calendar view and date in the URL', async () => {
@@ -490,6 +491,42 @@ describe('SchedulingPage', () => {
       });
     });
 
+    it('moves the board to the date of the shift just created', async () => {
+      const user = userEvent.setup();
+      // Without apparatus the form asks for none, so a date and a template
+      // are all it needs to submit.
+      useSchedulingStore.setState({ shiftApparatus: [] });
+      vi.mocked(schedulingService.createShift).mockReset();
+      vi.mocked(schedulingService.createShift).mockResolvedValue({ id: 'new' } as never);
+      renderWithRouter(<SchedulingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+      await user.selectOptions(within(dialog).getByLabelText('Shift Template'), 't0');
+      fireEvent.change(within(dialog).getByLabelText(/Start Date/), { target: { value: '2031-03-04' } });
+      await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+
+      await waitFor(() => expect(schedulingService.createShift).toHaveBeenCalled());
+      await waitFor(() => expect(window.location.search).toContain('date=2031-03-04'));
+    });
+
+    it('offers "Create a shift" rather than "the first" once the department has shifts', async () => {
+      renderWithRouter(<SchedulingPage />);
+      expect(await screen.findByRole('button', { name: 'Create a shift' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Create the first shift' })).not.toBeInTheDocument();
+    });
+
+    it('still says "the first" to a department with none on record', async () => {
+      vi.mocked(schedulingService.getSummary).mockResolvedValueOnce({
+        shifts_scheduled: 0,
+        shifts_scheduled_this_week: 0,
+        shifts_scheduled_this_month: 0,
+        hours_worked_this_month: 0,
+      } as never);
+      renderWithRouter(<SchedulingPage />);
+      expect(await screen.findByRole('button', { name: 'Create the first shift' })).toBeInTheDocument();
+    });
+
     it('names every field in the Create Shift dialog', async () => {
       const user = userEvent.setup();
       renderWithRouter(<SchedulingPage />);
@@ -517,6 +554,66 @@ describe('SchedulingPage', () => {
       // Custom Times heads a pair of fields rather than naming one, so it is a
       // group rather than a label.
       expect(screen.getByRole('group', { name: /Custom Times/ })).toBeInTheDocument();
+    });
+  });
+  /**
+   * A hand-created shift inherits its template's equipment checklists only
+   * through `template_id`; without it the shift had no checklists at all.
+   */
+  describe('creating a shift from a template', () => {
+    const mockCreateShift = vi.mocked(schedulingService.createShift);
+
+    beforeEach(() => {
+      mockCreateShift.mockReset();
+      mockCreateShift.mockResolvedValue({ id: 'new-shift' } as never);
+      mockCheckPermission.mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      act(() => {
+        useSchedulingStore.setState({ templates: [], templatesLoaded: false });
+      });
+    });
+
+    async function createFromForm() {
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+      fireEvent.change(within(dialog).getByLabelText(/Start Date/), { target: { value: '2099-03-04' } });
+      await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+      await waitFor(() => expect(mockCreateShift).toHaveBeenCalledTimes(1));
+      return mockCreateShift.mock.calls[0]?.[0];
+    }
+
+    it('sends the id of a template loaded from the backend', async () => {
+      useSchedulingStore.setState({
+        templates: [
+          {
+            id: 'tmpl-engine-day',
+            name: 'Engine Day',
+            is_active: true,
+            is_default: true,
+            start_time_of_day: '07:00',
+            end_time_of_day: '19:00',
+            duration_hours: 12,
+          },
+        ] as never,
+        templatesLoaded: true,
+      });
+
+      const payload = await createFromForm();
+
+      expect(payload).toMatchObject({ shift_date: '2099-03-04', template_id: 'tmpl-engine-day' });
+    });
+
+    it('sends no template id for a built-in fallback template', async () => {
+      useSchedulingStore.setState({ templates: [], templatesLoaded: true });
+
+      const payload = await createFromForm();
+
+      expect(payload).toMatchObject({ shift_date: '2099-03-04' });
+      expect(payload).not.toHaveProperty('template_id');
     });
   });
 });

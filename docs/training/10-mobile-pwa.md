@@ -190,11 +190,9 @@ Selecting it takes you to your dashboard. **There is no menu button in the top
 bar.** To open the full navigation menu, select **More** on the bottom bar.
 Tap outside the menu to close it.
 
-![Phone header with the menu button at the left edge and the department name beside it](./images/10-13-mobile-header-menu.png)
+![Phone header with the department logo and name, and no menu button](./images/10-13-mobile-header-menu.png)
 
-<!-- Screenshot needed:
-_[Administrator (long menu) at /dashboard in a 390×844 phone viewport: bottom-bar More tapped so the navigation drawer is open and not yet scrolled, with the bottom fade and the More pill with its arrow visible above the drawer footer.]_
--->
+![The administrator's navigation drawer at 390px, opened from More on the bottom bar and not yet scrolled: the list fades at its foot, with the More pill and its down arrow above the theme and logout controls](./images/10-25-drawer-open-scroll-hint.png)
 
 A long menu does not always look long on a phone, because phones hide
 scrollbars until you scroll. When there are more items below, the bottom of
@@ -202,9 +200,7 @@ the menu fades and a small **More** button with a down arrow appears. Select it
 to scroll the list down. On a computer the side menu has an ordinary
 scrollbar instead.
 
-<!-- Screenshot needed:
-_[The navigation drawer open on a 390px phone as an officer, with items below the fold: the fade at the bottom edge and the floating **More** chevron.]_
--->
+![The menu list in the open drawer, clipped: items continue below the fold, the last visible rows fade out and the floating More button with its bouncing chevron sits over them](./images/10-26-drawer-more-chevron.png)
 
 ### Notification Badges on a Phone
 
@@ -274,9 +270,7 @@ always first, so it is not in the lists.
   the department's Organization Settings. Officers who manage those reach them
   from **More**.
 
-<!-- Screenshot needed:
-_[My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**: the **Left of Add** and **Right of Add** selects (one set to Training), the **Use the default tabs** link, and the bottom bar beneath showing the chosen tab.]_
--->
+![My Account, Appearance, at 390px as a member: Phone navigation bar with Right of Add set to Training, the Use the default tabs link, and the bottom bar beneath carrying the Training tab](./images/10-27-phone-nav-bar-setting.png)
 
 ---
 
@@ -705,9 +699,9 @@ There are two buttons, each with a confirmation:
   Whoever saved them is not told.
 - **Keep on hold**, in either confirmation, leaves things as they are.
 
-<!-- Screenshot needed:
-_[Member signed in on a device with two or three held offline items (seed untagged entries in IndexedDB): the yellow "N offline items are on hold" notice at the top of the app with its Send as me and Discard buttons; a second frame with the "Send these as yours?" confirmation open. Do not confirm.]_
--->
+![At 390px as a member: the yellow notice at the top of the app saying three offline items are on hold, saved before this device recorded who saved them, with Send as me and Discard](./images/10-28-held-offline-notice.png)
+
+![The Send these as yours? confirmation over the held-items notice, warning that the device cannot tell who saved them, with Keep on hold and Send as me](./images/10-29-held-offline-confirm.png)
 
 ---
 

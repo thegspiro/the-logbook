@@ -158,7 +158,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             <article className="card border-green-200 p-5 dark:border-green-900">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-green-700 dark:text-green-400">Approved</p>
-                <CheckCircle2 className="h-5 w-5 text-green-600" aria-hidden="true" />
+                <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-600" aria-hidden="true" />
               </div>
               <p className="mt-2 text-3xl font-bold text-green-700 dark:text-green-400">
                 {formatHours(summary.approvedHours)}
@@ -171,7 +171,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
             <article className="card border-amber-200 p-5 dark:border-amber-900">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Needs review</p>
-                <ListChecks className="h-5 w-5 text-amber-600" aria-hidden="true" />
+                <ListChecks className="h-5 w-5 text-amber-700 dark:text-amber-600" aria-hidden="true" />
               </div>
               <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">
                 {formatHours(summary.pendingHours)}

@@ -128,6 +128,114 @@ Screenshots to create or replace are in
 
 ---
 
+# October 13–15, 2026 workflow updates
+
+Index for the seventh window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                                                       | Now in                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Minutes: circulate, member suggestions, adopt, closed sessions, roll call, attachments, outlines, rich text | [04 — Events & Meetings](./04-events-meetings.md#circulating-and-adopting-minutes)                      |
+| "Also called" names and near-match search for checklist items; CSV "Also Called" column                     | [05 — Inventory](./05-inventory.md)                                                                     |
+| Delete a medical supply category (supplies move first)                                                      | [05 — Inventory](./05-inventory.md)                                                                     |
+| Start from last year skips retired categories                                                               | [11 — Finance](./11-finance.md)                                                                         |
+| Claude (MCP) member sign-in tool calls fixed                                                                | [16 — Integrations](./16-integrations.md)                                                               |
+| Plain-language rewrites of guides 02, 06–09, 11–15, 17                                                      | The guides themselves; moved screenshot notes are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) |
+
+# October 19–20, 2026 workflow updates
+
+Index for the eleventh window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                        | Now in                                                                                                         |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Minutes: one Settings page (Attendance, Signatures, Reminders, Publishing)   | [04 — Events & Meetings](./04-events-meetings.md#who-is-listed-on-the-roll-department-default-and-per-minutes) |
+| Minutes: search the words inside the archive                                 | [04 — Events & Meetings](./04-events-meetings.md)                                                              |
+| Screening requirements apply only to the positions they name                 | [13 — Medical Screening](./13-medical-screening.md)                                                            |
+| Dashboard overdue dues counted by the dues screen's rule                     | [11 — Finance](./11-finance.md)                                                                                |
+| Date and time fields no longer spill over their neighbour on iPad and iPhone | Layout only; the Edit Member screenshot is queued                                                              |
+
+---
+
+# October 18–19, 2026 workflow updates
+
+Index for the tenth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                                     | Now in                                                                                               |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Minutes: publish to the library and a public page; roll listing default                   | [04 — Events & Meetings](./04-events-meetings.md#publishing-adopted-minutes-library-and-public-page) |
+| Elections: one email per member for the package and nominations notice                    | [14 — Elections](./14-elections.md)                                                                  |
+| Equipment checks: Present / Absent, crew-dated replacements, items without a heading      | [03 — Scheduling](./03-scheduling.md)                                                                |
+| Purchase request saves as a draft while typed; amount limits; chain ranges and boundaries | [11 — Finance](./11-finance.md)                                                                      |
+| Budget picker hides remaining amounts; chains match their own request type                | [11 — Finance](./11-finance.md)                                                                      |
+| Scheduling: Go to the next shift; own sign-up confirmed; ended shifts leave Open Shifts   | [03 — Scheduling](./03-scheduling.md)                                                                |
+| Administrative members: no readiness verdict, no crew Operations rows                     | [13 — Medical Screening](./13-medical-screening.md), [05 — Inventory](./05-inventory.md)             |
+| Messages to Probationary / Retired match the membership status too                        | [08 — Admin & Reports](./08-admin-reports.md)                                                        |
+
+---
+
+# October 16–18, 2026 workflow updates
+
+Index for the ninth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).
+**Before upgrading,** read the `docs/UPGRADING.md` entries for the weekly
+security report (on by default, emailed to the IT Manager) and for equipment-check
+counts (Min to Pass versus par). Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) under _Queued by the October
+16 – 18 documentation pass_. Most guides were also re-shot on 2026-10-17; those
+rows are marked **CURRENT** in place.
+
+| Topic                                                                                                             | Now in                                                      |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Meeting agenda items become the minutes outline; Sync from agenda; Not taken up                                   | [04 — Events & Meetings](./04-events-meetings.md)           |
+| Ballot and reminder emails send in the background; tokens saved first; per-contest printed ballots                | [14 — Elections](./14-elections.md)                         |
+| Nominee bell notice; meeting-aligned voting window; officer positions suggested; no write-in on Approve/Deny      | [14 — Elections](./14-elections.md)                         |
+| Weekly security report to the IT Manager; one department's task failure no longer stops the rest                  | [08 — Admin & Reports](./08-admin-reports.md)               |
+| Google Calendar and Outlook connect with a sign-in; department events ICS feed; calendar sync                     | [16 — Integrations](./16-integrations.md)                   |
+| Microsoft 365 accounts for converted members; Google attention list                                               | [16 — Integrations](./16-integrations.md)                   |
+| Sync History tab; **Import Past Training** (was Import History)                                                   | [02 — Training](./02-training.md)                           |
+| Medical supplies on the apparatus: counted, expire, apparatus-only, CSV                                           | [05 — Inventory](./05-inventory.md)                         |
+| Equipment-check counts: Min to Pass fails a count, par sets the restock                                           | [03 — Scheduling](./03-scheduling.md)                       |
+| One Operations header and section strip; phone layouts for one apparatus and the supply worklist                  | [05 — Inventory](./05-inventory.md)                         |
+| Dashboard Standby shows your own hours; Take a Shift hidden from members who cannot hold a seat                   | [00 — Getting Started](./00-getting-started.md)             |
+| Adopted minutes are signed in the app (Minutes → Settings → Signatures); name and password confirm each signature | [04 — Events & Meetings](./04-events-meetings.md)           |
+| Event cancellations, changes and organizer notices are emailed; post-event validation goes to organizers          | [04 — Events & Meetings](./04-events-meetings.md)           |
+| Daily email reminders for grant compliance tasks and pledges; Amount Awarded on the application                   | [12 — Grants & Fundraising](./12-grants-fundraising.md)     |
+| A used approval chain or step cannot be deleted (turn it off); chain edits are audited                            | [11 — Finance](./11-finance.md)                             |
+| Password changes are audited and the member is told                                                               | [00 — Getting Started](./00-getting-started.md)             |
+| NFPA Remove and the Operators buttons need apparatus.manage; Check-In Station shown to a check-in holder          | Behaviour only; no screen changed                           |
+| Store: offline notice, drafts explained, one countdown                                                            | [18 — Storefront](./18-storefront.md)                       |
+| Facility photos and documents upload in one step                                                                  | [06 — Apparatus & Facilities](./06-apparatus-facilities.md) |
+| Cleared fields now save; create forms keep input on failure (API keys, saved reports, grants, events)             | Behaviour only; no screen changed                           |
+
+---
+
+# October 15–16, 2026 workflow updates
+
+Index for the eighth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); the prospective-members set
+was re-captured in this window.
+
+| Topic                                                                                          | Now in                                                           |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Medical Supplies: where a supply is kept, sort, bulk retire, lots dialog, size, next expiry    | [05 — Inventory](./05-inventory.md#finding-and-tidying-supplies) |
+| Catalog Links: link matches automatically, with Undo                                           | [05 — Inventory](./05-inventory.md#catalog-links)                |
+| Critical minimum means strictly below; My Checklists phone layout                              | [03 — Scheduling](./03-scheduling.md)                            |
+| Weekly email of administrator-only folders                                                     | [07 — Documents](./07-documents-forms.md)                        |
+| Google accounts: tagged on creation, Link existing members, suspension from one departure hook | [16 — Integrations](./16-integrations.md)                        |
+| Undo-drop window counts from the drop's effective date                                         | [01 — Membership](./01-membership.md)                            |
+
+---
+
 # October 12–13, 2026 workflow updates
 
 Index for the sixth window. Audit:
@@ -147,3 +255,64 @@ Screenshots to create or replace are in
 | Saved reports; Department pulse Customize; Legal Documents Load more                          | [08 — Admin & Reports](./08-admin-reports.md)                                    |
 | Grant lifecycle and overspend; anonymous donors hidden                                        | [12 — Grants & Fundraising](./12-grants-fundraising.md)                          |
 | Claude (MCP) Settings button and connection walkthrough; Salesforce client credentials        | [16 — Integrations](./16-integrations.md)                                        |
+
+---
+
+# October 23–24, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                                                                                          | Now in                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Mark pipeline complete; Completed by hand; officer-only progress actions                                                       | [02 — Training](./02-training.md) (Completing a Pipeline by Hand)         |
+| No active requirements; inactive requirements and prerequisites; deactivating a pipeline withdraws members; prerequisite email | [02 — Training](./02-training.md) (Inactive Requirements and Pipelines)   |
+| Finance: reimburse by check, withdraw a draft, approver preview, inactive category                                             | [11 — Finance](./11-finance.md)                                           |
+| Shift patterns skip an inactive template                                                                                       | [03 — Scheduling](./03-scheduling.md)                                     |
+| Rename a variant product                                                                                                       | [05 — Inventory](./05-inventory.md) (Renaming a variant product)          |
+| Directory accounts: retirement, groups, name changes, secret expiry                                                            | [16 — Integrations](./16-integrations.md)                                 |
+| Locked built-in rank codes                                                                                                     | [08 — Admin & Reports](./08-admin-reports.md)                             |
+| Backup encryption; Google Shared Drive storage                                                                                 | Operator-facing: `BACKUP.md`, `FILE_STORAGE_HARDENING.md`, `UPGRADING.md` |
+
+---
+
+# October 22–23, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                                                                   | Now in                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Two-step sign-in required of administrative roles (14-day grace); step-up code before sensitive actions | [00 — Getting Started](./00-getting-started.md), [08 — Admin & Reports](./08-admin-reports.md), [`UPGRADING.md`](../UPGRADING.md) |
+| Gear low-stock email links to a filtered Inventory Items list                                           | [05 — Inventory](./05-inventory.md) (Low stock emails)                                                                            |
+| A checklist is overdue when its shift ends, not at midnight                                             | [03 — Scheduling](./03-scheduling.md) (written with the change)                                                                   |
+| Historical training import refuses undated rows                                                         | [02 — Training](./02-training.md) (written with the change)                                                                       |
+| Event page check-in and check-out controls                                                              | [Learning Center](./LEARNING_CENTER_SCREENSHOTS.md), 04 (written with the change)                                                 |
+| Department's own S3 / MinIO bucket and moving existing files into it                                    | Operator-facing: `BACKUP.md`, `FILE_STORAGE_HARDENING.md`, `UPGRADING.md`                                                         |
+| iCal integration drops the unused include-shifts setting                                                | `KNOWN_LIMITATIONS.md`                                                                                                            |
+
+---
+
+# October 20–21, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                                              | Now in                                                                                                         |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Check in from the event page; View QR Code only for managers and organizers                        | [04 — Events & Meetings](./04-events-meetings.md)                                                              |
+| My Training history: "Awaiting approval" group is now "No completion date"                         | [02 — Training](./02-training.md)                                                                              |
+| Delete, status change and archive refused for a member with permissions you lack                   | [01 — Membership](./01-membership.md) (When Deletion Is Refused)                                               |
+| Ranked-choice paper ballots entered ballot by ballot and counted individually                      | [14 — Elections](./14-elections.md) (Paper Ballots & Attestation)                                              |
+| Approver offices named in the applicant drawer                                                     | [15 — Prospective Members](./15-prospective-members.md)                                                        |
+| Shift calendar feed: disconnecting stops the link for every subscriber                             | [03 — Scheduling](./03-scheduling.md)                                                                          |
+| Roster names rank, membership type and positions apart; checklist presets use Present              | [01 — Membership](./01-membership.md), [03 — Scheduling](./03-scheduling.md) (already written with the change) |
+| Minutes: closed election's result filed automatically; Medical Supplies lot recall and truck links | [04](./04-events-meetings.md), [05](./05-inventory.md) (written with the change)                               |
+| Session lifetime, probationary members as current, Pillow / follow-redirects bumps                 | Operator-facing: [`UPGRADING.md`](../UPGRADING.md), wiki Security pages                                        |
+| Create Training Session no longer shows an apparatus picker (it was never saved)                   | Nothing in a guide named it                                                                                    |

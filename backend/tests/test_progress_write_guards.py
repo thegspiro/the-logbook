@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.sql.dml import Update
 
 from app.models.training import EnrollmentStatus, RequirementProgressStatus
@@ -154,14 +155,17 @@ def _update_count(db):
 
 
 class TestRecalcNeverResurrects:
-    async def _recalc(self, status, avg_percentage):
+    async def _recalc(self, status, avg_percentage, stored_percentage=None):
+        # An enrollment the rollup completed stored 100% in the same write.
+        if stored_percentage is None:
+            stored_percentage = 100.0 if status == EnrollmentStatus.COMPLETED else 0.0
         enrollment = SimpleNamespace(
             id="enr-1",
             organization_id="org-1",
             program_id="prog-1",
             user_id="u1",
             status=status,
-            progress_percentage=0.0,
+            progress_percentage=stored_percentage,
         )
         rows = [
             SimpleNamespace(progress_percentage=avg_percentage, requirement_id="r1")
@@ -174,7 +178,8 @@ class TestRecalcNeverResurrects:
                 _scalars(["r1"]),  # required requirement ids
                 _scalars(rows),  # load required progress rows
                 MagicMock(),  # UPDATE progress_percentage
-                MagicMock(),  # possible UPDATE status
+                # possible UPDATE status: the completion claim reports a row
+                MagicMock(spec=CursorResult, rowcount=1),
                 _scalars([]),  # milestone lookup
                 _one(program),  # notification: load program (if completed)
                 _one(user),  # notification: load user
@@ -207,4 +212,14 @@ class TestRecalcNeverResurrects:
         db, svc = await self._recalc(EnrollmentStatus.COMPLETED, 40.0)
         # progress_percentage update + status→ACTIVE reopen update.
         assert _update_count(db) == 2
+        svc._notify_program_completion.assert_not_awaited()
+
+    async def test_completed_by_hand_below_100_stays_completed(self):
+        # An officer's manual completion leaves the stored percentage below
+        # 100; progress that never reached 100 has not fallen, so the rollup
+        # must not undo the officer's decision.
+        db, svc = await self._recalc(
+            EnrollmentStatus.COMPLETED, 40.0, stored_percentage=50.0
+        )
+        assert _update_count(db) == 1
         svc._notify_program_completion.assert_not_awaited()

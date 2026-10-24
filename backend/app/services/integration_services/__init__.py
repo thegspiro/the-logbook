@@ -69,21 +69,13 @@ async def test_integration_connection(integration: Integration) -> str:
             raise Exception("No webhook URL configured")
         return await send_test_webhook(url, secret)
 
-    if itype == "google-calendar":
-        from app.services.integration_services.google_calendar_service import (
-            GoogleCalendarService,
-        )
+    if itype in ("google-calendar", "outlook"):
+        from app.services.calendar_sync_service import default_service_factory
 
-        creds = _get_calendar_credentials(integration)
-        return await GoogleCalendarService(creds).test_connection()
-
-    if itype == "outlook":
-        from app.services.integration_services.outlook_calendar_service import (
-            OutlookCalendarService,
-        )
-
-        creds = _get_calendar_credentials(integration)
-        return await OutlookCalendarService(creds).test_connection()
+        # The reconciler's own credentials, deployment OAuth client and
+        # Outlook tenant included, so an access token that lapsed since the
+        # last pass is refreshed instead of failing the test.
+        return await default_service_factory(integration).test_connection()
 
     if itype == "salesforce":
         from app.services.integration_services.salesforce_service import (
@@ -116,6 +108,42 @@ async def test_integration_connection(integration: Integration) -> str:
             raise Exception("No Cal.com API key configured")
         return await CalcomService(creds).test_connection()
 
+    if itype == "google-workspace":
+        from app.services.integration_services.google_workspace_service import (
+            GoogleWorkspaceError,
+            directory_for,
+        )
+
+        # The connector's messages are hand-written and safe to show; they
+        # are re-raised as a bare Exception, which is what the test-connection
+        # endpoint trusts (see sanitize_connector_error).
+        try:
+            return await directory_for(integration).test_connection(
+                str(config.get("domain", "")),
+                list(config.get("group_emails") or []),
+                str(config.get("org_unit_path") or "/"),
+            )
+        except GoogleWorkspaceError as exc:
+            raise Exception(str(exc)) from exc
+
+    if itype == "microsoft-365":
+        from app.services.integration_services.microsoft_365_service import (
+            Microsoft365Error,
+        )
+        from app.services.integration_services.microsoft_365_service import (
+            directory_for as microsoft_directory_for,
+        )
+
+        # Hand-written messages, re-raised bare like Google's above.
+        try:
+            return await microsoft_directory_for(integration).test_connection(
+                str(config.get("domain", "")),
+                list(config.get("groups") or []),
+                str(config.get("license_sku_id") or "") or None,
+            )
+        except Microsoft365Error as exc:
+            raise Exception(str(exc)) from exc
+
     if itype == "ical":
         return "iCal feeds are read-only — no connection test needed"
 
@@ -126,12 +154,33 @@ async def test_integration_connection(integration: Integration) -> str:
 
 
 def _get_calendar_credentials(integration: Integration) -> dict[str, Any]:
-    """Extract calendar credentials from encrypted storage."""
+    """Extract calendar credentials from encrypted storage.
+
+    The access token's expiry is not a secret and lives in public config, so
+    the service can refresh a lapsed token before using it.
+    """
     creds: dict[str, Any] = {}
-    for key in ("refresh_token", "client_id", "client_secret", "tenant_id", "token"):
+    for key in (
+        "refresh_token",
+        "client_id",
+        "client_secret",
+        "tenant_id",
+        "token",
+        "access_token",
+    ):
         val = integration.get_secret(key)
         if val:
             creds[key] = val
+    config = integration.config or {}
+    expires_at = config.get("token_expires_at")
+    if expires_at:
+        creds["token_expires_at"] = expires_at
+    # The Test button checks the department calendar itself: Google's
+    # calendar.app.created scope covers calendars the app made, not the
+    # account's calendar list, and it is what publishing writes to.
+    calendar_id = config.get("calendar_id")
+    if calendar_id:
+        creds["calendar_id"] = calendar_id
     return creds
 
 

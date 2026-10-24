@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { DialogPanel } from '@/components/ux/DialogPanel';
 import {
@@ -13,8 +13,9 @@ import {
   Settings,
   Loader2,
   MinusCircle,
+  MoreHorizontal,
   Truck,
-  Calendar,
+  Boxes,
   Play,
   X,
 } from 'lucide-react';
@@ -24,9 +25,10 @@ import type {
   ShiftEquipmentCheckRecord,
   EquipmentCheckTemplate,
 } from '../../../modules/inventory/types/equipmentCheck';
-import { isChecklistSubmitted } from '../../../modules/inventory/types/equipmentCheck';
+import { describeCount, isChecklistSubmitted } from '../../../modules/inventory/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../services/equipmentCheckApi';
-import { calendarDaysFromToday, formatCalendarDate, formatDate, formatTime } from '../../../utils/dateFormatting';
+import { calendarDaysFromToday, formatDate, formatTime, toLocalISODate } from '../../../utils/dateFormatting';
+import { dayHeading } from '../utils/dayHeading';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useAuthStore } from '../../../stores/authStore';
@@ -35,6 +37,7 @@ import { crewVisibleTemplates } from './equipmentCheckTemplates';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 
 // ---------------------------------------------------------------------------
@@ -111,19 +114,35 @@ const statusBadge = (status: string) => {
   }
 };
 
-/** "Today", "Tomorrow", "In 5 days", "3 days ago" — when this check is due. */
-const dueLabel = (days: number): string => {
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
-  if (days === -1) return 'Yesterday';
-  if (days > 1) return `In ${days} days`;
-  return `${Math.abs(days)} days ago`;
-};
-
 const TIMING_LABELS: Record<string, string> = {
   start_of_shift: 'Start of shift',
   end_of_shift: 'End of shift',
 };
+
+const TIMING_SHORT: Record<string, string> = {
+  start_of_shift: 'Start',
+  end_of_shift: 'End',
+};
+
+const timingBadgeClass = (timing: string | undefined) =>
+  timing === 'start_of_shift'
+    ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+    : 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-400';
+
+const DAY_HEADING_CLASS =
+  'bg-theme-bg text-theme-text-primary mobile-header-inset sticky z-10 flex items-baseline gap-2 py-1.5 text-sm font-semibold md:top-0';
+
+/** Consecutive runs of one key, in the order given — the lists arrive sorted. */
+function groupRuns<T>(items: T[], keyOf: (item: T) => string): { key: string; items: T[] }[] {
+  const groups: { key: string; items: T[] }[] = [];
+  for (const item of items) {
+    const key = keyOf(item);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.items.push(item);
+    else groups.push({ key, items: [item] });
+  }
+  return groups;
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -147,7 +166,6 @@ export const MyChecklistsPage: React.FC = () => {
   // Active checklists
   const [loading, setLoading] = useState(true);
   const [activeChecklists, setActiveChecklists] = useState<ActiveChecklist[]>([]);
-  const [timingFilter, setTimingFilter] = useState<'all' | 'start_of_shift' | 'end_of_shift'>('all');
 
   // History
   const [history, setHistory] = useState<ShiftEquipmentCheckRecord[]>([]);
@@ -216,6 +234,41 @@ export const MyChecklistsPage: React.FC = () => {
       void fetchHistory();
     }
   }, [showHistory, fetchHistory]);
+
+  /**
+   * Due checklists by day, soonest first. Within a day the start-of-shift
+   * check precedes the end-of-shift one, because that is the order they are
+   * done in. A shift arrived at from the drawer (`?shift=`) still comes to the
+   * top: its day leads, and within that day its rows do.
+   */
+  const dueDays = useMemo(() => {
+    const timingRank = (t: string) => (t === 'start_of_shift' ? 0 : 1);
+    const sorted = activeChecklists.slice().sort((a, b) => {
+      const byDate = (a.shiftDate ?? '').localeCompare(b.shiftDate ?? '');
+      if (byDate !== 0) return byDate;
+      if (highlightShiftId) {
+        const aMatch = a.shiftId === highlightShiftId ? 0 : 1;
+        const bMatch = b.shiftId === highlightShiftId ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+      }
+      return timingRank(a.checkTiming) - timingRank(b.checkTiming);
+    });
+    const days = groupRuns(sorted, (c) => c.shiftDate ?? '');
+    const highlighted = days.findIndex((d) => d.items.some((c) => c.shiftId === highlightShiftId));
+    if (highlighted > 0) days.unshift(...days.splice(highlighted, 1));
+    return days;
+  }, [activeChecklists, highlightShiftId]);
+
+  /**
+   * History records carry no checklist name, so one is borrowed from the
+   * member's current checklists where the template is still among them. A
+   * rig name is not borrowed: one template can serve several rigs, and the
+   * record does not say which it was run on.
+   */
+  const templateNames = useMemo(
+    () => new Map(activeChecklists.map((c) => [c.templateId, c.templateName] as const)),
+    [activeChecklists]
+  );
 
   const displayedHistory = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -420,7 +473,18 @@ export const MyChecklistsPage: React.FC = () => {
                   >
                     <div className="min-w-0">
                       <span className="text-theme-text-primary font-medium">{item.itemName}</span>
-                      <span className="text-theme-text-muted ml-2">{item.compartmentName}</span>
+                      <span className="text-theme-text-muted ml-2">{item.compartmentName || 'On the checklist'}</span>
+                      {item.quantityFound != null && (
+                        <span className="text-theme-text-secondary block text-xs">
+                          {/* Results filed before par was snapshotted carry
+                              only the single target they were judged by. */}
+                          {describeCount(
+                            item.quantityFound,
+                            item.expectedQuantity ?? item.requiredQuantity,
+                            item.countUnit
+                          )}
+                        </span>
+                      )}
                     </div>
                     {statusBadge(item.status)}
                   </div>
@@ -454,72 +518,50 @@ export const MyChecklistsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <ClipboardCheck className="text-theme-text-primary h-6 w-6 shrink-0" />
-          <h1 className="text-theme-text-primary text-xl font-bold">My Equipment Checklists</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => void handleOpenTemplatePicker()}
-            className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900"
-          >
-            <Play className="h-3.5 w-3.5" aria-hidden="true" />
-            Unscheduled checklist
-          </button>
-          {/* A whole checklist is the wrong instrument for "we just used two of
-              these". This is the way to record that without starting one. */}
-          <Link
-            to="/inventory/checklists/apparatus-inventory"
-            className="btn-secondary text-theme-text-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
-          >
-            <Truck className="h-3.5 w-3.5" />
-            Apparatus Inventory
-          </Link>
-          {canManage && (
-            <Link
-              to="/inventory/admin/checklists"
-              className="btn-secondary text-theme-text-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
+      {/* On a phone the two links that lead elsewhere fold into a menu, so
+          the list starts on the first screen. */}
+      <OperationsPageHeader
+        icon={ClipboardCheck}
+        title="My Equipment Checklists"
+        actions={
+          <>
+            <button
+              onClick={() => void handleOpenTemplatePicker()}
+              className="btn-primary inline-flex items-center gap-1.5"
             >
-              <Settings className="h-3.5 w-3.5" />
-              Manage Templates
+              <Play className="h-4 w-4" aria-hidden="true" />
+              Unscheduled checklist
+            </button>
+            {/* A whole checklist is the wrong instrument for "we just used two of
+          these". This is the way to record that without starting one. */}
+            <Link
+              to="/inventory/checklists/apparatus-inventory"
+              className="btn-secondary hidden items-center gap-1.5 sm:inline-flex"
+            >
+              <Boxes className="h-4 w-4" aria-hidden="true" />
+              Apparatus Inventory
             </Link>
-          )}
-        </div>
-      </div>
+            {canManage && (
+              <Link
+                to="/inventory/admin/checklists"
+                className="btn-secondary hidden items-center gap-1.5 sm:inline-flex"
+              >
+                <Settings className="h-4 w-4" aria-hidden="true" />
+                Manage Templates
+              </Link>
+            )}
+            <HeaderMenu canManage={canManage} />
+          </>
+        }
+      />
 
       {/* ============================================================= */}
-      {/* Checklists due now and coming up                               */}
+      {/* Checklists due now and coming up, by day                       */}
       {/* ============================================================= */}
-      <section>
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-theme-text-primary text-base font-semibold">Due now and coming up</h2>
-          {activeChecklists.length > 1 && (
-            <div className="card flex items-center gap-1 p-0.5">
-              {(
-                [
-                  ['all', 'All'],
-                  ['start_of_shift', 'Start of shift'],
-                  ['end_of_shift', 'End of shift'],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => setTimingFilter(value)}
-                  aria-pressed={timingFilter === value}
-                  className={`touch:min-h-11 touch:min-w-11 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-2.5 sm:py-1 ${
-                    timingFilter === value
-                      ? 'bg-red-800 text-white'
-                      : 'text-theme-text-muted hover:text-theme-text-primary'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      <section aria-labelledby="due-heading">
+        <h2 id="due-heading" className="text-theme-text-primary mb-1 text-base font-semibold">
+          Due now and coming up
+        </h2>
 
         {loading ? (
           <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
@@ -539,159 +581,111 @@ export const MyChecklistsPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="card-grid gap-3">
-            {activeChecklists
-              .filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter)
-              .slice()
-              /* Six checklists five to nine days out looked exactly as due as
-                 today's. Soonest first, and a shift arrived at from the drawer
-                 still comes to the top; within a day, the start-of-shift check
-                 precedes the end-of-shift one because that is the order they
-                 are done in. */
-              .sort((a, b) => {
-                if (highlightShiftId) {
-                  const aMatch = a.shiftId === highlightShiftId ? 0 : 1;
-                  const bMatch = b.shiftId === highlightShiftId ? 0 : 1;
-                  if (aMatch !== bMatch) return aMatch - bMatch;
-                }
-                const byDate = (a.shiftDate ?? '').localeCompare(b.shiftDate ?? '');
-                if (byDate !== 0) return byDate;
-                const timingRank = (t: string) => (t === 'start_of_shift' ? 0 : 1);
-                return timingRank(a.checkTiming) - timingRank(b.checkTiming);
-              })
-              .map((checklist) => {
-                const days = calendarDaysFromToday(checklist.shiftDate, timezone);
-                const isDueNow = days !== null && days <= 0;
-                const total = checklist.totalItems ?? 0;
-                const completed = checklist.completedItems ?? 0;
-                const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
-                const isStarted = checklist.status === 'in_progress' || checklist.status === 'incomplete';
-                // One check per shift and checklist, whoever on the crew files
-                // it. Offering to open a submitted one walked the member
-                // through every item and then refused at Submit with a 409.
-                const isSubmitted = isChecklistSubmitted(checklist.status);
-                const isHighlighted = highlightShiftId === checklist.shiftId;
+          <div className="space-y-3">
+            {dueDays.map((day) => {
+              const days = calendarDaysFromToday(day.key, timezone);
+              // The server marks a check overdue once its shift has ended
+              // unfiled, so an overnight shift still running is not flagged.
+              const overdue = day.items.some((c) => c.isOverdue);
+              const label = dayHeading(day.key, timezone);
+              return (
+                <section key={day.key} aria-label={label}>
+                  <h3 className={DAY_HEADING_CLASS}>
+                    {label}
+                    {overdue && <span className="text-xs font-medium text-red-700 dark:text-red-400">overdue</span>}
+                  </h3>
+                  <ul className="border-theme-surface-border bg-theme-surface divide-theme-surface-border divide-y overflow-hidden rounded-lg border">
+                    {day.items.map((checklist) => {
+                      const isDueNow = days !== null && days <= 0;
+                      const total = checklist.totalItems ?? 0;
+                      const completed = checklist.completedItems ?? 0;
+                      const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                      const isStarted = checklist.status === 'in_progress' || checklist.status === 'incomplete';
+                      // One check per shift and checklist, whoever on the crew
+                      // files it. Offering to open a submitted one walked the
+                      // member through every item and then refused at Submit
+                      // with a 409.
+                      const isSubmitted = isChecklistSubmitted(checklist.status);
+                      const isHighlighted = highlightShiftId === checklist.shiftId;
 
-                return (
-                  <div
-                    key={`${checklist.shiftId}-${checklist.templateId}`}
-                    className={`rounded-lg border p-4 ${
-                      isHighlighted
-                        ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20 dark:bg-blue-950/20'
-                        : 'border-theme-surface-border bg-theme-surface'
-                    }`}
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Truck className="text-theme-text-muted h-4 w-4 shrink-0" />
-                        <span className="text-theme-text-primary text-sm font-medium">{checklist.apparatusName}</span>
-                      </div>
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${
-                          checklist.checkTiming === 'start_of_shift'
-                            ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                            : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                        }`}
-                      >
-                        {TIMING_LABELS[checklist.checkTiming] ?? checklist.checkTiming}
-                      </span>
-                    </div>
-
-                    <div className="text-theme-text-muted mb-1 flex items-center gap-1.5 text-xs">
-                      <Calendar className="h-3 w-3" />
-                      {/* A shift date is a calendar date, not an instant. Run
-                          through the timezone it named the day before the
-                          shift, so every checklist card was dated a day early. */}
-                      <span>
-                        {formatCalendarDate(checklist.shiftDate, {
-                          year: 'numeric',
-                          month: 'numeric',
-                          day: 'numeric',
-                        })}
-                      </span>
-                      {days !== null && (
-                        <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                            days < 0
-                              ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-                              : days === 0
-                                ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                                : 'bg-theme-surface-hover text-theme-text-muted'
+                      return (
+                        <li
+                          key={`${checklist.shiftId}-${checklist.templateId}`}
+                          className={`flex items-center gap-3 px-3 py-2.5 ${
+                            isHighlighted ? 'bg-blue-50/50 ring-2 ring-blue-500/30 ring-inset dark:bg-blue-950/20' : ''
                           }`}
                         >
-                          {dueLabel(days)}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-theme-text-primary text-sm font-medium">{checklist.templateName}</p>
-
-                    {/* Progress bar and count */}
-                    {total > 0 && (
-                      <div className="mt-2">
-                        <div className="text-theme-text-muted mb-1 flex items-center justify-between text-xs">
-                          <span>
-                            {completed}/{total} items
-                          </span>
-                          {isStarted && <span>{progressPct}%</span>}
-                        </div>
-                        <div
-                          className="bg-theme-surface-border h-1.5 w-full overflow-hidden rounded-full"
-                          role="progressbar"
-                          aria-valuenow={progressPct}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`${completed} of ${total} items checked`}
-                        >
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              progressPct === 100 ? 'bg-green-500' : 'bg-blue-500'
-                            }`}
-                            style={{ width: `${progressPct}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-3 flex items-center justify-between">
-                      {statusBadge(checklist.status)}
-                      {/* The card badge said when the check belongs ("End") and
-                          the button said what to do ("Start Check"), so the two
-                          read as a contradiction. The button names the action
-                          only — and a check that is not due yet is still
-                          openable, just not dressed as the urgent one. */}
-                      {isSubmitted ? (
-                        <span className="text-theme-text-muted text-xs">Submitted for this shift</span>
-                      ) : (
-                        <button
-                          onClick={() => void handleStartCheck(checklist)}
-                          className={`touch:min-h-11 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                            isDueNow || isStarted
-                              ? 'bg-red-800 text-white hover:bg-red-900'
-                              : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
-                          }`}
-                        >
-                          {isStarted ? 'Continue checklist' : 'Open checklist'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            {activeChecklists.length > 0 &&
-              activeChecklists.filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter).length === 0 && (
-                <div className="card col-span-full p-6 text-center">
-                  <p className="text-theme-text-muted text-sm">
-                    No {timingFilter === 'start_of_shift' ? 'start of shift' : 'end of shift'} checklists.
-                  </p>
-                </div>
-              )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-primary text-sm font-semibold">
+                                {checklist.apparatusName}
+                              </span>
+                              <span
+                                className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ${timingBadgeClass(
+                                  checklist.checkTiming
+                                )}`}
+                              >
+                                {TIMING_SHORT[checklist.checkTiming] ?? checklist.checkTiming}
+                              </span>
+                            </div>
+                            <p className="text-theme-text-secondary mt-0.5 truncate text-xs">
+                              <span>{checklist.templateName}</span>
+                              {total > 0 && !isStarted && !isSubmitted && <span> &middot; {total} items</span>}
+                            </p>
+                            {isStarted && total > 0 && (
+                              <div className="mt-1 flex items-center gap-2">
+                                <div
+                                  className="bg-theme-surface-border h-1.5 max-w-32 flex-1 overflow-hidden rounded-full"
+                                  role="progressbar"
+                                  aria-valuenow={progressPct}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-label={`${completed} of ${total} items checked`}
+                                >
+                                  <div
+                                    className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                                    style={{ width: `${progressPct}%` }}
+                                  />
+                                </div>
+                                <span className="text-theme-text-muted text-xs tabular-nums">
+                                  {completed} of {total}
+                                </span>
+                              </div>
+                            )}
+                            {isSubmitted && (
+                              <p className="text-theme-text-muted mt-0.5 text-xs">Submitted for this shift</p>
+                            )}
+                          </div>
+                          {/* The button names the action only — and a check
+                              that is not due yet is still openable, just not
+                              dressed as the urgent one. */}
+                          {isSubmitted ? (
+                            statusBadge(checklist.status)
+                          ) : (
+                            <button
+                              onClick={() => void handleStartCheck(checklist)}
+                              className={`touch:min-h-11 shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+                                isDueNow || isStarted
+                                  ? 'bg-red-800 text-white hover:bg-red-900'
+                                  : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
+                              }`}
+                            >
+                              {isStarted ? 'Continue checklist' : 'Open checklist'}
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* ============================================================= */}
-      {/* Completed-checklist history                                    */}
+      {/* Completed-checklist history, by day                            */}
       {/* ============================================================= */}
       <section>
         <button
@@ -743,39 +737,48 @@ export const MyChecklistsPage: React.FC = () => {
                 <p className="text-theme-text-muted text-sm">No check history found.</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {displayedHistory.map((record) => (
-                  <button
-                    key={record.id}
-                    onClick={() => void handleViewCheckDetail(record.id)}
-                    className="btn-secondary flex w-full flex-col gap-2 px-3 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:px-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-theme-text-primary text-sm font-medium">
-                          {record.checkedAt ? formatDate(record.checkedAt, timezone) : 'Unknown date'}
-                        </span>
-                        <span className="text-theme-text-muted text-xs">
-                          {record.checkedAt ? formatTime(record.checkedAt, timezone) : ''}
-                        </span>
-                      </div>
-                      <div className="text-theme-text-muted mt-0.5 flex items-center gap-2 text-xs">
-                        <span>{record.checkTiming === 'start_of_shift' ? 'Start of Shift' : 'End of Shift'}</span>
-                        {record.checkedByName && (
-                          <>
-                            <span>&middot;</span>
-                            <span>{record.checkedByName}</span>
-                          </>
-                        )}
-                        <span>&middot;</span>
-                        <span>
-                          {record.completedItems}/{record.totalItems} items
-                        </span>
-                      </div>
-                    </div>
-                    {statusBadge(record.overallStatus)}
-                  </button>
-                ))}
+              <div className="space-y-3">
+                {groupRuns(displayedHistory, (r) => (r.checkedAt ? toLocalISODate(r.checkedAt, timezone) : '')).map(
+                  (day) => {
+                    const label = day.key ? dayHeading(day.key, timezone) : 'Unknown date';
+                    return (
+                      <section key={day.key || 'unknown'} aria-label={label} className="space-y-2">
+                        <h3 className={DAY_HEADING_CLASS}>{label}</h3>
+                        {day.items.map((record) => (
+                          <button
+                            key={record.id}
+                            onClick={() => void handleViewCheckDetail(record.id)}
+                            className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-theme-text-primary truncate text-sm font-medium">
+                                {(record.templateId && templateNames.get(record.templateId)) ||
+                                  `${TIMING_LABELS[record.checkTiming] ?? 'Equipment'} check`}
+                              </p>
+                              <p className="text-theme-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
+                                {[
+                                  record.checkedAt ? formatTime(record.checkedAt, timezone) : null,
+                                  TIMING_SHORT[record.checkTiming] ?? record.checkTiming,
+                                  record.checkedByName ?? null,
+                                  `${record.completedItems} of ${record.totalItems} items`,
+                                  record.failedItems > 0 ? `${record.failedItems} failed` : null,
+                                ]
+                                  .filter((part): part is string => Boolean(part))
+                                  .map((part, index) => (
+                                    <React.Fragment key={part}>
+                                      {index > 0 && <span aria-hidden="true">&middot;</span>}
+                                      <span>{part}</span>
+                                    </React.Fragment>
+                                  ))}
+                              </p>
+                            </div>
+                            {statusBadge(record.overallStatus)}
+                          </button>
+                        ))}
+                      </section>
+                    );
+                  }
+                )}
               </div>
             )}
           </div>
@@ -859,7 +862,7 @@ export const MyChecklistsPage: React.FC = () => {
                               className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
                                 tmpl.checkTiming === 'start_of_shift'
                                   ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                                  : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                  : 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-400'
                               }`}
                             >
                               {TIMING_LABELS[tmpl.checkTiming ?? ''] ?? tmpl.checkTiming}
@@ -877,6 +880,61 @@ export const MyChecklistsPage: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+/**
+ * Phone-only ⋯ menu for the header's two links. Wider screens show the links
+ * themselves. Plain links rather than a sheet: each one leaves the page, so
+ * there is nothing to dismiss afterwards — only an outside tap or Escape to
+ * close it without choosing.
+ */
+const HeaderMenu: React.FC<{ canManage: boolean }> = ({ canManage }) => {
+  const ref = useRef<HTMLDetailsElement | null>(null);
+
+  useEffect(() => {
+    const close = (event: Event) => {
+      const el = ref.current;
+      if (!el?.open) return;
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !el.contains(event.target as Node)) {
+        el.open = false;
+      }
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, []);
+
+  return (
+    <details ref={ref} className="relative sm:hidden" data-testid="checklist-header-menu">
+      <summary
+        className="btn-icon border-theme-surface-border text-theme-text-secondary list-none rounded-lg border [&::-webkit-details-marker]:hidden"
+        aria-label="More checklist pages"
+      >
+        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+      </summary>
+      <div className="popover-panel absolute top-full right-0 z-30 mt-1 min-w-56 overflow-hidden py-1">
+        <Link
+          to="/inventory/checklists/apparatus-inventory"
+          className="text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone flex items-center gap-2 px-3 py-2 text-sm"
+        >
+          <Boxes className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+          Apparatus inventory
+        </Link>
+        {canManage && (
+          <Link
+            to="/inventory/admin/checklists"
+            className="text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone flex items-center gap-2 px-3 py-2 text-sm"
+          >
+            <Settings className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+            Manage templates
+          </Link>
+        )}
+      </div>
+    </details>
   );
 };
 

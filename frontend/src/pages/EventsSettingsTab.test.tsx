@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import toast from 'react-hot-toast';
 
 const getModuleSettings = vi.fn();
 const getForms = vi.fn();
+const createEmailTemplate = vi.fn();
+const listEmailTemplates = vi.fn();
+const deleteEmailTemplate = vi.fn();
 
 vi.mock('../services/api', () => ({
   eventService: {
@@ -11,8 +15,10 @@ vi.mock('../services/api', () => ({
     updateModuleSettings: vi.fn(),
   },
   eventRequestService: {
-    listEmailTemplates: () => Promise.resolve([]),
+    listEmailTemplates: (...args: unknown[]) => listEmailTemplates(...args) as unknown,
+    deleteEmailTemplate: (...args: unknown[]) => deleteEmailTemplate(...args) as unknown,
     getForms: (...args: unknown[]) => getForms(...args) as unknown,
+    createEmailTemplate: (...args: unknown[]) => createEmailTemplate(...args) as unknown,
   },
   userService: { getUsers: () => Promise.resolve([]) },
 }));
@@ -52,6 +58,10 @@ describe('EventsSettingsTab', () => {
     getModuleSettings.mockResolvedValue(structuredClone(settings));
     getForms.mockReset();
     getForms.mockResolvedValue({ forms: [], total: 0, skip: 0, limit: 50 });
+    listEmailTemplates.mockReset();
+    listEmailTemplates.mockResolvedValue([]);
+    deleteEmailTemplate.mockReset();
+    deleteEmailTemplate.mockResolvedValue({ message: 'Template deleted' });
   });
 
   // A 200 that is not a settings object — a captive portal's HTML page — used
@@ -101,5 +111,137 @@ describe('EventsSettingsTab', () => {
 
     expect(await screen.findByRole('button', { name: 'Move "Review Request" up' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Move "Review Request" down' })).toBeDisabled();
+  });
+
+  describe('email templates', () => {
+    beforeEach(() => {
+      createEmailTemplate.mockReset();
+      createEmailTemplate.mockImplementation((data: Record<string, unknown>) =>
+        Promise.resolve({ id: 'tpl-1', is_active: 1, created_at: '', updated_at: '', ...data })
+      );
+      vi.mocked(toast.error).mockReset();
+    });
+
+    const openTemplateForm = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+      await user.click(screen.getByRole('button', { name: 'Email' }));
+      await user.click(await screen.findByRole('button', { name: 'New Template' }));
+      await user.type(screen.getByPlaceholderText(/Template name/), 'One week out');
+      await user.type(screen.getByPlaceholderText('Email subject'), 'Your event is next week');
+      await user.type(screen.getByPlaceholderText(/Email body/), '<p>See you soon</p>');
+    };
+
+    // The reminder task matches days_before_event templates by
+    // trigger_days_before alone; one saved without it never fired.
+    it('sends the days-before offset with a days-before-event template', async () => {
+      const user = userEvent.setup();
+      await openTemplateForm(user);
+
+      expect(screen.queryByRole('spinbutton', { name: 'Days before event' })).not.toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText('Send automatically'), 'days_before_event');
+      const days = screen.getByRole('spinbutton', { name: 'Days before event' });
+      expect(days).toBeRequired();
+      await user.type(days, '7');
+      await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+      await waitFor(() => expect(createEmailTemplate).toHaveBeenCalledTimes(1));
+      expect(createEmailTemplate).toHaveBeenCalledWith({
+        name: 'One week out',
+        subject: 'Your event is next week',
+        body_html: '<p>See you soon</p>',
+        trigger: 'days_before_event',
+        trigger_days_before: 7,
+      });
+    });
+
+    const refusal = 'Enter how many days before the event to send it, as a whole number from 1 to 90.';
+
+    it('refuses to save a days-before template with the days left blank', async () => {
+      const user = userEvent.setup();
+      await openTemplateForm(user);
+
+      await user.selectOptions(screen.getByLabelText('Send automatically'), 'days_before_event');
+      await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+      expect(createEmailTemplate).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith(refusal);
+    });
+
+    it.each(['0', '91', '2.5'])('refuses to save a days-before template with %j days', async (value) => {
+      const user = userEvent.setup();
+      await openTemplateForm(user);
+
+      await user.selectOptions(screen.getByLabelText('Send automatically'), 'days_before_event');
+      await user.type(screen.getByRole('spinbutton', { name: 'Days before event' }), value);
+      await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+      expect(createEmailTemplate).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith(refusal);
+    });
+
+    it('drops the offset once the trigger moves off days-before-event', async () => {
+      const user = userEvent.setup();
+      await openTemplateForm(user);
+
+      await user.selectOptions(screen.getByLabelText('Send automatically'), 'days_before_event');
+      await user.type(screen.getByRole('spinbutton', { name: 'Days before event' }), '3');
+      await user.selectOptions(screen.getByLabelText('Send automatically'), 'on_scheduled');
+      await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+      await waitFor(() => expect(createEmailTemplate).toHaveBeenCalledTimes(1));
+      const payload = createEmailTemplate.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.trigger).toBe('on_scheduled');
+      expect(payload.trigger_days_before).toBeUndefined();
+    });
+  });
+
+  describe('deleting an email template', () => {
+    const template = {
+      id: 'tpl-9',
+      name: 'Request received',
+      subject: 'We got your request',
+      body_html: '<p>Thanks</p>',
+      is_active: true,
+      created_at: '2026-08-01T00:00:00Z',
+      updated_at: '2026-08-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      listEmailTemplates.mockReset();
+      listEmailTemplates.mockResolvedValue([structuredClone(template)]);
+    });
+
+    const openEmailSection = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+      await user.click(screen.getByRole('button', { name: 'Email' }));
+      await screen.findByText('Request received');
+    };
+
+    it('asks first, naming the template, and keeps it on cancel', async () => {
+      const user = userEvent.setup();
+      await openEmailSection(user);
+
+      await user.click(screen.getByRole('button', { name: 'Delete "Request received"' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Delete email template "Request received"?' });
+      expect(dialog).toHaveTextContent('Emails already sent are unaffected');
+      await user.click(screen.getByRole('button', { name: 'Keep it' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(deleteEmailTemplate).not.toHaveBeenCalled();
+      expect(screen.getByText('Request received')).toBeInTheDocument();
+    });
+
+    it('deletes the template once confirmed', async () => {
+      const user = userEvent.setup();
+      await openEmailSection(user);
+
+      await user.click(screen.getByRole('button', { name: 'Delete "Request received"' }));
+      await user.click(await screen.findByRole('button', { name: 'Delete template' }));
+
+      await waitFor(() => expect(deleteEmailTemplate).toHaveBeenCalledWith('tpl-9'));
+      await waitFor(() => expect(screen.queryByText('Request received')).not.toBeInTheDocument());
+    });
   });
 });

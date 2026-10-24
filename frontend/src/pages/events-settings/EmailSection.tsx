@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import type { EmailSectionProps } from './types';
+import { MAX_TEMPLATE_DAYS_BEFORE, MIN_TEMPLATE_DAYS_BEFORE, type EmailSectionProps } from './types';
 
 const TRIGGER_LABELS: Record<string, string> = {
   on_submitted: 'New request submitted',
@@ -32,6 +32,8 @@ const EmailSection: React.FC<EmailSectionProps> = ({
   onNewTemplateBodyChange,
   newTemplateTrigger,
   onNewTemplateTriggerChange,
+  newTemplateDaysBefore,
+  onNewTemplateDaysBeforeChange,
 }) => {
   return (
     <div className="space-y-6">
@@ -120,6 +122,7 @@ const EmailSection: React.FC<EmailSectionProps> = ({
                 value={newTemplateTrigger}
                 onChange={(e) => onNewTemplateTriggerChange(e.target.value)}
                 className="form-input"
+                aria-label="Send automatically"
               >
                 <option value="">Manual send only</option>
                 {Object.entries(TRIGGER_LABELS).map(([key, triggerLabel]) => (
@@ -128,6 +131,25 @@ const EmailSection: React.FC<EmailSectionProps> = ({
                   </option>
                 ))}
               </select>
+              {newTemplateTrigger === 'days_before_event' && (
+                <div className="flex items-center gap-2">
+                  <label htmlFor="template-days-before" className="text-theme-text-primary text-sm font-medium">
+                    Days before event <span aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="template-days-before"
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_TEMPLATE_DAYS_BEFORE}
+                    max={MAX_TEMPLATE_DAYS_BEFORE}
+                    step={1}
+                    required
+                    value={newTemplateDaysBefore}
+                    onChange={(e) => onNewTemplateDaysBeforeChange(e.target.value)}
+                    className="form-input w-24"
+                  />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={onCreateTemplate}
@@ -160,6 +182,9 @@ const EmailSection: React.FC<EmailSectionProps> = ({
                   {tpl.trigger && (
                     <span className="ml-2 inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                       Auto: {TRIGGER_LABELS[tpl.trigger] || tpl.trigger}
+                      {tpl.trigger === 'days_before_event' && tpl.trigger_days_before
+                        ? ` (${tpl.trigger_days_before} ${tpl.trigger_days_before === 1 ? 'day' : 'days'})`
+                        : ''}
                     </span>
                   )}
                 </p>
@@ -168,7 +193,8 @@ const EmailSection: React.FC<EmailSectionProps> = ({
                 type="button"
                 onClick={() => onDeleteTemplate(tpl.id)}
                 className="text-theme-text-muted touch-target-phone shrink-0 text-sm transition-colors hover:text-red-600 dark:hover:text-red-400"
-                title="Delete template"
+                title={`Delete "${tpl.name}"`}
+                aria-label={`Delete "${tpl.name}"`}
               >
                 <Trash2 className="h-4 w-4" />
               </button>

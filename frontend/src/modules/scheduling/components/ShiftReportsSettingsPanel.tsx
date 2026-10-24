@@ -632,7 +632,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     <button
                       onClick={() => void saveTrainingDefaults()}
                       disabled={savingTraining}
-                      className="mobile-touch-target gap-1.5 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                      className="mobile-touch-target gap-1.5 rounded-lg bg-violet-700 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
                     >
                       {savingTraining && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                       Save Training Defaults
@@ -661,7 +661,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   onClick={() => setSelectedAppType(t)}
                   className={`mobile-touch-target rounded-lg px-3 text-sm font-medium capitalize transition-colors ${
                     selectedAppType === t
-                      ? 'bg-violet-600 text-white'
+                      ? 'bg-violet-700 text-white'
                       : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
@@ -695,8 +695,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     getTagClassName={(item) => {
                       const isLinked = skillEvalNames.has(item.toLowerCase());
                       return isLinked
-                        ? 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20'
-                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20';
+                        ? 'bg-green-500/10 text-green-800 dark:text-green-400 border border-green-500/20'
+                        : 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border border-amber-500/20';
                     }}
                     getTagTitle={(item) => {
                       const isLinked = skillEvalNames.has(item.toLowerCase());
@@ -736,7 +736,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   <button
                     onClick={() => void saveAppTypeMapping(appTypeSkills, appTypeTasks)}
                     disabled={savingAppType}
-                    className="mobile-touch-target gap-1.5 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                    className="mobile-touch-target gap-1.5 rounded-lg bg-violet-700 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
                   >
                     {savingAppType && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     Save Apparatus Skills &amp; Tasks
@@ -932,7 +932,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     disabled={savingRating}
                     className={`mobile-touch-target rounded-lg border px-3 text-sm font-medium transition-colors ${
                       trainingConfig.rating_scale_type === st
-                        ? 'border-violet-600 bg-violet-600 text-white'
+                        ? 'border-violet-600 bg-violet-700 text-white'
                         : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
                     }`}
                   >
@@ -1050,8 +1050,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     }
                     className={`mobile-touch-target gap-1.5 rounded-lg px-4 text-sm font-medium transition-colors ${
                       JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})
-                        ? 'cursor-default bg-violet-600 text-white'
-                        : 'bg-violet-600 text-white hover:bg-violet-700'
+                        ? 'cursor-default bg-violet-700 text-white'
+                        : 'bg-violet-700 text-white hover:bg-violet-800'
                     } disabled:opacity-50`}
                   >
                     {savingRating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -1130,7 +1130,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{label}</p>
                   <p
-                    className={`text-xs ${isActive ? 'text-violet-600/70 dark:text-violet-400/70' : 'text-theme-text-muted'}`}
+                    className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-400/70' : 'text-theme-text-muted'}`}
                   >
                     {description}
                   </p>

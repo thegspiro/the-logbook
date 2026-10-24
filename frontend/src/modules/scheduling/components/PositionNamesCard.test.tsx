@@ -21,4 +21,11 @@ describe('PositionNamesCard', () => {
     const updater = calls[calls.length - 1]?.[0];
     expect(updater?.(DEFAULT_SETTINGS).customPositions).toContainEqual({ value: 'tillerman', label: 'Tillerman' });
   });
+
+  it('labels the position ticks as not in effect yet', () => {
+    // Nothing reads `enabledPositions`: the template and shift pickers offer a
+    // fixed list. A tick that changes nothing must say so (CLAUDE.md #19).
+    render(<PositionNamesCard settings={DEFAULT_SETTINGS} onSettingsChange={vi.fn()} allPositionOptions={[]} />);
+    expect(screen.getByRole('note')).toHaveTextContent(/Not in effect yet/);
+  });
 });

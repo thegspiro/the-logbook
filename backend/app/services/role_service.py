@@ -29,6 +29,8 @@ from app.services.admin_continuity_service import (
     assert_role_change_retains_administrator,
 )
 from app.services.documents_service import release_position_from_folders
+from app.services.messaging_service import release_role_from_messages
+from app.services.suggestion_service import assert_position_not_sole_box_reviewer
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.sql_results import rows_affected
 
@@ -109,6 +111,7 @@ class RoleManagementService:
                 "permissions": role.permissions or [],
                 "is_system": role.is_system,
                 "priority": role.priority,
+                "mirrors_rank": role.mirrors_rank,
                 "created_at": role.created_at,
                 "updated_at": role.updated_at,
             }
@@ -454,8 +457,9 @@ class RoleManagementService:
             True if deleted successfully
 
         Raises:
-            ValueError: If role not found, is a system role, or is the only
-                position that opens a document folder
+            ValueError: If role not found, is a system role, is the only
+                position that opens a document folder, or is the only reviewer
+                of an open suggestion box
         """
         role = await self.get_role(db, role_id, organization_id)
         if not role:
@@ -483,10 +487,15 @@ class RoleManagementService:
             action=f"delete the position '{role_name}'",
         )
 
-        # Raises before anything changes if a folder would be left with no
-        # position to open it; otherwise drops this one from every folder.
+        # Both guards raise before anything changes: a folder left with no
+        # position to open it, or an open suggestion box left with nobody to
+        # read it.
+        await assert_position_not_sole_box_reviewer(db, organization_id, str(role_id))
         released_from = await release_position_from_folders(
             db, organization_id, str(role_id)
+        )
+        untargeted_messages = await release_role_from_messages(
+            db, organization_id, str(role_id), role_name
         )
 
         # Delete role (cascade will remove user_roles entries)
@@ -504,6 +513,7 @@ class RoleManagementService:
                     "role_slug": role_slug,
                     "affected_users": affected_users,
                     "removed_from_folders": released_from,
+                    "removed_from_message_audiences": untargeted_messages,
                 },
                 user_id=deleted_by,
                 username=audit_username,

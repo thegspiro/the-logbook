@@ -14,12 +14,15 @@ import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { exportMappingService } from '../services/api';
 import { AdvanceExportStatus, type AdvanceExportReadiness } from '../types';
+import { notInChartHint, UNSAFE_ACCOUNT_NAME_HINT } from '../utils/qbAccountIssues';
 
 const STATUS_LABELS: Record<AdvanceExportStatus, string> = {
   [AdvanceExportStatus.READY]: 'Ready',
   [AdvanceExportStatus.NO_ADVANCES_ACCOUNT]: 'No advances account',
   [AdvanceExportStatus.NO_CASH_ACCOUNT]: 'No bank account',
   [AdvanceExportStatus.PAYABLE_RECEIVABLE]: 'Payable/receivable account',
+  [AdvanceExportStatus.UNSAFE_ACCOUNT_NAME]: 'Account name not importable',
+  [AdvanceExportStatus.NOT_IN_CHART]: 'Not in chart of accounts',
 };
 
 const STATUS_COLORS: Record<AdvanceExportStatus, string> = {
@@ -27,7 +30,17 @@ const STATUS_COLORS: Record<AdvanceExportStatus, string> = {
   [AdvanceExportStatus.NO_ADVANCES_ACCOUNT]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
   [AdvanceExportStatus.NO_CASH_ACCOUNT]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
   [AdvanceExportStatus.PAYABLE_RECEIVABLE]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  [AdvanceExportStatus.UNSAFE_ACCOUNT_NAME]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  [AdvanceExportStatus.NOT_IN_CHART]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
+
+/** Only the two problems with an account's name need words beyond the badge. */
+const accountHint = (status: AdvanceExportStatus, notInChart: readonly string[] | undefined): string =>
+  status === AdvanceExportStatus.NOT_IN_CHART
+    ? notInChartHint(notInChart)
+    : status === AdvanceExportStatus.UNSAFE_ACCOUNT_NAME
+      ? UNSAFE_ACCOUNT_NAME_HINT
+      : '';
 
 interface AdvanceExportSectionProps {
   advances: AdvanceExportReadiness;
@@ -66,6 +79,11 @@ export const AdvanceExportSection: React.FC<AdvanceExportSectionProps> = ({ adva
         </h2>
         <span className={`badge ${STATUS_COLORS[advances.status]}`}>{STATUS_LABELS[advances.status]}</span>
       </div>
+      {accountHint(advances.status, advances.accountsNotInChart) && (
+        <p className="alert-warning rounded-lg p-3 text-sm">
+          {accountHint(advances.status, advances.accountsNotInChart)}
+        </p>
+      )}
       <p className="text-theme-text-secondary text-sm">
         A cash advance is owed to the department on an asset account until the member accounts for it. Its check is
         posted to that account from the bank; the expense reports that account for it, and any cash returned, are posted

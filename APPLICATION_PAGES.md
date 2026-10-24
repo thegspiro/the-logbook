@@ -6,19 +6,21 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                                    | Page                   | Description                                                                                                                          |
-| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `/`                                    | Welcome                | Landing / onboarding entry point                                                                                                     |
-| `/login`                               | Login                  | User authentication                                                                                                                  |
-| `/forgot-password`                     | Forgot Password        | Password reset request                                                                                                               |
-| `/reset-password`                      | Reset Password         | Password reset form                                                                                                                  |
-| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                       |
-| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                 |
-| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                   |
-| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_ |
-| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                             |
-| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text                                 |
-| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text                                   |
+| URL                                    | Page                   | Description                                                                                                                               |
+| -------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                    | Welcome                | Landing / onboarding entry point                                                                                                          |
+| `/login`                               | Login                  | User authentication                                                                                                                       |
+| `/forgot-password`                     | Forgot Password        | Password reset request                                                                                                                    |
+| `/reset-password`                      | Reset Password         | Password reset form                                                                                                                       |
+| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                            |
+| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                      |
+| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                        |
+| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_      |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                                  |
+| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text                                      |
+| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text                                        |
+| `/public/minutes`                      | Public Minutes         | Minutes the department posted publicly (list); off until the department turns on public posting under Minutes → Publishing _(2026-10-17)_ |
+| `/public/minutes/:copyId`              | Public Minutes         | One posted set of minutes, in the narrower public form; shows the version it replaced and a notice while under correction _(2026-10-17)_  |
 
 > **Badge check-in at the room kiosk** _(2026-10-03)_. A room with **Badge
 > check-in** switched on (Check-In QR Codes, `locations.manage_nfc_tags`, needs
@@ -74,6 +76,15 @@ Complete reference of all pages in the application, organized by module.
 | `/onboarding/stations`                 | Station Setup            | Create the department's stations                                                               |
 | `/onboarding/apparatus`                | Apparatus Setup          | Create the department's apparatus                                                              |
 | `/onboarding/complete`                 | Setup Complete           | Confirmation / hand-off into the app                                                           |
+
+> **Setup steps close once setup is finished** _(2026-10-20)_. Every row above
+> except `/onboarding` and `/onboarding/complete` sits behind `OnboardingGate`,
+> which asks `GET /onboarding/status` once and sends a visitor to `/login` when
+> setup is already done, instead of showing a form the backend would refuse to
+> save (`LB-ONBD-001`). A failed or rate-limited status call lets the step render
+> as before (the backend remains the authority). `/onboarding/complete` stays
+> open because the last step of a first run lands there just after setup is
+> marked finished.
 
 > **Completed setup cannot be replayed** _(2026-08-08)_. Once onboarding is
 > finished, the station and apparatus setup endpoints refuse further writes, so a
@@ -180,6 +191,7 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/members/admin/edit/:userId`        | Admin Member Edit                     | `members.manage`                                                                                                                                 |
 | `/members/admin/history/:userId`     | Member Audit History                  | `members.manage`                                                                                                                                 |
 | `/members/admin/waivers`             | Waiver Management                     | `members.manage`                                                                                                                                 |
+| `/members/admin/id-cards`            | Member ID Cards                       | `members.manage_id_cards`                                                                                                                        |
 | `/members/admin/settings`            | Members Settings                      | `members.manage`, `settings.manage`, `settings.manage_contact_visibility`, `settings.edit`, `organization.update_settings` or `apparatus.manage` |
 | `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`, `settings.manage`, `settings.manage_contact_visibility` or `organization.update_settings`                                      |
 | `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`, `settings.edit` or `organization.update_settings`                                                                              |
@@ -337,6 +349,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | --------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/locations`                      | Locations Management            | Authenticated                                                                                                                               |
 | `/locations/qr-codes`             | Check-In QR Codes               | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` **OR** `locations.manage_nfc_tags` **OR** `apparatus.manage_nfc_tags` |
+| `/locations/card-readers`         | Card Readers                    | `locations.manage` **OR** `facilities.manage` **OR** `locations.manage_nfc_tags`                                                            |
 | `/locations/:locationId/check-in` | Room Check-In (NFC tag landing) | Authenticated                                                                                                                               |
 
 > Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
@@ -458,7 +471,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `pipelines`         | Pipelines                     |
 | `shift-reports`     | Shift Reports                 |
 | `integrations`      | Integrations                  |
-| `import`            | Import History                |
+| `import`            | Import Past Training          |
 | `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
@@ -599,6 +612,7 @@ Compliance, Department Store, and Setup & Tools.
 | `/inventory/put-away`                      | Put Away by NFC           | `inventory.manage`                                                            |
 | `/inventory/shelf-audit`                   | Shelf Audit by NFC        | `inventory.manage`                                                            |
 | `/inventory/admin/nfc/enroll`              | Tag Items in Bulk         | `inventory.manage`                                                            |
+| `/inventory/admin/nfc/tags`                | NFC Tag Register          | any of `inventory.manage`, `inventory.check_manage` (compartment tags only)   |
 | `/inventory/admin/not-seen`                | Items Not Seen            | `inventory.manage`                                                            |
 | `/inventory/kiosk`                         | Self-Service Kiosk        | `inventory.kiosk`                                                             |
 
@@ -607,6 +621,8 @@ Compliance, Department Store, and Setup & Tools.
 > **Phase 2** _(2026-09-24)_: storage areas carry tags too (linked from the storage area editor), and `/inventory/put-away` records where items are by tap — shelf first opens the shelf for every item tapped after it; item first moves that one item onto the next shelf tapped. The move goes through the barcode put-away's rule (`InventoryService.put_away_items`), so an item that is assigned, checked out, lost, stolen or retired is refused, and the item takes the room of the nearest storage area that has one. Every tap by an `inventory.manage` holder is logged in `inventory_nfc_scans` and shown on the item as **Last Seen (NFC)**; a member opening a written tag from their own phone is not logged. A shelf's written tag opens put-away with that shelf chosen for an inventory manager.
 >
 > **Phase 3** _(2026-09-24)_: `/inventory/shelf-audit` compares the items tapped on a shelf with the items recorded there and saves the result (`inventory_nfc_audits`). Missing items are only listed — an audit never marks anything lost — and unexpected ones move onto the shelf only when ticked and confirmed, through the same put-away rule. `/inventory/admin/nfc/enroll` links tags to untagged items one after another. `/inventory/admin/not-seen` lists active items with no staff tap or custody event (assignment, return, checkout, check-in, issuance) in 30–365 days, with a CSV; it works with NFC switched off. With the NFC ID Cards integration connected, the member ID scanner on the inventory screens also accepts a tapped card.
+>
+> **Tag register** _(2026-10-24)_: `/inventory/admin/nfc/tags` lists every NFC tag the department has linked — on items, storage areas and equipment-check compartments — with what it names and, for item tags, when a staff tap last found it. The quartermaster marks tags lost or found (one or a selection), moves a tag onto another target of the same kind, unlinks one, and downloads the filtered register as a CSV. `inventory.manage` manages compartment tags here and through `/inventory/nfc-tags/{id}` too, alongside `inventory.check_manage`; a checklist builder still cannot change item or shelf tags. A checklist manager (`inventory.check_manage` alone) opens the register limited to compartment tags _(2026-10-24)_, and the server applies the same limit.
 >
 > **Phase 4** _(2026-09-25)_: storage areas can carry a shelf-audit schedule (due list on `/inventory/shelf-audit`, weekly overdue email). `/inventory/kiosk` is a self-service checkout kiosk, gated by its own `inventory.kiosk` grant (seeded to no position): members tap their ID card, then an item, to borrow or return it. Only categories with **Allow self-checkout** qualify, and a category's kiosk loan period sets the due date.
 
@@ -1107,6 +1123,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/minutes`            | Minutes List                 | Authenticated     |
 | `/minutes/attendance` | Meeting Attendance Dashboard | `meetings.manage` |
 | `/minutes/outlines`   | Meeting Outlines             | `minutes.manage`  |
+| `/minutes/settings`   | Minutes Settings             | `minutes.manage`  |
 | `/minutes/:minutesId` | Minutes Detail               | Authenticated     |
 
 ---
@@ -1596,6 +1613,16 @@ reviewable in one place.
 | ------------------- | --------------------- | ------------- |
 | `/account`          | User Account Settings | Authenticated |
 | `/settings/account` | Redirect → `/account` | Authenticated |
+
+## Unknown Addresses _(2026-10-20)_
+
+An address that matches no route shows **Page not found** (`NotFoundPage`)
+inside the signed-in layout: it names the path that matched nothing (never the
+query string or fragment, which can carry a token) and offers **Go to the
+dashboard** and **Go back**. A signed-out visitor is sent to sign in first, as
+before, and sees it afterwards. This used to redirect silently to the
+dashboard, which made a bookmark to a removed page look like the app had ignored
+the click.
 
 ## Settings & Administration
 

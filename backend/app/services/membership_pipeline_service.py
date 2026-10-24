@@ -6,9 +6,7 @@ pipeline configuration, prospect tracking, step progression, and
 transfer to full membership.
 """
 
-import asyncio
 import copy
-import re
 import secrets
 import unicodedata
 from dataclasses import dataclass
@@ -32,7 +30,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.audit import log_audit_event
-from app.core.constants import OFFICE_CATALOG
+from app.core.constants import OFFICE_CATALOG, office_label
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate
 from app.models.event import Event, EventExternalAttendee
@@ -52,7 +50,14 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
-from app.models.user import Organization, Role, User, UserStatus, generate_uuid
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    Organization,
+    Role,
+    User,
+    UserStatus,
+    generate_uuid,
+)
 from app.schemas.membership_pipeline import resolve_conversion_outcome
 from app.services import file_storage_service as file_storage
 from app.services.email_policy import (
@@ -61,6 +66,7 @@ from app.services.email_policy import (
     recipients_for,
 )
 from app.services.file_storage_service import StorageArea
+from app.services.integration_services.directory_common import DirectoryProviderInfo
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
     DEACTIVATED_EMAIL_MESSAGE,
@@ -188,6 +194,53 @@ DUPLICATE_MEMBER_REFUSAL = (
     "convert them automatically. Review the existing members list, then "
     "convert or reactivate from there."
 )
+
+
+class DuplicateApplicantError(Exception):
+    """An active applicant already holds the email an officer typed.
+
+    Raised by :meth:`MembershipPipelineService.create_prospect` only when the
+    caller asks for it (``reject_duplicate=True``). The staff form must not
+    report "added" for a record it did not create, while the public
+    application form keeps returning the existing applicant silently. Not a
+    ValueError, so the staff endpoint's 400 handler cannot swallow it.
+    """
+
+    def __init__(self, existing: ProspectiveMember) -> None:
+        super().__init__("An active applicant already uses this email")
+        self.existing = existing
+
+
+def describe_existing_applicant(prospect: ProspectiveMember) -> Dict[str, Any]:
+    """Name an existing applicant for the officer about to add a duplicate.
+
+    Only what the pipeline board already shows staff — name, pipeline and
+    stage. The email is left out because the caller has just typed it. Reads
+    ``pipeline`` and ``current_step``, which ``_find_active_prospect_by_email``
+    eager-loads.
+    """
+    pipeline = prospect.pipeline
+    step = prospect.current_step
+    return {
+        "prospect_id": str(prospect.id),
+        "name": f"{prospect.first_name} {prospect.last_name}".strip(),
+        "pipeline_name": pipeline.name if pipeline is not None else None,
+        "stage_name": step.name if step is not None else None,
+    }
+
+
+def duplicate_applicant_message(summary: Dict[str, Any]) -> str:
+    """The refusal the staff create endpoint returns for an existing applicant."""
+    where = (
+        f" in the {summary['pipeline_name']} pipeline"
+        if summary.get("pipeline_name")
+        else ""
+    )
+    stage = f" (stage: {summary['stage_name']})" if summary.get("stage_name") else ""
+    return (
+        f"{summary['name']} is already an active applicant{where}{stage}. "
+        "A second applicant can't be added with the same email."
+    )
 
 
 def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
@@ -441,12 +494,17 @@ def _approval_roles_held(positions: Iterable[Any]) -> set[str]:
     return roles
 
 
-def _approval_role_label(role: str) -> str:
-    """The office's display label for a stage's stored approver key."""
-    for office in OFFICE_CATALOG:
-        if str(office["key"]).casefold() == role.casefold():
-            return str(office["label"])
-    return role.replace("_", " ").title()
+def _required_approver_roles(config: Optional[Dict[str, Any]]) -> List[str]:
+    """A multi-approval stage's configured approver roles, as matched.
+
+    The stage editor stores what was typed, so " chief" is a value a stage can
+    hold, and compared verbatim it matches no holder — the stage can never
+    complete. Stripping here is the single point every approval check reads
+    through. Blank entries are kept, not dropped: a role nobody can hold keeps
+    the stage closed, whereas dropping it could leave a stage with no required
+    approvers, which would let it complete without any sign-off at all.
+    """
+    return [str(r).strip() for r in (config or {}).get("required_approvers") or []]
 
 
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
@@ -1674,6 +1732,8 @@ class MembershipPipelineService:
         organization_id: str,
         data: Dict[str, Any],
         created_by: Optional[str] = None,
+        *,
+        reject_duplicate: bool = False,
     ) -> ProspectiveMember:
         """Create a new prospective member.
 
@@ -1681,10 +1741,18 @@ class MembershipPipelineService:
         organization, a duplicate notification email is sent to the
         applicant (with the department BCC'd) and the existing prospect
         is returned instead of creating a new record.
+
+        ``reject_duplicate=True`` raises :class:`DuplicateApplicantError`
+        instead, without emailing the applicant: an officer's refused entry is
+        not a re-submitted application. The flag rather than a second lookup in
+        the caller, because the decision is made here — including when the
+        unique index catches a concurrent insert the preflight missed.
         """
         email = data.get("email", "").strip().lower()
         if email:
             existing = await self._find_active_prospect_by_email(organization_id, email)
+            if existing and reject_duplicate:
+                raise DuplicateApplicantError(existing)
             if existing:
                 # Fire-and-forget: send duplicate notification email
                 await self._notify_duplicate_application(existing, organization_id)
@@ -1789,6 +1857,8 @@ class MembershipPipelineService:
             existing = await self._find_active_prospect_by_email(
                 organization_id, email, current_read=True
             )
+            if existing and reject_duplicate:
+                raise DuplicateApplicantError(existing)
             if existing:
                 await self._notify_duplicate_application(existing, organization_id)
                 return existing
@@ -2109,7 +2179,7 @@ class MembershipPipelineService:
                     )
 
         elif step_type == PipelineStepType.MULTI_APPROVAL:
-            required_approvers = config.get("required_approvers", [])
+            required_approvers = _required_approver_roles(config)
             if required_approvers:
                 approvals = self._effective_action_result(
                     prospect, step, action_result
@@ -2120,13 +2190,12 @@ class MembershipPipelineService:
                     if isinstance(a, dict)
                 }
                 missing = [
-                    r
-                    for r in required_approvers
-                    if str(r).casefold() not in approved_roles
+                    r for r in required_approvers if r.casefold() not in approved_roles
                 ]
                 if missing:
                     raise ValueError(
-                        f"Approval still needed from: {', '.join(missing)}."
+                        "Approval still needed from: "
+                        f"{', '.join(office_label(r) for r in missing)}."
                     )
 
         elif step_type == PipelineStepType.REFERENCE_CHECK:
@@ -2480,7 +2549,7 @@ class MembershipPipelineService:
             .where(
                 User.id == completed_by,
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.positions))
@@ -2602,7 +2671,7 @@ class MembershipPipelineService:
             .where(
                 User.id == user_id,
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.positions))
@@ -2634,9 +2703,7 @@ class MembershipPipelineService:
 
         waiting: List[Dict[str, Any]] = []
         for prospect, step in rows.all():
-            required = [
-                str(r) for r in (step.config or {}).get("required_approvers") or []
-            ]
+            required = _required_approver_roles(step.config)
             progress = next(
                 (p for p in prospect.step_progress if str(p.step_id) == str(step.id)),
                 None,
@@ -2670,12 +2737,12 @@ class MembershipPipelineService:
                     "step_name": step.name,
                     "step_description": step.description,
                     "roles_to_sign": [
-                        {"role": r, "label": _approval_role_label(r)} for r in to_sign
+                        {"role": r, "label": office_label(r)} for r in to_sign
                     ],
                     "required_roles": [
                         {
                             "role": r,
-                            "label": _approval_role_label(r),
+                            "label": office_label(r),
                             "signed": r.casefold() in signed,
                         }
                         for r in required
@@ -2722,7 +2789,7 @@ class MembershipPipelineService:
         # full prospect record back), and a stage with no configured approvers
         # would leave nothing "missing" — completing and advancing the
         # prospect outright.
-        required = [str(r) for r in (step.config or {}).get("required_approvers") or []]
+        required = _required_approver_roles(step.config)
         if not required:
             raise ValueError("This step has no approver roles configured")
         if role.casefold() not in {r.casefold() for r in required}:
@@ -2797,12 +2864,12 @@ class MembershipPipelineService:
                 organization_id, completed_by, action_result
             )
             if action_result and "approvals" in action_result:
-                required = (step.config or {}).get("required_approvers", [])
+                required = _required_approver_roles(step.config)
                 # An approval for a role the stage never asked for is not an
                 # approval — recording it would store misleading sign-off
                 # evidence against the prospect's file.
                 if required:
-                    wanted = {str(r).casefold() for r in required}
+                    wanted = {r.casefold() for r in required}
                     for approval in action_result.get("approvals") or []:
                         role_name = (
                             approval.get("role") if isinstance(approval, dict) else None
@@ -2988,6 +3055,16 @@ class MembershipPipelineService:
         await self.db.commit()
 
         if isinstance(transfer, dict) and transfer.get("success"):
+            notify_skip = transfer.pop("_notify_enrollment_skipped", None)
+            if notify_skip is not None:
+                # After the commit, like the welcome email; never raises into
+                # the approval it follows.
+                try:
+                    await notify_skip()
+                except Exception:
+                    logger.exception(
+                        f"Enrollment-skipped notice failed for prospect {prospect_id}"
+                    )
             await self._deliver_auto_transfer_welcome(prospect, transfer, completed_by)
 
         # An automated-email stage has nothing left for anyone to do once its
@@ -3022,6 +3099,12 @@ class MembershipPipelineService:
         approval they follow is already durable.
         """
         try:
+            # No welcome email to carry the Google password: the account is
+            # still created, and its password goes out on its own.
+            provision_account = transfer.get("_provision_directory_account")
+            if provision_account is not None:
+                await provision_account()
+
             send = transfer.get("_send_welcome_email")
             if send is not None and await send():
                 return
@@ -4515,21 +4598,105 @@ class MembershipPipelineService:
         result_msg = (
             f"Prospect {prospect.full_name} transferred to membership as {username}"
         )
-        if enrollment_result:
+        skipped_enrollment: Optional[Dict[str, Any]] = None
+        if enrollment_result and enrollment_result.get("missing_prerequisites"):
+            skipped_enrollment = enrollment_result
+            result_msg += (
+                f". Not enrolled in training program "
+                f"{skipped_enrollment['program_name']}: must first complete "
+                f"{', '.join(skipped_enrollment['missing_prerequisites'])}. "
+                "Training officers will be emailed"
+            )
+        elif enrollment_result:
             prog = enrollment_result["program_name"]
             result_msg += f". Auto-enrolled in training program: {prog}"
 
+        # Staged in this transaction so the record outlives a crash between
+        # the commit and the directory's API call; the call itself runs only
+        # after the caller commits (see DirectoryAccountService).
+        from app.models.directory_account import DirectoryAccountStatus
+        from app.services.directory_account_service import (
+            DirectoryAccountService,
+            provider_info,
+        )
+
+        directory_service = DirectoryAccountService(self.db)
+        directory_row = await directory_service.stage_for_transfer(
+            organization_id=prospect.organization_id,
+            user_id=user_id,
+            department_email=department_email,
+            created_by=transferred_by,
+        )
+        directory_provision_id: Optional[str] = None
+        if directory_row is not None:
+            await self.db.flush()
+            # A row staged as already failed (an address off the Workspace
+            # domain) creates no mailbox, so nothing below changes for it: the
+            # welcome email still goes to the department address, immediately.
+            if directory_row.status == DirectoryAccountStatus.PENDING.value:
+                directory_provision_id = directory_row.id
+        directory_info = (
+            provider_info(directory_row.provider) if directory_row is not None else None
+        )
+
+        async def provision_directory_account() -> Optional[str]:
+            if directory_provision_id is None:
+                return None
+            try:
+                return await directory_service.provision(
+                    directory_provision_id, prospect.organization_id
+                )
+            except Exception:
+                logger.exception(
+                    f"Directory account provisioning crashed for user {user_id}"
+                )
+                # A rollback expires every loaded instance, and the welcome
+                # email that follows still reads the prospect.
+                await self.db.rollback()
+                await self.db.refresh(prospect)
+                return None
+
         # Send welcome email with temporary credentials if requested.
         # Use the primary (department) email so the new member receives
-        # credentials at the address they'll actually log in with.
+        # credentials at the address they'll actually log in with -- unless
+        # The Logbook is creating that mailbox now, in which case it cannot
+        # receive the password that opens it, and the personal address does.
+        welcome_recipient = primary_email
+        if directory_provision_id is not None and personal_email:
+            welcome_recipient = personal_email
+
         async def send_welcome() -> bool:
-            return await self._send_transfer_welcome_email(
+            password = await provision_directory_account()
+            sent = await self._send_transfer_welcome_email(
                 prospect=prospect,
                 username=username,
                 temp_password=temp_password,
                 organization_id=prospect.organization_id,
-                recipient_email=primary_email,
+                recipient_email=welcome_recipient,
+                directory_account=(
+                    (directory_info, primary_email, password)
+                    if password and directory_info is not None
+                    else None
+                ),
             )
+            if sent and password and directory_provision_id is not None:
+                await directory_service.mark_credentials_sent(
+                    directory_provision_id, prospect.organization_id
+                )
+            return sent
+
+        async def provision_directory_account_without_welcome() -> None:
+            password = await provision_directory_account()
+            if password and directory_provision_id is not None:
+                await directory_service.send_credentials_email(
+                    directory_provision_id, prospect.organization_id, password
+                )
+
+        # A directory account cannot be created before this transaction
+        # commits, so its credentials -- and a welcome email carrying them --
+        # wait for the caller's commit too.
+        if directory_provision_id is not None:
+            defer_welcome_email = True
 
         welcome_email_sent = False
         if send_welcome_email and not defer_welcome_email:
@@ -4546,9 +4713,47 @@ class MembershipPipelineService:
             "message": result_msg,
             "auto_enrollment": enrollment_result,
             "welcome_email_sent": welcome_email_sent,
+            # The response key predates other directories; the screen reads it.
+            "google_account": (
+                {
+                    "provider": directory_row.provider,
+                    "provider_name": (
+                        directory_info.product if directory_info else None
+                    ),
+                    "status": directory_row.status,
+                    "email": directory_row.primary_email,
+                }
+                if directory_row is not None
+                else None
+            ),
         }
+        # Sent once the member is durable, by whichever caller commits —
+        # the same reason as the deferred welcome email.
+        if skipped_enrollment is not None:
+            skipped = skipped_enrollment
+
+            async def notify_enrollment_skipped() -> None:
+                from app.services.training_program_service import (
+                    TrainingProgramService,
+                )
+
+                await TrainingProgramService(
+                    self.db
+                ).notify_officers_enrollment_skipped(
+                    organization_id=prospect.organization_id,
+                    member_name=skipped["member_name"],
+                    program_id=skipped["program_id"],
+                    program_name=skipped["program_name"],
+                    missing_names=skipped["missing_prerequisites"],
+                )
+
+            result["_notify_enrollment_skipped"] = notify_enrollment_skipped
         if send_welcome_email and defer_welcome_email:
             result["_send_welcome_email"] = send_welcome
+        elif directory_provision_id is not None:
+            result["_provision_directory_account"] = (
+                provision_directory_account_without_welcome
+            )
         return result
 
     async def _auto_enroll_probationary(
@@ -4609,6 +4814,42 @@ class MembershipPipelineService:
 
             if not program:
                 return None
+
+            # The same prerequisite gate as every manual enrollment path
+            # (TrainingProgramService.missing_prerequisites). A member who has
+            # not finished a prerequisite is left out of this pipeline only;
+            # the conversion goes ahead, and the training officers are emailed
+            # once it has committed (``notify_enrollment_skipped`` in
+            # _do_transfer) so they can enroll the member by hand later.
+            from app.services.training_program_service import (
+                TrainingProgramService,
+            )
+
+            missing = await TrainingProgramService(self.db).missing_prerequisites(
+                program.prerequisite_program_ids, [user_id], organization_id
+            )
+            if missing:
+                missing_names = next(iter(missing.values()))
+                member = (
+                    await self.db.execute(
+                        select(User).where(
+                            User.id == user_id,
+                            User.organization_id == organization_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                logger.info(
+                    f"Auto-enrollment of user {user_id} in '{program.name}' "
+                    f"(program_id={program.id}) skipped: prerequisites not "
+                    f"completed: {', '.join(missing_names)}"
+                )
+                return {
+                    "program_id": str(program.id),
+                    "program_name": program.name,
+                    "member_name": (member.display_name if member else None)
+                    or "A new member",
+                    "missing_prerequisites": list(missing_names),
+                }
 
             # Check if already enrolled
             existing = await self.db.execute(
@@ -5102,8 +5343,13 @@ class MembershipPipelineService:
         temp_password: str,
         organization_id: str,
         recipient_email: Optional[str] = None,
+        directory_account: Optional[Tuple[DirectoryProviderInfo, str, str]] = None,
     ) -> bool:
-        """Send welcome email with credentials to a transferred member."""
+        """Send welcome email with credentials to a transferred member.
+
+        ``directory_account`` is ``(provider, address, temporary password)``
+        for a directory account created for the member, added as its own card.
+        """
         try:
             from app.core.config import settings
             from app.services.email_service import EmailService
@@ -5123,6 +5369,15 @@ class MembershipPipelineService:
             )
 
             to_email = recipient_email or prospect.email
+            appended_html = appended_text = ""
+            if directory_account is not None:
+                from app.services.directory_account_service import (
+                    credentials_html,
+                    credentials_text,
+                )
+
+                appended_html = credentials_html(*directory_account)
+                appended_text = credentials_text(*directory_account)
             email_svc = EmailService(org)
             sent = await email_svc.send_welcome_email(
                 to_email=to_email,
@@ -5133,6 +5388,8 @@ class MembershipPipelineService:
                 organization_name=org_name,
                 login_url=login_url,
                 organization_id=organization_id,
+                appended_html=appended_html,
+                appended_text=appended_text,
             )
             return bool(sent)
         except Exception as e:
@@ -5142,15 +5399,10 @@ class MembershipPipelineService:
 
     @staticmethod
     def _sanitize_name_for_identifier(name: str) -> str:
-        """Normalize a name for use in usernames and email local parts.
+        """See :func:`department_email.sanitize_name_for_identifier`."""
+        from app.services.department_email import sanitize_name_for_identifier
 
-        Strips accents (François → francois), removes apostrophes and
-        non-alphanumeric characters, and lowercases the result.
-        """
-        nfkd = unicodedata.normalize("NFKD", name)
-        ascii_only = nfkd.encode("ascii", "ignore").decode("ascii")
-        lowered = ascii_only.lower()
-        return re.sub(r"[^a-z0-9]", "", lowered)
+        return sanitize_name_for_identifier(name)
 
     async def _generate_unique_username(
         self, first_name: str, last_name: str, organization_id: str
@@ -5203,53 +5455,11 @@ class MembershipPipelineService:
         Returns None when the feature is disabled or no domain is configured,
         letting callers fall back to the prospect's personal email.
         """
-        from app.services.organization_service import OrganizationService
+        from app.services.department_email import generate_department_email
 
-        org_service = OrganizationService(self.db)
-        org_settings = await org_service.get_organization_settings(organization_id)
-        dept = org_settings.department_email
-
-        if not dept.enabled or not dept.domain:
-            return None
-
-        from app.schemas.organization import DepartmentEmailFormat
-
-        first = self._sanitize_name_for_identifier(first_name)
-        last = self._sanitize_name_for_identifier(last_name)
-        if not first or not last:
-            logger.warning(
-                "Skipping department email generation: sanitized name is empty "
-                f"(first={first_name!r}, last={last_name!r})"
-            )
-            return None
-
-        if dept.format == DepartmentEmailFormat.FIRST_DOT_LAST:
-            local = f"{first}.{last}"
-        elif dept.format == DepartmentEmailFormat.FIRST_INITIAL_LAST:
-            local = f"{first[0]}{last}"
-        elif dept.format == DepartmentEmailFormat.FIRST_LAST:
-            local = f"{first}{last}"
-        elif dept.format == DepartmentEmailFormat.LAST_DOT_FIRST:
-            local = f"{last}.{first}"
-        else:
-            local = f"{first}.{last}"
-
-        candidate = f"{local}@{dept.domain}"
-
-        suffix = 0
-        while True:
-            existing = await self.db.execute(
-                select(func.count())
-                .select_from(User)
-                .where(
-                    User.organization_id == organization_id,
-                    User.email == candidate,
-                )
-            )
-            if (existing.scalar() or 0) == 0:
-                return candidate
-            suffix += 1
-            candidate = f"{local}{suffix}@{dept.domain}"
+        return await generate_department_email(
+            self.db, organization_id, first_name, last_name
+        )
 
     # =========================================================================
     # Kanban Board
@@ -5744,6 +5954,24 @@ class MembershipPipelineService:
     # =========================================================================
     # Duplicate Detection
     # =========================================================================
+
+    async def find_existing_applicant(
+        self, organization_id: str, email: str
+    ) -> Optional[Dict[str, Any]]:
+        """Summarize the active applicant holding ``email``, if any.
+
+        The staff form's pre-check. "Active" is the same status set
+        :meth:`create_prospect` treats as a duplicate (and the
+        ``uq_prospect_org_active_email`` index enforces), so the warning and
+        the refusal can never disagree about who blocks an email.
+        """
+        normalized = email.strip().lower()
+        if not normalized:
+            return None
+        existing = await self._find_active_prospect_by_email(
+            organization_id, normalized
+        )
+        return describe_existing_applicant(existing) if existing else None
 
     async def find_active_prospect_by_email(
         self, organization_id: str, email: str
@@ -6299,6 +6527,7 @@ class MembershipPipelineService:
         organization_id: str,
         prospect_ids: Optional[List[str]] = None,
         purged_by: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> int:
         """Permanently delete inactive prospects from a pipeline.
 
@@ -6315,12 +6544,20 @@ class MembershipPipelineService:
         the server. A file that exists but cannot be removed raises before any
         row is deleted, so a retry can finish the job; files already removed by
         then are treated as gone on the retry.
+
+        ``exclude_prospect_ids`` carries the caller's own prospect record (see
+        app/api/prospect_privacy.py): a coordinator whose own application is
+        inactive must not be able to destroy the file other members wrote
+        about them, whether by naming its id or by purging the whole tab.
         """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return 0
         ids = await self._delete_inactive_prospects(
-            pipeline_id, organization_id, prospect_ids=prospect_ids
+            pipeline_id,
+            organization_id,
+            prospect_ids=prospect_ids,
+            exclude_prospect_ids=exclude_prospect_ids,
         )
         if ids:
             await self.db.commit()
@@ -6332,6 +6569,7 @@ class MembershipPipelineService:
         organization_id: str,
         prospect_ids: Optional[List[str]] = None,
         inactive_before: Optional[datetime] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> List[str]:
         """Delete the matching inactive applications and their files; no commit.
 
@@ -6354,19 +6592,13 @@ class MembershipPipelineService:
             conditions.append(ProspectiveMember.inactive_since.isnot(None))
             conditions.append(ProspectiveMember.inactive_since <= inactive_before)
 
+        query = self._apply_prospect_exclusions(
+            select(ProspectiveMember.id).where(and_(*conditions)),
+            exclude_prospect_ids,
+        )
         # Locked so an applicant reactivated mid-purge is either purged before
         # the reactivation or not at all.
-        ids = list(
-            (
-                await self.db.execute(
-                    select(ProspectiveMember.id)
-                    .where(and_(*conditions))
-                    .with_for_update()
-                )
-            )
-            .scalars()
-            .all()
-        )
+        ids = list((await self.db.execute(query.with_for_update())).scalars().all())
         if not ids:
             return []
 
@@ -6381,8 +6613,6 @@ class MembershipPipelineService:
             .scalars()
             .all()
         )
-        import os
-
         for stored_path in paths:
             confined = prospect_document_path(stored_path, organization_id)
             if stored_path and confined is None:
@@ -6391,17 +6621,12 @@ class MembershipPipelineService:
                     f"path is outside organization {organization_id}'s storage"
                 )
                 continue
-            if confined and os.path.exists(confined):
-                try:
-                    await asyncio.to_thread(os.remove, confined)
-                except OSError as exc:
-                    logger.error(
-                        f"Failed to remove prospect document file {stored_path}: {exc}"
-                    )
-                    raise ValueError(
-                        "Could not delete an applicant's document file, so "
-                        "nothing was purged; please try again"
-                    ) from exc
+            if confined and not await file_storage.delete(confined):
+                logger.error(f"Failed to remove prospect document file {stored_path}")
+                raise ValueError(
+                    "Could not delete an applicant's document file, so "
+                    "nothing was purged; please try again"
+                )
 
         # Cascade handles the dependent rows.
         await self.db.execute(
@@ -6833,24 +7058,15 @@ class MembershipPipelineService:
         # the row goes, the foreign file stays where it is.
         stored_path = doc.file_path
         if stored_path:
-            import os
-
             confined = prospect_document_path(stored_path, organization_id)
             if confined is None:
                 logger.warning(
                     f"Not removing prospect document {document_id}: stored path "
                     f"is outside organization {organization_id}'s storage"
                 )
-            elif os.path.exists(confined):
-                try:
-                    await asyncio.to_thread(os.remove, confined)
-                except OSError as exc:
-                    logger.error(
-                        f"Failed to remove prospect document file {confined}: {exc}"
-                    )
-                    raise ValueError(
-                        "Could not delete the document file; please try again"
-                    ) from exc
+            elif not await file_storage.delete(confined):
+                logger.error(f"Failed to remove prospect document file {confined}")
+                raise ValueError("Could not delete the document file; please try again")
 
         await self._log_activity(
             prospect_id=prospect_id,

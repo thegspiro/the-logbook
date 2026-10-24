@@ -897,6 +897,94 @@ describe('EquipmentCheckTemplateBuilder clearing a field on save', () => {
       expect.objectContaining({ serial_number: null, lot_number: null })
     );
   });
+  it('sends a cleared count unit as null', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Edit Radio' });
+
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    await waitFor(() =>
+      expect(updateCheckItem).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ count_unit: null })
+      )
+    );
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder count settings', () => {
+  // A count has three numbers that answer two questions — Par sets the
+  // restock, Min to Pass and Critical Min set the verdict — and a unit that
+  // says what is counted.
+  const countTemplate = (over: Record<string, unknown>) => {
+    const t = structuredClone(template);
+    const cab = t.compartments[0];
+    if (cab) {
+      cab.items = [{ ...(cab.items[0] as (typeof cab.items)[number]), checkType: 'count', ...over }];
+    }
+    return t;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    reorderItems.mockResolvedValue(undefined);
+    mockViewport('phone');
+  });
+
+  it('offers the count unit presets and saves the one picked', async () => {
+    getTemplate.mockResolvedValue(countTemplate({ expectedQuantity: 10 }));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.click(await screen.findByRole('button', { name: 'Edit Radio' }));
+
+    const picker = screen.getByLabelText('Counted in');
+    expect(
+      within(picker)
+        .getAllByRole('option')
+        .map((o) => o.textContent)
+    ).toEqual(['each', 'rolls', 'boxes', 'pairs', 'packs', 'bottles', 'Custom or none...']);
+    await user.selectOptions(picker, 'rolls');
+
+    await waitFor(
+      () => expect(updateCheckItem).toHaveBeenCalledWith('radio', expect.objectContaining({ count_unit: 'rolls' })),
+      { timeout: 4000 }
+    );
+  }, 10_000);
+
+  it('does not offer a unit on a position linked to inventory', async () => {
+    getTemplate.mockResolvedValue(countTemplate({ expectedQuantity: 10, inventoryItemId: 'inv-1' }));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.click(await screen.findByRole('button', { name: 'Edit Radio' }));
+
+    expect(screen.getByText("The linked inventory item's unit")).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Counted in' })).not.toBeInTheDocument();
+  });
+
+  it('warns when Min to Pass is above Par', async () => {
+    getTemplate.mockResolvedValue(countTemplate({ expectedQuantity: 4, requiredQuantity: 6 }));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.click(await screen.findByRole('button', { name: 'Edit Radio' }));
+
+    expect(screen.getByText(/Min to Pass is above Par\. They should run/)).toBeInTheDocument();
+  });
+
+  it('says nothing when the numbers are in order', async () => {
+    getTemplate.mockResolvedValue(
+      countTemplate({ expectedQuantity: 10, requiredQuantity: 6, criticalMinimumQuantity: 2 })
+    );
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.click(await screen.findByRole('button', { name: 'Edit Radio' }));
+
+    expect(screen.queryByText(/They should run Critical Min/)).not.toBeInTheDocument();
+  });
 });
 
 describe('EquipmentCheckTemplateBuilder saving a NOT NULL column left blank', () => {
@@ -1546,7 +1634,9 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     const preview = screen.getByLabelText('Mobile checklist preview');
     expect(preview).toHaveClass('bg-theme-bg', 'text-theme-text-primary');
     expect(within(preview).getAllByText('Engine check').length).toBeGreaterThan(0);
-    expect(preview.querySelectorAll('.bg-theme-bg').length).toBeGreaterThanOrEqual(3);
+    // The screen and the home-indicator strip. The status bar above them is
+    // deliberately slate-900, to join the sweep's own dark header.
+    expect(preview.querySelectorAll('.bg-theme-bg').length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -2152,6 +2242,20 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
     expect(preview().queryByRole('button', { name: 'First item works' })).not.toBeInTheDocument();
     expect(preview().getByRole('button', { name: 'Second item works' })).toHaveAttribute('aria-pressed', 'false');
   }, 15_000);
+
+  it('opens the crew view full size from the rail and closes it on Escape', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+    await user.click(screen.getByRole('button', { name: 'Crew view' }));
+
+    expect(screen.queryByLabelText('Mobile checklist preview')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Open crew view full size' }));
+    expect(screen.getByRole('dialog', { name: 'Crew view, full size' })).toBeVisible();
+    expect(screen.getByLabelText('Mobile checklist preview')).toBeVisible();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByLabelText('Mobile checklist preview')).not.toBeInTheDocument());
+  });
 
   it('anchors the crew preview so the sweep fills the phone rather than the page', async () => {
     // The sweep renders `absolute inset-0` under previewMode. With no
@@ -2877,5 +2981,81 @@ describe('EquipmentCheckTemplateBuilder details and rows (W46)', () => {
     expect(name.closest('[aria-roledescription="sortable"]')).toBeNull();
     const handle = screen.getByRole('button', { name: /Save before dragging this compartment/ });
     expect(handle).toHaveAttribute('aria-roledescription', 'sortable');
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder date lines and checklist items', () => {
+  // The Date type is an expiring item by definition and cannot publish without
+  // a date; items can also sit directly on the checklist, between locations.
+  const withRadioAs = (over: Record<string, unknown>) => {
+    const t = structuredClone(template);
+    const cab = t.compartments[0];
+    if (cab) cab.items = [{ ...(cab.items[0] as (typeof cab.items)[number]), ...over }];
+    return t;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    addCompartment.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    reorderItems.mockResolvedValue(undefined);
+  });
+
+  it('lists a Date line with no date as something to fix before publishing', async () => {
+    mockViewport('laptop');
+    getTemplate.mockResolvedValue(withRadioAs({ checkType: 'expiry', hasExpiration: true }));
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: /Radio needs an expiration date/ })).toBeInTheDocument();
+  });
+
+  it('does not list one that has its date', async () => {
+    mockViewport('laptop');
+    getTemplate.mockResolvedValue(
+      withRadioAs({ checkType: 'expiry', hasExpiration: true, expirationDate: '2099-01-01' })
+    );
+    renderBuilder();
+
+    await screen.findByRole('button', { name: /Collapse Cab|Expand Cab/ });
+    expect(screen.queryByRole('button', { name: /Radio needs an expiration date/ })).not.toBeInTheDocument();
+  });
+
+  it('locks Has Expiration on for a Date line', async () => {
+    mockViewport('phone');
+    getTemplate.mockResolvedValue(withRadioAs({ checkType: 'expiry', hasExpiration: false }));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.click(await screen.findByRole('button', { name: 'Edit Radio' }));
+
+    const box = screen.getByRole('checkbox', { name: /Has Expiration/ });
+    expect(box).toBeChecked();
+    expect(box).toBeDisabled();
+  });
+
+  it('adds items directly to the checklist as a headingless group', async () => {
+    mockViewport('laptop');
+    getTemplate.mockResolvedValue(structuredClone(template));
+    addCompartment.mockResolvedValue({
+      id: 'loose',
+      templateId: 'template-1',
+      name: '',
+      sortOrder: 3,
+      isInline: true,
+      items: [],
+    });
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: /Collapse Cab|Expand Cab/ });
+
+    // Spot 0 is the place above the first location.
+    await user.click(screen.getByTestId('add-item-here-0'));
+
+    await waitFor(() =>
+      expect(addCompartment).toHaveBeenCalledWith('template-1', expect.objectContaining({ is_inline: true, name: '' }))
+    );
+    expect(await screen.findByTestId('inline-group-loose')).toBeInTheDocument();
   });
 });

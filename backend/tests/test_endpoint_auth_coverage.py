@@ -63,6 +63,10 @@ ALLOWLISTED_PUBLIC = {
     # the signed `state` token issued by the authorize endpoint plus the
     # double-submitted nonce cookie (see salesforce_oauth_callback docstring).
     ("salesforce_sync.py", "salesforce_oauth_callback"),
+    # Same shape for Google Calendar and Outlook: signed state + nonce cookie + the
+    # single-use pending attempt stored on the integration.
+    ("google_calendar_oauth.py", "google_calendar_oauth_callback"),
+    ("outlook_calendar_oauth.py", "outlook_calendar_oauth_callback"),
 }
 
 BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

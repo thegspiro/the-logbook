@@ -104,7 +104,11 @@ export const CalendarSubscribeCard: React.FC = () => {
                   aria-label="Copy calendar link"
                   title="Copy link"
                 >
-                  {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-700 dark:text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
                 </button>
               </div>
               <button

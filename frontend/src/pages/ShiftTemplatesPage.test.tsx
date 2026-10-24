@@ -7,6 +7,9 @@ import ShiftTemplatesPage from './ShiftTemplatesPage';
 
 const mockGetTemplates = vi.fn();
 const mockDeleteTemplate = vi.fn();
+const mockGetPatterns = vi.fn();
+const mockUpdateTemplate = vi.fn();
+const mockUpdatePattern = vi.fn();
 
 vi.mock('../modules/scheduling/services/api', async () => {
   const actual = await vi.importActual<typeof import('../modules/scheduling/services/api')>(
@@ -17,7 +20,9 @@ vi.mock('../modules/scheduling/services/api', async () => {
     schedulingService: {
       getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
       deleteTemplate: (...args: unknown[]) => mockDeleteTemplate(...args) as unknown,
-      getPatterns: vi.fn().mockResolvedValue([]),
+      getPatterns: (...args: unknown[]) => mockGetPatterns(...args) as unknown,
+      updateTemplate: (...args: unknown[]) => mockUpdateTemplate(...args) as unknown,
+      updatePattern: (...args: unknown[]) => mockUpdatePattern(...args) as unknown,
       getApparatusOptions: vi.fn().mockResolvedValue({ options: [], source: 'default' }),
     },
   };
@@ -27,8 +32,13 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: {
+    success: (...args: unknown[]) => toastSuccess(...args) as unknown,
+    error: (...args: unknown[]) => toastError(...args) as unknown,
+  },
 }));
 
 const buildTemplate = (positions: ShiftTemplateRecord['positions']): Record<string, unknown> => ({
@@ -45,6 +55,13 @@ const buildTemplate = (positions: ShiftTemplateRecord['positions']): Record<stri
   is_active: true,
   created_at: '2026-08-01T00:00:00Z',
   updated_at: '2026-08-01T00:00:00Z',
+});
+
+// Every block starts from no patterns; a block that needs some sets its own
+// after this runs (CLAUDE.md pitfall #28).
+beforeEach(() => {
+  mockGetPatterns.mockReset();
+  mockGetPatterns.mockResolvedValue([]);
 });
 
 describe('ShiftTemplatesPage', () => {
@@ -92,7 +109,59 @@ describe('ShiftTemplatesPage template delete', () => {
     mockGetTemplates.mockReset();
     mockGetTemplates.mockResolvedValue([buildTemplate(['officer'])]);
     mockDeleteTemplate.mockReset();
-    mockDeleteTemplate.mockResolvedValue(undefined);
+    mockDeleteTemplate.mockResolvedValue('deleted');
+    toastSuccess.mockReset();
+    toastError.mockReset();
+  });
+
+  // A template that shifts or patterns use is deactivated rather than deleted
+  // (the shifts keep its checklists); the dialog says so up front.
+  it('says a template in use is deactivated rather than deleted', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('it is deactivated instead of deleted');
+    expect(dialog).toHaveTextContent('equipment checklists');
+    // Patterns no longer generate from a deactivated template.
+    expect(dialog).toHaveTextContent('its patterns stop generating new shifts until it is reactivated');
+    expect(dialog).not.toHaveTextContent('keep generating');
+  });
+
+  it('reports a deactivation as one', async () => {
+    mockDeleteTemplate.mockResolvedValue('deactivated');
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    expect(toastSuccess.mock.calls[0]?.[0]).toMatch(/"Day Shift" is still used .* deactivated instead of deleted/);
+  });
+
+  it('reports a deletion as one, and shows the server reason on failure', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Template deleted'));
+
+    mockDeleteTemplate.mockRejectedValue({
+      isAxiosError: true,
+      message: 'Request failed with status code 400',
+      response: { status: 400, data: { detail: 'Shift template not found' } },
+    });
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError.mock.calls[0]?.[0]).toContain('Shift template not found');
   });
 
   it('asks before deleting, and keeps the template on "Keep it"', async () => {
@@ -118,5 +187,72 @@ describe('ShiftTemplatesPage template delete', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(mockDeleteTemplate).toHaveBeenCalledWith('tmpl-1'));
+  });
+});
+
+describe('ShiftTemplatesPage pattern held by an inactive template', () => {
+  const pattern = (overrides: Record<string, unknown>): Record<string, unknown> => ({
+    id: 'pat-1',
+    organization_id: 'org-1',
+    name: 'A-Shift',
+    pattern_type: 'daily',
+    template_id: 'tmpl-1',
+    start_date: '2026-10-01',
+    is_active: true,
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([{ ...buildTemplate(['officer']), is_active: false }]);
+    mockGetPatterns.mockReset();
+    mockGetPatterns.mockResolvedValue([
+      pattern({ inactive_templates: ['Day Shift'] }),
+      pattern({ id: 'pat-2', name: 'B-Shift', inactive_templates: [] }),
+    ]);
+  });
+
+  it('warns on that pattern only, and in its edit form', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('tab', { name: /Patterns/ }));
+    const notices = await screen.findAllByText(/Template inactive — this pattern is not generating shifts/);
+    expect(notices).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Edit A-Shift' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Template inactive — this pattern is not generating shifts');
+  });
+
+  it('reactivates the inactive template, and does not offer Generate on the held pattern', async () => {
+    const user = userEvent.setup();
+    mockUpdateTemplate.mockReset();
+    mockUpdateTemplate.mockResolvedValue(buildTemplate(['officer']));
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Reactivate Day Shift' }));
+    expect(mockUpdateTemplate).toHaveBeenCalledWith('tmpl-1', { is_active: true });
+    // Templates and patterns both reload: the pattern's held flag comes from the server.
+    await waitFor(() => {
+      expect(mockGetPatterns).toHaveBeenCalledTimes(2);
+    });
+
+    await user.click(screen.getByRole('tab', { name: /Patterns/ }));
+    expect(screen.getByRole('button', { name: 'Generate shifts from A-Shift' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Generate shifts from B-Shift' })).toBeEnabled();
+  });
+
+  it('pauses a pattern', async () => {
+    const user = userEvent.setup();
+    mockUpdatePattern.mockReset();
+    mockUpdatePattern.mockResolvedValue(pattern({ id: 'pat-2', is_active: false }));
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('tab', { name: /Patterns/ }));
+    await user.click(screen.getByRole('button', { name: 'Pause B-Shift' }));
+    expect(mockUpdatePattern).toHaveBeenCalledWith('pat-2', { is_active: false });
   });
 });

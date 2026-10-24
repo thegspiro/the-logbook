@@ -176,7 +176,7 @@ const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
                       className={`inline-flex min-w-[2rem] items-center justify-center rounded px-1.5 py-0.5 text-xs font-semibold ${
                         isLow
                           ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-                          : 'bg-green-500/10 text-green-700 dark:text-green-400'
+                          : 'bg-green-500/10 text-green-800 dark:text-green-400'
                       }`}
                     >
                       {onHand}
@@ -507,7 +507,13 @@ const VariantGroupsPage: React.FC = () => {
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
               className={inputClass}
               placeholder="e.g. Class A Dress Uniform"
+              {...(editingGroup ? { 'aria-describedby': 'vg-name-hint' } : {})}
             />
+            {editingGroup && (
+              <p id="vg-name-hint" className="text-theme-text-muted mt-1 text-xs">
+                Renaming also renames every item in this group. Each item keeps its size, colour and style.
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="vg-desc" className={labelClass}>
@@ -606,7 +612,7 @@ const VariantGroupsPage: React.FC = () => {
               <span
                 className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
                   detailGroup.active
-                    ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                    ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                     : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
                 }`}
               >

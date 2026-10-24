@@ -10,10 +10,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, CheckCircle2, Clock, Loader2, XCircle } from 'lucide-react';
+import { BookOpenCheck, CheckCircle2, Clock, Loader2, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { knowledgeTestService } from '../../services/knowledgeTestService';
 import { useConfirm } from '../../contexts/ConfirmContext';
+import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import type { KnowledgeAttempt, KnowledgeQuestionDelivered } from '../../types/knowledgeTest';
 
@@ -271,68 +272,67 @@ export const KnowledgeTestAttemptPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
-      <Link
-        to="/training/knowledge-tests"
-        className="text-theme-text-secondary touch:min-h-11 inline-flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Knowledge tests
-      </Link>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h1 className="text-theme-text-primary text-xl font-semibold">{attempt.test_name}</h1>
-        {open && remaining !== null && (
-          <span
-            className="badge bg-theme-surface-secondary text-theme-text-primary gap-1"
-            aria-live={remaining <= 60 ? 'assertive' : 'off'}
-          >
-            <Clock className="h-4 w-4" aria-hidden="true" />
-            {formatClock(remaining)} left
-          </span>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={BookOpenCheck}
+        title={attempt.test_name}
+        actions={
+          open && remaining !== null ? (
+            <span
+              className="badge bg-theme-surface-secondary text-theme-text-primary gap-1"
+              aria-live={remaining <= 60 ? 'assertive' : 'off'}
+            >
+              <Clock className="h-4 w-4" aria-hidden="true" />
+              {formatClock(remaining)} left
+            </span>
+          ) : undefined
+        }
+      />
+      {/* The questions keep their reading width under the full-width strip. */}
+      <div className="mx-auto max-w-3xl space-y-4">
+        {open && attempt.instructions && <p className="text-theme-text-secondary text-sm">{attempt.instructions}</p>}
+
+        {open ? (
+          <>
+            <ol className="space-y-3">
+              {attempt.questions.map((q, i) => (
+                <li key={q.id}>
+                  <QuestionCard
+                    index={i}
+                    question={q}
+                    chosen={answers[q.id] ?? []}
+                    disabled={submitting}
+                    onChange={(ids) => choose(q.id, ids)}
+                  />
+                </li>
+              ))}
+            </ol>
+            <div className="action-bar-safe surface-opaque border-theme-surface-border sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t py-3">
+              <span className="text-theme-text-muted text-sm" aria-live="polite">
+                {
+                  {
+                    idle: 'Answers save as you go',
+                    saving: 'Saving…',
+                    saved: 'Saved',
+                    failed: 'Not saved — check your connection',
+                  }[saveState]
+                }
+              </span>
+              <button
+                type="button"
+                className="btn-primary inline-flex items-center gap-2"
+                disabled={submitting}
+                onClick={() => void submit()}
+              >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                Submit answers
+              </button>
+            </div>
+          </>
+        ) : (
+          <ResultView attempt={attempt} />
         )}
       </div>
-      {open && attempt.instructions && <p className="text-theme-text-secondary text-sm">{attempt.instructions}</p>}
-
-      {open ? (
-        <>
-          <ol className="space-y-3">
-            {attempt.questions.map((q, i) => (
-              <li key={q.id}>
-                <QuestionCard
-                  index={i}
-                  question={q}
-                  chosen={answers[q.id] ?? []}
-                  disabled={submitting}
-                  onChange={(ids) => choose(q.id, ids)}
-                />
-              </li>
-            ))}
-          </ol>
-          <div className="action-bar-safe surface-opaque border-theme-surface-border sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t py-3">
-            <span className="text-theme-text-muted text-sm" aria-live="polite">
-              {
-                {
-                  idle: 'Answers save as you go',
-                  saving: 'Saving…',
-                  saved: 'Saved',
-                  failed: 'Not saved — check your connection',
-                }[saveState]
-              }
-            </span>
-            <button
-              type="button"
-              className="btn-primary inline-flex items-center gap-2"
-              disabled={submitting}
-              onClick={() => void submit()}
-            >
-              {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              Submit answers
-            </button>
-          </div>
-        </>
-      ) : (
-        <ResultView attempt={attempt} />
-      )}
     </div>
   );
 };

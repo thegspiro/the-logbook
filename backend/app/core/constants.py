@@ -223,6 +223,21 @@ def position_slugs_for_offices(*office_keys: str) -> list[str]:
     return slugs
 
 
+def office_label(key: str) -> str:
+    """The catalog's display label for an office key ("chief" -> "Chief").
+
+    Matching is case-insensitive and ignores surrounding whitespace, because
+    keys reach this from free-text stage configuration. A key with no catalog
+    entry is humanized rather than refused, so a department's own role name
+    ("hose_master") still reads as words.
+    """
+    wanted = key.strip().casefold()
+    for office in OFFICE_CATALOG:
+        if str(office["key"]).casefold() == wanted:
+            return str(office["label"])
+    return key.strip().replace("_", " ").title()
+
+
 # Leadership roles notified on critical events (election rollbacks, deletions).
 LEADERSHIP_ROLE_SLUGS: list[str] = position_slugs_for_offices(
     "chief", "president", "vice_president", "secretary"
@@ -301,6 +316,10 @@ AUDIT_EVENT_LOGIN_FAILED = "login_failed"
 AUDIT_EVENT_LOGOUT = "logout"
 AUDIT_EVENT_ACCOUNT_LOCKED = "account_locked"
 AUDIT_EVENT_ACCOUNT_UNLOCKED = "account_unlocked"
+# Self-service change through POST /auth/change-password. A token reset
+# and an administrator's reset are audited under their own event types.
+AUDIT_EVENT_PASSWORD_CHANGED = "password_changed"
+AUDIT_EVENT_PASSWORD_CHANGE_FAILED = "password_change_failed"
 # Written by SecurityMonitoringMiddleware for every completed export request;
 # read back by GET /security/download-activity.
 AUDIT_EVENT_DATA_EXPORT = "data_export"

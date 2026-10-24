@@ -14,10 +14,26 @@ import type {
   EmailLinkDomain,
   EmailServiceSettings,
   FileStorageSettings,
+  FileStorageStatus,
   User,
   UserProfileUpdate,
 } from '../types/user';
 import { asArray, expectArray } from '../utils/asArray';
+
+/** What happened in the connected directory when a member was added. */
+export interface MemberDirectoryAccountSummary {
+  provider: string;
+  provider_name: string;
+  /** created / linked_existing / pending / failed */
+  status: string;
+  email: string;
+  credentials_sent: boolean;
+  last_error?: string | null;
+}
+
+export interface CreatedMember extends UserWithRoles {
+  directory_account?: MemberDirectoryAccountSummary | null;
+}
 
 export const userService = {
   /**
@@ -161,8 +177,10 @@ export const userService = {
     password?: string | undefined;
     role_ids?: string[] | undefined;
     send_welcome_email?: boolean | undefined;
-  }): Promise<UserWithRoles> {
-    const response = await api.post<UserWithRoles>('/users', memberData);
+    /** Also create an account in the connected Google Workspace or Microsoft 365 directory. */
+    create_directory_account?: boolean | undefined;
+  }): Promise<CreatedMember> {
+    const response = await api.post<CreatedMember>('/users', memberData);
     return response.data;
   },
 
@@ -560,6 +578,30 @@ export const organizationService = {
    */
   async updateFileStorageSettings(settings: FileStorageSettings): Promise<FileStorageSettings> {
     const response = await api.patch<FileStorageSettings>('/organization/settings/file-storage', settings);
+    return response.data;
+  },
+
+  /**
+   * Where new files go now, and whether the saved S3 settings have been tested
+   */
+  async getFileStorageStatus(): Promise<FileStorageStatus> {
+    const response = await api.get<FileStorageStatus>('/organization/settings/file-storage/status');
+    return response.data;
+  },
+
+  /**
+   * Test the saved settings for the chosen platform; on success new files go there
+   */
+  async activateRemoteStorage(): Promise<FileStorageStatus> {
+    const response = await api.post<FileStorageStatus>('/organization/settings/file-storage/activate');
+    return response.data;
+  },
+
+  /**
+   * Store new files on the server's disk again
+   */
+  async deactivateRemoteStorage(): Promise<FileStorageStatus> {
+    const response = await api.post<FileStorageStatus>('/organization/settings/file-storage/deactivate');
     return response.data;
   },
 

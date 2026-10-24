@@ -63,7 +63,7 @@ Feature suggestions are welcome! Please:
 ### Prerequisites
 
 - Python >= 3.13
-- Node.js >= 22 and npm >= 11 (the `engines` floor in `frontend/package.json`)
+- Node.js >= 22.22.1 and npm >= 10 (the `engines` floor in `package.json` and `frontend/package.json`)
 - MySQL >= 8.0
 - Redis >= 7
 - Docker & Docker Compose (optional but recommended)

@@ -4,7 +4,7 @@
 
 import api from './apiClient';
 import type { Symbology } from './labelService';
-import type { InventoryAuditFrequency } from '../constants/enums';
+import type { InventoryAuditFrequency, InventoryNfcTagKind, InventoryNfcTagStatus } from '../constants/enums';
 import type { LabelSetup, LabelSetupSave } from '../modules/inventory/utils/labelSetups';
 import type {
   ClearanceLineItem,
@@ -77,6 +77,8 @@ import type {
   ItemVariantGroupCreate,
   EquipmentKit,
   EquipmentKitCreate,
+  KitProductOption,
+  KitIssuePlan,
   MemberSizePreferences,
   MemberSizePreferencesCreate,
   ImpactPlannerOptions,
@@ -105,18 +107,23 @@ import type {
   InventoryNfcAuditDetail,
   InventoryNfcAuditListResponse,
   InventoryNfcMember,
+  InventoryNfcMoveTarget,
   InventoryNfcPutAwayRequest,
   InventoryNfcPutAwayResponse,
   InventoryNfcResolveAnyRequest,
   InventoryNfcResolveAnyResponse,
   InventoryNfcResolveCheckRequest,
   InventoryNfcResolveCheckResponse,
+  InventoryNfcRegisterFilters,
+  InventoryNfcRegisterList,
   InventoryNfcResolveRequest,
   InventoryNfcScanListResponse,
   InventoryNfcSettings,
   InventoryNfcTag,
+  InventoryNfcTagBulkStatusResponse,
   InventoryNfcTagCreate,
   InventoryNfcTagListResponse,
+  InventoryNfcTagMove,
   InventoryNfcTagUpdate,
   InventoryNfcUntaggedListResponse,
   KioskActionResponse,
@@ -272,6 +279,8 @@ export const inventoryService = {
     unassigned_location?: boolean | undefined;
     storage_area_id?: string | undefined;
     vendor_id?: string | undefined;
+    /** Only items at or below their reorder point — the set the low-stock alert email lists. */
+    low_stock?: boolean | undefined;
     /** These three reached the API untyped: the caller spreads a filter object,
      *  which slips past TS's excess-property check (CLAUDE.md pitfall #5). */
     size?: string | undefined;
@@ -773,6 +782,53 @@ export const inventoryService = {
     await api.delete(`/inventory/nfc-tags/${tagId}`);
   },
 
+  // The department-wide tag register. Items, storage areas and compartments.
+  async getNfcRegister(
+    filters: InventoryNfcRegisterFilters,
+    limit: number,
+    offset: number
+  ): Promise<InventoryNfcRegisterList> {
+    const response = await api.get<InventoryNfcRegisterList>('/inventory/nfc-tags', {
+      params: { ...filters, limit, offset },
+    });
+    // An empty register reads as "no tags", so a bad body fails instead.
+    return {
+      items: expectArray(response.data?.items, 'NFC tag register'),
+      total: typeof response.data?.total === 'number' ? response.data.total : 0,
+    };
+  },
+
+  async exportNfcRegister(filters: InventoryNfcRegisterFilters): Promise<Blob> {
+    const response = await api.get<Blob>('/inventory/nfc-tags/export', { params: filters, responseType: 'blob' });
+    return response.data;
+  },
+
+  async bulkUpdateNfcTagStatus(
+    tagIds: string[],
+    status: InventoryNfcTagStatus
+  ): Promise<InventoryNfcTagBulkStatusResponse> {
+    const response = await api.post<InventoryNfcTagBulkStatusResponse>('/inventory/nfc-tags/bulk-status', {
+      tag_ids: tagIds,
+      status,
+    });
+    return {
+      updated: expectArray(response.data?.updated, 'bulk tag update'),
+      failed: asArray(response.data?.failed),
+    };
+  },
+
+  async getNfcMoveTargets(kind: InventoryNfcTagKind, search: string): Promise<InventoryNfcMoveTarget[]> {
+    const response = await api.get<{ items: InventoryNfcMoveTarget[] }>('/inventory/nfc-tags/move-targets', {
+      params: { kind, search: search.trim() || undefined },
+    });
+    return asArray(response.data?.items);
+  },
+
+  async moveNfcTag(tagId: string, target: InventoryNfcTagMove): Promise<InventoryNfcTag> {
+    const response = await api.post<InventoryNfcTag>(`/inventory/nfc-tags/${tagId}/move`, target);
+    return response.data;
+  },
+
   async createNfcAudit(data: InventoryNfcAuditCreate): Promise<InventoryNfcAuditDetail> {
     const response = await api.post<InventoryNfcAuditDetail>('/inventory/nfc/audits', data);
     return { ...response.data, items: expectArray(response.data?.items, 'shelf audit') };
@@ -1005,6 +1061,7 @@ export const inventoryService = {
     unassigned_location?: boolean | undefined;
     storage_area_id?: string | undefined;
     vendor_id?: string | undefined;
+    low_stock?: boolean | undefined;
     search?: string | undefined;
     size?: string | undefined;
     color?: string | undefined;
@@ -1453,10 +1510,31 @@ export const inventoryService = {
     return response.data;
   },
 
-  async issueKitToMember(kitId: string, userId: string): Promise<{ message: string; items_issued: number }> {
-    const response = await api.post<{ message: string; items_issued: number }>(
-      `/inventory/kits/${kitId}/issue/${userId}`
-    );
+  async getKitProductOptions(): Promise<KitProductOption[]> {
+    const response = await api.get<KitProductOption[]>('/inventory/kits/product-options');
+    return asArray(response.data);
+  },
+
+  async getKitIssuePlan(kitId: string, userId: string): Promise<KitIssuePlan> {
+    const response = await api.get<KitIssuePlan>(`/inventory/kits/${kitId}/issue-plan`, {
+      params: { user_id: userId },
+    });
+    return response.data;
+  },
+
+  /**
+   * `selections` maps a kit line id to the inventory row chosen for it — the
+   * quartermaster's size override. Lines left out use the member's size.
+   */
+  async issueKitToMember(
+    kitId: string,
+    userId: string,
+    selections?: Record<string, string>
+  ): Promise<{ message: string; items_issued: number }> {
+    const url = `/inventory/kits/${kitId}/issue/${userId}`;
+    const response = selections
+      ? await api.post<{ message: string; items_issued: number }>(url, { selections })
+      : await api.post<{ message: string; items_issued: number }>(url);
     return response.data;
   },
 

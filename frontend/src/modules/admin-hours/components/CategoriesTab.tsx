@@ -226,13 +226,13 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
         // page 929px wide on a phone (W79-2).
         <div className="grid grid-cols-1 gap-4">
           {categories.map((cat) => (
-            <div key={cat.id} className="bg-theme-surface flex items-center gap-4 rounded-lg p-4 shadow-md">
+            <div key={cat.id} className="bg-theme-surface flex min-w-0 items-center gap-4 rounded-lg p-4 shadow-md">
               <div className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: cat.color ?? '#6B7280' }} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="text-theme-text-primary font-semibold">{cat.name}</h3>
                   {!cat.isActive && (
-                    <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                    <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-800 dark:text-red-400">
                       Inactive
                     </span>
                   )}

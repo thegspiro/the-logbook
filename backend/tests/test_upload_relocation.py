@@ -280,3 +280,23 @@ class TestFlatDocumentFiles:
 
         assert report.moves == []
         assert report.already_current == 1
+
+
+class TestBucketReferences:
+    async def test_a_file_in_the_departments_bucket_counts_as_current(
+        self, db_session, setup_org_and_admin, root
+    ):
+        org_id, _admin_id = setup_org_and_admin
+        document_id = str(uuid4())
+        ref = f"s3://dept-files/{org_id}/documents/{document_id}/a.pdf"
+        db_session.add(
+            Document(id=document_id, organization_id=org_id, name="SOP", file_path=ref)
+        )
+        await db_session.flush()
+
+        report = await upload_relocation.apply(db_session, organization_id=org_id)
+
+        assert report.moves == []
+        assert report.missing == []
+        assert report.outside_storage == []
+        assert report.already_current == 1

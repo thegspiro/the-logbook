@@ -20,6 +20,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { MIN_VOID_REASON_LENGTH } from '../components/training/SkillTestOfficerActions';
 import { formatScore } from '../utils/skillScoreFormat';
 import { ClipboardList } from 'lucide-react';
+import { attributionName } from '../utils/memberName';
 
 /** Sentinel for the status dropdown. Not a SkillTestStatus — pending validation
  *  is a property of a *completed* test, so it maps to its own query param. */
@@ -40,7 +41,7 @@ const DEFAULT_RANGE_DAYS = 365;
  *
  *  Named positively rather than testing `!completed_at`: cancelled and voided
  *  tests have no completion date either, and treating "no completion date" as
- *  "still in progress" is what offered a cancelled test "Tap to start" and
+ *  "still in progress" is what offered a cancelled test "Start" and
  *  routed it to the scoring screen. */
 const isOpenForScoring = (test: SkillTestListItem): boolean => test.status === 'draft' || test.status === 'in_progress';
 
@@ -92,41 +93,47 @@ const TestCard: React.FC<{
       }}
       className="card w-full cursor-pointer p-4 text-left hover:border-red-500/50"
     >
-      <div className="flex flex-wrap items-center justify-between gap-y-2">
-        {selectable && (
-          // Stops the row's own click handler: ticking a box must not also open
-          // the scorecard underneath it.
-          <input
-            type="checkbox"
-            checked={!!selected}
-            onClick={(e) => e.stopPropagation()}
-            onChange={() => onToggleSelected?.()}
-            aria-label={`Select ${test.candidate_name}'s ${test.template_name} result`}
-            className="form-checkbox mr-3 shrink-0"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <p className="text-theme-text-primary truncate font-medium">{test.template_name}</p>
-            <StatusBadge status={test.status} />
-            {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
-            {test.is_practice && (
-              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                Practice
-              </span>
-            )}
-            {test.pending_validation && (
-              <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                Needs validation
-              </span>
-            )}
+      {/* On a phone the score and actions take their own row under the title:
+          beside it they left the template name a few characters before it
+          truncated, and stacked every badge one per line. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-1 items-start">
+          {selectable && (
+            // Stops the row's own click handler: ticking a box must not also open
+            // the scorecard underneath it.
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onClick={(e) => e.stopPropagation()}
+              onChange={() => onToggleSelected?.()}
+              aria-label={`Select ${test.candidate_name}'s ${test.template_name} result`}
+              className="form-checkbox mr-3 shrink-0"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <p className="text-theme-text-primary font-medium break-words sm:truncate">{test.template_name}</p>
+              <StatusBadge status={test.status} />
+              {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
+              {test.is_practice && (
+                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                  Practice
+                </span>
+              )}
+              {test.pending_validation && (
+                <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                  Needs validation
+                </span>
+              )}
+            </div>
+            <p className="text-theme-text-muted text-sm">
+              Candidate: {test.candidate_name} &middot; Examiner:{' '}
+              {attributionName(test.examiner_name, test.examiner_id)}
+            </p>
           </div>
-          <p className="text-theme-text-muted text-sm">
-            Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
-          </p>
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-3 pl-4">
-          <div className="text-right">
+        <div className="flex shrink-0 items-center gap-3 sm:ml-auto sm:pl-4">
+          <div className="mr-auto sm:mr-0 sm:text-right">
             {test.overall_score != null && (
               <p className="text-theme-text-primary text-lg font-bold">{formatScore(test.overall_score)}</p>
             )}
@@ -138,12 +145,12 @@ const TestCard: React.FC<{
             ) : (
               /* Gated on status, not on the absence of completed_at. A
                  cancelled test has no completion date either, and offering it
-                 "Tap to start" invited the officer back into an evaluation that
+                 "Start" invited the officer back into an evaluation that
                  is closed — the one row on this screen that is explicitly
                  read-only. */
               isOpenForScoring(test) && (
                 <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                  {test.started_at ? 'Tap to resume' : 'Tap to start'}
+                  {test.started_at ? 'Resume' : 'Start'}
                 </p>
               )
             )}

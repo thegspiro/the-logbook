@@ -55,7 +55,7 @@ destination; the areas are declared in
 | **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`) |
 | **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                         |
 | **Compliance Reporting** (`compliance`) | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                   |
-| **Settings & Data** (`settings`)        | Manual Entry Rules, Integrations, Import History, Headline Metrics (`metrics`)                         |
+| **Settings & Data** (`settings`)        | Manual Entry Rules, Integrations, Import Past Training, Headline Metrics (`metrics`)                   |
 
 Destination ids are unique across the hub, so a link is resolved by its
 `&tab=` first. Links that name the `setup` and `skills-testing` section ids, or
@@ -206,6 +206,7 @@ POST   /api/v1/training/programs/enrollments/{id}/advance-phase  # Officer advan
 POST   /api/v1/training/programs/enrollments/{id}/reset    # Reset a whole enrollment for a new recert cycle
 POST   /api/v1/training/programs/enrollments/{id}/withdraw # Withdraw (self or officer; soft)
 POST   /api/v1/training/programs/enrollments/{id}/reopen   # Put an EXPIRED enrollment back to active, optionally on a new deadline (training.manage)
+POST   /api/v1/training/programs/enrollments/{id}/complete # Mark an ACTIVE/ON_HOLD enrollment complete by hand; body {reason}, audited with the unmet count (training.manage)
 PATCH  /api/v1/training/programs/progress/{id}             # Update progress (log value, mark complete/in-progress/reopen, verify, record test score)
 POST   /api/v1/training/programs/progress/{id}/reset       # Reset one requirement's progress for a new recert cycle
 POST   /api/v1/training/programs/recert/run-due            # Auto-reset every enrollment past its stored recert deadline
@@ -310,9 +311,9 @@ category per section and links them; the result reports
 GET    /api/v1/training/sessions/calendar                  # Session calendar
 POST   /api/v1/training/sessions                           # Create session (events.manage)
 POST   /api/v1/training/sessions/recurring                 # Create a recurring series (events.manage)
-GET    /api/v1/training/sessions/by-event/{event_id}       # The session behind a Training event
+GET    /api/v1/training/sessions/by-event/{event_id}       # The session behind a Training event (200 with null when it has none)
 POST   /api/v1/training/sessions/by-event/{event_id}       # Attach training details to a Training event (events.manage)
-GET    /api/v1/training/sessions/by-event/{event_id}/approval  # Where the event's approval stands (events.manage or training.manage)
+GET    /api/v1/training/sessions/by-event/{event_id}/approval  # Where the event's approval stands (events.manage or training.manage; 200 with null when it has none)
 PATCH  /api/v1/training/sessions/{id}                      # Relink course/program/requirement (events.manage; locked while attendance is finalized)
 POST   /api/v1/training/sessions/{id}/finalize             # Runs the event's Finalize Attendance (events.manage)
 POST   /api/v1/training/sessions/{id}/reopen               # Runs the event's Reopen Attendance (events.reopen_attendance)
@@ -462,6 +463,7 @@ PATCH  /api/v1/training/external/providers/{id}/user-mappings/{mappingId}  # Upd
 GET    /api/v1/training/external/providers/{id}/imports    # Import records list
 POST   /api/v1/training/external/providers/{id}/imports/{importId}/import  # Import single
 POST   /api/v1/training/external/providers/{id}/imports/bulk  # Bulk import (up to 500 ids)
+POST   /api/v1/training/external/providers/{id}/imports/import-matched  # Import all pending records whose member is mapped
 ```
 
 ### Shift Completion Reports

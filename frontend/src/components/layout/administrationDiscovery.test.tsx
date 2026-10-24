@@ -45,9 +45,26 @@ vi.mock('../../stores/pendingSyncStore', () => ({
 
 vi.mock('../../hooks/useOfflineSyncEngine', () => ({ triggerOfflineDrain: vi.fn() }));
 
+// Integration types the department has connected. Cleared before every test,
+// so only a block that connects one sees the rows it puts in the menu.
+const connectedIntegrations = new Set<string>();
+
+vi.mock('../../hooks/useConnectedIntegrations', () => ({
+  useConnectedIntegrations: () => ({
+    connected: connectedIntegrations,
+    loading: false,
+    isConnected: (type: string) => connectedIntegrations.has(type),
+  }),
+}));
+
+beforeEach(() => {
+  connectedIntegrations.clear();
+});
+
 import { SideNavigation } from './SideNavigation';
 import { TopNavigation } from './TopNavigation';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 
 describe('the checklist officer can find the console they administer', () => {
   beforeEach(() => {
@@ -150,5 +167,61 @@ describe('a training officer is not an administrator of the schedule', () => {
     renderWithRouter(<SideNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
 
     expect(screen.queryByRole('button', { name: /Scheduling Admin/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('a check-in station operator can find the station', () => {
+  beforeEach(() => {
+    mockCheckPermission.mockReset();
+    // The station's own grant and nothing else: no users.view, no
+    // members.manage, nothing in ADMIN_NAVIGATION_PERMISSIONS.
+    mockCheckPermission.mockImplementation((permission: string) => permission === 'members.check_in');
+    connectedIntegrations.add(NFC_ID_CARDS_INTEGRATION);
+  });
+
+  it('offers Check-In Station in the side navigation, and nothing else in the Members group', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SideNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
+
+    // The section, the group and the row each have their own gate; all three
+    // must open for the row to be reachable.
+    expect(screen.getByText('Administration')).toBeInTheDocument();
+    const membersGroups = screen.getAllByRole('button', { name: /^Members/ });
+    // The member-facing Members directory is a button too; the group is the
+    // one that expands.
+    const group = membersGroups.find((b) => b.hasAttribute('aria-expanded'));
+    expect(group, 'no Members group in the Administration section').toBeDefined();
+    await user.click(group as HTMLElement);
+
+    expect(screen.getByRole('button', { name: /Check-In Station/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Member Management/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Scan Member ID/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Waivers/ })).not.toBeInTheDocument();
+  });
+
+  it('offers Check-In Station in the top navigation, and nothing else in Admin', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TopNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent(OPEN_MOBILE_NAV_EVENT));
+    });
+
+    const trigger = screen.getAllByRole('button', { name: 'Admin' })[0];
+    expect(trigger, 'no Admin group for the check-in operator').toBeDefined();
+    await user.click(trigger as HTMLElement);
+
+    expect(screen.getByRole('link', { name: /Check-In Station/ })).toHaveAttribute('href', '/members/check-in-station');
+    expect(screen.queryByRole('link', { name: /Member Management/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Scan Member ID/ })).not.toBeInTheDocument();
+  });
+
+  it('does not open the Administration section where the department issues no cards', () => {
+    // Without the integration the row is never built, so opening the section
+    // would show an empty heading.
+    connectedIntegrations.clear();
+    renderWithRouter(<SideNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
+
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Check-In Station/ })).not.toBeInTheDocument();
   });
 });

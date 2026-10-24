@@ -9,7 +9,14 @@
 // =============================================================================
 
 // Import enum types from the canonical source and re-export
-import type { StageType, ApplicantStatus, VotingMethod, VictoryCondition, MemberClass } from '../../../constants/enums';
+import type {
+  StageType,
+  ApplicantStatus,
+  VotingMethod,
+  VictoryCondition,
+  MemberClass,
+  GoogleAccountStatus,
+} from '../../../constants/enums';
 import {
   VotingMethod as VotingMethodValues,
   VictoryCondition as VictoryConditionValues,
@@ -561,6 +568,8 @@ export interface Applicant {
   current_stage_name?: string | undefined;
   current_stage_type?: StageType | undefined;
   current_stage_config?: StageConfig | undefined;
+  /** Display label for each of the current stage's `required_approvers`, keyed as stored. */
+  current_stage_approver_labels?: Record<string, string> | undefined;
   /** Whether the stage is marked Required. A required stage cannot be skipped. */
   current_stage_required?: boolean | undefined;
   stage_entered_at: string;
@@ -685,6 +694,23 @@ export interface BulkActionResult {
   results: BulkActionItemResult[];
 }
 
+/** The active applicant already holding an email, as the staff pre-check names them. */
+export interface ExistingApplicantMatch {
+  prospect_id: string;
+  name: string;
+  pipeline_name: string | null;
+  stage_name: string | null;
+}
+
+export interface ExistingRecordCheck {
+  /** Existing members (any status) matching the email or name. */
+  has_matches: boolean;
+  match_count: number;
+  matches: Array<{ status: string; match_type: string }>;
+  /** An active applicant with this email; the create endpoint refuses it with a 409. */
+  existing_applicant: ExistingApplicantMatch | null;
+}
+
 export interface AdvanceStageRequest {
   notes?: string | undefined;
   /** Ticks for a checklist stage, graded on the advance that completes it. */
@@ -733,6 +759,19 @@ export interface ConvertApplicantResponse {
   membership_number?: string | undefined;
   /** Whether the welcome email carrying the member's password went out. */
   welcome_email_sent: boolean;
+  /** The directory (Google Workspace or Microsoft 365) account outcome, when
+   *  the integration applied. The key predates Microsoft 365 support. */
+  google_account?: ConvertGoogleAccountOutcome | undefined;
+}
+
+export interface ConvertGoogleAccountOutcome {
+  /** 'google' or 'microsoft'; absent from responses before Microsoft 365. */
+  provider?: string | undefined;
+  provider_name?: string | undefined;
+  status: GoogleAccountStatus;
+  email: string;
+  credentials_sent: boolean;
+  last_error: string | null;
 }
 
 /** An approver role a Multi-Signer Approval stage asks for. */
@@ -991,6 +1030,8 @@ export interface BackendStepResponse {
   email_template_id: string | null;
   required: boolean;
   config: Record<string, unknown> | null;
+  /** Office label for each stored `required_approvers` value, keyed as stored. */
+  approver_labels?: Record<string, string> | undefined;
   inactivity_timeout_days: number | null;
   notify_prospect_on_completion: boolean;
   public_visible: boolean;

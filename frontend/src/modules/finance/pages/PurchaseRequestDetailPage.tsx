@@ -5,7 +5,7 @@
  * request info, approval timeline, and action buttons.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router';
 import {
   ArrowLeft,
@@ -20,6 +20,7 @@ import {
   CheckCircle,
   Clock,
   Ban,
+  Receipt,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
@@ -29,15 +30,20 @@ import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNotice';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
+import { ReimbursementClaimDialog } from '../components/ReimbursementClaimDialog';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
   ApprovalEntityType,
+  ExpenseReportStatus,
   PurchaseRequestStatus,
   PURCHASE_REQUEST_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
@@ -57,7 +63,16 @@ const STATUS_LABELS: Record<string, string> = {
   ordered: 'Ordered',
   received: 'Received',
   paid: 'Paid',
+  reimbursed: 'Reimbursed',
   cancelled: 'Cancelled',
+};
+
+const REPORT_STATUS_LABELS: Record<string, string> = {
+  draft: 'draft',
+  submitted: 'submitted',
+  pending_approval: 'awaiting approval',
+  approved: 'approved, awaiting payment',
+  paid: 'paid',
 };
 
 const APPROVAL_STEP_LABELS: Record<string, string> = {
@@ -139,11 +154,11 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ isDraft, steps }) =
         const isLast = idx === sorted.length - 1;
         const iconColor =
           step.status === 'approved' || step.status === 'auto_approved'
-            ? 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400'
+            ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
             : step.status === 'denied'
               ? 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400'
               : step.status === 'pending'
-                ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400'
+                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
                 : 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400';
 
         return (
@@ -203,6 +218,8 @@ const PurchaseRequestDetailPage: React.FC = () => {
     submitPurchaseRequest,
   } = useFinanceStore();
   const access = useFinanceRequestAccess();
+  const { confirm } = useConfirm();
+  const [claiming, setClaiming] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -256,12 +273,20 @@ const PurchaseRequestDetailPage: React.FC = () => {
 
   const handleCancel = async () => {
     if (!id) return;
+    const confirmed = await confirm({
+      title: 'Cancel this purchase request?',
+      message:
+        'The request is closed for good: any approval still outstanding is withdrawn, emailed approval links stop working, and any budget held for it is released. It cannot be reopened.',
+      confirmLabel: 'Cancel request',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
     try {
       await purchaseRequestService.cancel(id);
       toast.success('Purchase request cancelled');
       void fetchPurchaseRequest(id);
-    } catch {
-      toast.error('Failed to cancel purchase request');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to cancel purchase request'));
     }
   };
 
@@ -308,20 +333,34 @@ const PurchaseRequestDetailPage: React.FC = () => {
   const isDraft = pr.status === PurchaseRequestStatus.DRAFT;
   const canEdit = isDraft && isRequester;
   const canSubmit = isDraft && isRequester;
+  // Approved and not yet paid: the purchase can still be claimed back, or
+  // settled by the finance office (FinanceService's CLAIMABLE_PURCHASE_STATUSES).
+  const isOpenPurchase =
+    pr.status === PurchaseRequestStatus.APPROVED ||
+    pr.status === PurchaseRequestStatus.ORDERED ||
+    pr.status === PurchaseRequestStatus.RECEIVED;
+  // A submitted report claiming the purchase back holds it: the office cannot
+  // pay or cancel it beside the member's claim (a draft does not hold it).
+  const heldByClaim =
+    pr.reimbursementReportStatus != null && pr.reimbursementReportStatus !== ExpenseReportStatus.DRAFT;
+  const canClaim = isOpenPurchase && access.isOwn(pr.requestedBy) && !pr.reimbursementReportId;
   const canMarkOrdered = access.canManage && pr.status === PurchaseRequestStatus.APPROVED;
   const canMarkReceived = access.canManage && pr.status === PurchaseRequestStatus.ORDERED;
-  const canMarkPaid = access.canManage && pr.status === PurchaseRequestStatus.RECEIVED;
+  const canMarkPaid = access.canManage && pr.status === PurchaseRequestStatus.RECEIVED && !heldByClaim;
   // A requester may withdraw only a draft; past that it is the finance
   // office's to cancel (FinanceService.cancel_purchase_request).
   const canCancel = access.canManage
-    ? pr.status !== PurchaseRequestStatus.PAID && pr.status !== PurchaseRequestStatus.CANCELLED
+    ? pr.status !== PurchaseRequestStatus.PAID &&
+      pr.status !== PurchaseRequestStatus.REIMBURSED &&
+      pr.status !== PurchaseRequestStatus.CANCELLED &&
+      !heldByClaim
     : isDraft && isRequester;
   // Mirrors _PR_RECEIPT_CLOSED / _PR_RECEIPT_CLOSED_TO_REQUESTER in
   // backend/app/api/v1/endpoints/finance.py.
   const receiptClosed =
     pr.status === PurchaseRequestStatus.DENIED ||
     pr.status === PurchaseRequestStatus.CANCELLED ||
-    (!access.canManage && pr.status === PurchaseRequestStatus.PAID);
+    (!access.canManage && (pr.status === PurchaseRequestStatus.PAID || pr.status === PurchaseRequestStatus.REIMBURSED));
   const canAttachReceipt = isRequester && !receiptClosed;
 
   return (
@@ -381,6 +420,16 @@ const PurchaseRequestDetailPage: React.FC = () => {
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
+              </button>
+            )}
+            {canClaim && (
+              <button
+                type="button"
+                onClick={() => setClaiming(true)}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900"
+              >
+                <Receipt className="h-3.5 w-3.5" />
+                Request Reimbursement
               </button>
             )}
             {canMarkOrdered && (
@@ -468,6 +517,31 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(pr.receivedAt, tz)}</p>
             </div>
           )}
+          {pr.status === PurchaseRequestStatus.REIMBURSED && pr.paidAt && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Reimbursed</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(pr.paidAt, tz)}</p>
+            </div>
+          )}
+          {pr.reimbursementReportId && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Reimbursement</p>
+              <p className="text-theme-text-primary text-sm">
+                <Link
+                  to={`/finance/expenses/${pr.reimbursementReportId}`}
+                  className="font-medium text-red-700 hover:underline dark:text-red-400"
+                >
+                  {pr.reimbursementReportNumber ?? 'Expense report'}
+                </Link>
+                {pr.reimbursementReportStatus && (
+                  <span className="text-theme-text-secondary">
+                    {' '}
+                    ({REPORT_STATUS_LABELS[pr.reimbursementReportStatus] ?? pr.reimbursementReportStatus})
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
           <FunctionalClassControl
             value={pr.functionalClass}
             effective={pr.effectiveFunctionalClass}
@@ -542,7 +616,28 @@ const PurchaseRequestDetailPage: React.FC = () => {
           onDecided={() => void fetchPurchaseRequest(pr.id)}
         />
         <ApprovalTimeline isDraft={pr.status === PurchaseRequestStatus.DRAFT} steps={pr.approvalSteps} />
+        {isDraft && (
+          <div className="mt-4">
+            <ApprovalRoutePreview
+              entityType={ApprovalEntityType.PURCHASE_REQUEST}
+              amount={Number(pr.estimatedAmount)}
+              budgetId={pr.budgetId ?? undefined}
+            />
+          </div>
+        )}
       </div>
+
+      {claiming && (
+        <ReimbursementClaimDialog
+          purchase={pr}
+          onClose={() => setClaiming(false)}
+          onClaimed={(report) => {
+            setClaiming(false);
+            // The member checks the copied line and its receipt, then submits.
+            void navigate(`/finance/expenses/${report.id}`);
+          }}
+        />
+      )}
     </div>
   );
 };

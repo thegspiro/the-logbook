@@ -19,11 +19,8 @@ import {
   Package,
   Clock,
   CalendarClock,
-  Truck,
   Vote,
-  ClipboardList,
   BookOpen,
-  Layers,
   AlertTriangle,
   BarChart3,
   Bell,
@@ -34,17 +31,14 @@ import {
   Lightbulb,
   Plug,
   MapPin,
-  Network,
   Rocket,
   ShieldCheck,
   ShieldAlert,
   ClipboardCheck,
-  BookOpenCheck,
   Activity,
   CreditCard,
   ScanLine,
   Nfc,
-  Scale,
   Stethoscope,
   Store,
   HandCoins,
@@ -55,21 +49,22 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useScrollOverflow } from '../../hooks/useScrollOverflow';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
+import { isAdministrativeMember } from '../../utils/membership';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
-import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
-import { APPARATUS_ENTRY_PERMISSIONS } from '../../modules/apparatus/routes';
-import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
+import { operationsNavItems } from './operationsNavigation';
+import { governanceNavItems } from './governanceNavigation';
+import { trainingNavItems } from './trainingNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
@@ -199,8 +194,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   // Administration section). The shared helper's list mirrors the
   // section items' gates — extend it there, never inline, so Side/Top
   // navigation cannot drift apart.
-  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
-  const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission, { checkInStationOn: isNfcCardsOn });
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
@@ -223,39 +217,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'Training',
             path: '#',
             icon: GraduationCap,
-            subItems: [
-              {
-                label: 'My Training',
-                path: '/training/my-training',
-                icon: GraduationCap,
-              },
-              {
-                label: 'Submit Training',
-                path: '/training/submit',
-                icon: ClipboardList,
-              },
-              {
-                label: 'Course Library',
-                path: '/training/courses',
-                icon: BookOpen,
-              },
-              { label: 'Programs', path: '/training/programs', icon: Layers },
-              // Hidden for a department that records skills on shift reports.
-              ...(offersSkillsTesting(practicalSkillsMethod)
-                ? [
-                    {
-                      label: 'Skills Testing',
-                      path: '/training/skills-testing',
-                      icon: ClipboardCheck,
-                    },
-                  ]
-                : []),
-              {
-                label: 'Knowledge Tests',
-                path: '/training/knowledge-tests',
-                icon: BookOpenCheck,
-              },
-            ],
+            // One list with TopNavigation and the section strip on every
+            // Training page; see trainingNavigation.ts.
+            subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod)),
           } as NavItem,
         ]
       : []),
@@ -277,125 +241,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
       label: 'Operations',
       path: '#',
       icon: Package,
-      subItems: [
-        // My Issued Gear carries no gate: it is a member's own kit, plus the
-        // request and return they raise against it. Inventory is the
-        // whole department's catalogue and gates on `inventory.manage` —
-        // NOT on `inventory.view`, which every seeded member holds and needs
-        // for the request picker's item search.
-        ...(isModuleOn('inventory')
-          ? [
-              {
-                label: 'My Issued Gear',
-                path: '/inventory/my-equipment',
-                icon: Package,
-              },
-              { label: 'Inventory', path: '/inventory', icon: Package, permission: 'inventory.manage' },
-            ]
-          : []),
-        // Its own entry rather than a child of Inventory: the two are
-        // run by different officers in departments that split the role, and
-        // burying one under the other implies a hierarchy that isn't there.
-        //
-        // Deliberately NOT gated on the broad `inventory.view`, which both
-        // rank-and-file seeded roles hold: this is the stock room, and the
-        // people with a task on it are the ones who keep it stocked. A member
-        // restocking a rig from what they used wants Apparatus Inventory
-        // below, not this. The route and the API stay open on `inventory.view`
-        // — a member who follows a link can still look — but an entry every
-        // member carries in their nav implies a job they do not have.
-        //
-        // `view_medical` alone, and not the manage grants beside it: the route
-        // accepts only MEDICAL_VIEW_PERMISSIONS, and `checkPermission` gives
-        // no manage-implies-view. Advertising `manage_medical` here would send
-        // a supply officer who holds it without the read grant straight to
-        // Access Denied. A nav gate has to be a subset of its route's gate.
-        // Every seeded role that stocks medical holds `view_medical`.
-        ...(isModuleOn('medical_supplies')
-          ? [
-              {
-                label: 'Medical Supplies',
-                path: '/medical-supplies',
-                icon: Stethoscope,
-                permission: 'inventory.view_medical',
-              },
-            ]
-          : []),
-        // Equipment checklists. Two rows, because the two audiences want
-        // different things and one of them is everybody: a member wants the
-        // checks they owe, an officer wants the state of the fleet.
-        //
-        // "My Checklists" carries no permission gate on purpose. Walking a
-        // truck is the one thing every member does, the API narrows
-        // /my-checklists to the caller, and this row is now their only route
-        // to it — the Scheduling tab that used to carry them here is gone, and
-        // until it was added nothing in the nav pointed at checklists at all.
-        ...(isModuleOn('inventory')
-          ? [
-              {
-                label: 'My Checklists',
-                path: '/inventory/checklists/my',
-                icon: ClipboardCheck,
-              },
-              {
-                label: 'Fleet Readiness',
-                path: '/inventory/checklists',
-                // Not ClipboardCheck, which "My Checklists" directly above
-                // already uses. The rail collapses to a 20-unit icon-only
-                // strip where the label is replaced by a hover title, so two
-                // adjacent rows sharing a glyph are indistinguishable at a
-                // glance — and these two are for different audiences: the
-                // checks you owe versus the state of the fleet.
-                icon: ShieldCheck,
-                anyPermission: ['inventory.check_view', 'scheduling.manage'],
-              },
-            ]
-          : []),
-        // The crew half of the same shelf: "we just used two of these",
-        // recorded without starting a whole checklist. Gated on the default
-        // member grant, matching the route's own gate — this is the medical
-        // page most members actually need, and until now nothing in the nav
-        // pointed at it.
-        ...(isModuleOn('inventory')
-          ? [
-              {
-                label: 'Apparatus Inventory',
-                path: '/inventory/checklists/apparatus-inventory',
-                icon: Truck,
-                anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
-              },
-            ]
-          : []),
-        // Full apparatus module or lightweight version. Only the module-on row
-        // is gated: its pages are the fleet maintenance record and regular
-        // members no longer hold `apparatus.view`, and ProtectedRoute answers a
-        // permission failure with a full-page Access Denied rather than a
-        // redirect — so an ungated row here is a link to a dead end for most of
-        // the department. `/apparatus-basic` stays open to everyone: it is not
-        // the apparatus module, it has no route gate, and it reads the
-        // auth-only scheduling endpoints that departments without the module
-        // still need for shift staffing.
-        ...(isModuleOn('apparatus')
-          ? [
-              {
-                label: 'Apparatus',
-                path: '/apparatus',
-                icon: Truck,
-                anyPermission: [...APPARATUS_ENTRY_PERMISSIONS],
-              },
-            ]
-          : [{ label: 'Apparatus', path: '/apparatus-basic', icon: Truck }]),
-        ...(isModuleOn('facilities')
-          ? [
-              {
-                label: 'Facilities',
-                path: '/facilities',
-                icon: Building2,
-                anyPermission: [...FACILITY_ENTRY_PERMISSIONS],
-              },
-            ]
-          : []),
-      ],
+      // One list with TopNavigation and the section strip on every Operations
+      // page; the reasoning behind each row's gate lives there.
+      subItems: operationsNavItems(isModuleOn, isAdministrativeMember(undefined, currentUser?.membership_type)),
     },
     // When Facilities module is off, show a lightweight Locations page
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations', icon: MapPin } as NavItem]),
@@ -407,33 +255,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
       label: 'Governance',
       path: '/governance/org-chart',
       icon: Vote,
-      subItems: [
-        { label: 'Org Chart', path: '/governance/org-chart', icon: Network },
-        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections', icon: Vote }] : []),
-        ...(isModuleOn('minutes')
-          ? [
-              {
-                label: 'Minutes',
-                path: '/minutes',
-                icon: ClipboardList,
-              },
-              {
-                label: 'Action Items',
-                path: '/action-items',
-                icon: AlertTriangle,
-              },
-            ]
-          : []),
-        ...(canReviewLegalDocuments
-          ? [
-              {
-                label: 'Legal Documents',
-                path: '/governance/legal',
-                icon: Scale,
-              },
-            ]
-          : []),
-      ],
+      // One list with TopNavigation and the section strip on every Governance
+      // page; see governanceNavigation.ts.
+      subItems: governanceNavItems(isModuleOn),
     },
     // Every member holds finance.request, so the group is how they reach their
     // own purchase requests, expense reports and check requests.
@@ -502,8 +326,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             path: '#',
             icon: Users,
             // users.view holders (e.g. the quartermaster) get this group for
-            // the ID scanner; the manage-only entries below stay gated.
-            anyPermission: ['users.view', 'members.manage'],
+            // the ID scanner, and members.check_in holders for the Check-In
+            // Station; the manage-only entries below stay gated, and the group
+            // still hides when none of its rows is visible.
+            anyPermission: ['users.view', 'members.manage', 'members.check_in'],
             subItems: [
               ...(isModuleOn('prospective_members')
                 ? [
@@ -545,6 +371,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                       path: '/members/check-in-station',
                       icon: Nfc,
                       permission: 'members.check_in',
+                    },
+                    {
+                      label: 'ID Cards',
+                      path: '/members/admin/id-cards',
+                      icon: CreditCard,
+                      permission: 'members.manage_id_cards',
                     },
                   ]
                 : []),
@@ -973,7 +805,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                         {!collapsed ? (
                           <div className="px-4 pt-3 pb-2 md:pt-5">
                             <div className="border-theme-surface-border border-t" />
-                            <span className="text-theme-text-muted/70 mt-3 block text-[10px] font-bold tracking-widest uppercase">
+                            <span className="text-theme-text-muted mt-3 block text-[10px] font-bold tracking-widest uppercase">
                               {item.label}
                             </span>
                           </div>
@@ -1201,7 +1033,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               aria-pressed={theme === 'high-contrast'}
               className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all focus:ring-2 focus:outline-hidden ${
                 theme === 'high-contrast'
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                  ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
                   : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
               } ${collapsed ? 'justify-center p-3' : 'px-4 py-3'}`}
               title={

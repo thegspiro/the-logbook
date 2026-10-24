@@ -234,7 +234,7 @@ const ShiftCheckInPage: React.FC = () => {
           {preWorkShifts.length > 0 && <div className="mb-4 text-left">{preWorkOffer}</div>}
           <button
             onClick={() => void navigate('/scheduling')}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+            className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
           >
             Go to Scheduling
           </button>
@@ -264,7 +264,7 @@ const ShiftCheckInPage: React.FC = () => {
           </p>
           <button
             onClick={() => void navigate('/scheduling?tab=my-shifts')}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+            className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
           >
             Go to My Shifts
           </button>
@@ -317,7 +317,7 @@ const ShiftCheckInPage: React.FC = () => {
             {/* Say why it is unavailable. Offering a live-looking button that the
                 API then refuses is the state this replaces. */}
             {shift.checkin_closed_reason && !shift.is_finalized && (
-              <p className="text-center text-xs text-amber-600 dark:text-amber-400">{shift.checkin_closed_reason}</p>
+              <p className="text-center text-xs text-amber-700 dark:text-amber-400">{shift.checkin_closed_reason}</p>
             )}
             {/* Outside the check-in window, prep done ahead of an early shift
                 can still be timed — against whichever upcoming shift it is for. */}
@@ -326,10 +326,10 @@ const ShiftCheckInPage: React.FC = () => {
         ) : !attendance?.checked_out_at ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-600" />
               <div>
                 <p className="text-sm font-medium text-green-700 dark:text-green-400">Checked in</p>
-                <p className="text-xs text-green-600/70 dark:text-green-400/70">
+                <p className="text-xs text-green-700 dark:text-green-400/70">
                   <Clock className="mr-1 inline h-3 w-3" />
                   {formatTime(attendance.checked_in_at, tz)}
                 </p>
@@ -369,7 +369,7 @@ const ShiftCheckInPage: React.FC = () => {
         ) : (
           <div className="space-y-3 text-center">
             <div className="bg-theme-surface-hover rounded-lg p-4">
-              <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-green-600" />
+              <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-green-700 dark:text-green-600" />
               {hrs !== null && <p className="text-theme-text-primary text-lg font-bold">{hrs} hours</p>}
               <p className="text-theme-text-muted text-xs">
                 {formatTime(attendance.checked_in_at, tz)} &rarr; {formatTime(attendance.checked_out_at, tz)}
@@ -380,7 +380,7 @@ const ShiftCheckInPage: React.FC = () => {
         )}
 
         {shift.is_finalized && (
-          <p className="text-center text-xs text-amber-600 dark:text-amber-400">
+          <p className="text-center text-xs text-amber-700 dark:text-amber-400">
             This shift is finalized, so check-in and check-out are closed.
           </p>
         )}

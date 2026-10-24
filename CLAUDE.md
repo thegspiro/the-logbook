@@ -151,6 +151,11 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **JSON column deep copy** — code modifying nested keys in JSON columns uses `copy.deepcopy()` or `flag_modified()`, never `dict()` shallow copy
 - [ ] **New route registered in all three registries** — `APPLICATION_PAGES.md`, `testingRegistry.ts` and `e2e/mobile-route-inventory.ts`, policed by three different CI jobs (see Pitfall #30a)
 - [ ] **DB-backed tests marked `integration`** — a `db_session` test under a module-level `pytest.mark.unit` runs in the no-database job and fails on the fixture (see Pitfall #30b)
+- [ ] **Log messages formatted once** — never an f-string message combined with logger arguments; an id rather than user-supplied text where the id is enough (see Pitfall #33)
+- [ ] **New dependency verified** — name checked against the registry and the project's own docs, pinned like its neighbours, and named in the PR Summary (see Pitfall #34)
+- [ ] **Migration handles existing rows** — a tightened column, new unique or foreign key, or required column settles the rows already there, and a test proves it with rows present (see Pitfall #35)
+- [ ] **Safe to run twice** — a new webhook handler, scheduled task or retried write names the id that makes a second run a no-op, constrains it, and tests a double delivery (see Pitfall #36)
+- [ ] **The test was seen to fail** — a bug fix's test went red against the unfixed code; a test and the code it checks are not changed in one commit without a stated reason (see Pitfall #37)
 
 ## Project Overview
 
@@ -308,13 +313,22 @@ Consequences worth knowing:
   `npm ci`. Never trust a bare `tsc` invocation's version from either
   directory; use `tsc-native.mjs` (or, to deliberately run the `5.9.3` the
   linter uses, `node_modules/typescript/bin/tsc` from the repo root).
-- **Point your editor at the aliased compiler.** In VS Code, set this in your
-  local `.vscode/settings.json` (the directory is gitignored, so this cannot
-  be committed for you):
+- **The editor runs the aliased compiler, and the setting is committed.**
+  `.vscode/` is gitignored, but `.vscode/settings.json` and
+  `.vscode/extensions.json` are tracked, so a fresh clone already carries:
 
   ```json
-  "typescript.tsdk": "node_modules/typescript-native/lib"
+  "js/ts.experimental.useTsgo": true,
+  "js/ts.tsdk.path": "node_modules/typescript-native/lib"
   ```
+
+  Do not swap these back for `typescript.tsdk`. TypeScript 7 ships no
+  `tsserver.js`, so the classic key cannot load it from any path, and VS Code
+  quietly falls back to its own bundled version instead of the compiler the
+  build runs. The keys above are read by the TypeScript 7 extension
+  (`TypeScriptTeam.native-preview`, in the recommended extensions). If the
+  editor does not pick the workspace version up on its own, run
+  **TypeScript: Select TypeScript Version → Use Workspace Version** once.
 
 - Type-aware lint runs against 5.9.3 while the build uses 7.0.2. That gap is
   forced by upstream, not chosen. **When typescript-eslint ships TS 7 support,
@@ -1597,6 +1611,237 @@ why. That test scans the tree for all three shapes (a re-enabled
 `closeOnClickOutside`, a scrim with a click handler, and the
 `target === currentTarget` container check), so a new one fails loudly rather
 than shipping.
+
+### 32. A Gate on Account Status Asks "Is This a Current Member", Never `== ACTIVE` _(2026-10-20)_
+
+**Rule:** `UserStatus.PROBATIONARY` is a current account status. The member
+signs in, is scheduled, trains and holds property; an officer sets it from the
+profile and junior members derive to it. A query that means "the members on the
+roster today" filters `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (from
+`app/models/user.py`), and an instance check is `status in
+ACTIVE_ACCOUNT_STATUSES`. The frontend mirror is `isActiveAccount()` in
+`constants/enums.ts`. Forty-odd gates compared `== UserStatus.ACTIVE` and
+silently dropped probationary members from compliance, alerts, quorum, reports
+and pickers; nobody noticed because almost every probationary member still
+carried `active`, which nothing but the profile dialog ever changed.
+
+The literal comparison is allowed only where a Probationary count sits beside
+it and the two are meant to add up (the admin hub's tiles), and such a site is
+named in `ALLOWED` in `tests/test_account_status_gates.py` with that reason.
+That test sweeps `app/` and fails on any other literal `== ACTIVE` against
+`User.status`.
+
+### 33. A Log Message Is Formatted Once, and Carries Ids Rather Than Free Text _(2026-10-23)_
+
+**Line forgery is handled at the sink, so do not hand-escape for it.** The text
+stdout sink and `logs/app.log` print every message through
+`escape_log_message` in `app/core/logging.py`, which renders `\n`, `\r`, other
+control characters and the Unicode line separators as visible escapes. A
+member who types `bob\nINFO | Admin login succeeded` into a search box gets
+one line with a literal `\n` in it, not a forged second record — whatever the
+call site does. The JSON sink escapes through `json.dumps`. Before that fix the
+two text sinks wrote messages raw, and log injection is the class Veracode's
+2025 GenAI code security report found generated code leaving open in 88% of the
+cases that called for a defence, so do not undo the escaping or add a text sink
+without it; `tests/test_logging.py` asserts both sinks carry it.
+
+**What the sink cannot fix is a message formatted twice.** Loguru passes the
+message through `str.format` whenever positional or keyword arguments are
+supplied, so an f-string that splices in user text **and** also passes
+arguments re-parses that text as a format string. A `{` in the value raises
+`KeyError` or `IndexError` at the call site, and the request fails on the
+logging line, not on anything it was doing.
+
+```python
+# WRONG — user text is re-parsed as a format string; "{x}" raises KeyError
+logger.info(f"Search by {search_term} in {{}}", org_id)
+
+# CORRECT — one formatting pass
+logger.info("Search by {!r} in {}", search_term, org_id)
+
+# BETTER, where it answers the question — an id instead of the free text
+logger.info("Search by user {} in {}", user_id, org_id)
+```
+
+`{!r}` is still worth using for free text: the quotes show where a value starts
+and ends, which a trailing space or an empty string otherwise hides.
+
+**Prefer the id to the text.** Free text is where PHI turns up, and a log line
+rarely needs it to answer the question it exists for.
+
+**Rule:** never combine an f-string message with logger arguments — pass every
+value as an argument, or none. Log an id rather than user-supplied text where
+the id answers the question. `tests/test_log_call_shape.py` enforces the first
+half with an AST sweep over `app/` and `scripts/`; the second is review
+discipline.
+
+### 34. A Dependency or API You Remember Is Checked Against the Real One First _(2026-10-23)_
+
+A model recalls package names and API signatures from training, not from the
+registry or from the version this repository pins. Both recollections fail in
+ways that look correct:
+
+- **The package may not exist, or may be someone else's.** A study of 576,000
+  generated samples found commercial models naming non-existent packages in
+  5.2% of them, open models in 21.7%, and the same invented names recurring on
+  repeated runs. That repetition is what makes it an attack: a name a model
+  reliably invents can be registered with a malicious payload under it
+  ("slopsquatting"). `pip-audit` and `npm audit` cannot help — a freshly
+  registered package has no advisories against it.
+- **The API may be from a different version.** Benchmarks of evolving library
+  APIs find models using deprecated or removed calls in roughly a quarter to a
+  third of cases, and naming the target version in the prompt does not fix it —
+  reading that version's documentation does.
+
+Before adding a dependency to `backend/requirements.txt` or a `package.json`:
+
+1. **Confirm the name resolves to the project you mean.** Take it from that
+   project's own documentation or repository, not from memory, and check the
+   registry entry points back at it:
+
+   ```bash
+   npm view <pkg> name version time.created repository.url
+   curl -s https://pypi.org/pypi/<pkg>/json | python3 -c "import json,sys; i=json.load(sys.stdin)['info']; print(i['name'], i['version'], i['project_urls'])"
+   ```
+
+   A package created in the last few weeks, a repository URL that does not match
+   the project, or a name one character off a well-known one is a stop: report
+   it rather than installing it.
+
+2. **Pin it the way its manifest already pins.** `backend/requirements.txt`
+   pins with `==`. In `frontend/package.json`, follow the neighbouring entries,
+   and install from the repo root with the targeted
+   `npm install <pkg>@<version> --workspace frontend` described under "Two
+   TypeScript installs".
+3. **Name the new dependency in the pull request's Summary**, with why an
+   existing one does not cover it. A dependency is a long-lived commitment that
+   a diff of a lockfile does not make visible to a reviewer.
+
+Before calling an API whose signature you are recalling rather than reading,
+check it against the installed version — the source under `node_modules/` or
+the virtualenv's `site-packages/`, or that release's documentation. A test that
+exercises the call is what proves it, not the fact that it type-checks, since
+stubs and the real library can disagree.
+
+**Rule:** no dependency is added on recall alone, and no unfamiliar call is
+written from memory against a pinned library without checking the version
+installed here. Nothing enforces either step; both are review discipline.
+
+### 35. CI Migrates an Empty Database; Production Migrates the Rows That Exist _(2026-10-23)_
+
+`docs/rules/migrations.md` explains why CI runs `alembic upgrade head` against an
+**empty** database. The consequence that rule does not cover is that a migration
+is never run against data before it reaches a department. A constraint that
+holds on zero rows holds vacuously, and the first database it meets with rows in
+it is somebody's production one. The backend migrates itself on startup, so a
+migration that fails on that data is a backend that does not boot.
+
+Each of these passes CI and behaves differently on a populated table. All three
+were reproduced on the dev MariaDB under its strict `sql_mode`; MySQL 8 in
+strict mode documents the same behaviour:
+
+| Step                                          | Empty table (CI) | Table with rows                                                                        |
+| --------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `add_column(..., nullable=False)`, no default | succeeds         | **succeeds silently** — every existing row gets the type's implicit default: `''`, `0` |
+| `alter_column(..., nullable=False)`           | succeeds         | **fails** — `1265 Data truncated` on the first row still holding NULL                  |
+| `create_unique_constraint` / a unique index   | succeeds         | **fails** — `1062 Duplicate entry` if any two rows already share the value             |
+| `create_foreign_key` on an existing column    | succeeds         | **fails** on any row whose value has no parent                                         |
+
+The first row is the dangerous one, because nothing fails. A required
+`station_id` added this way leaves every existing member with an empty string
+that is neither a station nor NULL, so a lookup finds nothing and an `IS NULL`
+check for "not yet assigned" finds nothing either.
+
+So, for each step that narrows what a column may hold:
+
+1. **Settle the existing rows first, in the same migration.** Backfill the
+   value, or delete or merge the duplicates and orphans — and say in the
+   docstring what was done to them, under Pitfall #20's rule for backfills that
+   cannot be reversed. Only then add the constraint.
+2. **A new `NOT NULL` column gets a `server_default`, or is added nullable,
+   backfilled and then tightened.** Never rely on the implicit default.
+3. **Test it against rows.** A migration test that inserts the awkward rows — a
+   NULL, a duplicate, an orphan — before upgrading proves the step on the
+   database that matters. `tests/test_alembic_migrations.py` proves the chain,
+   not the data.
+4. **A step that removes or renames a column the current release reads** makes
+   restoring the previous image impossible without restoring the database
+   backup too. Say so in `docs/UPGRADING.md`, which already tells operators to
+   take that backup.
+
+**Rule:** a migration that tightens a column, adds a unique or foreign key, or
+adds a required column handles the rows already there, and a test proves it
+with those rows present. CI's empty database cannot tell you it does. Nothing
+enforces this; it is review discipline.
+
+### 36. A Retried or Redelivered Operation Must Not Repeat Its Side Effect _(2026-10-23)_
+
+Every path that runs without a person watching it can run twice: a provider
+redelivers a webhook it did not see acknowledged, a scheduled loop re-runs after
+a crash, a client retries a POST that timed out after it was processed. A
+handler written as "receive, act, return" is correct only if it runs once, and
+nothing in a test run ever runs it twice.
+
+What this repository already has, and what each does **not** cover:
+
+| Mechanism                                                       | Covers                                               | Does not cover                                                                                                                                     |
+| --------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `is_duplicate_webhook` (`app/utils/webhook_replay.py`)          | the identical signed body replayed within 10 minutes | a redelivery after 10 minutes, a redelivery whose body differs (a new timestamp), and every delivery while Redis is down — it fails open by design |
+| The scheduler claim (`app/core/background_claim.py`)            | two workers running the scheduled loops at once      | the same worker re-running a task that crashed between its side effect and its commit                                                              |
+| `with_db_retry` / `retry_on_db_error` (`app/utils/db_retry.py`) | reads during a brief database outage                 | writes — it retries `2013 Lost connection during query`, after which a write may already have committed                                            |
+
+So the replay guard is a freshness check, not idempotency. The durable guard is
+a **unique constraint on the provider's own id for the thing**.
+`StorePaymentEvent.external_id` is unique per organization and provider, and
+`StorefrontService.record_external_payment` looks the id up first and returns
+the existing row, which is why a PayPal redelivery cannot record a payment twice
+whatever Redis is doing. A new webhook handler follows that shape: store the
+provider's event or object id, constrain it, return the existing record on a
+repeat — the constraint is what catches two deliveries racing past the lookup —
+and answer 200 so the provider stops retrying.
+
+For a scheduled task that sends something, decide the order and say which in a
+comment, because both orders fail and they fail differently:
+
+- **send, then stamp and commit** — a crash in between sends again on the next
+  run (at least once). Right for a reminder, where a duplicate is a nuisance.
+- **stamp and commit, then send** — a crash in between never sends (at most
+  once). Right for anything where a duplicate does harm: a charge, a vote
+  notice, a TCPA-governed text.
+
+**Rule:** a webhook handler, scheduled task or retried write is written to be
+run twice. Name the id that makes the second run a no-op, put a unique
+constraint on it, and add a test that delivers or runs the same thing twice and
+asserts one effect. A timestamp is not an idempotency key. Nothing enforces
+this; it is review discipline.
+
+### 37. A Passing Test Is Evidence Only If It Could Have Failed _(2026-10-23)_
+
+A test suite reports whether the tests passed, not whether the change is right.
+SWE-ABS (2026) re-ran top agents' accepted SWE-bench patches against stronger
+tests and rejected about one in five; the leading agent fell from 78.8% to
+62.2%. Benchmarks built to catch it find agents hardcoding expected outputs,
+weakening assertions and rewriting the test rather than the code — and the gap
+between visible and held-out tests grows with the size of the task. Pitfalls
+#13 and #28 are this repository's own record of tests that passed for the wrong
+reason.
+
+- **A bug fix ships with a test that failed before the fix.** Run it against
+  the unfixed code and see it go red, then apply the fix and see it go green. A
+  regression test nobody has seen fail is not known to test the regression.
+- **Do not change a test and the code it checks in the same commit without
+  saying why in the commit message.** An assertion loosened beside the code it
+  constrains is the change most likely to be hiding a bug, and in review it
+  reads as housekeeping. When a test's expectation is genuinely wrong, fix it in
+  its own commit that says what was wrong with it.
+- **Assert the value, not the shape.** `assert result` and `toBeDefined()` pass
+  for most wrong answers. A test asserts what the right answer is.
+- **Never special-case the test input in the code under test** — no branch on a
+  fixture's id, no constant that exists to match an expected value.
+
+**Rule:** a test counts as evidence for a change only once it has been seen to
+fail without that change. Nothing enforces this; it is review discipline,
+including when you are reviewing your own diff.
 
 ## Environment Variables
 

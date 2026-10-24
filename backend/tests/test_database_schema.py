@@ -539,6 +539,18 @@ class TestColumnConstraints:
             # encryption_key_custody: the row is the confirmation, stamped
             # when it is given and never updated.
             "confirmed_at",
+            # minutes_signatures: the row is the signature, stamped when it is
+            # given and never updated.
+            "signed_at",
+            # inventory_lot_recalls: the row is the recall, server-stamped
+            # when it is recorded; a separate created_at would always equal it.
+            "recalled_at",
+            # minutes_public_copies: the row is the public posting, stamped
+            # when first posted; a repost replaces it in place.
+            "posted_at",
+            # nfc_card_taps: the row is the tap, stamped when it happened and
+            # never updated.
+            "tapped_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():
@@ -689,6 +701,32 @@ class TestIndexCoverage:
             not unindexed
         ), "Tables where organization_id does not lead any index:\n" + "\n".join(
             unindexed
+        )
+
+    def test_no_two_indexes_cover_the_same_columns(self):
+        """
+        A UNIQUE constraint is backed by its own index, so a plain Index on the
+        same columns in the same order serves no read and costs a write on every
+        insert. shift_equipment_checks carried one from 2026-08-22, when
+        uq_shift_equipment_check_shift_template was added over the April
+        idx_shift_equip_check_shift_tmpl.
+        """
+        redundant = []
+        for table_name, table in _tables.items():
+            seen: dict[tuple[str, ...], str] = {}
+            keyed = [(idx.name, idx.columns) for idx in table.indexes] + [
+                (con.name, con.columns)
+                for con in table.constraints
+                if isinstance(con, UniqueConstraint)
+            ]
+            for name, columns in keyed:
+                key = tuple(col.name for col in columns)
+                if key in seen:
+                    redundant.append(f"{table_name}: {seen[key]} and {name} {key}")
+                else:
+                    seen[key] = str(name)
+        assert not redundant, "Indexes covering identical columns:\n" + "\n".join(
+            redundant
         )
 
     def test_status_columns_are_indexed(self):

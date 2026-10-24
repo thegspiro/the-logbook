@@ -79,9 +79,13 @@ export const useOverrideAttendance = ({
         setSubmitting(true);
         setSubmitError(null);
 
-        const data: RSVPOverride = {};
-        if (overrideCheckIn) data.override_check_in_at = localToUTC(overrideCheckIn, timezone);
-        if (overrideCheckOut) data.override_check_out_at = localToUTC(overrideCheckOut, timezone);
+        // An emptied box is sent as null, not omitted: the API keeps any key
+        // it is not sent, so omitting it left the old override time in place
+        // behind a success toast.
+        const data: RSVPOverride = {
+          override_check_in_at: overrideCheckIn ? localToUTC(overrideCheckIn, timezone) : null,
+          override_check_out_at: overrideCheckOut ? localToUTC(overrideCheckOut, timezone) : null,
+        };
 
         await eventService.overrideAttendance(eventId, editingRsvp.user_id, data);
         setShowOverrideModal(false);

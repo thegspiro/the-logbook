@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
+  canRecordReplacementDate,
+  checkItemStatusLabel,
   containerTypeLabel,
+  normalizeCheckType,
   countedOnTruck,
   daysUntil,
   isPresetContainerType,
   submitterMaySwap,
   targetQuantity,
+  isBelowCriticalMinimum,
 } from './equipmentCheck';
 
 describe('containerTypeLabel', () => {
@@ -168,5 +172,56 @@ describe('countedOnTruck', () => {
 
   it('reports null when nothing has been counted, leaving the fallback to the caller', () => {
     expect(countedOnTruck(item({}))).toBeNull();
+  });
+});
+
+describe('isBelowCriticalMinimum', () => {
+  it('is critical only strictly below the minimum', () => {
+    expect(isBelowCriticalMinimum(1, 2, 4)).toBe(true);
+    expect(isBelowCriticalMinimum(2, 2, 4)).toBe(false);
+    expect(isBelowCriticalMinimum(3, 2, 4)).toBe(false);
+  });
+
+  it('never calls a position that meets its target critical', () => {
+    // The reported case: 2 of an expected 2, with the minimum set to 2.
+    expect(isBelowCriticalMinimum(2, 2, 2)).toBe(false);
+    // A minimum above the target still cannot make a full position critical.
+    expect(isBelowCriticalMinimum(4, 5, 4)).toBe(false);
+    expect(isBelowCriticalMinimum(3, 5, 4)).toBe(true);
+  });
+
+  it('is never critical without a minimum, and uses the minimum alone without a target', () => {
+    expect(isBelowCriticalMinimum(0, null, 4)).toBe(false);
+    expect(isBelowCriticalMinimum(0, undefined, null)).toBe(false);
+    expect(isBelowCriticalMinimum(0, 1, null)).toBe(true);
+  });
+});
+
+describe('presence', () => {
+  it('is its own type, and the legacy present still means pass/fail', () => {
+    expect(normalizeCheckType('presence')).toBe('presence');
+    expect(normalizeCheckType('present')).toBe('function');
+  });
+
+  it('reads a filed answer in the words the crew used', () => {
+    expect(checkItemStatusLabel('presence', 'pass')).toBe('Present');
+    expect(checkItemStatusLabel('presence', 'fail')).toBe('Absent');
+    expect(checkItemStatusLabel('presence', 'not_checked')).toBe('Not checked');
+    expect(checkItemStatusLabel('function', 'fail')).toBe('Fail');
+    expect(checkItemStatusLabel(undefined, 'pass')).toBe('Pass');
+  });
+});
+
+describe('canRecordReplacementDate', () => {
+  it('is only a Date line that inventory does not track', () => {
+    expect(canRecordReplacementDate({ checkType: 'expiry' })).toBe(true);
+    expect(canRecordReplacementDate({ checkType: 'expiry', inventoryItemId: 'inv-1' })).toBe(false);
+    expect(
+      canRecordReplacementDate({
+        checkType: 'expiry',
+        lotsAboard: [{ id: 'l1', lotNumber: 'A', quantity: 1 } as never],
+      })
+    ).toBe(false);
+    expect(canRecordReplacementDate({ checkType: 'count' })).toBe(false);
   });
 });

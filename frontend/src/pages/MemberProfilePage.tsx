@@ -35,8 +35,9 @@ import { useRanks } from '../hooks/useRanks';
 import { useProfileVisibility } from '../hooks/useProfileVisibility';
 import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
-import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
+import { withoutRankMirrors } from '../utils/positions';
 import { isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
 import type {
@@ -55,19 +56,24 @@ import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
-import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { useDialog } from '../hooks/useDialog';
 import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
+import { GoogleAccountPanel } from '../modules/membership/components/GoogleAccountPanel';
+import { DIRECTORY_INTEGRATIONS } from '../modules/membership/constants/googleAccount';
+import { useMemberGoogleAccount } from '../modules/membership/hooks/useMemberGoogleAccount';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { StatusChangeReason } from '../components/member-profile/StatusChangeReason';
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
 import { UndoDropControl } from '../components/member-profile/UndoDropControl';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 import { displayNameOf, givenName } from '../utils/memberName';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // Types for inventory data
 interface InventoryItem {
@@ -80,6 +86,10 @@ interface InventoryItem {
 }
 
 /** Check if a module is enabled by its id. */
+function statusLabel(status: string): string {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function isModuleEnabled(moduleId: string): boolean {
   const mod = AVAILABLE_MODULES.find((m) => m.id === moduleId);
   return mod?.enabled ?? false;
@@ -124,6 +134,7 @@ export const MemberProfilePage: React.FC = () => {
   // Photo upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const { confirm } = useConfirm();
 
   // Address edit state
   const [editingAddress, setEditingAddress] = useState(false);
@@ -157,12 +168,17 @@ export const MemberProfilePage: React.FC = () => {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
   const [anonymizeModalOpen, setAnonymizeModalOpen] = useState(false);
-
-  // Takes the fixed mobile bottom bar off this overlay while it is open.
-  useOverlaySurface(statusModalOpen);
   const [statusChanging, setStatusChanging] = useState(false);
+  // Escape stays off mid-save so the dialog cannot vanish while the request
+  // it started is still deciding the member's status.
+  const statusDialogRef = useDialog<HTMLDivElement>({
+    isOpen: statusModalOpen,
+    onClose: () => setStatusModalOpen(false),
+    closeOnEscape: !statusChanging,
+  });
   const [newStatus, setNewStatus] = useState<string>('');
   const [statusReason, setStatusReason] = useState('');
+  const [separationDate, setSeparationDate] = useState('');
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
@@ -359,6 +375,9 @@ export const MemberProfilePage: React.FC = () => {
   // on that basis alone.
   const { isConnected: isIntegrationConnected, loading: integrationsLoading } = useConnectedIntegrations();
   const idCardsEnabled = !integrationsLoading && isIntegrationConnected(NFC_ID_CARDS_INTEGRATION);
+  const googleWorkspaceEnabled =
+    !integrationsLoading && DIRECTORY_INTEGRATIONS.some((type) => isIntegrationConnected(type));
+  const googleAccount = useMemberGoogleAccount(userId, canManageMembers && googleWorkspaceEnabled);
 
   const handleOpenStatusModal = () => {
     if (!user) return;
@@ -370,6 +389,7 @@ export const MemberProfilePage: React.FC = () => {
     }
     setNewStatus(user.status);
     setStatusReason('');
+    setSeparationDate(getTodayLocalDate(tz));
     setStatusModalOpen(true);
   };
 
@@ -381,6 +401,9 @@ export const MemberProfilePage: React.FC = () => {
   const statusDialogMayRejoin = statusModalOpen && isSeparatedStatus(user?.status);
   const rejoin = useRejoinServiceOptions(userId ?? null, statusDialogMayRejoin, tz);
   const isRejoining = statusDialogMayRejoin && newStatus !== '' && !isSeparatedStatus(newStatus);
+  // The reverse: a current member dropped or retired has their service stint
+  // closed, on the date the officer gives here rather than always today.
+  const isLeaving = statusModalOpen && !isSeparatedStatus(user?.status) && isSeparatedStatus(newStatus);
 
   const handleStatusChange = async () => {
     if (!userId || !newStatus || !user) return;
@@ -393,6 +416,7 @@ export const MemberProfilePage: React.FC = () => {
         new_status: newStatus,
         reason: statusReason.trim() || undefined,
         ...(isRejoining ? rejoin.options : {}),
+        ...(isLeaving ? { separation_date: separationDate || undefined } : {}),
       });
       // Re-fetch user to get the updated status
       await fetchUserData(userId);
@@ -528,6 +552,15 @@ export const MemberProfilePage: React.FC = () => {
 
   const handlePhotoRemove = async () => {
     if (!userId) return;
+    const confirmed = await confirm({
+      title: 'Remove profile photo?',
+      message: isSelf
+        ? 'Your photo is removed from your profile and the roster. You can upload a new one at any time.'
+        : 'This member’s photo is removed from their profile and the roster. A new one can be uploaded at any time.',
+      confirmLabel: 'Remove photo',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
     try {
       setUploadingPhoto(true);
       setError(null);
@@ -700,10 +733,12 @@ export const MemberProfilePage: React.FC = () => {
   // still reserve two-thirds of the page for nothing.
   const showAdminHours = Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0) || adminHoursLoading;
   const showIdCards = Boolean(canManageIdCards && userId && idCardsEnabled);
+  const showGoogleAccount = Boolean(googleAccount.account && userId);
   const hasLeftColumn =
     (trainingEnabled && canViewTargetTraining) ||
     showAdminHours ||
     showIdCards ||
+    showGoogleAccount ||
     (inventoryModuleEnabled && canViewTargetInventory);
   const hasQuickStats =
     (trainingEnabled && canViewTargetTraining) ||
@@ -846,7 +881,7 @@ export const MemberProfilePage: React.FC = () => {
                     {user.membership_number && <> · #{user.membership_number}</>}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {(user.roles || []).map((role) => (
+                    {withoutRankMirrors(user.roles || []).map((role) => (
                       <span
                         key={role.id}
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -877,13 +912,17 @@ export const MemberProfilePage: React.FC = () => {
                     onClick={handleOpenStatusModal}
                     className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold transition hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 ${
                       user.status === UserStatus.ACTIVE
-                        ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                        ? 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-400'
                         : 'bg-theme-surface-secondary text-theme-text-secondary'
                     }`}
                     title={user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change member status'}
+                    aria-label={`${user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change status'}, currently ${statusLabel(user.status)}`}
                   >
-                    {user.status.replace(/_/g, ' ')}
-                    <Pencil className="h-3 w-3" />
+                    Status: {statusLabel(user.status)}
+                    <span className="inline-flex items-center gap-1 font-normal underline" aria-hidden="true">
+                      <Pencil className="h-3 w-3" />
+                      {user.status === UserStatus.ARCHIVED ? 'Reactivate' : 'Change'}
+                    </span>
                   </button>
                 ) : (
                   // The account lifecycle status is leadership's concern; a
@@ -938,6 +977,17 @@ export const MemberProfilePage: React.FC = () => {
                 hides itself when the organization has cards turned off. */}
               {showIdCards && userId && (
                 <MemberIdCardsPanel userId={userId} memberName={user ? displayNameOf(user) : undefined} />
+              )}
+
+              {/* Google Workspace account created at conversion. Officers
+                only, and only for a member The Logbook made one for. */}
+              {showGoogleAccount && userId && googleAccount.account && (
+                <GoogleAccountPanel
+                  userId={userId}
+                  account={googleAccount.account}
+                  onChange={googleAccount.setAccount}
+                  onReload={googleAccount.reload}
+                />
               )}
 
               {/* Assigned Inventory - the member's own kit, or a quartermaster's
@@ -1305,6 +1355,7 @@ export const MemberProfilePage: React.FC = () => {
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                    {userId && <StatusChangeReason userId={userId} tz={tz} refreshKey={user.status} />}
                     {user.status === UserStatus.ACTIVE && (
                       <p className="text-theme-text-muted mt-1 text-xs">
                         You see this because you manage members. Other members see a status only when it is not Active.
@@ -1440,8 +1491,16 @@ export const MemberProfilePage: React.FC = () => {
         {/* Status Change Modal */}
         {statusModalOpen && (
           <div className="modal-overlay z-50 flex items-center justify-center">
-            <div className="bg-theme-surface-modal modal-panel-scroll mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
-              <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Change Member Status</h3>
+            <div
+              ref={statusDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="status-dialog-title"
+              className="bg-theme-surface-modal modal-panel-scroll mx-4 w-full max-w-md rounded-lg p-6 shadow-xl"
+            >
+              <h3 id="status-dialog-title" className="text-theme-text-primary mb-4 text-lg font-semibold">
+                Change Member Status
+              </h3>
               <div className="space-y-4">
                 <div>
                   <label
@@ -1462,10 +1521,15 @@ export const MemberProfilePage: React.FC = () => {
                       .filter((s) => s !== UserStatus.ARCHIVED)
                       .map((s) => (
                         <option key={s} value={s}>
-                          {s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                          {statusLabel(s)}
                         </option>
                       ))}
                   </select>
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Probationary follows the member&rsquo;s membership type: setting the type to Probationary on their
+                    record, or the tier ladder advancing them off it, moves this status on its own. A status set here
+                    holds until the type is next changed.
+                  </p>
                 </div>
                 <div>
                   <label htmlFor="status-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
@@ -1481,8 +1545,32 @@ export const MemberProfilePage: React.FC = () => {
                   />
                 </div>
                 {isRejoining && <RejoinServiceFields state={rejoin} disabled={statusChanging} />}
+                {isLeaving && (
+                  <div>
+                    <label
+                      htmlFor="status-separation-date"
+                      className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                    >
+                      Effective date
+                    </label>
+                    <input
+                      id="status-separation-date"
+                      type="date"
+                      value={separationDate}
+                      min={user?.hire_date ?? undefined}
+                      max={getTodayLocalDate(tz)}
+                      onChange={(e) => setSeparationDate(e.target.value)}
+                      disabled={statusChanging}
+                      aria-describedby="status-separation-date-hint"
+                      className="form-input px-3 text-sm focus:ring-blue-500"
+                    />
+                    <p id="status-separation-date-hint" className="text-theme-text-muted mt-1 text-xs">
+                      The day they left. Their service history ends on this date.
+                    </p>
+                  </div>
+                )}
                 {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
-                  <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-600 dark:text-yellow-400">
+                  <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-800 dark:text-yellow-400">
                     Dropping a member creates a property return report and may send an email notification.
                   </p>
                 )}

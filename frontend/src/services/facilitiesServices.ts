@@ -202,16 +202,22 @@ export interface RoomUpdate {
   is_active?: boolean;
 }
 
+/**
+ * Also the update payload (`updateSystem` takes a `Partial` of it). The fields
+ * the edit form owns accept `null` because the backend dumps updates with
+ * `exclude_unset`: omitting a key keeps the stored value, so a clear has to be
+ * sent as `null`.
+ */
 export interface FacilitySystemCreate {
   facility_id: string;
   name: string;
   system_type: string;
-  description?: string;
-  manufacturer?: string;
-  model_number?: string;
-  serial_number?: string;
-  install_date?: string;
-  warranty_expiration?: string;
+  description?: string | null | undefined;
+  manufacturer?: string | null | undefined;
+  model_number?: string | null | undefined;
+  serial_number?: string | null | undefined;
+  install_date?: string | null | undefined;
+  warranty_expiration?: string | null | undefined;
   expected_life_years?: number;
   condition?: string;
   last_tested_date?: string;
@@ -219,8 +225,8 @@ export interface FacilitySystemCreate {
   test_result?: string;
   certification_number?: string;
   certified_by?: string;
-  test_frequency_days?: number;
-  notes?: string;
+  test_frequency_days?: number | null | undefined;
+  notes?: string | null | undefined;
 }
 
 export interface EmergencyContact {
@@ -939,6 +945,19 @@ export const facilitiesService = {
     const response = await api.post<FacilityPhoto>('/facilities/photos', data);
     return response.data;
   },
+  /**
+   * Upload a photo in one step, filed in the facility's Photos folder. Needs a
+   * facilities grant only, not documents.manage.
+   */
+  async uploadPhoto(facilityId: string, file: File, caption?: string): Promise<FacilityPhoto> {
+    const form = new FormData();
+    form.append('file', file);
+    if (caption) form.append('caption', caption);
+    const response = await api.post<FacilityPhoto>(`/facilities/${facilityId}/photos/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
   async updatePhoto(
     photoId: string,
     data: Partial<Omit<FacilityPhotoCreate, 'caption'>> & { caption?: string | null }
@@ -961,6 +980,19 @@ export const facilitiesService = {
   },
   async createFacilityDocument(data: FacilityDocumentCreate): Promise<FacilityDocument> {
     const response = await api.post<FacilityDocument>('/facilities/documents', data);
+    return response.data;
+  },
+  /**
+   * Upload a document in one step, filed in the facility's restricted Facility
+   * Documents folder. Needs a facilities grant only, not documents.manage.
+   */
+  async uploadFacilityDocument(facilityId: string, file: File, documentType?: string): Promise<FacilityDocument> {
+    const form = new FormData();
+    form.append('file', file);
+    if (documentType) form.append('document_type', documentType);
+    const response = await api.post<FacilityDocument>(`/facilities/${facilityId}/documents/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
   async updateFacilityDocument(
@@ -1180,6 +1212,12 @@ export interface OperationalRankResponse {
    * rank a department invents for itself confers nothing and reports 0.
    */
   default_permission_count: number;
+  /**
+   * A rank of the built-in registry. Its default permissions are keyed by its
+   * code, so the server refuses to change the code; the display name may
+   * change. Custom ranks report false and may be recoded freely.
+   */
+  is_built_in: boolean;
   created_at: string;
   updated_at: string;
 }

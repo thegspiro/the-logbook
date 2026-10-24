@@ -97,11 +97,15 @@ const TrainingRequirementsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (requirement: TrainingRequirement) => {
     if (
       !(await confirm({
         title: 'Delete requirement',
-        message: 'Permanently delete this requirement? This cannot be undone.',
+        message:
+          `Delete "${requirement.name}"? If a pipeline, member progress, a skills or knowledge test, ` +
+          'a recertification pathway, a course class, a compliance profile or a waiver still uses it, ' +
+          'it is deactivated instead of deleted, so those records keep it. Otherwise it is deleted, ' +
+          'which cannot be undone.',
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -109,11 +113,26 @@ const TrainingRequirementsPage: React.FC = () => {
       return;
 
     try {
-      await trainingService.deleteRequirement(id);
-      setRequirements(requirements.filter((r) => r.id !== id));
-      toast.success('Requirement permanently deleted');
+      await trainingService.deleteRequirement(requirement.id);
     } catch (_error) {
       toast.error('Failed to delete requirement');
+      return;
+    }
+
+    // The endpoint answers 204 either way, as the locations endpoint it
+    // follows does; whether the row survived (deactivated) is what says
+    // which of the two happened.
+    try {
+      const fresh = await trainingService.getRequirements({ active_only: false });
+      setRequirements(fresh);
+      toast.success(
+        fresh.some((r) => r.id === requirement.id)
+          ? `"${requirement.name}" is still in use, so it was deactivated instead of deleted`
+          : 'Requirement deleted'
+      );
+    } catch (_error) {
+      toast.success('Requirement deleted, or deactivated if it was still in use');
+      void fetchData();
     }
   };
 
@@ -129,6 +148,8 @@ const TrainingRequirementsPage: React.FC = () => {
         source: requirement.source,
         registry_name: requirement.registry_name,
         registry_code: requirement.registry_code,
+        allows_external_credit: requirement.allows_external_credit,
+        shift_credited: requirement.shift_credited,
         training_type: requirement.training_type,
         required_hours: requirement.required_hours,
         required_courses: requirement.required_courses,
@@ -155,6 +176,7 @@ const TrainingRequirementsPage: React.FC = () => {
         period_end_month: requirement.period_end_month,
         period_end_day: requirement.period_end_day,
         include_current_month: requirement.include_current_month,
+        recency_days: requirement.recency_days,
         category_ids: requirement.category_ids,
         new_member_cutoff_date: requirement.new_member_cutoff_date,
         existing_member_deadline: requirement.existing_member_deadline,
@@ -346,7 +368,7 @@ const TrainingRequirementsPage: React.FC = () => {
                   setShowCreateModal(true);
                 }}
                 onDelete={() => {
-                  void handleDelete(requirement.id);
+                  void handleDelete(requirement);
                 }}
                 onDuplicate={() => {
                   void handleDuplicate(requirement);
@@ -475,7 +497,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h2 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h2>
               {requirement.requirement_type && (
-                <span className="text-theme-text-primary rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold">
+                <span className="rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold text-white">
                   {getRequirementTypeLabel(requirement.requirement_type)}
                 </span>
               )}
@@ -483,20 +505,18 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   (unused) due date type here read as a recurring schedule —
                   "Calendar Period" implies an annual Dec 31 reset. */}
               {requirement.frequency === 'one_time' ? (
-                <span className="text-theme-text-primary rounded bg-teal-700 px-2 py-1 text-xs font-semibold">
-                  One Time
-                </span>
+                <span className="rounded bg-teal-700 px-2 py-1 text-xs font-semibold text-white">One Time</span>
               ) : (
                 <span
                   className={`rounded px-2 py-1 text-xs font-semibold ${
                     requirement.due_date_type === 'rolling'
-                      ? 'bg-purple-600'
+                      ? 'bg-purple-600 text-white'
                       : requirement.due_date_type === 'calendar_period'
-                        ? 'bg-blue-600'
+                        ? 'bg-blue-600 text-white'
                         : requirement.due_date_type === 'certification_period'
-                          ? 'bg-orange-600'
-                          : 'bg-theme-surface-hover'
-                  } text-theme-text-primary`}
+                          ? 'bg-orange-700 text-white'
+                          : 'bg-theme-surface-hover text-theme-text-primary'
+                  }`}
                 >
                   {getDueDateTypeLabel(requirement.due_date_type)}
                 </span>
@@ -506,7 +526,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   className={`rounded px-2 py-1 text-xs font-semibold ${
                     requirement.source === 'national'
                       ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
-                      : 'bg-green-500/20 text-green-700 dark:text-green-400'
+                      : 'bg-green-500/20 text-green-800 dark:text-green-400'
                   }`}
                 >
                   {requirement.registry_name || (requirement.source === 'national' ? 'National' : 'State')}
@@ -589,7 +609,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               onClick={onToggleActive}
               className={`rounded-lg p-2 transition-colors ${
                 requirement.active
-                  ? 'bg-green-600/20 text-green-700 hover:bg-green-600/30 dark:text-green-400'
+                  ? 'bg-green-600/20 text-green-800 hover:bg-green-600/30 dark:text-green-400'
                   : 'bg-theme-surface-hover/20 text-theme-text-muted hover:bg-theme-surface-hover/30'
               }`}
               title={requirement.active ? 'Deactivate' : 'Activate'}
@@ -619,7 +639,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             </button>
             <button
               onClick={onDelete}
-              className="rounded-lg bg-red-600/20 p-2 text-red-700 transition-colors hover:bg-red-600/30 dark:text-red-400"
+              className="rounded-lg bg-red-600/20 p-2 text-red-800 transition-colors hover:bg-red-600/30 dark:text-red-400"
               title="Delete"
               aria-label={`Delete ${requirement.name}`}
             >

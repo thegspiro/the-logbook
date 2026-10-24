@@ -503,8 +503,6 @@ async def create_budget_item(
     try:
         service = GrantService(db)
         item_data = data.model_dump(exclude_unset=True)
-        # Override application_id from URL path
-        item_data.pop("application_id", None)
         item = await service.create_budget_item(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
@@ -661,8 +659,6 @@ async def create_expenditure(
     try:
         service = GrantService(db)
         exp_data = data.model_dump(exclude_unset=True)
-        # Override application_id from URL path
-        exp_data.pop("application_id", None)
         expenditure = await service.create_expenditure(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
@@ -843,8 +839,6 @@ async def create_compliance_task(
     try:
         service = GrantService(db)
         task_data = data.model_dump(exclude_unset=True)
-        # Override application_id from URL path
-        task_data.pop("application_id", None)
         task = await service.create_compliance_task(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
@@ -1004,8 +998,6 @@ async def create_note(
     try:
         service = GrantService(db)
         note_data = data.model_dump(exclude_unset=True)
-        # Override application_id from URL path
-        note_data.pop("application_id", None)
         note = await service.create_note(
             application_id=str(app_id),
             data=note_data,
@@ -1248,6 +1240,7 @@ async def list_donors(
             skip=pagination.skip,
             limit=pagination.limit,
             search_anonymous=can_see_identity,
+            search_contact=can_see_identity,
         )
         return [present_donor(d, can_see_identity) for d in donors]
     except ValueError as e:

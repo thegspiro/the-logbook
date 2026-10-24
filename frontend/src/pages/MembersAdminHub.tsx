@@ -10,10 +10,12 @@
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { ScanLine, Upload, UserPlus } from 'lucide-react';
+import { CreditCard, ScanLine, Upload, UserPlus } from 'lucide-react';
 import { AdminHubFrame, AdminMetricsSettings } from '../components/admin';
 import type { AdminHubAction } from '../components/admin';
 import { useAuthStore } from '../stores/authStore';
+import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
+import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { MEMBERS_SETTINGS_SECTIONS } from './members/admin/settings/membersSettingsSections';
 import { MEMBERS_ADMIN_TABS, type MembersAdminTab } from './membersAdminTabs';
@@ -36,6 +38,8 @@ export const MembersAdminHub: React.FC = () => {
   const navigate = useNavigate();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canCreate = checkPermission('users.create');
+  const canManageCards = checkPermission('members.manage_id_cards');
+  const { isConnected } = useConnectedIntegrations({ enabled: canManageCards });
   const tabs = MEMBERS_ADMIN_TABS.filter((tab) => !tab.permission || canCreate);
   // Validated against the tabs this member can actually open, not the full
   // list. A bookmarked ?tab=add for someone without users.create would
@@ -64,6 +68,16 @@ export const MembersAdminHub: React.FC = () => {
   const actions: AdminHubAction[] = [
     { key: 'scan', label: 'Scan a member ID', icon: ScanLine, onClick: () => void navigate('/members/scan') },
   ];
+  // The card page is its own route, gated on the card grant alone, so it is
+  // an action here rather than a tab: a tab would demand members.manage too.
+  if (canManageCards && isConnected(NFC_ID_CARDS_INTEGRATION)) {
+    actions.push({
+      key: 'id-cards',
+      label: 'Member ID cards',
+      icon: CreditCard,
+      onClick: () => void navigate('/members/admin/id-cards'),
+    });
+  }
   if (canCreate) {
     actions.push({
       key: 'import',

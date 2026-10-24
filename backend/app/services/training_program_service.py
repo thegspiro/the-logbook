@@ -17,7 +17,7 @@ from uuid import UUID
 from loguru import logger
 from sqlalchemy import delete, func
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -115,6 +115,49 @@ OFFICER_PROGRESS_NOTE_KEYS = (
 # finished with: re-reading it live would reopen a program finished last year
 # the day an annual requirement's window rolled over.
 _LIVE_ENROLLMENT_STATUSES = (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
+
+# Enrollments an officer may mark complete by hand (complete_enrollment_manually).
+# Wider than the rollup's ACTIVE-only rule on purpose; see that method.
+MANUALLY_COMPLETABLE_STATUSES = (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
+
+# Recorded on enrollments still in progress when their program is deactivated,
+# whether in place of a delete or from the edit form (see
+# _withdraw_in_progress_enrollments).
+PROGRAM_DEACTIVATED_WITHDRAWAL_REASON = (
+    "Withdrawn automatically: the pipeline was deactivated."
+)
+
+
+def link_counts_toward_completion(link: Any) -> bool:
+    """Whether one program↔requirement link counts toward completion.
+
+    The in-memory projection of ``get_required_requirement_ids`` — required,
+    and the requirement active — for callers that already hold the links with
+    their requirements loaded (the program detail's "required" total). Keep
+    the two in step.
+    """
+    requirement = getattr(link, "requirement", None)
+    return (
+        getattr(link, "is_required", False) is True
+        and requirement is not None
+        and getattr(requirement, "active", None) is True
+    )
+
+
+def prerequisite_refusal(missing_names: Sequence[str]) -> str:
+    """The refusal for a member missing these prerequisite pipelines — the
+    one wording every enrollment path and the eligibility picker give."""
+    return f"Must first complete: {', '.join(missing_names)}"
+
+
+def _counts_as_prerequisite(program_active: Optional[bool]) -> bool:
+    """Whether a prerequisite program with this ``active`` value is enforced.
+
+    ``IS TRUE`` like the program lists: a NULL flag hides a program from every
+    list, so it cannot be something a member is told to complete first.
+    """
+    return program_active is True
+
 
 LINKED_PROGRESS_REFUSAL = (
     "This requirement is the department's own and reads the member's "
@@ -478,6 +521,86 @@ class TrainingProgramService:
                 f"completion"
             )
 
+    async def _claim_completion(
+        self,
+        enrollment_id: UUID | str,
+        from_statuses: Sequence[EnrollmentStatus],
+        completion_reason: Optional[str] = None,
+    ) -> bool:
+        """Move an enrollment to COMPLETED if it is still in one of
+        ``from_statuses``; True when this call made the change.
+
+        ``completion_reason`` is an officer's reason for a manual completion,
+        written by the same conditional UPDATE so that a call which loses the
+        race cannot put its reason on someone else's completion. None for an
+        automatic completion, which stores NULL.
+
+        A compare-and-set rather than a read then a write: the status check is
+        in the UPDATE's own WHERE clause, which InnoDB evaluates against the
+        latest committed row, so two completions racing each other — the
+        rollup and an officer, or two officers — cannot both succeed, and the
+        completion side effects (``_after_enrollment_completed``) are fired
+        only by the caller that got True. Does not commit.
+        """
+        now = datetime.now(timezone.utc)
+        claimed = await self.db.execute(
+            update(ProgramEnrollment)
+            .where(
+                ProgramEnrollment.id == str(enrollment_id),
+                ProgramEnrollment.status.in_(tuple(from_statuses)),
+            )
+            .values(
+                status=EnrollmentStatus.COMPLETED,
+                completed_at=now,
+                completion_reason=completion_reason,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return rows_affected(claimed) == 1
+
+    async def _after_enrollment_completed(
+        self,
+        enrollment: ProgramEnrollment,
+        completion_credit_id: Optional[str] = None,
+    ) -> None:
+        """Everything that follows an enrollment becoming COMPLETED.
+
+        The single list of completion side effects, shared by the automatic
+        rollup (``_recalculate_enrollment_progress``) and an officer's manual
+        completion (``complete_enrollment_manually``) so the two cannot drift
+        (pitfall #29): the member's completion notice, then the EVOC operator
+        grant for a program linked to an EVOC level. Call it only after the
+        ``_claim_completion`` that returned True has been committed.
+
+        Best-effort: the completion is already committed, and a notification
+        failure must not turn it into an error for the caller.
+        """
+        try:
+            await self.db.refresh(enrollment)
+            program_result = await self.db.execute(
+                select(TrainingProgram).where(
+                    TrainingProgram.id == str(enrollment.program_id)
+                )
+            )
+            program = program_result.scalar_one_or_none()
+            user_result = await self.db.execute(
+                select(User).where(User.id == str(enrollment.user_id))
+            )
+            user = user_result.scalar_one_or_none()
+            if program and user:
+                await self._notify_program_completion(
+                    enrollment, program, user, UUID(str(program.organization_id))
+                )
+
+                # Auto-add as operator on matching apparatus when
+                # an EVOC training program completes
+                await self._handle_evoc_completion(
+                    program, enrollment, completion_credit_id
+                )
+        except Exception as e:
+            logger.error(f"Failed to send program completion notification: {e}")
+
     # ==================== Training Requirement Methods ====================
 
     async def _validate_required_skills(
@@ -603,20 +726,31 @@ class TrainingProgramService:
             for program in programs
             for pid in (program.prerequisite_program_ids or [])
         }
-        names: Dict[str, str] = {}
+        found: Dict[str, Tuple[str, bool]] = {}
         if wanted:
             rows = await self.db.execute(
-                select(TrainingProgram.id, TrainingProgram.name).where(
+                select(
+                    TrainingProgram.id, TrainingProgram.name, TrainingProgram.active
+                ).where(
                     TrainingProgram.id.in_(wanted),
                     TrainingProgram.organization_id == str(organization_id),
                 )
             )
-            names = {str(row_id): row_name for row_id, row_name in rows.all()}
+            found = {
+                str(row_id): (row_name, _counts_as_prerequisite(row_active))
+                for row_id, row_name, row_active in rows.all()
+            }
         for program in programs:
+            # An inactive prerequisite is listed, flagged, rather than hidden:
+            # it is still stored and applies again the day it is reactivated.
             program.prerequisite_programs = [
-                {"id": str(pid), "name": names[str(pid)]}
+                {
+                    "id": str(pid),
+                    "name": found[str(pid)][0],
+                    "active": found[str(pid)][1],
+                }
                 for pid in (program.prerequisite_program_ids or [])
-                if str(pid) in names
+                if str(pid) in found
             ]
 
     async def _validate_required_courses(
@@ -866,6 +1000,11 @@ class TrainingProgramService:
             for field, value in updates.items()
             if field in target_fields
         )
+        # Deactivating or reactivating changes whether the requirement counts
+        # toward pipeline completion (get_required_requirement_ids).
+        active_changed = updates.get("active") is not None and (
+            updates["active"] is True
+        ) != (requirement.active is True)
 
         # `updates` is built with exclude_unset, so a None here was sent
         # deliberately: the officer cleared the field. That applies to every
@@ -881,6 +1020,10 @@ class TrainingProgramService:
         # left stale against the new target.
         if target_changed:
             await self._recompute_progress_for_requirement(requirement)
+        if active_changed:
+            await self.recalculate_enrollments_for_requirement(
+                requirement.id, organization_id
+            )
 
         return requirement, None
 
@@ -1213,14 +1356,18 @@ class TrainingProgramService:
         organization_id: UUID | str,
         target_position: Optional[str] = None,
         is_template: Optional[bool] = None,
+        include_inactive: bool = False,
     ) -> List[TrainingProgram]:
         """
-        Get training programs with optional filters
+        Get training programs with optional filters. Deactivated programs are
+        left out unless *include_inactive*, which the list screen asks for so
+        an officer can reactivate one.
         """
         query = select(TrainingProgram).where(
             TrainingProgram.organization_id == organization_id,
-            TrainingProgram.active.is_(True),
         )
+        if not include_inactive:
+            query = query.where(TrainingProgram.active.is_(True))
 
         if target_position:
             query = query.where(TrainingProgram.target_position == target_position)
@@ -1310,6 +1457,10 @@ class TrainingProgramService:
             if prereq_error:
                 return None, prereq_error
             data["prerequisite_program_ids"] = list(prerequisite_ids) or None
+        # Null would hide the program from every list (they match
+        # ``active IS TRUE``) without being a deactivation anyone can undo.
+        if "active" in data and data["active"] is None:
+            return None, "Choose whether the program is active"
         if (
             "allows_concurrent_enrollment" in data
             and data["allows_concurrent_enrollment"] is None
@@ -1319,34 +1470,96 @@ class TrainingProgramService:
                 "the same time"
             )
 
+        # Deactivating from the edit form does what deactivating in place of
+        # a delete does: nobody can finish a pipeline that has left every
+        # list, so its in-progress members are withdrawn. Only a real
+        # transition — resending ``active: false`` on an inactive program
+        # withdraws nothing new.
+        deactivating = data.get("active") is False and program.active is True
+
         for field, value in data.items():
             setattr(program, field, value)
+
+        if deactivating:
+            await self._withdraw_in_progress_enrollments(program.id)
 
         await self.db.commit()
         await self.db.refresh(program)
         await self.attach_prerequisite_summaries([program], organization_id)
         return program, None
 
+    async def _withdraw_in_progress_enrollments(self, program_id: UUID | str) -> int:
+        """Withdraw a deactivated program's ACTIVE / ON_HOLD enrollments.
+
+        The same fields ``withdraw_enrollment`` sets — status WITHDRAWN, record
+        kept — with ``PROGRAM_DEACTIVATED_WITHDRAWAL_REASON``. Completed,
+        failed, expired and already-withdrawn enrollments are left alone:
+        they are the history the deactivation exists to keep. Reactivating
+        the program does not undo this. No commit; returns the count.
+
+        ``program_id`` must come from an org-scoped read of the program.
+        """
+        result = await self.db.execute(
+            update(ProgramEnrollment)
+            .where(
+                ProgramEnrollment.program_id == str(program_id),
+                ProgramEnrollment.status.in_(_LIVE_ENROLLMENT_STATUSES),
+            )
+            .values(
+                status=EnrollmentStatus.WITHDRAWN,
+                withdrawn_at=datetime.now(timezone.utc),
+                withdrawal_reason=PROGRAM_DEACTIVATED_WITHDRAWAL_REASON,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
+
     async def delete_training_program(
         self,
         program_id: UUID,
         organization_id: UUID | str,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[Optional[str], Optional[str]]:
         """
-        Permanently delete a program and everything under it — phases,
-        requirement links, milestones, enrollments, and enrolled members'
-        progress. Also removes the program-specific requirements it owns once
-        they're no longer referenced anywhere. Explicit ordered deletes (rather
-        than ORM cascade) keep this deterministic on the async session.
+        Delete a program, or deactivate it when members have graduated from it.
 
-        This is irreversible; the UI guards it behind a typed/confirmed warning.
-        Returns (ok, error_message).
+        A program with any COMPLETED enrollment is deactivated
+        (``active=False``) instead: a delete would erase those graduates'
+        enrollments and progress, which are the department's record that they
+        finished it. Its structure and every enrollment are kept. Enrollments
+        still in progress (ACTIVE / ON_HOLD) are withdrawn the same way
+        ``withdraw_enrollment`` withdraws one — status WITHDRAWN, record kept —
+        because nobody can finish a pipeline that has left every list, and an
+        open enrollment in it would keep raising deadline warnings.
+
+        Otherwise the program is permanently deleted with everything under it —
+        phases, requirement links, milestones, enrollments, and enrolled
+        members' progress — along with the program-specific requirements it
+        owns once they're no longer referenced anywhere. Explicit ordered
+        deletes (rather than ORM cascade) keep this deterministic on the async
+        session.
+
+        Returns ``("deleted" | "deactivated", None)`` on success and
+        ``(None, error_message)`` otherwise.
         """
         program = await self.get_program_by_id(program_id, organization_id)
         if not program:
-            return False, "Training program not found"
+            return None, "Training program not found"
 
         pid = str(program_id)
+
+        graduated = await self.db.execute(
+            select(ProgramEnrollment.id)
+            .where(
+                ProgramEnrollment.program_id == pid,
+                ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+            )
+            .limit(1)
+        )
+        if graduated.scalar_one_or_none() is not None:
+            program.active = False
+            await self._withdraw_in_progress_enrollments(pid)
+            await self.db.commit()
+            return "deactivated", None
 
         enroll_rows = await self.db.execute(
             select(ProgramEnrollment.id).where(ProgramEnrollment.program_id == pid)
@@ -1411,7 +1624,7 @@ class TrainingProgramService:
 
         await self.db.execute(delete(TrainingProgram).where(TrainingProgram.id == pid))
         await self.db.commit()
-        return True, None
+        return "deleted", None
 
     @staticmethod
     def _target_field_changed(field: str, stored: Any, new: Any) -> bool:
@@ -1588,6 +1801,42 @@ class TrainingProgramService:
             for eid in affected_enrollment_ids:
                 await self._recalculate_enrollment_progress(UUID(str(eid)))
                 await self._maybe_auto_advance_phase(UUID(str(eid)))
+
+    async def recalculate_enrollments_for_requirement(
+        self, requirement_id: UUID | str, organization_id: UUID | str
+    ) -> int:
+        """Re-roll every in-progress enrollment whose program links this
+        requirement, after something changed whether it counts — its
+        ``active`` flag. Returns the number of enrollments recalculated.
+
+        The same scope and steps as toggling a link's ``is_required``:
+        ACTIVE / ON_HOLD enrollments only, each recalculated and re-checked
+        for phase advancement. So an ACTIVE member who had finished
+        everything else completes the program here, through
+        ``_recalculate_enrollment_progress`` — the one place any completion
+        happens, with its completion notice and EVOC operator side effects.
+        A COMPLETED enrollment is never reopened by a reactivation: it is not
+        in scope, as it is not for the ``is_required`` toggle.
+        """
+        rows = await self.db.execute(
+            select(ProgramEnrollment.id)
+            .join(TrainingProgram, TrainingProgram.id == ProgramEnrollment.program_id)
+            .join(
+                ProgramRequirement,
+                ProgramRequirement.program_id == ProgramEnrollment.program_id,
+            )
+            .where(
+                ProgramRequirement.requirement_id == str(requirement_id),
+                TrainingProgram.organization_id == str(organization_id),
+                ProgramEnrollment.status.in_(_LIVE_ENROLLMENT_STATUSES),
+            )
+            .distinct()
+        )
+        enrollment_ids = [str(row[0]) for row in rows.all()]
+        for eid in enrollment_ids:
+            await self._recalculate_enrollment_progress(UUID(eid))
+            await self._maybe_auto_advance_phase(UUID(eid))
+        return len(enrollment_ids)
 
     async def _validate_phase_prerequisites(
         self,
@@ -1808,12 +2057,34 @@ class TrainingProgramService:
 
         # Requirement links on this phase, and the enrollments of this program.
         link_result = await self.db.execute(
-            select(ProgramRequirement.id, ProgramRequirement.requirement_id).where(
-                ProgramRequirement.phase_id == str(phase_id)
-            )
+            select(
+                ProgramRequirement.requirement_id, ProgramRequirement.owns_requirement
+            ).where(ProgramRequirement.phase_id == str(phase_id))
         )
         link_rows = link_result.all()
-        requirement_ids = [str(r[1]) for r in link_rows]
+        phase_requirement_ids = {str(r[0]) for r in link_rows}
+        owned_requirement_ids = {str(r[0]) for r in link_rows if r[1]}
+
+        # A requirement another phase of this same program still links stays
+        # tracked by the program, so its progress rows must survive — dropping
+        # them would silently reset work members have already done. Mirrors the
+        # guard in remove_requirement_from_program.
+        still_linked_ids: set[str] = set()
+        if phase_requirement_ids:
+            sibling_result = await self.db.execute(
+                select(ProgramRequirement.requirement_id).where(
+                    ProgramRequirement.program_id == str(program_id),
+                    ProgramRequirement.requirement_id.in_(phase_requirement_ids),
+                    # A phase-less link (phase_id NULL) still counts; a bare
+                    # `!=` would drop it, since NULL != x is not true in SQL.
+                    or_(
+                        ProgramRequirement.phase_id.is_(None),
+                        ProgramRequirement.phase_id != str(phase_id),
+                    ),
+                )
+            )
+            still_linked_ids = {str(r[0]) for r in sibling_result.all()}
+        requirement_ids = sorted(phase_requirement_ids - still_linked_ids)
 
         enroll_result = await self.db.execute(
             select(ProgramEnrollment.id, ProgramEnrollment.current_phase_id).where(
@@ -1864,6 +2135,27 @@ class TrainingProgramService:
 
         # Delete the phase (cascades its ProgramRequirement links + milestones).
         await self.db.delete(phase)
+        await self.db.flush()
+
+        # A requirement one of this phase's links created, and that nothing
+        # links any longer, is an orphan: remove it so it doesn't linger in the
+        # requirements library. One linked in from the library (owns_requirement
+        # False) belongs to the department and is never deleted here.
+        if owned_requirement_ids:
+            remaining_links = await self.db.execute(
+                select(ProgramRequirement.requirement_id).where(
+                    ProgramRequirement.requirement_id.in_(owned_requirement_ids)
+                )
+            )
+            still_referenced = {str(r[0]) for r in remaining_links.all()}
+            orphaned_ids = owned_requirement_ids - still_referenced
+            if orphaned_ids:
+                await self.db.execute(
+                    delete(TrainingRequirement).where(
+                        TrainingRequirement.id.in_(orphaned_ids)
+                    )
+                )
+
         await self.db.commit()
 
         # Recompute the whole program's enrollments (removed requirements change
@@ -2428,8 +2720,7 @@ class TrainingProgramService:
             organization_id,
         )
         if missing:
-            names = ", ".join(next(iter(missing.values())))
-            return None, f"Must first complete: {names}"
+            return None, prerequisite_refusal(next(iter(missing.values())))
 
         # Check for existing active enrollment. A read-then-insert: two
         # concurrent enrollments of one member both passed a plain SELECT and
@@ -2539,8 +2830,15 @@ class TrainingProgramService:
         names no program in this department (a stale clone or import) can never
         be completed and is reported as "a prerequisite program".
 
-        The one definition behind the enroll picker, bulk enrollment and cohort
-        roster sync, so the three cannot disagree about who is eligible.
+        A prerequisite program that is currently inactive is skipped: the
+        department decided a deactivated pipeline blocks nobody. It is skipped
+        here, at check time, rather than pruned from the stored list, so
+        reactivating it makes it a requirement again.
+
+        The one definition behind every enrollment path (``enroll_member``,
+        which single, bulk and cohort enrollment all end in), the enroll
+        picker's eligibility and cohort roster sync, so they cannot disagree
+        about who is eligible.
         """
         prereq_ids = [str(p) for p in (prerequisite_program_ids or [])]
         user_id_strs = [str(u) for u in user_ids]
@@ -2548,12 +2846,23 @@ class TrainingProgramService:
             return {}
 
         name_rows = await self.db.execute(
-            select(TrainingProgram.id, TrainingProgram.name).where(
+            select(
+                TrainingProgram.id, TrainingProgram.name, TrainingProgram.active
+            ).where(
                 TrainingProgram.id.in_(prereq_ids),
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
+        prereq_names: Dict[str, str] = {}
+        inactive: set[str] = set()
+        for row_id, row_name, row_active in name_rows.all():
+            if _counts_as_prerequisite(row_active):
+                prereq_names[str(row_id)] = row_name
+            else:
+                inactive.add(str(row_id))
+        prereq_ids = [pid for pid in prereq_ids if pid not in inactive]
+        if not prereq_ids:
+            return {}
         completed_pairs: set[tuple[str, str]] = set()
         if prereq_names:
             completed_result = await self.db.execute(
@@ -2575,6 +2884,93 @@ class TrainingProgramService:
             if names:
                 missing[uid] = names
         return missing
+
+    async def notify_officers_enrollment_skipped(
+        self,
+        organization_id: UUID | str,
+        member_name: str,
+        program_id: UUID | str,
+        program_name: str,
+        missing_names: Sequence[str],
+    ) -> int:
+        """Email the training officers that a member was not enrolled in a
+        pipeline automatically because a prerequisite is unfinished.
+
+        Email only: an operational notice acted on in business hours, never a
+        text (pitfall #18). Recipients are the members holding
+        ``training.manage`` who take Training officer duties email — the same
+        resolver and email kind as the provider course-match notice. Returns
+        the number of emails sent. Never raises: the conversion that skipped
+        the enrollment is already done, and a mail failure must not undo it.
+        """
+        import html
+
+        from app.core.config import settings
+        from app.models.user import Organization
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            recipients_for,
+        )
+        from app.services.email_service import EmailService, wrap_email_body
+        from app.services.email_theme import ACCENT_AMBER, action
+        from app.services.external_course_mapping import training_officers
+
+        sent = 0
+        try:
+            org = await self.db.get(Organization, str(organization_id))
+            officers = recipients_for(
+                await training_officers(self.db, str(organization_id)),
+                EmailKind.TRAINING_DUTIES,
+                department_required_kinds(org),
+            )
+            if not officers:
+                return 0
+            missing = ", ".join(missing_names)
+            url = f"{settings.FRONTEND_URL.rstrip('/')}/training/programs/{program_id}"
+            lead = (
+                f"{member_name} was not enrolled in {program_name} automatically "
+                f"because they have not completed its prerequisite: {missing}."
+            )
+            follow_up = (
+                "Enroll them by hand once the prerequisite is complete, or "
+                "enroll them in the prerequisite first."
+            )
+            body = (
+                f"<p>{html.escape(lead)}</p><p>{html.escape(follow_up)}</p>"
+                + action(html.escape(url), "Open the pipeline")
+            )
+            html_body = wrap_email_body(
+                org,
+                "Automatic enrollment skipped",
+                body,
+                header_color=ACCENT_AMBER,
+                chip="Action required",
+            )
+            # A subject is a header: a line break in a name would end it.
+            subject = " ".join(
+                f"Not enrolled automatically: {member_name} - {program_name}".split()
+            )
+            email_service = EmailService(organization=org)
+            for officer in officers:
+                try:
+                    delivered, _ = await email_service.send_email(
+                        to_emails=[officer.email],
+                        subject=subject,
+                        html_body=html_body,
+                        text_body=f"{lead}\n\n{follow_up}\n\n{url}\n",
+                        db=self.db,
+                        template_type="auto_enrollment_prerequisite_skipped",
+                    )
+                    sent += 1 if delivered else 0
+                except Exception as exc:
+                    logger.error(
+                        f"Enrollment-skipped email to officer {officer.id} failed: "
+                        f"{exc}"
+                    )
+        except Exception as exc:
+            logger.error(f"Enrollment-skipped notice failed: {exc}")
+        return sent
 
     async def get_enrollment_eligibility(
         self,
@@ -2651,10 +3047,9 @@ class TrainingProgramService:
                     False,
                 )
             elif uid in missing_prereqs:
-                names = ", ".join(missing_prereqs[uid])
                 status, reason, eligible = (
                     "prerequisite",
-                    f"Must first complete: {names}",
+                    prerequisite_refusal(missing_prereqs[uid]),
                     False,
                 )
             elif uid in concurrent_ids:
@@ -4420,6 +4815,7 @@ class TrainingProgramService:
         enrollment.status = EnrollmentStatus.ACTIVE
         enrollment.progress_percentage = 0.0
         enrollment.completed_at = None
+        enrollment.completion_reason = None
         enrollment.current_phase_id = first_phase_id
         # Anchor pace/behind-schedule heuristics to the fresh cycle and clear the
         # prior deadline-warning bookkeeping so warnings can fire for the new one.
@@ -4550,6 +4946,9 @@ class TrainingProgramService:
         else:
             enrollment.status = EnrollmentStatus.WITHDRAWN
             enrollment.withdrawn_at = withdrawn_at
+            # An officer may withdraw a completed enrollment; the reason it
+            # was completed no longer describes it (the audit log keeps it).
+            enrollment.completion_reason = None
             if reason:
                 enrollment.withdrawal_reason = reason
 
@@ -4557,6 +4956,99 @@ class TrainingProgramService:
         await self.db.refresh(enrollment)
         await self._ensure_program_loaded(enrollment)
         return enrollment, None
+
+    async def complete_enrollment_manually(
+        self,
+        enrollment_id: UUID | str,
+        organization_id: UUID | str,
+        reason: str,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str], int]:
+        """An officer marks a member's whole enrollment complete by hand.
+
+        For a pipeline the rollup will not finish — every required item
+        retired — or a member the department has decided is done, whether or
+        not every required item is met. Returns
+        ``(enrollment, error, unmet_required_count)``; the count is how many
+        required items the member had not met, which the endpoint audits with
+        the officer's reason.
+
+        ON_HOLD is allowed as well as ACTIVE. The rollup refuses ON_HOLD
+        because nobody chose that completion; here an officer does, and a
+        member paused while waiting for exactly this sign-off is the case the
+        action exists for. WITHDRAWN, FAILED and EXPIRED are outcomes on record
+        and are reopened through their own paths first.
+
+        Completion goes through ``_claim_completion`` and
+        ``_after_enrollment_completed`` — the same write and the same side
+        effects as an automatic completion. Requirement progress is untouched:
+        what the member had not met stays unmet on record. The trimmed
+        ``reason`` is stored on the enrollment (``completion_reason``) by the
+        claim itself; the endpoint audits it as well.
+        """
+        # Locked so two officers, or an officer and the rollup, serialize on
+        # the row (pitfall #27); the claim re-checks the status in its own
+        # WHERE clause besides. Org-scoped through the program, as the other
+        # enrollment actions are (pitfall #14).
+        result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram, TrainingProgram.id == ProgramEnrollment.program_id)
+            .where(
+                ProgramEnrollment.id == str(enrollment_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+            .with_for_update(of=ProgramEnrollment)
+            .execution_options(populate_existing=True)
+        )
+        enrollment = result.scalar_one_or_none()
+        if not enrollment:
+            return None, "Enrollment not found", 0
+
+        if enrollment.status not in MANUALLY_COMPLETABLE_STATUSES:
+            current = getattr(enrollment.status, "value", enrollment.status)
+            if enrollment.status == EnrollmentStatus.COMPLETED:
+                message = "This enrollment is already complete"
+            else:
+                message = (
+                    "Only an active or on-hold enrollment can be marked "
+                    f"complete; this one is {str(current).replace('_', ' ')}"
+                )
+            return None, message, 0
+
+        unmet = await self._unmet_required_count(enrollment.id, enrollment.program_id)
+
+        if not await self._claim_completion(
+            enrollment.id,
+            MANUALLY_COMPLETABLE_STATUSES,
+            completion_reason=reason.strip(),
+        ):
+            return None, "This enrollment is already complete", 0
+
+        await self.db.commit()
+        await self._after_enrollment_completed(enrollment)
+        await self.db.refresh(enrollment)
+        await self._ensure_program_loaded(enrollment)
+        return enrollment, None, unmet
+
+    async def _unmet_required_count(self, enrollment_id: Any, program_id: Any) -> int:
+        """How many of a program's counting (required, active) items this
+        enrollment has not met — met meaning 100%, the rollup's own test, and a
+        missing progress row counting as unmet as it does in
+        ``_is_phase_complete``. ``program_id`` must come from an org-scoped
+        read (pitfall #14)."""
+        required_ids = set(
+            await self.get_required_requirement_ids(program_id=program_id)
+        )
+        if not required_ids:
+            return 0
+        result = await self.db.execute(
+            select(RequirementProgress.requirement_id).where(
+                RequirementProgress.enrollment_id == str(enrollment_id),
+                RequirementProgress.requirement_id.in_(required_ids),
+                RequirementProgress.progress_percentage >= 100.0,
+            )
+        )
+        met = {str(rid) for rid in result.scalars().all()}
+        return len(required_ids - met)
 
     async def auto_reset_if_due(
         self, enrollment: ProgramEnrollment, today: Optional[date] = None
@@ -4580,6 +5072,10 @@ class TrainingProgramService:
 
         program = await self._get_program_for_enrollment(enrollment)
         if not program or not getattr(program, "recert_enabled", False):
+            return False
+        # A deactivated program is kept for its graduates' history; resetting
+        # their enrollments would erase the very record it was kept for.
+        if getattr(program, "active", True) is False:
             return False
 
         await self._perform_enrollment_reset(enrollment, program, today=today)
@@ -4689,6 +5185,10 @@ class TrainingProgramService:
             enrollment.target_completion_date = target_completion_date
 
         enrollment.status = EnrollmentStatus.ACTIVE
+        # Only an EXPIRED enrollment reaches here, and none should carry a
+        # reason; cleared anyway because a reason must never sit on an active
+        # enrollment, whatever path left it there.
+        enrollment.completion_reason = None
         # Let the warning sweep speak again on the new deadline.
         enrollment.deadline_warning_sent = False
         enrollment.deadline_warning_sent_at = None
@@ -4719,6 +5219,8 @@ class TrainingProgramService:
             .where(
                 TrainingProgram.organization_id == str(organization_id),
                 TrainingProgram.recert_enabled.is_(True),
+                # Deactivated programs are kept for their graduates' history.
+                TrainingProgram.active.is_(True),
                 ProgramEnrollment.status.in_(self._RECERTABLE_STATUSES),
                 ProgramEnrollment.next_recert_reset_at.isnot(None),
                 ProgramEnrollment.next_recert_reset_at <= today,
@@ -4749,15 +5251,32 @@ class TrainingProgramService:
         program_id: Optional[Any] = None,
         phase_id: Optional[Any] = None,
     ) -> List[str]:
-        """The distinct requirement ids marked *required* in a program (or in one
-        phase of it).
+        """The distinct requirement ids that count toward completing a program
+        (or one phase of it): linked as *required*, and the requirement itself
+        active.
+
+        A deactivated requirement is not required while it stays inactive —
+        the same rule compliance grading applies — so it drops out of the
+        enrollment percentage, phase completion and advancement, and the
+        "N of M" count, all of which read this set. Members' recorded progress
+        on it is kept, and it counts again once reactivated.
+        ``link_counts_toward_completion`` is the per-link projection of this
+        query for callers that already hold the links.
 
         Progress rows key off ``requirement_id``, and there is no foreign key
         between ``requirement_progress`` and ``program_requirements`` to join on,
         so callers resolve the id set first and filter progress by it.
         """
-        query = select(ProgramRequirement.requirement_id).where(
-            ProgramRequirement.is_required.is_(True)
+        query = (
+            select(ProgramRequirement.requirement_id)
+            .join(
+                TrainingRequirement,
+                TrainingRequirement.id == ProgramRequirement.requirement_id,
+            )
+            .where(
+                ProgramRequirement.is_required.is_(True),
+                TrainingRequirement.active.is_(True),
+            )
         )
         if program_id is not None:
             query = query.where(ProgramRequirement.program_id == str(program_id))
@@ -4765,6 +5284,47 @@ class TrainingProgramService:
             query = query.where(ProgramRequirement.phase_id == str(phase_id))
         result = await self.db.execute(query)
         return list({str(rid) for rid in result.scalars().all()})
+
+    async def _has_required_links(self, phase_id: Any) -> bool:
+        """Whether anything in a phase is linked as required, active or not —
+        what tells "nothing to do here" from "everything here is inactive"."""
+        result = await self.db.execute(
+            select(ProgramRequirement.id)
+            .where(
+                ProgramRequirement.phase_id == str(phase_id),
+                ProgramRequirement.is_required.is_(True),
+            )
+            .limit(1)
+        )
+        return result.first() is not None
+
+    async def phases_without_active_requirements(self, program_id: Any) -> List[str]:
+        """Ids of the phases whose required items are all inactive.
+
+        Such a phase is never complete (``_is_phase_complete``), so the
+        progress read names them and the page says why the phase is not
+        finishing rather than leaving the member stuck without a word. A phase
+        with nothing linked as required is not listed: it is complete.
+        ``program_id`` must come from an org-scoped read; ``program_requirements``
+        has no organization column (pitfall #14).
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement.phase_id, TrainingRequirement.active)
+            .join(
+                TrainingRequirement,
+                TrainingRequirement.id == ProgramRequirement.requirement_id,
+            )
+            .where(
+                ProgramRequirement.program_id == str(program_id),
+                ProgramRequirement.is_required.is_(True),
+                ProgramRequirement.phase_id.isnot(None),
+            )
+        )
+        has_active: Dict[str, bool] = {}
+        for phase_id, active in result.all():
+            key = str(phase_id)
+            has_active[key] = has_active.get(key, False) or active is True
+        return sorted(pid for pid, active in has_active.items() if not active)
 
     async def _recalculate_enrollment_progress(
         self,
@@ -4799,6 +5359,14 @@ class TrainingProgramService:
             program_id=enrollment.program_id
         )
         if not required_ids:
+            # Nothing left counts toward completion — every required item is
+            # inactive, or none was ever marked required. Department rule
+            # (2026-10-23): an empty set is not a passing set (pitfall #29), so
+            # nobody is auto-completed for finishing nothing, the stored
+            # percentage is left as it was rather than rolled up to 100, and
+            # a completed enrollment is not reopened. The progress read says
+            # so instead (``no_active_requirements``); an officer completes a
+            # member by hand or reactivates a requirement, which recalculates.
             return
 
         result = await self.db.execute(
@@ -4838,28 +5406,33 @@ class TrainingProgramService:
         # EXPIRED, or ON_HOLD enrollment retains its progress rows, so without
         # this guard a progress edit that reaches 100% would silently flip it to
         # COMPLETED — reversing a withdrawal or overriding a terminal state.
-        newly_completed = avg_percentage >= 100.0 and was_active
-        if newly_completed:
-            await self.db.execute(
-                update(ProgramEnrollment)
-                .where(ProgramEnrollment.id == str(enrollment_id))
-                .values(
-                    status=EnrollmentStatus.COMPLETED,
-                    completed_at=datetime.now(timezone.utc),
-                )
-            )
-        elif avg_percentage < 100.0 and was_completed:
+        # The status is part of the claim's WHERE clause, so an officer's
+        # manual completion committed since ``was_active`` was read wins and
+        # the side effects below fire once, not twice.
+        newly_completed = (
+            avg_percentage >= 100.0
+            and was_active
+            and await self._claim_completion(enrollment_id, (EnrollmentStatus.ACTIVE,))
+        )
+        if avg_percentage < 100.0 and was_completed and previous_percentage >= 100.0:
             # Progress fell back below 100% for an enrollment that had already
             # completed — e.g. an officer corrected an over-count downward, or a
             # new required requirement was added to the program. Reopen it so it
             # doesn't stay marked complete without actually satisfying every
             # required item.
+            #
+            # Only when it *fell*: an enrollment an officer marked complete by
+            # hand (``complete_enrollment_manually``) was completed below 100%
+            # on purpose and keeps whatever percentage it had, so the next
+            # progress edit must not quietly undo the officer's decision. An
+            # automatic completion always stores >= 100 in the same write.
             await self.db.execute(
                 update(ProgramEnrollment)
                 .where(ProgramEnrollment.id == str(enrollment_id))
                 .values(
                     status=EnrollmentStatus.ACTIVE,
                     completed_at=None,
+                    completion_reason=None,
                 )
             )
 
@@ -4877,33 +5450,8 @@ class TrainingProgramService:
             except Exception as e:
                 logger.error(f"Failed to send milestone notification: {e}")
 
-        # Send completion notification if newly completed
         if newly_completed:
-            try:
-                # Re-fetch enrollment for notification
-                await self.db.refresh(enrollment)
-                program_result = await self.db.execute(
-                    select(TrainingProgram).where(
-                        TrainingProgram.id == str(enrollment.program_id)
-                    )
-                )
-                program = program_result.scalar_one_or_none()
-                user_result = await self.db.execute(
-                    select(User).where(User.id == str(enrollment.user_id))
-                )
-                user = user_result.scalar_one_or_none()
-                if program and user:
-                    await self._notify_program_completion(
-                        enrollment, program, user, UUID(str(program.organization_id))
-                    )
-
-                    # Auto-add as operator on matching apparatus when
-                    # an EVOC training program completes
-                    await self._handle_evoc_completion(
-                        program, enrollment, completion_credit_id
-                    )
-            except Exception as e:
-                logger.error(f"Failed to send program completion notification: {e}")
+            await self._after_enrollment_completed(enrollment, completion_credit_id)
 
         # A requirement's own completion message. Every progress write ends in
         # this rollup, so this is the one place that sees every path that can
@@ -5009,8 +5557,12 @@ class TrainingProgramService:
         phase_id: UUID,
     ) -> bool:
         """Whether every *required* requirement in a phase is satisfied for
-        this enrollment. A phase with no required requirements is trivially
-        complete (there is nothing gating advancement out of it).
+        this enrollment. A phase with nothing linked as required is trivially
+        complete (there is nothing gating advancement out of it). A phase whose
+        required items are *all inactive* is not: that is an empty set, not a
+        passing one (pitfall #29), so it neither completes nor auto-advances,
+        and the progress read lists it in ``phases_without_active_requirements``.
+        An officer can still advance the member by hand.
 
         A required requirement with no progress row at all counts as *not*
         satisfied: an enrollment missing a row for it has not done it, and
@@ -5019,7 +5571,7 @@ class TrainingProgramService:
         """
         required_ids = await self.get_required_requirement_ids(phase_id=phase_id)
         if not required_ids:
-            return True
+            return not await self._has_required_links(phase_id=phase_id)
 
         result = await self.db.execute(
             select(RequirementProgress).where(

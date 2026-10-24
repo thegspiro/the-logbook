@@ -304,6 +304,7 @@ class TestEquipmentCheckReports:
             check_id="c-1",
             status="pass",
             item_name="SCBA",
+            check_type="function",
             quantity_found=None,
             level_reading=None,
             serial_number=None,
@@ -606,9 +607,13 @@ class TestEquipmentChecks:
 
         await module.EquipmentCheckService(db).get_my_checklists("u1", "org-1")
 
+        # The window opens MY_CHECKLISTS_OVERDUE_DAYS before the org's local
+        # day, so missed checks stay listed; it must count from that day, not
+        # from the UTC one.
+        window = timedelta(days=module.MY_CHECKLISTS_OVERDUE_DAYS)
         bound = _bound(db.execute.await_args_list[1].args[0])
-        assert LOCAL_TODAY in bound
-        assert FROZEN_UTC.date() not in bound
+        assert LOCAL_TODAY - window in bound
+        assert FROZEN_UTC.date() - window not in bound
 
     async def test_a_lot_expiring_today_is_not_yet_expired(self):
         from app.models.apparatus import CheckItemDeployedLot, CheckTemplateItem

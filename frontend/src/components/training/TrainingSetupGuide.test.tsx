@@ -47,6 +47,12 @@ describe('TrainingSetupGuide', () => {
       'href',
       '/training/admin?page=records&tab=sessions'
     );
+    // Named for the tab it opens: the step builds a program, and the tab is
+    // "Programs". "Pipelines" was an older name for the same thing.
+    expect(screen.getByRole('link', { name: /Open Programs/ })).toHaveAttribute(
+      'href',
+      '/training/admin?page=setup&tab=pipelines'
+    );
   });
 
   it('ticks off a finished step and drops its link', () => {

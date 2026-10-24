@@ -16,21 +16,22 @@ import {
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
+import { isAdministrativeMember } from '../../utils/membership';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
-import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
-import { APPARATUS_ENTRY_PERMISSIONS } from '../../modules/apparatus/routes';
-import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
+import { operationsNavItems } from './operationsNavigation';
+import { governanceNavItems } from './governanceNavigation';
+import { trainingNavItems } from './trainingNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
@@ -154,8 +155,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
-  const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission, { checkInStationOn: isNfcCardsOn });
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
@@ -181,17 +181,12 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
           {
             label: 'Training',
             path: '/training/my-training',
-            subItems: [
-              { label: 'My Training', path: '/training/my-training' },
-              { label: 'Submit Training', path: '/training/submit' },
-              { label: 'Course Library', path: '/training/courses' },
-              { label: 'Programs', path: '/training/programs' },
-              // Hidden for a department that records skills on shift reports.
-              ...(offersSkillsTesting(practicalSkillsMethod)
-                ? [{ label: 'Skills Testing', path: '/training/skills-testing' }]
-                : []),
-              { label: 'Knowledge Tests', path: '/training/knowledge-tests' },
-            ],
+            // One list with SideNavigation and the section strip on every
+            // Training page; see trainingNavigation.ts.
+            subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod)).map(({ label, path }) => ({
+              label,
+              path,
+            })),
           } as NavItem,
         ]
       : []),
@@ -200,56 +195,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     {
       label: 'Operations',
       path: '/inventory',
-      subItems: [
-        // Gates mirror SideNavigation's Operations group — see there.
-        ...(isModuleOn('inventory')
-          ? [
-              { label: 'My Issued Gear', path: '/inventory/my-equipment' },
-              { label: 'Inventory', path: '/inventory', permission: 'inventory.manage' },
-            ]
-          : []),
-        // Gates mirror SideNavigation's Operations group — see the reasoning
-        // there. The stock room is for whoever keeps it stocked; the crew's
-        // "we just used two of these" lives in Apparatus Inventory.
-        ...(isModuleOn('medical_supplies')
-          ? [
-              {
-                label: 'Medical Supplies',
-                path: '/medical-supplies',
-                permission: 'inventory.view_medical',
-              },
-            ]
-          : []),
-        // See SideNavigation for why "My Checklists" carries no permission
-        // gate: it is every member's only route to the checks they owe.
-        ...(isModuleOn('inventory')
-          ? [
-              { label: 'My Checklists', path: '/inventory/checklists/my' },
-              {
-                label: 'Fleet Readiness',
-                path: '/inventory/checklists',
-                anyPermission: ['inventory.check_view', 'scheduling.manage'],
-              },
-            ]
-          : []),
-        ...(isModuleOn('inventory')
-          ? [
-              {
-                label: 'Apparatus Inventory',
-                path: '/inventory/checklists/apparatus-inventory',
-                anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
-              },
-            ]
-          : []),
-        // See SideNavigation for why the module-on row is gated and the
-        // module-off `/apparatus-basic` row is not.
-        ...(isModuleOn('apparatus')
-          ? [{ label: 'Apparatus', path: '/apparatus', anyPermission: [...APPARATUS_ENTRY_PERMISSIONS] }]
-          : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
-        ...(isModuleOn('facilities')
-          ? [{ label: 'Facilities', path: '/facilities', anyPermission: [...FACILITY_ENTRY_PERMISSIONS] }]
-          : []),
-      ],
+      // One list with SideNavigation and the section strip on every
+      // Operations page; the reasoning behind each row's gate lives there.
+      subItems: operationsNavItems(isModuleOn, isAdministrativeMember(undefined, currentUser?.membership_type)).map(
+        ({ label, path, permission, anyPermission }) => ({
+          label,
+          path,
+          ...(permission ? { permission } : {}),
+          ...(anyPermission ? { anyPermission } : {}),
+        })
+      ),
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
     // Neither the org chart nor Legal Documents is behind a module flag: every
@@ -260,17 +215,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     {
       label: 'Governance',
       path: '/governance/org-chart',
-      subItems: [
-        { label: 'Org Chart', path: '/governance/org-chart' },
-        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
-        ...(isModuleOn('minutes')
-          ? [
-              { label: 'Minutes', path: '/minutes' },
-              { label: 'Action Items', path: '/action-items' },
-            ]
-          : []),
-        ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
-      ],
+      // One list with SideNavigation and the section strip on every
+      // Governance page; see governanceNavigation.ts.
+      subItems: governanceNavItems(isModuleOn).map(({ label, path, permission, anyPermission }) => ({
+        label,
+        path,
+        ...(permission ? { permission } : {}),
+        ...(anyPermission ? { anyPermission } : {}),
+      })),
     },
     // See SideNavigation: the group is every member's way to their own requests.
     ...(isModuleOn('finance')
@@ -322,7 +274,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               // backend serves to users.view or members.manage holders.
               { label: 'Scan Member ID', path: '/members/scan', anyPermission: ['users.view', 'members.manage'] },
               ...(isNfcCardsOn
-                ? [{ label: 'Check-In Station', path: '/members/check-in-station', permission: 'members.check_in' }]
+                ? [
+                    { label: 'Check-In Station', path: '/members/check-in-station', permission: 'members.check_in' },
+                    { label: 'ID Cards', path: '/members/admin/id-cards', permission: 'members.manage_id_cards' },
+                  ]
                 : []),
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,
@@ -751,7 +706,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     </button>
                   ) : (
                     <span
-                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-300"
                       role="status"
                       aria-live="polite"
                       title={
@@ -809,7 +764,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   onClick={toggleHighContrast}
                   aria-pressed={theme === 'high-contrast'}
                   className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${
-                    theme === 'high-contrast' ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-secondary'
+                    theme === 'high-contrast' ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-secondary'
                   }`}
                   title={theme === 'high-contrast' ? 'High contrast on — click to restore' : 'Turn on high contrast'}
                   aria-label={
@@ -943,7 +898,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 <div className="border-theme-surface-border mt-2 space-y-1 border-t pt-2">
                   {!isOnline && (
                     <div
-                      className="flex items-center space-x-2 rounded-md bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300"
+                      className="flex items-center space-x-2 rounded-md bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-800 dark:text-amber-300"
                       role="status"
                       aria-live="polite"
                     >
@@ -1010,7 +965,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     onClick={toggleHighContrast}
                     aria-pressed={theme === 'high-contrast'}
                     className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                      theme === 'high-contrast' ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-secondary'
+                      theme === 'high-contrast' ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-secondary'
                     }`}
                   >
                     <Contrast className="h-4 w-4" aria-hidden="true" />

@@ -99,6 +99,12 @@ const RemindNonVotersModal: React.FC<RemindNonVotersModalProps> = ({
             />
           </div>
 
+          {sending && (
+            <p className="text-theme-text-secondary mt-4 text-sm" role="status" aria-live="polite">
+              Sending reminders. Many non-voters can take a few minutes. If you leave this page the send carries on.
+            </p>
+          )}
+
           <div className="mt-6 flex justify-end space-x-3">
             <button
               type="button"

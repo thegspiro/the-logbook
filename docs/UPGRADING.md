@@ -134,6 +134,29 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
+
+`unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`
+used to fall back to `change_me_strong_password` for `MYSQL_ROOT_PASSWORD`,
+`DB_PASSWORD` and `REDIS_PASSWORD`, and (Unraid file only) to
+`GENERATE_WITH_openssl_rand_hex_32` for `SECRET_KEY`, `ENCRYPTION_KEY` and
+`ENCRYPTION_SALT`. A missing `.env` value therefore started a database
+protected by a password printed in the repository. `docker-compose.minimal.yml`
+had the same fallback for `REDIS_PASSWORD`. Each is now a required variable,
+and `docker compose up` stops with `<NAME> must be set in .env`.
+
+- **Installs made with `unraid-setup.sh`:** nothing to do. It writes all six
+  values to `.env`.
+- **Compose Manager or hand-written `.env` that relied on the placeholder:**
+  the database was initialised with that password, so do not just set a new
+  `DB_PASSWORD` — the stored one will no longer match. Either put the password
+  you are actually running with into `.env`, or change it inside MySQL/Redis
+  first (`ALTER USER`, `CONFIG SET requirepass`) and then update `.env`.
+- Elasticsearch and MinIO keep an empty default: both refuse to start without
+  a password, and the variables only matter when their profile is enabled.
+
+No migration and no data change.
+
 ### The backend needs the `nh3` package for rich-text minutes (2026-10-14)
 
 Meeting-minutes sections can now be written with a rich-text editor. The
@@ -481,6 +504,530 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A department can keep its files in a Google Shared Drive (2026-10-23)
+
+Google Drive under **Organization Settings > Storage** (and in onboarding) now
+works, the same way as S3. **Nothing moves on upgrade**: new files go to the
+drive only after an administrator presses **Test and switch to Google Drive**.
+
+- The screen now asks for a **service account key** (the JSON file Google
+  Cloud downloads) and a **Shared Drive ID**, plus an optional folder. Add
+  the service account to the Shared Drive as a **Content manager**, and
+  enable the Google Drive API in its Google Cloud project. Shared Drives need
+  Google Workspace.
+- The old OAuth client ID and secret fields were never read. A department
+  that filled them in has to enter the service-account details instead; the
+  saved values are left where they are and ignored.
+- Files are encrypted before upload, a drive that cannot be reached refuses
+  uploads (`LB-UPLD-006`), and `scripts/migrate_uploads_to_s3.py` already
+  moves existing files to whichever remote platform a department has
+  switched to, Google Drive included. `encrypt_uploads.py --rewrap` and the
+  `backup.sh` notice cover Drive too.
+- The server needs outbound HTTPS to `www.googleapis.com` and
+  `oauth2.googleapis.com`.
+
+### An explicit `null` for an on/off or count setting is refused with a 400 (2026-10-23)
+
+Migration `6dce1364ff7e` makes 99 columns `NOT NULL` with defaults. They are
+mostly on/off settings, counts, statuses and timestamps, across 36 tables,
+including training module configuration, inventory items and categories,
+shift templates and users. Which databases it touches:
+
+- **An installation that has been upgraded through the migrations** already had
+  these constraints. The migration finds nothing to change and finishes at once.
+- **An installation first set up from the models** (a fresh install) is
+  changed. Any stored `NULL` in one of these columns is set to the column's
+  default, and each affected table is rebuilt once to add the constraint. On a
+  large `inventory_items` or `checkout_records` table the rebuild takes longer
+  and the backend starts after it finishes. Back up first, as for every
+  upgrade.
+
+What you will notice afterwards: an API request that sends `null` for one of
+these fields gets a **400** naming the field ("Field 'quantity' cannot be
+cleared"). Before, an upgraded installation failed the same request with a 500
+and a fresh install stored the NULL. The app's own screens do not send these
+nulls. A script or integration that does should leave the field out instead.
+
+The downgrade does nothing on purpose: upgraded installations always had these
+constraints.
+
+### Former members' ID cards show as Suspended, and card taps are logged (2026-10-23)
+
+Only affects departments that have turned on **NFC ID Cards** under
+Settings → Integrations.
+
+- **The migration suspends cards held by former members.** Any card still
+  marked Active whose holder is inactive, suspended, dropped, archived or
+  deleted becomes **Suspended**, with the reason "Suspended automatically: the
+  card holder is no longer an active member". Those cards were already refused
+  at every reader, so nobody loses a working card; the card's status simply
+  stops reading Active. Retired and on-leave members keep working cards.
+- **From now on this happens on every status change.** A member who leaves
+  has their active cards suspended; if they return to active or probationary,
+  only the cards the system suspended come back. A card an officer suspended
+  by hand, or a lost or revoked card, stays as it is.
+- **Every tap at a check-in station or room kiosk is recorded**, refused taps
+  included, for the new **Member ID Cards** page (`/members/admin/id-cards`,
+  needs `members.manage_id_cards`). History starts at the upgrade; nothing
+  earlier was recorded. Taps are deleted after **24 months** by a nightly task
+  (`nfc_card_tap_purge`). A department can change that on the page's Settings
+  tab, from 3 to 84 months.
+
+Rolling back with `alembic downgrade a0195b397bf3` returns every automatically suspended card to Active — their
+taps are still refused by the member-status check — and drops the tap log.
+
+### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
+
+Nothing runs on upgrade. Three operator commands, all inside the backend
+container (`intranet-backend`, or `logbook-backend` on Unraid):
+
+- **`python scripts/migrate_uploads_to_s3.py`** moves the files a department
+  stored on the `uploads` volume before it switched to its own bucket. A dry
+  run by default; `--apply` copies, verifies and repoints them and keeps the
+  disk copies; `--rollback MANIFEST` undoes it; `--finalize MANIFEST` deletes
+  the disk copies once each bucket copy verifies again. `--org ID` limits it
+  to one department, which must already have passed **Test and switch to
+  S3**. A file still in a module's pre-2026-10 folder is reported: run
+  `scripts/relocate_uploads.py` first.
+- **`python scripts/encrypt_uploads.py --rewrap`** now covers objects in
+  departments' buckets as well as the volume (`docs/KEY_ROTATION.md`). A
+  bucket object is downloaded and re-uploaded whole, so a large bucket takes
+  as long as moving its data. Keep a retired key in `ENCRYPTION_KEYS_LEGACY`
+  until both counts read zero.
+- **`scripts/backup.sh`** now lists the buckets holding department files,
+  under a warning that they are not in the archive. It never downloads them;
+  `docs/BACKUP.md` says how to back them up.
+
+`scripts/relocate_uploads.py` no longer reports a file in a department's
+bucket as missing on disk. It counts it as already in the new layout.
+
+### A department can keep its files in its own S3 or MinIO bucket (2026-10-22)
+
+The Amazon S3 choice under **Organization Settings > Storage** (and in
+onboarding) now does something. Until this version it was saved and ignored,
+and every file went to the `uploads` volume whatever a department picked.
+
+**Nothing moves on upgrade.** A department that chose S3 earlier keeps
+uploading to the `uploads` volume until an administrator presses **Test and
+switch to S3** on that screen. The test writes, reads back and deletes a small
+object with the saved settings, and only then are new uploads sent to the
+bucket. Editing those settings afterwards sends uploads back to the volume
+until the test passes again, and the screen says so. Files already stored stay
+where they are and keep working either way. `scripts/migrate_uploads_to_s3.py`
+moves them into the bucket (see the next entry up).
+
+What an operator needs to know:
+
+- **Objects are encrypted before upload** with the installation's file key,
+  exactly like files on the volume. Back up that key: without it nothing in the
+  bucket can be read.
+- **A bucket that cannot be reached refuses uploads and downloads with a 503
+  (`LB-UPLD-006`)** rather than storing the file somewhere else.
+- **A private or plain-HTTP endpoint is refused unless you set
+  `S3_ALLOW_PRIVATE_ENDPOINT=true`.** That includes the bundled MinIO
+  (`with-s3` profile, `http://minio:9000`). A department administrator types the
+  endpoint, so the default stays closed. Cloud-metadata addresses are refused
+  either way. The variable is in all three compose files' `environment:` blocks.
+- **Backups:** `scripts/backup.sh` copies only the `uploads` volume. Back
+  up a department's bucket with the provider's own tooling (versioning or
+  replication on AWS, `mc mirror` on MinIO); see `docs/BACKUP.md`.
+- **Anonymous suggestions:** a department on S3 stores suggestion screenshots in
+  its bucket too, and the bucket records each object's exact upload time. On
+  the volume that time is truncated to noon of the day so an anonymous
+  submission cannot be matched to a login. Whoever can list the bucket or read
+  its access logs can see the exact time (owner decision, 2026-10-22).
+
+### Backups can be encrypted (2026-10-23)
+
+Backups were plaintext. They can now be encrypted, and **nothing changes until
+you create a key**: with no key the nightly backup runs as before, logs a
+warning every run, and administrators see a critical "Backups are not
+encrypted" notice. No migration; no restart is needed to keep working.
+
+To turn it on, on the host in the install directory:
+
+1. `./scripts/backup-keygen.sh`. It writes `backup-keys/` (Unraid:
+   `/mnt/user/appdata/the-logbook/backup-keys`), prints a private key **once**
+   and asks you to confirm you stored it away from the server. **Store the
+   private key and a copy of `backup-keys/backup-drill.key` somewhere other
+   than this server and its backups. With both lost, encrypted backups cannot
+   be recovered.**
+2. Production compose only: `docker compose ... up -d backup backend` so the
+   sidecar mounts `./backup-keys` and the backend can read the sidecar's status
+   (the backend now mounts the `backups` volume read-only). Unraid users
+   re-apply the compose file (the key directory and `BACKUP_ENCRYPT_EXISTING`
+   are new).
+3. The next nightly run writes `.tar.gz.enc` + `.enc.key` + `.sha256` instead
+   of `.tar.gz`, and then **encrypts the plaintext archives already in the
+   backups directory and deletes the plaintext** after decrypting each copy and
+   comparing it with the original. Set `BACKUP_ENCRYPT_EXISTING=false` to keep
+   them.
+
+Things that change once a key exists:
+
+- **Backup files are three files, not one.** Anything that copies the backups
+  directory offsite must copy the `.enc`, `.enc.key` and `.sha256`.
+- **`backup.sh --destination s3|azure|gcs` now refuses to upload an
+  unencrypted archive** (before, it uploaded whatever it made). Create a key
+  first, or the offsite step fails.
+- Restoring an encrypted archive needs the drill key or the offline private key
+  (`backup.sh --restore FILE.enc [--drill-key F | --private-key F]`). Plaintext
+  archives restore as before.
+
+Full details: [BACKUP.md](./BACKUP.md#encrypted-backups).
+
+### Administrators must use two-factor authentication, and sensitive actions ask you to confirm (2026-10-23)
+
+Adds a migration (`users.mfa_grace_started_at`, `sessions.stepup_verified_at`, both
+nullable and applied by the normal startup). **Nothing is blocked on upgrade day.**
+
+- **Privileged members get 14 days.** A member holding administration or health-record
+  permissions (the fire, deputy and assistant chiefs, president, secretary, membership
+  coordinator and IT manager in the seeded positions; the full list is on the
+  Security-Authentication wiki page) has 14 days from the first request after the
+  upgrade to enroll in two-factor authentication. They are emailed once and see a
+  banner. After that they can reach only the setup screens. Change the period with
+  `MFA_GRACE_DAYS` (`0` closes it at once). **Make sure the IT manager has saved their
+  recovery codes first**: they hold `*`, and recovery codes are their only way back
+  from a lost authenticator.
+- **Sensitive actions ask for a code (or password).** Exports of the audit and error
+  logs, security and role changes, positions assignment, IP and integration changes,
+  administrator password/MFA resets and deleting or anonymizing a member now need a
+  re-verification within the last 10 minutes (`STEPUP_WINDOW_MINUTES`). The app
+  prompts and repeats the action. **Scripts calling these endpoints directly** must
+  `POST /auth/step-up` first on the same session, or they receive `403 LB-AUTH-013`.
+- **Single-sign-on-only accounts without MFA cannot step up** and are told to enroll
+  in MFA; they must anyway once their grace period ends.
+
+### Station kiosks can stay signed in for a week (2026-10-21)
+
+Adds a migration (`sessions.is_kiosk`, additive, applied by the normal startup) and one
+permission, `security.kiosk_session`, **seeded to no position and no rank**. Nothing
+changes for anyone until a department grants it.
+
+- A member holding it sees a "Kiosk session" card on the Check-In Station and the
+  inventory kiosk and can switch their own session to a 12-hour idle timeout and a
+  7-day lifetime. They can switch it back at any time, and enabling it is audited.
+  Change the limits with `SESSION_KIOSK_IDLE_TIMEOUT_MINUTES` (default `720`) and
+  `SESSION_KIOSK_ABSOLUTE_MAX_HOURS` (default `168`); `0` turns a limit off.
+- The kiosk limits apply only while the member still holds the permission. The `*` and
+  `security.*` wildcards grant it, so an administrator already can.
+- **Sign a station in with a dedicated account** holding only that station's
+  permissions plus `security.kiosk_session`, not a chief's own account: a session left
+  on a shared tablet carries every permission of whoever signed in.
+- Every session now shows a toast five minutes before its lifetime ends, so a member
+  can save work.
+
+### Sessions now end after 12 hours, and idle sessions no longer sign you out everywhere (2026-10-20)
+
+Three changes to how a session ends. None blocks a restart and none needs a migration.
+
+- **A 12-hour absolute lifetime.** A session now ends 12 hours after sign-in however
+  active it is, and the member signs in again. Before, a session that kept refreshing
+  never had to. Change it with `SESSION_ABSOLUTE_MAX_HOURS` (`0` turns it off). **A
+  wall-mounted Check-In Station or inventory kiosk left signed in will ask for a
+  sign-in at least once every 12 hours.** Members with the new
+  `security.kiosk_session` permission can give a station its own longer limits; see
+  the kiosk entry above.
+- **Idle sessions are refused on refresh, and no longer revoke the member's other
+  sessions.** Coming back to a tab after more than 15 minutes (but before the access
+  cookie lapsed) used to be read as a stolen refresh token, and signed the member
+  out on every device. It now just asks them to sign in on that device.
+- **Background polls no longer count as activity.** The notification count, the
+  shift board, the check-in station's target list and live election turnout send an
+  `X-Background-Request: 1` header, and the server leaves the idle timer alone for
+  them. A tab left open on an unattended computer therefore signs out after the idle
+  limit. Real typing or clicking reports itself to the server every couple of minutes
+  while it happens, so a member filling in a long form is not signed out.
+
+A reverse proxy that strips unknown request headers needs nothing: the header only
+shortens the sender's own session.
+
+### Positions named after a rank leave the member pickers (2026-10-21)
+
+Onboarding seeds Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant,
+Engineer, Firefighter and EMT as **positions** as well as ranks, because those
+positions carry the rank's own permission list. Add Member therefore offered
+"Firefighter" in the position dropdown beside "Firefighter" in the rank
+dropdown, and the roster could show the same word in both columns, or in
+neither.
+
+From this version those positions are not offered or shown on the member
+screens: the Add Member position dropdown, the roster's Positions column, the
+profile's position badges, Member Management's View by Position, and the
+positions a member can be given in Manage Positions. A rank is set in the Rank
+field, and a member holding the rank already has the access the position would
+give. Nothing is removed from the database:
+
+- A member who already holds one of these positions keeps it and its access.
+  It stays listed in that member's Manage Positions dialog, marked **Rank**,
+  so an officer can untick it.
+- **Organization Settings > Role Management** still lists every one of them,
+  marked **Mirrors a rank**, because that is where the access a rank carries is
+  edited.
+- **The member importer rejects a rank name in the `role` column.** A CSV row
+  whose `role` reads `Firefighter` (or any other rank name) is reported with
+  `role "Firefighter" is a rank — put it in the rank column instead` and not
+  imported; before this version it assigned the position. Move the value to
+  the `rank` column.
+
+To list the members who hold one of these positions:
+
+```sql
+SELECT u.id, u.username, u.rank, p.slug AS position
+FROM user_positions up
+JOIN positions p ON p.id = up.position_id
+JOIN users u ON u.id = up.user_id
+WHERE p.is_system = 1
+  AND p.slug IN ('fire_chief', 'deputy_chief', 'assistant_chief', 'captain',
+                 'lieutenant', 'engineer', 'firefighter', 'emt');
+```
+
+### Account status follows membership type for probationary members (2026-10-21)
+
+A member's **membership type** (probationary, active, life, administrative, or
+a tier of your ladder) and their **account status** (active, probationary, on
+leave, retired, dropped) were two separate facts that nothing connected: a
+member added as probationary had an active account, and the tier ladder
+advancing them off probation never changed their status.
+
+From this version the type drives the status, one way, between the two
+statuses that say nothing about leave or separation:
+
+- Setting a member's type to **Probationary** (Add Member, Edit Member, the
+  importer's `membershipType` column, or a prospect converted as one) puts an
+  **active** account on **probationary**.
+- Setting it to anything else, including the monthly tier advance moving a
+  member up the ladder, moves a **probationary** account back to **active**.
+- A member who is on leave, inactive, suspended, retired or dropped keeps that
+  status whatever their type says; it catches up when they return.
+- The profile's **Change Status** dialog still works on its own. A status set
+  there holds until the member's type is next written.
+
+**Migration `2794794bda6e` settles the members you already have.** On the
+first start after upgrading it moves every active account whose type is
+probationary onto probationary, and every probationary account whose type is
+anything else onto active. Each change is written to the audit log as
+`account_status_backfilled` with both statuses and the member, and sets the
+member's status-change reason to "Follows membership type …", so the profile's
+status history shows it. To list what moved:
+
+```sql
+SELECT JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.username')) AS member,
+       JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.previous_status')) AS was,
+       JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.new_status')) AS now_
+FROM audit_logs WHERE event_type = 'account_status_backfilled';
+```
+
+`alembic downgrade -1` restores the previous status of every member the
+migration moved who still holds the status it wrote, and logs each reversal
+the same way. A member whose status an officer changed since is not touched.
+Audit rows are never deleted.
+
+Because the previous version already counts a probationary account as a
+current member everywhere (the entry below), moving these accounts changes
+nothing about what a member can do; it changes what the roster, the admin
+hub's Active and Probationary tiles, and the status filters show.
+
+### A probationary account is a current member everywhere (2026-10-20)
+
+`probationary` is one of the account statuses an officer can set from a
+member's profile (**Change status**), and junior members derive to it. Sign-in
+and shift eligibility already treated it as current, but about forty other
+queries asked for the literal `active` status and left probationary accounts
+out: training compliance and the compliance officer views, certificate expiry
+alerts, the competency matrix, meeting quorum's denominator, the attendance
+dashboard, the org chart, the training and compliance reports and CSV exports,
+saved report recipients, the inventory assignee pickers and impact planner,
+the consent roster, the forms and skills-test member searches, event
+eligibility, pipeline sign-offs, and the administrator-continuity guard.
+
+All of them now count a probationary account as a current member. What you
+may notice after the upgrade, for any member whose status is probationary:
+
+- They appear in compliance, certification and training reports and alerts,
+  and can be picked as an assignee, candidate or recipient.
+- Percentage quorum divides by one more member each.
+- A probationary member holding an administrator position now counts as an
+  administrator, so removing the last active one is refused if a probationary
+  one remains, and vice versa.
+- "Active members" counts on the dashboards, the members page and the
+  reports include them. The admin hub keeps separate Active and Probationary
+  tiles, which still add up to the current roster.
+
+No data changes and no migration runs; the rule is enforced by
+`backend/tests/test_account_status_gates.py`.
+
+### Ranked-choice paper ballots are counted, and entered ballot by ballot (2026-10-20)
+
+Paper votes in a **ranked-choice** race were miscounted. The instant-runoff
+count groups votes into ballots by voter, a paper vote has no voter, and every
+paper vote in the race was pooled into a single ballot: a stack of thirty
+counted as one. Plurality, supermajority and approval races were not affected,
+and neither were electronic ranked ballots.
+
+- **Past results can change.** Results are computed from the stored votes each
+  time they are read, so a ranked-choice race that took paper votes now reports
+  each paper vote as its own ballot — on screen and on the certified results
+  PDF. Where paper votes were a large share of the box, the winner can change.
+  To list the elections affected, run against the database:
+
+  ```sql
+  SELECT DISTINCT e.id, e.title, e.status
+  FROM elections e
+  JOIN votes v ON v.election_id = e.id
+  WHERE v.is_manual = 1 AND v.deleted_at IS NULL
+    AND (e.voting_method = 'ranked_choice'
+         OR e.ballot_items LIKE '%"ranked_choice"%');
+  ```
+
+  Paper votes recorded before this upgrade carry no ranking — the form only
+  took totals — so each counts as a first choice and nothing further can be
+  recovered from them.
+
+- **Record Paper Ballots asks for rankings in a ranked race.** Each ballot's
+  1st, 2nd, 3rd... choices are entered, and identical ballots once with a copy
+  count. Totals per candidate are refused for a ranked race (the request
+  returns 400 with a message saying so); every other race is entered as before.
+- **One new column, `votes.paper_ballot_id`.** The migration only adds it
+  (nullable, no backfill). `alembic downgrade -1` drops it, after which ranked
+  paper ballots recorded since the upgrade are counted one row at a time again.
+
+### Finance timestamps recorded before the UTC fix are corrected (2026-10-18)
+
+Finance records showed times hours off from each other — a purchase request's
+"Created" four hours before its "Approved", for example. The database stamped
+`created_at` and `updated_at` in the **MySQL server's own time zone** while the
+application reads every stored time as UTC. Connections now pin the session to
+UTC, which stops the skew for new rows. This upgrade corrects the rows written
+before it, in the 19 finance tables only (purchase, expense and check requests,
+budgets and their categories, amendments and requests, approval chains and
+records, dues, fiscal years, QuickBooks export mappings and logs).
+
+- **Nothing happens if your MySQL server runs on UTC**, which was never skewed.
+  The migration reads the server's own zone and checks it is not UTC before
+  touching a row. The shipped Unraid compose files set `America/New_York`, so
+  those installations are corrected.
+- **Daylight saving is applied row by row.** A January row moves five hours, a
+  July row four, using the same rules the server used to stamp them. The one
+  hour a year when local clocks repeat (the autumn change) cannot be told apart,
+  so a row stamped in that hour may be off by an hour.
+- **Deploy it together with the UTC fix, or tell it when the fix started.** The
+  migration treats every row up to the moment it runs as old. If the build that
+  pins UTC has already been serving for a while, rows written since then are
+  correct and must not be shifted again: set `FINANCE_TS_FIX_CUTOFF_UTC` (for
+  example `2026-10-18 17:00:00`, in UTC) to when that build started, in the
+  backend container's environment, before restarting.
+- **If the zone cannot be resolved the upgrade stops and changes nothing.** A
+  named server zone needs MySQL's time zone tables; the message says so. Load
+  them (`mysql_tzinfo_to_sql`), or set `FINANCE_TS_FIX_SOURCE_TZ` to a fixed
+  offset such as `-05:00` (accepting one offset for the whole year).
+- **Other modules are not corrected.** Their timestamps carry the same skew, but
+  some are covered by integrity hashes (the audit log, election records) and
+  others are written by code on some paths, so each needs its own reviewed
+  migration. Rows written after this upgrade are correct everywhere.
+- **Back up first.** The downgrade (`alembic downgrade -1`) converts back, and is
+  exact apart from the repeated autumn hour, but run it straight after a bad
+  upgrade, not after the application has been writing new rows.
+
+### Equipment checklists: a Date line needs its date to publish (2026-10-18)
+
+A **Date** line (stored as `expiry`) checks the expiration date on record, so a
+checklist can no longer be **published** while one of its Date lines has no
+date. The builder lists each one under "Before publishing" and the server
+refuses the publish with `date item "<name>" needs an expiration date`. Drafts
+still save. A Date line linked to an inventory item is exempt, because its
+dates come from the lots aboard, and so is a line with a dated lot aboard.
+
+- **A checklist that is already published keeps running.** Nothing is
+  unpublished at upgrade. The rule applies the next time someone publishes it,
+  which also happens after any structural edit, since those return a checklist
+  to draft. Add the missing dates, or switch those lines to another type,
+  before then.
+- **Choosing Date turns Has Expiration on**, and it cannot be turned off on a
+  Date line. Other types can still tick it.
+- **Crews can record a replacement's date.** On a Date line not linked to
+  inventory, the crew can enter the date (and optionally the lot) printed on a
+  replacement unit they put in. The line's date on the checklist is updated to
+  it, the change log names the member and the check, and the checklist stays
+  published. A date in the past is refused. Inventory-linked lines keep using
+  Swap.
+
+The same release adds two things that need no action:
+
+- **Items can sit directly on a checklist**, between locations, with no
+  heading. They are stored as a headingless group, using the new
+  `check_template_compartments.is_inline` column. Migration `e99f068be43e` only
+  adds that column (default false) and rewrites no rows, so it is safe on a
+  running database. An emptied group is removed when the checklist is saved.
+  A second revision, `d80493f28236`, adds the same column under the same
+  existence guard; it was written in parallel and finds the column already
+  there, so on every database it changes nothing. Both are expected in
+  `alembic history`.
+- **A Present answer type** (Present / Absent). Absent fails the line and needs
+  no note. No existing line is converted. A device still running the previous
+  app shows a Present line as a Works line and files its Pass / Fail, which the
+  server stores the same way.
+
+### A weekly security report is emailed to the IT Manager (2026-10-16)
+
+Every department now receives a weekly email of **counts** — security alerts by
+severity and type, application errors by type, and whether the audit log's hash
+chain verified — with links to the Security Alerts and Audit Log pages. It
+carries no member names, usernames or event descriptions. A quiet week sends a
+short all-clear, so a missing email means the scheduler or mail is broken.
+
+- **On by default, Monday 07:00 on the department's clock.** Change the day and
+  hour, or turn it off, under **Organization Settings > Authentication >
+  Security Report**. Nothing is stored until someone saves, so an installation
+  upgrading today starts receiving it without any action.
+- **Recipients:** active members who hold the **IT Manager** position; if no
+  one does, active full administrators. The settings page says which. It is a
+  required email, so a recipient cannot switch it off in their own preferences.
+- **Needs the scheduler.** The `weekly_security_report` task is checked hourly
+  (`0 * * * *` on a host cron setup, listed with the other tasks in
+  `scheduled_tasks.py`). A deployment that does not run scheduled tasks sends
+  nothing.
+- **First send:** a department is not sent last week's slot at upgrade time; it
+  waits for its next scheduled day and hour.
+- **Single-department installs** also count alerts raised before sign-in (for
+  example repeated failed logins), which have no organization and appear in no
+  department's alert list on a shared install.
+
+No migration; the setting lives in the organization's existing settings JSON.
+
+### Equipment-check counts: short of par is a restock, not a failure (2026-10-16)
+
+A count line on an equipment checklist now answers two questions with two
+numbers. **Min to Pass** fails the line when the count is below it, and so
+does **Critical Min** even when Min to Pass is blank. **Par** no longer fails
+anything: a count below par but at or above the minimum **passes** and puts the
+shortfall on the restock list.
+
+What changes from the upgrade onward:
+
+- **Checklists with only Par set stop failing for being short.** Under the old
+  rule a count below par failed the line, the check, and the apparatus's
+  readiness. Those lines now pass with a restock line instead, so compliance
+  and failure reports show fewer failures from the upgrade date. Checks filed
+  before the upgrade keep their original verdict. If a line should still fail
+  below a number, set **Min to Pass** on it in the checklist builder.
+- **Par and Min to Pass both set now raise a restock between them.** Before,
+  Min to Pass was used as the only target, so a count of 8 against par 10 /
+  min 6 passed and nothing was restocked. It now passes and asks for 2.
+- **The CSV checklist import stops copying the par column into Min to Pass.**
+  Add a `Min to Pass` column to the file to set a pass floor.
+- **Count lines can name a unit** ("each", "rolls", "boxes", …). Count a
+  partial pack in the smaller unit; every quantity stays a whole number. A line
+  linked to an inventory item always counts in that item's unit of measure.
+
+The migration (`12e20092c1a8`) only adds three nullable columns and rewrites
+no rows, so it is safe on a running database.
+
+A check saved for offline sending on a device still running the previous app
+is accepted: that app reports short-of-par lines as **Fail**, and the server
+files the crew's answer as sent.
+
 ### Installer and backup settings (2026-10-13)
 
 - **`BACKUP_ENABLED` and `BACKUP_SCHEDULE` did nothing** and are gone from the
@@ -792,6 +1339,70 @@ folder unless somebody has filed it elsewhere since.
   columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
+
+### Facility files upload in one step (2026-10-16)
+
+Nothing here stops the stack from starting, and there is no migration. The
+facility Files section now uploads through two new endpoints:
+
+- `POST /facilities/{facility_id}/photos/upload`: an image, with an optional
+  `caption`.
+- `POST /facilities/{facility_id}/documents/upload`: any document type the
+  Documents library accepts, with an optional `document_type` (default
+  `facility_record`) and `description`.
+
+Both take `facilities.create`, `facilities.edit` or `facilities.manage`, and
+no Documents permission. Before this, a facilities manager without
+`documents.manage` was refused. The file is stored straight into the
+facility's Photos or Facility Documents folder.
+
+The old two-step path still works: `POST /documents/upload`, then
+`POST /facilities/photos` or `POST /facilities/documents`.
+
+### Full administrators get a weekly email of admin-only folders (2026-10-16)
+
+Nothing here stops the stack from starting, and there is no migration. A new
+scheduled task, `admin_only_folder_digest`, checks daily and emails each
+department's active full administrators at most once a week, while any folder
+is on the Documents page's list of folders only they can open. Each email
+lists every such folder.
+
+- **External cron:** if you run scheduled tasks from cron rather than the
+  backend's own loop, add
+  `25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest`.
+- **Opting out:** it is the optional "Document folder access" email. A full
+  administrator can turn it off under their email settings, and a department
+  can make it required on the Member Emails & Texts page.
+- When it was last sent is stored in the organization's settings, under
+  `documents.admin_only_digest_last_sent`.
+
+### Folders that lose everyone but administrators are listed (2026-10-15)
+
+Nothing here stops the stack from starting. Migration `c903fc771081` adds two
+nullable columns to `document_folders`, `admin_only_confirmed_at` and
+`admin_only_confirmed_by`, with no backfill. A folder can come to open to full
+administrators alone without being saved, for example when the last member
+holding its position leaves it. Full administrators now see those folders
+listed on the Documents page, each with **Change access** and **Keep for
+administrators only**.
+
+- **Folders confirmed before this upgrade are listed once.** The save-time
+  question from 2026-10-14 recorded nothing, so a folder confirmed then
+  appears on the list and needs **Keep for administrators only** a second
+  time.
+- **Probationary members now count** as members who open a folder, for this
+  list and for the save-time question. Sign-in already treats them as active,
+  and before this change a folder only probationary members could open was
+  reported as administrators-only.
+- **API:** `GET /documents/folders/admin-only` returns the list, and is empty
+  for anyone but a full administrator.
+  `POST /documents/folders/{id}/confirm-admin-only` records the confirmation.
+- **A confirmation lapses when the folder regains an audience.** Reading the
+  list clears it, so `GET /documents/folders/admin-only` can write: it clears
+  the confirmation on any folder someone besides administrators can open
+  again.
+- **Downgrade** drops both columns, so the list shows every confirmed folder
+  again after the next upgrade.
 
 ### A folder only administrators could open is confirmed first (2026-10-14)
 
@@ -2345,7 +2956,7 @@ the gear — that answer is the whole record.
 After that, a mark clears itself whenever the value the label encodes changes
 (barcode, else asset tag, else serial number), so an item whose barcode is
 edited goes back to needing a label. Details in
-[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label-2026-09-23).
+[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label).
 
 ### Suggestion boxes, and a new permission on five seeded positions (2026-09-23)
 

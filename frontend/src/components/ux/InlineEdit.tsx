@@ -116,7 +116,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
                 restoreFocus.current = true;
                 void handleSave();
               }}
-              className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center justify-center p-1 text-green-700 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
               aria-label="Save"
             >
               <Check className="h-3.5 w-3.5" />

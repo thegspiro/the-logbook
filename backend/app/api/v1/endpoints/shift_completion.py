@@ -34,25 +34,37 @@ from app.schemas.shift_completion import (
     ShiftCompletionReportUpdate,
     TraineeAcknowledgment,
 )
-from app.services.shift_completion_service import ShiftCompletionService
+from app.services.shift_completion_service import (
+    ShiftCompletionService,
+    reject_future_shift_date,
+)
 from app.services.training_module_config_service import TrainingModuleConfigService
 
 router = APIRouter()
 
 
-def _apply_trainee_visibility(report, visibility: dict) -> None:
-    """Strip fields from a report that the trainee should not see."""
+def _trainee_view(report, visibility: dict) -> ShiftCompletionReportResponse:
+    """The report as a trainee may see it, with hidden fields blanked.
+
+    The fields are blanked on a serialized copy, never on ``report``: it is
+    attached to the request's session, and ``get_db`` commits at the end of
+    every request, reads included, so a None set on the ORM row would erase
+    the officer's narrative and the reviewer's notes from the database.
+    """
+    hidden: dict = {"reviewer_notes": None}
     if not visibility.get("show_performance_rating", True):
-        report.performance_rating = None
+        hidden["performance_rating"] = None
     if not visibility.get("show_officer_narrative", False):
-        report.officer_narrative = None
+        hidden["officer_narrative"] = None
     if not visibility.get("show_areas_of_strength", True):
-        report.areas_of_strength = None
+        hidden["areas_of_strength"] = None
     if not visibility.get("show_areas_for_improvement", True):
-        report.areas_for_improvement = None
+        hidden["areas_for_improvement"] = None
     if not visibility.get("show_skills_observed", True):
-        report.skills_observed = None
-    report.reviewer_notes = None
+        hidden["skills_observed"] = None
+    return ShiftCompletionReportResponse.model_validate(report).model_copy(
+        update=hidden
+    )
 
 
 def _manages_training(user: User) -> bool:
@@ -146,6 +158,9 @@ async def create_shift_report(
 
     service = ShiftCompletionService(db)
     try:
+        await reject_future_shift_date(
+            db, current_user.organization_id, data.shift_date
+        )
         report = await service.create_report(
             organization_id=current_user.organization_id,
             officer_id=current_user.id,
@@ -229,6 +244,9 @@ async def batch_create_shift_reports(
 
     service = ShiftCompletionService(db)
     try:
+        await reject_future_shift_date(
+            db, current_user.organization_id, data.shift_date
+        )
         result = await service.batch_create_reports(
             organization_id=current_user.organization_id,
             officer_id=current_user.id,
@@ -290,12 +308,8 @@ async def get_my_shift_reports(
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
 
-    # Strip sensitive fields based on visibility config
     visibility = config.to_visibility_dict()
-    for report in reports:
-        _apply_trainee_visibility(report, visibility)
-
-    return reports
+    return [_trainee_view(report, visibility) for report in reports]
 
 
 @router.get("/my-stats")
@@ -613,8 +627,7 @@ async def get_shift_report(
     if is_trainee and not has_manage:
         config_service = TrainingModuleConfigService(db)
         config = await config_service.get_config(current_user.organization_id)
-        visibility = config.to_visibility_dict()
-        _apply_trainee_visibility(report, visibility)
+        return _trainee_view(report, config.to_visibility_dict())
 
     return report
 
@@ -631,11 +644,15 @@ async def update_shift_report(
     Officers use this to complete auto-created drafts with ratings,
     narratives, and skills before submitting. Training pipeline progress is
     triggered only when review_status transitions to approved. The service
-    allows only the filing officer; without training.manage the report must
-    also be on a shift the caller is the Shift Officer of.
+    allows only drafts, and only the filing officer (or a training.manage
+    holder, for a draft whose officer's account was deleted); without
+    training.manage the report must also be on a shift the caller is the Shift
+    Officer of. Where a submitted draft goes is the department's review
+    setting, not the client's.
     """
     service = ShiftCompletionService(db)
-    if not _manages_training(current_user):
+    manages = _manages_training(current_user)
+    if not manages:
         existing = await service.get_report(
             report_id, organization_id=current_user.organization_id
         )
@@ -649,6 +666,7 @@ async def update_shift_report(
             organization_id=current_user.organization_id,
             officer_id=str(current_user.id),
             updates=update_fields,
+            manages_training=manages,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

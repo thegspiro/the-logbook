@@ -42,8 +42,17 @@ def _svc():
     return MessagingService(MagicMock())
 
 
-def _targeted(message, user_id="u1", role_ids=None, roles=None, status="active"):
-    return _svc()._is_targeted(message, user_id, role_ids or [], roles or [], status)
+def _targeted(
+    message,
+    user_id="u1",
+    role_ids=None,
+    roles=None,
+    status="active",
+    member_status=None,
+):
+    return _svc()._is_targeted(
+        message, user_id, role_ids or [], roles or [], status, member_status
+    )
 
 
 class TestIsTargeted:
@@ -78,6 +87,26 @@ class TestIsTargeted:
         msg = _msg(target_type="statuses", statuses=["retired"])
         assert _targeted(msg, status="active") is False
 
+    @pytest.mark.parametrize("ladder", ["probationary", "retired"])
+    def test_statuses_match_the_membership_ladder(self, ladder):
+        # A member added as probationary keeps an active account, so the
+        # account status alone never matched the "Probationary" audience.
+        msg = _msg(target_type="statuses", statuses=[ladder])
+        assert _targeted(msg, status="active", member_status=ladder) is True
+
+    def test_account_status_still_matches_without_the_ladder(self):
+        msg = _msg(target_type="statuses", statuses=["probationary"])
+        assert _targeted(msg, status="probationary", member_status="regular") is True
+
+    @pytest.mark.parametrize("ladder", ["regular", "life", "junior", None])
+    def test_other_ladder_statuses_do_not_match(self, ladder):
+        msg = _msg(target_type="statuses", statuses=["probationary", "retired"])
+        assert _targeted(msg, status="active", member_status=ladder) is False
+
+    def test_ladder_status_matches_only_when_targeted(self):
+        msg = _msg(target_type="statuses", statuses=["retired"])
+        assert _targeted(msg, status="active", member_status="probationary") is False
+
     def test_members_match(self):
         msg = _msg(target_type="members", members=["u1", "u2"])
         assert _targeted(msg, user_id="u2") is True
@@ -111,6 +140,28 @@ class TestTargetedUsers:
         assert "users.status IN" in sql
         assert set(query.compile().params["status_1"]) == set(ACTIVE_ACCOUNT_STATUSES)
         assert "users.deleted_at IS NULL" in sql
+
+    async def test_probationary_audience_includes_ladder_probationary(self):
+        def member(uid, status, member_status):
+            return SimpleNamespace(
+                id=uid, roles=[], status=status, member_status=member_status
+            )
+
+        users = [
+            member("probie", "active", "probationary"),
+            member("flagged", "probationary", "regular"),
+            member("regular", "active", "regular"),
+        ]
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = users
+        db.execute = AsyncMock(return_value=result)
+
+        targeted = await MessagingService(db)._targeted_users(
+            _msg(target_type="statuses", statuses=["probationary"]), "org-1"
+        )
+
+        assert [u.id for u in targeted] == ["probie", "flagged"]
 
 
 class TestUnreadCount:

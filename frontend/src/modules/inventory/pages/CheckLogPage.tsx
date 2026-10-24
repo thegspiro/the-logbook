@@ -21,10 +21,26 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { AlertTriangle, CalendarDays, ClipboardList, Grid3x3, List, Loader2, Search, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarDays,
+  ChevronRight,
+  ClipboardList,
+  Grid3x3,
+  List,
+  Loader2,
+  Search,
+  X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import type { CheckLogEntry, CheckLogResponse, CheckOutcome } from '../../../modules/inventory/types/equipmentCheck';
+import type {
+  CheckLogCell,
+  CheckLogEntry,
+  CheckLogResponse,
+  CheckLogRow,
+  CheckOutcome,
+} from '../../../modules/inventory/types/equipmentCheck';
 import { CHECK_OUTCOME_LABELS } from '../../../modules/inventory/types/equipmentCheck';
 import {
   OUTCOME_LEGEND,
@@ -35,10 +51,14 @@ import {
   formatRate,
 } from '../../../modules/inventory/utils/checkOutcome';
 import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
+import { dayHeading } from '../../../modules/inventory/utils/dayHeading';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
 import { EmptyState } from '../../../components/ux';
+import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
+import { Modal } from '../../../components/Modal';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 const WINDOW_OPTIONS = [7, 14, 30] as const;
 
@@ -114,10 +134,23 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
    */
   const submittedOnly = ['1', 'true'].includes((searchParams.get('submitted') ?? '').toLowerCase());
 
+  /**
+   * `?findings=1` narrows to occasions where the crew recorded a finding —
+   * the "Found a problem" summary chip.
+   *
+   * Not `?status=failed`: the chip's count is the server's `withFindings`,
+   * which counts any occasion with a finding, and a check holding an
+   * out-of-service item or left incomplete can carry findings under a
+   * different outcome. Filtering on the outcome would list fewer checks than
+   * the chip had just promised.
+   */
+  const findingsOnly = ['1', 'true'].includes((searchParams.get('findings') ?? '').toLowerCase());
+
   const clearStatusFilter = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.delete('status');
     next.delete('submitted');
+    next.delete('findings');
     // replace: the filter came from a link on another page, so backing out of
     // it should return there rather than stepping through filter states.
     setSearchParams(next, { replace: true });
@@ -155,6 +188,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
     let rows = data?.entries ?? [];
     if (hasStatusFilter) rows = rows.filter((e) => statusFilter.includes(e.status));
     if (submittedOnly) rows = rows.filter((e) => Boolean(e.checkId));
+    if (findingsOnly) rows = rows.filter((e) => e.findingCount > 0);
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter(
@@ -164,7 +198,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
         (e.checkedByName ?? '').toLowerCase().includes(q) ||
         e.findings.some((f) => f.toLowerCase().includes(q))
     );
-  }, [data, search, statusFilter, hasStatusFilter, submittedOnly]);
+  }, [data, search, statusFilter, hasStatusFilter, submittedOnly, findingsOnly]);
 
   /**
    * The grid is a rig-by-day matrix with no status dimension, so it cannot
@@ -173,35 +207,53 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
    * matrix under a "Showing only" banner that now contradicted it — the
    * toggle is withdrawn while filtering and the rendered view is derived.
    */
-  const isFiltered = hasStatusFilter || submittedOnly;
+  const isFiltered = hasStatusFilter || submittedOnly || findingsOnly;
   const canShowGrid = data?.scope === 'fleet' && data.rows.length > 0 && !isFiltered;
   const effectiveView: ViewMode = isFiltered ? 'log' : view;
   const summary = data?.summary;
 
+  const missedChipActive = statusFilter.length === 1 && statusFilter[0] === 'missed' && !submittedOnly && !findingsOnly;
+  const findingsChipActive = findingsOnly && !hasStatusFilter && !submittedOnly;
+
+  /**
+   * The summary chips are shortcuts onto the same URL filters a dashboard
+   * link uses, so the banner, the back button and a shared link all behave
+   * as they already do. Tapping the active chip again clears it. Either way
+   * the list is where the answer is, so the view moves there.
+   */
+  const toggleQuickFilter = useCallback(
+    (key: 'missed' | 'findings', active: boolean) => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('status');
+      next.delete('submitted');
+      next.delete('findings');
+      if (!active) {
+        if (key === 'missed') next.set('status', 'missed');
+        else next.set('findings', '1');
+      }
+      setSearchParams(next, { replace: true });
+      setView('log');
+    },
+    [searchParams, setSearchParams]
+  );
+
+  const [openDay, setOpenDay] = useState<{ row: CheckLogRow; cell: CheckLogCell } | null>(null);
+
   return (
-    <div className="space-y-4">
+    <div className={showHeader ? 'mx-auto max-w-7xl space-y-4' : 'space-y-4'}>
+      {/* No back link: the section strip and the trail above the title carry
+          the way out, and for a member reading their own log the strip's My
+          Checklists row is the link the old "← My checklists" was. */}
       {showHeader && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <ClipboardList className="text-theme-text-primary h-6 w-6 shrink-0" aria-hidden="true" />
-            <div>
-              <h1 className="text-theme-text-primary text-xl font-bold">Check log</h1>
-              <p className="text-theme-text-muted text-xs">
-                {data?.scope === 'own'
-                  ? 'Checks you performed'
-                  : 'Every expected check, including the ones that did not happen'}
-              </p>
-            </div>
-          </div>
-          {/* A member reading their own log does not hold the fleet board's
-              grant, so "Fleet" would lead them to Access Denied. */}
-          <Link
-            to={data?.scope === 'own' ? '/inventory/checklists/my' : '/inventory/checklists'}
-            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-          >
-            &larr; {data?.scope === 'own' ? 'My checklists' : 'Fleet'}
-          </Link>
-        </div>
+        <OperationsPageHeader
+          icon={ClipboardList}
+          title="Check log"
+          subtitle={
+            data?.scope === 'own'
+              ? 'Checks you performed'
+              : 'Every expected check, including the ones that did not happen'
+          }
+        />
       )}
 
       {/* Window + view controls */}
@@ -301,6 +353,11 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               checks someone submitted
             </span>
           )}
+          {findingsOnly && (
+            <span className="badge border border-amber-500/40 text-amber-700 dark:text-amber-400">
+              checks that found a problem
+            </span>
+          )}
           <button
             type="button"
             onClick={clearStatusFilter}
@@ -312,17 +369,37 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
         </div>
       )}
 
-      {/* Summary */}
+      {/* Summary — one line, so the grid or the list starts above the fold
+          on a phone. The two counts worth acting on are chips that open the
+          list narrowed to them; a chip with nothing behind it is left out. */}
       {summary && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <LogTile label="Checks completed" value={formatRate(summary.completionRate)} tone="ok" />
-          <LogTile label="Missed entirely" value={String(summary.missed)} tone={summary.missed > 0 ? 'crit' : ''} />
-          <LogTile
-            label="Found a problem"
-            value={String(summary.withFindings)}
-            tone={summary.withFindings > 0 ? 'warn' : ''}
-          />
-          <LogTile label="Expected in window" value={String(summary.expected)} tone="" />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-testid="check-log-summary">
+          <p className="text-theme-text-secondary text-sm">
+            <span className="text-theme-text-primary font-bold tabular-nums">{formatRate(summary.completionRate)}</span>{' '}
+            completed &middot; <span className="tabular-nums">{summary.expected}</span> expected
+          </p>
+          {(summary.missed > 0 || missedChipActive || summary.withFindings > 0 || findingsChipActive) && (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Show only">
+              {(summary.missed > 0 || missedChipActive) && (
+                <SummaryChip
+                  count={summary.missed}
+                  label="missed"
+                  tone={CHIP_TONES.crit}
+                  active={missedChipActive}
+                  onClick={() => toggleQuickFilter('missed', missedChipActive)}
+                />
+              )}
+              {(summary.withFindings > 0 || findingsChipActive) && (
+                <SummaryChip
+                  count={summary.withFindings}
+                  label="found a problem"
+                  tone={CHIP_TONES.warn}
+                  active={findingsChipActive}
+                  onClick={() => toggleQuickFilter('findings', findingsChipActive)}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -338,93 +415,152 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
           description="No checks were expected on any apparatus over these duty days. Check templates are set up per apparatus or apparatus type."
         />
       ) : effectiveView === 'grid' && canShowGrid ? (
-        <CheckGrid data={data} />
+        <CheckGrid data={data} onOpenDay={(row, cell) => setOpenDay({ row, cell })} />
       ) : (
         <CheckEntries entries={entries} tz={tz} scoped={Boolean(apparatusId)} />
       )}
+
+      <DaySheet day={openDay} tz={tz} onClose={() => setOpenDay(null)} />
     </div>
   );
 };
+
+const CHIP_TONES = {
+  warn: 'text-amber-700 dark:text-amber-400',
+  crit: 'text-red-700 dark:text-red-400',
+};
+
+const SummaryChip: React.FC<{
+  count: number;
+  label: string;
+  tone: string;
+  active: boolean;
+  onClick: () => void;
+}> = ({ count, label, tone, active, onClick }) => (
+  <button
+    type="button"
+    aria-pressed={active}
+    onClick={onClick}
+    className={`touch-target-phone flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors ${
+      active
+        ? 'border-theme-text-primary bg-theme-surface-secondary text-theme-text-primary'
+        : `border-theme-surface-border hover:bg-theme-surface-hover ${tone}`
+    }`}
+  >
+    <span className="font-bold tabular-nums">{count}</span> {label}
+  </button>
+);
 
 // ---------------------------------------------------------------------------
 // Grid
 // ---------------------------------------------------------------------------
 
-const CheckGrid: React.FC<{ data: CheckLogResponse }> = ({ data }) => (
+/**
+ * The unit column is pinned while the days scroll beneath it, so a phone
+ * that shows six days at a time still says which rig each row is. Sticky
+ * cells need an opaque fill or the squares show through them; the card's
+ * surface is translucent in dark mode, so it is layered over the opaque page
+ * colour to read the same as the rest of the card.
+ */
+const PINNED_CELL =
+  'bg-theme-bg sticky left-0 z-10 [background-image:linear-gradient(var(--surface-bg),var(--surface-bg))] shadow-[1px_0_0_var(--surface-border)]';
+
+const cellLabel = (row: CheckLogRow, cell: CheckLogCell): string =>
+  `${row.unitLabel}, ${formatCalendarDate(cell.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${cell.checks
+    .map(
+      (check) =>
+        `${TIMING_SHORT[check.checkTiming] ?? check.checkTiming} ${CHECK_OUTCOME_LABELS[check.status].toLowerCase()}`
+    )
+    .join(', ')}`;
+
+const CheckGrid: React.FC<{
+  data: CheckLogResponse;
+  onOpenDay: (row: CheckLogRow, cell: CheckLogCell) => void;
+}> = ({ data, onOpenDay }) => (
   <div className="space-y-3">
-    <div className="border-theme-surface-border bg-theme-surface overflow-x-auto rounded-lg border p-3">
-      <table className="w-full border-collapse text-sm">
-        <caption className="sr-only">Check outcomes by apparatus over the last {data.dates.length} duty days</caption>
-        <thead>
-          <tr>
-            <th
-              scope="col"
-              className="text-theme-text-muted pr-3 pb-2 text-left font-mono text-[10px] tracking-wider uppercase"
-            >
-              Apparatus
-            </th>
-            {data.dates.map((day) => (
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+      {/* Opens on the newest day: what happened this morning is the usual
+          question, and it is the column a phone would otherwise hide. */}
+      <ScrollCueRow startAtEnd className="rounded-lg">
+        <table className="w-full border-collapse text-sm">
+          <caption className="sr-only">Check outcomes by apparatus over the last {data.dates.length} duty days</caption>
+          <thead>
+            <tr>
               <th
-                key={day}
                 scope="col"
-                className="text-theme-text-muted px-0.5 pb-2 text-center font-mono text-[10px] font-semibold whitespace-nowrap"
+                data-scroll-pin
+                className={`${PINNED_CELL} text-theme-text-muted pt-3 pr-3 pb-2 pl-3 text-left font-mono text-[10px] tracking-wider uppercase`}
               >
-                {formatCalendarDate(day, { day: 'numeric' })}
+                Apparatus
               </th>
-            ))}
-            <th
-              scope="col"
-              className="text-theme-text-muted pb-2 pl-3 text-right font-mono text-[10px] tracking-wider uppercase"
-            >
-              Rate
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.rows.map((row) => (
-            <tr key={row.apparatusId} className="border-theme-surface-border border-t">
-              <th scope="row" className="py-1.5 pr-3 text-left whitespace-nowrap">
-                <Link
-                  to={`/inventory/checklists/apparatus/${row.apparatusId}`}
-                  className="text-theme-text-primary font-mono text-xs font-bold hover:text-blue-600"
+              {data.dates.map((day) => (
+                <th
+                  key={day}
+                  scope="col"
+                  className="text-theme-text-muted px-0.5 pt-3 pb-2 text-center font-mono text-[10px] font-semibold whitespace-nowrap"
                 >
-                  {row.unitLabel}
-                </Link>
+                  {formatCalendarDate(day, { day: 'numeric' })}
+                </th>
+              ))}
+              <th
+                scope="col"
+                className="text-theme-text-muted pt-3 pr-3 pb-2 pl-3 text-right font-mono text-[10px] tracking-wider uppercase"
+              >
+                Rate
               </th>
-              {row.cells.map((cell) => (
-                <td key={cell.date} className="px-0.5 py-1.5">
-                  <div className="flex justify-center gap-[2px]">
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row) => (
+              <tr key={row.apparatusId} className="border-theme-surface-border border-t">
+                <th scope="row" className={`${PINNED_CELL} py-1 pr-3 pl-3 text-left whitespace-nowrap`}>
+                  <Link
+                    to={`/inventory/checklists/apparatus/${row.apparatusId}`}
+                    className="text-theme-text-primary font-mono text-xs font-bold hover:text-blue-600"
+                  >
+                    {row.unitLabel}
+                  </Link>
+                </th>
+                {row.cells.map((cell) => (
+                  <td key={cell.date} className="px-0.5 py-1">
                     {cell.checks.length === 0 ? (
                       <span
-                        className="bg-theme-surface-border/40 block h-5 w-3.5 rounded-[3px]"
+                        className="bg-theme-surface-border/40 touch:h-8 touch:w-9 mx-auto block h-5 w-3.5 rounded-[3px]"
                         title={`${formatCalendarDate(cell.date, {
                           month: 'short',
                           day: 'numeric',
                         })} — no check scheduled`}
                       />
                     ) : (
-                      cell.checks.map((check, index) => (
-                        <span
-                          key={`${cell.date}-${check.checkId ?? index}`}
-                          className={`block h-5 w-3.5 rounded-[3px] ${OUTCOME_SWATCH[check.status]}`}
-                          title={`${formatCalendarDate(cell.date, { month: 'short', day: 'numeric' })} · ${
-                            TIMING_SHORT[check.checkTiming] ?? check.checkTiming
-                          } — ${CHECK_OUTCOME_LABELS[check.status]}${
-                            check.findingCount > 0 ? ` (${check.findingCount})` : ''
-                          }`}
-                        />
-                      ))
+                      // The whole day is one target: two squares a few pixels
+                      // wide each are not separately tappable, and the sheet
+                      // lists every check that day anyway.
+                      <button
+                        type="button"
+                        onClick={() => onOpenDay(row, cell)}
+                        aria-label={cellLabel(row, cell)}
+                        title={cellLabel(row, cell)}
+                        className="touch:min-h-11 touch:w-9 mx-auto flex items-center justify-center gap-[2px] rounded-md focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none"
+                      >
+                        {cell.checks.map((check, index) => (
+                          <span
+                            key={`${cell.date}-${check.checkId ?? index}`}
+                            aria-hidden="true"
+                            className={`touch:h-8 touch:w-auto touch:min-w-2 touch:flex-1 block h-5 w-3.5 rounded-[3px] ${OUTCOME_SWATCH[check.status]}`}
+                          />
+                        ))}
+                      </button>
                     )}
-                  </div>
+                  </td>
+                ))}
+                <td className="text-theme-text-secondary py-1 pr-3 pl-3 text-right font-mono text-xs tabular-nums">
+                  {formatRate(row.completionRate)}
                 </td>
-              ))}
-              <td className="text-theme-text-secondary py-1.5 pl-3 text-right font-mono text-xs tabular-nums">
-                {formatRate(row.completionRate)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ScrollCueRow>
     </div>
 
     <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
@@ -439,9 +575,70 @@ const CheckGrid: React.FC<{ data: CheckLogResponse }> = ({ data }) => (
         Not scheduled
       </span>
       {/* Says why a weekly rig's row is mostly blank and still reads 100%. */}
-      <span className="ml-auto">Each column is a duty day; a rate counts only the checks that apparatus expected.</span>
+      <span className="ml-auto">
+        Each column is a duty day; tap one to see its checks. A rate counts only the checks that apparatus expected.
+      </span>
     </div>
   </div>
+);
+
+/** One rig on one day: what the squares in that cell stand for, in words. */
+const DaySheet: React.FC<{
+  day: { row: CheckLogRow; cell: CheckLogCell } | null;
+  tz: string;
+  onClose: () => void;
+}> = ({ day, tz, onClose }) => (
+  <Modal
+    isOpen={day !== null}
+    onClose={onClose}
+    size="sm"
+    title={day ? `${day.row.unitLabel} · ${dayHeading(day.cell.date, tz)}` : ''}
+  >
+    {day && (
+      <div className="space-y-3">
+        <p className="text-theme-text-muted text-xs">
+          {formatCalendarDate(day.cell.date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </p>
+        <ul className="space-y-2" aria-label="Checks that day">
+          {day.cell.checks.map((check, index) => (
+            <li
+              key={`${check.checkId ?? 'expected'}-${index}`}
+              className="border-theme-surface-border flex items-start gap-2.5 rounded-lg border px-3 py-2"
+            >
+              <span
+                className={`mt-1 block h-4 w-3 shrink-0 rounded-[3px] ${OUTCOME_SWATCH[check.status]}`}
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-theme-text-primary text-sm font-medium">{check.templateName}</p>
+                <p className="text-theme-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                  <span>{TIMING_LABELS[check.checkTiming] ?? check.checkTiming}</span>
+                  <span
+                    className={`rounded-full border px-1.5 py-0.5 text-[11px] font-semibold ${OUTCOME_PILL[check.status]}`}
+                  >
+                    {CHECK_OUTCOME_LABELS[check.status]}
+                  </span>
+                  {check.findingCount > 0 && (
+                    <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                      {check.findingCount} {check.findingCount === 1 ? 'finding' : 'findings'}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <Link
+          to={`/inventory/checklists/apparatus/${day.row.apparatusId}`}
+          className="text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border touch-target-phone flex items-center justify-between rounded-lg border px-3 py-2 text-sm font-medium"
+        >
+          Open {day.row.unitLabel}
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      </div>
+    )}
+  </Modal>
 );
 
 // ---------------------------------------------------------------------------
@@ -459,93 +656,88 @@ const CheckEntries: React.FC<{ entries: CheckLogEntry[]; tz: string; scoped: boo
     );
   }
 
+  // The server sends entries newest day first, and every filter here keeps
+  // that order, so consecutive runs are the days.
+  const days: { date: string; entries: CheckLogEntry[] }[] = [];
+  for (const entry of entries) {
+    const last = days[days.length - 1];
+    if (last && last.date === entry.shiftDate) last.entries.push(entry);
+    else days.push({ date: entry.shiftDate, entries: [entry] });
+  }
+
   return (
-    <div className="space-y-2">
-      {entries.map((entry) => {
-        return (
-          <div
-            key={`${entry.shiftId}-${entry.templateId}`}
-            className={`bg-theme-surface border-theme-surface-border flex flex-col gap-2 rounded-lg border border-l-[3px] px-3 py-2.5 sm:flex-row sm:items-center ${
-              entry.status === 'passed'
-                ? 'border-l-green-500'
-                : entry.status === 'missed' || entry.status === 'out_of_service'
-                  ? 'border-l-red-500'
-                  : 'border-l-amber-500'
-            }`}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                {!scoped && (
-                  <span className="text-theme-text-primary font-mono text-xs font-bold">{entry.unitLabel}</span>
-                )}
-                <span className="text-theme-text-primary text-sm font-medium">{entry.templateName}</span>
-                <span
-                  className={`rounded-full border px-1.5 py-0.5 text-[11px] font-semibold ${
-                    OUTCOME_PILL[entry.status]
-                  }`}
-                >
-                  {CHECK_OUTCOME_LABELS[entry.status]}
-                </span>
-              </div>
-              <div className="text-theme-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                <span>{formatCalendarDate(entry.shiftDate, { month: 'short', day: 'numeric' })}</span>
-                {entry.checkedAt && <span>{formatTime(entry.checkedAt, tz)}</span>}
-                <span>&middot;</span>
-                <span>{TIMING_LABELS[entry.checkTiming] ?? entry.checkTiming}</span>
-                {entry.checkedByName && (
-                  <>
-                    <span>&middot;</span>
-                    <span>{entry.checkedByName}</span>
-                  </>
-                )}
-                {entry.totalItems !== null && entry.totalItems !== undefined && (
-                  <>
-                    <span>&middot;</span>
-                    <span>
-                      {entry.completedItems ?? 0} of {entry.totalItems} items
-                    </span>
-                  </>
-                )}
-                {/* A missed check has nobody to name and no items to count —
-                    the row exists because the check does not. The server sets
-                    this status only where it found no submission, so the
-                    absent checkId needs no separate test. */}
-                {entry.status === 'missed' && <span>&middot; nobody submitted this check</span>}
-              </div>
-              {entry.findings.length > 0 && (
-                <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-                  <span>
-                    {entry.findings.join(', ')}
-                    {entry.findingCount > entry.findings.length
-                      ? ` +${entry.findingCount - entry.findings.length} more`
-                      : ''}
+    <div className="space-y-4">
+      {days.map((group) => (
+        <section key={group.date} aria-label={dayHeading(group.date, tz)} className="space-y-2">
+          {/* Pinned below the fixed mobile header (top-0 from 768px) on an
+              opaque layer, so a long day keeps saying which day it is. */}
+          <h2 className="bg-theme-bg text-theme-text-primary mobile-header-inset sticky z-10 py-1.5 text-sm font-semibold md:top-0">
+            {dayHeading(group.date, tz)}
+          </h2>
+          {group.entries.map((entry) => (
+            <div
+              key={`${entry.shiftId}-${entry.templateId}`}
+              className={`bg-theme-surface border-theme-surface-border flex flex-col gap-2 rounded-lg border border-l-[3px] px-3 py-2.5 sm:flex-row sm:items-center ${
+                entry.status === 'passed'
+                  ? 'border-l-green-500'
+                  : entry.status === 'missed' || entry.status === 'out_of_service'
+                    ? 'border-l-red-500'
+                    : 'border-l-amber-500'
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {!scoped && (
+                    <span className="text-theme-text-primary font-mono text-xs font-bold">{entry.unitLabel}</span>
+                  )}
+                  <span className="text-theme-text-primary text-sm font-medium">{entry.templateName}</span>
+                  <span
+                    className={`rounded-full border px-1.5 py-0.5 text-[11px] font-semibold ${
+                      OUTCOME_PILL[entry.status]
+                    }`}
+                  >
+                    {CHECK_OUTCOME_LABELS[entry.status]}
                   </span>
-                </p>
-              )}
+                </div>
+                <div className="text-theme-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                  {/* The day heading carries the date, so the line starts at
+                    the time — and a missed check, which has none, at its
+                    timing. */}
+                  {[
+                    entry.checkedAt ? formatTime(entry.checkedAt, tz) : null,
+                    TIMING_SHORT[entry.checkTiming] ?? entry.checkTiming,
+                    entry.checkedByName ?? null,
+                    entry.totalItems !== null && entry.totalItems !== undefined
+                      ? `${entry.completedItems ?? 0} of ${entry.totalItems} items`
+                      : null,
+                  ]
+                    .filter((part): part is string => Boolean(part))
+                    .map((part, index) => (
+                      <React.Fragment key={part}>
+                        {index > 0 && <span aria-hidden="true">&middot;</span>}
+                        <span>{part}</span>
+                      </React.Fragment>
+                    ))}
+                  {entry.status === 'missed' && <span>&middot; nobody submitted this check</span>}
+                </div>
+                {entry.findings.length > 0 && (
+                  <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span>
+                      {entry.findings.join(', ')}
+                      {entry.findingCount > entry.findings.length
+                        ? ` +${entry.findingCount - entry.findings.length} more`
+                        : ''}
+                    </span>
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          ))}
+        </section>
+      ))}
     </div>
   );
 };
-
-const LOG_TILE_TONES: Record<string, string> = {
-  ok: 'border-l-green-500',
-  warn: 'border-l-amber-500',
-  crit: 'border-l-red-500',
-};
-
-const LogTile: React.FC<{ label: string; value: string; tone: string }> = ({ label, value, tone }) => (
-  <div
-    className={`border-theme-surface-border bg-theme-surface rounded-lg border border-l-[3px] px-3 py-2 ${
-      LOG_TILE_TONES[tone] ?? 'border-l-theme-surface-border'
-    }`}
-  >
-    <p className="text-theme-text-primary text-xl leading-tight font-bold tabular-nums">{value}</p>
-    <p className="text-theme-text-muted text-[11px]">{label}</p>
-  </div>
-);
 
 export default CheckLogPage;

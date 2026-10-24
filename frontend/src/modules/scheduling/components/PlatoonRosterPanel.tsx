@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import { Loader2, Search, Save, Users } from 'lucide-react';
 import { userService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { UserStatus } from '../../../constants/enums';
+import { isActiveAccount } from '../../../constants/enums';
 import { displayNameOf } from '../../../utils/memberName';
 
 interface RosterRow {
@@ -37,7 +37,7 @@ export const PlatoonRosterPanel: React.FC = () => {
     try {
       const users = await userService.getUsers();
       const mapped: RosterRow[] = users
-        .filter((u) => u.status === UserStatus.ACTIVE)
+        .filter((u) => isActiveAccount(u.status))
         .map((u) => ({
           id: String(u.id),
           name: displayNameOf(u) || String(u.email || u.id),
@@ -149,7 +149,7 @@ export const PlatoonRosterPanel: React.FC = () => {
             void handleSave();
           }}
           disabled={saving || changed.length === 0}
-          className="mobile-touch-target gap-1.5 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+          className="mobile-touch-target gap-1.5 rounded-lg bg-violet-700 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
           Save{changed.length > 0 ? ` (${changed.length})` : ''}

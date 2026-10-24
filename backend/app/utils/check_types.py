@@ -4,7 +4,9 @@
 values over time — ``pass_fail``, ``present``, ``functional``, ``quantity``,
 ``level``, ``date_lot``, ``reading``, ``text`` and ``header``. Seven of those
 are *checks*, and between them they only ever store four kinds of answer: a
-number, a pass/fail, a quantity, or a date.
+number, a pass/fail, a quantity, or a date. A fifth shape, ``presence``, was
+added on 2026-10-18 for "is it on the truck", which earlier collapsed into
+pass/fail and lost its own answer buttons.
 
 The extra values were layout decisions wearing a type's clothing. ``present``
 and ``functional`` both store pass/fail and differ only in what the crew is
@@ -14,10 +16,10 @@ An admin building a checklist had to choose between near-synonyms, and the
 form had to carry a distinct control for each, so the same question rendered
 two ways depending on which one somebody picked years earlier.
 
-The four canonical types below are the answer shapes, and each one decides its
+The canonical types below are the answer shapes, and each one decides its
 own control, pass rule, and stored record. ``header`` and ``text`` survive
 untouched because they are not checks at all — they are the layout, and the
-point of naming the four is that a type is no longer a layout choice.
+point of naming them is that a type is no longer a layout choice.
 
 Writers settle the shape here so readers do not have to.
 """
@@ -41,11 +43,21 @@ COUNT = "count"
 #: AED pads, extinguisher inspection. Stores a date.
 EXPIRY = "expiry"
 
-#: The four answer shapes a check item can have.
-CANONICAL_CHECK_TYPES = (LEVEL, FUNCTION, COUNT, EXPIRY)
+#: Whether the thing is aboard at all — a spare SCBA bottle, wheel chocks,
+#: the map book. Stores present / absent. Absent fails the line on its own:
+#: "it is missing" explains itself the way a short count does, so no note is
+#: asked for.
+#:
+#: Named ``presence`` rather than reusing the legacy ``present``, which has
+#: always meant pass/fail and still normalizes to ``function``. Reusing it would
+#: change what an existing caller sending ``present`` gets back.
+PRESENCE = "presence"
+
+#: The answer shapes a check item can have.
+CANONICAL_CHECK_TYPES = (LEVEL, FUNCTION, COUNT, EXPIRY, PRESENCE)
 
 #: Structural rows that are not checks and have no answer to store. They are
-#: deliberately outside the four: they are the layout a type is no longer
+#: deliberately outside the canonical set: they are the layout a type is no longer
 #: allowed to be.
 STRUCTURAL_TYPES = ("header", "text")
 
@@ -111,3 +123,39 @@ def legacy_instruction_for(check_type: Optional[str]) -> Optional[str]:
     description and does not need one supplied.
     """
     return LEGACY_TYPE_INSTRUCTIONS.get((check_type or "").strip().lower())
+
+
+def describe_count(
+    found: Optional[int],
+    par: Optional[int],
+    unit: Optional[str] = None,
+) -> Optional[str]:
+    """A filed count as a crew reads it: ``"8 / 10 each, restock 2"``.
+
+    ``par`` is the result's snapshotted par, or for a result filed before par
+    was recorded its ``required_quantity`` — the single target it was then
+    judged by. A count below par names the restock, because that is what the
+    supply officer acts on; whether it also failed is the status column's job.
+    """
+    if found is None:
+        return None
+    label = str(found) if par is None else f"{found} / {par}"
+    if unit:
+        label = f"{label} {unit}"
+    if par is not None and found < par:
+        label = f"{label}, restock {par - found}"
+    return label
+
+
+#: How a presence line's answer reads. Pass and fail are the stored values —
+#: every report, total and failure rule keeps working off them — but on a
+#: printed report "FAIL" beside a spare bottle says less than "ABSENT".
+PRESENCE_STATUS_LABELS: Dict[str, str] = {"pass": "present", "fail": "absent"}
+
+
+def describe_status(check_type: Optional[str], status: Optional[str]) -> str:
+    """A filed status in the words the crew answered with."""
+    value = status or ""
+    if normalize_check_type(check_type) == PRESENCE:
+        return PRESENCE_STATUS_LABELS.get(value, value)
+    return value

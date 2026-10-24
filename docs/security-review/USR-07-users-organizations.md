@@ -1,6 +1,156 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup), 2026-10-14 (pass 9, PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250) — omitted from this line by that pass, corrected here), 2026-10-18 (pass 10), 2026-10-22 (pass 11) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+
+---
+
+## Pass 11 (2026-10-22) — real delta (privilege ceiling extended to status-change/archive/delete, permanent-delete record preservation, membership-type/account-status sync, directory-account creation, S3 file storage settings endpoints), 0 fixed, 0 new findings
+
+**Step 0.** `search_pull_requests` for `is:pr is:open head:claude/security-review-` returned 0 — no security-review PR open. `PROGRESS.md`'s rotation table had row 07 as the first `⬜`, matching the task's own confirmation.
+
+**Scope:** the same twelve files prior passes declared: `endpoints/users.py`, `endpoints/organizations.py`, `endpoints/member_status.py`, `endpoints/member_leaves.py`, `services/user_service.py`, `services/organization_service.py`, `services/member_leave_service.py`, `models/user.py`, `schemas/user.py`, `schemas/organization.py`, `app/mcp/tools/members.py`, `app/mcp/tools/organization.py`. **Baseline:** `cf2242e4` (PR #3410's merge, pass 10). **Head:** `origin/main` at review time. `git log --no-merges cf2242e4..origin/main -- <declared files>` narrows a large multi-day window down to **14 commits touching a declared file directly**; every one read in full via `git show`, not sampled. `git diff --stat` across the twelve: `member_status.py` +136/-? , `organizations.py` +120, `users.py` +311, `models/user.py` +114, `schemas/organization.py` +47, `schemas/user.py` +50, `organization_service.py` +14/-? — 733 insertions / 59 deletions total across the seven files actually touched (`member_leaves.py`, `user_service.py`, `member_leave_service.py`, the two MCP files are byte-identical to pass 10).
+
+**Not a zero-delta pass — real feature work, and two of the eleven commits are themselves security hardenings landed independently of this rotation, re-verified end to end below rather than taken on their commit messages' word:**
+
+- **`5fc2c5f9` and `f2732e7b` close a real privilege-ceiling gap.** `DELETE /users/{id}` (soft and hard), `PATCH /{user_id}/status`, and `POST /{user_id}/archive` previously checked only `members.manage`, so a member manager could deactivate, status-change, or permanently delete the System Owner or any other account holding permissions beyond their own — the same escalation shape the already-existing password-reset/MFA-reset ceiling guards against, just not extended to these three mutations. All three now call `_enforce_account_reset_ceiling` (generalized this pass with an `action`/`detail` override) before mutating: `delete_user` (`users.py:2278-2286`, after the org-scoped fetch, before any blocker check), `change_member_status` (`member_status.py:363-372`, after the locking org-scoped fetch, before any status-transition logic), and `archive_member` (`member_status.py:936-943`, after an org-scoped fetch now eager-loading `selectinload(User.positions)` so the ceiling check has what it needs without a lazy load in an async context). Confirmed `User.roles = synonym("positions")` (`models/user.py:638`) so `change_member_status`'s pre-existing `selectinload(User.roles)` already populates what `_collect_user_permissions` reads (`user.positions`) — no lazy-load gap on that path. Wildcard administrators are exempt by the existing `_has_permission` mechanism, unchanged. Each site passes a distinct `action`/`detail` (`member-delete`, `member-status-change`, `member-archive`) so `report_privilege_escalation_attempt`'s audit trail still distinguishes which mutation was attempted. Guarded by the authors' own new `tests/test_member_status_privilege_ceiling.py` (`TestStatusChange`, `TestArchive`) plus `test_users_delete_endpoint.py`'s extensions — re-read, not re-written.
+- **`78a6a57e` fixes a real data-loss bug on permanent delete, correctly.** `skill_tests.examiner_id` and `shift_completion_reports.officer_id` were `NOT NULL` + `ON DELETE CASCADE` to `users.id`, so permanently deleting an examiner or officer silently destroyed every skill test or shift report they had _filed on other members_ — their own history, not the deleter's. Migration `cbe0de50f202` makes both columns `nullable=True` with `ON DELETE SET NULL` (CLAUDE.md Pitfall #2 — both model columns at `skills_testing.py:242-246` / `training.py:2376-2380` are correctly paired `nullable=True`); the migration itself derives the FK's current action from `information_schema` rather than assuming, is idempotent, and tolerates a `create_all`-only table (Pitfall #26). `get_deletion_impact`'s record counts (`users.py:2740-2777`) gained an explicit `organization_id` filter on top of the pre-existing org-scoped target-user fetch — hardening, not a fix for a real IDOR, since `user_id` was already resolved within the caller's org at `users.py:2725-2728` before any of these counts run. `return_member_inventory` (`user_deletion_service.py:287-390`) and `release_future_shift_commitments` (`member_shift_release_service.py`, new) are both read in full: every query filters `organization_id` explicitly (never trusts the bare `user_id` match alone), the shift-release path takes a locking read on `StandingShiftClaim` before ending claims (Pitfall #27), and `count_records_removed_with_member` (`user_deletion_service.py:222-268`) derives its `UNION ALL` branches from `Base.metadata`'s own `ON DELETE CASCADE` declarations plus an `organization_id` filter on every table that carries the column — "org-scoped twice over" per its own docstring, confirmed by reading the function rather than trusting it.
+- **`37bf5845` (membership-type-drives-account-status sync) reviewed for privilege-ceiling bypass; found not applicable.** The new flush-listener (`sync_account_status_with_membership`, `models/user.py`) auto-moves an account only between `ACTIVE` and `PROBATIONARY` — never into/out of `leave`/`suspended`/`retired`/`dropped`/`archived` — and `UserStatus.PROBATIONARY` is itself a current-member status (Pitfall #32: `ACTIVE_ACCOUNT_STATUSES` includes it), so this sync does not "take an account out of service" the way the three mutations above do, and does not route around the ceiling check just added to them. The write that can trigger it (`PATCH /{user_id}/membership-type`, `members.manage`-gated) is a tier/classification change, not an account-lifecycle one; it was not extended with the same ceiling check and is not flagged for one — moving someone onto or off probation grants no permission and disables no account. Migration `2794794bda6e` (the backfill) re-read: conditional `UPDATE ... WHERE status = :expected` (so a status an officer changed concurrently is never clobbered), audits every row it changes, tolerates a `create_all`-only `users`/`audit_logs` pair, and its downgrade restores only rows still holding the status it wrote. No security defect.
+- **`55efca00` (directory-account creation on `POST /users`) reviewed end to end; sound.** `_department_email_for_directory_account` (`users.py:266-306`) refuses before anything is written when no directory is connected, department addresses are off, or the typed address is already on the department domain — all three branches read directly, not inferred from the docstring. Every `DirectoryAccountService` call from `create_member` passes `str(current_user.organization_id)` explicitly, and the service's own methods (`connected_provider`, `stage_for_transfer`, `get_for_user`, `link_new_member`) filter `organization_id` on every query (spot-checked by reading the service file directly — not this feature's own declared scope, but load-bearing for a declared endpoint). The temporary password is never returned in the API response (unchanged invariant); the one new PII-adjacent surface, `MemberDirectoryAccountSummary.last_error` (`schemas/user.py`), is sourced from `DirectoryError`, whose docstring states "a failure whose message is safe to show an officer," and tracing its only producer (`google_workspace_service.py`'s `_translate`) confirms every branch returns a hand-authored, status-code-keyed message — "only the type and HTTP status are logged," per its own comment — never the raw provider exception body.
+- **`b51300c7` (S3/MinIO file storage, 3 new routes on `organizations.py`) reviewed; sound, and correctly reuses the established settings-injection guard.** `GET /settings/file-storage/status`, `POST .../s3/activate`, `POST .../s3/deactivate` (`organizations.py:643-739`) are all gated `require_permission("settings.manage", "organization.update_settings")`, derive `organization_id` only from `current_user`, and the activate route is rate-limited (`_rate_limit_settings_test_storage`, 60s window) and audited. `OrganizationService.update_organization_settings`'s existing "the generic settings path cannot be used to plant a client-controlled `email_link_domain`" filter (praised in pass 7) is extended in the same commit to also strip the S3 activation-record key (`organization_service.py:440-448`) — so a `settings.manage` holder cannot forge a passed connection test through the generic PATCH path, only through the dedicated, rate-limited, audited route that actually ran one. The endpoint-safety check for a client-supplied S3 endpoint URL (`s3_storage.py:170-194`) routes through the repo's existing `assert_outbound_url_safe` SSRF guard and blocks cloud-metadata hosts by name, with private/plain-HTTP endpoints refused unless the operator sets `S3_ALLOW_PRIVATE_ENDPOINT` — read directly, though `s3_storage.py` is outside this feature's four declared files (it belongs to a storage/infrastructure feature not yet in the rotation) and was not audited beyond this endpoint-safety spot check. `s3_problem`/error text surfaced in the status response is sourced from hand-authored `ValueError` messages in `s3_storage.check_config`, never a raw boto3 exception.
+- **`2aa75b8f` (rank-mirroring positions, additive `mirrors_rank` field) and `3050599d` (kiosk-session model column, `sessions.is_kiosk`)** are both additive, change no permission or query, and were read for completeness only because they touch `models/user.py`/`schemas/user.py`. Neither is this feature's own territory (role/position display, and Feature 01's auth/session lifecycle, respectively); no finding.
+- **`74638250`, `911a111d`, `6e8b82ac`** touch only `schemas/organization.py`, adding `ge`/`le` bounds to one existing field and new `Optional[...]` fields to the shared `MinutesSettingsUpdate` sub-schema (Minutes/Feature 24's own surface riding the shared `OrganizationSettingsUpdate` aggregator) — the same pattern pass 10 already documented for this file. No logic in `organizations.py`/`organization_service.py` touched by these three.
+- **`0d571c1e`, `a2ab74a4`, `8a57d069`** are date/eligibility-calculation corrections inside `member_status.py` with no change to auth, permission, org-scoping, or query shape — re-read to confirm none introduces a new by-id query or widens a permission; none does.
+
+**All 82 routes across the four principal files re-enumerated mechanically, not sampled** (32 `users.py` / **27** `organizations.py`, up from 24 for the three new S3 routes / 16 `member_status.py` / 7 `member_leaves.py`, unchanged). Every route's `Depends` read directly: no route lost a permission dependency, no new by-id route appeared without an org-scoped fetch, and `organizations.py` still carries no by-id path parameter beyond the pre-existing allowlisted `/retention-policy/{record_class}` (the new S3 routes take no path parameters at all). No new `.ilike()`/`.like()` without `escape=`, raw `csv.writer`, or `window.confirm`/`alert`/`prompt` in any of the twelve backend files or their frontend consumers (`AddMember.tsx`, `MemberProfilePage.tsx`, `Members.tsx`, `StorageLocationPanel.tsx` — grepped fresh this pass, 0 hits; the new photo-removal confirmation in `MemberProfilePage.tsx` uses `useConfirm()`, and the status-change dialog uses `useDialog()` with `aria-modal`, matching Pitfalls #16/#21/#31).
+
+**Re-verified, not re-derived — both standing findings unchanged, neither touched by this window's delta:**
+
+- **USR-5** (LOW/MED, unbounded lists; narrowed by the owner, partially fixed, remainder accepted) — `get_archived_members`, `list_users_with_roles`, `MemberLeaveService.list_leaves` are all in files this window's diff did not touch (`member_leaves.py`, `user_service.py`, `member_leave_service.py` are byte-identical to pass 10; `users.py` grew above and below `list_users_with_roles` without touching it). Unchanged in shape; still accepted-as-is per the owner's recorded decision.
+- **USR-8** (MED, `GET /users` sends the full roster record to every `members.view` holder; narrowed by the owner via `GET /users/directory`, remainder accepted) — `UserService.get_users_for_organization`, `UserListResponse`, `list_users` are all unchanged this window (`user_service.py` untouched; `users.py`'s `list_users`/`UserListResponse` region not part of this window's diff). Still open per the owner's decision, unchanged.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.** This was a real, substantial delta — 733 insertions across seven files, including two genuine security hardenings (privilege-ceiling extension, permanent-delete data-loss fix) that landed independently of this rotation — and every new surface it introduced was reviewed against all seven checklist dimensions and found either already correctly guarded or not applicable to this feature's trust boundary.
+
+### Completion gate (pass 11)
+
+| Check                                                                                                                                                   | Result                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                           | ✅ 0 violations                                             |
+| `black --check app/ tests/ alembic/`                                                                                                                    | ✅ 2567 files unchanged                                     |
+| `isort --check-only app/ tests/ alembic/` (checked against both the repo's installed 9.0.2 and CI's separately-pinned 9.0.1)                            | ✅ clean under both                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                       | ✅ 640 revisions, single head `cc8c16cb6d98`                |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                       | ✅ 273 routes, 0 errors, 0 warnings                         |
+| `pytest tests/ -q -k "<pass 10's selection, plus account_status, membership_status, shift_release, kiosk, file_storage, numeric_bounds, mirrors_rank>"` | ✅ 2,396 passed, 1 pre-existing skip (`py_vapid`), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                                      | ✅ 0 errors                                                 |
+| `cd frontend && npm run lint`                                                                                                                           | ✅ 0 errors, 0 warnings (see note below)                    |
+
+`npm ci` was not needed — `node_modules` was already present and current in this worktree.
+
+---
+
+## Pass 10 (2026-10-18) — watchdog pickup: real delta (PHI read auditing, new status-change-reason endpoints, undo-drop window + separation-date hardening), 0 fixed, 0 new findings
+
+**Scope.** Pass 9 merged as `7add73bc4` (PR #3250). `git log --no-merges
+7add73bc4..HEAD` over the twelve declared files (`endpoints/users.py`,
+`endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`,
+`mcp/tools/members.py`, `mcp/tools/organization.py`): 7 non-merge commits,
+all read in full. No user/organization-table migration landed (checked by
+scanning every new migration body for `users`/`organizations`/
+`member_status`/`member_leave` — none matched; the new head
+`89723c04ae94` and its siblings all belong to the Minutes module's own
+signatures/public-copies/reminders tables).
+
+**3 of the 7 commits only touch `schemas/organization.py`, and only to add
+fields to the Minutes module's own settings sub-schema** (`public_posting`
+/ `executive_library_publishing` / `executive_public_posting` on
+`MinutesSettingsUpdate`, a new `SignatureSlotSetting` + `signature_slots`
+field, `reminder_days_before_due` / `overdue_repeat_days` /
+`open_items_digest`) — all `Optional[...] = None` with simple
+Field-level constraints (regex/length/range), nested under the shared
+`OrganizationSettingsUpdate` aggregator, which is why they show up in this
+feature's file list despite being Minutes' (Feature 24) own surface. No
+logic in `organizations.py`/`organization_service.py` touched; same shape
+as pass 9's note about an unrelated file sharing this feature's declared
+list.
+
+**The 4 real changes, each verified sound:**
+
+- **PHI read auditing (`c498e4bc1`).** `member_leaves.py` gains
+  `_audit_leave_read()`, called from `list_leaves_of_absence` (every read)
+  and `get_member_leaves` (only when `not is_own` — a member reading their
+  own leave history isn't audited as accessing someone else's PHI). Every
+  event carries ids and a record count, never the leave's free-text reason
+  — satisfies HIPAA §164.312(b) without logging the PHI itself. Pure
+  audit-logging addition; no auth/tenancy/exposure change.
+- **New status-change-reason endpoints (`1a305b736`).** `GET
+/users/{id}/status-change` and `PATCH
+/users/{id}/status-change-reason` are both gated by
+  `require_permission("members.manage")` and resolve the target through
+  the existing `_load_member(db, user_id, organization_id, for_update=...)`
+  helper — direct org-scoping (Pitfall #14a) via `User.organization_id ==
+organization_id`, excluding soft-deleted rows, with `for_update=True` on
+  the write path. The PATCH refuses when there's no status change on
+  record to attach a reason to, strips/nulls a blank reason, and audits
+  with both the previous and new reason text alongside the original
+  `member_status_changed` entry. No new exposure: the reason was already
+  readable by a `members.manage` holder via the member record itself.
+- **Undo-drop window counts from the drop's effective date
+  (`5ee95c2d4`).** Previously a back-dated drop still got the full
+  `UNDO_DROP_WINDOW_DAYS` counted from _when it was recorded_, so a drop
+  entered three weeks late could be silently erased from service history
+  well past when a department would expect that to still be possible —
+  tightening, not weakening, an existing business rule. The new anchor
+  calculation is capped so it can never run _later_ than the original
+  window (`anchor = changed - timedelta(days=backdated_days)` only shifts
+  backward), closing the exact loophole the commit names: editing a
+  stint's end afterwards in Service History to stretch the undo window.
+  Both call sites (`get_undo_drop_availability`, `undo_member_drop`) are
+  unchanged in their org-scoping/permission gates — only the availability
+  calculation itself changed.
+- **Separation-date on status change (`0929c7fea`).** `change_member_status`
+  (existing endpoint, existing `members.manage`-gated route, unchanged
+  this commit) now accepts an optional `separation_date`, validated
+  server-side against `today` (`resolve_org_today`, not client time) and
+  refused with 400 if in the future; a date before the member's current
+  service began is refused via the service layer's own `ValueError` → 400. `status_changed_at` (audit/undo-window anchor) is left alone;
+  only the service-stint close date moves. No new permission surface.
+
+**All 79 routes across the four principal files re-enumerated mechanically**
+(32/24/16/7 — `member_status.py` grew from 14 to 16 for the two new
+status-change-reason routes above; the other three files are unchanged
+counts from pass 9). No route re-gated, no `.ilike()`/`.like()` without
+`escape=`, no raw `csv.writer`, no `window.confirm`/`alert`/`prompt`
+introduced this window (grepped the four substantive commits directly).
+
+**Standing items re-verified, both unchanged (neither file in this
+window's delta):**
+
+- **USR-5** (unbounded lists, narrowed/accepted by the owner) —
+  `get_archived_members` (now `member_status.py:1012`, line drift only
+  from this window's own insertions landing above it),
+  `list_users_with_roles` (`users.py:870`, file untouched this window),
+  `MemberLeaveService.list_leaves` (`member_leave_service.py:160`, file
+  untouched this window) all unchanged in shape.
+- **USR-8** (`GET /users` sends the full roster record to every
+  `members.view` holder, narrowed/accepted by the owner) — `users.py` and
+  `UserListResponse` untouched this window.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.**
+
+### Completion gate (pass 10)
+
+| Check                                                             | Result                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                     | ✅ 0 violations                                                                                                                                                                                                                                                                                                                                                                |
+| `black --check app/ tests/ alembic/`                              | ✅ 2438 files unchanged                                                                                                                                                                                                                                                                                                                                                        |
+| `isort --check-only app/ tests/ alembic/`                         | ✅ clean                                                                                                                                                                                                                                                                                                                                                                       |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 619 revisions, single head `89723c04ae94`                                                                                                                                                                                                                                                                                                                                   |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 272 routes, 0 errors, 0 warnings                                                                                                                                                                                                                                                                                                                                            |
+| `pytest tests/ -q -k "<pass 9's own selection string>"`           | ✅ 1,576 passed, 1 skipped (environment-only, `pywebpush`) — a first run against a local database still at the pre-migration head gave 17 failures (`meeting_minutes.published_revision_version` unknown column, an unrelated Minutes-module migration this session hadn't applied); after `alembic upgrade head` the same selection was clean, same pattern pass 9 documented |
+| `frontend: npm run typecheck`                                     | ✅ clean                                                                                                                                                                                                                                                                                                                                                                       |
+| `frontend: npm run lint`                                          | ✅ clean                                                                                                                                                                                                                                                                                                                                                                       |
 
 ---
 

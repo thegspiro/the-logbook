@@ -251,6 +251,7 @@ class TestTheEndpoint:
                 ),
                 db=db_session,
                 current_user=self._caller(org_id),
+                hidden_prospect_ids=set(),
             )
 
         assert response.purged_count == 1
@@ -287,6 +288,7 @@ class TestTheEndpoint:
                     data=PurgeInactiveRequest(prospect_ids=[prospect.id], confirm=True),
                     db=db_session,
                     current_user=self._caller(org_id),
+                    hidden_prospect_ids=set(),
                 )
 
         assert refused.value.status_code == 400

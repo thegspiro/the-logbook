@@ -37,7 +37,7 @@ const STATE_LABEL: Record<ReceiptState, string> = {
 };
 
 const STATE_CLASS: Record<ReceiptState, string> = {
-  counted: 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300',
+  counted: 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300',
   test: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
   voided: 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300',
   unknown: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',

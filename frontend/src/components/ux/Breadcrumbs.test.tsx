@@ -92,7 +92,7 @@ describe('Breadcrumbs', () => {
   it('does not link a path no route declares', () => {
     // Only /new and /:templateId are declared under
     // /inventory/admin/checklists/templates; the bare path is not a route, so
-    // App.tsx's catch-all would redirect to the dashboard.
+    // App.tsx's catch-all would show "Page not found".
     grant('inventory.manage', 'inventory.check_manage');
     renderAt('/inventory/admin/checklists/templates/new');
 
@@ -236,6 +236,39 @@ describe('Breadcrumbs', () => {
       renderAt('/members/check-in-station', <Breadcrumbs underHub="/members/admin" />);
 
       expect(currentCrumbs()[0]).toHaveTextContent('Check-In Station');
+    });
+  });
+
+  describe('compactOnPhone', () => {
+    // The back link only replaces the trail below 640px, by class; jsdom lays
+    // nothing out, so these assert which parent it names and where it goes.
+    const backLink = () =>
+      screen.getAllByRole('link').find((link) => !within(trail()).queryAllByRole('link').includes(link));
+
+    it('offers the immediate parent when the viewer may open it', () => {
+      grant('inventory.check_manage', 'inventory.check_view', 'inventory.manage');
+      renderAt('/inventory/admin/checklists/supply', <Breadcrumbs compactOnPhone />);
+
+      expect(backLink()).toHaveAttribute('href', '/inventory/admin/checklists');
+      expect(trail()).toHaveClass('max-sm:hidden');
+    });
+
+    // A checklist officer holding only check_view reaches the supply worklist
+    // but not the checklist admin above it; the link must not lead to Access
+    // Denied.
+    it('skips a parent the viewer cannot open', () => {
+      grant('inventory.check_view');
+      renderAt('/inventory/admin/checklists/supply', <Breadcrumbs compactOnPhone />);
+
+      expect(backLink()?.getAttribute('href')).not.toBe('/inventory/admin/checklists');
+    });
+
+    it('leaves the trail alone without the option', () => {
+      grant('inventory.check_manage');
+      renderAt('/inventory/admin/checklists/supply');
+
+      expect(trail()).not.toHaveClass('max-sm:hidden');
+      expect(backLink()).toBeUndefined();
     });
   });
 

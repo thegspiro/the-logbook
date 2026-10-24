@@ -39,20 +39,21 @@ fails if this document misses a curated code).
 
 ## Authentication & session (LB-AUTH)
 
-| Code        | Meaning                                                                | What to do                                                                                                                               |
-| ----------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| LB-AUTH-001 | Not signed in — the request carried no session cookie or token.        | Sign in again. If it recurs right after login, check the browser accepts cookies and the site is accessed via the expected domain.       |
-| LB-AUTH-002 | Session expired or invalid — a token was presented but rejected.       | Sign in again. If every user is affected at once, check whether `SECRET_KEY` was rotated (that invalidates all sessions).                |
-| LB-AUTH-003 | Account inactive.                                                      | An administrator can reactivate the account from the Members page.                                                                       |
-| LB-AUTH-004 | Password change required (flagged after an admin reset).               | Complete the password-change prompt shown after login.                                                                                   |
-| LB-AUTH-005 | MFA enrollment required by the organization; account not enrolled yet. | Finish MFA setup under Profile → Security, or an admin can lift the org-wide requirement temporarily.                                    |
-| LB-AUTH-006 | Incorrect username or password at login.                               | Check spelling; use password reset. Repeated failures are rate limited (see LB-SYS-003).                                                 |
-| LB-AUTH-007 | Invalid MFA verification code.                                         | Re-enter the current code (they rotate every 30s). Persistent failures usually mean the phone's clock is skewed. An admin can reset MFA. |
-| LB-AUTH-008 | Missing CSRF token on a logged-in request.                             | Reload the page and retry; sign out/in if it persists; check for cookie-stripping extensions.                                            |
-| LB-AUTH-009 | Invalid CSRF token (usually a stale tab after a newer login).          | Reload the page; close duplicate tabs.                                                                                                   |
-| LB-AUTH-010 | Self-registration attempted while disabled.                            | An administrator creates accounts from the Members page, or enables `REGISTRATION_ENABLED`.                                              |
-| LB-AUTH-011 | MFA challenge expired (too long between password and code entry).      | Start the login again and enter the code promptly.                                                                                       |
-| LB-AUTH-012 | Session refreshed by another tab at the same moment (not token theft). | Nothing — the app retries with the new session. A reload picks it up if one ever shows.                                                  |
+| Code        | Meaning                                                                                                       | What to do                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| LB-AUTH-001 | Not signed in — the request carried no session cookie or token.                                               | Sign in again. If it recurs right after login, check the browser accepts cookies and the site is accessed via the expected domain.            |
+| LB-AUTH-002 | Session expired or invalid — a token was presented but rejected.                                              | Sign in again. If every user is affected at once, check whether `SECRET_KEY` was rotated (that invalidates all sessions).                     |
+| LB-AUTH-003 | Account inactive.                                                                                             | An administrator can reactivate the account from the Members page.                                                                            |
+| LB-AUTH-004 | Password change required (flagged after an admin reset).                                                      | Complete the password-change prompt shown after login.                                                                                        |
+| LB-AUTH-005 | MFA enrollment required by the organization; account not enrolled yet.                                        | Finish MFA setup under Profile → Security, or an admin can lift the org-wide requirement temporarily.                                         |
+| LB-AUTH-006 | Incorrect username or password at login.                                                                      | Check spelling; use password reset. Repeated failures are rate limited (see LB-SYS-003).                                                      |
+| LB-AUTH-007 | Invalid MFA verification code.                                                                                | Re-enter the current code (they rotate every 30s). Persistent failures usually mean the phone's clock is skewed. An admin can reset MFA.      |
+| LB-AUTH-008 | Missing CSRF token on a logged-in request.                                                                    | Reload the page and retry; sign out/in if it persists; check for cookie-stripping extensions.                                                 |
+| LB-AUTH-009 | Invalid CSRF token (usually a stale tab after a newer login).                                                 | Reload the page; close duplicate tabs.                                                                                                        |
+| LB-AUTH-010 | Self-registration attempted while disabled.                                                                   | An administrator creates accounts from the Members page, or enables `REGISTRATION_ENABLED`.                                                   |
+| LB-AUTH-011 | MFA challenge expired (too long between password and code entry).                                             | Start the login again and enter the code promptly.                                                                                            |
+| LB-AUTH-012 | Session refreshed by another tab at the same moment (not token theft).                                        | Nothing — the app retries with the new session. A reload picks it up if one ever shows.                                                       |
+| LB-AUTH-013 | Re-verification required before a sensitive action (export, security change, recovery or destructive action). | Confirm with an authenticator code (or password without MFA); the app prompts and repeats the action. API callers `POST /auth/step-up` first. |
 
 ## Permissions (LB-PERM)
 
@@ -93,13 +94,14 @@ fails if this document misses a curated code).
 
 ## File uploads (LB-UPLD)
 
-| Code        | Meaning                                                                                                   | What to do                                                                                                        |
-| ----------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| LB-UPLD-001 | File exceeds the size limit for this upload type (limit stated in the message).                           | Compress/resize the file, or split archives into parts.                                                           |
-| LB-UPLD-002 | File type not accepted — checked by content, so renaming the extension doesn't help.                      | Convert to one of the listed types; re-export if the file may be corrupted.                                       |
-| LB-UPLD-003 | Server-side upload inspection temporarily unavailable; upload refused rather than unvetted.               | Retry in a few minutes; if persistent, check backend logs for the libmagic dependency.                            |
-| LB-UPLD-004 | The file was identified as malicious by the ClamAV scan; nothing was stored and the rejection is audited. | Get a fresh copy from the source; an admin can check the audit log (`upload_malware_detected`) for the signature. |
-| LB-UPLD-005 | Malware scanning is on but ClamAV was unreachable or timed out; upload refused rather than unscanned.     | Retry in a few minutes; if persistent, check the `clamav` container is healthy and `CLAMAV_HOST`/`CLAMAV_PORT`.   |
+| Code        | Meaning                                                                                                      | What to do                                                                                                           |
+| ----------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| LB-UPLD-001 | File exceeds the size limit for this upload type (limit stated in the message).                              | Compress/resize the file, or split archives into parts.                                                              |
+| LB-UPLD-002 | File type not accepted — checked by content, so renaming the extension doesn't help.                         | Convert to one of the listed types; re-export if the file may be corrupted.                                          |
+| LB-UPLD-003 | Server-side upload inspection temporarily unavailable; upload refused rather than unvetted.                  | Retry in a few minutes; if persistent, check backend logs for the libmagic dependency.                               |
+| LB-UPLD-004 | The file was identified as malicious by the ClamAV scan; nothing was stored and the rejection is audited.    | Get a fresh copy from the source; an admin can check the audit log (`upload_malware_detected`) for the signature.    |
+| LB-UPLD-005 | Malware scanning is on but ClamAV was unreachable or timed out; upload refused rather than unscanned.        | Retry in a few minutes; if persistent, check the `clamav` container is healthy and `CLAMAV_HOST`/`CLAMAV_PORT`.      |
+| LB-UPLD-006 | The department's own S3 / MinIO bucket was unreachable or refused the request; nothing was stored elsewhere. | Retry in a few minutes; if persistent, an administrator checks File Storage settings and runs Test and switch to S3. |
 
 ## Onboarding (LB-ONBD)
 
@@ -138,6 +140,12 @@ Scheduling → Settings → General.
 | Code       | Meaning                                                                                                 | What to do                                                                                                                             |
 | ---------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | LB-DOC-001 | A folder's access settings would admit no active member except full administrators (nothing was saved). | Choose a permission or position members hold, or loosen a folder above it. If it is meant for administrators only, confirm when asked. |
+
+## Finance (LB-FIN)
+
+| Code       | Meaning                                                                                                                   | What to do                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| LB-FIN-001 | A QuickBooks export would resend payments from a file confirmed as imported into QuickBooks, which would post them twice. | Leave out payments already sent. If the earlier entries were deleted in QuickBooks, confirm when the QuickBooks Export screen asks. |
 
 ## Automatic fallback (LB-API-\<status\>)
 

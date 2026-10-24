@@ -94,8 +94,9 @@ RETIRED_SETTINGS: dict[str, str] = {
     ),
     "DB_POOL_MIN": "only DB_POOL_MAX reaches the connection pool",
     "STORAGE_TYPE": (
-        "uploads are always written to local disk under /app/uploads; there is "
-        "no S3, Azure or GCS backend"
+        "there is no installation-wide storage setting: uploads go to local "
+        "disk under /app/uploads, or to a department's own S3 bucket chosen in "
+        "its File Storage settings"
     ),
     "UPLOAD_DIR": (
         "every upload writer uses its own fixed path under /app/uploads; mount "
@@ -190,6 +191,14 @@ class Settings(BaseSettings):
         """
         args: dict = {
             "connect_timeout": self.DB_CONNECT_TIMEOUT,
+            # Every DATETIME is stored and read as UTC (see _stamp_utc in
+            # app/core/database.py), but server_default=func.now() is
+            # evaluated in the session's zone, which falls back to the MySQL
+            # server's TZ (America/New_York in the shipped compose files).
+            # Without this, created_at was stored as local wall-clock time and
+            # read back as UTC, hours off from Python-written columns such as
+            # approved_at.
+            "init_command": "SET time_zone = '+00:00'",
         }
         if self.DB_SSL:
             import ssl
@@ -258,6 +267,20 @@ class Settings(BaseSettings):
     HIPAA_SESSION_TIMEOUT_MINUTES: int = (
         15  # Automatic logoff after inactivity (§164.312(a)(2)(iii))
     )
+    # Hours a session may live however active it is; 0 turns the cap off. Idle
+    # time alone does not end a session that keeps refreshing, so without this a
+    # stolen cookie that keeps being used never has to sign in again.
+    SESSION_ABSOLUTE_MAX_HOURS: int = Field(default=12, ge=0)
+    # Limits for a session its owner marked as a station kiosk (requires the
+    # security.kiosk_session permission). 0 disables the limit.
+    SESSION_KIOSK_ABSOLUTE_MAX_HOURS: int = Field(default=168, ge=0)
+    SESSION_KIOSK_IDLE_TIMEOUT_MINUTES: int = Field(default=720, ge=0)
+    # Days a privileged member who has not enrolled in MFA keeps working before
+    # the enrollment gate closes; 0 closes it at once.
+    MFA_GRACE_DAYS: int = Field(default=14, ge=0)
+    # Minutes a successful step-up (POST /auth/step-up) keeps sensitive actions
+    # open on that session.
+    STEPUP_WINDOW_MINUTES: int = Field(default=10, ge=1)
     HIPAA_PASSWORD_HISTORY_COUNT: int = (
         12  # Previous passwords remembered (§164.312(d))
     )
@@ -291,6 +314,14 @@ class Settings(BaseSettings):
     # private-resolution check is waived; HTTPS-scheme and cloud-metadata-
     # endpoint checks still apply.
     AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION: bool = False
+    # Explicit operator risk acceptance: allow a department's own S3 endpoint
+    # (File Storage settings) to resolve to a private address, and to use
+    # plain HTTP — the bundled MinIO at http://minio:9000 is both. The endpoint
+    # is typed by a department administrator, not the operator, so the default
+    # stays closed: open, it lets that administrator point the server's
+    # signed requests at any internal service. Cloud-metadata hosts stay
+    # blocked either way.
+    S3_ALLOW_PRIVATE_ENDPOINT: bool = False
     # Comma-separated IP addresses/CIDRs containing operator-approved label
     # printers. Empty disables direct network printing. This is deliberately a
     # platform setting rather than tenant-managed configuration: organization
@@ -1358,6 +1389,32 @@ class Settings(BaseSettings):
     # Comma-separated allowed email domains (empty = any verified email that
     # matches an existing local user).
     AUTHENTIK_ALLOWED_DOMAINS: str = ""
+
+    # ============================================
+    # Calendar publishing (Google Calendar / Outlook)
+    # ============================================
+    # One-way publishing of department events to a dedicated Google or
+    # Outlook calendar. While this is off the two catalog cards report
+    # "coming soon" and cannot be connected, a row an older release left
+    # "connected" is presented the same way (it never held credentials), and
+    # the calendar_sync scheduled task does nothing. Turning it on makes the
+    # cards connectable through "Connect with Google" and "Connect with
+    # Microsoft" (OAuth sign-ins that create the department's calendar),
+    # after which the task publishes every five minutes. The department
+    # iCalendar (ICS) feed does not depend on this switch.
+    CALENDAR_SYNC_ENABLED: bool = False
+    # Absolute URL Google redirects back to after the Google Calendar
+    # consent screen. Must exactly match an "Authorized redirect URI" on the
+    # OAuth client (GOOGLE_CLIENT_ID, or the department's own), e.g.
+    # https://app.example.org/api/v1/integrations/google-calendar/oauth/callback
+    # Leave unset to derive it from the incoming request's base URL.
+    GOOGLE_CALENDAR_REDIRECT_URI: str | None = None
+    # Absolute URL Microsoft redirects back to after the Outlook sign-in.
+    # Must exactly match a "Web" redirect URI on the app registration
+    # (AZURE_AD_CLIENT_ID, or the department's own), e.g.
+    # https://app.example.org/api/v1/integrations/outlook/oauth/callback
+    # Leave unset to derive it from the incoming request's base URL.
+    MICROSOFT_CALENDAR_REDIRECT_URI: str | None = None
 
     # ============================================
     # Claude (MCP) OAuth 2.1 authorization server

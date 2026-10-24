@@ -4,14 +4,44 @@ import { Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff 
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
 import { userService, organizationService, roleService, locationsService } from '../services/api';
+import { withoutRankMirrors } from '../utils/positions';
 import type { Location } from '../services/api';
 import { getErrorDetail, getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
+import type { CreatedMember } from '../services/userServices';
 import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, memberClassAndStatusFor } from '../utils/membership';
+
+/** The directories a new member's account can be created in, by integration type. */
+const DIRECTORY_PRODUCTS: ReadonlyArray<readonly [string, string]> = [
+  ['google-workspace', 'Google Workspace'],
+  ['microsoft-365', 'Microsoft 365'],
+];
+
+/** One line for the officer about what happened in the directory. */
+const directoryOutcome = (member: CreatedMember): { ok: boolean; message: string } | null => {
+  const account = member.directory_account;
+  if (!account) return null;
+  if (account.status === 'created') {
+    return {
+      ok: true,
+      message: `Member added with a ${account.provider_name} account at ${account.email}`,
+    };
+  }
+  if (account.status === 'linked_existing') {
+    return { ok: true, message: `Member added and linked to their ${account.provider_name} account` };
+  }
+  return {
+    ok: false,
+    message: `Member added, but the ${account.provider_name} account was not created${
+      account.last_error ? `: ${account.last_error.replace(/\.+$/, '')}` : ''
+    }. Retry from their profile.`,
+  };
+};
 
 /** The create endpoint's refusal for a username already in the department. */
 const USERNAME_TAKEN = 'Username already exists';
@@ -23,6 +53,12 @@ const AddMember: React.FC = () => {
   const { confirm } = useConfirm();
   const { rankOptions } = useRanks();
   const [isSaving, setIsSaving] = useState(false);
+  const { isConnected } = useConnectedIntegrations();
+  const directoryProduct = DIRECTORY_PRODUCTS.find(([type]) => isConnected(type))?.[1] ?? null;
+  // Unticked by default: each account uses a license, and not every member
+  // added here needs one (owner decision, 2026-10-20).
+  const [createDirectoryAccount, setCreateDirectoryAccount] = useState(false);
+  const creatingAccount = directoryProduct !== null && createDirectoryAccount;
   // The number the server will assign when Membership Number is left blank, or
   // null when the department assigns numbers by hand. It decides whether the
   // field is required: requiring it while auto-assignment is on meant the typed
@@ -104,7 +140,7 @@ const AddMember: React.FC = () => {
     roleService
       .getRoles()
       .then((roles) => {
-        setAvailablePositions(roles.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
+        setAvailablePositions(withoutRankMirrors(roles).map((r) => ({ id: r.id, name: r.name })));
       })
       .catch(() => {
         /* non-critical */
@@ -289,6 +325,7 @@ const AddMember: React.FC = () => {
         ...(formData.zipCode ? { address_zip: formData.zipCode } : {}),
         ...(useCustomPassword && initialPassword ? { password: initialPassword } : {}),
         ...(formData.role ? { role_ids: [formData.role] } : {}),
+        ...(creatingAccount ? { create_directory_account: true } : {}),
       };
 
       // The form has no username field; it is derived from the email. Two
@@ -296,17 +333,20 @@ const AddMember: React.FC = () => {
       // same one, and the second member could not be added at all — the
       // refusal named a field the officer never saw (workflow review W08).
       // Try the next free suffix instead.
+      let created: CreatedMember | null = null;
       for (let attempt = 1; ; attempt++) {
         const candidate = attempt === 1 ? username : `${username}_${attempt}`;
         try {
-          await userService.createMember({ ...memberPayload, username: candidate });
+          created = await userService.createMember({ ...memberPayload, username: candidate });
           break;
         } catch (err: unknown) {
           if (attempt >= MAX_USERNAME_ATTEMPTS || getErrorDetail(err) !== USERNAME_TAKEN) throw err;
         }
       }
 
-      toast.success('Member added');
+      const outcome = created ? directoryOutcome(created) : null;
+      if (outcome && !outcome.ok) toast.error(outcome.message);
+      else toast.success(outcome?.message ?? 'Member added');
       void navigate('/members');
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Unable to add member. Try again.');
@@ -583,7 +623,8 @@ const AddMember: React.FC = () => {
 
               <div>
                 <label htmlFor="add-email" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Email <span className="text-red-700 dark:text-red-400">*</span>
+                  {creatingAccount ? 'Personal email' : 'Email'}{' '}
+                  <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="email"
@@ -594,6 +635,25 @@ const AddMember: React.FC = () => {
                   placeholder="john.doe@example.com"
                 />
                 {errors.email && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email}</p>}
+                {directoryProduct && (
+                  <label className="mt-3 flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={createDirectoryAccount}
+                      onChange={(e) => setCreateDirectoryAccount(e.target.checked)}
+                      className="form-checkbox mt-0.5"
+                    />
+                    <span>
+                      <span className="text-theme-text-primary text-sm font-medium">
+                        Create a {directoryProduct} account
+                      </span>
+                      <span className="text-theme-text-muted block text-xs">
+                        At a department address made from their name, which becomes their sign-in email. The email above
+                        is kept as their personal address, where the temporary passwords are sent.
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
             </div>
           </div>
@@ -838,7 +898,7 @@ const AddMember: React.FC = () => {
                 </select>
                 <p id="add-role-help" className="text-theme-text-muted mt-1 text-xs">
                   The job they hold here, such as Secretary or Training Officer. Positions decide most of what they can
-                  see and do in The Logbook.
+                  see and do in The Logbook. A rank such as Captain or Firefighter is set in the Rank field, not here.
                 </p>
               </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import { BrowserRouter, Routes, Route } from 'react-router';
 import { Toaster } from 'react-hot-toast';
 
 // Security initialization
@@ -19,6 +19,7 @@ import { RouteTitleManager } from './components/RouteTitleManager';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PullToRefreshProvider } from './contexts/PullToRefreshContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
+import { StepUpProvider } from './contexts/StepUpContext';
 import { SignOutUnconfirmedNotice } from './components/SignOutUnconfirmedNotice';
 
 // Protected Route & Layout
@@ -79,9 +80,11 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
 
+const PublicMinutesPage = lazyWithRetry(() => import('./pages/PublicMinutesPage'));
 // Public legal pages (privacy policy / terms of service)
 const LegalPage = lazyWithRetry(() => import('./pages/legal/LegalPage'));
 const LearningCenterPage = lazyWithRetry(() => import('./pages/learning/LearningCenterPage'));
+const NotFoundPage = lazyWithRetry(() => import('./pages/NotFoundPage'));
 const LearningPathPage = lazyWithRetry(() => import('./pages/learning/LearningPathPage'));
 
 /**
@@ -104,142 +107,149 @@ function App() {
         {/* Above the router so any screen can ask for a confirmation, and
             outside AppLayout so public pages (login, onboarding) get one too. */}
         <ConfirmProvider>
-          <BrowserRouter>
-            <RouteTitleManager />
-            <div className="App">
-              <UpdateNotification />
-              <SignOutUnconfirmedNotice />
-              <Suspense fallback={<PageLoadingFallback />}>
-                <Routes>
-                  {/* ============================================
+          <StepUpProvider>
+            <BrowserRouter>
+              <RouteTitleManager />
+              <div className="App">
+                <UpdateNotification />
+                <SignOutUnconfirmedNotice />
+                <Suspense fallback={<PageLoadingFallback />}>
+                  <Routes>
+                    {/* ============================================
                 ONBOARDING MODULE
                 Comment out the line below to disable onboarding
                 ============================================ */}
-                  {getOnboardingRoutes()}
+                    {getOnboardingRoutes()}
 
-                  {/* ============================================
+                    {/* ============================================
                 PROTECTED ROUTES WITH APP LAYOUT
                 All routes below get the sidebar/top navigation
                 ============================================ */}
-                  <Route
-                    element={
-                      <ProtectedRoute>
-                        <PullToRefreshProvider>
-                          <AppLayout />
-                        </PullToRefreshProvider>
-                      </ProtectedRoute>
-                    }
-                  >
-                    {/* Main Dashboard */}
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/learning" element={<LearningCenterPage />} />
-                    <Route path="/learning/:pathId" element={<LearningPathPage />} />
+                    <Route
+                      element={
+                        <ProtectedRoute>
+                          <PullToRefreshProvider>
+                            <AppLayout />
+                          </PullToRefreshProvider>
+                        </ProtectedRoute>
+                      }
+                    >
+                      {/* Main Dashboard */}
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/learning" element={<LearningCenterPage />} />
+                      <Route path="/learning/:pathId" element={<LearningPathPage />} />
 
-                    {/* Feature Modules */}
-                    {getApparatusRoutes()}
-                    {getMembershipRoutes()}
-                    {getProspectiveMembersRoutes()}
-                    {getAdminHoursRoutes()}
-                    {getCommunicationsRoutes()}
-                    {getEventsRoutes()}
-                    {getDocumentsRoutes()}
-                    {getTrainingRoutes()}
-                    {getInventoryRoutes()}
-                    {getMedicalSuppliesRoutes()}
-                    {getStorefrontRoutes()}
-                    {getSchedulingRoutes()}
-                    {getFacilitiesRoutes()}
-                    {getElectionsRoutes()}
-                    {getMinutesRoutes()}
-                    {getActionItemsRoutes()}
-                    {getGovernanceRoutes()}
-                    {getNotificationsRoutes()}
-                    {getFormsRoutes()}
-                    {getIntegrationsRoutes()}
-                    {getMedicalScreeningRoutes()}
-                    {getTestingRoutes()}
+                      {/* Feature Modules */}
+                      {getApparatusRoutes()}
+                      {getMembershipRoutes()}
+                      {getProspectiveMembersRoutes()}
+                      {getAdminHoursRoutes()}
+                      {getCommunicationsRoutes()}
+                      {getEventsRoutes()}
+                      {getDocumentsRoutes()}
+                      {getTrainingRoutes()}
+                      {getInventoryRoutes()}
+                      {getMedicalSuppliesRoutes()}
+                      {getStorefrontRoutes()}
+                      {getSchedulingRoutes()}
+                      {getFacilitiesRoutes()}
+                      {getElectionsRoutes()}
+                      {getMinutesRoutes()}
+                      {getActionItemsRoutes()}
+                      {getGovernanceRoutes()}
+                      {getNotificationsRoutes()}
+                      {getFormsRoutes()}
+                      {getIntegrationsRoutes()}
+                      {getMedicalScreeningRoutes()}
+                      {getTestingRoutes()}
 
-                    {/* Finance */}
-                    {getFinanceRoutes()}
+                      {/* Finance */}
+                      {getFinanceRoutes()}
 
-                    {/* Grants & Fundraising */}
-                    {getGrantsFundraisingRoutes()}
+                      {/* Grants & Fundraising */}
+                      {getGrantsFundraisingRoutes()}
 
-                    {/* Reports */}
-                    {getReportsRoutes()}
+                      {/* Reports */}
+                      {getReportsRoutes()}
 
-                    {/* IP Security */}
-                    {getIPSecurityRoutes()}
+                      {/* IP Security */}
+                      {getIPSecurityRoutes()}
 
-                    {/* Admin & Settings */}
-                    {getAdminRoutes()}
-                    {getPublicPortalRoutes()}
-                    {getSettingsRoutes()}
-                  </Route>
+                      {/* Admin & Settings */}
+                      {getAdminRoutes()}
+                      {getPublicPortalRoutes()}
+                      {getSettingsRoutes()}
 
-                  {/* ============================================
+                      {/* Anything above that matched nothing. Inside the layout so a
+                        signed-in user keeps the navigation, and a signed-out one is
+                        sent to sign in first. */}
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Route>
+
+                    {/* ============================================
                 PUBLIC ROUTES (no auth required)
                 ============================================ */}
-                  {getProspectiveMembersPublicRoutes()}
-                  {getFormsPublicRoutes()}
-                  {getEventsPublicRoutes()}
-                  {getElectionsPublicRoutes()}
-                  {getFacilitiesPublicRoutes()}
+                    {getProspectiveMembersPublicRoutes()}
+                    {getFormsPublicRoutes()}
+                    {getEventsPublicRoutes()}
+                    {getElectionsPublicRoutes()}
+                    {getFacilitiesPublicRoutes()}
 
-                  {/* Login Page */}
-                  <Route path="/login" element={<LoginPage />} />
+                    {/* Login Page */}
+                    <Route path="/login" element={<LoginPage />} />
 
-                  {/* OAuth (Google) redirect landing page */}
-                  <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+                    {/* OAuth (Google) redirect landing page */}
+                    <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 
-                  {/* Password Reset Pages */}
-                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                  <Route path="/reset-password" element={<ResetPasswordPage />} />
+                    {/* Password Reset Pages */}
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-                  {/* Legal pages (public) */}
-                  <Route path="/privacy" element={<LegalPage />} />
-                  <Route path="/terms" element={<LegalPage />} />
-                  {/* Public external-approver page (token-authenticated) */}
-                  <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
+                    {/* Legal pages (public) */}
+                    <Route path="/privacy" element={<LegalPage />} />
+                    <Route path="/terms" element={<LegalPage />} />
+                    {/* Public minutes (no sign-in): the copies the department chose to post */}
+                    <Route path="/public/minutes" element={<PublicMinutesPage />} />
+                    <Route path="/public/minutes/:copyId" element={<PublicMinutesPage />} />
+                    {/* Public external-approver page (token-authenticated) */}
+                    <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
+                  </Routes>
+                </Suspense>
 
-                  {/* Catch all - redirect to welcome */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </Suspense>
-
-              {/* Toast notifications */}
-              <Toaster
-                position="top-right"
-                containerClassName="app-toaster"
-                toastOptions={{
-                  duration: 4000,
-                  className: 'app-toast',
-                  ariaProps: {
-                    role: 'status',
-                    'aria-live': 'polite',
-                  },
-                  success: {
-                    className: 'app-toast app-toast--success',
-                    iconTheme: {
-                      primary: 'var(--toast-success)',
-                      secondary: 'var(--toast-icon-secondary)',
-                    },
-                  },
-                  error: {
-                    className: 'app-toast app-toast--error',
+                {/* Toast notifications */}
+                <Toaster
+                  position="top-right"
+                  containerClassName="app-toaster"
+                  toastOptions={{
+                    duration: 4000,
+                    className: 'app-toast',
                     ariaProps: {
-                      role: 'alert',
-                      'aria-live': 'assertive',
+                      role: 'status',
+                      'aria-live': 'polite',
                     },
-                    iconTheme: {
-                      primary: 'var(--toast-error)',
-                      secondary: 'var(--toast-icon-secondary)',
+                    success: {
+                      className: 'app-toast app-toast--success',
+                      iconTheme: {
+                        primary: 'var(--toast-success)',
+                        secondary: 'var(--toast-icon-secondary)',
+                      },
                     },
-                  },
-                }}
-              />
-            </div>
-          </BrowserRouter>
+                    error: {
+                      className: 'app-toast app-toast--error',
+                      ariaProps: {
+                        role: 'alert',
+                        'aria-live': 'assertive',
+                      },
+                      iconTheme: {
+                        primary: 'var(--toast-error)',
+                        secondary: 'var(--toast-icon-secondary)',
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </BrowserRouter>
+          </StepUpProvider>
         </ConfirmProvider>
       </ErrorBoundary>
     </ThemeProvider>

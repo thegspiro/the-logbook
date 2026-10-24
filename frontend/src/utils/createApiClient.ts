@@ -16,10 +16,12 @@ import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
 import { handleExpiredSession, performSharedRefresh } from '../services/apiClient';
 import { reportApiError } from '../services/errorReporting';
+import { isStepUpRequired, requestStepUp } from './stepUp';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
     _retry?: boolean;
+    _stepUpTried?: boolean;
   }
 }
 
@@ -89,6 +91,12 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
       }
 
       const originalRequest = error.config;
+      if (isStepUpRequired(error) && originalRequest && !originalRequest._stepUpTried) {
+        originalRequest._stepUpTried = true;
+        if (await requestStepUp()) return api(originalRequest);
+        return Promise.reject(error);
+      }
+
       if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
         originalRequest._retry = true;
         try {

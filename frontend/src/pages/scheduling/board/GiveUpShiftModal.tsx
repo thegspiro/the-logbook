@@ -108,17 +108,27 @@ export const GiveUpShiftModal: React.FC<GiveUpShiftModalProps> = ({
     setSubmitting(true);
     try {
       await schedulingService.withdrawSignup(shift.id);
-      if (endSeries && standingClaim) {
-        // The remaining dates go with it — that is what the member ticked.
-        await schedulingService.endStandingShift(standingClaim.id, true);
-      }
-      onChanged();
-      setStep(2);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not release this shift.'));
-    } finally {
       setSubmitting(false);
+      return;
     }
+    // The seat is gone from here on, whatever happens to the series: the board
+    // must re-read now, or it keeps showing the member seated and a retry
+    // fails with "You are not assigned".
+    onChanged();
+    if (endSeries && standingClaim) {
+      try {
+        // The remaining dates go with it — that is what the member ticked.
+        await schedulingService.endStandingShift(standingClaim.id, true);
+      } catch (err) {
+        toast.error(
+          `This shift was released, but the standing shift could not be ended (${getErrorMessage(err, 'unknown error')}). End it from your standing shifts.`
+        );
+      }
+    }
+    setStep(2);
+    setSubmitting(false);
   };
 
   const handleOffer = async () => {
@@ -331,7 +341,7 @@ export const GiveUpShiftModal: React.FC<GiveUpShiftModalProps> = ({
       {step === 2 && (
         <div className="py-4 text-center">
           <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-green-200 bg-green-50 dark:border-green-500/40 dark:bg-green-500/10">
-            <Check className="h-6 w-6 text-green-600 dark:text-green-400" aria-hidden="true" />
+            <Check className="h-6 w-6 text-green-700 dark:text-green-400" aria-hidden="true" />
           </span>
           <h4 className="text-theme-text-primary text-[17px] font-bold">
             {choice === 'trade'

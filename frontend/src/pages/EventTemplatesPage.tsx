@@ -7,13 +7,13 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
-import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { FileText, Plus, Pencil, Archive, ToggleLeft, ToggleRight, ArrowLeft, Clock } from 'lucide-react';
+import { FileText, Plus, Pencil, Archive, ToggleLeft, ToggleRight, Clock } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventTemplate, EventTemplateCreate } from '../types/event';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { Breadcrumbs, EmptyState, ConfirmDialog } from '../components/ux';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { EventTemplateForm } from '../components/EventTemplateForm';
 
 export const EventTemplatesPage: React.FC = () => {
@@ -159,33 +159,18 @@ export const EventTemplatesPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs underHub="/events/admin" />
-
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            to="/events"
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
-          >
-            <ArrowLeft className="mr-2 h-5 w-5" aria-hidden="true" />
-            Back to Events
-          </Link>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold sm:text-3xl">
-                <FileText className="h-7 w-7 text-red-700" aria-hidden="true" />
-                Event Templates
-              </h1>
-              <p className="text-theme-text-secondary mt-1 text-sm">
-                Save common event settings to reuse when you create an event.
-              </p>
-            </div>
+        <EventsPageHeader
+          icon={FileText}
+          title="Event Templates"
+          subtitle="Save common event settings to reuse when you create an event."
+          underHub="/events/admin"
+          actions={
             <button onClick={handleCreate} className="btn-primary inline-flex items-center gap-2">
               <Plus className="h-5 w-5" aria-hidden="true" />
               New Template
             </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Template List */}
         {templates.length === 0 ? (
@@ -259,7 +244,7 @@ export const EventTemplatesPage: React.FC = () => {
                       aria-label={template.is_active ? `Deactivate ${template.name}` : `Activate ${template.name}`}
                     >
                       {template.is_active ? (
-                        <ToggleRight className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <ToggleRight className="h-5 w-5 text-green-700 dark:text-green-400" />
                       ) : (
                         <ToggleLeft className="h-5 w-5" />
                       )}

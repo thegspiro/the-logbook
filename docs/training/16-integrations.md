@@ -1,6 +1,24 @@
 # Integrations
 
-The Integrations module connects The Logbook to external services — calendar systems, messaging platforms, CRM tools, dispatch systems, and reporting agencies. Each integration is configured and managed from a central page.
+Integrations connect The Logbook to services outside it: chat apps, Salesforce,
+PayPal, e-signature and booking tools, training providers and Claude. Each one
+is switched on and managed from one page.
+
+## Lesson at a Glance
+
+|                     |                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| **Who this is for** | Administrators and IT officers who set up integrations. Training officers, for training providers |
+| **What you need**   | A position that can manage organization settings and third-party integrations                     |
+| **Essential path**  | About 30 minutes: the overview, connecting, and the integrations your department uses             |
+| **Full guide**      | About 2 hours                                                                                     |
+| **Last verified**   | 2026-10-14                                                                                        |
+| **Owner**           | Your department's IT officer                                                                      |
+
+Most members never open this page. The parts a member may meet are the
+[calendar feeds](#icalendar-ics-feed),
+[ID cards](#nfc-id-cards--tap-in-attendance) and
+[connecting Claude to their own account](#walkthrough-connecting-the-claudeai-connector).
 
 ---
 
@@ -13,30 +31,46 @@ The Integrations module connects The Logbook to external services — calendar s
 5. [Documenso — Document E-Signatures](#documenso--document-e-signatures)
 6. [Cal.com — Interview Scheduling](#calcom--interview-scheduling)
 7. [PayPal — Store Payment Reconciliation](#paypal--store-payment-reconciliation)
-8. [Calendar Integrations](#calendar-integrations)
-9. [Messaging Integrations](#messaging-integrations)
-10. [Weather Alerts](#weather-alerts)
-11. [EMS & Fire Reporting](#ems--fire-reporting)
-12. [Generic Webhooks](#generic-webhooks)
-13. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
-14. [Training Provider Integrations](#training-provider-integrations)
-15. [Monitoring Integration Health](#monitoring-integration-health)
-16. [Troubleshooting](#troubleshooting)
+8. [Google Workspace — Member Accounts](#google-workspace--member-accounts)
+   - [Microsoft 365 — Member Accounts](#microsoft-365--member-accounts)
+9. [Calendar Integrations](#calendar-integrations)
+10. [Messaging Integrations](#messaging-integrations)
+11. [Weather Alerts](#weather-alerts)
+12. [EMS & Fire Reporting](#ems--fire-reporting)
+13. [Generic Webhooks](#generic-webhooks)
+14. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
+15. [Training Provider Integrations](#training-provider-integrations)
+16. [Claude (MCP)](#claude-mcp--asking-questions-of-your-logbook)
+17. [Monitoring Integration Health](#monitoring-integration-health)
+18. [Troubleshooting](#troubleshooting)
+19. [Realistic Example](#realistic-example-connecting-slack-and-the-shift-feed)
+20. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## Integrations Overview
 
-**Required Permission:** `settings.manage`
+Open **Administration → Forms & Comms → Integrations**. The menu entry appears
+only when the Integrations module is turned on for your department.
 
-Navigate to **Settings > Integrations** (`/integrations`) to view and manage all external connections.
+Who can do what:
 
-The integrations page shows:
+| To                                    | You need a position with                     |
+| ------------------------------------- | -------------------------------------------- |
+| Open the Integrations page            | **Full settings and admin management**       |
+| Connect, change, test or disconnect   | **Manage third-party integrations** as well  |
+| Issue Claude service keys and clients | **Issue and revoke Claude MCP service keys** |
 
-- **Connected integrations** with status indicators (green = healthy, yellow = error)
-- **Available integrations** that can be configured
-- **Coming Soon** integrations planned for future releases
-- Summary counts: connected vs available
+These are the names the Role Management screen shows.
+
+The page shows:
+
+- **Available Integrations** — how many entries the catalog has
+- **Active** — how many are connected or turned on
+- **Ready to Set Up** — how many you could connect today
+- A card for each integration. A connected one carries a green **Connected**
+  badge (**Active** for a feature such as NFC ID Cards). A planned one carries
+  **Coming Soon**. One that can carry patient information carries **PHI**.
 
 ![Integrations catalog grid with connection status on each card](./images/16-01-integrations-catalog.png)
 
@@ -46,232 +80,268 @@ The integrations page shows:
 
 ### Currently Available
 
-| Category           | Integration        | Description                                                                  |
-| ------------------ | ------------------ | ---------------------------------------------------------------------------- |
-| **Calendar**       | Google Calendar    | Two-way event sync                                                           |
-| **Calendar**       | Microsoft Outlook  | Calendar and contact sync                                                    |
-| **Calendar**       | iCalendar (ICS)    | Advertises the per-member shift feed; no configuration screen of its own     |
-| **Messaging**      | Slack              | Event alerts, training reminders, custom channels                            |
-| **Messaging**      | Discord            | Webhook notifications, event reminders                                       |
-| **Messaging**      | Microsoft Teams    | Adaptive Cards, channel notifications                                        |
-| **CRM**            | Salesforce         | Contact sync, donor management, bidirectional                                |
-| **Documents**      | Documenso          | Send documents for e-signature (open-source DocuSign alternative)            |
-| **Scheduling**     | Cal.com            | Self-scheduling links and booking sync (open-source Calendly alternative)    |
-| **Payments**       | PayPal             | Match incoming store payments to department store orders automatically       |
-| **Data**           | Generic Webhooks   | Signed messages to any URL — only a test message is sent today               |
-| **Safety**         | NWS Weather Alerts | Checks your zone code against the weather service — alerts are not shown yet |
-| **Access Control** | NFC ID Cards       | Issue member ID cards with an NFC tag and check members in by tapping one    |
+| Category           | Integration        | What it does today                                                                               |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------ |
+| **Calendar**       | iCalendar (ICS)    | A subscribe link to the department's published events — see [below](#icalendar-ics-feed)         |
+| **Messaging**      | Slack              | Posts new events, shifts and training records to a channel                                       |
+| **Messaging**      | Discord            | The same, to a Discord channel                                                                   |
+| **Messaging**      | Microsoft Teams    | The same, to a Teams channel                                                                     |
+| **CRM**            | Salesforce         | Sends members, training and events to Salesforce; can update contact details                     |
+| **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                            |
+| **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                           |
+| **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                       |
+| **Automation**     | Generic Webhooks   | Sends a signed test message to a web address — nothing else yet                                  |
+| **Safety**         | NWS Weather Alerts | Checks your weather zone code — alerts are not shown yet                                         |
+| **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                              |
+| **Access Control** | Google Workspace   | Creates a Google account for each applicant converted to a member; suspends it when they leave   |
+| **Access Control** | Microsoft 365      | Creates and licenses a Microsoft 365 account for each new member; blocks sign-in when they leave |
+| **AI Assistants**  | Claude (MCP)       | Lets Claude answer questions about your department                                               |
 
 ### Coming Soon
 
-These carry a **Coming Soon** badge and no **Connect** button; the API refuses
-`connect` on them outright.
+These cards carry a **Coming Soon** badge and have no **Connect** button.
+Nothing can be set up for them yet.
 
-| Integration                   | Description                       |
-| ----------------------------- | --------------------------------- |
-| Active911                     | Dispatch alerts and mapping       |
-| CSV Import/Export             | Member import, training export    |
-| ESO Solutions                 | ePCR data exchange                |
-| FirstWatch                    | Dispatch analytics                |
-| Generic ePCR Import           | CSV or NEMSIS XML from any vendor |
-| Google Maps                   | Hydrant mapping and pre-plans     |
-| ImageTrend                    | ePCR sync and run reports         |
-| NEMSIS Response Module Export | NEMSIS 3.5 for state EMS          |
-| NFIRS Export                  | NFIRS 5.0 for state fire marshal  |
-| NREMT Verification            | Certification status verification |
-| PulsePoint                    | CPR alerts and AED locations      |
-| WhatsApp Business             | Notifications and group messages  |
-| Zapier                        | Connect to 5,000+ apps            |
+| Integration                   | Planned for                                                            |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| Active911                     | Dispatch alerts and mapping                                            |
+| CSV Import/Export             | Member import, training export                                         |
+| ESO Solutions                 | ePCR data exchange                                                     |
+| FirstWatch                    | Dispatch analytics                                                     |
+| Generic ePCR Import           | CSV or NEMSIS XML from any vendor                                      |
+| Google Calendar               | One-way event publishing (see [Google Calendar](#google-calendar))     |
+| Google Maps                   | Hydrant mapping and pre-plans                                          |
+| ImageTrend                    | ePCR sync and run reports                                              |
+| Microsoft Outlook             | One-way event publishing (see [Microsoft Outlook](#microsoft-outlook)) |
+| NEMSIS Response Module Export | NEMSIS 3.5 for state EMS                                               |
+| NFIRS Export                  | NFIRS 5.0 for state fire marshal                                       |
+| NREMT Verification            | Certification status verification                                      |
+| PulsePoint                    | CPR alerts and AED locations                                           |
+| WhatsApp Business             | Notifications and group messages                                       |
+| Zapier                        | Connect to 5,000+ apps                                                 |
 
-> **Corrected 2026-08-12.** Both tables were checked against the shipped
-> catalog and five entries moved. **CSV Import/Export**, **Generic ePCR
-> Import**, **NEMSIS Response Module Export** and **NFIRS Export** were listed
-> as currently available and are `coming_soon`; **FirstWatch** was missing
-> altogether. The Coming Soon table also named "NREMT Certification" and
-> "ImageTrend ePCR", which are **NREMT Verification** and **ImageTrend** on the
-> card.
+Several modules already have their own CSV exports on their own pages, such as
+members, admin hours, finance and compliance reports.
 
 ---
 
 ## Connecting an Integration
 
-1. Find the integration in the catalog
-2. Click **Connect**
-3. Fill in the configuration fields (vary by integration type)
-4. Click **Test Connection** to verify credentials
-5. Save to activate
+1. Find the integration's card.
+2. Select **Connect**.
+3. Fill in the fields, if the integration has any. Integrations without fields
+   show a list of what they include instead.
+4. Select **Connect** at the bottom of the window.
+5. On the card, select **Test** to check it works. The result appears as a
+   message at the top of the screen.
 
 ![Slack connect dialog with its webhook URL field](./images/16-02-slack-connect.png)
 
-**Outbound connections are checked and capped** _(2026-10-05)_. Before The
-Logbook calls an address you give an integration (a webhook, Slack, Discord,
-Teams, Cal.com, Documenso, audit-log shipping), it looks the name up once and
-refuses to connect if the answer is an internal address, then connects to
-exactly the address it checked. A hostname that resolves to a private or
-metadata address now fails with an "unsafe URL" style refusal, so point
-integrations at a public hostname. Google Calendar calls are also bounded: a
-response over 10 MB is refused and a call that stalls times out after seconds
-rather than hanging the sync. An integration that fails these checks shows as
-**Connection failed**; a sync that times out simply tries again at its next run.
-Connections made through a corporate proxy are not pinned, because the proxy
-does its own lookup.
+A connected card has these buttons, depending on the integration: **Details**,
+**Settings**, **Sync**, **Bookings**, **Service key**, **Test** and
+**Disconnect**.
+
+**Saved passwords and keys stay hidden.** When you edit an integration, a blank
+password, secret or key box means "keep what is stored". You never see a stored
+secret again.
+
+**Addresses must be public.** The Logbook refuses to connect to a web address
+that leads to a private network, such as a station computer or a home router.
+This applies to every address you give an integration: Slack, Discord, Teams,
+webhooks, Cal.com and Documenso. Use the service's public web address.
+
+> **What if a test fails with a general message?** When something unexpected
+> goes wrong, the message reads "An unexpected error occurred. Please try
+> again." The details are written to the system log for your IT
+> administrator. Messages
+> that name the problem, such as "Salesforce rejected these credentials", are
+> shown as they are.
 
 ---
 
 ## Salesforce CRM
 
-The Salesforce integration provides **bidirectional sync** between The Logbook and Salesforce for contacts, training records, events, and donors.
+Salesforce can receive your members, training records and events. It can also
+send contact details back to members you already have.
 
 ### Configuration
 
-| Field              | Description                                                                |
-| ------------------ | -------------------------------------------------------------------------- |
-| **Instance URL**   | Your Salesforce org URL (e.g., `https://yourorg.my.salesforce.com`)        |
-| **Client ID**      | Connected App client ID from Salesforce Setup                              |
-| **Client Secret**  | OAuth client secret                                                        |
-| **Refresh Token**  | Optional OAuth refresh token; leave empty for a service-account connection |
-| **Environment**    | `production` or `sandbox`                                                  |
-| **Sync Direction** | `push` (Logbook → SF), `pull` (SF → Logbook), or `both`                    |
+| Field                       | What to enter                                                                           |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| **Salesforce Instance URL** | Your Salesforce address, such as `https://yourorg.my.salesforce.com`                    |
+| **Environment**             | **Production**, or **Sandbox** for a Salesforce test org                                |
+| **Contact Matching**        | How to recognise members who are already Salesforce contacts (see below)                |
+| **Connected App Client ID** | From the Connected App you create in Salesforce Setup                                   |
+| **Client Secret**           | From the same Connected App                                                             |
+| **Refresh Token**           | Only for a manual connection. Leave it empty otherwise                                  |
+| **Sync Direction**          | **Push** (Logbook to Salesforce), **Pull** (Salesforce to Logbook) or **Bidirectional** |
+
+**Contact Matching** has three choices:
+
+- **Match by email (recommended)**
+- **Match by email + last name (stricter)**
+- **Never match — always create new**
+
+Matching stops The Logbook creating a second contact for someone Salesforce
+already has.
+
+Two tick boxes finish the form:
+
+- **Skip custom fields my Salesforce org hasn't created yet** — recommended
+  while you are still building your Salesforce setup.
+- **Sync automatically every 30 minutes** in the direction you chose. The
+  manual sync buttons still work.
 
 ### Choose an Authentication Method
 
-**Interactive connection (recommended for an administrator-managed org):**
-select **Connect with Salesforce**. The authorization-code flow stores the
-resulting refresh token encrypted and renews access tokens automatically.
+**Interactive (best when an administrator manages Salesforce):** select
+**Connect with Salesforce**. You are sent to Salesforce to allow access, then
+back. There is nothing to copy, and The Logbook keeps the connection renewed.
 
-**Service account (recommended for unattended scheduled sync):** create a
-Salesforce Connected App with **OAuth 2.0 Client Credentials Flow** enabled,
-select a dedicated least-privilege **Run As** integration user, enter the org's
-My Domain URL plus the Connected App client ID and secret, and leave **Refresh
-Token** empty. Do not enter or store the Run As user's password. The Run As user
-needs **API Enabled** and only the object and field permissions required for the
-selected sync types.
+**Service account (best for unattended automatic syncs):**
 
-**Moving an existing connection to the service account** _(2026-10-11)_.
-Clearing the **Refresh Token** box and saving does **not** do this — a blank
-secret field always means "leave what is stored". Instead, with Salesforce
-connected, open **Sync** and select **Switch to Client Credentials** under
-**Sign-in method**, then confirm. The stored refresh token (and the cached
-access token) are discarded and nothing else changes; the next sync signs in
-with the Connected App's client ID and secret. Set up the Connected App's
-client-credentials flow and Run As user first, or syncs fail until you do.
+1. In Salesforce, create a Connected App with **OAuth 2.0 Client Credentials
+   Flow** turned on.
+2. Pick a dedicated **Run As** user with as few rights as possible. It needs
+   **API Enabled** and access to the records you sync, and nothing more.
+3. In The Logbook, enter the Salesforce address, the client ID and the client
+   secret. Leave **Refresh Token** empty.
 
-Before the first write, run the readiness check and preview. Create the
-recommended `Logbook_*__c` external-ID fields: Contact matching can fall back to
-email, but Task and Event pushes can duplicate records without their external
-IDs.
+Never enter or store the Run As user's password.
+
+**Moving an existing connection to the service account:** emptying the
+**Refresh Token** box does not do it, because a blank secret box always means
+"keep what is stored". Instead:
+
+1. Set up the Connected App and the Run As user in Salesforce first. Otherwise
+   syncs fail until you do.
+2. On the connected Salesforce card, open **Sync**.
+3. Under **Sign-in method**, select **Switch to Client Credentials**, then
+   confirm with **Switch to client credentials**.
+
+The saved interactive sign-in is thrown away and nothing else changes. The next
+sync signs in with the Connected App's own client ID and secret.
+
+**Before the first push**, run the readiness check and preview (below). Also
+create the recommended Logbook ID fields in Salesforce. Contacts can be matched
+by email without them, but tasks and events may be duplicated.
 
 ### Sync Types
 
-| Action            | Description                                                                                                                                                                               |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Push Members**  | Sync all active members to Salesforce contacts                                                                                                                                            |
-| **Push Training** | Sync training records and certifications                                                                                                                                                  |
-| **Push Events**   | Sync department events                                                                                                                                                                    |
-| **Pull Contacts** | Update existing Logbook members from Salesforce contacts — contact details only (names, phones, station, address). Never creates members, and never changes rank, email, status, or dates |
+| Button                         | What it does                                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Members → Contacts**         | Sends active members to Salesforce as contacts                                                                                                                                             |
+| **Training Records → Tasks**   | Sends training records and certifications                                                                                                                                                  |
+| **Events → Salesforce Events** | Sends department events                                                                                                                                                                    |
+| **Contacts → Members**         | Updates members you already have from their Salesforce contact: names, phones, station and address only. Never creates or removes a member, and never changes rank, email, status or dates |
 
 ### How to Sync
 
-1. Open **Sync** on the connected Salesforce card. A **Salesforce Sync** panel
-   opens below the catalog, in two columns:
-   - **Push to Salesforce** — _Members → Contacts_, _Training Records → Tasks_,
-     _Events → Salesforce Events_
-   - **Pull from Salesforce** — _Contacts → Members_. This one matches against
-     members you already have (by id, then email) and updates their details;
-     it never creates or deletes a member, and it needs the sync direction set
-     to Pull or Bidirectional
-2. Click the action you want. The result is reported as a toast with its
-   success and failure counts
-3. Below the two columns, a **readiness** check and a **dry-run preview** let
-   you see what a push would do before running one
-
-> **Corrected 2026-08-12.** There is no **Status** tab, no last-sync timestamp
-> and no sync-history table anywhere in this panel — the retired screenshot
-> placeholder asked for all three. A run's counts appear once, in the toast.
-> The buttons are also named by what they map, not "Push Members".
+1. On the connected Salesforce card, select **Sync**. The **Salesforce Sync**
+   panel opens below the catalog, in two columns:
+   - **Push to Salesforce** — **Members → Contacts**, **Training Records →
+     Tasks** and **Events → Salesforce Events**
+   - **Pull from Salesforce** — **Contacts → Members**. This needs the sync
+     direction set to **Pull** or **Bidirectional**
+2. Select the button you want. A message reports how many records succeeded
+   and how many failed. That message is the only place a run's counts appear;
+   the integration's **Details** page shows whether each run succeeded.
+3. Below the columns, **Check readiness** and **Preview member sync** show
+   what a push would do before you run one.
 
 #### Readiness and preview
 
-The sync panel, and with it **Check readiness** and **Preview member sync**,
-appears only while a Salesforce integration is **connected**. The endpoints
-behind the two buttons (`GET /integrations/salesforce/readiness` and
-`POST /integrations/salesforce/preview/members`) return 404 "Salesforce
-integration is not connected" unless the integration is enabled and connected.
+The **Salesforce Sync** panel, with both buttons, appears only while
+Salesforce is connected.
 
-Neither result can carry a credential — the readiness result is built from four
-keys and nothing else:
+**Check readiness** tells you:
 
-| Key                        | Carries                                                                                                                  |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `connected`                | true/false                                                                                                               |
-| `objects`                  | per-sObject: reachable, the **names** of any missing custom fields, and an error message if the object could not be read |
-| `external_id_fields_ready` | true/false                                                                                                               |
-| `ready`                    | true/false                                                                                                               |
+- whether The Logbook can reach Salesforce
+- for each kind of Salesforce record, whether it can be read, and the names of
+  any custom fields that are missing
+- whether the Logbook ID fields are ready
+- whether everything is ready
 
-There is no access token, refresh token, client secret, instance URL or request
-body in it. When the connection itself fails, an `error` message is added — one
-of the Salesforce client's own fixed messages, such as "Salesforce
-authentication failed — the access token may be expired or revoked" or
-"Salesforce returned HTTP {status}", or a generic message for any unexpected
-failure. None quotes a credential or a response body.
+If the connection itself fails, it shows Salesforce's own short message, such
+as "Salesforce authentication failed — the access token may be expired or
+revoked".
 
-The preview result is counts only — how many members would be created,
-updated or adopted (matched to an existing Contact), and how many skipped — and
-names no Salesforce record ids.
+**Preview member sync** shows counts only: how many members would be created,
+updated or matched to an existing contact, and how many skipped.
+
+Neither result ever shows a password, key or secret.
 
 ### Field Mappings
 
-The system maps internal fields to Salesforce fields automatically. View the current mapping via **View Field Mappings** on the integration detail page.
+The Logbook decides which of its fields go into which Salesforce field. There
+is no screen to view or change this.
 
-### Webhook Integration
+### Updates sent from Salesforce
 
-Salesforce can push contact updates back to The Logbook via a webhook at `POST /api/public/v1/webhooks/salesforce/{integration_id}`. The webhook validates the HMAC signature in the `X-Salesforce-Signature` header before processing, and rejects every request when the integration has no webhook secret configured. Each delivery is audit-logged with the object type, action, record counts and source IP — never the records' field values, the signature or the secret.
+Salesforce can also send contact changes to The Logbook as they happen. Your
+Salesforce administrator sets this up with a shared secret. Without a secret,
+every message is refused. Each message received is recorded in the audit log,
+without the contact's details.
 
 ### Edge Cases
 
-| Scenario                                                                                           | Behavior                                                                                                                                                                                                                                                                                           |
-| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A Contact's **Title** (rank) is changed in Salesforce                                              | Ignored on pull _(2026-08-12)_ — rank never syncs into The Logbook, because rank affects what a member can do here and Salesforce is not authoritative for it. The Logbook still **pushes** rank out to the Contact `Title`. If a member's rank looks wrong, fix it in The Logbook, not Salesforce |
-| Salesforce API rate limit hit                                                                      | Retried up to three times, honoring `Retry-After` or using bounded exponential backoff                                                                                                                                                                                                             |
-| Transient Salesforce failure (HTTP 500/502/503/504 on a read, or a network error fetching a token) | Retried up to three times with bounded backoff. Writes are not retried on a 5xx, so an ambiguous failure cannot create a duplicate record                                                                                                                                                          |
-| Invalid Connected App credentials                                                                  | Not retried — the token request fails at once with "Failed to refresh Salesforce access token — verify your Connected App credentials"                                                                                                                                                             |
-| A later SOQL result page fails                                                                     | The pull fails; partial results are never applied as a successful pull                                                                                                                                                                                                                             |
-| Field mapping mismatch                                                                             | Warning logged; unmatched fields skipped                                                                                                                                                                                                                                                           |
-| Sandbox vs production mismatch                                                                     | Warning shown; data won't sync to production from sandbox                                                                                                                                                                                                                                          |
-| OAuth token expired                                                                                | Auto-refreshed transparently                                                                                                                                                                                                                                                                       |
-| Conflict on bidirectional sync                                                                     | There is no conflict-policy setting; the permitted direction determines which write applies last                                                                                                                                                                                                   |
+| What happens                                       | What The Logbook does                                                                                                                                           |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A contact's **Title** (rank) changes in Salesforce | Ignored. Rank decides what a member can do in The Logbook, so it never comes from Salesforce. The Logbook still sends rank out. Fix a wrong rank in The Logbook |
+| Salesforce says "too many requests"                | Tries again, up to three times, waiting a little longer each time                                                                                               |
+| Salesforce fails briefly while being read          | Tries again, up to three times. A failed write is not tried again, so a record cannot be created twice                                                          |
+| The Connected App details are wrong                | Fails at once with "Failed to refresh Salesforce access token — verify your Connected App credentials"                                                          |
+| Salesforce fails partway through sending a pull    | The whole pull fails. Half a list of contacts is never applied                                                                                                  |
+| One contact in a pull cannot be applied            | That contact is skipped and counted as failed. The other contacts are still applied                                                                             |
+| A field does not match                             | Skipped, with a note in the log                                                                                                                                 |
+| Sandbox and production are mixed up                | A warning is shown; sandbox data does not go to production                                                                                                      |
+| The sign-in expires                                | Renewed automatically                                                                                                                                           |
+| Both sides changed the same record                 | There is no setting for this. The direction you chose decides which change lands last                                                                           |
 
 ---
 
 ## Documenso — Document E-Signatures
 
-**Documenso** is an open-source DocuSign alternative for sending documents out for electronic signature. Use it to collect signed waivers, membership agreements, or policy acknowledgments. Works with Documenso Cloud (`app.documenso.com`) or a self-hosted instance.
+**Documenso** is an open-source DocuSign alternative for electronic
+signatures. Use it to collect signed waivers, membership agreements or policy
+acknowledgments. It works with Documenso Cloud or your own Documenso server.
 
 ### Configuration
 
-| Field                           | Description                                                                                         |
-| ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **API Token**                   | Create under **Settings > API** in your Documenso dashboard. Stored encrypted.                      |
-| **API Base URL**                | Leave blank for Documenso Cloud. Self-hosted instances use `https://your-host/api/v1`.              |
-| **Webhook Secret** _(optional)_ | A shared secret that enables automatic pipeline auto-advance when a document is signed (see below). |
+| Field                           | What to enter                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| **API Token**                   | Create one under **Settings > API** in Documenso. Stored securely                      |
+| **API Base URL**                | Leave blank for Documenso Cloud. For your own server, `https://your-host/api/v1`       |
+| **Webhook Secret** _(optional)_ | A shared secret. It lets a signed document move the applicant on by itself (see below) |
 
-After entering the token, click **Test Connection** to verify it.
+After saving, select **Test** on the card to check the token.
 
 ### Auto-Advancing a Signing Stage (Webhooks)
 
-When you set a **Webhook Secret**, the connect dialog shows a **callback URL**:
+When you set a **Webhook Secret**, the connect window shows a **callback URL**
+like this:
 
 ```
 https://your-logbook-host/api/public/v1/webhooks/documenso/{integration_id}
 ```
 
-Add this URL as a webhook in Documenso and have it send the secret in the `X-Documenso-Secret` header (or an HMAC-SHA256 body signature in `X-Documenso-Signature`). When a document is **completed** (all recipients signed), The Logbook matches the signer's email to a prospective member whose current stage is a Documenso-backed **Document Upload** stage and **advances them automatically** — no coordinator action needed.
+In Documenso, add that address as a webhook and give it the same secret.
 
-> **Security:** The callback endpoint is rate limited (30 requests/minute per IP) and rejects any request that fails secret/signature verification. An integration with no webhook secret configured rejects all inbound webhooks.
+When everyone has signed a document, The Logbook looks for a prospective member
+with the signer's email. If that applicant's current stage is a **Document
+Upload** stage set to use Documenso, they move on to the next stage
+automatically. No coordinator needs to act.
+
+> **Important.** Messages that fail the secret check are refused. With no
+> secret set, every message is refused. The address also accepts only a limited
+> number of messages a minute.
 
 ### Using Documenso in the Membership Pipeline
 
-Once Documenso is connected, a **Document Upload** pipeline stage gains a **Collection Method** option — switch it from _Upload_ to _Documenso e-signature_. Applicants then see a "Documents sent for signature" note on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
+Once Documenso is connected, a **Document Upload** stage gains a **Collection
+Method** choice. Switch it from _Upload_ to _Documenso e-signature_. Applicants
+then see "Documents sent for signature" on their status page. See
+[Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
 
 ![Documenso connect dialog with its API token and webhook fields](./images/16-04-documenso-connect.png)
 
@@ -279,135 +349,240 @@ Once Documenso is connected, a **Document Upload** pipeline stage gains a **Coll
 
 ## Cal.com — Interview Scheduling
 
-**Cal.com** is an open-source Calendly alternative for scheduling. Use it to let applicants self-schedule interviews, ride-alongs, or station tours, and to surface upcoming bookings in The Logbook. Works with Cal.com Cloud (`cal.com`) or a self-hosted instance.
+**Cal.com** is an open-source Calendly alternative. Applicants use it to book
+their own interviews, ride-alongs or station tours. It works with Cal.com Cloud
+or your own Cal.com server.
 
 ### Configuration
 
-| Field                           | Description                                                                                        |
-| ------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **API Key**                     | Create under **Settings > Developer > API keys** in Cal.com. Stored encrypted.                     |
-| **API Base URL**                | Leave blank for Cal.com Cloud. Self-hosted instances use `https://your-host/api/v1`.               |
-| **Webhook Secret** _(optional)_ | A signing secret that enables automatic pipeline auto-advance when an applicant books (see below). |
+| Field                           | What to enter                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| **API Key**                     | Create one under **Settings > Developer > API keys** in Cal.com. Stored securely |
+| **API Base URL**                | Leave blank for Cal.com Cloud. For your own server, `https://your-host/api/v1`   |
+| **Webhook Secret** _(optional)_ | A shared secret. It lets a finished meeting move the applicant on by itself      |
 
-Click **Test Connection** to verify the key.
+After saving, select **Test** on the card to check the key.
 
 ### Viewing Bookings
 
-On the connected Cal.com card, click **Bookings** to see upcoming bookings pulled from your Cal.com account (title, attendee, time, and status).
+On the connected Cal.com card, select **Bookings**. It lists upcoming bookings
+from your Cal.com account: title, attendee, time and status. The list comes
+straight from Cal.com each time you open it.
 
 ### Auto-Advancing a Meeting Stage (Webhooks)
 
-When you set a **Webhook Secret**, the connect dialog shows a **callback URL**:
+When you set a **Webhook Secret**, the connect window shows a **callback URL**
+like this:
 
 ```
 https://your-logbook-host/api/public/v1/webhooks/calcom/{integration_id}
 ```
 
-Add this URL as a Cal.com webhook subscribed to the **MEETING_ENDED** event, using the same secret. Cal.com signs the body with HMAC-SHA256 and sends the `X-Cal-Signature-256` header. Once the booked meeting has finished, The Logbook matches the attendee's email to a prospective member whose current stage is a Cal.com-backed **Meeting** stage and **advances them automatically**.
+In Cal.com, add that address as a webhook for the **MEETING_ENDED** event, with
+the same secret.
 
-> **Subscribe `MEETING_ENDED`, not `BOOKING_CREATED`.** A booking is an
-> intention, not attendance — advancing on it moved an applicant on the moment
-> they picked a slot, weeks before the meeting. An attendee Cal.com has marked
-> as a **no-show** is ignored, so a meeting nobody joined advances nobody. Cal.com
-> cannot prove somebody was present, though: if your department needs presence
-> recorded rather than assumed, leave the stage on manual advancement.
->
-> **Older pipelines: fixed 2026-09-16.** A Meeting stage created under the
-> pipeline's earliest stage format (an "action" stage whose action is
-> _schedule meeting_) was never reached by this webhook, so a booking that
-> should have advanced the applicant silently did nothing. It now advances them
-> like any other Cal.com meeting stage.
+When a booked meeting ends, The Logbook looks for a prospective member with the
+attendee's email. If that applicant's current stage is a **Meeting** stage set
+to use Cal.com, they move on automatically. This includes Meeting stages from
+older pipelines.
+
+> **Subscribe to MEETING_ENDED, not BOOKING_CREATED.** A booking only shows
+> someone meant to come. An attendee Cal.com marked as a **no-show** is
+> ignored, so a meeting nobody joined moves nobody on. Cal.com cannot prove
+> someone was there, though. If your department needs attendance recorded by a
+> person, leave the stage on manual advancement.
 
 ### Using Cal.com in the Membership Pipeline
 
-Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** option — switch it from _Manual_ to _Cal.com_ and paste your booking link. Applicants then see a **Schedule** button on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
-
-> **No screenshot of this _(2026-08-12)_.** The Bookings panel is real and
-> works, but it lists bookings fetched live from your Cal.com account — there is
-> nothing to photograph without a connected one, and our documentation
-> environment has no third-party accounts. See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-per-event-notification-triggers-2026-08-12).
+Once Cal.com is connected, a **Meeting** stage gains a **Scheduling** choice.
+Switch it from _Manual_ to _Cal.com_ and paste your booking link. Applicants
+then see a **Schedule** button on their status page. See
+[Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
 
 ---
 
 ## PayPal — Store Payment Reconciliation
 
-**PayPal** connects your department's own PayPal **Business** account so that incoming payments are matched to [Department Store](./18-storefront.md) orders automatically, instead of somebody ticking "mark paid" for each one.
+**PayPal** links your department's own PayPal **Business** account. Incoming
+payments are then matched to [Department Store](./18-storefront.md) orders
+automatically, so nobody has to mark each one paid.
 
-**The Logbook never takes a payment.** This integration works in the opposite direction: PayPal tells The Logbook what it _received_. There is no checkout and no money passes through the application. Marking orders paid by hand still works exactly as before, and remains the only option for Venmo, Cash App, Zelle, cash and checks.
+**The Logbook never takes a payment.** PayPal tells The Logbook what the
+account _received_. There is no checkout, and no money passes through The
+Logbook. Marking orders paid by hand still works. It is the only way for
+Venmo, Cash App, Zelle, cash and checks.
 
-> **Why only PayPal?** Venmo publishes no API for personal or peer-to-peer transfers, and Zelle runs inside each bank's own app. PayPal is the only one of the common payment apps that can report back, so it is the only one that can settle an order without a person.
+> **Why only PayPal?** Venmo offers no way to report personal transfers, and
+> Zelle runs inside each bank's own app. PayPal is the only common payment app
+> that can report back.
 
 ### Configuration
 
-| Field                             | Description                                                                                                                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Environment**                   | **Sandbox** (testing) or **Live**. Defaults to sandbox. Credentials are not interchangeable between the two.                                                                               |
-| **Client ID** / **Client Secret** | From a REST app at [developer.paypal.com](https://developer.paypal.com) → **Apps & Credentials**. Stored encrypted, never displayed back. Leave blank when editing to keep what is stored. |
-| **Webhook ID**                    | **Required.** PayPal assigns this when you add the webhook (below). Without it, incoming payments cannot be verified and are rejected.                                                     |
-| **Settle orders automatically**   | On by default. See the matching rules below.                                                                                                                                               |
+| Field                             | What to enter                                                                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Environment**                   | **Sandbox (testing)** or **Live**. Starts on sandbox. Sandbox and live credentials do not mix                                           |
+| **Client ID** / **Client Secret** | From a REST app at [developer.paypal.com](https://developer.paypal.com) → **Apps & Credentials**. Stored securely and never shown again |
+| **Webhook ID**                    | **Required.** PayPal gives you this when you add the webhook (below). Without it, payments cannot be checked and are refused            |
+| **Settle orders automatically**   | On at first. See the matching rules below                                                                                               |
 
-**Test Connection** verifies the credentials. It deliberately reports a _warning_ rather than a plain success when the Webhook ID is missing — credentials alone reconcile nothing.
+**Test** checks the credentials. It gives a _warning_, not a plain success, if
+the Webhook ID is missing, because credentials alone match nothing.
 
 ### Adding the Webhook
 
-The connect dialog shows the callback URL to paste into PayPal:
+The connect window shows the address to paste into PayPal:
 
 ```
 https://your-logbook-host/api/public/v1/webhooks/paypal/{integration_id}
 ```
 
-In your PayPal REST app, add a webhook at that URL and subscribe it to **Payment capture completed** (`PAYMENT.CAPTURE.COMPLETED`) — and nothing else. Other event types are acknowledged and discarded, so subscribing to more only adds noise. Copy the Webhook ID PayPal assigns back into the connect dialog.
+1. In your PayPal REST app, add a webhook at that address.
+2. Subscribe it to **Payment capture completed** only. Other kinds of message
+   are thrown away, so adding more only adds noise.
+3. Copy the Webhook ID PayPal gives you into the connect window.
 
-> **Security:** Every delivery is verified through PayPal's own signature-verification endpoint, rate limited per IP, replay-protected, and audit-logged. The PayPal capture ID is unique per organization, so a redelivered notification can never pay an order twice. A payment reported by one department's PayPal account can never settle another department's order.
+> **Important.** Every message is checked with PayPal before it counts. The
+> same PayPal payment can never pay an order twice. A payment to one
+> department's PayPal account can never settle another department's order.
 
 ### How Payments Are Matched
 
-A payment settles an order automatically only when **both** hold:
+A payment settles an order by itself only when **both** are true:
 
-1. The payment reference contains exactly one order number in `ORD-YYYY-NNNN` form — read from PayPal's `invoice_id`, `custom_id`, or note.
-2. The amount equals that order's outstanding balance **exactly**.
+1. The payment's reference holds exactly one order number, such as
+   `ORD-2026-0042`. The Logbook reads the invoice number, the custom field and
+   the note.
+2. The amount is **exactly** what the order still owes.
 
-Anything else is recorded and left for a person under **Department Store >
+Everything else is recorded and waits for a person under **Department Store >
 Payments**:
 
-| Outcome               | Meaning                                                           |
-| --------------------- | ----------------------------------------------------------------- |
-| Applied               | Matched and settled                                               |
-| Matched — not applied | Would have settled, but automatic settlement is turned off        |
-| No order found        | The reference carried no order number                             |
-| Needs a decision      | Amount doesn't match, or the order is cancelled or already square |
-| Dismissed             | An administrator decided it wasn't a store payment                |
+| Outcome               | Meaning                                                              |
+| --------------------- | -------------------------------------------------------------------- |
+| Applied               | Matched and settled                                                  |
+| Matched — not applied | Would have settled, but automatic settlement is off                  |
+| No order found        | The reference had no order number                                    |
+| Needs a decision      | The amount does not match, or the order is cancelled or already paid |
+| Dismissed             | An administrator decided it was not a store payment                  |
 
-Fuzzy matching on payer name or amount alone was considered and rejected: two members can easily owe the same amount in the same order window, and crediting the wrong member's order is worse than a short wait in a queue.
+There is no guessing by payer name or amount. Two members can easily owe the
+same amount in the same window. Crediting the wrong member is worse than a
+short wait in the queue.
 
-Every inbound payment is recorded whether or not it matched. The unmatchable ones are the case that most needs a human — the money has already left the member's account, so discarding the notification would leave them chasing an order that still reads unpaid.
+Every payment is recorded, matched or not. The unmatched ones most need a
+person: the money has already left the member's account.
 
 ### Payments the Webhook Missed
 
-If PayPal cannot reach The Logbook, or The Logbook cannot confirm a delivery with PayPal, the notification is refused and PayPal eventually gives up retrying. Once a day The Logbook asks PayPal directly for the payments the account received in the last seven days and records any it does not already have — matched and settled by exactly the rules above. A payment is never recorded twice, whichever way it arrived.
+Sometimes a payment message never arrives, for example while The Logbook is
+unreachable. Once a day, The Logbook asks PayPal for the last seven days of
+payments. It records any it does not already have, using the same rules. A
+payment is never recorded twice.
 
-This needs one extra setting on the PayPal side: in your REST app at [developer.paypal.com](https://developer.paypal.com), turn on the **Transaction Search** feature. Without it the daily check cannot see your payments, and the department's error monitor says so. PayPal's search lags by a few hours, so a missed payment shows up the following day rather than immediately.
+This needs one more setting in PayPal: turn on **Transaction Search** for your
+REST app. Without it the daily check cannot see your payments, and your error
+monitoring reports it. PayPal's search runs a few hours behind, so a missed
+payment appears the next day.
 
 ### Getting the Order Number onto the Payment
 
-The matcher reads whatever reference the payer or the department attached:
+The matcher reads whatever reference the payer or the department added:
 
-- **PayPal invoices** — put the order number in the invoice reference field. Most reliable, and the one to prefer.
-- **Payment links / checkout** — set `custom_id` to the order number.
-- **Plain "send money"** — ask the member to put the order number in the note. This works, but depends on them typing it, so expect some payments in the review queue.
+- **PayPal invoices** — put the order number in the invoice reference. This is
+  the most reliable.
+- **Payment links or checkout** — set the custom field to the order number.
+- **Plain "send money"** — ask the member to put the order number in the note.
+  This depends on them typing it, so expect some in the review queue.
 
 ### Working the Review Queue
 
-**Department Store > Payments** (`/inventory/admin/store?tab=payments`) lists
-everything unresolved. For each entry:
+Open the store console's **Payments** tab. It lists everything unresolved. For
+each entry:
 
-- **Apply to order** — settles the order. For an unmatched payment, enter the order to credit first. This writes through the normal payment path, so the order timeline, the member's receipt email, and the window rollups all behave as if it had been marked paid by hand.
-- **Dismiss** — for payments that aren't store orders at all (a donation, a dues payment, a refund). An applied payment cannot be dismissed.
+- **Apply to order** — settles the order. For an unmatched payment, enter the
+  order first. The order's history, the member's receipt email and the window
+  totals all update as if it had been marked paid by hand.
+- **Dismiss** — for money that is not a store order, such as a donation, dues
+  or a refund. An applied payment cannot be dismissed.
 
 ![PayPal connect dialog with environment and credential fields](./images/16-06-paypal-connect.png)
 
-For the full store walkthrough, see [Department Store](./18-storefront.md).
+For the whole store walkthrough, see [Department Store](./18-storefront.md).
+
+---
+
+## Google Workspace — Member Accounts
+
+**Google Workspace** gives each applicant the department converts to a member a Google account at their department email address. Only an organization administrator (`admin.access`) can connect, change or disconnect it.
+
+### Configuration
+
+| Field                   | Description                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Service account key** | The JSON key of a Google Cloud service account with domain-wide delegation. Stored encrypted, never shown.          |
+| **Admin to act as**     | A Workspace admin allowed to create users and manage groups.                                                        |
+| **Domain**              | Must match **Organization Settings → Department Email**, which must be on. Accounts are created at those addresses. |
+| **Organizational unit** | Where new accounts go, for example `/Members`.                                                                      |
+| **Groups** _(optional)_ | Up to 20 group addresses each new member is added to.                                                               |
+
+Authorize the service account's client ID in the Google Admin console (**Security → API controls → Domain-wide delegation**) for `admin.directory.user` and `admin.directory.group.member`, plus the read-only `admin.directory.orgunit.readonly` that lets **Test** confirm the organizational unit exists. Each account uses a Workspace license.
+
+### What Happens at Conversion
+
+The account is created **after** the conversion is saved, so a Google failure never undoes it. The temporary Google password goes to the member's **personal** email — in the welcome email when one is sent, otherwise on its own — and Google asks for a new one at first sign-in. The conversion result says what happened, and the member's profile shows the account with a **Retry** for anything unfinished. If the address already belongs to a Google account, The Logbook links to it and changes nothing.
+
+### Members Added Another Way
+
+**Add Member** has a **Create a Google Workspace account** box (unticked by default). Ticked, the member's department address is generated from their name and becomes their sign-in email, the email you typed is kept as their personal address, and the temporary passwords go there. Every member added without it — including each row of a roster import — is linked automatically when their email is already a Google account's primary address. An import never creates accounts.
+
+### When a Member Leaves
+
+Dropping a member (voluntary or involuntary) or deleting them **suspends** their Google account; undoing the drop, a rejoin or reactivating an archived member lifts it again. On-leave and inactive members keep their account, and so do retired members unless the retirement setting below is on. The Logbook only lifts a suspension it applied itself — an account someone had already suspended in Google stays suspended. If Google cannot be reached, the departure still goes through and the member's profile offers a **Retry**.
+
+**Retirement and name changes.** Retiring a member does not suspend their account
+unless the integration's **Suspend the account when a member retires** setting is
+on (off by default). It affects members who retire after it is turned on; it does
+not suspend those already retired or restore anyone when turned off. A retired
+member who returns gets the account back. When a member's first or last name
+changes, an account The Logbook created is renamed to match; the address is never
+changed, and linked accounts are never renamed.
+
+**Groups.** Suspending a departed member's account also takes it out of the groups
+set under **Add new members to these groups**, so it stops receiving department
+mail; a return puts it back. A group that would not let go is retried and, after a
+day, listed under **N need attention** as "Left, but still in a group".
+
+### Accounts Needing Attention
+
+When an account is waiting on something The Logbook could not finish — a departed member's suspension, an account never created, a password that never arrived — the Google Workspace card shows **N need attention**. It lists each member with the reason and a link to their profile. Anything waiting over a day is also emailed each morning to administrators (`admin.access`).
+
+### Members Who Joined Earlier
+
+Only accounts The Logbook created or linked are suspended. To cover members who were on the roster before the integration, an administrator clicks **Link existing members** on the Google Workspace card. It shows how many members have an account at exactly their Logbook email and why the others are skipped, then links them once confirmed. Members who have already left are not linked. Nothing changes in Google.
+
+See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) for setup steps and account states.
+
+### Microsoft 365 — Member Accounts
+
+**Microsoft 365** does the same for departments on Microsoft: an account at the department email address for each new member, licensed and added to your groups, with sign-in blocked when they leave. A department connects **either** Google Workspace **or** Microsoft 365, not both. Only an organization administrator (`admin.access`) can connect, change or disconnect it.
+
+| Field                       | Description                                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Directory (tenant) ID**   | From the Entra ID app registration's Overview page.                                                                                                                 |
+| **Application (client) ID** | From the same page.                                                                                                                                                 |
+| **Client secret value**     | The secret's value, not its ID. Stored encrypted, never shown. Replace it before it expires.                                                                        |
+| **Domain**                  | Must match **Organization Settings → Department Email** and be verified in Microsoft 365.                                                                           |
+| **Usage location**          | The two-letter country every new account gets (`US` by default). Microsoft will not license an account without one.                                                 |
+| **License SKU ID**          | _(optional)_ The license each new account is given. Leave empty when a group below licenses its members.                                                            |
+| **Groups**                  | _(optional)_ Up to 20 security groups (by object ID) or Microsoft 365 groups. **Test** rejects distribution lists, mail-enabled security groups and dynamic groups. |
+
+The app registration needs the Microsoft Graph application permissions `User.ReadWrite.All`, `User-PasswordProfile.ReadWrite.All`, `User.RevokeSessions.All`, `GroupMember.ReadWrite.All` and, with a license, `LicenseAssignment.ReadWrite.All`, with admin consent, and the **User Administrator** role.
+
+Enter the secret's **Expires** date as **Client secret expires on**. From 30 days before it, the card shows the days left and administrators get a morning email at 30 days, 7 days and on the day. A new secret needs its new date entered with it. The Microsoft setting is **Block sign-in when a member retires**, and a group that assigns licenses is never edited, because removing the member would remove the license. Accounts still in the directory 90 days after suspension are listed under **N need attention** for information only; The Logbook never deletes an account.
+
+Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
+
+See [Microsoft 365 Integration](../../wiki/Integration-Microsoft-365.md) for setup steps and account states.
 
 ---
 
@@ -415,44 +590,147 @@ For the full store walkthrough, see [Department Store](./18-storefront.md).
 
 ### Google Calendar
 
-Sync department events with Google Calendar:
+The Logbook creates one calendar for the department, named after it (for
+example _Falls Church Fire Events_), in a Google account an administrator
+signs in with, and publishes the department's events to it, **one way**.
+Members subscribe to that calendar in Google. Nothing is read back from
+Google, and no contacts or emails are exchanged.
 
-1. Connect with Google OAuth credentials
-2. Select which calendars to sync
-3. Events created in The Logbook automatically appear in Google Calendar
-4. Two-way sync updates events in both directions
+**Before you start (server operator).** The card reads **Coming Soon** until
+the server's `CALENDAR_SYNC_ENABLED` setting is turned on; it is off by
+default. The sign-in uses the server's Google OAuth client — the same
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` as "Sign in with Google" — and
+that client needs the **Google Calendar API** enabled and the callback address
+`https://<your site>/api/v1/integrations/google-calendar/oauth/callback` added
+as an authorized redirect URI (or set `GOOGLE_CALENDAR_REDIRECT_URI` to the
+exact address). A department can use its own OAuth client instead by saving
+its client ID and secret on the integration.
+
+**Connecting** (needs the integrations management permission):
+
+1. On the Google Calendar card, select **Connect with Google**.
+2. Sign in with the Google account that should own the department calendar,
+   and allow access. The Logbook asks only to manage calendars **it creates**;
+   it cannot see or change any other calendar in the account.
+3. You come back to the Integrations page. The card shows the account, the
+   new calendar's name and **Last published**.
+
+The sign-in must be finished within ten minutes, in the same browser, by the
+person who started it.
+
+**What is published.** Each published event from 30 days ago to 180 days
+ahead: its title, start and end, location, event type and a link back to the
+event in The Logbook. Drafts are never sent, and a cancelled or deleted event
+is removed from the calendar. Who is going, RSVP answers, custom fields and
+attachments are never sent. Publishing runs every five minutes.
+
+**Sync event descriptions** is off by default, because a description can hold
+notes meant only for members. Turn it on from the card to publish
+descriptions too.
+
+**When something goes wrong.** The card shows the last error and how many runs
+in a row have failed. **Reconnect required** means Google no longer accepts
+the sign-in — the password changed, access was removed in the Google account,
+or the grant expired. Select **Reconnect with Google**; publishing continues
+into the same calendar if it still exists.
+
+**Disconnecting** stops publishing and hands the access back to Google. The
+calendar stays in the Google account with the events already on it; delete it
+there if the department no longer wants it. Connecting again creates a new
+calendar, which members must subscribe to again.
 
 ### Microsoft Outlook
 
-Sync with Outlook/Exchange calendars:
+Outlook works the same way as Google Calendar. The Logbook creates one
+calendar for the department, named after it, in a Microsoft 365 (work or
+school) account an administrator signs in with, and publishes the
+department's events to it, **one way**. Share that calendar with members from
+Outlook so they can add it. Nothing is read back from Outlook, and no contacts
+or emails are exchanged.
 
-1. Connect with Microsoft 365 credentials
-2. Events and contacts sync between platforms
-3. Email notifications can be sent via Outlook
+**Before you start (server operator).** The card reads **Coming Soon** until
+the server's `CALENDAR_SYNC_ENABLED` setting is turned on; it is off by
+default. The sign-in uses the server's Microsoft (Azure AD) app — the same
+`AZURE_AD_CLIENT_ID` and `AZURE_AD_CLIENT_SECRET` as "Sign in with
+Microsoft", though that sign-in does not have to be turned on. The app needs
+the delegated Microsoft Graph permission **Calendars.ReadWrite** and the
+callback address
+`https://<your site>/api/v1/integrations/outlook/oauth/callback` added as a
+**Web** redirect URI (or set `MICROSOFT_CALENDAR_REDIRECT_URI` to the exact
+address). The sign-in goes to the server's `AZURE_AD_TENANT_ID` tenant, or to
+any work or school account when that is not set; personal Outlook.com
+accounts are not offered. A department can use its own app instead by saving
+its client ID, client secret and tenant ID on the integration.
+
+**Connecting** (needs the integrations management permission):
+
+1. On the Microsoft Outlook card, select **Connect with Microsoft**.
+2. Choose the Microsoft 365 account that should own the department calendar
+   (it needs an Exchange Online mailbox), and accept the permissions.
+3. You come back to the Integrations page. The card shows the account, the
+   new calendar's name and **Last published**.
+
+The sign-in must be finished within ten minutes, in the same browser, by the
+person who started it. **What is published**, **Sync event descriptions** and
+**Reconnect required** work exactly as for
+[Google Calendar](#google-calendar); select **Reconnect with Microsoft** to
+sign in again.
+
+**Disconnecting** stops publishing and removes the sign-in from The Logbook.
+Microsoft has no way for an app to hand back a single sign-in, so the access
+ends when it expires; to end it at once, remove The Logbook under **My Apps**
+in the Microsoft account (or in Entra ID). The calendar stays in the account
+with the events already on it; delete it in Outlook if the department no
+longer wants it. Connecting again creates a new calendar, which must be shared
+with members again.
 
 ### iCalendar (ICS) Feed
 
-The feed is **per member and private**, and it is not set up from this page.
-Each member opens **Subscribe to my shifts** at the top of
-**Scheduling > My Shifts**:
+There are two kinds of calendar feed. Both are read-only links that any
+calendar app (Google, Apple or Outlook) can subscribe to.
 
-1. Opening the card mints that member's own feed token on first use
-2. Copy the link, or select the field and copy it by hand
-3. Subscribe in any calendar app (Google, Apple, Outlook)
-4. The feed auto-updates as shifts change
-5. **Reset link** issues a new token, which immediately kills the old URL —
-   the way to revoke a link that has been shared or leaked
+**The department events feed** is set up here, on the **iCalendar (ICS)**
+card:
+
+1. Select **Connect** on the card. Connecting creates the feed's link.
+2. The card shows the link. Select the copy button, or select the box and copy
+   it by hand.
+3. Share it with members, for example in a members-only message.
+4. **Reset link** makes a new link and stops the old one at once. Use it if
+   the link was posted somewhere public. Every calendar subscribed to the old
+   link stops updating until it is given the new one.
+
+The feed carries the department's **published** events from 30 days ago to a
+year ahead: each event's title, start and end, location, event type and a link
+back to the event in The Logbook. It leaves out drafts and cancelled events,
+and never carries an event's description, who is going, RSVP answers or custom
+fields. **Disconnect** stops the link; connecting again makes a new one.
+
+Only people who can manage integrations see the link or can reset it. Each
+reset is recorded in the audit log.
+
+![The connected iCalendar (ICS) card: the note that anyone with the link can see the department's published events, the feed link with its copy button, and Reset link](./images/16-16-ical-department-feed.png)
+
+**A member's shift feed** is private to each member, and it is not set up on
+the Integrations page. Each member opens **Subscribe to my shifts** at the top
+of **Scheduling > My Shifts**:
+
+1. Opening the card creates the member's own link the first time.
+2. Copy the link, or select the box and copy it by hand.
+3. Subscribe to it in any calendar app: Google, Apple or Outlook.
+4. The calendar updates as shifts change. Calendar apps check every so often,
+   which can take up to an hour.
+5. **Reset link** makes a new link and stops the old one at once. Use it if a
+   link was shared or leaked.
+
+There is one shift feed per member, and it carries that member's shifts. No
+one, including an officer, can see another member's link.
+
+> **Important.** Anyone with either link can see what is in it, without
+> signing in. Treat it like a password. **Reset link** is there for when it
+> gets out.
 
 ![The Subscribe to my shifts card expanded — the member's private feed URL, its copy button and the reset control](./images/16-07-calendar-subscribe.png)
-
-> **Corrected 2026-08-12.** This section described enabling "the ICS
-> integration" on the Integrations page and copying **filtered feed URLs** —
-> All Events, Training Only, My Shifts. There is one feed and it carries
-> shifts: `GET /api/v1/calendar/{token}.ics`, served publicly and identified
-> only by the token, with no filter parameter. The iCalendar entry in the
-> integrations catalog advertises the feature but has no configuration screen
-> behind it. Because the link is unauthenticated, treat it as a password: the
-> card says so, and **Reset link** is there for when it gets out.
 
 ---
 
@@ -460,140 +738,133 @@ Each member opens **Subscribe to my shifts** at the top of
 
 ### Slack
 
-1. Create an incoming webhook in your Slack workspace settings
-2. Paste the webhook URL in the integration configuration
-3. Messages appear in your configured Slack channel
+1. In your Slack workspace settings, create an incoming webhook for a channel.
+2. Paste its address into **Webhook URL** and select **Connect**.
+3. Select **Test** on the card. The channel receives "The Logbook — Integration
+   test successful!"
 
 ### Discord
 
-1. Create a webhook in your Discord server settings
-2. Paste the webhook URL
-3. Notifications appear as bot messages in your channel
+1. In your Discord channel settings, create a webhook.
+2. Paste its address and select **Connect**.
+3. Select **Test** on the card.
 
 ### Microsoft Teams
 
-1. Create an incoming webhook connector in your Teams channel
-2. Paste the webhook URL
-3. Notifications appear as Adaptive Cards with action buttons
+1. In your Teams channel, create an incoming webhook.
+2. Paste its address and select **Connect**.
+3. Select **Test** on the card. Messages arrive as cards in the channel.
 
-> **You cannot choose which events post _(2026-08-12)_.** Earlier versions of
-> this guide had a step for selecting event triggers and described checkboxes
-> for New Member, Training Completed, Event Scheduled and Shift Change. There is
-> no such control — a messaging integration collects a webhook URL and posts
-> every notification the department sends. Use **Test** on the card to check a
-> webhook, and the integration's **Details** page to see whether recent
-> deliveries succeeded. The Slack connect dialog is pictured under
-> [Connecting an Integration](#connecting-an-integration). See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-per-event-notification-triggers-2026-08-12).
+### What gets posted
+
+A connected chat integration posts when someone:
+
+- creates an event
+- creates a shift (making shifts from a pattern posts one summary)
+- adds a training record (adding several at once posts one summary)
+
+**You cannot choose which of these post.** A chat integration has one setting,
+the webhook address. Nothing else is posted: not new members, not equipment
+checks, not other notifications.
+
+Posting is a best effort. If Slack, Discord or Teams refuses a message, The
+Logbook does not try it again. The integration's **Details** page shows each
+delivery and whether it worked.
 
 ---
 
 ## Weather Alerts
 
-The **NWS Weather Alerts** integration connects to the National Weather Service (part of NOAA, the US weather agency). It is free and needs no account or key.
+The **NWS Weather Alerts** integration talks to the National Weather Service
+(NWS), part of the US weather agency. It is free and needs no account or key.
 
 ### Configuration
 
-| Field           | Description                                                                |
-| --------------- | -------------------------------------------------------------------------- |
-| **NWS Zone ID** | Your area's zone code (format: `[STATE][C or Z][3DIGITS]`, e.g., `VAZ053`) |
+| Field           | What to enter                                                                   |
+| --------------- | ------------------------------------------------------------------------------- |
+| **NWS Zone ID** | Your area's zone code: state, then C or Z, then three digits. Example: `VAZ053` |
+
+> **Tip.** Find your zone at
+> [weather.gov/pdd/gis](https://www.weather.gov/pdd/gis). Search by county or
+> zone.
 
 ### How It Works
 
-> **Only the connection test works today.** When you connect this integration
-> and select **Test**, The Logbook asks the National Weather Service for your
-> zone's current alerts and tells you whether the zone code is valid and how
-> many alerts are active — for example, "Zone VAZ053 is valid. 2 active
-> alert(s)."
+> **Important. Only the test works today.** Select **Test** and The Logbook asks
+> the weather service for your zone's current alerts. It tells you whether the
+> zone is valid and how many alerts are active, for example "Zone VAZ053 is
+> valid. 2 active alert(s)."
 >
-> Nothing happens after that. The Logbook does not check for alerts on a
-> schedule, and alerts do not appear on the dashboard or anywhere else in the
-> app. Do not rely on this integration to warn your members about severe
-> weather; keep using your current alerting.
+> Nothing happens after that. The Logbook does not check for alerts on its own,
+> and alerts do not appear anywhere in the app. Do not rely on it to warn
+> members about severe weather. Keep your current alerting.
 
-The alerts it can read are the ones the National Weather Service publishes for
-your zone, such as Tornado Warning, Flood Warning and Fire Weather Watch.
-
-> **Hint:** Find your NWS Zone ID at [weather.gov/pdd/gis](https://www.weather.gov/pdd/gis) — search by county or zone.
+The alerts it can read are the ones the weather service publishes for your
+zone, such as Tornado Warning, Flood Warning and Fire Weather Watch.
 
 ---
 
 ## EMS & Fire Reporting
 
-> **Not built yet — corrected 2026-08-12.** All three integrations in this
-> section (**Generic ePCR Import**, **NEMSIS Response Module Export**, **NFIRS
-> Export**) ship in the catalog with status `coming_soon`. Their cards carry a
-> **Coming Soon** badge and no **Connect** button, and the API refuses them
-> outright — `POST /integrations/{id}/connect` returns _"This integration is
-> not yet available"_. There is no configuration screen behind any of them.
->
-> The steps below describe the intended design, not current behaviour. The
-> NFIRS screenshot placeholder has been removed rather than left standing for a
-> screen that does not exist; the same applies to the state-code, FDID and
-> date-range fields it named. The other `coming_soon` entries in the catalog are
-> Active911, CSV Import/Export, ESO Solutions, FirstWatch, Google Maps,
-> ImageTrend, NREMT Verification, PulsePoint, WhatsApp Business and Zapier.
+**None of these is built yet.** **Generic ePCR Import**, **NEMSIS Response
+Module Export** and **NFIRS Export** are in the catalog marked **Coming Soon**.
+They have no **Connect** button and no settings screen.
 
-### Generic ePCR Import
+What each is planned to do:
 
-Import patient care report data from any ePCR vendor:
+| Integration                   | Planned use                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| Generic ePCR Import           | Upload a CSV or NEMSIS XML export from any ePCR vendor, so run data feeds reports and compliance |
+| NEMSIS Response Module Export | Produce a NEMSIS 3.5 file of response data for state EMS reporting                               |
+| NFIRS Export                  | Produce an NFIRS 5.0 file of incident data for the state fire marshal                            |
 
-1. Export data from your ePCR system as CSV or NEMSIS XML
-2. Navigate to the ePCR integration
-3. Upload the export file
-4. System parses and imports run/call data
-5. Data feeds into scheduling reports and compliance tracking
-
-Supported vendors: ImageTrend, ESO, Zoll, or any vendor that exports CSV/NEMSIS XML.
-
-### NEMSIS Response Module Export
-
-Export response data in NEMSIS 3.5 format for state EMS reporting:
-
-1. Configure your state code and agency ID
-2. Select the date range to export
-3. Generate the NEMSIS XML file
-4. Submit to your state EMS reporting system
-
-### NFIRS Export
-
-Export incident data in NFIRS 5.0 format for state fire marshal reporting:
-
-1. Configure your state code and FDID (Fire Department ID)
-2. Select the reporting period
-3. Generate the NFIRS export file
-4. Submit to your state fire marshal office
+Each needs incident or run records that The Logbook does not keep yet. Keep
+using your current reporting system.
 
 ---
 
 ## Generic Webhooks
 
-Send event notifications to any external system via HTTP POST:
+A generic webhook sends signed messages to a web address that you choose.
 
 ### Configuration
 
-| Field           | Description                                                   |
-| --------------- | ------------------------------------------------------------- |
-| **Webhook URL** | Your endpoint that receives POST requests                     |
-| **Secret**      | Optional HMAC signing secret for `X-Webhook-Signature` header |
+| Field           | What to enter                                                  |
+| --------------- | -------------------------------------------------------------- |
+| **Webhook URL** | The address of the system that will receive the messages       |
+| **Secret**      | Optional. Lets the receiving system check a message is genuine |
 
-> **Only the test message is sent today.** Selecting **Test** sends one
-> `test.ping` message to your URL, so you can confirm your system receives it.
-> The Logbook does not yet send a webhook when anything happens in the app — a
-> new member, a completed training, a shift change or anything else. There are
-> no events to subscribe to. The format below is what the test message uses,
-> and is the format real events are expected to use once they are added.
+> **Important. Only the test message is sent today.** **Test** sends one test
+> message to your address, so you can check your system receives it. The
+> Logbook does not yet send anything when something happens in the app. There
+> is nothing to subscribe to.
 
-### What your system receives
+### When delivery fails
 
-The Logbook sends an HTTP `POST` with a JSON body and these headers:
+- **The address must start with `https://` and be on the public internet.** An
+  address on a private network, such as `https://192.168.1.20/hook`, is refused
+  when you save it. It is checked again before every message.
+- **The receiving system must answer that it accepted the message.** Anything
+  else counts as a failure.
+- **The Logbook tries three times in all**, waiting 1 second, then 2 seconds.
+  After that it gives up. The message is not kept or sent later.
 
-| Header                | Value                                                          |
-| --------------------- | -------------------------------------------------------------- |
-| `Content-Type`        | `application/json`                                             |
-| `X-Webhook-Event`     | The event name — `test.ping` for the test message              |
-| `User-Agent`          | `TheLogbook-Webhook/1.0`                                       |
-| `X-Webhook-Signature` | Only when you entered a **Secret** — see _Checking it is real_ |
+Without a **Secret**, messages are sent unsigned. The receiving system then
+cannot tell a message from The Logbook apart from one sent by someone else.
+
+### For the person who builds the receiving system
+
+Pass this part to whoever writes the system that receives the messages.
+
+**What your system receives.** An HTTP `POST` with a JSON body and these
+headers:
+
+| Header                | Value                                             |
+| --------------------- | ------------------------------------------------- |
+| `Content-Type`        | `application/json`                                |
+| `X-Webhook-Event`     | The event name — `test.ping` for the test message |
+| `User-Agent`          | `TheLogbook-Webhook/1.0`                          |
+| `X-Webhook-Signature` | Only when a **Secret** is set — see below         |
 
 The body of the test message:
 
@@ -607,22 +878,19 @@ The body of the test message:
 }
 ```
 
-`timestamp` is the time it was sent, as a whole number of seconds since
-1 January 1970 (UTC) — a "Unix timestamp", not a written-out date.
+`timestamp` is the sending time in whole seconds since 1 January 1970 (UTC).
 
-### Checking it is real
+Answer with any 2xx status, such as 200 or 204.
 
-If you entered a **Secret**, every message carries a signature:
+**Checking it is real.** With a secret, every message carries:
 
 ```
 X-Webhook-Signature: sha256=3f0a…c9
 ```
 
 The part after `sha256=` is an HMAC-SHA256 of the **exact bytes** of the body,
-written as lowercase hexadecimal, using your secret as the key. To check it,
-compute the same value over the raw body you received — before parsing or
-reformatting the JSON, which changes the bytes — and compare the two. For
-example, in Python:
+in lowercase hexadecimal, keyed with the secret. Compute the same value over
+the raw body, before parsing it, and compare. For example, in Python:
 
 ```python
 import hashlib, hmac
@@ -633,582 +901,437 @@ def is_genuine(raw_body: bytes, header: str, secret: str) -> bool:
     return hmac.compare_digest(expected, received)
 ```
 
-Without a secret, messages are sent unsigned and your system has no way to tell
-a message from The Logbook apart from one sent by someone else.
-
-### When delivery fails
-
-- **Your system must answer with a 2xx status** (such as 200 or 204). Anything
-  else counts as a failure.
-- **The Logbook tries three times in all**, waiting 1 second and then 2 seconds
-  between tries. After the third failure it gives up; the message is not
-  queued or sent later.
-- **The URL must start with `https://` and be reachable over the public
-  internet.** An address on a private network, such as
-  `https://192.168.1.20/hook` or `https://localhost/hook`, is refused when you
-  save it. It is checked again each time a message is sent, and a message to an
-  address that fails the check is not sent at all.
-
 ---
 
 ## NFC ID Cards — Tap-In Attendance
 
-Turns a member's ID card into the thing that records their attendance. Once the
-integration is on, an officer binds a card to a member from the **ID Cards**
-section of that member's profile, and the member taps it at a check-in station
-to be checked into a shift, a meeting or an admin hours category.
+This turns a member's ID card into the way they record attendance. An officer
+links a card to a member. The member then taps it at a check-in station to be
+checked into a shift, a meeting or an admin hours category.
 
-**While the integration is off nothing exists** — no ID Cards section, no
-station page, no navigation entry, and every card endpoint refuses. Turning it
-off later stops issued cards working without deleting the record of who held
-them.
+### Turning it on
+
+NFC ID Cards is a feature you switch on, not a service you connect. Find
+**NFC ID Cards** on the Integrations page and select **Activate**. It starts
+**off**.
+
+**While it is off, nothing exists:** no ID Cards section on profiles, no
+station page and no menu entry. A department that has never opened the
+Integrations page counts as off.
+
+Turning it off later (**Deactivate**) stops every issued card working. The
+record of who held which card is kept.
+
+Two permissions go with it. On the Role Management screen they read:
+
+| Permission                                            | For                                               |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| **Issue and revoke member ID card (NFC) credentials** | Issuing, labelling, suspending and revoking cards |
+| **Check members in at an ID card check-in station**   | Running a check-in station                        |
+
+The full walkthrough is in
+[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station).
 
 ### Issuing a card
 
-Officers with `members.manage_id_cards` see **Issue card** on a member's
-profile. Two ways to bind one, and the first is the better one:
+Officers who can issue ID cards see **Issue card** in the **ID Cards** section
+of a member's profile. There are two ways to link a card. The first is better:
 
-| Option                           | Use it when                            | What is stored                                      |
-| -------------------------------- | -------------------------------------- | --------------------------------------------------- |
-| **Write a code to a blank card** | The tag is writable — a sticker, a fob | A freshly minted 128-bit code, written onto the tag |
-| **Read a printed card's serial** | The card is already made and locked    | The chip's own serial number                        |
+| Option                           | Use it when                              | What is kept                            |
+| -------------------------------- | ---------------------------------------- | --------------------------------------- |
+| **Write a code to a blank card** | The tag can be written: a sticker, a fob | A new random code, written onto the tag |
+| **Read a printed card's serial** | The card is already made and locked      | The chip's own serial number            |
 
-Prefer writing a code. It is unguessable, it is not printed anywhere on the
-card, and the tag can be wiped and reissued to somebody else later — where a
-card identified only by its chip serial is that member's forever.
+Writing a code is better because:
 
-On a desktop with no NFC radio, hold the card against a **USB reader** with the
-cursor in the serial box, or type the serial printed on the card. Writing a code
-needs Chrome on Android over HTTPS.
+- the code cannot be guessed and is not printed on the card
+- the tag can be wiped and given to someone else later
 
-**Members cannot do any of this.** There is no self-service screen and no
-member-facing endpoint: a card records attendance on somebody's behalf, so it is
-issued the way a key is — by an officer, who hands it over.
+A card known only by its chip serial belongs to that member for good.
+
+On a computer with no NFC reader built in, hold the card on a **USB reader**
+with the cursor in the serial box. Or type the serial printed on the card.
+Writing a code needs Chrome on an Android phone.
+
+**Members cannot do any of this themselves.** A card records attendance on
+someone's behalf, so it is issued the way a key is: by an officer, by hand.
 
 ### Running a station
 
-**Members → Check-In Station** (`members.check_in`). Pick what members are
-checking into, arm the reader, and leave the device at the door. Each tap shows
-the member's name and what was recorded, then clears itself for the next person.
+Open **Administration → Members → Check-In Station**. You need the
+check-in station permission above.
 
-- **In, then out** — the default. One card serves arrival and departure.
-- **Checks in** / **Checks out** — fix the direction when a second station
+1. Pick what members are checking into.
+2. Turn on the reader.
+3. Leave the device at the door.
+
+Each tap shows the member's name and what was recorded, then clears for the
+next person.
+
+- **In, then out** — the default. One card covers arrival and departure.
+- **Checks in** / **Checks out** — use one of these when a second station
   covers the other door.
 
-A card tapped again within a minute is treated as a bounce and reports the
-current state rather than checking the member back out.
+A card tapped again within a minute counts as a double tap. The station shows
+the member's current state instead of checking them out.
 
 ### Losing a card
 
-Suspend it to stop it working temporarily. **Report lost** if it is gone: that
-is permanent and cannot be undone, because whoever picked the card up can still
-tap it. Issue a replacement afterwards — for a written card, that can be the
-same tag rewritten.
+- **Suspend** a card to stop it working for a while.
+- **Report lost** if it is gone. That is permanent, because whoever picks it up
+  could still tap it.
+
+Then issue a replacement. For a card with a written code, that can be the same
+tag written again.
 
 ---
 
 ## Training Provider Integrations
 
-Training provider integrations are configured from **Training Admin > Setup > Integrations** — the **External Training Integrations** screen, separate from the general integrations page. See [Training & Certification > External Training Integrations](./02-training.md#external-training-integrations) for details.
+Training providers are set up in **Training Admin > Settings & Data >
+Integrations**, on
+the **External Training Integrations** screen. That is separate from the
+Integrations page. See
+[Training & Certification > External Training Integrations](./02-training.md#external-training-integrations).
 
-Available training providers:
+Available providers:
 
-- **Vector Solutions** — Category catalog fetch, credit hours, auto-sync
-- **Target Solutions** — Course and activity completions from the Training Records API (see below)
-- **Lexipol** — Policy training sync
-- **iAmResponding** — Response tracking
-- **Custom API** — Generic webhook-based provider
+- **Vector Solutions** — category list, credit hours, automatic sync
+- **Target Solutions** — course and policy completions from its Training
+  Records report (see below)
+- **Lexipol** — policy training
+- **iAmResponding** — response tracking
+- **Custom API** — any other provider that can send records
 
-**Only Target Solutions credits completions automatically** _(2026-10-07)_.
-Its syncs turn every completion whose member is matched into a training record;
-for Vector Solutions, Lexipol, iAmResponding and a Custom API, synced
-completions wait under **Imports** for an officer, as before. Each of those
-providers moves to automatic crediting only after its own review against real
-records. Every provider's completion is keyed by its record id, so a re-sync
-updates it rather than adding it twice; one the provider sends without an id is
-keyed by member, course and completion date instead.
+**Only Target Solutions credits completions automatically.** A Target Solutions
+completion whose member is matched becomes a training record straight away.
+Completions from the other providers wait in the **Import Queue** for an
+officer.
+
+Every completion is identified by the provider's record number. A second sync
+updates it instead of adding it twice. A completion sent without a number is
+identified by member, course and completion date instead.
 
 ### Setting up Target Solutions
 
-> **Set up before 2026-09-29? Re-enter it.** Until then a Target Solutions
-> provider was sent to the Vector Solutions API — a different credential,
-> returning certifications rather than completions — so it imported nothing
-> useful. Edit the provider, enter the key and secret as below, press **Test**,
-> then **Sync Now**.
+Target Solutions gives you a **Training Records API** address that looks like
+this:
 
-Target Solutions provides a **Training Records API** URL that looks like
-`https://app.targetsolutions.com/tsapp/api/?action=reports.buildReport&reportType=completionsall&key=…&secret=…`.
-Split it into three fields rather than pasting it whole:
+`https://app.targetsolutions.com/tsapp/api/?action=reports.buildReport&reportType=completionsall&key=…&secret=…`
 
-| Field        | Enter                                        |
+Split it into three boxes rather than pasting it whole:
+
+| Box          | Enter                                        |
 | ------------ | -------------------------------------------- |
 | API Base URL | `https://app.targetsolutions.com/tsapp/api/` |
-| API Key      | the value after `key=`                       |
-| API Secret   | the value after `secret=`                    |
+| API Key      | the part after `key=`                        |
+| API Secret   | the part after `secret=`                     |
 
-<!-- Screenshot needed:
-_[Training Officer or admin (training.manage) at /training/admin?page=setup&tab=integrations → Add Provider → Target Solutions, details step: API Base URL with its helper text, API Key and API Secret \* holding only obviously fake values (demo-key / demo-secret) or empty, Enable Auto-Sync switched on (it starts off) with Pull new completions: Every hour and Daily 30-day review at 02:00 with its timezone helper. Never save, and never type a real key or secret.]_
--->
+![Configure Provider for Target Solutions: Display Name, API Base URL empty with its helper text giving the Training Records API address, API Key and API Secret holding demo values, and under Sync Settings Enable Auto-Sync on, Pull new completions Every hour and Daily 30-day review at 02:00 with the department-timezone note](./images/16-17-target-solutions-details.png)
 
-The key and secret are stored encrypted and are never returned by the API or
-shown again. A base URL that still contains a key, secret or token is
-rejected, because the base URL is stored in plain text. The credentials are
-also redacted from application logs, Sentry events, and any error message an
-officer sees.
+The key and secret are stored securely and never shown again. A base address
+that still contains a key, secret or other sign-in code is refused, because the
+base address is not kept secret. The key and secret are also removed from the
+system log and from any error message an officer sees.
 
-Each sync downloads the completions report for its date range. Members are
-matched by the report's **Email** column against their Logbook email (ignoring
-case and spaces; deleted members are skipped). When no email matches, the
-report's **Employee ID** is matched against the member's **Membership Number**
-_(2026-10-07)_, so keep the two numbers the same in both systems. A member who
-cannot be matched yet is listed under **User Mappings**, and is matched
-automatically on a later sync once their email or membership number is on file
-— unless an officer has already set or cleared that mapping by hand.
+**How members are matched.** Each sync downloads the completions report for
+its dates. Members are matched in this order:
 
-To map a member by hand, pick the member from the user's dropdown under
-**Mappings → Users** _(2026-10-04)_; their waiting completions move to that
-member immediately.
+1. The report's **Email** against the member's Logbook email (capital letters
+   and spaces ignored; deleted members skipped).
+2. If no email matches, the report's **Employee ID** against the member's
+   **Membership Number**. Keep the two numbers the same in both systems.
 
-**Matched completions are credited automatically** _(2026-10-07)_. A Target
-Solutions sync turns every completion whose member is matched into a training
-record straight away, the same as an upload; only completions nobody matches
-wait under **Imports**. When such a member is mapped later, their waiting
-completions are imported with **Import** or **Bulk Import**.
+A person who cannot be matched yet is listed on the **Users** tab under
+**Mappings**. They are matched automatically on a later sync once their email
+or membership number is on file — unless an officer has set or cleared that
+mapping by hand.
 
-Credit hours come from the report's **Duration (hours)** column — the hours the
-course is accredited for — never from **Time Spent In Course**, which counts how
-long the member had it open. A row with no duration credits no hours.
+**Mapping a member by hand.** Open the provider's **Mappings**, go to the
+**Users** tab and pick the member from that person's list. Their waiting
+completions move to that member. They are credited the next time a sync or an
+uploaded report includes them.
 
-**Policy acknowledgments** _(2026-10-07)_. The report's **Assignment Type**
-separates Target Solutions' own courses (**TS Course**) from items your
-department authored (**Admin**) — the documents members must read and
-acknowledge, usually every year because a federal or local rule requires it,
-such as a whistleblower policy or a code of conduct. Admin rows are recorded
-with the training type **Policy Acknowledgment**, with no hours, so they stay
-apart from courses and appear in each member's training history under that
-type.
+**Hours.** Credit hours come from the report's **Duration (hours)** column, the
+hours the course is accredited for. They never come from **Time Spent In
+Course**, which counts how long the member had it open. A row with no duration
+gives no hours.
 
-A training requirement set only to the type **Policy Acknowledgment** is met by
-an acknowledgment of _any_ policy. To require one particular policy every year,
-map it to a library course and link the requirement to that course — see
-**Course mappings** below.
+**Policy acknowledgments.** The report's **Assignment Type** tells two things
+apart:
 
-Target Solutions records each acknowledgment click, so a member who opens the
-same policy twice in one day appears twice. The second one on the same day is
-kept under **Imports** marked **duplicate** and never becomes a training record.
-An acknowledgment on a later day — next year's reading — is recorded as usual.
+- **TS Course** — a Target Solutions course.
+- **Admin** — a document your department wrote that members must read and
+  acknowledge. Often this is yearly, because a law requires it, such as a
+  whistleblower policy or a code of conduct.
 
-<!-- Screenshot needed:
-_[Training Admin → Setup → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
--->
+Admin rows are recorded with the training type **Policy Acknowledgment** and no
+hours. They stay apart from courses and appear in each member's training
+history under that type.
+
+A requirement set only to the type **Policy Acknowledgment** is met by
+acknowledging _any_ policy. To require one particular policy each year, map it
+to a library course and link the requirement to that course. See
+[Course mappings](#course-mappings) below.
+
+Target Solutions records every click on an acknowledgment. A member who opens
+the same policy twice in a day appears twice. The second one that day is kept in
+the **Import Queue** marked **duplicate** and never becomes a training record.
+An acknowledgment on a later day, such as next year's, is recorded as usual.
+
+![The Target Solutions provider form filled in: API Base URL https://app.targetsolutions.com/tsapp/api/, API Key and API Secret with placeholder values, and Enable Auto-Sync on with Pull new completions Every hour and Daily 30-day review at 02:00](./images/16-18-target-solutions-filled.png)
 
 ### Syncing on a schedule
 
-Under **Sync Settings**, turn on **Enable Auto-Sync**. A Target Solutions provider then runs two kinds of sync:
+Under **Sync Settings**, turn on **Enable Auto-Sync**. A Target Solutions
+provider then runs two kinds of sync:
 
-| Run                     | When                                                      | Asks Target Solutions for                                 |
-| ----------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
-| **Pull**                | every hour by default (**Pull new completions**)          | completions since the last sync, at least since yesterday |
-| **Daily 30-day review** | once a day, 02:00 by default (**Daily 30-day review at**) | every completion from the last 30 days                    |
+| Run                     | When                                                    | Asks Target Solutions for                                     |
+| ----------------------- | ------------------------------------------------------- | ------------------------------------------------------------- |
+| **Pull**                | every hour at first (**Pull new completions**)          | completions since the last sync, and at least since yesterday |
+| **Daily 30-day review** | once a day, 02:00 at first (**Daily 30-day review at**) | every completion from the last 30 days                        |
 
-Frequent pulls stay small, so a class someone finishes shows up under
-**Imports** within about an hour. The review exists because Target Solutions
-lets a completion be recorded for a past date, and a pull that only looks
-forward from the last sync would never ask for it. Records already synced are
-updated in place, matched by Transcript ID, so the overlap never creates
+The hourly pulls stay small, so a class someone finishes shows up within about
+an hour. The daily review exists because Target Solutions lets a completion be
+recorded for a past date. A pull that only looks forward would never ask for
+it. Records already brought in are updated in place, so the overlap never makes
 duplicates.
 
 Details:
 
-- The review time is in the department's timezone and keeps its local time
-  across daylight-saving changes.
-- The scheduler checks every 30 minutes, so each run starts within 30 minutes
-  of its time.
-- A newly enabled provider starts with a review, so its first sync brings in
-  the last 30 days.
-- A review that fails is retried on the next run until one succeeds.
-- Auto-sync only runs for an active provider whose last **Test Connection**
-  passed. Run a connection test after saving the provider.
-- A completion **deleted** in Target Solutions is not removed here, because the
-  report only lists completions that still exist.
-- The provider card's **Auto-Sync** line shows both, e.g. "Every 1h · review
-  daily at 02:00". Other providers show only "Every _N_h" and their form has a
-  single **Sync Interval**, scheduled from the previous sync as before.
+- The review time is in your department's time zone and keeps its local time
+  when the clocks change.
+- The schedule is checked every 30 minutes, so each run starts within 30
+  minutes of its time.
+- A newly switched-on provider starts with a review, so its first sync brings
+  in the last 30 days.
+- A review that fails is tried again on the next run until one works.
+- Automatic syncs run only for an active provider whose last **Test** passed.
+  Run **Test** after saving the provider.
+- A completion **deleted** in Target Solutions is not removed here, because
+  the report lists only completions that still exist.
+- The provider card's **Auto-Sync** line shows both, for example "Every 1h ·
+  review daily at 02:00".
 
-#### Course mappings _(2026-10-07)_
+Other providers show only "Every _N_h". Their form has a single **Sync
+Interval**, counted from the previous sync.
 
-> **Warning:** importing completions does not make a requirement check the
-> right course. A requirement of type **Hours** filtered only by training type
-> is met by **any** imported course of that type. One department's first
-> Target Solutions import showed a member's annual HIPAA refresher as complete
-> on the strength of two CAPCE medical courses — Hematology and Sepsis — with no
-> HIPAA training at all. Before your first import, make every topic-specific
-> requirement (HIPAA, bloodborne pathogens, policy acknowledgments…) a
-> **Courses** requirement and map the provider's courses to it as described
-> below. See
+#### Course mappings
+
+> **Warning.** Bringing in completions does not make a requirement check the
+> right course. A requirement of type **Hours**, filtered only by training
+> type, is met by **any** course of that type. One department's first import
+> showed a member's yearly HIPAA refresher as complete because of two medical
+> courses, Hematology and Sepsis. The member had done no HIPAA training at all.
+>
+> Before your first import, make every topic requirement (HIPAA, bloodborne
+> pathogens, policy acknowledgments and so on) a **Courses** requirement. Then
+> map the provider's courses to it as below. See
 > [Never Use an Hours Requirement for a Required Topic](./02-training.md#never-use-an-hours-requirement-for-a-required-topic).
 
-Target Solutions gives each course a **Course ID**, and issues a new one when it
-publishes a new version — a new HIPAA video, a re-accredited CAPCE course, a
-revised policy. Requirements link to courses in **your library**, not to
-Target Solutions' IDs, so a new version never means editing a requirement:
+Target Solutions gives each course a **Course ID**. It gives a new one each
+time it publishes a new version: a new HIPAA video, a re-accredited course, a
+revised policy. Your requirements link to courses in **your library**, not to
+Target Solutions' numbers. So a new version never means editing a requirement:
 
-1. Create the course once in the library (for example **HIPAA Awareness**) and
-   link your annual requirement to it, with the requirement type **Courses**.
-2. Open the provider's **Mappings → Courses** tab and map each Target Solutions
-   course to its library course. Map every version to the same library course;
-   completing any one of them meets the requirement.
+1. Create the course once in your library, for example **HIPAA Awareness**.
+   Link your yearly requirement to it, with the requirement type **Courses**.
+2. Open the provider's **Mappings**, go to the **Courses** tab, and map each
+   Target Solutions course to its library course. Map every version to the
+   same library course. Completing any version meets the requirement.
 
-Every course Target Solutions has sent appears on that tab, with how many
-members completed it. An unmapped course that looks like one already in your
-library — the same title once the ID in brackets and the "CAPCE" prefix are
-set aside, or an earlier version you mapped — shows the suggestion with a
-**Map to …** button. Nothing is mapped until an officer chooses; pick a
-different course from the list if the suggestion is wrong.
+The **Courses** tab lists every course Target Solutions has sent, with how many
+members completed it. If an unmapped course looks like one in your library, it
+shows a **Map to …** button. "Looks like" means the same title once the number
+in brackets and the "CAPCE" prefix are ignored, or an earlier version you
+mapped. Nothing is mapped until an officer chooses. Pick a different course
+from the list if the suggestion is wrong.
 
-**When a new version arrives**, everyone holding **training.manage** is emailed
-_New Course Version to Map_, naming the course and the library course it looks
-like. Each course is emailed about once. Officers who turned off **Training
-officer duties** emails under their notification preferences are not emailed.
-Courses that look like nothing in the library are listed on the tab without an
-email.
+**When a new version arrives**, everyone who can manage training is emailed
+_New Course Version to Map_. It names the course and the library course it
+looks like. Each course is emailed about once. Officers who turned off
+**Training officer duties** emails in their notification preferences are not
+emailed. Courses that look like nothing in the library are listed on the tab
+without an email.
 
 **Mapping credits past completions.** Members who completed a new version
-before it was mapped read as not current until it is; mapping it updates the
-training records already imported from it, so they become current at once.
-Unmapping takes the course back off those records. A record an officer linked
-to a different course by hand is left alone either way.
+before it was mapped show as not current until it is. Mapping it updates the
+training records already brought in, so they become current at once. Unmapping
+takes the course back off those records. A record an officer linked to a
+different course by hand is left alone either way.
 
-**Categories come from the course.** Target Solutions sends no category, so an
-imported completion is filed under its mapped library course's category — the
-first of the course's categories that is still active. The order is: the
-category an officer picks when importing, then a category mapping, then the
-mapped course's category, then the **Bulk Import** default, then the provider's
-default category. Mapping a course also files its earlier records under the
-course's category, when they had none or only the provider's default; a
-category someone chose is kept.
+**Categories come from the course.** Target Solutions sends no category. An
+imported completion is filed under its mapped library course's first active
+category. The order of choice is:
 
-#### Uploading a report by hand _(2026-10-07)_
+1. the category an officer picks when importing
+2. a category mapping
+3. the mapped course's category
+4. the bulk-import default
+5. the provider's default category
 
-A Target Solutions provider card always has **Upload Report**, whether or not
-the API key and secret are set and whether or not the last connection test
-passed. A provider that was deleted accepts no uploads, as it accepts no syncs. Use it when the API is not set up yet, is not answering, or to load
-history older than the 30-day review.
+Mapping a course also files its earlier records under the course's category,
+if they had none or only the provider's default. A category someone chose is
+kept.
 
-1. In Target Solutions, run the Training Records API report link (or download
-   the completions report) and save it as a **CSV** file. The report's title
-   lines above the column headings are fine to leave in.
-2. On the provider card, choose **Upload Report** and pick the file (25 MB at
-   most).
+#### Uploading a report by hand
 
-Completions whose member is matched — by email, then Employee ID — become
-training records immediately, exactly as after a sync. Completions nobody
-matches wait under **Imports**. The upload appears in the sync history as
-an **upload**.
+A Target Solutions provider card always has **Upload Report**. It works whether
+or not the key and secret are set, and whether or not the last test passed. A
+deleted provider accepts no uploads. Use it when the connection is not set up
+yet, is not answering, or to load history older than 30 days.
+
+1. In Target Solutions, run the Training Records report link, or download the
+   completions report. Save it as a **CSV** file. The title lines above the
+   column headings can stay.
+2. On the provider card, choose **Upload Report** and pick the file. The limit
+   is 25 MB.
+
+Completions whose member is matched, by email and then Employee ID, become
+training records at once, just as after a sync. Completions nobody matches wait
+in the **Import Queue**. The upload appears on the **Sync History** tab as an
+**Uploaded report**, and **Show classes** there lists what it brought in.
 
 **Nothing is recorded twice.** Every completion is identified by its
-**Transcript ID**. Uploading the same file again, uploading a report that
-overlaps an API sync, or an API sync that later brings in a completion already
-uploaded each update the one existing entry. A completion that is already a
-training record is never credited again. An upload and a sync for the same
-provider take turns rather than running over each other, and the database
-itself refuses a second entry with the same Transcript ID.
+**Transcript ID**. Each of these updates the one existing entry instead of
+adding another:
+
+- uploading the same file again
+- uploading a report that overlaps a sync
+- a sync that later brings in a completion already uploaded
+
+A completion that is already a training record is never credited again. An
+upload and a sync for the same provider take turns rather than running at the
+same time.
 
 **A voided completion stays voided.** If an officer voids a training record
 that came from Target Solutions — a course a member cheated on, say — the
-record keeps its Transcript ID, so every later sync or upload of that
-completion links to the voided record and credits nothing. See _Fixing a
-Mistaken Approval or Record_ in the Training guide.
+record keeps its Transcript ID. Every later sync or upload of it then links to
+the voided record and credits nothing. See _Fixing a Mistaken Approval or
+Record_ in the Training guide.
 
-> **On upgrade:** if two staged entries already shared a Transcript ID, the
-> upgrade keeps one — the one already imported, else the oldest — and marks the
-> others **duplicate**, with the original ID noted on them. Nothing is deleted,
-> and no training record is changed.
+#### When the connection test or a sync fails
 
-#### When the connection test or a sync fails _(2026-10-07)_
+The message says what Target Solutions actually sent back. The same words
+appear after **Test** and on a failed sync in the sync history.
 
-The message says what Target Solutions actually sent back. The same text
-appears after **Test Connection** and on a failed sync in the sync history.
+| Message begins                                         | What to check                                                                                                             |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Target Solutions rejected the API key or secret        | Enter the key and secret again from Target Solutions' API settings                                                        |
+| Target Solutions redirected the report request to …    | The message names where it pointed. A sign-in page means the key or secret was not accepted; otherwise check the base URL |
+| Target Solutions has no report API at this address     | Set **API Base URL** to `https://app.targetsolutions.com/tsapp/api/`                                                      |
+| Target Solutions returned a web page titled "…"        | The title is Target Solutions' own. Check the key and secret, and that the base URL is the API address, not the website   |
+| Target Solutions returned a file without the … columns | Target Solutions answered, but not with the completions report. The quoted first line often names the problem             |
+| Target Solutions had a server error                    | A problem on their side. Try again later; the next scheduled sync tries again by itself                                   |
+| did not respond within … seconds / Could not connect   | The Logbook cannot reach Target Solutions. Check the base URL, and ask your IT administrator to check internet access     |
 
-| Message begins                                         | What to check                                                                                                                          |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Target Solutions rejected the API key or secret        | Re-enter the key and secret from Target Solutions' API settings.                                                                       |
-| Target Solutions redirected the report request to …    | The message names where it pointed. A sign-in page means the key or secret was not accepted; anything else, check the base URL.        |
-| Target Solutions has no report API at this address     | Set **API Base URL** to `https://app.targetsolutions.com/tsapp/api/`.                                                                  |
-| Target Solutions returned a web page titled "…"        | The title is Target Solutions' own. Check the key and secret, and that the base URL is the API address rather than the website.        |
-| Target Solutions returned a file without the … columns | Target Solutions answered, but not with the completions report. The quoted first line is its own wording, often naming the problem.    |
-| Target Solutions had a server error                    | A problem on their side. Try again later; the next scheduled sync retries automatically.                                               |
-| did not respond within … seconds / Could not connect   | Target Solutions or the network is unreachable from the Logbook server. Check the base URL and that the server can reach the internet. |
-
-The key and secret are never shown in these messages, even when Target
-Solutions' own page or file repeats them.
+The key and secret never appear in these messages, even when Target Solutions'
+own page repeats them.
 
 ---
 
-## Monitoring Integration Health
+## Claude (MCP) — asking questions of your Logbook
 
-The integrations dashboard shows health status for each connected integration:
+**Claude (MCP)** lets Claude answer questions about your department's Logbook.
+It works with Claude Code, Claude Desktop and claude.ai. MCP stands for Model
+Context Protocol, the standard Claude uses to reach other systems. The card is
+in the **AI Assistants** category.
 
-| Indicator           | Meaning                                              |
-| ------------------- | ---------------------------------------------------- |
-| **Green checkmark** | Connected and healthy — last sync successful         |
-| **Yellow warning**  | Connected but last sync failed — check error details |
-| **Gray dot**        | Not connected — available to configure               |
-| **Red X**           | Connection lost — credentials may have expired       |
+> **Important. It is off until an administrator connects it, and it answers
+> nothing until an IT administrator issues a service key or registers a
+> client.** These are separate steps on purpose.
 
-> **Integration detail page _(2026-10-05)_.** Click **Details** on any
-> integration card to open its health page: last sync, last success, the last
-> error and when it happened, how many runs in a row have failed, and its last
-> 50 runs — syncs, connection checks and chat deliveries, each with what
-> triggered it. **Retry sync** (Salesforce) re-runs the sync; for other
-> integrations the same button reads **Retry connection check**. It can be
-> pressed once a minute per integration. Error text is cleaned before it is
-> stored, so it never shows a webhook URL, token or email address. Health is
-> reported as _Healthy_, _Recent failure_, _Failing_ (three or more failures in
-> a row) or _Not run yet_.
-
----
-
-## Troubleshooting
-
-| Issue                                                   | Solution                                                                                                                                                                                                     |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Integration shows "Connection failed"                   | Verify credentials haven't expired. Click "Test Connection" to diagnose.                                                                                                                                     |
-| Salesforce sync shows field mapping errors              | Check field mappings via the integration detail page. Ensure Salesforce fields exist.                                                                                                                        |
-| Webhook not receiving events                            | Verify your endpoint is reachable from the internet. Check the webhook URL. Test with a curl command.                                                                                                        |
-| Weather alerts not showing                              | Verify your NWS Zone ID is correct. Check that the NOAA API is responding.                                                                                                                                   |
-| ICS feed not updating                                   | Allow up to 1 hour for calendar apps to refresh. Verify the feed URL is correct.                                                                                                                             |
-| ePCR import fails                                       | Check the file format (CSV or NEMSIS XML). Ensure column headers match expected format.                                                                                                                      |
-| Slack notifications not appearing                       | Verify the webhook URL in Slack workspace settings. Check channel permissions.                                                                                                                               |
-| Documenso "connection failed"                           | Verify the API token under **Settings > API** and the base URL (self-hosted instances only).                                                                                                                 |
-| Cal.com "connection failed"                             | Verify the API key under **Settings > Developer > API keys**.                                                                                                                                                |
-| Signed document or booking didn't advance the applicant | Confirm the Webhook Secret matches on both sides, the callback URL is correct, the signer/attendee email matches the applicant, and the applicant's **current** stage is configured to use that integration. |
-| OAuth token expired                                     | Most integrations auto-refresh tokens. If persistent, disconnect and reconnect.                                                                                                                              |
-| PHI data in integration                                 | ePCR and medical integrations are flagged as containing PHI. Data is processed and deleted after import per HIPAA requirements.                                                                              |
-
----
-
-## Realistic Example: Connecting Slack and Google Calendar
-
-### Background
-
-**Oakville Fire Department** IT Manager **Steve Park** wants to set up two integrations: Slack notifications for department events and Google Calendar sync so members see shifts on their personal calendars.
-
-### Part 1: Connecting Slack (Monday Morning)
-
-1. Steve navigates to **Settings > Integrations**
-2. Finds **Slack** in the Messaging category → clicks **Connect**
-3. In a separate browser tab, he opens Oakville FD's Slack workspace:
-   - Goes to **Settings > Manage Apps > Incoming Webhooks**
-   - Creates a webhook for the `#department-alerts` channel
-   - Copies the webhook URL: `https://hooks.slack.com/services/T0ABC.../B0DEF.../xxxxx`
-4. Back in The Logbook, pastes the webhook URL
-5. Configures event triggers:
-   - New Event Created: **On**
-   - Shift Assignment: **On**
-   - Training Completed: **On**
-   - Member Joined: **On**
-   - Equipment Check Failed: **On**
-6. Clicks **Test Connection** → a test message appears in `#department-alerts`: "The Logbook connected successfully"
-7. Clicks **Save**
-
-That afternoon, Lt. Santos creates a training event "Q3 Hazmat Refresher" → a Slack notification automatically posts to `#department-alerts`:
-
-> **The Logbook** — New Event: Q3 Hazmat Refresher
-> Date: July 15, 2026 | 08:00 AM - 12:00 PM
-> Location: Station 1 Training Bay
-> RSVP by July 10
-
-> **No screenshot here _(2026-08-12)_.** The Slack connect dialog and its
-> webhook URL field are already pictured under
-> [Connecting an Integration](#connecting-an-integration); the event-trigger
-> checkboxes and Test Connection button this asked for do not exist. The other
-> half — the Slack channel showing a delivered message — is outside the
-> application and cannot be captured from our documentation environment.
-
-### Part 2: Connecting Google Calendar (Monday Afternoon)
-
-1. Steve navigates to **Integrations** → finds **Google Calendar** → clicks **Connect**
-2. The system redirects to Google OAuth consent screen
-3. Steve signs in with the department's Google Workspace account
-4. Grants calendar read/write permissions
-5. Back in The Logbook, selects which calendar to sync: "Oakville FD — Events"
-6. Enables two-way sync:
-   - Logbook → Google: Events created in The Logbook appear on Google Calendar
-   - Google → Logbook: Not enabled (department creates all events in The Logbook)
-7. Clicks **Save**
-
-Members who subscribe to the "Oakville FD — Events" Google Calendar now see department events alongside their personal calendar.
-
-### Part 3: Telling Members About the Shift Feed (Optional)
-
-There is nothing for Steve to set up here. The ICS feed is minted per member,
-on demand, the first time each of them opens **Subscribe to my shifts** on
-**My Shifts** — so what Steve sends round is an instruction, not a URL:
-
-> Open Scheduling → My Shifts, click **Subscribe to my shifts**, copy the link,
-> and add it in your calendar app. It is yours alone — don't forward it. If you
-> ever do, click **Reset link** and the old one stops working.
-
-Pictured under [iCalendar (ICS) Feed](#icalendar-ics-feed) above.
-
-> **Corrected 2026-08-12.** This step had Steve enabling the integration and
-> the system generating three shared feed URLs — All Events, My Shifts and
-> Training Only — for him to distribute. No such screen or URLs exist: there is
-> one per-member feed, carrying shifts, at `/api/v1/calendar/{token}.ics`, and
-> an officer never sees another member's. The retired screenshot placeholder
-> also asked for a phone photographed showing a third-party calendar app, which
-> is not a screen this application draws.
-
-### Part 4: Monitoring Health (Ongoing)
-
-The next week, Steve checks the integrations dashboard:
-
-| Integration     | Status  | Last Sync        | Notes                           |
-| --------------- | ------- | ---------------- | ------------------------------- |
-| Slack           | Healthy | 2 hours ago      | 14 notifications sent this week |
-| Google Calendar | Healthy | 30 min ago       | 8 events synced                 |
-| iCalendar (ICS) | —       | N/A (pull-based) | 12 subscribers                  |
-
-**Edge case encountered:** On Wednesday, while Steve creates a batch of events, Slack refuses one of the notifications because too many arrived at once. The Logbook does **not** try that message again — that one notification never reaches the channel. The Slack integration now reads **Recent failure**, and its history shows "The platform did not accept the message." The next notification goes through and the status returns to **Healthy**. If three in a row fail, it reads **Failing**. If an important announcement was the one that failed, post it in Slack by hand.
-
-**Edge case:** A member reports their shift calendar shows UTC times instead of Eastern. Steve checks and the ICS feed correctly includes timezone metadata — the member's calendar app was set to UTC. Fixed on the member's device, not in The Logbook.
-
-### Edge Cases
-
-| Scenario                                            | Behavior                                                                                                                                                                                                                                                  |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Slack webhook URL becomes invalid (channel deleted) | Each notification fails. The status reads **Recent failure**, then **Failing** after three in a row; the history shows "The platform did not accept the message." (Slack's own error text is not kept). Create a new webhook in Slack and update the URL. |
-| Google OAuth token expires                          | Refreshed automatically. If the refresh fails, the run is recorded as a failure on the integration's page. Disconnect Google Calendar and connect it again to sign in afresh.                                                                             |
-| ICS feed subscriber exceeds rate limit              | Feed returns 429; subscriber's calendar app retries automatically.                                                                                                                                                                                        |
-| Two integrations send the same event notification   | Each integration sends independently — member may see duplicate notifications in Slack and email. Configure triggers to avoid overlap.                                                                                                                    |
-| Generic webhook secret not configured               | The test message is sent without a signature, so the receiving system cannot tell it really came from The Logbook. (Generic webhooks send only the test message today.)                                                                                   |
-| Integration configured but module disabled          | Events from disabled modules don't trigger notifications (e.g., inventory disabled → no equipment alerts).                                                                                                                                                |
-
----
-
-**Previous:** [Prospective Members Pipeline](./15-prospective-members.md) | **Next:** [Privacy & Your Data](./17-privacy-data-rights.md)
-
-## August 23, 2026 update — NFC ID Cards
-
-**NFC ID Cards is an integration**, not a always-present feature: Settings →
-Integrations → **NFC ID Cards**. It starts **off**, and the switch is enforced
-on the server, not only by hiding the screens — so nothing is reachable while
-it is off.
-
-The guard **fails closed**: a department whose integration catalog has never
-been opened counts as not having turned it on. A fresh install therefore has no
-live credential surface until somebody deliberately enables one.
-
-Turning it off again is the intended way to stop cards already handed out from
-working, **without deleting the records that say who held them**.
-
-Two permissions to grant alongside it — neither is granted by the upgrade:
-
-| Permission                | For                                               |
-| ------------------------- | ------------------------------------------------- |
-| `members.manage_id_cards` | Issuing, labelling, suspending and revoking cards |
-| `members.check_in`        | Running a check-in station                        |
-
-Full walkthrough:
-[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station).
-
-## Claude (MCP) — asking questions of your Logbook _(2026-09-03)_
-
-`/api/mcp` is a Model Context Protocol endpoint served by the existing backend
-process, so Claude Code, the Messages API connector and (through a local bridge)
-Claude Desktop can ask questions of a department's Logbook.
-
-It appears in the integrations catalog as **Claude (MCP)**, category _AI
-Assistants_.
-
-> **It is off on every installation until an administrator connects it, and it
-> answers nothing until an IT administrator issues a service key.** Both steps
-> are deliberate and separate.
-
-![Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening, full duty schedule and member sign-in switches all off, as shipped](./images/16-08-mcp-connect-form.png)
+![Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening, full duty schedule, medical supply inventory and member sign-in switches all off, as shipped](./images/16-08-mcp-connect-form.png)
 
 ![The Claude (MCP) service key panel in its shown-once state: Copy this key now, it is shown once and cannot be recovered, above a demo key value standing in for the real one](./images/16-09-mcp-service-key.png)
 
 ### What it can reach
 
-**51 read tools** over the roster, events, shifts, training and certifications,
+**Read tools** cover the roster, events, shifts, training and certifications,
 inventory, apparatus, facilities, meetings and published minutes, documents in
 unrestricted folders, and elections.
 
-**Three areas sit behind their own switches, all off by default:**
+**Four areas have their own switches, all off at first:**
 
-| Switch   | What it adds                                                                                                                        |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Finance  | Finance totals                                                                                                                      |
-| Medical  | Medical-screening **status** only                                                                                                   |
-| Schedule | The full duty schedule. Without it, the shift tools list only shifts open to all members — what any eligible member can already see |
+| Switch                   | What it adds                                                                                                                                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Finance                  | Finance totals                                                                                                                                                                                                       |
+| Medical screening status | Medical screening **status** only                                                                                                                                                                                    |
+| Full duty schedule       | The full duty schedule. Without it, Claude sees only shifts open to all members — what any eligible member can already see                                                                                           |
+| Medical supply inventory | Medical stock: counts, items below their reorder point, and lots expiring or already expired. Claude still cannot ask for a reorder of a medical item. A member's own connection also needs medical inventory access |
 
-**Three write tools** — draft an event, add a meeting action item, raise a
-reorder request — sit behind a read/write switch, also off by default.
+**Three write tools** draft an event, add a meeting action item, or raise a
+reorder request. They need the access mode set to read/write, which is also off
+at first.
 
-**Tools a department has not switched on are not even listed to the client.**
+**Tools your department has not switched on are not even listed to Claude.**
 
 ### Personal information never leaves
 
-One redaction boundary is applied to **every** tool result. Stripped at every
-depth: phone, mobile, work and personal email, home address, date of birth,
-emergency contacts, photo, membership and certification numbers, login names,
-medical results, credentials and tokens.
+The same protection applies to **every** answer. These are always removed:
+phone numbers, email addresses, home addresses, dates of birth, emergency
+contacts, photos, membership and certification numbers, login names, medical
+results, and passwords or sign-in codes.
 
-On top of that, **every string value is scrubbed of email addresses and phone
-numbers**, so free text — a note, a description — cannot carry them out either.
+On top of that, **email addresses and phone numbers are removed from all free
+text**, such as a note or a description. Other details typed into published
+content do pass through.
 
 ### The service key
 
-- One active key per organization.
-- Stored as a **SHA-256 digest only**; the plaintext is shown in the UI exactly
-  once and cannot be retrieved afterwards.
-- Optional expiry or lifetime. **Rotation revokes the previous key.**
-- Issuing and revoking require the new **`integrations.mcp_keys`** permission,
-  which only the **IT Manager** position holds by default.
-- Every tool call, issue and revocation is audit-logged.
+- One active key per department.
+- The key is shown **once**, when it is issued. It cannot be shown again.
+- It can have an expiry date. **Issuing a new key cancels the old one.**
+- Issuing and cancelling keys needs **Issue and revoke Claude MCP service
+  keys**. Only the **IT Manager** position has it at first.
+- Every question Claude asks, and every key issued or cancelled, is recorded in
+  the audit log.
 
 ### Setting it up
 
-1. **Integrations → Claude (MCP) → Connect.** Choose the access mode and leave
-   the three data switches off unless you want them.
-2. **Issue a service key** from the Service key panel. Copy it immediately — it
-   is shown once.
-3. Point the client at `/api/mcp` with that key.
+1. **Integrations → Claude (MCP) → Connect.** Choose the access mode. Leave the
+   three data switches off unless you want them.
+2. **Issue a service key** from the **Service key** panel. Copy it at once; it
+   is shown only once.
+3. Give the key to whoever sets up the Claude client, with your Logbook's
+   address followed by `/api/mcp`.
 
-Full setup detail, including client configuration, is on the
+**Test** on the card says whether a key has been issued and when it expires.
+Full setup detail, including client settings, is on the
 `Integration-Claude-MCP` wiki page.
 
-### Deployment notes
+### Member sign-in (OAuth)
 
-Stateless, JSON-response transport: any worker or replica answers any request,
-and **no reverse-proxy change is needed** because it is served under `/api/`.
-
-### Member sign-in (OAuth) _(2026-10-06)_
-
-claude.ai custom connectors and Claude Desktop authenticate with OAuth instead
-of a pasted key. **Member sign-in** lets each member connect one of those with
-their **own account**: they sign in, see what the client asks for — and how
-many tools each request would actually reach for them — and choose **Allow**
-or **Don't allow**. The connection can then do only what that member can do in
-The Logbook, within the switches above.
+claude.ai and Claude Desktop sign in with OAuth instead of a pasted key.
+**Member sign-in** lets each member connect Claude to their **own account**.
+They sign in, see what Claude is asking for, and see how many tools each
+request would actually reach for them. Then they choose **Allow** or **Don't
+allow**. The connection can do only what that member can do in The Logbook,
+within the switches above.
 
 > **OAuth here does not mean Google or Microsoft sign-in.** The Logbook runs its
-> own small authorization server. A member signs in on The Logbook's ordinary
-> login page with their **local username and password** (and MFA, if they use
-> it); Claude is handed a short-lived token for that member and never sees the
-> password. A department with no single sign-on configured needs nothing extra.
+> own small sign-in service. A member signs in on The Logbook's ordinary login
+> page with their **Logbook username and password** (and their second sign-in
+> step, if they use one). Claude receives a short-lived pass for that member and
+> never sees the password. A department without single sign-on needs nothing
+> extra.
 
-It is **off** until three things are true: the server operator sets
-`MCP_OAUTH_ENABLED` and `MCP_OAUTH_ISSUER_URL`; an administrator ticks **Let
-members connect with their own account** on the integration; and an IT
-administrator registers the client (name, exact redirect URI, optional secret)
-in the **Member sign-in (OAuth)** panel on the card.
+It stays **off** until three things are true:
+
+1. The server operator sets `MCP_OAUTH_ENABLED` and `MCP_OAUTH_ISSUER_URL`.
+2. An administrator ticks **Let members connect with their own account** on
+   the integration.
+3. An IT administrator registers the client (name, exact redirect address,
+   optional secret) in the **Member sign-in (OAuth)** panel on the card.
 
 - Changing or resetting a password ends every connection the member holds.
-- There is no self-service client registration; every client is registered by
-  someone holding `integrations.mcp_keys`.
+- **Fixed on 2026-10-14:** before then, every tool call on a member's
+  connection was refused, and Claude showed only "Error executing tool". A
+  member who connected before the fix and saw that does not need to reconnect;
+  just ask again. A tool the member lacks the permission for, or that a
+  department switch has turned off, is still refused, with its own message.
+- Members cannot register a client themselves. Every client is registered by
+  someone who can issue Claude service keys.
 
 ### Walkthrough: connecting the claude.ai connector
 
@@ -1263,7 +1386,7 @@ server_ notice instead, the operator step above is not done.
 The **Register a client** form is prefilled for claude.ai: name `claude.ai`,
 **Issue a client secret** ticked, and the redirect URI
 `https://claude.ai/api/mcp/auth_callback`. Leave those as they are and select
-**Register client**. Requires `integrations.mcp_keys`.
+**Register client**. Requires **Issue and revoke Claude MCP service keys**.
 
 ![The Member sign-in (OAuth) panel: the authorization server address, no clients registered yet, and the Register a client form prefilled with the name claude.ai, Issue a client secret ticked and claude.ai's redirect URI](./images/16-11-mcp-oauth-register-client.png)
 
@@ -1319,7 +1442,7 @@ Select **Connect** on the new connector. The browser goes to The Logbook:
 
 Members review and disconnect their own connections on the **Claude
 connections** page (`/claude/connections`), linked from the consent screen. It
-has no menu entry yet, so bookmark it or use the link. Administrators see every
+has no menu entry, so bookmark it or use the link. Administrators see every
 member's connection in the Member sign-in (OAuth) panel and can end any of
 them.
 
@@ -1341,12 +1464,172 @@ them.
 Full setup detail, including Claude Code and Claude Desktop clients, is on the
 `Integration-Claude-MCP` wiki page.
 
-## Integration errors no longer leak internals _(2026-08-31)_
+---
 
-Testing an integration's connection, or checking Salesforce sync readiness,
-could show a raw internal or connection error message if the underlying network
-call failed unexpectedly. Errors now show a generic message while the details
-are still logged for troubleshooting.
+## Monitoring Integration Health
 
-The specific, intentional messages — "Salesforce rejected these credentials",
-and its siblings — are unaffected.
+On the Integrations page, each card shows only whether it is **Connected**. To
+see how an integration is doing, select **Details** on its card. The health
+page shows:
+
+- **Last sync** and **Last success**
+- **Failures in a row**
+- **Status**: **Healthy**, **Recent failure**, **Failing** (three or more
+  failures in a row) or **Not run yet**
+- **Last error**, and when it happened
+- the last 50 runs — syncs, connection checks and chat notifications — with
+  what started each one
+
+**Retry sync** (Salesforce) runs the sync again. For other integrations the
+same button reads **Retry connection check**. It can be used once a minute for
+each integration.
+
+Error text is cleaned before it is saved, so it never shows a webhook address,
+key or email address.
+
+---
+
+## Troubleshooting
+
+| Problem                                                    | What to do                                                                                                                                                                 |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Test** reports a failure                                 | Check the details you entered have not expired or changed, then select **Test** again. Open **Details** for the last error                                                 |
+| Google Calendar or Outlook reads Coming Soon               | Calendar publishing is turned off on the server (`CALENDAR_SYNC_ENABLED`); Outlook cannot be connected yet either way. See [Calendar Integrations](#calendar-integrations) |
+| Google Calendar reads Reconnect required                   | Select **Reconnect with Google** on the card. See [Google Calendar](#google-calendar)                                                                                      |
+| Salesforce sync reports missing fields                     | Run **Check readiness**. Create the missing fields in Salesforce, or tick **Skip custom fields my Salesforce org hasn't created yet**                                      |
+| Webhook test never arrives                                 | Check the address is public and starts with `https://`. Ask whoever runs the receiving system to check it answers                                                          |
+| Weather alerts not showing                                 | Expected: alerts are not shown anywhere yet. **Test** only checks the zone code                                                                                            |
+| Shift feed or department feed not updating                 | Calendar apps check every so often, up to about an hour. Check the link is the current one, not one from before a **Reset link**                                           |
+| Slack, Discord or Teams posts not appearing                | Check the webhook address is still valid in the chat app. Open **Details** to see whether deliveries failed                                                                |
+| Documenso test fails                                       | Check the API token under **Settings > API** in Documenso, and the base URL if you run your own Documenso                                                                  |
+| Cal.com test fails                                         | Check the API key under **Settings > Developer > API keys** in Cal.com                                                                                                     |
+| A signed document or booking did not move the applicant on | Check the Webhook Secret matches on both sides, the callback URL is right, the email matches the applicant, and the applicant's **current** stage uses that integration    |
+| A sign-in keeps expiring                                   | Most integrations renew it by themselves. If it keeps failing, disconnect and connect again                                                                                |
+
+---
+
+## Realistic Example: Connecting Slack and the Shift Feed
+
+### Background
+
+**Oakville Fire Department** IT Manager **Steve Park** wants new events posted
+in Slack. He also wants members to see their shifts in their own calendars.
+
+### Part 1: Connecting Slack (Monday Morning)
+
+1. Steve opens **Administration → Forms & Comms → Integrations**.
+2. He finds **Slack** in the Messaging category and selects **Connect**.
+3. In another browser tab, he opens Oakville FD's Slack workspace settings. He
+   creates an incoming webhook for the `#department-alerts` channel and copies
+   its address: `https://hooks.slack.com/services/T0ABC.../B0DEF.../xxxxx`
+4. Back in The Logbook, he pastes the address into **Webhook URL** and selects
+   **Connect**.
+5. On the Slack card, he selects **Test**. `#department-alerts` receives "The
+   Logbook — Integration test successful!"
+
+There are no event choices to make. From now on, every new event, new shift and
+new training record posts to the channel.
+
+That afternoon, Lt. Santos creates a training event, "Q3 Hazmat Refresher". A
+message about it appears in `#department-alerts` with its title, date, time and
+location.
+
+### Part 2: Telling Members About the Shift Feed
+
+Steve first looks at the Google Calendar card. It reads **Coming Soon**
+because calendar publishing is turned off on the department's server, so he
+connects the **iCalendar (ICS)** card instead, copies the department events
+link it shows, and posts it in the members' channel.
+
+Each member's shift feed is made the first time they open **Subscribe to my
+shifts** on **My Shifts**. So Steve sends round an instruction, not a link:
+
+> Open Scheduling → My Shifts, select **Subscribe to my shifts**, copy the
+> link, and add it in your calendar app (Google, Apple or Outlook). It is yours
+> alone — don't forward it. If you ever do, select **Reset link** and the old
+> one stops working.
+
+It is pictured under [iCalendar (ICS) Feed](#icalendar-ics-feed).
+
+### Part 3: Monitoring Health (Ongoing)
+
+The next week, Steve selects **Details** on the Slack card. It reads
+**Healthy**, with the last run a few hours ago.
+
+**What went wrong on Wednesday:** while Steve made a batch of events, Slack
+refused one message because too many arrived at once. The Logbook does **not**
+try that message again, so it never reaches the channel. The Slack
+integration reads **Recent failure**, and its history shows "The platform did
+not accept the message." The next message goes through and the status returns
+to **Healthy**. If three in a row had failed, it would read **Failing**. If an
+important announcement was the one lost, post it in Slack by hand.
+
+**A member's calendar shows the wrong times:** a member says their shift
+calendar shows UTC times instead of Eastern. The feed carries the time zone
+correctly; the member's calendar app was set to UTC. It is fixed on the
+member's phone, not in The Logbook.
+
+### Edge Cases
+
+| What happens                                      | What it means / what to do                                                                                                                                                                                     |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The Slack webhook stops working (channel deleted) | Each post fails. The status reads **Recent failure**, then **Failing** after three in a row. The history shows "The platform did not accept the message." Create a new webhook in Slack and update the address |
+| A calendar app checks the feed too often          | The Logbook refuses some of the checks for a while. The calendar app tries again by itself                                                                                                                     |
+| Slack and email both carry the same news          | Each sends on its own, so a member may see it twice. There is no setting to prevent this                                                                                                                       |
+| Generic webhook has no secret                     | The test message is sent unsigned, so the receiving system cannot tell it really came from The Logbook                                                                                                         |
+
+---
+
+## If You Learned an Older Version
+
+If you are following older notes, an older recording or an SOP, these things
+work differently from what they describe.
+
+- **Google Calendar publishes one way, to a calendar The Logbook creates.**
+  Older notes describe choosing one of your existing calendars and two-way
+  sync. Neither exists: connecting creates a new department calendar, and
+  nothing is read back from Google. Outlook cannot be connected yet.
+- **There are no event choices for Slack, Discord or Teams.** Older notes
+  describe ticking New Member, Training Completed, Event Scheduled or Shift
+  Change. A chat integration takes only a webhook address, and posts new
+  events, shifts and training records.
+- **There is one department feed, not three.** Older notes describe copying
+  "All Events", "Training Only" and "My Shifts" links from the iCalendar
+  integration. The card gives one link, to the department's published events.
+  Each member's shift feed comes from **Scheduling > My Shifts**.
+- **Generic ePCR Import, NEMSIS Response Module Export, NFIRS Export and CSV
+  Import/Export are Coming Soon**, not available. FirstWatch is also in the
+  Coming Soon list. The NREMT and ImageTrend cards read **NREMT Verification**
+  and **ImageTrend**.
+- **The Salesforce panel has no Status tab, last-sync time or sync history.**
+  A run's counts appear once, in a message. The buttons are named by what they
+  send, such as **Members → Contacts**, not "Push Members". There is no **View
+  Field Mappings** button.
+- **The health indicators moved.** Cards no longer show green, yellow, grey or
+  red health marks. Health is on each integration's **Details** page.
+- **Test is on the card.** The connect window has no **Test Connection**
+  button; connect first, then select **Test** on the card.
+- **Training provider integrations are under Settings & Data.** Older notes
+  say **Training Admin > Setup > Integrations**. There is no Setup area in
+  Training Admin any more.
+- **NFC ID Cards is something you switch on.** A department that has not
+  activated it has no ID Cards section and no check-in station.
+- **An older Target Solutions setup may need entering again.** Older versions
+  sent its details to the Vector Solutions service, so nothing useful came in.
+  Edit the provider, enter the key and secret as described above, select
+  **Test**, then **Sync Now**.
+- **Target Solutions completions are credited automatically.** Older notes say
+  every synced completion waits for an officer. Only completions nobody can
+  match wait now; other providers still wait for an officer.
+- **The Target Solutions waiting list is the Import Queue.** Older notes call
+  it "Imports" and describe **Import** and **Bulk Import** buttons, which the
+  screen does not have.
+- **Cal.com: subscribe to MEETING_ENDED.** Older notes say BOOKING_CREATED,
+  which moved applicants on as soon as they picked a time.
+- **Duplicate Target Solutions entries from older versions** were kept, with
+  all but one marked **duplicate** and the original number noted on them. No
+  training record was changed.
+
+---
+
+**Previous:** [Prospective Members Pipeline](./15-prospective-members.md) | **Next:** [Privacy & Your Data](./17-privacy-data-rights.md)

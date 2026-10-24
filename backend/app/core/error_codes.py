@@ -48,6 +48,7 @@ class ErrorCode(str, Enum):
     AUTH_REGISTRATION_DISABLED = "LB-AUTH-010"
     AUTH_MFA_CHALLENGE_EXPIRED = "LB-AUTH-011"
     AUTH_REFRESH_SUPERSEDED = "LB-AUTH-012"
+    AUTH_STEPUP_REQUIRED = "LB-AUTH-013"
 
     # --- Permissions ---------------------------------------------------
     PERM_INSUFFICIENT = "LB-PERM-001"
@@ -77,6 +78,7 @@ class ErrorCode(str, Enum):
     UPLD_VALIDATION_UNAVAILABLE = "LB-UPLD-003"
     UPLD_MALWARE_DETECTED = "LB-UPLD-004"
     UPLD_SCAN_UNAVAILABLE = "LB-UPLD-005"
+    UPLD_STORAGE_UNAVAILABLE = "LB-UPLD-006"
 
     # --- Onboarding ------------------------------------------------------
     ONBD_ALREADY_COMPLETED = "LB-ONBD-001"
@@ -95,6 +97,9 @@ class ErrorCode(str, Enum):
 
     # --- Documents -------------------------------------------------------
     DOC_FOLDER_ADMIN_ONLY = "LB-DOC-001"
+
+    # --- Finance ---------------------------------------------------------
+    FIN_REIMPORT_CONFIRMATION_REQUIRED = "LB-FIN-001"
 
 
 @dataclass(frozen=True)
@@ -249,6 +254,22 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
         resolution=(
             "Nothing to do: the app retries with the new session cookies.",
             "If a member sees it as an error, a reload picks up the new " "session.",
+        ),
+    ),
+    ErrorCode.AUTH_STEPUP_REQUIRED: ErrorCodeInfo(
+        title="Re-verification required",
+        description=(
+            "This action (an export, a security or policy change, an "
+            "account-recovery change or a destructive member action) needs "
+            "a recent re-verification on the current session. The member "
+            "is signed in; they have not confirmed their identity again "
+            "within the step-up window."
+        ),
+        resolution=(
+            "The app prompts for an authenticator code (or the password, "
+            "for a member without MFA) and retries the action.",
+            "Calling the API directly: POST /auth/step-up, then repeat the "
+            "request within STEPUP_WINDOW_MINUTES.",
         ),
     ),
     ErrorCode.PERM_INSUFFICIENT: ErrorCodeInfo(
@@ -478,6 +499,21 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "a restart) and that CLAMAV_HOST / CLAMAV_PORT point at it.",
         ),
     ),
+    ErrorCode.UPLD_STORAGE_UNAVAILABLE: ErrorCodeInfo(
+        title="File storage unavailable",
+        description=(
+            "The department keeps its files in its own S3 or MinIO bucket and "
+            "the bucket could not be reached or refused the request, so the "
+            "file was not stored or read. Files are never written anywhere "
+            "else instead."
+        ),
+        resolution=(
+            "Retry in a few minutes.",
+            "If it persists, an administrator should check the bucket, its "
+            "credentials and its endpoint under Organization Settings > File "
+            "Storage and run Test and switch to S3 again.",
+        ),
+    ),
     ErrorCode.ONBD_ALREADY_COMPLETED: ErrorCodeInfo(
         title="Onboarding already completed",
         description=(
@@ -580,6 +616,21 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "loosen a restriction on a folder above it.",
             "If the folder is meant for full administrators only, confirm "
             "when the Documents screen asks, and it is saved as it is.",
+        ),
+    ),
+    ErrorCode.FIN_REIMPORT_CONFIRMATION_REQUIRED: ErrorCodeInfo(
+        title="QuickBooks export would resend imported payments",
+        description=(
+            "A QuickBooks export asked to include payments already sent, and "
+            "some of them went out in a file the Treasurer confirmed was "
+            "imported into QuickBooks. Importing them again would post them "
+            "twice. No file was produced."
+        ),
+        resolution=(
+            "Leave out payments already sent, unless the earlier entries were "
+            "deleted in QuickBooks.",
+            "If they were, confirm when the QuickBooks Export screen asks, "
+            "and the file is produced with them.",
         ),
     ),
     ErrorCode.SCHED_UNKNOWN_SEAT: ErrorCodeInfo(

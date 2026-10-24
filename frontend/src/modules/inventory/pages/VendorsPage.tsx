@@ -104,9 +104,11 @@ const VendorFormModal: React.FC<{
 }> = ({ isOpen, onClose, onSaved, editVendor }) => {
   const [f, setF] = useState<VendorFD>(EMPTY_VENDOR);
   const [saving, setSaving] = useState(false);
+  const [contactNameError, setContactNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
+    setContactNameError(null);
     if (editVendor) {
       setF({
         ...EMPTY_VENDOR,
@@ -139,6 +141,14 @@ const VendorFormModal: React.FC<{
       toast.error('Vendor name is required');
       return;
     }
+    // The primary contact is only created when it has a name, so a title,
+    // email or phone typed without one was dropped behind a success toast.
+    const contactDetailTyped = [f.contact_title, f.contact_email, f.contact_phone].some((v) => v.trim());
+    if (!editVendor && contactDetailTyped && !f.contact_name.trim()) {
+      setContactNameError('Contact name is required to save a contact');
+      return;
+    }
+    setContactNameError(null);
     setSaving(true);
     try {
       if (editVendor) {
@@ -392,9 +402,23 @@ const VendorFormModal: React.FC<{
                   id="vendor-contact-name"
                   className={inp}
                   value={f.contact_name}
-                  onChange={(e) => up('contact_name', e.target.value)}
+                  onChange={(e) => {
+                    up('contact_name', e.target.value);
+                    if (e.target.value.trim()) setContactNameError(null);
+                  }}
                   placeholder="Sales rep or service desk"
+                  aria-invalid={contactNameError ? true : undefined}
+                  aria-describedby={contactNameError ? 'vendor-contact-name-error' : undefined}
                 />
+                {contactNameError && (
+                  <p
+                    id="vendor-contact-name-error"
+                    role="alert"
+                    className="mt-1 text-xs text-red-700 dark:text-red-300"
+                  >
+                    {contactNameError}
+                  </p>
+                )}
               </div>
               <div>
                 <label className={lbl} htmlFor="vendor-contact-title">
@@ -1124,7 +1148,7 @@ export const VendorsPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">Active Vendors</p>
           </div>
           <div className="card-secondary p-3 text-center">
-            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.preferred}</p>
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{stats.preferred}</p>
             <p className="text-theme-text-muted text-xs">Preferred</p>
           </div>
           <div className="card-secondary p-3 text-center">
@@ -1135,7 +1159,7 @@ export const VendorsPage: React.FC = () => {
 
         {canManage && unlinked.length > 0 && (
           <div className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
             <p className="text-xs text-amber-700 dark:text-amber-300">
               {unlinked.length} supplier name{unlinked.length === 1 ? '' : 's'} not on the list — named by{' '}
               {unlinkedTotals.items} item{unlinkedTotals.items === 1 ? '' : 's'} and {unlinkedTotals.reorders} reorder

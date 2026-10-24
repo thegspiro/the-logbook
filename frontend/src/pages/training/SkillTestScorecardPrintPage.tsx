@@ -30,6 +30,7 @@ import { hydrateTemplateSections } from '../../utils/skillTemplateSections';
 import type { CriterionResult, SkillCriterion, SkillTest } from '../../types/skillsTesting';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
 import { formatScore } from '../../utils/skillScoreFormat';
+import { attributionName } from '../../utils/memberName';
 
 const cellStyle: React.CSSProperties = {
   border: '1px solid #ccc',
@@ -270,7 +271,7 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                   <strong>Candidate:</strong> {test.candidate_name || '—'}
                 </td>
                 <td style={cellStyle}>
-                  <strong>Examiner:</strong> {test.examiner_name || '—'}
+                  <strong>Examiner:</strong> {attributionName(test.examiner_name, test.examiner_id, '—')}
                 </td>
               </tr>
               <tr>

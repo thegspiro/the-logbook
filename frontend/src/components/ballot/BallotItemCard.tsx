@@ -44,7 +44,7 @@ export const BallotItemCard: React.FC<BallotItemCardProps> = ({
   onRank,
   closedNote,
 }) => {
-  const { isApprovalType, isRanked, isMultiSelect, selectionCap } = itemForm(item, settings);
+  const { isApprovalType, isRanked, isMultiSelect, selectionCap, allowsWriteIn } = itemForm(item, settings);
   const atCap = isMultiSelect && selectionCap !== null && (choice?.candidate_ids.length ?? 0) >= selectionCap;
 
   return (
@@ -74,7 +74,7 @@ export const BallotItemCard: React.FC<BallotItemCardProps> = ({
                   name={`item-${item.id}`}
                   checked={choice?.choice === BallotChoice.APPROVE}
                   onChange={() => onChoice(item.id, BallotChoice.APPROVE)}
-                  className="focus:ring-theme-focus-ring h-4 w-4 text-green-600"
+                  className="focus:ring-theme-focus-ring h-4 w-4 text-green-700 dark:text-green-600"
                 />
                 <span className="text-theme-text-primary font-medium">Approve</span>
               </label>
@@ -170,7 +170,7 @@ export const BallotItemCard: React.FC<BallotItemCardProps> = ({
             ))
           )}
 
-          {settings.allow_write_ins && (
+          {allowsWriteIn && (
             <div>
               {/* The bordered card is the label, as for every other option:
                   with only the inner row clickable the write-in target was

@@ -112,6 +112,76 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     count asks the access check itself, parent folders included. A department
     whose only active members are full administrators, such as a fresh
     install, is not asked.
+30. **A folder that loses everyone but full administrators later is listed,
+    not asked about** (2026-10-15). Members lose access through positions,
+    position permissions, status, archiving, deletion and rank, from many
+    screens and from unattended jobs (auto-archive, tier advancement). So
+    the change goes through, and full administrators see each such folder
+    on the Documents page, where they can change its access or keep it for
+    administrators.
+    - Keeping a folder records `admin_only_confirmed_at`/`_by`, and the
+      folder is no longer listed. Confirming at save time records the same
+      thing.
+    - The record is cleared whenever an access save leaves someone else
+      able to open the folder. It is also cleared when the list is read and
+      someone else can open the folder again, for example a new holder of
+      its position. A later loss then lists the folder again.
+    - Only the topmost shut folder is listed: a folder shut because its
+      parent is shut is settled with the parent.
+    - Personal folders are never listed, since they open to their owner
+      alone by design.
+    - Probationary members count, as sign-in counts them.
+    - Full administrators are also emailed the list, at most once a week per
+      department, while any folder is on it (2026-10-16). Each email repeats
+      every folder still listed. It is the optional "Document folder access"
+      email (`EmailKind.DOCUMENT_DUTIES`), which a department can make
+      required.
+31. **A department's own S3 bucket** (2026-10-21, owner decisions). The S3
+    (and MinIO-compatible) choice in a department's File Storage settings
+    will decide where that department's new files go. The bucket,
+    credentials and endpoint are the department's, from onboarding, not an
+    installation-wide setting.
+    - Files already on local disk move with a migration command (verified
+      copy, rollback, finalize, as relocation and encryption do). Until it
+      runs, a file with a local reference keeps being served from disk, so
+      switching never breaks a download.
+    - Malware scanning, per-organization separation and encryption at rest
+      apply exactly as on local disk. Files are encrypted before they leave
+      the server.
+    - Tests fake S3 with moto (test-only dependency).
+    - Built in three steps:
+      1. One storage interface (`exists`, `read_bytes`, `plaintext_size`,
+         `delete`, `file_response` in `file_storage_service`) that every
+         caller uses, with the local backend only. Behaviour is unchanged.
+      2. The S3 backend and the per-department settings it reads.
+      3. The migration command, the encryption and rewrap tooling on S3,
+         backups, and docs.
+    - Step 2 decisions (2026-10-22): a department's uploads move to its
+      bucket only after **Test and switch to S3** passes with the saved
+      settings, and go back to local disk if those settings are edited
+      afterwards; an unreachable bucket **refuses** the upload (503,
+      `LB-UPLD-006`) rather than writing to disk; the endpoint must be public
+      HTTPS unless the operator sets `S3_ALLOW_PRIVATE_ENDPOINT`; and
+      anonymous suggestion screenshots go to the bucket too, accepting that
+      the bucket records their exact upload time.
+
+32. **Google Drive next, through one interface for every remote platform**
+    (2026-10-23, owner decisions).
+    - Google Drive is built before OneDrive / SharePoint.
+    - The server signs in with a **service account** and stores files in a
+      **Shared Drive** the department adds that account to, the same
+      service-account approach as the Google Workspace integration. Files
+      belong to the department's drive, not to a person whose access can
+      lapse. It needs Google Workspace. The never-read OAuth client ID and
+      secret fields give way to a service-account key.
+    - The S3 pattern applies unchanged: Test and switch before any upload
+      goes there, an unreachable store refuses the upload, files are
+      encrypted before upload, and existing files move with the migration
+      command (apply, rollback, finalize).
+    - Built in three steps: (1) the connection test, status, migration and
+      rewrap made platform-neutral, S3 behaviour unchanged; (2) the Google
+      Drive backend and its settings; (3) migration, rewrap and backup
+      notice for Drive.
 
 ## Phases
 
@@ -121,7 +191,12 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | done (#3011) |
 | 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | done (#3031) |
 | 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | done         |
-| 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | this change  |
+| 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | done         |
+| 6     | A department's own S3 / MinIO bucket (decision 31), step 1 of 3: one storage interface every caller uses                                        | done (#3537) |
+| 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | done (#3561) |
+| 8     | Decision 31, step 3 of 3: moving existing files into a bucket, rewrap on S3, backup notice                                                      | done (#3567) |
+| 9     | Decision 32, step 1 of 3: the connection test, status, migration and rewrap made platform-neutral (S3 unchanged)                                | done (#3611) |
+| 10    | Decision 32, step 2 of 3: the Google Drive backend (service account, Shared Drive) and its settings                                             | this change  |
 
 ### Phase 1 — what changed
 
@@ -299,6 +374,86 @@ form's "No folder" choice reads "General Documents (default)".
 
 This revision also joins the two Alembic heads `3f3bd6f3c7e4` and
 `990e288940bc`, published with the same parent.
+
+### Phase 7 — a department's own bucket (2026-10-22)
+
+| Piece                 | Where                                                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Talking to a bucket   | `app/services/s3_storage.py`, the only module that imports boto3 (`tests/test_storage_operations.py`)                                                           |
+| A stored reference    | `s3://<bucket>/<org>/<area>/<record>/<uuid><ext>`; `resolve()` confines it by its leading key segments, as it confines a path by directory                      |
+| Where a new file goes | `file_storage.write_file`: the bucket when the platform is S3 **and** the saved settings' keyed fingerprint matches the last passed test; otherwise the volume  |
+| The connection test   | `POST /organization/settings/file-storage/s3/activate` (write, read back, delete a probe; re-checked under the row lock); `.../s3/deactivate` goes back to disk |
+| What the screen shows | `GET /organization/settings/file-storage/status`, rendered by `StorageLocationPanel`                                                                            |
+| Bucket down           | 503 `LB-UPLD-006` on upload, download and existence checks; a delete reports failure as on disk                                                                 |
+| Endpoint check        | `assert_outbound_url_safe` each time a department's client is built; private or plain HTTP only with `S3_ALLOW_PRIVATE_ENDPOINT`                                |
+| Settings cache        | Per worker, 30 s, 256 departments; cleared in the worker that saves. Another worker follows within 30 s                                                         |
+
+Encrypted before upload with the same format and key as the volume, so the
+bucket's operator never holds plaintext. Step 3 (phase 8, below) covers
+moving existing files in, key rotation and backups.
+
+### Phase 8 — moving existing files into a bucket (2026-10-22)
+
+Owner decisions: the copies on disk are **kept until finalize**, as relocation
+and encryption keep theirs; and backups **stay with the bucket's own tooling**
+— `backup.sh` names the buckets it leaves out rather than downloading them.
+
+| Piece        | Where                                                                                                                                                    |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The move     | `app/services/remote_migration.py`, driven by `scripts/migrate_uploads_to_s3.py`: apply (copy, read back, compare SHA-256, repoint), rollback, finalize  |
+| Which rows   | `upload_relocation.collect_references`, now including minutes attachments; one file shared by several rows moves once                                    |
+| Which files  | Only files in the org-first layout, for departments that passed the connection test; a legacy-layout file is reported for `relocate_uploads.py` first    |
+| Manifest     | `/app/uploads/.s3-migration/`, written before any row changes                                                                                            |
+| Key rotation | `encrypt_uploads.py --rewrap` also rewraps bucket objects, found through the rows that reference them                                                    |
+| Backups      | `backup.sh` calls `migrate_uploads_to_s3.py --buckets` and warns which buckets hold files the archive does not; `docs/BACKUP.md` covers provider tooling |
+
+A moved anonymous screenshot's bucket copy carries the migration's time, not
+the submission's. Relocation now counts an `s3://` reference as already in the
+new layout; before this it reported one as missing on disk.
+
+### Phase 9 — one interface for every remote platform (2026-10-23)
+
+`app/services/remote_storage.py` defines what a remote platform provides:
+references by scheme carrying the org-first key, a configuration with a keyed
+fingerprint, a check, and a backend that encrypts on `put` and decrypts on
+every read. `remote_storage.platforms()` lists the platforms this
+installation can connect to; S3 is the only one so far (`S3Platform` in
+`s3_storage`).
+
+| Was (S3 only)                                        | Now                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `OrgStorage.s3`, `.s3_problem`, `.writes_to_s3`      | `.backends`, `.problems` (by platform), `.writes_to` (the platform name, or None)     |
+| `activate_s3` / `deactivate_s3`                      | `activate_remote` / `deactivate_remote`, for whichever platform is saved              |
+| `POST …/file-storage/s3/activate`, `…/s3/deactivate` | `POST …/file-storage/activate`, `…/deactivate`; the S3 routes stay as aliases         |
+| `app/services/s3_migration.py`                       | `app/services/remote_migration.py`, through the interface; manifests keep their names |
+| The Storage panel's S3 wording                       | Names, nouns and the container come from the status response                          |
+
+The status response gains `platform_label`, `platform_short_label`,
+`container_noun`, `container`, `platform_connectable`, `location` and
+`problem`; `bucket` and `s3_problem` stay for clients written against them.
+The activation record also stores `container`; one written earlier is read
+through its `bucket`. Existing activation records still match, because the S3
+fingerprint did not change.
+
+### Phase 10 — a department's Google Shared Drive (2026-10-23)
+
+| Piece              | Where                                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Talking to Drive   | `app/services/google_drive_storage.py`: Drive v3 REST through `google-auth`'s authorized session, 5 s / 30 s timeouts, three retries on 429 and 5xx    |
+| Signing in         | The department's service-account key, scoped to the whole Drive API; what it reaches is bounded by the Shared Drives the account has been added to     |
+| A stored reference | `gdrive://<shared_drive_id>/<file_id>/<org>/<area>/<record>/<name>`; `resolve()` confines it by the key after the id, as for a bucket                  |
+| A new file's id    | Reserved at Drive (`files.generateIds`, 20 at a time) before the upload, so a retried upload replaces the file it made rather than making a second one |
+| Settings           | `google_drive_service_account_key` (encrypted, never returned), `google_drive_shared_drive_id`, optional `google_drive_folder_id`                      |
+| Connection test    | The shared Test and switch: write, read back and delete a probe in the chosen folder; the account needs the Content manager role so it can delete      |
+
+`RemoteBackend.ref_for` may now ask the store, so it runs off the event loop
+with the upload, and the migration assigns each file's reference when it
+copies the file, not when it plans: a dry run reserves nothing. The
+platform-neutral migration, rewrap and backup notice from phase 9 already
+cover Drive. Step 3 renames the S3-named command and finishes the docs.
+
+The old OAuth client ID and secret fields were read by nothing; the API still
+accepts them, the screens no longer ask for them.
 
 ### Found in passing, not in this change
 

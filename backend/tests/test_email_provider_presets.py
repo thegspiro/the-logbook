@@ -3293,10 +3293,13 @@ class TestSendBatchOnSmtp:
             recipients, mime = service.build_message(**kwargs)
             built = service.build_batch_message(**kwargs)
 
-        # The MIME multipart boundary is generated per message, so normalize
-        # it away rather than asserting the two renderings are byte-identical.
+        # The MIME multipart boundary and the Date header are generated per
+        # message — two builds straddling a second boundary carry different
+        # Dates — so normalize both away rather than asserting the renderings
+        # are byte-identical.
         def _without_boundary(text: str) -> str:
-            return re.sub(r"={5,}\d+={2,}", "BOUNDARY", text)
+            text = re.sub(r"={5,}\d+={2,}", "BOUNDARY", text)
+            return re.sub(r"(?m)^Date: .*$", "Date: DATE", text)
 
         assert recipients == built.recipients
         assert _without_boundary(mime) == _without_boundary(built.mime)
@@ -3304,6 +3307,13 @@ class TestSendBatchOnSmtp:
         assert built.subject == "Drill"
         assert built.cc_emails == ["chief@dept.example"]
         assert built.reply_to == "chief@dept.example"
+
+
+def _setup_in_progress():
+    """Onboarding is still open, so the completion guard lets the call through."""
+    service = MagicMock()
+    service.needs_onboarding = AsyncMock(return_value=True)
+    return patch("app.api.v1.onboarding.OnboardingService", return_value=service)
 
 
 class TestOnboardingSelfHostedLogin:
@@ -3330,6 +3340,7 @@ class TestOnboardingSelfHostedLogin:
 
         with (
             patch("app.api.v1.onboarding.validate_session", AsyncMock()),
+            _setup_in_progress(),
             patch.object(email_test_helper, "test_smtp_connection") as smtp_test,
         ):
             response = await verify_email_configuration(
@@ -3353,6 +3364,7 @@ class TestOnboardingSelfHostedLogin:
 
         with (
             patch("app.api.v1.onboarding.validate_session", AsyncMock()),
+            _setup_in_progress(),
             patch(
                 "app.api.v1.onboarding.test_smtp_connection_uniform",
                 return_value=(True, "SMTP connection successful", {}),

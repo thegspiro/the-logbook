@@ -24,12 +24,23 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEMO_COMPLIANCE_CREDENTIALS,
   DEMO_CREDENTIALS,
   DEMO_FORWARDEE_CREDENTIALS,
+  DEMO_GEARLESS_CREDENTIALS,
+  DEMO_TRAINING_OFFICER_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
+  DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
+  DEMO_TREASURER_CREDENTIALS,
   SHOTS,
 } from "./manifest.mjs";
+import {
+  TOTP_PERIOD_SECONDS,
+  readAdminTotpSecret,
+  totpForStep,
+  totpStep,
+} from "./totp.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..", "..");
@@ -374,7 +385,7 @@ async function detectSubjectOutOfFrame(page, shot) {
       };
 }
 
-/** The document-space rectangle the screenshot will cover. */
+/** The rectangle the screenshot will cover, in boundingBox() coordinates. */
 async function captureFrame(page, shot) {
   if (shot.selector) {
     return await page.locator(shot.selector).first().boundingBox();
@@ -388,10 +399,13 @@ async function captureFrame(page, shot) {
         height: document.documentElement.scrollHeight,
       };
     }
-    // boundingBox() is document-space, so the viewport rect has to be too.
+    // boundingBox() is relative to the viewport, not the document, so a
+    // viewport shot's frame starts at 0,0 however far the page is scrolled.
+    // Offsetting it by the scroll position failed every shot that scrolls its
+    // subject into view.
     return {
-      x: window.scrollX,
-      y: window.scrollY,
+      x: 0,
+      y: 0,
       width: window.innerWidth,
       height: window.innerHeight,
     };
@@ -442,10 +456,105 @@ async function signIn(page, credentials) {
     .getByRole("button", { name: /sign in|log ?in/i })
     .first()
     .click();
+  // An account enrolled in two-factor stays on /login and shows the code step
+  // instead of leaving it, so wait for whichever happens first.
+  await page.waitForFunction(
+    () =>
+      !window.location.pathname.startsWith("/login") ||
+      document.querySelector("#mfa-code") !== null,
+    null,
+    { timeout: 30_000 },
+  );
+  if (new URL(page.url()).pathname.startsWith("/login")) {
+    await enterAuthenticatorCode(page, credentials);
+  }
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
     timeout: 30_000,
   });
   await settle(page);
+}
+
+/**
+ * The administrator's authenticator secret, read once from where the seeder
+ * stores it (see "The administrator's two-factor secret" in README.md).
+ */
+let adminTotpSecret;
+function adminSecret() {
+  if (adminTotpSecret === undefined) adminTotpSecret = readAdminTotpSecret();
+  return adminTotpSecret;
+}
+
+// The server accepts each time-step once per account, and the light and dark
+// admin contexts sign in back to back, so the second must not reuse the first
+// one's step.
+let lastTotpStep = -1;
+
+async function freshTotpCode(page, secret) {
+  let step = totpStep();
+  if (step <= lastTotpStep) {
+    step = lastTotpStep + 1;
+    const waitMs = step * TOTP_PERIOD_SECONDS * 1000 - Date.now() + 1000;
+    await page.waitForTimeout(Math.max(0, waitMs));
+  }
+  lastTotpStep = step;
+  return totpForStep(secret, step);
+}
+
+/**
+ * Complete the login page's code step for the administrator.
+ *
+ * A first refusal is expected now and then: the seeder (or another capture)
+ * may have spent the current step moments earlier. The next step's code is
+ * tried once; a second refusal means the stored secret is wrong.
+ */
+async function enterAuthenticatorCode(page, credentials) {
+  // Neither of these is cured by signing in again, so `login` must not retry.
+  if (credentials !== DEMO_CREDENTIALS) {
+    throw Object.assign(
+      new Error(
+        `${credentials.username} asked for a two-factor code; only the ` +
+          "administrator is expected to be enrolled",
+      ),
+      { noRetry: true },
+    );
+  }
+  const secret = adminSecret();
+  if (!secret) {
+    throw Object.assign(
+      new Error(
+        `${credentials.username} is enrolled in two-factor but no secret is ` +
+          'available — see "The administrator\'s two-factor secret" in ' +
+          "scripts/screenshots/README.md",
+      ),
+      { noRetry: true },
+    );
+  }
+  const field = page.locator("#mfa-code");
+  const verify = page.getByRole("button", { name: /^verify$/i });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await field.fill(await freshTotpCode(page, secret));
+    // Read the verdict off the response rather than the page: a refusal's
+    // alert from the first attempt is still on screen when the second is
+    // submitted, so the page alone cannot say which attempt it belongs to.
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/v1/auth/mfa/login") &&
+          r.request().method() === "POST",
+        { timeout: 30_000 },
+      ),
+      verify.click(),
+    ]);
+    if (response.ok()) return;
+  }
+  // Not retried by `login`: each refused code counts toward the account
+  // lockout, and signing in again would only spend two more.
+  throw Object.assign(
+    new Error(
+      `the stored two-factor secret was refused twice for ${credentials.username}`,
+    ),
+    { noRetry: true },
+  );
 }
 
 /**
@@ -486,6 +595,10 @@ function makeSessions(browser, baseOptions) {
         // position. Shots that picture what a member sees have to be taken as
         // one, because the officer view of the same route is a different page.
         await login(page, DEMO_MEMBER_CREDENTIALS);
+      } else if (auth === "second-member") {
+        // Another ordinary member, for states the demo member cannot hold at
+        // the same time as the ones other shots photograph.
+        await login(page, DEMO_SECOND_MEMBER_CREDENTIALS);
       } else if (auth === "secretary") {
         // Holds legal.propose and nothing that can publish. Used where the
         // *absence* of a control is the subject: an admin capture of the same
@@ -495,6 +608,24 @@ function makeSessions(browser, baseOptions) {
         // Reaches one suggestion through a forward and reviews no box, so the
         // Review tab shows what a forward recipient sees and nothing more.
         await login(page, DEMO_FORWARDEE_CREDENTIALS);
+      } else if (auth === "treasurer") {
+        // Runs the approval chains and raised none of the seeded requests, so
+        // the Approve controls separation of duties hides from the
+        // administrator are on screen.
+        await login(page, DEMO_TREASURER_CREDENTIALS);
+      } else if (auth === "compliance") {
+        // The Compliance box's only reviewer. The secretary reviews every
+        // other seeded box but not this one.
+        await login(page, DEMO_COMPLIANCE_CREDENTIALS);
+      } else if (auth === "gearless") {
+        // Holds nothing, borrows nothing and has asked for nothing, so My
+        // Issued Gear shows a member's empty page rather than the demo
+        // member's full one.
+        await login(page, DEMO_GEARLESS_CREDENTIALS);
+      } else if (auth === "trainingofficer") {
+        // Holds the Training Officer position, which is what a new training
+        // submission prompts in the inbox.
+        await login(page, DEMO_TRAINING_OFFICER_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }
@@ -521,8 +652,21 @@ async function login(page, credentials) {
       await signIn(page, credentials);
       break;
     } catch (error) {
-      if (attempt >= 2) throw error;
-      console.log(`  … login attempt ${attempt + 1} timed out, retrying`);
+      if (error.noRetry) throw error;
+      // The sign-in limiter counts every attempt from this address, and a
+      // second capture or seeder running against the same backend spends the
+      // same allowance. A refusal says so on the page; waiting out its window
+      // is cheaper than losing the run.
+      const throttled = await page
+        .getByText(/too many/i)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (attempt >= (throttled ? 6 : 2)) throw error;
+      console.log(
+        `  … login attempt ${attempt + 1} ${throttled ? "rate-limited" : "timed out"}, retrying`,
+      );
+      if (throttled) await page.waitForTimeout(65_000);
     }
   }
 
@@ -774,7 +918,9 @@ async function main() {
         throw new Error("page hit the ErrorBoundary — the app crashed here");
       }
       const pageError = await detectPageError(page);
-      if (pageError) {
+      // `allowPageError` names one exact phrase the pattern mistakes for an
+      // error on that screen; anything else it matches still fails the shot.
+      if (pageError && pageError !== shot.allowPageError) {
         throw new Error(`page rendered an error: "${pageError}"`);
       }
       const overflow = await detectHorizontalOverflow(page);

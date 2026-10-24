@@ -4,7 +4,7 @@
  * The template is stored the way an admin builds it: a flat list of
  * compartments carrying `parentCompartmentId`, section dividers mixed in among
  * them, and per-item columns that mean different things depending on which of
- * four types the item is. The sweep wants a walk — an ordered list of places,
+ * the types the item is. The sweep wants a walk — an ordered list of places,
  * each holding what to ask there. This is the only place that translation
  * happens, so a rule about it has one home rather than one per screen.
  *
@@ -31,8 +31,10 @@
  */
 
 import {
+  canRecordReplacementDate,
   CheckType,
   normalizeCheckType,
+  passFloor,
   soonestExpiration,
   targetQuantity,
   type CheckTemplateCompartment,
@@ -58,11 +60,10 @@ export interface SweepSource {
 /**
  * Par: what the truck is supposed to hold.
  *
- * `requiredQuantity` wins where both are set — `expectedQuantity` is the older
- * column and some templates carry both. Through `targetQuantity`, so a
- * `requiredQuantity` of 0 falls through to the expected count the way
- * `_target_quantity` does: this par is what the sweep's swap gate measures a
- * shortfall against, and a zero par there refuses a top-up the server allows.
+ * Through `targetQuantity`, so it resolves exactly as `_target_quantity` does
+ * — the larger of the two columns, with a 0 falling through: this par is what
+ * the sweep's restock lines and swap gate measure a shortfall against, and a
+ * different par here would refuse a top-up the server allows.
  */
 function par(item: CheckTemplateItem): number | undefined {
   return targetQuantity(item) ?? undefined;
@@ -84,6 +85,7 @@ function toItemSpec(item: CheckTemplateItem, source: SweepSource): CheckItemSpec
   const last = source.lastResults?.[item.id];
   const isCount = normalizeCheckType(item.checkType) === CheckType.COUNT;
   const parValue = par(item);
+  const floorValue = passFloor(item.requiredQuantity, item.criticalMinimumQuantity);
   const carriedValue = isCount ? carried(item, source.lastResults) : undefined;
   // The soonest date *aboard*, not the position's column: a position holding
   // three boxes holds three dates and the truck is exposed by its oldest.
@@ -98,12 +100,23 @@ function toItemSpec(item: CheckTemplateItem, source: SweepSource): CheckItemSpec
     ...(item.levelUnit !== undefined ? { levelUnit: item.levelUnit } : {}),
     ...(last?.level_reading !== undefined ? { lastLevelReading: last.level_reading } : {}),
     ...(parValue !== undefined ? { expectedQuantity: parValue } : {}),
+    ...(isCount && floorValue !== null ? { passFloor: floorValue } : {}),
+    ...(isCount && item.unitOfMeasure ? { countUnit: item.unitOfMeasure } : {}),
     ...(carriedValue !== undefined ? { carriedQuantity: carriedValue } : {}),
     ...(expiry !== undefined ? { expirationDate: expiry } : {}),
     ...(item.inventoryItemId !== undefined ? { inventoryItemId: item.inventoryItemId } : {}),
     ...(item.expirationWarningDays !== undefined ? { expirationWarningDays: item.expirationWarningDays } : {}),
+    ...(canRecordReplacementDate(item) ? { takesReplacementDate: true } : {}),
   };
 }
+
+/**
+ * What the strip and the Next button call a group of items placed directly on
+ * the checklist. It has no name of its own — that is the point of it — but the
+ * map still needs words for "you are here", and the stop screen shows no
+ * heading for it.
+ */
+export const INLINE_STOP_NAME = 'On the checklist';
 
 /**
  * The seal as the crew meets it: the number off the record, the answer so far.
@@ -166,6 +179,9 @@ export function toLapStops(source: SweepSource): LapStop[] {
     // stop. One that somehow carries items is kept anyway, because dropping
     // a crew's items to honour a layout flag is the wrong trade.
     if (compartment.isHeader && compartment.items.length === 0) continue;
+    // An emptied group of items placed directly on the checklist is not a
+    // place to stand; publishing ignores it the same way.
+    if (compartment.isInline && compartment.items.length === 0) continue;
     const parentId = parentOf(compartment);
     if (parentId === undefined) {
       roots.push(compartment);
@@ -183,7 +199,8 @@ export function toLapStops(source: SweepSource): LapStop[] {
     const seal = toSeal(compartment, source);
     return {
       id: compartment.id,
-      name: compartment.name,
+      name: compartment.isInline ? INLINE_STOP_NAME : compartment.name,
+      ...(compartment.isInline ? { isInline: true } : {}),
       ...(compartment.containerType !== undefined ? { containerType: compartment.containerType } : {}),
       ...(compartment.isSealed ? { isSealed: true } : {}),
       ...(seal !== undefined ? { seal } : {}),

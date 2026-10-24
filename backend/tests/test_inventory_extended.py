@@ -154,6 +154,31 @@ class TestDepartureClearance:
         assert clearance.items_outstanding == 0
 
     @pytest.mark.asyncio
+    async def test_deadline_counts_from_the_given_moment(
+        self, db_session, setup_org_and_user
+    ):
+        """A drop opens its clearance with the deadline counted from the
+        drop's effective moment, matching the property return letter."""
+        from datetime import datetime, timedelta, timezone
+
+        org_id, user_id, _ = setup_org_and_user
+        counted_from = datetime(2026, 9, 1, 15, tzinfo=timezone.utc)
+
+        clearance, err = await DepartureClearanceService(db_session).initiate_clearance(
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
+            return_deadline_days=14,
+            counted_from=counted_from,
+        )
+
+        assert err is None
+        deadline = clearance.return_deadline
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        assert deadline == counted_from + timedelta(days=14)
+
+    @pytest.mark.asyncio
     async def test_cannot_initiate_duplicate_clearance(
         self, db_session, setup_org_and_user
     ):
@@ -1094,6 +1119,14 @@ class TestPoolWithoutStockRule:
     def test_an_individual_row_is_out_of_scope(self):
         assert (
             is_pool_without_stock({"tracking_type": "individual", "quantity": 0})
+            is False
+        )
+
+    def test_a_supply_kept_on_the_apparatus_only_has_no_shelf_to_count(self):
+        assert (
+            is_pool_without_stock(
+                {"tracking_type": "pool", "quantity": 0, "apparatus_only": True}
+            )
             is False
         )
 

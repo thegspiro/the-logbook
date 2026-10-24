@@ -13,8 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.utils.check_types import (
     CANONICAL_CHECK_TYPES,
+    EXPIRY,
     LEGACY_CHECK_TYPES,
     STRUCTURAL_TYPES,
     normalize_check_type,
@@ -30,8 +32,9 @@ from app.utils.check_types import (
 # unrecognised one reached the crew as a raw token ("presence" under every item,
 # because that is what the value said). Validated on the way in instead.
 #
-# Since 2026-08-23 the stored form is one of the four canonical answer shapes
-# (level / function / count / expiry) plus the two structural rows. The legacy
+# Since 2026-08-23 the stored form is one of the canonical answer shapes
+# (level / function / count / expiry, and since 2026-10-18 presence) plus the
+# two structural rows. The legacy
 # names are still *accepted* — an integration or an older client may send one,
 # and rejecting it would break a caller over a rename it never asked for — but
 # they are normalized before they are stored, so nothing new lands in the old
@@ -70,18 +73,32 @@ def _validate_check_type(value: Optional[str]) -> Optional[str]:
     return normalize_check_type(value)
 
 
+def _normalize_count_unit(value: Optional[str]) -> Optional[str]:
+    """Trim a count unit, and read a blank one as "no unit".
+
+    Free text rather than a fixed list: the builder offers presets (each,
+    rolls, boxes, ...) but a department counts in its own terms. A blank is
+    an admin clearing the field, which must store NULL rather than "".
+    """
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed or None
+
+
 class CheckTemplateItemCreate(BaseModel):
     """Schema for creating a check template item."""
 
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     check_type: str = Field(default="pass_fail", max_length=30)
     is_required: bool = False
-    required_quantity: Optional[int] = None
-    expected_quantity: Optional[int] = None
-    critical_minimum_quantity: Optional[int] = None
-    min_level: Optional[float] = None
+    required_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    expected_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    critical_minimum_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    count_unit: Optional[str] = Field(None, max_length=50)
+    min_level: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
@@ -90,12 +107,26 @@ class CheckTemplateItemCreate(BaseModel):
     inventory_item_id: Optional[str] = None
     has_expiration: bool = False
     expiration_date: Optional[date] = None
-    expiration_warning_days: int = 30
+    expiration_warning_days: int = Field(30, ge=INT32_MIN, le=INT32_MAX)
 
     @field_validator("check_type")
     @classmethod
     def check_type_is_supported(cls, value: str) -> str:
         return _validate_check_type(value) or value
+
+    @field_validator("count_unit")
+    @classmethod
+    def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_count_unit(value)
+
+    @model_validator(mode="after")
+    def date_lines_carry_a_date(self) -> "CheckTemplateItemCreate":
+        # A Date line is a date on record; with expiration off it has nothing
+        # to confirm, and the check form drew Pass/Fail beside an empty date.
+        # Other types keep the checkbox, so a count of IV bags can carry one.
+        if self.check_type == EXPIRY:
+            self.has_expiration = True
+        return self
 
 
 class CheckTemplateItemBulkCreate(BaseModel):
@@ -137,13 +168,14 @@ class CheckTemplateItemUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     compartment_id: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     check_type: Optional[str] = Field(None, max_length=30)
     is_required: Optional[bool] = None
-    required_quantity: Optional[int] = None
-    expected_quantity: Optional[int] = None
-    critical_minimum_quantity: Optional[int] = None
-    min_level: Optional[float] = None
+    required_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    expected_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    critical_minimum_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    count_unit: Optional[str] = Field(None, max_length=50)
+    min_level: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
@@ -152,12 +184,27 @@ class CheckTemplateItemUpdate(BaseModel):
     inventory_item_id: Optional[str] = None
     has_expiration: Optional[bool] = None
     expiration_date: Optional[date] = None
-    expiration_warning_days: Optional[int] = None
+    expiration_warning_days: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
     @field_validator("check_type")
     @classmethod
     def check_type_is_supported(cls, value: Optional[str]) -> Optional[str]:
         return _validate_check_type(value)
+
+    @field_validator("count_unit")
+    @classmethod
+    def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_count_unit(value)
+
+    @model_validator(mode="after")
+    def date_lines_carry_a_date(self) -> "CheckTemplateItemUpdate":
+        # Assigned rather than left to the service so the field counts as set
+        # and survives the endpoint's exclude_unset dump. An update that only
+        # turns expiration off on an existing Date line is settled by
+        # EquipmentCheckService.update_item, which can see the stored type.
+        if self.check_type == EXPIRY:
+            self.has_expiration = True
+        return self
 
 
 class CheckTemplateItemResponse(UTCResponseBase):
@@ -179,6 +226,9 @@ class CheckTemplateItemResponse(UTCResponseBase):
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
+    # The position's own unit, as typed in the builder. What a crew sees is
+    # unit_of_measure below, which prefers the linked catalog's unit.
+    count_unit: Optional[str] = None
     min_level: Optional[float] = None
     level_unit: Optional[str] = None
     serial_number: Optional[str] = None
@@ -187,8 +237,8 @@ class CheckTemplateItemResponse(UTCResponseBase):
     equipment_id: Optional[str] = None
     inventory_item_id: Optional[str] = None
     quantity_on_truck: Optional[int] = None
-    # Projected from the linked catalog item: "2/4" alone does not say whether
-    # a crew is looking for two boxes or two gloves.
+    # Projected from the linked catalog item, else count_unit: "2/4" alone
+    # does not say whether a crew is looking for two boxes or two gloves.
     unit_of_measure: Optional[str] = None
     # The lots physically aboard, soonest first. A crew checking a drug bag is
     # reading dates off boxes; without these the form can only show one date
@@ -207,18 +257,59 @@ class CheckTemplateItemResponse(UTCResponseBase):
 # ============================================
 
 
+def _check_inline_shape(
+    is_inline: Optional[bool],
+    *,
+    is_header: Optional[bool],
+    is_sealed: Optional[bool],
+    parent_compartment_id: Optional[str],
+) -> None:
+    """Refuse an inline group that is also a heading, a seal, or nested.
+
+    An inline group is items placed directly on the checklist. A seal is a
+    claim about one closed bag, a section header carries no items, and nesting
+    would put the "loose" items inside a location after all — each combination
+    describes something other than what the flag means.
+    """
+    if not is_inline:
+        return
+    if is_header:
+        raise ValueError("Items placed directly on a checklist cannot be a section")
+    if is_sealed:
+        raise ValueError("Items placed directly on a checklist cannot be sealed")
+    if parent_compartment_id:
+        raise ValueError(
+            "Items placed directly on a checklist cannot sit inside a location"
+        )
+
+
 class CheckTemplateCompartmentCreate(BaseModel):
     """Schema for creating a compartment."""
 
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: bool = False
     container_type: str = Field("compartment", max_length=50)
     is_sealed: bool = False
+    is_inline: bool = False
     parent_compartment_id: Optional[str] = None
     items: Optional[List[CheckTemplateItemCreate]] = None
+
+    @model_validator(mode="after")
+    def inline_group_shape(self) -> "CheckTemplateCompartmentCreate":
+        _check_inline_shape(
+            self.is_inline,
+            is_header=self.is_header,
+            is_sealed=self.is_sealed,
+            parent_compartment_id=self.parent_compartment_id,
+        )
+        if self.is_inline:
+            # Headingless by definition. A name sent anyway would surface in
+            # result snapshots and reports as a location nobody can see.
+            self.name = ""
+        return self
 
 
 class CompartmentReplaceRequest(BaseModel):
@@ -242,18 +333,19 @@ class CheckTemplateCompartmentUpdate(BaseModel):
 
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: Optional[bool] = None
     container_type: Optional[str] = Field(None, max_length=50)
     is_sealed: Optional[bool] = None
+    is_inline: Optional[bool] = None
     parent_compartment_id: Optional[str] = None
 
 
 class CheckTemplateCompartmentClone(BaseModel):
     """Position at which to insert a cloned saved compartment."""
 
-    sort_order: int = Field(..., ge=0)
+    sort_order: int = Field(..., ge=0, le=INT32_MAX)
 
 
 class CheckTemplateCompartmentResponse(UTCResponseBase):
@@ -274,6 +366,7 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     is_header: bool = False
     container_type: str = "compartment"
     is_sealed: bool = False
+    is_inline: bool = False
     parent_compartment_id: Optional[str] = None
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
@@ -303,6 +396,14 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
             return False
         return bool(v)
 
+    @field_validator("is_inline", mode="before")
+    @classmethod
+    def coerce_is_inline(cls, v: object) -> bool:
+        """A row read before repair_schema adds the column has no value."""
+        if v is None:
+            return False
+        return bool(v)
+
 
 # ============================================
 # Equipment Check Template Schemas
@@ -321,7 +422,7 @@ class EquipmentCheckTemplateCreate(BaseModel):
     assigned_positions: Optional[List[str]] = None
     # Creation is a draft operation unless the caller explicitly publishes.
     is_active: bool = False
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     compartments: Optional[List[CheckTemplateCompartmentCreate]] = None
 
 
@@ -336,7 +437,7 @@ class EquipmentCheckTemplateUpdate(BaseModel):
     template_type: Optional[str] = Field(None, max_length=30)
     assigned_positions: Optional[List[str]] = None
     is_active: Optional[bool] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
 
 class EquipmentCheckTemplateResponse(UTCResponseBase):
@@ -389,18 +490,22 @@ class CheckItemResultSubmit(BaseModel):
     status: str = Field(
         ..., pattern=r"^(pass|fail|not_applicable|out_of_service|not_checked)$"
     )
-    quantity_found: Optional[int] = Field(None, ge=0)
-    required_quantity: Optional[int] = None
-    critical_minimum_quantity: Optional[int] = None
-    level_reading: Optional[float] = Field(None, allow_inf_nan=False)
+    quantity_found: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    critical_minimum_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    level_reading: Optional[float] = Field(
+        None, allow_inf_nan=False, ge=-FLOAT32_MAX, le=FLOAT32_MAX
+    )
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
     serial_found: Optional[str] = Field(None, max_length=100)
     lot_found: Optional[str] = Field(None, max_length=100)
-    # Expiration read off a unit replaced during this check. This is retained
-    # as check evidence; authoritative template dates change through inventory
-    # lot swaps rather than ordinary check submissions.
+    # Expiration read off a unit replaced during this check, with its lot.
+    # Kept as evidence on the result. On a Date line that is not linked to
+    # inventory it also becomes the line's date (change-logged), so the line
+    # stops failing; a linked line's date changes only through a lot swap, so
+    # there it is dropped. A date already past is refused.
     expiration_found: Optional[date] = None
     photo_urls: Optional[List[str]] = None
     # Advisory only: the server recomputes expiry from the template item so a
@@ -424,7 +529,7 @@ class CheckSealSubmit(BaseModel):
     compartment_name: str
     seal_number: Optional[str] = Field(None, max_length=100)
     intact: bool = True
-    cleared_item_count: int = Field(0, ge=0)
+    cleared_item_count: int = Field(0, ge=0, le=INT32_MAX)
     notes: Optional[str] = None
 
 
@@ -477,6 +582,9 @@ class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     status: str
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
+    # Par at check time; NULL on results filed before it was recorded.
+    expected_quantity: Optional[int] = None
+    count_unit: Optional[str] = None
     critical_minimum_quantity: Optional[int] = None
     level_reading: Optional[float] = None
     level_unit: Optional[str] = None
@@ -555,6 +663,9 @@ class CheckItemHistory(UTCResponseBase):
     shift_id: str
     shift_date: Optional[date] = None
     status: str
+    # The type the line had when it was answered, so a Present line's
+    # pass / fail can read as present / absent.
+    check_type: Optional[str] = None
     quantity_found: Optional[int] = None
     level_reading: Optional[float] = None
     serial_number: Optional[str] = None
@@ -664,6 +775,9 @@ class FailureLogRecord(BaseModel):
     check_type: Optional[str] = None
     status: str
     notes: Optional[str] = None
+    quantity_found: Optional[int] = None
+    target_quantity: Optional[int] = None
+    count_unit: Optional[str] = None
     checked_by_name: Optional[str] = None
 
 
@@ -855,7 +969,7 @@ class DeployedLotUpdateRequest(BaseModel):
     same thing.
     """
 
-    quantity: int = Field(..., ge=0)
+    quantity: int = Field(..., ge=0, le=INT32_MAX)
     lot_number: Optional[str] = Field(None, max_length=100)
     expiration_date: Optional[date] = None
 
@@ -921,13 +1035,13 @@ class ItemUsedRequest(BaseModel):
     note: Optional[str] = Field(None, max_length=500)
     # Omitted for a position that is not counted (a single tool, a pass/fail
     # inspection), where the report itself is the whole message.
-    quantity_used: Optional[int] = Field(None, ge=1)
+    quantity_used: Optional[int] = Field(None, ge=1, le=INT32_MAX)
 
 
 class ItemQuantityRequest(BaseModel):
     """Set the on-truck count outright — a recount, or a hand restock."""
 
-    quantity: int = Field(..., ge=0)
+    quantity: int = Field(..., ge=0, le=INT32_MAX)
 
 
 class ItemRestockStateResponse(BaseModel):
@@ -957,6 +1071,8 @@ class ItemDeployment(BaseModel):
     template_item_id: str
     item_name: str
     compartment_name: Optional[str] = None
+    # The checklist's nesting, outermost first and ending in compartment_name.
+    compartment_path: List[str] = Field(default_factory=list)
     template_id: Optional[str] = None
     template_name: Optional[str] = None
     apparatus_id: Optional[str] = None
@@ -967,6 +1083,10 @@ class ItemDeployment(BaseModel):
     expiration_date: Optional[date] = None
     days_until_expiration: Optional[int] = None
     is_expired: bool = False
+    # What the position should hold, and the running count aboard (null when
+    # nobody has counted since the position was defined).
+    target_quantity: Optional[int] = None
+    quantity_on_truck: Optional[int] = None
 
 
 class ExpiredStockDisposition(str, Enum):
@@ -990,7 +1110,7 @@ class LotSwapRequest(BaseModel):
 
     inventory_lot_id: str
     # Defaults to one, which is the whole story for a single-unit bracket.
-    quantity: int = Field(1, ge=1)
+    quantity: int = Field(1, ge=1, le=INT32_MAX)
     # A disposition is what separates a replacement from a top-up: it says
     # units are coming *off*, and where they went. A two-of-four restock sends
     # none and retires nothing, so a swap never removes stock by inference.
@@ -1183,6 +1303,51 @@ class CrossTemplateLinkResponse(BaseModel):
     linked: int = 0
     skipped: int = 0
     skipped_positions: List[SkippedLinkPosition] = Field(default_factory=list)
+
+
+class AutoLinkedGroup(BaseModel):
+    """One checklist name that was linked automatically, and what to."""
+
+    model_config = _camel_config
+
+    name: str
+    inventory_item_id: str
+    inventory_item_name: str
+    confidence: str
+    # Set when an "also called" name produced the match, so the screen can say
+    # why "BVM" was linked to "Bag Valve Mask".
+    matched_alias: Optional[str] = None
+    position_count: int
+    # The positions this pass actually wrote — positions linked by hand in
+    # the meantime are left out — so the screen can link to each template and
+    # undo exactly these.
+    positions: List[LinkReportPosition] = Field(default_factory=list)
+
+
+class AutoLinkResponse(CrossTemplateLinkResponse):
+    """What the automatic pass linked, and how much it left for a person."""
+
+    left_for_review: int = 0
+    groups: List[AutoLinkedGroup] = Field(default_factory=list)
+
+
+class CrossTemplateUnlinkRequest(BaseModel):
+    """Links to undo: template item id -> the inventory item it was linked to.
+
+    The expected item is part of the request so a position re-linked by hand
+    since is recognised and left alone. Capped like the link request.
+    """
+
+    links: Dict[str, str] = Field(..., min_length=1, max_length=2000)
+
+
+class CrossTemplateUnlinkResponse(BaseModel):
+    """How many positions were unlinked, and how many had changed meanwhile."""
+
+    model_config = _camel_config
+
+    unlinked: int = 0
+    skipped: int = 0
 
 
 # CheckTemplateItemResponse references DeployedLot, which is declared with the

@@ -23,11 +23,12 @@ import {
   Users,
   FolderTree,
   Download,
-  Trash2,
+  Power,
   Edit2,
   PlayCircle,
   Upload,
   GraduationCap,
+  History,
 } from 'lucide-react';
 import { Tooltip } from '../components/ux';
 import { externalTrainingService, trainingService, userService } from '../services/api';
@@ -44,8 +45,9 @@ import type {
 } from '../types/training';
 import type { User } from '../types/user';
 import { useTablist } from '../hooks/useTablist';
+import ExternalSyncHistoryPanel from '../components/training/ExternalSyncHistoryPanel';
 
-type TabView = 'providers' | 'imports' | 'mappings';
+type TabView = 'providers' | 'imports' | 'history' | 'mappings';
 
 const PROVIDER_TYPES: { value: ExternalProviderType; label: string; description: string }[] = [
   {
@@ -702,9 +704,10 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         <button
           onClick={() => onDelete(provider.id)}
           className="bg-theme-surface text-theme-text-primary flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-red-800"
-          aria-label="Delete provider"
+          aria-label="Deactivate provider"
+          title="Deactivate"
         >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          <Power className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -968,6 +971,18 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
   );
 };
 
+/**
+ * Unmapped rows first, each group in the order the API returned it. Settled
+ * once, when the list loads, rather than at every render: a row the officer
+ * has just mapped stays where their eyes are until the modal is reopened,
+ * instead of dropping to the foot of a 300-row list the moment they pick a
+ * member — which would hide a mis-click they still want to correct.
+ */
+const unmappedFirst = <T extends { is_mapped: boolean }>(items: T[]): T[] => [
+  ...items.filter((item) => !item.is_mapped),
+  ...items.filter((item) => item.is_mapped),
+];
+
 interface MappingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -1008,11 +1023,11 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
         externalTrainingService.getCourseMappings(providerId),
         trainingService.getCourses(true),
       ]);
-      setCategoryMappings(categories);
-      setUserMappings(users);
+      setCategoryMappings(unmappedFirst(categories));
+      setUserMappings(unmappedFirst(users));
       setInternalCategories(internal);
       setMembers(roster);
-      setCourseMappings(courses);
+      setCourseMappings(unmappedFirst(courses));
       setLibraryCourses(library);
     } catch (_err) {
       // Error silently handled - mappings modal will show empty state
@@ -1120,7 +1135,11 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
           </p>
         </div>
 
-        <div className="tab-scroll" role="tablist" {...tablist} aria-label="Mapping types">
+        {/* shrink-0: tab-scroll is overflow-x:auto, which lets a flex child
+            shrink below its content, while the flex-1 body below has a zero
+            basis and never shrinks. With hundreds of rows the tab bar was the
+            one child that gave, collapsing to a sliver under the header. */}
+        <div className="tab-scroll shrink-0" role="tablist" {...tablist} aria-label="Mapping types">
           <button
             onClick={() => setActiveTab('categories')}
             role="tab"
@@ -1162,7 +1181,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6" role="tabpanel">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6" role="tabpanel">
           {loading ? (
             <div className="text-theme-text-muted py-8 text-center" role="status" aria-live="polite">
               Loading mappings...
@@ -1600,6 +1619,25 @@ interface ImportQueuePanelProps {
 const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshKey, onOpenMappings }) => {
   const [summaries, setSummaries] = useState<Record<string, ProviderImportSummary>>({});
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [importingProvider, setImportingProvider] = useState<string | null>(null);
+
+  const handleImportMatched = async (providerId: string) => {
+    setImportingProvider(providerId);
+    try {
+      const result = await externalTrainingService.importMatched(providerId);
+      if (result.failed > 0) {
+        toast.error(`Imported ${result.imported} records; ${result.failed} failed. See the Failed list for details.`);
+      } else {
+        toast.success(`Imported ${result.imported} records`);
+      }
+      setReloadKey((key) => key + 1);
+    } catch (err: unknown) {
+      toast.error(`Import failed: ${getErrorMessage(err)}`);
+    } finally {
+      setImportingProvider(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1633,7 +1671,7 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshK
     return () => {
       cancelled = true;
     };
-  }, [providers, refreshKey]);
+  }, [providers, refreshKey, reloadKey]);
 
   if (loading) {
     return (
@@ -1667,14 +1705,25 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshK
               <h2 id={`import-queue-${provider.id}`} className="text-theme-text-primary text-lg font-semibold">
                 {provider.name}
               </h2>
-              <button
-                onClick={() => onOpenMappings(provider.id)}
-                aria-label={`Open mappings for ${provider.name}`}
-                className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
-              >
-                <FolderTree className="h-4 w-4" aria-hidden="true" />
-                Open mappings
-              </button>
+              <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                <button
+                  onClick={() => void handleImportMatched(provider.id)}
+                  disabled={importingProvider === provider.id}
+                  aria-label={`Import matching pending records for ${provider.name}`}
+                  className="btn-primary flex shrink-0 items-center gap-2"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  {importingProvider === provider.id ? 'Importing...' : 'Import matching pending records'}
+                </button>
+                <button
+                  onClick={() => onOpenMappings(provider.id)}
+                  aria-label={`Open mappings for ${provider.name}`}
+                  className="btn-primary flex shrink-0 items-center gap-2"
+                >
+                  <FolderTree className="h-4 w-4" aria-hidden="true" />
+                  Open mappings
+                </button>
+              </div>
             </div>
             {summary.failedToLoad && (
               <p className="alert-warning mb-4 text-sm" role="alert">
@@ -1801,22 +1850,25 @@ const ExternalTrainingPage: React.FC = () => {
     setEditModal({ isOpen: true, provider });
   };
 
+  // The backend only deactivates a provider (it stays listed as Inactive and
+  // its imported records are kept), so the dialog must not promise removal.
   const handleDelete = async (providerId: string) => {
+    const providerName = providers.find((p) => p.id === providerId)?.name || 'this integration';
     const agreed = await confirm({
-      title: 'Delete this integration?',
+      title: `Deactivate ${providerName}?`,
       message:
-        'Every training record imported through it is removed with it. Records logged in The Logbook directly are untouched.',
-      confirmLabel: 'Delete integration',
-      cancelLabel: 'Keep it',
+        'It stops syncing, and no further records are pulled or uploaded through it. Training records already imported through it are kept, and the integration stays listed here as Inactive.',
+      confirmLabel: 'Deactivate integration',
+      cancelLabel: 'Keep it active',
       variant: 'danger',
     });
     if (!agreed) return;
     try {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();
-      toast.success('Provider deleted');
+      toast.success('Integration deactivated');
     } catch (err: unknown) {
-      toast.error(`Failed to delete: ${getErrorMessage(err)}`);
+      toast.error(`Failed to deactivate: ${getErrorMessage(err)}`);
     }
   };
 
@@ -1888,6 +1940,19 @@ const ExternalTrainingPage: React.FC = () => {
             Import Queue
           </button>
           <button
+            onClick={() => setActiveTab('history')}
+            role="tab"
+            aria-selected={activeTab === 'history'}
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
+              activeTab === 'history'
+                ? 'border-b-2 border-red-500 text-red-500'
+                : 'text-theme-text-muted hover:text-theme-text-primary'
+            }`}
+          >
+            <History className="mr-2 inline-block h-4 w-4" aria-hidden="true" />
+            Sync History
+          </button>
+          <button
             onClick={() => setActiveTab('mappings')}
             role="tab"
             aria-selected={activeTab === 'mappings'}
@@ -1954,6 +2019,8 @@ const ExternalTrainingPage: React.FC = () => {
           </div>
         ) : activeTab === 'imports' ? (
           <ImportQueuePanel providers={providers} refreshKey={mappingsRefreshKey} onOpenMappings={handleViewMappings} />
+        ) : activeTab === 'history' ? (
+          <ExternalSyncHistoryPanel providers={providers} />
         ) : (
           <AllMappingsPanel providers={providers} refreshKey={mappingsRefreshKey} onOpenMappings={handleViewMappings} />
         )}

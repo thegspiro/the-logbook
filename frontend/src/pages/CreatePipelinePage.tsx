@@ -828,7 +828,7 @@ const StepRequirements: React.FC<{
                     {(req.requirement_type === 'hours' || req.requirement_type === 'courses') && (
                       <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
                         <AlertCircle
-                          className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                          className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400"
                           aria-hidden="true"
                         />
                         <div>
@@ -1229,7 +1229,7 @@ const StepReview: React.FC<{
             <span className="bg-theme-surface-hover text-theme-text-secondary rounded-sm px-2 py-1">{info.code}</span>
           )}
           {info.target_position && (
-            <span className="rounded-sm bg-red-500/20 px-2 py-1 text-red-700 dark:text-red-400">
+            <span className="rounded-sm bg-red-500/20 px-2 py-1 text-red-800 dark:text-red-400">
               {TARGET_POSITIONS.find((position) => position.value === info.target_position)?.label ??
                 info.target_position}
             </span>
@@ -1238,7 +1238,7 @@ const StepReview: React.FC<{
             {info.structure_type === 'phases' ? 'Phases, in order' : 'One list, any order'}
           </span>
           {info.is_template && (
-            <span className="rounded-sm bg-green-500/20 px-2 py-1 text-green-700 dark:text-green-400">Template</span>
+            <span className="rounded-sm bg-green-500/20 px-2 py-1 text-green-800 dark:text-green-400">Template</span>
           )}
           {info.prerequisite_program_ids.length > 0 && (
             <span className="bg-theme-surface-hover text-theme-text-secondary rounded-sm px-2 py-1">
@@ -1268,7 +1268,7 @@ const StepReview: React.FC<{
                 </span>
               )}
               {phase?.requires_manual_advancement && (
-                <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-yellow-700 dark:text-yellow-400">
+                <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-yellow-800 dark:text-yellow-400">
                   Officer must approve advancement
                 </span>
               )}
@@ -1646,7 +1646,9 @@ const CreatePipelinePage: React.FC = () => {
 
         {/* Step indicator */}
         {/* Five 44px steps and their connectors fit a 320px phone only with
-            the spacing tightened below sm; the labels are sr-only there. */}
+            the spacing tightened below sm. The labels wait for lg rather than sm: the
+            sidebar leaves a tablet well under its viewport width, and six labelled
+            steps overflowed the page there. */}
         <div className="bg-theme-surface mb-8 flex items-center rounded-lg p-2 sm:p-3">
           {wizardSteps.map((step, i) => {
             const StepIcon = step.icon;
@@ -1674,7 +1676,7 @@ const CreatePipelinePage: React.FC = () => {
                   }`}
                 >
                   {isComplete ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
-                  <span className="sr-only sm:not-sr-only">{step.label}</span>
+                  <span className="sr-only lg:not-sr-only">{step.label}</span>
                 </button>
               </React.Fragment>
             );

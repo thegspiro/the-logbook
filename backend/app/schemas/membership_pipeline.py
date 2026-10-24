@@ -8,14 +8,23 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
+from app.core.constants import office_label
 from app.models.membership_pipeline import (
     ActionType,
     PipelineStepType,
     ProspectStatus,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
 # step_type / action_type / status map to strict MySQL ENUM columns, but were
 # typed as free str and inserted raw (create_step/update_step, update_prospect's
@@ -84,7 +93,7 @@ class PipelineStepBase(BaseModel):
     )
     is_first_step: bool = False
     is_final_step: bool = False
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     email_template_id: Optional[UUID] = None
     required: bool = True
     config: Optional[Dict[str, Any]] = Field(
@@ -92,7 +101,10 @@ class PipelineStepBase(BaseModel):
         description="Stage-specific configuration (form settings, election config, etc.)",
     )
     inactivity_timeout_days: Optional[int] = Field(
-        None, description="Per-step inactivity timeout override in days"
+        None,
+        description="Per-step inactivity timeout override in days",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     notify_prospect_on_completion: bool = Field(
         default=False,
@@ -130,11 +142,11 @@ class PipelineStepUpdate(BaseModel):
         _enum_validator(_ACTION_TYPES, "action_type")
     )
     is_final_step: Optional[bool] = None
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     email_template_id: Optional[UUID] = None
     required: Optional[bool] = None
     config: Optional[Dict[str, Any]] = None
-    inactivity_timeout_days: Optional[int] = None
+    inactivity_timeout_days: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     notify_prospect_on_completion: Optional[bool] = None
     public_visible: Optional[bool] = None
 
@@ -148,6 +160,21 @@ class PipelineStepResponse(PipelineStepBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def approver_labels(self) -> Dict[str, str]:
+        """Display label for each stored ``required_approvers`` value.
+
+        Keyed by the value exactly as stored, so a screen can look a role up
+        without normalizing it first. Labels come from ``OFFICE_CATALOG`` —
+        the same catalog that decides who may sign — so the frontend does not
+        keep a second copy of it.
+        """
+        roles = (self.config or {}).get("required_approvers")
+        if not isinstance(roles, list):
+            return {}
+        return {str(role): office_label(str(role)) for role in roles}
 
 
 ConversionClass = Literal["operational", "administrative", "social"]
@@ -867,6 +894,15 @@ class TransferProspectRequest(BaseModel):
         return self
 
 
+class TransferGoogleAccountSummary(BaseModel):
+    """The Google Workspace account outcome of a conversion, when one applied."""
+
+    status: str
+    email: str
+    credentials_sent: bool = False
+    last_error: Optional[str] = None
+
+
 class TransferProspectResponse(BaseModel):
     """Response after transferring a prospect"""
 
@@ -879,6 +915,7 @@ class TransferProspectResponse(BaseModel):
     department_email_generated: bool = False
     message: str
     welcome_email_sent: bool = False
+    google_account: Optional[TransferGoogleAccountSummary] = None
 
 
 # --- Activity Log Schema ---
@@ -896,17 +933,6 @@ class ActivityLogResponse(UTCResponseBase):
     created_at: datetime
 
     model_config = _response_config
-
-
-# --- Kanban Board Schema ---
-
-
-class PipelineKanbanColumn(BaseModel):
-    """Schema for a kanban board column (one per step)"""
-
-    step: PipelineStepResponse
-    prospects: List[ProspectListResponse] = []
-    count: int = 0
 
 
 # --- Document Schemas ---
@@ -1039,7 +1065,7 @@ class InterviewCreate(BaseModel):
         max_length=100,
         description="Role of the interviewer, e.g. Membership Coordinator, Chief",
     )
-    interview_date: Optional[datetime] = None
+    interview_date: Optional[UTCDateTime] = None
     step_id: Optional[UUID] = None
 
 
@@ -1053,7 +1079,7 @@ class InterviewUpdate(BaseModel):
     )
     recommendation_notes: Optional[str] = None
     interviewer_role: Optional[str] = Field(None, max_length=100)
-    interview_date: Optional[datetime] = None
+    interview_date: Optional[UTCDateTime] = None
 
 
 class InterviewResponse(UTCResponseBase):

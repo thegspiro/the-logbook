@@ -33,9 +33,11 @@ vi.mock('../services/api', () => ({
     getEventAttendees: vi.fn(),
     getEventStats: vi.fn(),
     getEligibleMembers: vi.fn(),
+    bulkAddAttendees: vi.fn(),
     createOrUpdateRSVP: vi.fn(),
     cancelEvent: vi.fn(),
     deleteEvent: vi.fn(),
+    deleteEventSeries: vi.fn(),
     duplicateEvent: vi.fn(),
     checkInAttendee: vi.fn(),
     recordActualTimes: vi.fn(),
@@ -79,6 +81,12 @@ vi.mock('../modules/prospective-members/services/api', () => ({
 }));
 // Tested on its own (EventGuestsCard.test.tsx); its request is not under test here.
 vi.mock('../components/event-detail/EventGuestsCard', () => ({ default: () => null }));
+// The card-taps section has its own tests (EventCardCheckinsTab.test.tsx);
+// here it would only add a request the services/api mock above does not serve.
+vi.mock('../components/event-detail/EventCardTapsCard', () => ({ EventCardTapsCard: () => null }));
+vi.mock('../hooks/useConnectedIntegrations', () => ({
+  useConnectedIntegrations: () => ({ connected: new Set<string>(), loading: false, isConnected: () => false }),
+}));
 
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
@@ -311,14 +319,38 @@ describe('EventDetailPage', () => {
       });
     });
 
-    it('should show QR code button for active events', async () => {
+    it('should show QR code button for active events to someone who runs them', async () => {
+      mockCheckPermission.mockReturnValue(true);
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
 
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /view qr code/i })).toBeInTheDocument();
       });
+    });
+
+    // The QR page is the code put on display at the event; a member has
+    // nothing to scan it with on their own phone.
+    it('does not offer the display QR code to a member', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('button', { name: /view qr code/i })).not.toBeInTheDocument();
+    });
+
+    it('offers the display QR code to the organizer without events.manage', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, can_manage_organizers: true });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /view qr code/i })).toBeInTheDocument();
     });
   });
 
@@ -873,6 +905,68 @@ describe('EventDetailPage', () => {
       await waitFor(() => {
         expect(eventService.deleteEvent).toHaveBeenCalledWith('evt-1');
         expect(mockNavigate).toHaveBeenCalledWith('/events');
+      });
+    });
+
+    describe('on an occurrence of a recurring series', () => {
+      const occurrence: Event = { ...mockEvent, is_recurring: true, recurrence_parent_id: 'parent-1' };
+
+      beforeEach(() => {
+        vi.mocked(eventService.getEvent).mockReset();
+        vi.mocked(eventService.getEvent).mockResolvedValue(occurrence);
+        vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+        vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+        vi.mocked(eventService.deleteEventSeries).mockReset();
+        vi.mocked(eventService.deleteEventSeries).mockResolvedValue(undefined);
+        vi.mocked(eventService.deleteEvent).mockReset();
+        vi.mocked(eventService.deleteEvent).mockResolvedValue(undefined);
+      });
+
+      const openDeleteDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+        renderWithRouter(<EventDetailPage />);
+        await waitFor(() => {
+          expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
+        });
+        await user.click(screen.getByRole('button', { name: /more/i }));
+        await user.click(screen.getByRole('button', { name: /delete event/i }));
+        await screen.findByRole('radio', { name: /delete only this event/i });
+      };
+
+      it('offers this and future occurrences between this one and the whole series', async () => {
+        const user = userEvent.setup();
+        await openDeleteDialog(user);
+
+        const radios = within(screen.getByRole('dialog', { name: 'Delete Event' })).getAllByRole('radio');
+        expect(radios).toHaveLength(3);
+        expect(radios[0]).toHaveAccessibleName('Delete only this event');
+        expect(radios[1]).toHaveAccessibleName('Delete this and future events in this series (keep earlier events)');
+        expect(radios[2]).toHaveAccessibleName('Delete all events in this series');
+      });
+
+      it('deletes from this occurrence on, naming it as the cutoff', async () => {
+        const user = userEvent.setup();
+        await openDeleteDialog(user);
+
+        await user.click(screen.getByRole('radio', { name: /this and future events/i }));
+        await user.click(screen.getByRole('button', { name: /delete this and future/i }));
+
+        await waitFor(() => {
+          expect(eventService.deleteEventSeries).toHaveBeenCalledWith('parent-1', false, 'evt-1');
+          expect(mockNavigate).toHaveBeenCalledWith('/events');
+        });
+        expect(eventService.deleteEvent).not.toHaveBeenCalled();
+      });
+
+      it('still deletes the whole series without a cutoff', async () => {
+        const user = userEvent.setup();
+        await openDeleteDialog(user);
+
+        await user.click(screen.getByRole('radio', { name: /delete all events in this series/i }));
+        await user.click(screen.getByRole('button', { name: /delete entire series/i }));
+
+        await waitFor(() => {
+          expect(eventService.deleteEventSeries).toHaveBeenCalledWith('parent-1');
+        });
       });
     });
 
@@ -1506,7 +1600,7 @@ describe('EventDetailPage', () => {
     // the manager blocks above left configured.
     beforeEach(() => {
       vi.mocked(eventService.getEvent).mockReset();
-      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, going_count: 2 });
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, going_count: 2, can_view_attendees: true });
       vi.mocked(eventService.getEventAttendees).mockReset();
       vi.mocked(eventService.getEventAttendees).mockResolvedValue([
         { user_id: 'user-1', user_name: 'John Doe', status: 'going' },
@@ -1523,10 +1617,10 @@ describe('EventDetailPage', () => {
       expect(screen.getByRole('heading', { name: /who's going/i })).toBeInTheDocument();
     });
 
-    it('renders nothing when the roster is not shared with members', async () => {
-      // A 403 resolves to an empty list in the service, so the card is simply
-      // absent — a member who may not see the list is not told there is one.
-      vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
+    it('does not ask for a roster the event does not share', async () => {
+      // The server says whether the roster will answer this member. Asking
+      // anyway took a 403, logged twice, on every visit.
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, going_count: 2, can_view_attendees: false });
 
       renderWithRouter(<EventDetailPage />);
 
@@ -1534,6 +1628,7 @@ describe('EventDetailPage', () => {
         expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
       expect(screen.queryByRole('heading', { name: /who's going/i })).not.toBeInTheDocument();
+      expect(eventService.getEventAttendees).not.toHaveBeenCalled();
     });
 
     it('never renders contact details even if the payload carries them', async () => {
@@ -1581,7 +1676,7 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      await user.click(await screen.findByRole('button', { name: /rsvp now|i'm coming/i }));
+      await user.click(await screen.findByRole('button', { name: /rsvp now|^going$/i }));
       await user.click(await screen.findByRole('button', { name: /submit rsvp/i }));
 
       await waitFor(() => {
@@ -1629,7 +1724,8 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      expect(await screen.findByRole('button', { name: /i'm coming/i })).toBeInTheDocument();
+      // "Going", the word the list card's button uses for the same action.
+      expect(await screen.findByRole('button', { name: /^going$/i })).toBeInTheDocument();
     });
 
     it('still refuses an RSVP on a cancelled event', async () => {
@@ -1897,6 +1993,9 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEventRSVPs).mockReset();
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      // The QR code is the display copy for whoever runs the event.
+      mockCheckPermission.mockReturnValue(true);
     });
 
     it('offers both on an upcoming event', async () => {
@@ -2027,6 +2126,152 @@ describe('EventDetailPage', () => {
 
       expect(await screen.findByRole('heading', { name: 'Attendance Requests' })).toBeInTheDocument();
       expect(screen.getByText('Phone died at the door')).toBeInTheDocument();
+    });
+  });
+
+  describe('Add all eligible attendees', () => {
+    // BulkAddAttendees.user_ids is capped at 200; one request carrying every
+    // eligible id 422'd for any roster above that.
+    const members = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `m-${i}`,
+        first_name: 'Member',
+        last_name: String(i),
+        email: null,
+      }));
+
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.getEligibleMembers).mockReset();
+      vi.mocked(eventService.getEligibleMembers).mockResolvedValue(members(450));
+      vi.mocked(eventService.bulkAddAttendees).mockReset();
+      vi.mocked(eventService.bulkAddAttendees).mockImplementation((_eventId, userIds) =>
+        Promise.resolve({ created_count: userIds.length, errors: [] })
+      );
+      vi.mocked(toast.success).mockReset();
+      vi.mocked(toast.error).mockReset();
+    });
+
+    const addAll = async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'Check In' }));
+      await waitFor(() => expect(eventService.getEligibleMembers).toHaveBeenCalledWith('evt-1'));
+      await user.click(await screen.findByRole('button', { name: /Add All Eligible as Going/ }));
+    };
+
+    it('sends at most 200 ids per request and sums what each batch created', async () => {
+      await addAll();
+
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Added 450 members to the event'));
+      const calls = vi.mocked(eventService.bulkAddAttendees).mock.calls;
+      expect(calls.map((call) => call[1].length)).toEqual([200, 200, 50]);
+      expect(calls.every((call) => call[0] === 'evt-1' && call[2] === 'going')).toBe(true);
+      // Every member is sent exactly once across the batches.
+      expect(new Set(calls.flatMap((call) => call[1])).size).toBe(450);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('names the members the backend refused instead of dropping its errors', async () => {
+      vi.mocked(eventService.getEligibleMembers).mockResolvedValue(members(3));
+      vi.mocked(eventService.bulkAddAttendees).mockResolvedValue({
+        created_count: 2,
+        errors: [{ user_id: 'm-1', error: 'Event is at capacity' }],
+      });
+
+      await addAll();
+
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Added 2 members to the event'));
+      expect(toast.error).toHaveBeenCalledWith('1 member was not added. Member 1: Event is at capacity');
+    });
+
+    it('reports a failed batch and how many members it left unadded', async () => {
+      vi.mocked(eventService.bulkAddAttendees)
+        .mockResolvedValueOnce({ created_count: 200, errors: [] })
+        .mockRejectedValueOnce(makeApiError('Attendance has been finalized.', 409));
+
+      await addAll();
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Attendance has been finalized. 250 members were not added.')
+      );
+      expect(toast.success).toHaveBeenCalledWith('Added 200 members to the event');
+      // The run stops at the refusal rather than repeating it for the last batch.
+      expect(eventService.bulkAddAttendees).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('checking in from the event page', () => {
+    const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+    const happeningNow = {
+      ...mockEvent,
+      start_datetime: minutesFromNow(-10),
+      end_datetime: minutesFromNow(110),
+      check_in_opens_at: minutesFromNow(-70),
+      check_in_closes_at: minutesFromNow(110),
+    };
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventAttendees).mockReset();
+      vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(false);
+    });
+
+    it('offers Check In while check-in is open, as the list card does', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(withoutKeys(happeningNow, 'rsvp_deadline'));
+
+      renderWithRouter(<EventDetailPage />);
+
+      const link = await screen.findByRole('link', { name: /check in/i });
+      expect(link).toHaveAttribute('href', `/events/${mockEvent.id}/check-in`);
+    });
+
+    it('says so once the member has checked in, instead of offering it again', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withoutKeys({ ...happeningNow, user_attended: true }, 'rsvp_deadline')
+      );
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText(/you're checked in/i)).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /check in/i })).not.toBeInTheDocument();
+    });
+
+    it('does not offer it before check-in opens', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_opens_at: minutesFromNow(60),
+        check_in_closes_at: minutesFromNow(240),
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('link', { name: /check in/i })).not.toBeInTheDocument();
+    });
+
+    it('states the credit the list card states', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        credited_hours: 2,
+        hour_category_label: 'Meetings & Governance',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText(/Meetings & Governance hours/)).toHaveTextContent(
+        /Up to 2(\.0)?\s*Meetings & Governance hours/
+      );
     });
   });
 });

@@ -101,11 +101,9 @@ includes archived members, because those are the records officers look after.
 
 ![Member directory listing members with their status and contact columns](./images/01-01-member-directory.png)
 
-![The Member Directory as an ordinary member: name, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes](./images/01-40-member-directory-member.png)
+![The Member Directory as an ordinary member: name, rank, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes](./images/01-40-member-directory-member.png)
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members on a desktop width: the Members table with the status filter set to Archived, showing at least one archived member's row with the green Reactivate icon beside Edit and Delete in Actions. Needs an archived member in the demo seed. Do not open the Reactivate dialog.]_
--->
+![The Members table filtered to Archived: a former member's row with the green Reactivate icon beside Edit and Delete](./images/01-42-archived-member-row.png)
 
 **Member statuses:**
 
@@ -147,7 +145,7 @@ details follow the department setting. Your home address and personal email
 stay hidden from other members. Officers who manage members can always see
 every field.
 
-![My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email, phone and mobile the note that the department's own setting has them off for everyone](./images/01-41-profile-visibility.png)
+![My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email and mobile, which the department's own setting has off for everyone, the note "Shared once the department allows it"](./images/01-41-profile-visibility.png)
 
 ### Scan Member ID
 
@@ -235,9 +233,7 @@ Organization settings.
 Print one **Test card** first to check the alignment. Cards print in black
 only, so they look the same on a black-only ribbon as on a colour one.
 
-<!-- Screenshot needed:
-_[Administrator (members.manage) at /members/print-id-cards with two demo members selected: the Orientation, Sides and Code options, the Save as department layout button, and the "Accept old badges" switch at the bottom. Check the route in the page before capturing.]_
--->
+![Print ID Cards for two members with Front and back chosen: the Orientation, Sides and Code choices, Test card and Save as department layout, the duplex printing note, and the Accept old badges switch at the bottom](./images/01-43-print-id-cards.png)
 
 ### Badge Codes
 
@@ -270,9 +266,9 @@ codes scan.
 Inventory checkout always refuses a member whose account is not active,
 whichever badge they show.
 
-<!-- Screenshot needed:
-_[Administrator at /members/<demo member id>/id-card: the badge with its QR code, showing the membership number as text, and the "Reissue badge" button; a second frame with the "Reissue this badge?" confirmation open. Demo member only; do not confirm.]_
--->
+![A member's digital ID card: membership number as text, the badge code under its barcode, the QR code, and the Print ID Card and Reissue badge buttons](./images/01-44-member-id-card.png)
+
+![The Reissue this badge? confirmation: every printed badge and the phone card stop scanning, with Keep current badge and Reissue badge](./images/01-45-reissue-badge-confirm.png)
 
 ---
 
@@ -490,7 +486,14 @@ give access. The form explains each one:
 - **Rank** is "Their title in the chain of command, such as Captain or
   Firefighter. A rank carries a few default permissions of its own."
 - **Position** is "The job they hold here, such as Secretary or Training
-  Officer. Positions decide most of what they can see and do in The Logbook."
+  Officer. Positions decide most of what they can see and do in The Logbook.
+  A rank such as Captain or Firefighter is set in the Rank field, not here."
+
+The position list does not offer Chief, Captain, Firefighter or the other
+ranks. Those are set in the Rank field, and a member holding the rank already
+has the access the matching position would give. The same names still appear
+under **Organization Settings > Role Management**, marked **Mirrors a rank**,
+because that is where the access a rank carries is edited.
 
 **Rank** is greyed out for an Administrative member, with the note
 "Administrative members do not hold an operational rank."
@@ -519,9 +522,7 @@ department, so a temporary password can't be sent. Set one here and give it
 to the member." The Logbook also refuses any new account that asks for a
 welcome email while email cannot be sent.
 
-<!-- Screenshot needed:
-_[As an administrator (users.create + members.manage) on an install with email not configured, at /members/admin?tab=add: the Account Password block with Set initial password ticked and disabled and the "Required: email isn't set up for this department…" hint visible. Leave the password fields empty; do not capture any typed password.]_
--->
+![Add Member's Account Password block on a department without email: Set initial password ticked and locked, the note saying why, and the empty password fields with their rules](./images/01-46-add-member-password-no-email.png)
 
 ### The Membership Number on Add Member
 
@@ -639,9 +640,7 @@ be longer than 50 characters is refused straight away. If you take the year
 out of a pattern, the yearly restart turns off in the same save. If nobody
 changes these settings, numbers look like `FD-0001`.
 
-<!-- Screenshot needed:
-_[Members Admin → Settings → Membership IDs with numbering and auto-generation on → the **Year and number** preset applied: Number pattern `{YYYY}-{SEQ}`, Minimum digits 3, **Restart the count each year** on, **The year follows** set to **Our fiscal year** starting in July and named by **The year it ends in**, and the line "The next member will be numbered 2027-001." with "Next: 2027-001" in the panel header.]_
--->
+![Membership ID Number settings with the Year and number preset: pattern {YYYY}-{SEQ}, three digits, the count restarting each year on a fiscal year from July named by the year it ends in, and the next member numbered 2027-001](./images/01-47-membership-id-fiscal-year.png)
 
 #### Numbers Are Never Reissued
 
@@ -735,21 +734,22 @@ file.
 
 **CSV columns.** The template has all of them. The order does not matter.
 
-| Column                                                                           | Notes                                                                        |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `firstName`, `lastName`                                                          | **Required**                                                                 |
-| `email`                                                                          | **Required.** Must be unique in the department                               |
-| `middleName`                                                                     |                                                                              |
-| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on |
-| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`               |
-| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                  |
-| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                    |
-| `primaryPhone`, `secondaryPhone`                                                 |                                                                              |
-| `rank`, `station`, `platoon`                                                     |                                                                              |
-| `role`                                                                           | Must match a role name set up under **Roles**                                |
-| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                  |
-| `emergencyEmail1`                                                                |                                                                              |
-| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                           |
+| Column                                                                           | Notes                                                                           |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `firstName`, `lastName`                                                          | **Required**                                                                    |
+| `email`                                                                          | **Required.** Must be unique in the department                                  |
+| `middleName`                                                                     |                                                                                 |
+| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on    |
+| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`                  |
+| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                     |
+| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                       |
+| `primaryPhone`, `secondaryPhone`                                                 |                                                                                 |
+| `membershipType`                                                                 | `probationary`, `regular`, `life` or `administrative`. Blank imports as regular |
+| `rank`, `station`, `platoon`                                                     |                                                                                 |
+| `role`                                                                           | Must match a role name set up under **Roles**                                   |
+| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                     |
+| `emergencyEmail1`                                                                |                                                                                 |
+| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                              |
 
 Only `firstName`, `lastName` and `email` are required. A file with just those
 three columns imports. Older templates called the membership number column
@@ -879,8 +879,10 @@ The Admin Edit page has these sections:
 - **Emergency Contacts:** add, change or remove contacts.
 
 You cannot change status here. Use the status button on the member's profile.
-Positions are given with **Manage Roles** on the member's row in Member
-Management.
+Positions are given with **Manage Positions** on the member's row in Member
+Management. That list leaves out the positions named after a rank; a member
+who was given one before this version still sees it there, marked **Rank**,
+so it can be taken off.
 
 ![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)
 
@@ -921,9 +923,7 @@ name or relationship is pointed out on the page before you save.
 > access every member needs, so it can only be removed from an archived
 > member."
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/admin, Member Management tab: a demo member's Reset Password dialog with a weak password typed (for example Abcdefgh1234!) so the Password rules list shows "No runs like 123 or abc" unmet. Never submit, and never capture a real password.]_
--->
+![Reset Password for a member with a weak password typed (masked): the Password rules list ticks the length and character rules and leaves No runs like 123 or abc unmet](./images/01-48-reset-password-rules.png)
 
 ---
 
@@ -962,6 +962,11 @@ profile once per visit.
 
 ## Deleting Members
 
+> **Roster tips.** On **Members** (table and card views) each name links to the
+> member's profile. Row actions carry the member's name ("Delete Jordan Avery",
+> "Reset password for Jordan Avery"), so a screen reader announces whose row
+> each button belongs to.
+
 **Who can do this:** officers who can manage members.
 
 To permanently delete a member:
@@ -995,7 +1000,18 @@ There is no delete button on the profile or the Admin Edit page.
 **What is kept, with the member's name removed:** records the member
 **created, approved, issued or uploaded**, such as documents and approvals.
 The record stays; only the link to the member is cleared. Uploaded documents
-are kept.
+are kept. This includes other members' records the deleted member signed:
+the examiner on a skills test and the officer on a shift report now show
+**Former member** instead of a name.
+
+**Gear and shifts.** Any gear the member still holds is returned to stock in
+the same step, so item status and pool counts stay right. The **Records
+affected** list counts every record the delete removes.
+
+**Leaving the active statuses also frees their shifts.** Deactivating,
+archiving, or changing a member to a status outside the active ones takes them
+off shifts that have not started and ends their standing claims, and records an
+audit event. Past and in-progress shifts are untouched.
 
 > **Important.** Deletion is permanent and cannot be undone. If you may need
 > the member's records later, change their status to **Dropped** or
@@ -1037,6 +1053,14 @@ financial trail still makes sense. See
 Deletion is also refused if it would remove the department's last
 administrator.
 
+**You cannot act on a member who holds permissions you do not.** Deleting,
+changing the status of, or archiving a member is refused (403) when that member
+holds a permission you lack, so a member manager cannot deactivate or delete the
+System Owner or a more senior officer. The attempt is reported to the security
+log as a privilege-escalation attempt, the same as a password or MFA reset
+refused for the same reason. Administrators with every permission are not
+affected.
+
 ### Anonymizing a Former Member
 
 Anonymizing permanently removes a departed member's personal information. The
@@ -1065,9 +1089,7 @@ What is kept stays linked to a placeholder named "Former Member".
 > roster. Like a deactivated member, they no longer appear anywhere in the app
 > and cannot be reactivated.
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/:userId for a Dropped or Archived demo member: the Anonymize Member dialog showing the warning sentence, the red Removed panel, the Kept panel with the "Former Member" note, the empty "Type <name> to confirm" field and the disabled Anonymize button. Clip to the dialog. Never type the name or confirm — the action is irreversible and would remove the demo member. Needs a dropped or archived member in the seed.]_
--->
+![The Anonymize Member dialog for an archived former member: the warning, what is removed, what is kept under Former Member, and the typed confirmation with Anonymize still disabled](./images/01-49-anonymize-member.png)
 
 ## Prospective Members Pipeline
 
@@ -1417,9 +1439,7 @@ you might show the tracker only after someone passes their interview.
 | The stage is marked as the final stage                                        | It never completes itself, because completing the final stage is the department's approval                                                                             |
 | The applicant started on the stage, was placed on it, or was moved back to it | The on/off setting still applies, but no link email is sent and the stage waits for you to complete it. Only arriving by finishing the stage before it sends the email |
 
-<!-- Screenshot needed:
-_[As a Membership Coordinator (prospective_members.manage) at /prospective-members/settings: a pipeline selected and Add Stage open with the Enable Status Page tile chosen, showing the "Enables the public status page" panel with its override sentence, "Enable public status page at this stage" ticked, and "Message in the link email (optional)" filled with a sample welcome line.]_
--->
+![Add Stage with Enable Status Page chosen: the panel saying it enables the public status page and overrides the pipeline setting, Enable public status page at this stage ticked, and a welcome line in the link email message](./images/01-50-status-page-stage.png)
 
 ### Pipeline Configuration
 
@@ -1675,14 +1695,25 @@ You change a member's account status from their profile page.
 ### Changing a Member's Status
 
 1. Open the member's profile.
-2. Select the **status badge** next to the member's name, or the pencil next
-   to **Status** in the Membership panel. Both open the **Change Member
-   Status** dialog.
+2. Select the **status chip** next to the member's name (it reads, for
+   example, "Status: Active · Change"), or the pencil next to **Status** in the
+   Membership panel. Both open the **Change Member Status** dialog. It is a
+   true dialog: **Esc** closes it (not while it is saving), and keyboard focus
+   stays inside it.
 3. Choose the new status under **New Status**: Active, Inactive, Suspended,
    Probationary, Leave, Retired, Dropped Voluntary or Dropped Involuntary.
 4. Optionally enter a **Reason**.
 5. Select **Update Status**. The button stays greyed out until you pick a
    status different from the current one.
+
+**Membership type and status move together for two statuses.** Setting a
+member's **Membership Type** to **Probationary** puts an Active account on
+**Probationary**, and any other type (including a custom tier and the monthly
+tier advance) moves a Probationary account back to **Active**. Inactive,
+Suspended, Leave, Retired, Dropped and Archived are never touched. The status
+history records the move with the reason "Follows membership type". A status
+you set by hand in this dialog holds until the membership type is next
+changed.
 
 **Archived is not in the list.** A dropped member is archived automatically
 once their property is returned and their departure clearance is completed.
@@ -1721,14 +1752,15 @@ See [Former Members Who Rejoin](#former-members-who-rejoin).
 
 ![The Change Member Status dialog with a drop status selected and its property-return note](./images/01-29-status-change-modal.png)
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Change Member Status dialog with Active selected, showing the Earlier service radios (department default marked), Return date and Last day of previous service. Never press Update Status. Needs a dropped member in the seed.]_
--->
+![Change Member Status for a member who left voluntarily, with Active selected: Earlier service with its recorded length, Continue prior service (marked as the department default) and Restart at zero, and the Return date](./images/01-51-rejoin-status-dialog.png)
 
 ### Undoing a Drop Made by Mistake
 
 For 7 days after a member is dropped, their profile shows _"Dropped by
-mistake? You can undo this drop until …"_ under Status.
+mistake? You can undo this drop until …"_ under Status. The 7 days count from
+the drop's **Effective date** — the day the member left — not the day you
+recorded it. A drop entered with an effective date more than 7 days back
+cannot be undone.
 
 1. Under **Restore as**, choose Active, Probationary, Inactive or On Leave.
 2. Optionally enter a reason.
@@ -1782,7 +1814,9 @@ When you drop a member, The Logbook automatically:
 1. **Creates a property return report** listing everything issued to them.
    It is saved in **Documents**, in the leadership-only **Member
    Separations** folder. It is kept out of Reports because it names the
-   member, the reason they left and their home address.
+   member, the reason they left and their home address. The report gives the
+   drop's **Effective date** and a return deadline counted from it, so a drop
+   entered late can show a deadline that has already passed.
 2. **Emails the report** to the member, and to anyone your drop-notification
    settings copy in.
 3. **Opens a departure clearance** to track what is still out.
@@ -1801,9 +1835,13 @@ A member gets at most one reminder per check: the latest one they are due. A
 member first found at day 100 gets only the 90-day reminder, never a late
 30-day one. No reminder is ever sent twice.
 
+The 30 and 90 days count from the drop's **Effective date** — the day the
+member left — not the day you recorded it. A drop entered with an effective
+date 35 days back gets its 30-day reminder at the next daily check.
+
 **Who still has property.** The **Former members still holding property**
 panel lists every dropped member with items still out. It shows when they
-were dropped, how many items, their value and which reminders have gone. You
+were dropped (the effective date), how many items, their value and which reminders have gone. You
 find it on the Inventory **Member Equipment** page and on **Members Admin →
 Member Management**. Select a name to open the member's profile.
 
@@ -2136,9 +2174,7 @@ The whole list is saved at once, and it must make sense:
 > on file. Their service still counts from their hire date, including the time
 > away. Fix it by editing their Service History.
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/:userId for a demo member who rejoined under Restart at zero: the Service History card in its read view, showing the Credited service and Prior service (not counted) tiles and two stints — an earlier one tagged "Dropped (voluntary)" and "Not counted", and a current one ending "present". Needs a seeded rejoin with stints. Clip to the card.]_
--->
+![The Service History card of a member who rejoined under Restart at zero: Credited service and Prior service (not counted) tiles, an earlier stint marked Dropped (voluntary) and Not counted, and the current stint ending present](./images/01-52-service-history-restart.png)
 
 ---
 
@@ -2616,7 +2652,7 @@ made from the same results — see [Inventory](./05-inventory.md).
 
 The planner's screens — the "Needs item" rows, the sizes to buy and the
 shortfall — are pictured in
-[Inventory](./05-inventory.md#impact-planner--demand-forecasting--bulk-operations-2026-06-22).
+[Inventory](./05-inventory.md#impact-planner).
 This part only shows what a new member's first kit looks like through them.
 
 ---

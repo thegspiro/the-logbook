@@ -179,13 +179,19 @@ export const formatForDateTimeInput = (dateString?: string | Date | null, timezo
  *
  * @param localDateTimeStr - Value from a datetime-local input (e.g., "2024-01-15T14:30")
  * @param timezone - IANA timezone the value should be interpreted in (e.g., "America/New_York")
- * @returns UTC ISO string, or empty string if input is falsy
+ * @returns UTC ISO string, or empty string if input is falsy or carries no
+ *   complete calendar date
  */
 export const localToUTC = (localDateTimeStr?: string | null, timezone?: string): string => {
   if (!localDateTimeStr) return '';
 
   const [datePart, timePart] = localDateTimeStr.split('T');
+  // A value with no date ("T09:00") must not be filled in: defaulting the
+  // missing fields produced 1900-01-01, so a cleared expiry was sent as an
+  // instant long past and the record was created already expired. Every caller
+  // treats '' as "no value".
   const parts = (datePart ?? '').split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return '';
   const year = parts[0] ?? 0;
   const month = parts[1] ?? 1;
   const day = parts[2] ?? 1;

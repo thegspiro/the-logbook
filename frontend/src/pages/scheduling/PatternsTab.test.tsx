@@ -8,12 +8,14 @@ const mockGetPatterns = vi.fn();
 const mockGetTemplates = vi.fn();
 const mockGenerate = vi.fn();
 const mockCreatePattern = vi.fn();
+const mockUpdatePattern = vi.fn();
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getPatterns: (...a: unknown[]) => mockGetPatterns(...a) as unknown,
     getTemplates: (...a: unknown[]) => mockGetTemplates(...a) as unknown,
     generateShiftsFromPattern: (...a: unknown[]) => mockGenerate(...a) as unknown,
     createPattern: (...a: unknown[]) => mockCreatePattern(...a) as unknown,
+    updatePattern: (...a: unknown[]) => mockUpdatePattern(...a) as unknown,
   },
 }));
 
@@ -70,6 +72,8 @@ beforeEach(() => {
   mockGenerate.mockResolvedValue({ shifts_created: 11 });
   mockCreatePattern.mockReset();
   mockCreatePattern.mockResolvedValue({ ...PATTERN, id: 'pat-2' });
+  mockUpdatePattern.mockReset();
+  mockUpdatePattern.mockResolvedValue(PATTERN);
   mockToastSuccess.mockReset();
   mockToastError.mockReset();
 });
@@ -132,6 +136,60 @@ describe('PatternsTab', () => {
         day_template_id: 'tpl-1',
         night_template_id: 'tpl-2',
       },
+    });
+  });
+
+  describe('a preset whose name promises a shift length', () => {
+    const TWELVE = { ...TEMPLATE, duration_hours: 12 };
+    const TWENTY_FOUR = {
+      ...TEMPLATE,
+      id: 'tpl-24',
+      name: '24-hour tour',
+      start_time_of_day: '07:00',
+      end_time_of_day: '07:00',
+      duration_hours: 24,
+    };
+
+    beforeEach(() => {
+      mockGetTemplates.mockReset();
+      mockGetTemplates.mockResolvedValue([TWELVE, TWENTY_FOUR]);
+    });
+
+    async function choose(preset: RegExp, templateId: string) {
+      const user = userEvent.setup();
+      renderWithRouter(<PatternsTab />);
+      await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+      await user.click(await screen.findByRole('button', { name: preset }));
+      await user.selectOptions(screen.getByLabelText('Shift Template *'), templateId);
+      return user;
+    }
+
+    it('warns when a 24/48 is built on a 12-hour template', async () => {
+      await choose(/24-Hour On \/ 48-Hour Off/, 'tpl-1');
+
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /built on 24-hour shifts, but Day Shift A runs 12 hours, so each duty day gets one 12-hour shift/
+      );
+    });
+
+    it('still lets the officer create it: halves are a real way to staff it', async () => {
+      const user = await choose(/24-Hour On \/ 48-Hour Off/, 'tpl-1');
+      await user.type(screen.getByLabelText('Start Date *'), '2026-10-09');
+      await user.click(screen.getByRole('button', { name: 'Create Pattern' }));
+
+      expect(mockCreatePattern).toHaveBeenCalledWith(expect.objectContaining({ template_id: 'tpl-1' }));
+    });
+
+    it('says nothing when the template matches', async () => {
+      await choose(/24-Hour On \/ 48-Hour Off/, 'tpl-24');
+
+      expect(screen.queryByText(/built on 24-hour shifts/)).not.toBeInTheDocument();
+    });
+
+    it('checks the 12-hour preset against 12 hours, not 24', async () => {
+      await choose(/12-Hour Shifts/, 'tpl-24');
+
+      expect(screen.getByRole('status')).toHaveTextContent(/built on 12-hour shifts, but 24-hour tour runs 24 hours/);
     });
   });
 
@@ -301,5 +359,80 @@ describe('PatternsTab', () => {
       expect.stringMatching(/^No new shifts\. Dates already on the schedule/)
     );
     expect(mockToastError).not.toHaveBeenCalled();
+  });
+});
+
+// A template that shifts or patterns use is deactivated rather than deleted.
+// A pattern naming one still shows it; a new pattern is not offered it.
+describe('PatternsTab with a deactivated template', () => {
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([{ ...TEMPLATE, is_active: false }]);
+  });
+
+  it('still names it on the pattern that uses it, and asks for inactive ones too', async () => {
+    renderWithRouter(<PatternsTab />);
+
+    expect(await screen.findByText(/Template: Day Shift A/)).toBeInTheDocument();
+    expect(mockGetTemplates).toHaveBeenCalledWith({ active_only: false });
+  });
+
+  it('does not offer it to a new pattern', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+    await user.click(screen.getByRole('button', { name: /Manual Setup/ }));
+
+    expect(within(screen.getByLabelText('Shift Template *')).queryByRole('option', { name: /Day Shift A/ })).toBeNull();
+  });
+});
+
+// The server reports which patterns an inactive template is holding; the
+// list says so, and only on those patterns.
+describe('PatternsTab with a pattern held by an inactive template', () => {
+  beforeEach(() => {
+    mockGetPatterns.mockReset();
+    mockGetPatterns.mockResolvedValue([
+      { ...PATTERN, inactive_templates: ['Day Shift A'] },
+      { ...PATTERN, id: 'pat-2', name: 'B-Shift 24/48', inactive_templates: [] },
+    ]);
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([{ ...TEMPLATE, is_active: false }]);
+  });
+
+  it('warns that the pattern is not generating shifts', async () => {
+    renderWithRouter(<PatternsTab />);
+
+    const notices = await screen.findAllByRole('status');
+    const held = notices.filter((n) =>
+      n.textContent?.includes('Template inactive — this pattern is not generating shifts')
+    );
+    expect(held).toHaveLength(1);
+    expect(held[0]).toHaveTextContent('Day Shift A');
+  });
+
+  it('does not offer Generate on the held pattern, which the server would refuse', async () => {
+    renderWithRouter(<PatternsTab />);
+
+    expect(await screen.findByRole('button', { name: 'Generate shifts from A-Shift 24/48' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Generate shifts from B-Shift 24/48' })).toBeEnabled();
+  });
+});
+
+describe('PatternsTab pausing a pattern', () => {
+  it('pauses an active pattern and does not offer Generate on a paused one', async () => {
+    const user = userEvent.setup();
+    mockGetPatterns.mockReset();
+    mockGetPatterns.mockResolvedValueOnce([PATTERN]).mockResolvedValue([{ ...PATTERN, is_active: false }]);
+    renderWithRouter(<PatternsTab />);
+
+    await screen.findByRole('button', { name: 'Generate shifts from A-Shift 24/48' });
+    // The first pattern opens on load, so its Pause button is already showing.
+    await user.click(screen.getByRole('button', { name: 'Pause A-Shift 24/48' }));
+
+    expect(mockUpdatePattern).toHaveBeenCalledWith('pat-1', { is_active: false });
+    expect(await screen.findByRole('button', { name: 'Resume A-Shift 24/48' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate shifts from A-Shift 24/48' })).toBeDisabled();
   });
 });

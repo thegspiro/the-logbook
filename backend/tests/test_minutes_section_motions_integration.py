@@ -130,7 +130,10 @@ class TestSectionMotions:
         assert resp.status_code == 201, resp.text
         assert resp.json()["section_key"] == "adjournment"
         listed = (await _get(world, minutes["id"]))["motions"]
-        assert [m["section_key"] for m in listed] == ["adjournment"]
+        recorded = [m for m in listed if m["status"] != "pending"]
+        assert [m["section_key"] for m in recorded] == ["adjournment"]
+        # Recording it filled in the prepared motion instead of adding a second.
+        assert [m["section_key"] for m in listed].count("adjournment") == 1
 
     async def test_a_motion_without_a_section_is_unchanged(self, world):
         minutes = await _create(world)
@@ -145,7 +148,8 @@ class TestSectionMotions:
 
         assert resp.status_code == 400
         assert "section" in resp.json()["detail"].lower()
-        assert (await _get(world, minutes["id"]))["motions"] == []
+        listed = (await _get(world, minutes["id"]))["motions"]
+        assert [m for m in listed if m["status"] != "pending"] == []
 
     async def test_updating_to_a_missing_section_is_refused(self, world):
         minutes = await _create(world)

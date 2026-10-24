@@ -121,7 +121,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
               onClick={() => adjustLength(p.value)}
               className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 cycleDays === p.value
-                  ? 'border-violet-600 bg-violet-600 text-white'
+                  ? 'border-violet-600 bg-violet-700 text-white'
                   : 'border-theme-surface-border text-theme-text-muted hover:border-violet-500'
               }`}
             >
@@ -136,7 +136,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
         <span className="text-theme-text-muted text-xs">Quick fill:</span>
         <button
           onClick={() => fillRange('day')}
-          className="rounded-sm border border-amber-400/50 px-2 py-1 text-[11px] text-amber-600 transition-colors hover:bg-amber-500/10 dark:text-amber-400"
+          className="rounded-sm border border-amber-400/50 px-2 py-1 text-[11px] text-amber-700 transition-colors hover:bg-amber-500/10 dark:text-amber-400"
         >
           All Day
         </button>
@@ -203,7 +203,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
         {dayCount > 0 && (
           <span className="flex items-center gap-1">
             <Sun className="h-3 w-3 text-amber-500" />
-            Day: <span className="font-semibold text-amber-600 dark:text-amber-400">{dayCount}</span>
+            Day: <span className="font-semibold text-amber-700 dark:text-amber-400">{dayCount}</span>
           </span>
         )}
         {nightCount > 0 && (

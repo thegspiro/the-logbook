@@ -1,18 +1,33 @@
 /**
  * Members Admin Page
  *
- * Administrative page for managing user roles, permissions, and contact information.
+ * Administrative page for managing members' positions, permissions, and
+ * contact information.
  * Accessible to: IT Administrator, Chief, Assistant Chief, President,
  * Vice President, Secretary, Assistant Secretary
  *
  * Features:
- * - View by Member: See each member and their assigned roles
- * - View by Role: See each role and the members assigned to it
+ * - View by Member: See each member, their rank, membership type and positions
+ * - View by Position: See each position and the members assigned to it
  * - Edit member contact information (admin)
+ *
+ * A member record carries four separate classifications, and three of them
+ * use the word "probationary" to mean different things. This page names all
+ * four so an officer can tell which one they are looking at:
+ * - Positions (the Roles page): the offices held, and the main source of
+ *   permissions. Every member holds the base Member position. The seeded
+ *   positions that mirror a rank (Chief, Captain, Firefighter, ...) are not
+ *   offered or shown here — a rank is set in the Rank field — except that one
+ *   a member already holds stays in Manage Positions so it can be taken off.
+ * - Rank: the operational rank, with a few default permissions of its own.
+ * - Membership Type: the class and ladder standing — probationary, active,
+ *   life, administrative. No permissions; the tier ladder advances it.
+ * - Status: the account lifecycle — active, on leave, retired, dropped —
+ *   changed from the member's profile.
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { userService, roleService, locationsService } from '../services/api';
 import type { Location } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
@@ -21,12 +36,13 @@ import { useAuthStore } from '../stores/authStore';
 import toast from 'react-hot-toast';
 import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { mirrorsRank, withoutRankMirrors } from '../utils/positions';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
+import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
 import { useTimezone } from '../hooks/useTimezone';
 import { OverduePropertyReturnsPanel } from '../components/members/OverduePropertyReturnsPanel';
 import { formatTime } from '../utils/dateFormatting';
@@ -49,7 +65,7 @@ export const MembersAdminPage: React.FC = () => {
   const { confirm } = useConfirm();
   const navigate = useNavigate();
   const { checkPermission, user: currentUser } = useAuthStore();
-  const { rankOptions } = useRanks();
+  const { rankOptions, formatRank } = useRanks();
   const tz = useTimezone();
   const [unlockingUserId, setUnlockingUserId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
@@ -208,7 +224,7 @@ export const MembersAdminPage: React.FC = () => {
       if (status === 403) {
         setError(detail || 'You do not have permission to assign roles. Contact an administrator.');
       } else {
-        setError(detail || 'Unable to save role assignments. Try again.');
+        setError(detail || 'Unable to save position assignments. Try again.');
       }
     } finally {
       setSaving(false);
@@ -291,6 +307,14 @@ export const MembersAdminPage: React.FC = () => {
   const isLockedBasePosition = (user: Pick<UserWithRoles, 'status'>, role: Pick<Role, 'slug'>) =>
     role.slug === 'member' && user.status !== UserStatus.ARCHIVED;
 
+  // The seeded mirror of a rank is not something to hand out — the Rank field
+  // is — but one a member already holds stays listed so it can be taken off.
+  // Hidden assignments survive a save untouched: `selectedRoleIds` starts from
+  // every position the member holds, and only the offered ones can be toggled.
+  const offeredPositions = roles.filter(
+    (role) => !mirrorsRank(role) || !!selectedUser?.roles.some((held) => held.id === role.id)
+  );
+
   const handleToggleRole = (roleId: string) => {
     setSelectedRoleIds((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]));
   };
@@ -300,10 +324,10 @@ export const MembersAdminPage: React.FC = () => {
   };
 
   const handleQuickRemoveRole = async (user: UserWithRoles, roleId: string) => {
-    const roleName = user.roles.find((r) => r.id === roleId)?.name ?? 'this role';
+    const roleName = user.roles.find((r) => r.id === roleId)?.name ?? 'this position';
     if (
       !(await confirm({
-        title: 'Remove role',
+        title: 'Remove position',
         message: `Remove ${roleName} from ${displayNameOf(user) || user.username}?`,
         confirmLabel: 'Remove',
         cancelLabel: 'Keep it',
@@ -321,7 +345,7 @@ export const MembersAdminPage: React.FC = () => {
       // The server refuses on purpose — the last administrator, the grant
       // ceiling — and its reason is the useful part; "check your connection"
       // sent the officer looking for a network fault.
-      setError(getErrorDetail(err) || 'Unable to remove the role. Check your connection and try again.');
+      setError(getErrorDetail(err) || 'Unable to remove the position. Check your connection and try again.');
     }
   };
 
@@ -331,7 +355,7 @@ export const MembersAdminPage: React.FC = () => {
 
     if (
       !(await confirm({
-        title: 'Remove from role',
+        title: 'Remove from position',
         message: `Remove ${displayNameOf(user) || user.username} from ${role.name}?`,
         confirmLabel: 'Remove',
         cancelLabel: 'Keep it',
@@ -347,7 +371,7 @@ export const MembersAdminPage: React.FC = () => {
       await fetchData();
     } catch (err: unknown) {
       setError(
-        getErrorDetail(err) || 'Unable to remove the member from this role. Check your connection and try again.'
+        getErrorDetail(err) || 'Unable to remove the member from this position. Check your connection and try again.'
       );
     }
   };
@@ -520,17 +544,27 @@ export const MembersAdminPage: React.FC = () => {
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
               } focus:ring-theme-focus-ring rounded-r-lg focus:z-10 focus:ring-2`}
             >
-              View by Role
+              View by Position
             </button>
           </div>
         </div>
+
+        <p className="text-theme-text-muted mb-4 text-sm">
+          Each member has a <strong>rank</strong> (their place in the chain of command), a{' '}
+          <strong>membership type</strong> (probationary, active, life or administrative, which the Membership Tiers
+          ladder advances) and one or more <strong>positions</strong> (the offices held, managed under Roles, which
+          decide what they can do). Every member holds the base Member position. Positions named after a rank &mdash;
+          Chief, Captain, Firefighter &mdash; are not listed here: a rank is set in the Rank field and carries its own
+          access. A member&rsquo;s account <strong>status</strong> &mdash; on leave, retired, dropped &mdash; is changed
+          from their profile.
+        </p>
 
         {/* View by Member */}
         {viewMode === 'by-member' && (
           <div className="bg-theme-surface overflow-x-auto shadow-sm backdrop-blur-xs sm:rounded-lg">
             <table
               className="rwd-table divide-theme-surface-border min-w-full divide-y"
-              aria-label="Members and their roles"
+              aria-label="Members and their positions"
             >
               <thead className="bg-theme-surface-secondary">
                 <tr>
@@ -550,7 +584,19 @@ export const MembersAdminPage: React.FC = () => {
                     scope="col"
                     className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
-                    Roles
+                    Rank
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Membership Type
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Positions
                   </th>
                   <th
                     scope="col"
@@ -577,9 +623,12 @@ export const MembersAdminPage: React.FC = () => {
                           </span>
                         </div>
                         <div className="ml-4">
-                          <div className="text-theme-text-primary text-sm font-medium">
+                          <Link
+                            to={`/members/${user.id}`}
+                            className="text-theme-text-primary text-sm font-medium hover:underline"
+                          >
                             {displayNameOf(user) || user.username}
-                          </div>
+                          </Link>
                           <div className="text-theme-text-muted text-sm">@{user.username}</div>
                         </div>
                       </div>
@@ -587,12 +636,21 @@ export const MembersAdminPage: React.FC = () => {
                     <td data-label="Member #" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
                       {user.membership_number || '-'}
                     </td>
-                    <td data-label="Roles" className="px-6 py-4">
+                    <td data-label="Rank" className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
+                      {formatRank(user.rank) || '-'}
+                    </td>
+                    <td
+                      data-label="Membership Type"
+                      className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap"
+                    >
+                      {membershipTypeLabel(user.membership_type) || '-'}
+                    </td>
+                    <td data-label="Positions" className="px-6 py-4">
                       <div className="flex flex-wrap justify-end gap-1 md:justify-start">
-                        {user.roles.length === 0 ? (
-                          <span className="text-theme-text-muted text-sm">No roles</span>
+                        {withoutRankMirrors(user.roles).length === 0 ? (
+                          <span className="text-theme-text-muted text-sm">No positions</span>
                         ) : (
-                          user.roles.map((role) => (
+                          withoutRankMirrors(user.roles).map((role) => (
                             <span
                               key={role.id}
                               className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
@@ -608,7 +666,7 @@ export const MembersAdminPage: React.FC = () => {
                                     void handleQuickRemoveRole(user, role.id);
                                   }}
                                   className="touch-target-phone ml-1 hover:text-red-600"
-                                  aria-label={`Remove ${role.name} role from ${displayNameOf(user) || user.username}`}
+                                  aria-label={`Remove ${role.name} position from ${displayNameOf(user) || user.username}`}
                                 >
                                   ×
                                 </button>
@@ -638,19 +696,22 @@ export const MembersAdminPage: React.FC = () => {
                       <div className="flex flex-wrap justify-end gap-3">
                         <button
                           onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
+                          aria-label={`Edit ${displayNameOf(user) || user.username}`}
                           className="touch-target-phone text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleEditRoles(user)}
+                          aria-label={`Manage positions for ${displayNameOf(user) || user.username}`}
                           className="touch-target-phone text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                         >
-                          Manage Roles
+                          Manage Positions
                         </button>
                         {currentUser?.id !== user.id && (
                           <button
                             onClick={() => setResetPasswordUser(user)}
+                            aria-label={`Reset password for ${displayNameOf(user) || user.username}`}
                             className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
                             Reset Password
@@ -659,6 +720,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && user.locked_until && (
                           <button
                             onClick={() => void handleUnlock(user)}
+                            aria-label={`Unlock ${displayNameOf(user) || user.username}`}
                             disabled={unlockingUserId === user.id}
                             className="touch-target-phone text-yellow-700 hover:text-yellow-800 disabled:opacity-50 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
@@ -668,6 +730,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && user.mfa_enabled && (
                           <button
                             onClick={() => setResetMfaUser(user)}
+                            aria-label={`Reset MFA for ${displayNameOf(user) || user.username}`}
                             className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
                             Reset MFA
@@ -676,6 +739,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && (
                           <button
                             onClick={() => handleDeleteUser(user)}
+                            aria-label={`Delete ${displayNameOf(user) || user.username}`}
                             className="touch-target-phone text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                           >
                             Delete
@@ -690,10 +754,10 @@ export const MembersAdminPage: React.FC = () => {
           </div>
         )}
 
-        {/* View by Role */}
+        {/* View by Position */}
         {viewMode === 'by-role' && (
           <div className="space-y-4">
-            {roles.map((role) => {
+            {withoutRankMirrors(roles).map((role) => {
               const usersWithRole = users.filter((user) => user.roles.some((r) => r.id === role.id));
 
               return (
@@ -725,7 +789,7 @@ export const MembersAdminPage: React.FC = () => {
                   </div>
                   <div className="px-6 py-4">
                     {usersWithRole.length === 0 ? (
-                      <p className="text-theme-text-muted text-sm italic">No members assigned to this role</p>
+                      <p className="text-theme-text-muted text-sm italic">No members assigned to this position</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {usersWithRole.map((user) => (
@@ -740,9 +804,12 @@ export const MembersAdminPage: React.FC = () => {
                                 </span>
                               </div>
                               <div>
-                                <div className="text-theme-text-primary text-sm font-medium">
+                                <Link
+                                  to={`/members/${user.id}`}
+                                  className="text-theme-text-primary text-sm font-medium hover:underline"
+                                >
                                   {displayNameOf(user) || user.username}
-                                </div>
+                                </Link>
                                 {user.membership_number && (
                                   <div className="text-theme-text-muted text-xs">#{user.membership_number}</div>
                                 )}
@@ -1072,7 +1139,7 @@ export const MembersAdminPage: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Role Assignment Modal (for View by Member) */}
+        {/* Position Assignment Modal (for View by Member) */}
         <Modal
           isOpen={editingRoles && !!selectedUser}
           onClose={() => {
@@ -1080,7 +1147,7 @@ export const MembersAdminPage: React.FC = () => {
             setSelectedUser(null);
             setError(null);
           }}
-          title={`Manage Roles for ${(selectedUser ? displayNameOf(selectedUser) : '') || selectedUser?.username}`}
+          title={`Manage Positions for ${(selectedUser ? displayNameOf(selectedUser) : '') || selectedUser?.username}`}
           footer={
             <>
               <button
@@ -1106,7 +1173,9 @@ export const MembersAdminPage: React.FC = () => {
             </>
           }
         >
-          <p className="text-theme-text-muted mb-4 text-sm">Select the roles to assign to this member</p>
+          <p className="text-theme-text-muted mb-4 text-sm">
+            Select the positions to assign to this member. A rank is set from the member&rsquo;s profile, not here.
+          </p>
 
           {error && (
             <div
@@ -1118,7 +1187,7 @@ export const MembersAdminPage: React.FC = () => {
           )}
 
           <div className="space-y-2">
-            {roles.map((role) => (
+            {offeredPositions.map((role) => (
               <label
                 key={role.id}
                 className="hover:bg-theme-surface-hover flex cursor-pointer items-start rounded-lg p-3"
@@ -1144,15 +1213,27 @@ export const MembersAdminPage: React.FC = () => {
                         System
                       </span>
                     )}
+                    {mirrorsRank(role) && (
+                      <span className="rounded-sm bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
+                        Rank
+                      </span>
+                    )}
                   </div>
-                  {role.description && <p className="text-theme-text-muted mt-1 text-xs">{role.description}</p>}
+                  {mirrorsRank(role) ? (
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Duplicates the {role.name} rank, which already grants this access. Untick to remove it; it is not
+                      offered to members who do not hold it.
+                    </p>
+                  ) : (
+                    role.description && <p className="text-theme-text-muted mt-1 text-xs">{role.description}</p>
+                  )}
                 </div>
               </label>
             ))}
           </div>
         </Modal>
 
-        {/* Member Assignment Modal (for View by Role) */}
+        {/* Member Assignment Modal (for View by Position) */}
         <Modal
           isOpen={editingMembers && !!selectedRole}
           onClose={() => {
@@ -1186,7 +1267,7 @@ export const MembersAdminPage: React.FC = () => {
             </>
           }
         >
-          <p className="text-theme-text-muted mb-4 text-sm">Select the members to assign to this role</p>
+          <p className="text-theme-text-muted mb-4 text-sm">Select the members to assign to this position</p>
 
           {error && (
             <div

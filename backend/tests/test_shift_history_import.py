@@ -28,14 +28,17 @@ from app.models.external_shift_hours import (
     ExternalAgency,
     ExternalApparatus,
     ExternalShiftHours,
+    ExternalShiftHoursStatus,
 )
 from app.models.shift_history_import import ShiftHistoryImportRow
 from app.models.training import (
     AssignmentStatus,
     BasicApparatus,
+    PreWorkStatus,
     Shift,
     ShiftAssignment,
     ShiftAttendance,
+    ShiftPreWorkSession,
 )
 from app.models.user import User, UserStatus
 from app.schemas.shift_history_import import (
@@ -487,6 +490,69 @@ class TestCommit:
         await db_session.refresh(existing)
         assert existing.total_hours == 24.0
         assert existing.call_count == 2
+
+    async def test_an_existing_shifts_approved_prep_stays_in_its_total(
+        self, db_session, world
+    ):
+        """Finalize counts approved pre-shift work in ``total_hours``; adding
+        imported crew to the shift used to recompute it from attendance only
+        and drop the prep time."""
+        existing = Shift(
+            id=_uid(),
+            organization_id=world.org_id,
+            shift_date=date(2025, 3, 1),
+            start_time=datetime(2025, 3, 1, 12, 30, tzinfo=timezone.utc),
+            end_time=datetime(2025, 3, 2, 12, 30, tzinfo=timezone.utc),
+            apparatus_id=world.a106e,
+            is_finalized=True,
+        )
+        db_session.add(existing)
+        await db_session.flush()
+        db_session.add(
+            ShiftPreWorkSession(
+                organization_id=world.org_id,
+                shift_id=existing.id,
+                user_id=world.bob,
+                started_at=datetime(2025, 3, 1, 11, 30, tzinfo=timezone.utc),
+                ended_at=datetime(2025, 3, 1, 12, 30, tzinfo=timezone.utc),
+                duration_minutes=60,
+                status=PreWorkStatus.APPROVED,
+                approved_minutes=60,
+            )
+        )
+        await db_session.flush()
+        service, draft = await _draft(
+            db_session, world, _csv("Alice Ng,101,A106E,2025-03-01,0700,0700,,,")
+        )
+        analysis, _ = await service.analyze(draft)
+        key = analysis.shifts[0].key
+        await service.update_mappings(draft, existing_shifts={key: "accept"})
+        await service.commit(world.org_id, draft.id, world.admin)
+
+        await db_session.refresh(existing)
+        assert existing.total_hours == 25.0
+
+    async def test_a_rejected_outside_entry_is_not_recreated_on_reimport(
+        self, db_session, world
+    ):
+        rows = ["Alice Ng,101,A106,2025-03-02,0700,1900,,,"]
+        await self._committed(db_session, world, rows)
+        entry = (
+            await db_session.execute(
+                select(ExternalShiftHours).where(
+                    ExternalShiftHours.organization_id == world.org_id
+                )
+            )
+        ).scalar_one()
+        entry.status = ExternalShiftHoursStatus.REJECTED.value
+        await db_session.flush()
+
+        service, again = await _draft(db_session, world, _csv(*rows))
+        analysis, _ = await service.analyze(again)
+
+        assert all(a.duplicate_existing for a in analysis.external)
+        with pytest.raises(ImportNotReady, match="Nothing"):
+            await service.commit(world.org_id, again.id, world.admin)
 
     async def test_creates_no_completion_reports(self, db_session, world):
         await self._committed(

@@ -617,6 +617,141 @@ class TestApprovalChainService:
         assert large_chain is not None
         assert large_chain.name == "Large Purchase"
 
+    async def test_an_amount_on_the_edge_between_two_chains_takes_the_higher_one(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """Exactly $500.00 fits "up to $500" and "$500 and over"; the second wins."""
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+        steps = [
+            {
+                "step_order": 1,
+                "name": "Officer Review",
+                "step_type": ApprovalStepType.APPROVAL,
+                "approver_type": ApproverType.PERMISSION,
+                "approver_value": "finance.approve",
+            }
+        ]
+        for name, low, high in (("Small", 0, 500), ("Large", 500, None)):
+            await service.create_approval_chain(
+                org_id=org_id,
+                created_by=user_id,
+                name=name,
+                applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+                min_amount=low,
+                max_amount=high,
+                is_default=False,
+                steps=steps,
+            )
+
+        on_the_edge = await service.resolve_approval_chain(
+            org_id, ApprovalEntityType.PURCHASE_REQUEST, Decimal("500.00")
+        )
+        just_under = await service.resolve_approval_chain(
+            org_id, ApprovalEntityType.PURCHASE_REQUEST, Decimal("499.99")
+        )
+
+        assert on_the_edge is not None
+        assert on_the_edge.name == "Large"
+        assert just_under is not None
+        assert just_under.name == "Small"
+
+    async def test_changing_one_end_of_a_chain_is_checked_against_the_other(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """Raising the minimum past the stored maximum would match no amount."""
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Mid purchase",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            min_amount=100,
+            max_amount=500,
+            is_default=False,
+        )
+
+        with pytest.raises(ValueError, match="minimum amount cannot be above"):
+            await service.update_approval_chain(chain.id, org_id, min_amount=900)
+        with pytest.raises(ValueError, match="minimum amount cannot be above"):
+            await service.update_approval_chain(chain.id, org_id, max_amount=50)
+
+        cleared = await service.update_approval_chain(
+            chain.id, org_id, max_amount=None, min_amount=900
+        )
+        assert cleared.max_amount is None
+        assert cleared.min_amount == 900
+
+    async def test_chain_resolution_only_uses_chains_for_the_request_type(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """An expense report or check request never borrows a purchase chain.
+
+        The purchase chain here is the default, category-scoped and
+        amount-scoped, so it would outscore the plain expense chain if the
+        lookup let purchase chains compete for other request types.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+        category = await service.create_budget_category(org_id=org_id, name="Apparatus")
+        step = {
+            "step_order": 1,
+            "name": "Officer Review",
+            "step_type": ApprovalStepType.APPROVAL,
+            "approver_type": ApproverType.PERMISSION,
+            "approver_value": "finance.approve",
+        }
+        await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Apparatus Purchases",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            budget_category_id=category.id,
+            min_amount=0,
+            max_amount=10000,
+            is_default=True,
+            steps=[dict(step)],
+        )
+
+        # No chain for check requests: nothing applies, so the request is
+        # decided by hand rather than routed through the purchase chain.
+        assert (
+            await service.resolve_approval_chain(
+                org_id, ApprovalEntityType.CHECK_REQUEST, 300, category.id
+            )
+            is None
+        )
+        assert (
+            await service.preview_approval_chain(
+                org_id, "expense_report", 300, category.id
+            )
+            is None
+        )
+
+        await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Expense Reimbursement",
+            applies_to=ApprovalEntityType.EXPENSE_REPORT,
+            is_default=False,
+            steps=[dict(step)],
+        )
+        expense_chain = await service.resolve_approval_chain(
+            org_id, ApprovalEntityType.EXPENSE_REPORT, 300, category.id
+        )
+        assert expense_chain is not None
+        assert expense_chain.name == "Expense Reimbursement"
+
+        purchase_chain = await service.resolve_approval_chain(
+            org_id, ApprovalEntityType.PURCHASE_REQUEST, 300, category.id
+        )
+        assert purchase_chain is not None
+        assert purchase_chain.name == "Apparatus Purchases"
+
     async def test_approval_step_progression(
         self, db_session: AsyncSession, sample_org_data
     ):
@@ -1327,6 +1462,9 @@ class TestApprovalChainService:
                     },
                 ],
             )
+            # Routed, as submit_purchase_request leaves it: only a request
+            # awaiting approval is listed.
+            pr.status = PurchaseRequestStatus.PENDING_APPROVAL
             await service.create_approval_records(
                 chain,
                 ApprovalEntityType.PURCHASE_REQUEST,
@@ -1426,6 +1564,9 @@ class TestApprovalChainService:
                 },
             ],
         )
+        # Routed, as submit_purchase_request leaves them: a step is approvable
+        # only while its request is awaiting approval.
+        pr_a.status = PurchaseRequestStatus.PENDING_APPROVAL
         a_records = await service.create_approval_records(
             one_step,
             ApprovalEntityType.PURCHASE_REQUEST,
@@ -1471,6 +1612,7 @@ class TestApprovalChainService:
                 },
             ],
         )
+        pr_b.status = PurchaseRequestStatus.PENDING_APPROVAL
         b_records = await service.create_approval_records(
             two_step,
             ApprovalEntityType.PURCHASE_REQUEST,

@@ -692,6 +692,12 @@ class Vote(Base):
     manual_batch_id: Mapped[Optional[str]] = mapped_column(
         String(36), nullable=True, index=True
     )
+    # Ties together the rows of one ranked paper ballot (rank 1, rank 2, ...)
+    # so the instant-runoff count reads them as a single voter's preferences.
+    # A paper ballot has no voter identity to group by, and it must not be
+    # given one: voter_hash/voter_id feed turnout and double-vote checks.
+    # NULL on every electronic vote and on unranked paper votes.
+    paper_ballot_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Proxy voting — tracks when a vote is cast on behalf of another member
     is_proxy_vote: Mapped[bool] = mapped_column(
@@ -804,6 +810,106 @@ class ManualBallotBatch(Base):
         "ManualBallotAttestation",
         back_populates="batch",
         cascade="all, delete-orphan",
+    )
+
+
+class BallotSendJobStatus(str, Enum):
+    """Lifecycle of one background ballot send."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class BallotSendJobKind(str, Enum):
+    """What a background send mails: the ballot itself, a reminder to the
+    members who have not voted yet, the pre-meeting package, or the
+    nominations-open announcement. Ballots and reminders both write the
+    election's record of who was sent a ballot, so they share one in-progress
+    guard; the package and the announcement write neither and each has its own
+    (``ballot_send_jobs.PACKAGE_GUARD_KINDS``, ``ANNOUNCEMENT_GUARD_KINDS``)."""
+
+    BALLOTS = "ballots"
+    REMINDER = "reminder"
+    PACKAGE = "package"
+    ANNOUNCEMENT = "announcement"
+
+
+class BallotSendJob(Base):
+    """One request to email ballots, run in the background.
+
+    A department-sized send takes longer than any HTTP client or proxy will
+    wait, so the request only records this row and returns; the send runs
+    after the response and writes its outcome here for the page to poll. The
+    row lives in the database rather than Redis so a poll answered by a
+    different uvicorn worker sees it, and so it outlives a restart that
+    interrupts the send.
+
+    A queued or running row also blocks a second send for the same election:
+    two overlapping sends mail every member twice, and each writes the
+    election's record of who was sent a ballot from what it read when it
+    started, so whichever finishes last overwrites the other's.
+    """
+
+    __tablename__ = "ballot_send_jobs"
+    __table_args__ = (
+        Index("ix_ballot_send_jobs_election_status", "election_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    election_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("elections.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requested_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=BallotSendJobKind.BALLOTS.value,
+        server_default=BallotSendJobKind.BALLOTS.value,
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=BallotSendJobStatus.QUEUED.value,
+        server_default=BallotSendJobStatus.QUEUED.value,
+    )
+    # The outcome, filled when the send completes. Mirrors EmailBallotResponse
+    # so the poll can hand back exactly what the synchronous endpoint returns.
+    success: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    recipients_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    failed_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    skipped_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    skipped_details: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
+    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Set when the send raised or was interrupted; already user-safe.
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 

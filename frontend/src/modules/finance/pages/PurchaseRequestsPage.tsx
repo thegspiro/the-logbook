@@ -32,6 +32,7 @@ const STATUS_TABS: { value: string; label: string }[] = [
   { value: PurchaseRequestStatus.ORDERED, label: 'Ordered' },
   { value: PurchaseRequestStatus.RECEIVED, label: 'Received' },
   { value: PurchaseRequestStatus.PAID, label: 'Paid' },
+  { value: PurchaseRequestStatus.REIMBURSED, label: 'Reimbursed' },
   { value: PurchaseRequestStatus.CANCELLED, label: 'Cancelled' },
 ];
 
@@ -52,7 +53,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 const PRIORITY_COLORS: Record<string, string> = {
   low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
@@ -201,7 +202,7 @@ const PurchaseRequestsPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Purchase requests">
             <table className="w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">

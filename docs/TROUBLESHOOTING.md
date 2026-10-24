@@ -9126,7 +9126,7 @@ Worth internalising, because the shape is identical every time: **two revision i
 
 ### Problem: `npm ci` fails with "Missing: vite@... from lock file"
 
-**Status (Fixed):** Lockfile drift on `main`; regenerated. **Node >= 22** is the real floor — the root install builds the frontend workspace, so the frontend's floor governs.
+**Status (Fixed):** Lockfile drift on `main`; regenerated. **Node >= 22.22.1** is the real floor — the root install builds the frontend workspace, so the frontend's floor governs.
 
 ---
 
@@ -9348,7 +9348,8 @@ curl http://YOUR-IP:3001/health
 # raised an error. While the app is still starting,
 # the body also carries "checks": {"database": ..., "redis": ...}.
 
-# System and configuration detail (non-production environments only)
+# System and configuration detail (ENVIRONMENT=development only; staging and
+# production answer 404)
 curl http://YOUR-IP:3001/health/detailed
 ```
 

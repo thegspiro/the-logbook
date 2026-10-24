@@ -27,8 +27,8 @@ export const AccessLogsTab: React.FC = () => {
   }, [filters, refetch]);
 
   const getStatusColor = (statusCode: number) => {
-    if (statusCode >= 200 && statusCode < 300) return 'text-green-600';
-    if (statusCode >= 400 && statusCode < 500) return 'text-yellow-600';
+    if (statusCode >= 200 && statusCode < 300) return 'text-green-700 dark:text-green-600';
+    if (statusCode >= 400 && statusCode < 500) return 'text-yellow-700 dark:text-yellow-600';
     if (statusCode >= 500) return 'text-red-600';
     return 'text-theme-text-muted';
   };

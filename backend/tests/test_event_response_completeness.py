@@ -70,6 +70,16 @@ CALLER_SUPPLIED = {
     "organizer_name",
     "alternate_organizer_name",
     "can_manage_organizers",
+    # The rest of the list card's derived fields, per caller: whether this
+    # member checked in (their own RSVP row), what the event would credit (the
+    # org's hour mappings) and whether the attendee list will answer them (the
+    # org's roster setting and their permission). Computed on the detail
+    # endpoint only; the defaults (False / None) are the honest answer on
+    # create and update responses, which no member reads to check in.
+    "user_attended",
+    "credited_hours",
+    "hour_category_label",
+    "can_view_attendees",
 }
 
 

@@ -47,15 +47,15 @@ from its open list.
 | B6  | meetings & minutes         | MM2    | ✅     |
 | B7  | equipment-check            | EC2    | ✅     |
 | B8  | documents                  | DOC2   | ✅     |
-| B9  | membership pipeline        | MP2    | ⬜     |
+| B9  | membership pipeline        | MP2    | ✅     |
 | B10 | messaging & communications | MSG2   | ✅     |
-| B11 | notifications              | NOTIF2 | ⬜     |
-| B12 | integrations               | INT2   | ⬜     |
-| B13 | forms                      | FORM2  | ⬜     |
-| B14 | grants & fundraising       | GF2    | ⬜     |
-| B15 | admin-hours                | AH2    | ⬜     |
-| B16 | reports & analytics        | RPT2   | ⬜     |
-| B17 | events                     | EV2    | ⬜     |
+| B11 | notifications              | NOTIF2 | ✅     |
+| B12 | integrations               | INT2   | ✅     |
+| B13 | forms                      | FORM2  | ✅     |
+| B14 | grants & fundraising       | GF2    | ✅     |
+| B15 | admin-hours                | AH2    | ✅     |
+| B16 | reports & analytics        | RPT2   | ✅     |
+| B17 | events                     | EV2    | ✅     |
 | B18 | training                   | TR2    | ⬜     |
 | B19 | scheduling                 | SCH2   | ⬜     |
 | B20 | finance                    | FIN2   | ⬜     |
@@ -3142,3 +3142,226 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   eslint clean · backend related suites **649 passed, 1 skipped** · frontend
   documents tests **62 passed** · new file 10 pass, 0 under the unit job's marker
   expression. See documents.md → Pass 5. Next: B9 membership pipeline.
+- **B9 membership pipeline ✅ (pass 5) — `PUT /pipelines/{id}` answered a null
+  NOT NULL column with a 500 (MP2-6).** Drove the five update endpoints over HTTP
+  against the real schema, sending `null` for every NOT NULL field the schemas can
+  name (9, derived). The step, prospect, election-package and interview handlers
+  already catch the `ValueError` `apply_updates` raises and return a 400;
+  `update_pipeline` was the one handler with no `try/except`, so `name` and
+  `public_show_future_stages` were 500s (2 of 15 cases failed on the unmodified
+  handler, 13 passed). **Fixed** by catching it like its siblings; the nullable
+  controls (`description`, `notes`, `coordinator_notes`) still clear. **Dead code
+  (MP2-7):** the AST scan (counting `tests/`) flagged five names, four of them
+  decorator-registered validators read and kept; `PipelineKanbanColumn` appears
+  nowhere else in the repository and was removed. **Noted (MP2-8):** the step
+  update schema accepts `sort_order` that the service deliberately strips (a stage
+  moves via `reorder_steps`); the stage modal re-sends the current value, harmless,
+  now pinned by a test, dropping the field from the schema and mapper is a small
+  follow-up. **Verified good:** all five handlers use `exclude_unset`; the two
+  routes without `require_permission` (`/my-sign-offs`, `approve-step`) are
+  deliberate, role-scoped and documented; frontend update payloads send explicit
+  nulls for the nullable clears; `/prospective-members/` is in
+  `UNCACHEABLE_PREFIXES`. **Not read:** the rest of the 8,848-line service (advance /
+  regress, auto-advance, form and email side effects, conversion, public status) and
+  the 16,798-line frontend beyond its update payloads. **Sandbox faults, not code:**
+  the Python lacked the pinned `nh3` dependency (16 files failed to collect) and the
+  local schema predated `main`; both fixed in the sandbox and recorded in the gate.
+  Gate: flake8 / black / isort clean · backend related suites **1256 passed, 1
+  skipped** · new file 15 pass, 2 fail without the fix, 0 under the unit job's
+  marker expression · route-permission check 0 errors · no frontend change. See
+  membership-pipeline.md → Pass 5. Next: B10 messaging & communications — already
+  marked ✅ in the status table, so the next ⬜ is B11 notifications.
+- **B11 notifications ✅ (pass 5) — `PATCH /rules/{id}` with `enabled: null` stored NULL and
+  then returned 500 (NOTIF2-5).** Drove the rule update endpoint over HTTP against the
+  real schema. `name`, `trigger`, `category` and `channel` (NOT NULL) already come back
+  400 and `description` / `config` still clear; `enabled` is a **nullable column behind
+  a response field that is a plain `bool`**, so `apply_updates` wrote the NULL, the
+  commit succeeded, and serializing the response failed — a 500 after the write that
+  also broke every later `GET /rules` for the org, and left the rule reading as off
+  (2 of 9 cases failed on the unmodified schema, including the follow-up listing).
+  **Fixed** in the request schema with a validator that refuses an explicit null
+  (422) and ignores an omitted key. Same shape as DOC-20 in documents. **Removed
+  (NOTIF2-7):** a `# noqa: F401` re-export in `notification_rules.py` that no file
+  imported. **Flagged (NOTIF2-6):** the rules screen can create and toggle a rule but
+  not edit or delete it (the endpoints and client wrappers exist, nothing calls
+  them); owner decision, mirrored to KNOWN_LIMITATIONS. **Observed, not changed:**
+  67 `# noqa: E712` and 6 `# noqa: E711` in `backend/app`, all no-ops because
+  `.flake8` ignores both globally — a mechanical sweep for its own PR. **Verified
+  good:** #19 holds (all four `ENFORCED_TRIGGERS` have a resolver caller; the create
+  form offers no inert control); log scope is the caller's own unless
+  `notifications.manage`; `resolve_sms_recipients` is test-only by design (the
+  documented wrapper over `resolve_sms_targets`). **Not read:** the Web Push send path
+  (passes 2–4), the inbox rendering, the individual senders' delivery logic. Gate:
+  flake8 / black / isort clean · backend related suites **607 passed, 1 skipped** · new
+  file 9 pass, 2 fail without the fix, 0 under the unit job's marker expression ·
+  route-permission check 0 errors · no frontend change. See notifications.md →
+  Pass 5. Next: B12 integrations.
+- **B12 integrations ✅ (pass 5) — `disconnect` promoted a `coming_soon` integration to
+  connectable (INT2-1), and a chat or webhook integration could be "connected" with no
+  destination (INT2-2).** This module has no `apply_updates` path — an update writes only
+  a validated JSON `config` — so the null-on-NOT-NULL lens did not apply; the pass drove
+  the **status lifecycle** over HTTP against the real schema instead. `disconnect` wrote
+  `status="available"` with no `coming_soon` check, which is exactly what `connect`'s gate
+  lets through: `connect` Zapier → 400, `disconnect` → 200, `connect` → 200 connected and
+  enabled. **Fixed** (400 before any write). Separately, `webhook_url` / `url` are plain
+  `str`, a blank secret means "keep", and the Connect button is not disabled on an empty
+  field, so a first connect with a blank URL stored _connected + enabled_ on an
+  integration whose every send fails with "No webhook URL configured" (all four types
+  confirmed). **Fixed** with `_require_destination` on connect and on update of a
+  connected row; the first draft let a blank generic-webhook `url` overwrite the stored
+  one because that key is public config and a blank there is the value, caught by the
+  reconnect control test. **Flagged (INT2-3):** PayPal, Documenso, Cal.com and Salesforce
+  also connect with no credentials — a product call, since everything but the credential
+  has a default; **flagged (INT2-4):** `ensure_catalog` only inserts, so a catalog status
+  or wording change never reaches an existing organization (history squashed, drift not
+  measurable). Both mirrored to KNOWN_LIMITATIONS. **Removed (INT2-5):** unused
+  `COLOR_RED`. **Verified good:** INT-1 / INT-3 / INT-4 still hold, every by-id query is
+  org-scoped, Retry Sync's lock + cooldown + rollback, Google Workspace admin gate on
+  connect / update / disconnect. **Not read:** `salesforce_sync.py`, `calcom_sync.py` and
+  the public webhook routers (INT-27 covered them), connector delivery logic, most of
+  `IntegrationsPage.tsx`. Gate: flake8 / black / isort clean · 9 related integration
+  suites **247 passed** · new file 22 pass, 11 fail without the fix, 0 under the unit job's
+  marker expression · route-permission check 0 errors · no frontend change. See
+  integrations.md → Pass 5. Next: B13 forms.
+- **B13 forms ✅ (pass 5) — seven flags could be nulled into a row that broke the
+  form's own screen (FORM2-2).** The three PATCH routes already write through
+  `apply_updates` and the service turns its `ValueError` into a 400, so a null against a
+  NOT NULL column was verified clean; the open shape was the DOC-20 / NOTIF2-5 one — a
+  **nullable column behind a plain `bool` / `str` response field**. Sent `null` for every
+  field of the three update schemas against a fresh form each time and read the row back:
+  `allow_multiple_submissions`, `require_authentication`, `notify_on_submission`,
+  `is_public` (form), `required`, `width` (field) and `is_active` (integration) stored
+  NULL, answered 500, and left `GET /forms/{id}` at 500 too. Two read falsy afterwards:
+  `if form.require_authentication and not submitted_by` means a NULL **opens an
+  authenticated form to public submission**, and `allow_multiple_submissions` NULL reads
+  as one-per-person. **Fixed** in the request schemas with a shared `_reject_null`
+  validator (422; an omitted key is untouched). The frontend types never allow null for
+  these, so it needs a direct client with `forms.manage`. The new test file derives its
+  cases from schema ∩ model ∩ response model (NOT NULL → refused; nullable-but-plain →
+  422 and the form still loads; other nullable → still clears) and pins the flag set, so
+  a new column is a new case. **Observed, not changed:** one redundant `# noqa: E712` at
+  `forms_service.py:2076` (part of the repo-wide sweep already recorded). **Verified
+  good:** AST scan found nothing unreferenced; every by-id read resolves the form
+  org-scoped first; enum validation (FORM2-1) holds; all 22 routes carry the expected
+  gate. **Not read:** the submission pipeline, integration processors, email
+  notification and stage-advance guards (their suites pass), most of `modules/forms`.
+  Gate: flake8 / black / isort / mypy clean · 16 related suites **270 passed** · new
+  file 39 pass, 7 fail without the fix, 0 under the unit job's marker expression ·
+  route-permission check 0 errors · no frontend change. See forms.md → Pass 5. Next: B14
+  grants & fundraising.
+- **B14 grants & fundraising ✅ (pass 5) — eight of ten update endpoints answered 500 and
+  lost the change (GF2-1).** The 149-case null probe over the ten `*Update` schemas was
+  clean (NOT NULL columns come back 400, nullable ones are accepted), so the pass drove a
+  **real change** through each `PUT` with a `get_db` that commits on success and rolls back
+  on an exception, as `get_session` does. Opportunity, budget item, compliance task,
+  campaign, donor, donation, pledge and fundraising event returned 500 and the table kept the
+  old value; only application and expenditure worked. Cause: `updated_at` is
+  `onupdate=func.now()`, MySQL / MariaDB cannot return it from an UPDATE, so SQLAlchemy
+  expires it after the flush, and the response model's read lazy-loads in an async session
+  (MissingGreenlet); the rollback then discards the write. The create paths carry the fix and
+  an explanatory comment; the update paths never got it. The frontend calls four of them
+  (pledge, event, campaign restriction, compliance task). **Fixed** with a shared
+  `reload_updated_at` helper (one primary-key SELECT) called after the flush in the eight
+  services; two mocked service tests now provide an awaitable `refresh`. Reproduced on
+  MariaDB 10.11, not MySQL 8, and not in a browser. **Flagged (GF2-2):** a scan found seven
+  more flush-and-return `update_*` services outside this module (finance chain step,
+  inventory reorder request, label printer, legal draft, medical screening requirement and
+  record, org chart node) — candidates, not driven; mirrored to KNOWN_LIMITATIONS for their
+  own rotation passes. **Verified good:** AST scan found nothing unreferenced; GF-7 / GF-8
+  fixed in code, GF-9's open half unchanged; all 45 routes gated. **Not read:** report
+  builders, reminder notifications, application lifecycle internals (their suites pass), most
+  of the frontend module. Gate: flake8 / black / isort / mypy clean · 17 related suites **449
+  passed** · new file 159 pass, 9 fail without the fix, 0 under the unit job's marker
+  expression · route-permission check 0 errors · no frontend change. See
+  grants-fundraising.md → Pass 5. Next: B15 admin-hours.
+- **B15 admin-hours ✅ (pass 5) — `PATCH /event-mappings/{id}` with `percentage: null` or
+  `is_active: null` answered 200 and changed nothing (AH2-1).** This module is in better shape
+  than most of the rotation: every create and update service already reloads `created_at` /
+  `updated_at` after its flush, the category update goes through `apply_updates`, and the
+  entry edits are explicit about null ("None leaves the description alone; a blank string
+  clears it"). A real change through the category, event-mapping and officer entry-edit
+  `PATCH`es, driven with a `get_db` that rolls back on an exception, saves and answers 200 on
+  all three, so the GF2-1 shape (a flushed row returned with an expired `updated_at`) is not
+  present here. The null probe found the one gap: `update_event_hour_mapping` reads `None`
+  as "not provided", and `exclude_unset` hands it an explicit null as the same `None`, so a
+  null on either NOT NULL column was acknowledged and ignored where every other update path
+  answers 400. **Fixed** in the request schema with a validator (422; an omitted key is
+  untouched, the service contract is unchanged); the frontend type never allows null. **Observed,
+  not changed:** `eventHourMappingService.update` has no caller — the settings screen lists,
+  creates and deletes mappings but cannot edit or switch one off (product call, NOTIF2-6's
+  shape). **Verified good:** AST scan found nothing unreferenced; the AH-1 / AH-4 / AH-6
+  invariants hold in their suites; every by-id read is org-scoped; all 27 routes gated.
+  **Not read:** clock-in / out, auto-close, event-attendance crediting, the report builders and
+  export (their suites pass). Gate: flake8 / black / isort / mypy clean · 14 related suites
+  **191 passed** · new file 13 pass, 2 fail without the fix, 0 under the unit job's marker
+  expression · route-permission check 0 errors · no frontend change. See admin-hours.md →
+  Pass 5. Next: B16 reports & analytics.
+
+---
+
+## 🏁 Final page sweep (2026-10-20)
+
+A pre-deployment pass over all 249 fixed routes and 35 detail pages at phone,
+tablet and desktop widths, signed in as an administrator and as a plain member,
+plus the public pages signed out — driven in a real browser against a real
+backend. **Fixed:** pages that scrolled sideways at phone or tablet width, accessibility defects
+(unnamed controls, nested interactive rows, QR codes with no alternative, a
+malformed definition list), contrast failures in the orange, emerald and
+warning-text palettes and on the compliance print sheet, and two unused
+components. `GET /health/detailed` was found unauthenticated on staging; `main`
+closed it independently by serving the route in development only, and that fix
+was kept over a `settings.manage` dependency. `/onboarding/*` now redirects to sign-in once setup is
+finished and an unknown URL shows "Page not found" instead of redirecting
+silently (both approved by the owner). No owner decision from the sweep is left open.
+**Verified good:** every protected route redirects signed
+out, a member is denied every administrative page, no token in a response body,
+secrets redacted for non-admins. See
+[final-sweep-2026-10.md](./final-sweep-2026-10.md).
+
+- **B16 reports & analytics ✅ (pass 5) — one member could take the analytics dashboard down
+  for the whole organization (RPT2-1).** The module's one update route, `PATCH
+/reports/saved/{id}`, came back clean: a real change saves and answers 200, `null` on the
+  two NOT NULL columns is a 400, nullable ones are accepted, and the handler commits and
+  refreshes, so the B14 `updated_at` shape is absent (nine cases kept as a regression file).
+  So the pass looked at what a client-supplied value does when it is read back.
+  `POST /analytics/track` stores any `metadata` dict from any member, and `/analytics/metrics`
+  keys its failure breakdown by `metadata["error_reason"]`: a dict or list is unhashable, the
+  row stays stored, and every later `/metrics` call for the organization answered 500 until
+  the row was deleted by hand (reproduced over HTTP). **Fixed** — the reason is used only if
+  it is a string, cut to 100 characters, otherwise `unknown`. **Fixed (RPT2-2)** — track
+  accepted metadata of any size under a 60 MB body limit, and `/export` returns 1,000 rows of
+  it; now 422 above 4,096 bytes (no rate limit added: a shared station network would drop
+  legitimate events silently). **Flagged (RPT2-3):** nothing in the application writes an
+  analytics event — `track*` is never called and the check-in handlers write none — so the QR
+  dashboard reads zeros; the CLAUDE.md #19 shape in reverse, mirrored to KNOWN_LIMITATIONS
+  with a correction under the accepted "no per-event analytics panel" entry. **Verified
+  good:** AST scan found nothing unreferenced; gating and the PII gate; every analytics query
+  org-scoped. **Not read:** the report generators (their suites pass), platform analytics
+  beyond its gate, the `modules/reports` frontend. Gate: flake8 / black / isort / mypy clean ·
+  14 related suites **180 passed** · new files 17 pass, 4 fail without the fix, 0 under the
+  unit job's marker expression · route-permission check 0 errors · no frontend change. See
+  reports-analytics.md → Pass 5. Next: B17 events.
+- **B17 events ✅ (pass 5) — a null on a required field answered 500 in four update paths
+  (EV2-3 to EV2-6).** The events service is the one place in the rotation that still writes
+  updates with a bare `setattr` loop rather than `apply_updates`, so the null probe found work.
+  `PATCH /events/{id}` with `null` for any of 13 NOT NULL fields (title, event_type, the two
+  times, `requires_rsvp`, `is_mandatory`, `allow_guests`, `send_reminders`, `reminder_target`,
+  `require_checkout`, `check_in_window_type`, the two guest check-in flags) answered 500 — a
+  `TypeError` for the times (the end-after-start comparison ran on `None`), an
+  `IntegrityError` at the flush for the rest — and `reminder_schedule: null` answered **200**
+  and left a stored JSON `null` where every reader expects a list. `PATCH /events/templates/{id}`
+  (10 fields), `PATCH /event-requests/email-templates/{id}` (4) and the external-attendee
+  edit (`name`) did the same. **Fixed** with `reject_null_for_required` in
+  `utils/model_updates.py` — `apply_updates`' refusal, made before the update reads its own
+  payload — called ahead of the date arithmetic in `update_event` and in
+  `update_future_events`, and `apply_updates` in the other three (all 400, "cannot be
+  cleared"); nullable fields still clear. None is reachable from the app's own forms (the
+  frontend type allows `null` only on nullable fields), so each needs a direct client with
+  `events.manage`. The B14 `updated_at` shape is **absent** here: a real change saves and
+  answers 200 on all three that return a row. **Verified good:** AST scan found nothing
+  unreferenced; EV-1 / 8 / 9 / 10 hold in their suites; every fetch is org-scoped. **Not
+  read:** creation, recurrence expansion, waitlist, finalization and training credit,
+  reminder tasks, public intake (their suites pass). Gate: flake8 / black / isort / mypy clean
+  · 28 related suites **818 passed** · new tests 72 pass, 30 fail without the fixes, 0 under
+  the unit job's marker expression · route-permission check 0 errors · no frontend change.
+  See events.md → Pass 5. Next: B18 training.

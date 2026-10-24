@@ -1,6 +1,352 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), pass 10 (PR pending)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11)
+
+---
+
+## Follow-up (2026-10-23) — route-coverage guard for the MP-32 class; MP-33 and MP-34 fixed
+
+Pass 8 missed `GET /my-sign-offs` because it reviewed changed files only and
+did not re-list the routes. Two changes so that miss cannot recur unnoticed:
+
+- **Guard test:** `tests/test_prospect_route_self_access_coverage.py` (unit, no
+  database). It walks every route on the membership-pipeline router through
+  its `Depends` tree. Any route without `{prospect_id}` must depend on
+  `get_hidden_prospect_ids`, carry `block_self_interview_access`, or be listed
+  in `EXEMPT` with a reason. A second test fails on a stale `EXEMPT` entry.
+- **Command:** `.claude/commands/security-review.md` Step 3 now says a repeat
+  pass re-lists the routes by AST and compares the count with the previous
+  pass, rather than reviewing only the files in the diff.
+
+Writing the guard turned up two more routes of the MP-32 shape:
+
+### MP-33 — LOW — `purge-inactive` could delete the caller's own application — ✅ FIXED
+
+**What:** `POST /pipelines/{pipeline_id}/purge-inactive` takes applicant ids in
+the request body, or none at all to purge the whole Inactive tab. The router
+guard cannot see body ids. Both bulk routes exclude the caller's own record
+for this reason, but purge did not.
+
+**Failure scenario:** a coordinator whose own application is inactive purges
+the tab, or names their own id. Their file is permanently deleted, along with
+the interview notes and recommendations other members wrote about them.
+
+**Fix:** the endpoint depends on `get_hidden_prospect_ids`, and
+`purge_inactive_prospects` passes the set to `_delete_inactive_prospects`,
+which drops it from the locked select through `_apply_prospect_exclusions`.
+The scheduled auto-purge passes nothing and is unchanged.
+
+**Test:**
+`test_prospect_self_access.py::TestGuardOverHttp::test_purge_inactive_spares_the_callers_own_record`
+covers both the named-id and the whole-tab paths. It fails with the fix
+stashed and passes with it.
+
+### MP-34 — LOW — the duplicate-email check names the caller's own application — ✅ FIXED
+
+`POST /prospects/check-existing` and the `POST /prospects` 409 both name the
+active applicant for an email the caller types, so a caller can type their
+own email and see their own application's pipeline and stage. Flagged at
+first, then fixed the same day on the owner's decision to hide the match.
+
+**Fix:** both routes depend on `get_hidden_prospect_ids`. `check-existing`
+nulls `existing_applicant` when it is the caller's own record, and the
+`POST /prospects` 409 for that record carries only the generic
+`DuplicateApplicantError` message. Both left `EXEMPT` in the guard test.
+The frontend needed no change: a null `existing_applicant` falls through to
+the create call, whose 409 detail is shown as a toast.
+
+**Test:**
+`test_prospect_self_access.py::TestGuardOverHttp::test_duplicate_email_check_does_not_describe_own_application`
+runs through the real dependency stack. It checks that another applicant is
+still named while the caller's own application is not, and it fails with
+the endpoint change stashed.
+
+## Pass 12 (2026-10-23) — real delta (staff duplicate-applicant refusal, approver-role trimming/labeling, file-storage interface migration, numeric bounds, UTC interview times), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
+
+**Step 0/1.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results before this iteration started; PR #3569 (Feature 07, Users
+& organizations, pass 11) had already merged cleanly into `main`. Rotation row
+08 (Membership pipeline) was confirmed the first `⬜` by reading
+`PROGRESS.md`'s rotation table directly.
+
+**Scope confirmation.** Rotation table row 08 (`membership_pipeline.py`,
+`membership_pipeline_service.py`) plus this feature's established additional
+scope: `models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, `utils/prospect_fields.py`, and
+`frontend/src/modules/prospective-members/`.
+
+**Last reviewed at:** `3d6ecd20` (pass 11's merge commit, PR #3420).
+`git log --no-merges 3d6ecd20..HEAD` over the declared scope: 15 non-merge
+commits, all read in full (not diffed-and-trusted) —
+`git diff --stat 3d6ecd20..HEAD` on the full scope: 27 files, 800
+insertions / 248 deletions (229 changed lines in
+`membership_pipeline_service.py`, 59 in the endpoint, 43 in the schema, the
+rest frontend). `prospect_privacy.py` and `utils/prospect_fields.py` are
+byte-for-byte unchanged since pass 11 (confirmed via `git diff`, empty).
+
+**The real delta, by area:**
+
+| Area                                                     | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Files                       |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Staff duplicate-applicant refusal                        | `create_prospect(reject_duplicate=True)` now raises `DuplicateApplicantError` instead of silently returning the existing row when an active applicant already holds the email; the staff endpoint (`POST /prospects`) maps it to a 409 naming the applicant (name, pipeline, stage — via `describe_existing_applicant`/`duplicate_applicant_message`), writes no `prospect_created` audit entry, and sends no email. `check-existing` gained a parallel `existing_applicant` field so the Add Applicant form can warn before submitting. The public/guest-check-in/form-submission callers (`guest_check_in_service.py`, `forms_service.py`) still call `create_prospect` with the default `reject_duplicate=False`, so the silent-dedup-and-notify behavior for the public application form is unchanged. | endpoint, service, frontend |
+| Multi-approval role trimming/labeling                    | `_required_approver_roles()` is now the single point every approval check (gate, sign-off list, `/approve-step`, `/my-sign-offs`) reads a stage's `required_approvers` through, trimming whitespace so a padded stored value (`" chief"`) matches a holder instead of permanently blocking the stage. `office_label()`/the new `approver_labels` computed field let the frontend show "Chief" instead of the raw stored key, through the same `OFFICE_CATALOG` that decides who may sign (no second copy of the catalog). `StageConfigModal` now trims/drops blank roles on save.                                                                                                                                                                                                                          | service, schema, frontend   |
+| File-storage interface migration                         | `add_prospect_document`/`download_prospect_document`/`delete_prospect_document`/`_delete_inactive_prospects` now go through `file_storage.delete`/`delete_quietly`/`exists`/`file_response` instead of bare `os.remove`/`os.path.exists`/`stored_file_response`, as part of a repo-wide "route every stored-file read, check and delete through one interface" change. Behavior-preserving: `file_storage.delete` still fails loudly (raises `ValueError` on a real removal failure, `False`/logged on a backend-resolution error) and the row delete still follows the file delete in the same order as before.                                                                                                                                                                                           | endpoint, service           |
+| Numeric request-field bounds                             | `PipelineStepBase.sort_order`/`inactivity_timeout_days` (and the `Update` variant) now cap at `INT32_MAX`/`INT32_MIN` via the repo-wide "bound every numeric request field to its column range" sweep — closes a DB-level `OverflowError`-as-500 on a client-supplied out-of-range integer, not a new authorization surface.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | schema                      |
+| UTC interview times                                      | `InterviewCreate.interview_date`/`InterviewUpdate.interview_date` moved from bare `datetime` to `UTCDateTime`, matching CLAUDE.md's UTC-storage convention; part of a repo-wide "Store minutes and interview request times as the UTC instant" change.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | schema                      |
+| Account-status gate correctness                          | Two `User.status == UserStatus.ACTIVE` comparisons in `_authorized_multi_approval_result`'s approver lookups became `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (CLAUDE.md Pitfall #32) — a probationary officer holding an approval role can now actually sign off; this _widens_ who can approve to match every other status gate in the app, not a new grant of authority (the role-holding check, `_approval_roles_held`, is unaffected).                                                                                                                                                                                                                                                                                                                                                               | service                     |
+| Audit on stage delete                                    | `delete_step` now writes a `membership_pipeline.step_deleted` audit entry (pipeline id, step id) — deleting a stage deletes every applicant's progress record for it, so the trail previously had no record of who did it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | endpoint                    |
+| Dead code removed                                        | Frontend `applicantService.deleteApplicant` (called a route that does not exist) removed; confirmed zero remaining call sites.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | frontend                    |
+| a11y / correctness, out of this feature's security scope | ~15 color-contrast (`text-X-600` → `text-X-700`/`-800`) fixes and UX copy changes (pipeline/stage delete dialog wording, event-unlink confirmation) across the module's components — read to confirm none touch auth/scoping/validation logic; none do.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | frontend                    |
+
+**Tenant isolation re-derived on every new/changed by-id site:**
+`find_existing_applicant`/`_find_active_prospect_by_email` (the duplicate
+check powering both the 409 and `check-existing`'s new field) is called with
+`current_user.organization_id` exactly as the pre-existing lookup was — no
+new by-id or by-email query skips an org filter. The file-storage interface
+migration changes _how_ a stored path is read/deleted, not _which org's_
+files are reachable: every call site still resolves the path through
+`prospect_document_path(stored_path, organization_id)` before calling
+`file_storage.delete`/`exists` (unchanged by the migration — confirmed by
+reading each of the four call sites in the diff above). `office_label()` and
+`_required_approver_roles()` operate only on a step's own `config` JSON, no
+org/user lookup involved.
+
+**Authorization re-derived for the new refusal path:** `DuplicateApplicantError`
+is raised, and the 409 built, strictly _before_ `create_prospect` would have
+inserted a row or sent mail — confirmed by reading `create_prospect`'s
+control flow: the `reject_duplicate` check at the top of the method (and
+again at the second, lock-protected check used for the race with a concurrent
+insert) returns before any `ProspectiveMember(...)`/`db.add()`/email call.
+`POST /prospects`'s permission gate (`members.create` OR
+`prospective_members.manage`) is unchanged, and the new `existing_applicant`
+disclosure (name, pipeline, stage — deliberately not email, which the caller
+already typed) is proportionate to that gate: `members.create`'s own
+docstring in `app/core/permissions.py` describes it as scoped specifically to
+"Add prospective members to the recruitment pipeline," so a holder is already
+the intended audience for exactly this duplicate-resolution workflow, unlike
+MP-7's case (an archived member's _email_ surfacing to a caller who matched
+only by name and never typed it). Not a finding.
+
+**No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`** (both
+existing sites — `ProspectiveMember.first_name`/`last_name`/`email` search at
+`membership_pipeline_service.py:1420-1424`, `TrainingProgram.name` lookup at
+`:4766` — re-verified with `escape=LIKE_ESCAPE_CHAR` present), **no raw
+`csv.writer`/`csv.DictWriter`, no `window.confirm`/`alert`/`prompt`**
+introduced or present anywhere in this feature's current scope (grepped
+fresh over the full scope, not limited to the diff).
+
+**Route enumeration (checklist §1/§2), done fresh via AST walk, not diffed:**
+**53 routes** — unchanged from pass 11. No route added, removed, or had its
+`require_permission(...)` arguments changed by this window's 15 commits
+(confirmed: the only endpoint-file hunks touched are `delete_step`'s new
+audit call, `check_existing_members_for_prospect`/`create_prospect`'s
+duplicate handling, and the four file-storage call sites — none of which is a
+decorator or a `Depends(...)` argument). The router-wide
+`block_self_prospect_access` dependency (`membership_pipeline.py:117`) is
+unchanged. MP-31's target-role ceiling enforcement
+(`_enforce_target_role_ceiling`/`_enforce_role_grant_ceiling`, lines
+1131–1305) is outside every hunk this window's commits touch — re-confirmed
+present and unchanged by direct read, not diff.
+
+### Standing items re-verified this pass
+
+- **MP-10 (listing half)** — `list_election_packages`
+  (`membership_pipeline_service.py:7557-7607`) still has no `.limit()`/
+  `.offset()` — confirmed by direct read of the full function body, not a
+  grep for the word "limit". Unaffected by this window's diff (the function
+  does not appear in it). **Still OPEN**; `docs/KNOWN_LIMITATIONS.md`'s entry
+  matches current code and line references (updated below for the line-number
+  drift since pass 10's `:7421`).
+- **MP-22** — `delete_prospect_document` (`membership_pipeline_service.py:6946`)
+  and `_delete_inactive_prospects` (`:6481`) both still remove the file from
+  disk (now via `file_storage.delete`, migrated this window — see the
+  file-storage area above) _before_ the row delete and the caller's commit.
+  A commit failure after a successful delete still leaves a DB row (or, for
+  the purge path, nothing — the row delete already ran) referencing a file
+  that is gone. Read both functions in full this pass (not inferred from the
+  file-storage migration's commit message) to confirm the ordering itself —
+  the only thing that changed is which function performs the removal, not
+  when. **Still OPEN**; owner-accepted tradeoff, unchanged.
+
+No new flags. Both re-derived from current code this pass, not copied from
+the prior write-up.
+
+### Verified good ✅ (pass 12)
+
+- **The staff duplicate-applicant refusal fails closed and cannot be used to
+  enumerate applicants beyond the caller's existing authority**: traced
+  `create_prospect`'s control flow end to end (both the initial check and the
+  lock-protected re-check), confirmed no insert/email/audit-write precedes
+  the raise, and confirmed the public/guest-check-in/forms paths are
+  unaffected (`reject_duplicate` defaults to `False` and only the staff
+  endpoint passes `True`).
+- **The approver-role trimming change does not weaken the multi-signer gate**:
+  `_required_approver_roles()` only normalizes whitespace on both the stored
+  config and the comparison side — it does not relax, widen, or bypass the
+  "signer must currently hold the role" check, which still lives in
+  `complete_step`/`_approval_roles_held` (MP-9's standing concern), re-confirmed
+  present and unchanged.
+- **The file-storage interface migration preserves tenant-scoping and
+  fail-closed semantics on every one of this feature's four call sites**:
+  each still resolves the stored path through `prospect_document_path(...,
+organization_id)` before calling the new interface, and a real deletion
+  failure still raises rather than being swallowed (`file_storage.delete`
+  returns `False`, which the caller still treats as fatal — re-confirmed by
+  reading the four call sites, not the shared helper's docstring alone).
+- **MP-31's target-role ceiling and MP-32's `/my-sign-offs` filter are both
+  untouched by this window's diff** (confirmed: neither
+  `_enforce_target_role_ceiling`/`_enforce_role_grant_ceiling` nor
+  `list_my_sign_offs`/`get_hidden_prospect_ids` appears in any of the 15
+  commits' hunks).
+- **No regression on any previously-closed finding** (MP-1 through MP-9,
+  MP-11 through MP-21, MP-23 through MP-32) — none of their call sites appear
+  in this pass's diff.
+
+### Completion gate (pass 12)
+
+Run against CI's pinned toolchain (`flake8==7.3.0`, `black==26.5.1`,
+`isort==9.0.1`, installed into this session's Python 3.13 interpreter — the
+sandbox's bare `python3` resolves to 3.11, so every command below was run as
+`python3.13` explicitly); frontend against the repo's existing
+`node_modules` (no lockfile change needed for this pass).
+
+| Check                                                                         | Result                                                                      |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/`                                   | pass, 0 violations                                                          |
+| `python3.13 -m black --check app/ tests/ alembic/`                            | pass, 2567 files unchanged                                                  |
+| `python3.13 -m isort --check-only app/ tests/ alembic/`                       | pass, 0 violations                                                          |
+| `python3.13 scripts/validate_migrations.py --strict` (repo root)              | pass — 640 revisions, single head `cc8c16cb6d98` (no migration this pass)   |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)          | pass — 273 routes checked, 0 errors, 0 warnings                             |
+| scoped backend pytest (`-k "membership or prospect or pipeline or election"`) | 1876 passed, 1 skipped (environment-only, `py_vapid`/`pywebpush`), 0 failed |
+| `cd frontend && npm run typecheck`                                            | pass, 0 errors                                                              |
+| `cd frontend && npm run lint`                                                 | pass, 0 errors, 0 warnings                                                  |
+| scoped frontend suite (`npx vitest run src/modules/prospective-members`)      | 302 passed (35 files)                                                       |
+
+No application source file changed this pass (0 fixes — the real fixes
+already landed on `main` via the 15 commits above, all independently tested
+and already merged). Every check above verifies that the delta which landed
+since pass 11 is sound, not that a new patch applied cleanly.
+
+---
+
+## Pass 11 (2026-10-18) — watchdog pickup: real delta (directory-account provisioning hooked into conversion), 0 fixed, 0 new findings; MP-22 re-confirmed unchanged
+
+**Note on this file's pass numbering running one ahead of its lap-mates:**
+pass 10 (above) landed one day after features 00–07's own pass 9, so this
+file is a pass ahead of the sibling findings files reviewed in the same
+watchdog run (PUB-03/SF-04/FIN-05/ELEC-06/USR-07 are all on their own
+pass 10 as of this run). Each findings file's pass count is local to
+itself; nothing in the rotation mechanism requires them to stay numerically
+aligned across features, and Step 0 reads the truth from GitHub, not from
+matching numbers across files.
+
+**Scope.** Pass 10 merged as `b260c519e` (PR #3255). `git log --no-merges
+b260c519e..HEAD` over the declared scope (`membership_pipeline.py`,
+`membership_pipeline_service.py`, `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`, `utils/
+prospect_fields.py`, `frontend/src/modules/prospective-members/`): 5
+non-merge commits, all read in full. No prospect/pipeline-table migration
+landed this window (the one migration-touching commit in this range,
+`90b69e626`, only adds a new, unrelated `google_account_provisions` table
+— confirmed by reading the migration file, not just the commit message's
+mention of "prospective-members pipeline").
+
+**The real delta is a new directory-account provisioning engine
+(Google Workspace, later generalized to also support Microsoft 365)
+hooked into `transfer_prospect` — the endpoint that converts an applicant
+to a member — read in full across all five commits, not diffed
+piecemeal:**
+
+- **Org-scoping, throughout.** Every `DirectoryAccountService` call from
+  `membership_pipeline_service.py` passes `prospect.organization_id`
+  explicitly (`stage_for_transfer`, `provision`, `mark_credentials_sent`,
+  `send_credentials_email`); `DirectoryAccountService.provision()` itself
+  loads its row with `_load(organization_id, provision_id=..., lock=True)`
+  — org-scoped and row-locked (Pitfall #27's shape) before any mutation.
+- **The temporary directory-account password is never stored, confirmed
+  by reading the model, not just its docstring's claim.**
+  `models/directory_account.py` has no password column at all (its own
+  docstring says so: "The temporary password is never stored here: it
+  lives only in memory for the [delivery email]"). In the service,
+  `provision()` returns the plaintext password as a local return value
+  used only to build the welcome/credentials email, then discarded — it
+  is never assigned to any ORM attribute. This is a distinct credential
+  from the member's own Logbook login password (`temp_password`,
+  generated by `generate_temporary_password()` and immediately
+  `hash_password()`-ed before storage at `:4305-4310`) — the two are not
+  conflated anywhere in the flow.
+- **Commit-ordering and failure isolation, traced end to end.** The
+  directory-account row is staged _inside_ the same transaction as the
+  member conversion (so a crash between commit and the directory API
+  call leaves a resumable row, not data loss), but the actual
+  provider API call (`provision_directory_account()`) runs only _after_
+  that transaction commits — a directory failure can never roll back or
+  fail the member conversion itself. A caught exception during
+  provisioning explicitly rolls back and refreshes the `prospect` ORM
+  object so the welcome email that follows still has a valid, attached
+  instance to read.
+- **No response ever carries the password.** `result["google_account"]`
+  (the pipeline API response) and the retry/status field it mirrors on
+  the member's profile both expose only `provider`, `provider_name`,
+  `status`, and `email` — confirmed by reading the dict literal directly,
+  not inferred from the commit message.
+- **Permission gate unchanged.** `transfer_prospect` is still gated by
+  `require_permission("members.manage", "prospective_members.manage")` —
+  the provisioning hook rides on this already-gated endpoint; no new
+  route was added to `membership_pipeline.py` for it (confirmed: still
+  53 routes, unchanged from pass 10).
+- **A real, narrow fix landed within this window and is correctly in
+  place (`2008edbec`):** an earlier commit in this same window
+  (`90b69e626`) had provisioned even for a row staged as already-failed
+  (an address off the Workspace domain); `2008edbec` restricts
+  provisioning to `status == PENDING` rows only. Verified present in the
+  current code, not merely claimed by the commit.
+- **Other hardening in this same commit** (alias/group-linking rejection,
+  suspending by Google's immutable user id rather than a possibly-aliased
+  address, 409-recovery, restricting retries once a member has departed,
+  redacted error logging) **lives in `directory_account_service.py`**,
+  which is outside this feature's declared scope — that file belongs to
+  the Integrations rotation entry and will get its own dedicated pass
+  there. Noted here only so a future MP-08 pass does not re-derive it as
+  this feature's own finding.
+- **`3284dc052` — pure correctness fix, no security implication.**
+  `PUT /pipelines/{id}` was the one update handler with no
+  `except ValueError`, so `apply_updates` raising on a null aimed at a
+  `NOT NULL` column (`name`, `public_show_future_stages`) escaped as a
+  500; now caught and returned as 400 via `safe_error_detail`. No
+  auth/tenancy change.
+
+**All 53 routes re-enumerated** (unchanged from pass 10); no new
+`.ilike()`/`.like()` without `escape=`, no raw `csv.writer`, no
+`window.confirm`/`alert`/`prompt` introduced this window (grepped the
+five commits directly). The router-wide `block_self_prospect_access`
+dependency is unchanged.
+
+**Standing item re-verified, unchanged (neither site touched by this
+window's delta):**
+
+- **MP-22** (a document delete, or the purge rewrite sharing the same
+  helper, can lose a file on disk if the commit fails after a successful
+  `os.remove`) — `delete_prospect_document`
+  (`membership_pipeline_service.py:6916`) and `_delete_inactive_prospects`
+  (`:6444`) are both outside every hunk this window's five commits touch.
+  Owner-accepted tradeoff, unchanged.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.**
+
+### Completion gate (pass 11)
+
+| Check                                                                  | Result                                                     |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                          | ✅ 0 violations                                            |
+| `black --check app/ tests/ alembic/`                                   | ✅ 2438 files unchanged                                    |
+| `isort --check-only app/ tests/ alembic/`                              | ✅ clean                                                   |
+| `python3 scripts/validate_migrations.py --strict`                      | ✅ 619 revisions, single head `89723c04ae94`               |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)      | ✅ 272 routes, 0 errors, 0 warnings                        |
+| `pytest tests/ -q -k "membership or prospect or pipeline or election"` | ✅ 1,734 passed, 1 skipped (environment-only, `pywebpush`) |
+| `frontend: npm run typecheck`                                          | ✅ clean                                                   |
+| `frontend: npm run lint`                                               | ✅ clean                                                   |
+| `npx vitest run src/modules/prospective-members`                       | ✅ 287 passed (34 files)                                   |
 
 ---
 

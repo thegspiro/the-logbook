@@ -25,8 +25,21 @@ from app.models.notification import (
 from app.models.user import Role, User, UserStatus
 from app.services.message_delivery_service import THROTTLED_REASON
 from app.utils.member_names import format_display_name
+from app.utils.membership import MemberStatus
+from app.utils.model_updates import reject_null_for_required
 from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# Statuses spelled the same on the account and on the membership ladder (see
+# the module docstring of app/models/user.py). A department means the ladder
+# when it targets "probationary members" or "retired members": a new member is
+# added at ladder status probationary with an active account, so matching the
+# account status alone missed every probie added the usual way. The account
+# status still counts, so a member an admin set to probationary through
+# "Change status" keeps receiving these messages.
+LADDER_TARGETABLE_STATUSES = frozenset(
+    {MemberStatus.PROBATIONARY, MemberStatus.RETIRED}
+)
 
 
 def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
@@ -79,6 +92,47 @@ def _delivery_state(delivery: DepartmentMessageDelivery) -> Dict[str, Any]:
         "delivered_at": delivered_at.isoformat() if delivered_at else None,
         "error": error,
     }
+
+
+async def release_role_from_messages(
+    db: AsyncSession, organization_id: str, role_id: str, role_name: Optional[str]
+) -> int:
+    """Take a role about to be deleted out of every message that targets it.
+
+    Called by RoleService.delete_role, in its transaction. Left behind, the id
+    reaches nobody — no member can hold a deleted role — and the message's
+    next edit re-sends it and is refused as targeting a role outside the
+    organization. The role's name goes too: legacy rows target by name, and a
+    role later created under the same name must not inherit this audience.
+    Returns how many messages were changed.
+    """
+    gone = {str(role_id)}
+    if role_name:
+        gone.add(role_name)
+    messages = (
+        (
+            await db.execute(
+                select(DepartmentMessage)
+                .where(
+                    DepartmentMessage.organization_id == str(organization_id),
+                    DepartmentMessage.target_roles.is_not(None),
+                )
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    changed = 0
+    for message in messages:
+        current = message.target_roles or []
+        kept = [r for r in current if str(r) not in gone]
+        if len(kept) != len(current):
+            # A new list rather than an in-place edit: a plain JSON column does
+            # not notice a mutated list (CLAUDE.md pitfall #12).
+            message.target_roles = kept
+            changed += 1
+    return changed
 
 
 class MessagingService:
@@ -303,6 +357,15 @@ class MessagingService:
                 effective_statuses = updates.get(
                     "target_statuses", message.target_statuses
                 )
+                effective_member_ids, effective_roles = (
+                    await self._drop_vanished_stored_targets(
+                        organization_id,
+                        message,
+                        effective_target_type,
+                        effective_member_ids,
+                        effective_roles,
+                    )
+                )
                 await self._validate_targeting(
                     organization_id,
                     effective_target_type,
@@ -337,6 +400,9 @@ class MessagingService:
                 "expires_at",
                 "scheduled_at",
             }
+            reject_null_for_required(
+                message, {k: v for k, v in updates.items() if k in allowed_fields}
+            )
             for key, value in updates.items():
                 if key in allowed_fields:
                     if key == "priority":
@@ -693,14 +759,17 @@ class MessagingService:
         return added
 
     @staticmethod
-    def _user_targeting_context(user) -> Tuple[List[str], List[str], str]:
-        """Extract the (role_ids, role_names, status) a user is matched on."""
+    def _user_targeting_context(
+        user,
+    ) -> Tuple[List[str], List[str], str, Optional[str]]:
+        """Extract the (role_ids, role_names, status, member_status) a user is
+        matched on."""
         role_ids = [str(r.id) for r in user.roles]
         role_names = [r.name for r in user.roles]
         status = (
             user.status.value if hasattr(user.status, "value") else str(user.status)
         )
-        return role_ids, role_names, status
+        return role_ids, role_names, status, user.member_status
 
     async def _get_targeting_user(
         self, organization_id: str, user_id: str
@@ -724,8 +793,12 @@ class MessagingService:
         user_role_ids: List[str],
         user_role_names: List[str],
         user_status: str,
+        member_status: Optional[str] = None,
     ) -> bool:
         """Check if a message targets the given user.
+
+        Status targeting matches the account status, and for the statuses in
+        ``LADDER_TARGETABLE_STATUSES`` the membership-ladder status as well.
 
         Role targeting matches on role *id* (rename-safe). A role-name fallback
         is retained so messages authored before role-id targeting — or entries
@@ -747,7 +820,12 @@ class MessagingService:
             )
         elif tt == "statuses":
             target_statuses = message.target_statuses or []
-            return user_status in target_statuses
+            if user_status in target_statuses:
+                return True
+            return (
+                member_status in LADDER_TARGETABLE_STATUSES
+                and member_status in target_statuses
+            )
         elif tt == "members":
             target_ids = message.target_member_ids or []
             return user_id in target_ids
@@ -911,7 +989,9 @@ class MessagingService:
         audience, foreign/garbage member or role ids, or invalid member statuses.
         Role entries may be a role id or (rename-safe) role name, matching
         ``_is_targeted``. Updates call this only when an audience field changes,
-        so an unrelated edit does not reject a retained legacy role name.
+        and drop stored entries whose row has since gone before calling it
+        (``_drop_vanished_stored_targets``), so an edit is not refused over a
+        role or member deleted after the message was written.
         """
         target = (
             target_type.value if hasattr(target_type, "value") else str(target_type)
@@ -921,13 +1001,9 @@ class MessagingService:
         if target == "members":
             if not target_member_ids:
                 raise ValueError("At least one target member is required")
-            result = await self.db.execute(
-                select(User.id).where(
-                    User.organization_id == organization_id,
-                    User.id.in_([str(m) for m in target_member_ids]),
-                )
+            valid_members = await self._existing_member_ids(
+                organization_id, target_member_ids
             )
-            valid_members = {str(r) for r in result.scalars().all()}
             if any(str(m) not in valid_members for m in target_member_ids):
                 raise ValueError(
                     "One or more target members are not in your organization"
@@ -936,16 +1012,7 @@ class MessagingService:
         if target == "roles":
             if not target_roles:
                 raise ValueError("At least one target role is required")
-            result = await self.db.execute(
-                select(Role.id, Role.name).where(
-                    Role.organization_id == organization_id
-                )
-            )
-            valid_roles: set = set()
-            for row in result.all():
-                valid_roles.add(str(row.id))
-                if row.name:
-                    valid_roles.add(row.name)
+            valid_roles = await self._existing_role_keys(organization_id)
             if any(str(r) not in valid_roles for r in target_roles):
                 raise ValueError(
                     "One or more target roles are not in your organization"
@@ -959,6 +1026,62 @@ class MessagingService:
                 raise ValueError("One or more target statuses are invalid")
             return
         raise ValueError("Invalid message target type")
+
+    async def _existing_member_ids(
+        self, organization_id: str, member_ids: List[str]
+    ) -> Set[str]:
+        """Which of ``member_ids`` are member rows of this organization."""
+        result = await self.db.execute(
+            select(User.id).where(
+                User.organization_id == organization_id,
+                User.id.in_([str(m) for m in member_ids]),
+            )
+        )
+        return {str(r) for r in result.scalars().all()}
+
+    async def _existing_role_keys(self, organization_id: str) -> Set[str]:
+        """Every id and name a role entry of this organization may carry."""
+        result = await self.db.execute(
+            select(Role.id, Role.name).where(Role.organization_id == organization_id)
+        )
+        keys: Set[str] = set()
+        for row in result.all():
+            keys.add(str(row.id))
+            if row.name:
+                keys.add(row.name)
+        return keys
+
+    async def _drop_vanished_stored_targets(
+        self,
+        organization_id: str,
+        message: DepartmentMessage,
+        target_type: Any,
+        member_ids: Optional[List[str]],
+        roles: Optional[List[str]],
+    ) -> Tuple[Optional[List[str]], Optional[List[str]]]:
+        """Drop audience entries the message already held whose row is gone.
+
+        A role deleted or a member hard-deleted after the message was written
+        leaves its id stored here, and the edit form sends the stored list
+        back. Validating it as if newly chosen refused every later save — even
+        a title fix — over an entry the editor never touched and cannot see.
+        Only entries already on the message are forgiven: an id the caller is
+        adding still has to exist, so this cannot be used to plant one.
+        """
+        target = target_type.value if hasattr(target_type, "value") else target_type
+        if target == "members" and member_ids:
+            stored = {str(m) for m in message.target_member_ids or []}
+            if stored:
+                existing = await self._existing_member_ids(organization_id, member_ids)
+                member_ids = [
+                    m for m in member_ids if str(m) in existing or str(m) not in stored
+                ]
+        if target == "roles" and roles:
+            stored = {str(r) for r in message.target_roles or []}
+            if stored:
+                existing = await self._existing_role_keys(organization_id)
+                roles = [r for r in roles if str(r) in existing or str(r) not in stored]
+        return member_ids, roles
 
     @staticmethod
     def _audience_for_type(
@@ -999,8 +1122,12 @@ class MessagingService:
         users = users_result.scalars().all()
         targeted = []
         for u in users:
-            role_ids, role_names, status = self._user_targeting_context(u)
-            if self._is_targeted(message, str(u.id), role_ids, role_names, status):
+            role_ids, role_names, status, member_status = self._user_targeting_context(
+                u
+            )
+            if self._is_targeted(
+                message, str(u.id), role_ids, role_names, status, member_status
+            ):
                 targeted.append(u)
         return targeted
 

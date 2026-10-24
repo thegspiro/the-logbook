@@ -22,7 +22,10 @@ from app.models.apparatus import (
     TemplateChangeLog,
 )
 from app.schemas.equipment_check import DeployedLotUpdateRequest
-from app.services.equipment_check_service import EquipmentCheckService
+from app.services.equipment_check_service import (
+    _REPLACEMENT_DATE,
+    EquipmentCheckService,
+)
 from app.services.inventory_service import InventoryService
 
 
@@ -69,8 +72,35 @@ def _template_item(**kwargs) -> CheckTemplateItem:
 
 
 class TestResolveExpiration:
-    def test_found_date_does_not_supersede_template(self, service):
+    # Since 2026-10-18 a crew may record a replacement's date on a Date line
+    # with no inventory link (the date it read off the unit it put aboard).
+    # A linked line's date stays inventory-owned: the swap records it.
+
+    def test_found_date_does_not_supersede_an_inventory_linked_template(self, service):
+        item = _template_item(inventory_item_id="inv-1")
+        resolved = service._resolve_expiration(
+            {"template_item_id": "ti-1", "expiration_found": NEXT_YEAR}, item
+        )
+        assert resolved == YESTERDAY
+
+    def test_found_date_supersedes_an_unlinked_date_line(self, service):
+        # Read from the key only validation writes, once it has accepted the
+        # date for a line that takes one and checked it is not past.
         item = _template_item()
+        resolved = service._resolve_expiration(
+            {"template_item_id": "ti-1", _REPLACEMENT_DATE: NEXT_YEAR}, item
+        )
+        assert resolved == NEXT_YEAR
+
+    def test_an_unvalidated_found_date_does_not_supersede(self, service):
+        item = _template_item()
+        resolved = service._resolve_expiration(
+            {"template_item_id": "ti-1", "expiration_found": NEXT_YEAR}, item
+        )
+        assert resolved == YESTERDAY
+
+    def test_found_date_is_ignored_on_a_line_that_is_not_a_date_line(self, service):
+        item = _template_item(check_type="function")
         resolved = service._resolve_expiration(
             {"template_item_id": "ti-1", "expiration_found": NEXT_YEAR}, item
         )
@@ -95,8 +125,8 @@ class TestResolveExpiration:
         assert resolved == YESTERDAY
 
     def test_observed_past_date_does_not_override_inventory(self, service):
-        """Legacy client observations cannot override inventory-backed data."""
-        item = _template_item(expiration_date=NEXT_YEAR)
+        """Client observations cannot override inventory-backed data."""
+        item = _template_item(expiration_date=NEXT_YEAR, inventory_item_id="inv-1")
         resolved = service._resolve_expiration(
             {"template_item_id": "ti-1", "expiration_found": YESTERDAY}, item
         )
@@ -111,7 +141,7 @@ class TestResolveExpiration:
         assert item.expiration_date == NEXT_YEAR
 
     def test_observed_past_date_leaves_an_untracked_item_untracked(self, service):
-        item = _template_item(has_expiration=False)
+        item = _template_item(has_expiration=False, check_type="function")
         resolved = service._resolve_expiration(
             {"template_item_id": "ti-1", "expiration_found": YESTERDAY}, item
         )
@@ -138,7 +168,7 @@ class TestComputeCheckStatus:
         assert items[0]["is_expired"] is True
         assert (total, completed, failed, overall) == (1, 1, 1, "fail")
 
-    def test_replacement_date_cannot_clear_the_auto_fail(self, service):
+    def test_replacement_date_cannot_clear_a_linked_lines_auto_fail(self, service):
         items = [
             {
                 "template_item_id": "ti-1",
@@ -147,12 +177,34 @@ class TestComputeCheckStatus:
             }
         ]
         _, _, failed, overall = service._compute_check_status(
-            items, {"ti-1": _template_item()}, today=date.today()
+            items,
+            {"ti-1": _template_item(inventory_item_id="inv-1")},
+            today=date.today(),
         )
         assert items[0]["status"] == "fail"
         assert items[0]["is_expired"] is True
         assert items[0]["expiration_date"] == YESTERDAY
         assert (failed, overall) == (1, "fail")
+
+    def test_a_replacement_clears_an_unlinked_date_lines_auto_fail(self, service):
+        # The crew swapped the expired unit for one off the shelf and read its
+        # date; that is the unit aboard now, so the line passes. Validation
+        # has already accepted it, which is what writes the key.
+        items = [
+            {
+                "template_item_id": "ti-1",
+                "status": "pass",
+                "expiration_found": NEXT_YEAR,
+                _REPLACEMENT_DATE: NEXT_YEAR,
+            }
+        ]
+        _, _, failed, overall = service._compute_check_status(
+            items, {"ti-1": _template_item()}, today=date.today()
+        )
+        assert items[0]["status"] == "pass"
+        assert items[0]["is_expired"] is False
+        assert items[0]["expiration_date"] == NEXT_YEAR
+        assert (failed, overall) == (0, "pass")
 
     def test_observed_expiration_is_ignored_for_in_date_template(self, service):
         """Inventory-backed expiration remains authoritative."""
@@ -165,7 +217,11 @@ class TestComputeCheckStatus:
         ]
         _, _, failed, overall = service._compute_check_status(
             items,
-            {"ti-1": _template_item(expiration_date=NEXT_YEAR)},
+            {
+                "ti-1": _template_item(
+                    expiration_date=NEXT_YEAR, inventory_item_id="inv-1"
+                )
+            },
             today=date.today(),
         )
         assert items[0]["status"] == "pass"
@@ -304,8 +360,10 @@ class TestCreateCheckItems:
 
         assert tmpl_item.quantity_on_truck is None
 
-    async def test_submitted_lot_metadata_is_not_persisted(self, service, mock_db):
-        tmpl_item = _template_item()
+    async def test_submitted_lot_metadata_is_not_persisted_on_a_linked_line(
+        self, service, mock_db
+    ):
+        tmpl_item = _template_item(inventory_item_id="inv-1")
         items_data = [
             {
                 "template_item_id": "ti-1",
@@ -1381,15 +1439,23 @@ class TestItemDeployments:
 
         rows = MagicMock()
         rows.all.return_value = [(item, compartment_name, template)]
+        # The checklist nests Compartment 1 inside the Driver Side.
+        item.compartment_id = "comp-1"
+        compartments = MagicMock()
+        compartments.all.return_value = [
+            ("comp-1", "Compartment 1", "comp-0"),
+            ("comp-0", "Driver Side", None),
+        ]
         names = MagicMock()
         names.all.return_value = [("app-1", "Engine 1")]
-        mock_db.execute = AsyncMock(side_effect=[rows, names])
+        mock_db.execute = AsyncMock(side_effect=[rows, compartments, names])
 
         result = await service.get_item_deployments("inv-1", "org-1")
 
         assert len(result) == 1
         assert result[0]["apparatus_name"] == "Engine 1"
         assert result[0]["compartment_name"] == "Compartment 1"
+        assert result[0]["compartment_path"] == ["Driver Side", "Compartment 1"]
         assert result[0]["lot_number"] == "LOT-2"
         assert result[0]["is_expired"] is True
 
@@ -1402,7 +1468,9 @@ class TestItemDeployments:
 
         rows = MagicMock()
         rows.all.return_value = [(item, "Compartment 1", template)]
-        mock_db.execute = AsyncMock(side_effect=[rows])
+        compartments = MagicMock()
+        compartments.all.return_value = []
+        mock_db.execute = AsyncMock(side_effect=[rows, compartments])
 
         result = await service.get_item_deployments("inv-1", "org-1")
 

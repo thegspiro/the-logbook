@@ -9,14 +9,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGet = vi.fn();
+const mockPost = vi.fn();
 
 vi.mock('./apiClient', () => ({
   default: {
     get: (...args: unknown[]) => mockGet(...args) as unknown,
+    post: (...args: unknown[]) => mockPost(...args) as unknown,
   },
 }));
 
-import { LIST_ALL_PAGE_SIZE, memberStatusService } from './adminServices';
+import { LIST_ALL_PAGE_SIZE, integrationsService, memberStatusService } from './adminServices';
 
 const rows = (prefix: string, count: number) => Array.from({ length: count }, (_, i) => ({ id: `${prefix}-${i}` }));
 
@@ -74,5 +76,37 @@ describe.each([
 
     await expect(memberStatusService[method]()).resolves.toEqual([]);
     expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('integrationsService.linkExistingGoogleMembers', () => {
+  const url = '/integrations/google-workspace/link-existing';
+
+  beforeEach(() => {
+    mockPost.mockReset();
+    mockPost.mockResolvedValue({ data: { applied: false, linked: 2 } });
+  });
+
+  it('previews when given no count', async () => {
+    await integrationsService.linkExistingGoogleMembers();
+    expect(mockPost).toHaveBeenCalledWith(url, null, { params: { apply: false } });
+  });
+
+  it('applies exactly the confirmed count, even when it is zero', async () => {
+    await integrationsService.linkExistingGoogleMembers(0);
+    expect(mockPost).toHaveBeenCalledWith(url, null, { params: { apply: true, expected: 0 } });
+  });
+});
+
+describe('integrationsService.getGoogleWorkspaceAttention', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it('reads the list from the attention endpoint', async () => {
+    mockGet.mockResolvedValue({ data: { items: [{ user_id: 'u1' }] } });
+    const items = await integrationsService.getGoogleWorkspaceAttention();
+    expect(mockGet).toHaveBeenCalledWith('/integrations/google-workspace/attention');
+    expect(items).toEqual([{ user_id: 'u1' }]);
   });
 });

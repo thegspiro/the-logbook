@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor, act } from '@testing-library/react';
+import { screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter, mockQRCheckInData, createMockApiError } from '../test/utils';
 import EventQRCodePage from './EventQRCodePage';
@@ -384,17 +384,20 @@ describe('EventQRCodePage', () => {
   });
 
   describe('Navigation', () => {
-    it('should display back to event link', async () => {
+    // The trail test renders at the page's own URL; later suites assume none.
+    afterEach(() => {
+      window.history.replaceState({}, '', '/');
+    });
+
+    it('should trail back to the event', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
+      // The trail starts from the section the URL sits under.
+      window.history.replaceState({}, '', '/events/1/qr-code');
 
       renderWithRouter(<EventQRCodePage />);
 
-      let backLink!: HTMLElement;
-      await waitFor(() => {
-        backLink = screen.getByRole('link', { name: /back to event/i });
-        expect(backLink).toBeInTheDocument();
-      });
-      expect(backLink).toHaveAttribute('href', '/events/1');
+      const trail = await screen.findByRole('navigation', { name: /breadcrumb/i });
+      expect(within(trail).getByRole('link', { name: 'Test Event' })).toHaveAttribute('href', '/events/1');
     });
   });
 

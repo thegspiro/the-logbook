@@ -134,6 +134,8 @@ class TestIntegrationToDict:
             "last_error",
             "last_error_at",
             "consecutive_error_count",
+            "credential_days_left",
+            "credential_expiring",
             "health",
             "supports_sync",
             "created_at",
@@ -175,6 +177,17 @@ class TestValidateConfig:
         config = {"zone_id": "invalid"}
         with pytest.raises(HTTPException):
             _validate_config("nws-weather", config)
+
+    def test_ical_takes_event_types_only(self):
+        # include_shifts was accepted and stored but nothing read it, so a
+        # department could switch on shifts in its feed and get none. The
+        # department feed carries published events; each member's shifts come
+        # from their own feed. The key is now refused rather than kept inert.
+        assert _validate_config("ical", {"included_event_types": ["training"]}) == {
+            "included_event_types": ["training"]
+        }
+        with pytest.raises(HTTPException):
+            _validate_config("ical", {"include_shifts": True})
 
     def test_unknown_type_passes_through(self):
         config = {"any_key": "any_value"}

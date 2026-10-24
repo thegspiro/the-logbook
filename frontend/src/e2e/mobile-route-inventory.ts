@@ -61,6 +61,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/public/minutes',
+    source: 'src/App.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/public/minutes/:copyId',
+    source: 'src/App.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/finance/approvals/:token',
     source: 'src/App.tsx',
     coverage: 'exempt',
@@ -362,6 +374,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/locations/qr-codes',
+    source: 'src/modules/facilities/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/locations/card-readers',
     source: 'src/modules/facilities/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',
@@ -958,6 +976,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/members/admin/id-cards',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/admin/members',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',
@@ -994,6 +1018,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     coverage: 'exempt',
     detail:
       'outline list built from the shared card, btn-secondary and Modal utilities; /minutes is the representative module route',
+  },
+  {
+    path: '/minutes/settings',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'settings screen built on the shared SettingsLayout, form-input and btn-primary utilities; /minutes is the representative module route',
   },
   {
     path: '/minutes/:minutesId',
@@ -1353,6 +1384,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/inventory/admin/nfc/enroll',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/inventory/admin/nfc/tags',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',

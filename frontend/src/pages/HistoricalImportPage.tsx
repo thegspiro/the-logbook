@@ -246,19 +246,25 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
         <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
           <div>
             <p className="text-theme-text-primary mb-1 font-medium">Required Columns</p>
+            {/* Bold primary text, not red: high contrast paints this card #111111,
+                where red-800 falls short of 7:1 (mobile-accessibility.spec.ts). */}
             <ul className="text-theme-text-muted space-y-0.5">
               {matchBy === 'email' && (
                 <li>
-                  <code className="text-red-800 dark:text-red-400">email</code> - Member email for matching
+                  <code className="text-theme-text-primary font-semibold">email</code> - Member email for matching
                 </li>
               )}
               {matchBy === 'membership_number' && (
                 <li>
-                  <code className="text-red-800 dark:text-red-400">membership_number</code> - Membership number
+                  <code className="text-theme-text-primary font-semibold">membership_number</code> - Membership number
                 </li>
               )}
               <li>
-                <code className="text-red-800 dark:text-red-400">course_name</code> - Training course title
+                <code className="text-theme-text-primary font-semibold">course_name</code> - Training course title
+              </li>
+              <li>
+                <code className="text-theme-text-primary font-semibold">completion_date</code> - When it was completed;
+                a row without one is not imported
               </li>
             </ul>
           </div>
@@ -266,7 +272,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
             <p className="text-theme-text-primary mb-1 font-medium">Optional Columns</p>
             <ul className="text-theme-text-muted space-y-0.5">
               <li>
-                <code>completion_date</code>, <code>hours</code>, <code>training_type</code>
+                <code>hours</code>, <code>training_type</code>
               </li>
               <li>
                 <code>certification_number</code>, <code>expiration_date</code>
@@ -422,7 +428,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                       mapping.action === action
                         ? action === 'skip'
                           ? 'bg-theme-surface-hover border-theme-surface-border text-theme-text-muted'
-                          : 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
+                          : 'border-red-500 bg-red-600/20 text-red-800 dark:text-red-400'
                         : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
                     }`}
                   >
@@ -617,7 +623,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
             onClick={() => setFilterType(f)}
             className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
               filterType === f
-                ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
+                ? 'border-red-500 bg-red-600/20 text-red-800 dark:text-red-400'
                 : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
             }`}
           >
@@ -902,7 +908,7 @@ const HistoricalImportPage: React.FC = () => {
   }, []);
 
   return (
-    // Rendered only as the Import History tab of Training Administration,
+    // Rendered only as the Import Past Training tab of Training Administration,
     // whose content column already supplies the side padding and width.
     <div className="py-6">
       <div className="mb-6">

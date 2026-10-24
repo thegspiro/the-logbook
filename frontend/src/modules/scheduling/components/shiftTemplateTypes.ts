@@ -326,6 +326,8 @@ export interface ShiftPattern {
   end_date?: string;
   assigned_members?: unknown;
   is_active: boolean;
+  /** Inactive templates the pattern names; non-empty means it is not generating. */
+  inactive_templates?: string[];
   created_at: string;
   updated_at: string;
   created_by?: string;

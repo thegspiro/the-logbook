@@ -22,6 +22,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
 from app.models.finance import (
     ApprovalEntityType,
@@ -47,6 +48,7 @@ from app.schemas.finance import (
     ApprovalChainStepResponse,
     ApprovalChainStepUpdate,
     ApprovalChainUpdate,
+    ApprovalRoutePreviewResponse,
     ApprovalStepRecordResponse,
     ApproverCoverageResponse,
     BudgetAmendmentCreate,
@@ -84,6 +86,7 @@ from app.schemas.finance import (
     DuesSummaryResponse,
     ExpenseLineItemCreate,
     ExpenseLineItemResponse,
+    ExpenseLineItemUpdate,
     ExpenseReportCreate,
     ExpenseReportResponse,
     ExpenseReportUpdate,
@@ -122,6 +125,9 @@ from app.schemas.finance import (
     PurchaseRequestCreate,
     PurchaseRequestResponse,
     PurchaseRequestUpdate,
+    QuickBooksChartResponse,
+    ReimbursementCheckCreate,
+    ReimbursementReportCreate,
     StartFromLastYearResponse,
     UnroutedApprovalResponse,
 )
@@ -156,18 +162,26 @@ from app.services.finance_service import (
     FinanceEntityNotFoundError,
     FinanceService,
     ManualApprovalConflictError,
+    ReimportConfirmationRequired,
 )
 from app.services.functional_expenses import FunctionalClassifier
 from app.services.restricted_funds import (
+    KIND_CHECK,
+    KIND_EXPENSE,
+    KIND_PURCHASE,
     charges_of,
     fund_balances,
     fund_names,
     shortfalls,
 )
+from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.delete_outcome import set_delete_outcome
 from app.utils.finance_settings import load_finance_settings
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
+from app.utils.quickbooks_chart import MAX_CHART_FILE_BYTES, parse_chart_of_accounts
+from app.utils.upload_limits import read_upload_limited
 
 router = APIRouter()
 
@@ -713,12 +727,22 @@ async def update_budget_category(
 @router.delete("/budget-categories/{cat_id}", status_code=204)
 async def delete_budget_category(
     cat_id: str,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
+    """Delete a budget category, or deactivate it while anything uses it.
+
+    A category with budget lines (in any fiscal year), approval chains or
+    budget requests is deactivated instead, so that history keeps it. The
+    response stays 204 either way; ``X-Delete-Outcome`` says which happened.
+    """
     service = FinanceService(db)
     try:
-        await service.delete_budget_category(cat_id, str(current_user.organization_id))
+        deleted = await service.delete_budget_category(
+            cat_id, str(current_user.organization_id)
+        )
+        set_delete_outcome(response, deleted)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -920,9 +944,10 @@ async def list_budget_options(
 
     **Requires permission: finance.request, finance.view or finance.manage**
 
-    Each line is a label (its category, plus its station when it has one)
-    and the amount remaining. That is all a member choosing a line needs, and
-    all they see: the budget pages themselves stay behind the view grant.
+    Each line is a label (its category, plus its station when it has one).
+    The amount remaining is added only for ``finance.view`` / ``finance.manage``
+    holders and for the owner of that line; every other member gets the label
+    alone. The budget pages themselves stay behind the view grant.
     """
     # Registered before `/budgets/{budget_id}` for the reason
     # get_budget_summary gives.
@@ -931,6 +956,9 @@ async def list_budget_options(
         str(current_user.organization_id),
         fiscal_year_id,
         charger_id=_requester_scope(current_user),
+        amounts_for=str(current_user.id),
+        sees_all_amounts=user_has_permission(current_user, "finance.view")
+        or user_has_permission(current_user, "finance.manage"),
     )
 
 
@@ -1802,6 +1830,43 @@ async def preview_approval_chain(
 
 
 @router.get(
+    "/approval-chains/route-preview", response_model=ApprovalRoutePreviewResponse
+)
+async def preview_request_route(
+    entity_type: str = Query(...),
+    amount: Decimal = Query(..., ge=0, max_digits=12, decimal_places=2),
+    budget_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
+):
+    """
+    Who a request would wait on if it were submitted now
+
+    For the member raising a purchase request, expense report or check
+    request: the chain it would go to, each step's approver as the request's
+    own timeline would name them, which steps the amount auto-approves, and
+    whether the dual-approval threshold applies. With no chain, a finance
+    approver decides by hand. Unlike ``/approval-chains/preview`` it returns
+    no approver configuration. Registered before ``/approval-chains/{chain_id}``
+    for the reason given on that route.
+
+    **Authentication required**
+    **Requires permission: finance.request, finance.view or finance.manage**
+    """
+    service = FinanceService(db)
+    try:
+        return await service.preview_request_route(
+            str(current_user.organization_id), entity_type, amount, budget_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get(
     "/approval-chains/approver-coverage",
     response_model=list[ApproverCoverageResponse],
 )
@@ -1851,11 +1916,27 @@ async def update_approval_chain(
 ):
     service = FinanceService(db)
     try:
-        return await service.update_approval_chain(
+        updates = data.model_dump(exclude_unset=True)
+        chain = await service.update_approval_chain(
             chain_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
+            **updates,
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_updated",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "name": chain.name,
+                "fields": sorted(updates),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return chain
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1872,7 +1953,19 @@ async def delete_approval_chain(
 ):
     service = FinanceService(db)
     try:
-        await service.delete_approval_chain(chain_id, str(current_user.organization_id))
+        name = await service.delete_approval_chain(
+            chain_id, str(current_user.organization_id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_deleted",
+            event_category="finance",
+            severity="info",
+            event_data={"chain_id": chain_id, "name": name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1894,11 +1987,26 @@ async def add_chain_step(
 ):
     service = FinanceService(db)
     try:
-        return await service.add_chain_step(
+        step = await service.add_chain_step(
             chain_id,
             str(current_user.organization_id),
             **data.model_dump(),
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_added",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "step_id": str(step.id),
+                "name": step.name,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return step
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1920,12 +2028,29 @@ async def update_chain_step(
 ):
     service = FinanceService(db)
     try:
-        return await service.update_chain_step(
+        updates = data.model_dump(exclude_unset=True)
+        step = await service.update_chain_step(
             step_id,
             chain_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
+            **updates,
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_updated",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "step_id": step_id,
+                "name": step.name,
+                "fields": sorted(updates),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return step
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1943,8 +2068,18 @@ async def delete_chain_step(
 ):
     service = FinanceService(db)
     try:
-        await service.delete_chain_step(
+        name = await service.delete_chain_step(
             step_id, chain_id, str(current_user.organization_id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_deleted",
+            event_category="finance",
+            severity="info",
+            event_data={"chain_id": chain_id, "step_id": step_id, "name": name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
         )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -2592,6 +2727,13 @@ async def set_check_request_functional_class(
                 "accounts for it"
             ),
         )
+    if cr.expense_report_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A reimbursement check is classified by the expense report it pays"
+            ),
+        )
     await _set_functional_class(
         db, cr, data.functional_class, current_user, "check_request"
     )
@@ -2918,6 +3060,18 @@ async def deny_step(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+async def _with_reimbursement_links(
+    service: FinanceService, payload, kind: str, entity, org_id: str
+):
+    """The response, with the other records on its reimbursement path
+    (app/services/finance_reimbursement.py)."""
+    for field, value in (
+        await service.reimbursement_links(kind, entity, org_id)
+    ).items():
+        setattr(payload, field, value)
+    return payload
+
+
 # ============================================
 # Purchase Requests
 # ============================================
@@ -3101,13 +3255,16 @@ async def get_purchase_request(
     )
     if not pr:
         raise HTTPException(status_code=404, detail="Purchase request not found")
-    return await _with_approval_steps(
+    payload = await _with_approval_steps(
         service,
         PurchaseRequestResponse.model_validate(pr),
         ApprovalEntityType.PURCHASE_REQUEST,
         pr.id,
         str(current_user.organization_id),
         current_user,
+    )
+    return await _with_reimbursement_links(
+        service, payload, KIND_PURCHASE, pr, str(current_user.organization_id)
     )
 
 
@@ -3180,13 +3337,16 @@ async def submit_purchase_request(
         # With its steps, as the detail endpoint returns it: the screen shows
         # this response as the request, and without them its Approval Timeline
         # read "This request has no approval steps" until a reload.
-        return await _with_approval_steps(
+        payload = await _with_approval_steps(
             service,
             PurchaseRequestResponse.model_validate(pr),
             ApprovalEntityType.PURCHASE_REQUEST,
             pr.id,
             str(current_user.organization_id),
             current_user,
+        )
+        return await _with_reimbursement_links(
+            service, payload, KIND_PURCHASE, pr, str(current_user.organization_id)
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -3306,6 +3466,62 @@ async def cancel_purchase_request(
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/purchase-requests/{pr_id}/reimbursement-report",
+    response_model=ExpenseReportResponse,
+    status_code=201,
+)
+async def create_reimbursement_report(
+    pr_id: str,
+    data: ReimbursementReportCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Claim back an approved purchase the requester paid for themselves.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Raises a draft expense report linked to the request, with one line copied
+    from it, for the requester to attach a receipt to and submit. Only the
+    member who raised the request may; another member's request is a 404 to a
+    caller without the manage grant.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        er = await service.create_reimbursement_report(
+            pr_id,
+            org_id,
+            str(current_user.id),
+            requester_scope=_requester_scope(current_user),
+            **data.model_dump(exclude_unset=True),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.reimbursement_report_created",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "report_number": er.report_number,
+                "purchase_request_id": pr_id,
+                "amount": str(er.total_amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return await _with_reimbursement_links(
+            service, ExpenseReportResponse.model_validate(er), KIND_EXPENSE, er, org_id
+        )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -3433,13 +3649,16 @@ async def get_expense_report(
     """
     service = FinanceService(db)
     er = await _readable_expense_report(service, er_id, current_user)
-    return await _with_approval_steps(
+    payload = await _with_approval_steps(
         service,
         ExpenseReportResponse.model_validate(er),
         ApprovalEntityType.EXPENSE_REPORT,
         er.id,
         str(current_user.organization_id),
         current_user,
+    )
+    return await _with_reimbursement_links(
+        service, payload, KIND_EXPENSE, er, str(current_user.organization_id)
     )
 
 
@@ -3513,6 +3732,119 @@ async def add_expense_line_item(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+@router.put(
+    "/expense-reports/{er_id}/items/{item_id}",
+    response_model=ExpenseLineItemResponse,
+)
+async def update_expense_line_item(
+    er_id: str,
+    item_id: str,
+    data: ExpenseLineItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Edit a line on a draft expense report.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only on the caller's own report. The line is
+    found through its report, which is org-scoped.
+    """
+    service = FinanceService(db)
+    try:
+        return await service.update_expense_line_item(
+            er_id,
+            item_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
+            **data.model_dump(exclude_unset=True),
+        )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.delete("/expense-reports/{er_id}/items/{item_id}", status_code=204)
+async def delete_expense_line_item(
+    er_id: str,
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Remove a line from a draft expense report.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only from the caller's own report.
+    """
+    service = FinanceService(db)
+    try:
+        await service.delete_expense_line_item(
+            er_id,
+            item_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
+        )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/expense-reports/{er_id}/cancel",
+    response_model=ExpenseReportResponse,
+)
+async def cancel_expense_report(
+    er_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Withdraw or cancel an expense report.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant this is the member withdrawing their own draft;
+    anything further along is the finance office's to cancel.
+    """
+    service = FinanceService(db)
+    try:
+        er = await service.cancel_expense_report(
+            er_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.expense_report_cancelled",
+            event_category="finance",
+            severity="info",
+            event_data={"report_number": er.report_number},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return er
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
 @router.post(
     "/expense-reports/{er_id}/submit",
     response_model=ExpenseReportResponse,
@@ -3538,13 +3870,16 @@ async def submit_expense_report(
             requester_id=_requester_scope(current_user),
         )
         # With its steps, for the reason given in submit_purchase_request.
-        return await _with_approval_steps(
+        payload = await _with_approval_steps(
             service,
             ExpenseReportResponse.model_validate(er),
             ApprovalEntityType.EXPENSE_REPORT,
             er.id,
             str(current_user.organization_id),
             current_user,
+        )
+        return await _with_reimbursement_links(
+            service, payload, KIND_EXPENSE, er, str(current_user.organization_id)
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -3587,6 +3922,61 @@ async def mark_expense_paid(
             username=current_user.username,
         )
         return er
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/expense-reports/{er_id}/reimbursement-check",
+    response_model=CheckRequestResponse,
+    status_code=201,
+)
+async def request_reimbursement_check(
+    er_id: str,
+    data: ReimbursementCheckCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Pay an approved expense report by check.
+
+    **Requires permission: finance.manage**
+
+    Raises a check request payable to the member for what the report still
+    owes them, in the member's name, and submits it through the check-request
+    approval chain. Issuing that check marks the report paid.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    try:
+        cr = await service.request_reimbursement_check(
+            er_id, org_id, **data.model_dump(exclude_unset=True)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.reimbursement_check_requested",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "request_number": cr.request_number,
+                "expense_report_id": er_id,
+                "amount": str(cr.amount),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        payload = await _with_approval_steps(
+            service,
+            CheckRequestResponse.model_validate(cr),
+            ApprovalEntityType.CHECK_REQUEST,
+            cr.id,
+            org_id,
+            current_user,
+        )
+        return await _with_reimbursement_links(service, payload, KIND_CHECK, cr, org_id)
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -3680,13 +4070,16 @@ async def get_check_request(
     )
     if not cr:
         raise HTTPException(status_code=404, detail="Check request not found")
-    return await _with_approval_steps(
+    payload = await _with_approval_steps(
         service,
         CheckRequestResponse.model_validate(cr),
         ApprovalEntityType.CHECK_REQUEST,
         cr.id,
         str(current_user.organization_id),
         current_user,
+    )
+    return await _with_reimbursement_links(
+        service, payload, KIND_CHECK, cr, str(current_user.organization_id)
     )
 
 
@@ -3748,7 +4141,7 @@ async def submit_check_request(
             requester_id=_requester_scope(current_user),
         )
         # With its steps, for the reason given in submit_purchase_request.
-        return await _with_approval_steps(
+        payload = await _with_approval_steps(
             service,
             CheckRequestResponse.model_validate(cr),
             ApprovalEntityType.CHECK_REQUEST,
@@ -3756,10 +4149,57 @@ async def submit_check_request(
             str(current_user.organization_id),
             current_user,
         )
+        return await _with_reimbursement_links(
+            service, payload, KIND_CHECK, cr, str(current_user.organization_id)
+        )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/check-requests/{cr_id}/cancel",
+    response_model=CheckRequestResponse,
+)
+async def cancel_check_request(
+    cr_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Withdraw or cancel a check request that has not been issued.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant this is the member withdrawing their own draft;
+    anything further along is the finance office's to cancel. An issued
+    check is voided instead.
+    """
+    service = FinanceService(db)
+    try:
+        cr = await service.cancel_check_request(
+            cr_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.check_request_cancelled",
+            event_category="finance",
+            severity="info",
+            event_data={"request_number": cr.request_number},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return cr
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -4446,6 +4886,7 @@ async def generate_export(
             data.date_range_end,
             data.file_format,
             include_exported=data.include_exported,
+            confirm_reimport=data.confirm_reimport,
         )
         # Named for the department's calendar days it covers, so a month's
         # file does not overwrite the last one in the treasurer's downloads.
@@ -4460,6 +4901,12 @@ async def generate_export(
             content=csv_stream,
             media_type="text/csv",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except ReimportConfirmationRequired as e:
+        raise CodedHTTPException(
+            status_code=409,
+            detail=str(e),
+            error_code=ErrorCode.FIN_REIMPORT_CONFIRMATION_REQUIRED,
         )
     except (BudgetLimitExceededError, ExportInProgressError) as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -4477,6 +4924,161 @@ async def list_export_logs(
 ):
     service = FinanceService(db)
     return await service.list_export_logs(str(current_user.organization_id), pagination)
+
+
+@router.post("/export/logs/{log_id}/imported", response_model=ExportLogResponse)
+async def confirm_export_imported(
+    log_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Record that an export's file was imported into QuickBooks.
+
+    **Requires permission: finance.manage**
+
+    Only a complete export can be confirmed (400 otherwise). Once confirmed,
+    sending its payments again is refused (409, ``LB-FIN-001``) unless the
+    request says ``confirmReimport``.
+    """
+    org_id = str(current_user.organization_id)
+    service = FinanceService(db)
+    try:
+        await service.confirm_export_imported(org_id, log_id, str(current_user.id))
+        await log_audit_event(
+            db=db,
+            event_type="finance.export_import_confirmed",
+            event_category="finance",
+            severity="info",
+            event_data={"export_log_id": log_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return await service.get_export_log_row(org_id, log_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.delete("/export/logs/{log_id}/imported", response_model=ExportLogResponse)
+async def withdraw_export_imported(
+    log_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Undo a confirmation that an export was imported into QuickBooks.
+
+    **Requires permission: finance.manage**
+    """
+    org_id = str(current_user.organization_id)
+    service = FinanceService(db)
+    try:
+        await service.withdraw_export_imported(org_id, log_id)
+        await log_audit_event(
+            db=db,
+            event_type="finance.export_import_withdrawn",
+            event_category="finance",
+            severity="info",
+            event_data={"export_log_id": log_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return await service.get_export_log_row(org_id, log_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/export/chart-of-accounts", response_model=QuickBooksChartResponse)
+async def get_chart_of_accounts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """The QuickBooks chart of accounts the export checks names against.
+
+    **Requires permission: finance.manage**
+    """
+    service = FinanceService(db)
+    return await service.get_chart_of_accounts(str(current_user.organization_id))
+
+
+@router.post("/export/chart-of-accounts", response_model=QuickBooksChartResponse)
+async def upload_chart_of_accounts(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Replace the chart of accounts with QuickBooks' Account List report.
+
+    **Requires permission: finance.manage**
+
+    Takes the report as exported from QuickBooks Online (.xlsx or .csv).
+    Once a chart is on file, an export posting to an account it does not
+    list is refused, and readiness reports the account as ``not_in_chart``.
+    """
+    org_id = str(current_user.organization_id)
+    try:
+        raw = await read_upload_limited(file, MAX_CHART_FILE_BYTES)
+    except ValueError:
+        raise HTTPException(
+            status_code=413,
+            detail="The file is larger than an Account List report can be (5 MB).",
+        )
+    # Before parsing, as for every upload (app/services/upload_scanning.py).
+    await reject_if_malicious(
+        db,
+        raw,
+        upload_kind="finance_chart_of_accounts",
+        detected_mime=None,
+        user=current_user,
+    )
+    try:
+        accounts = parse_chart_of_accounts(raw, file.filename or "")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    service = FinanceService(db)
+    try:
+        await service.replace_chart_of_accounts(org_id, str(current_user.id), accounts)
+        await log_audit_event(
+            db=db,
+            event_type="finance.chart_of_accounts_uploaded",
+            event_category="finance",
+            severity="info",
+            event_data={"account_count": len(accounts)},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return await service.get_chart_of_accounts(org_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.delete("/export/chart-of-accounts", status_code=204)
+async def clear_chart_of_accounts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """Remove the uploaded chart of accounts, which stops the name check.
+
+    **Requires permission: finance.manage**
+    """
+    service = FinanceService(db)
+    try:
+        await service.clear_chart_of_accounts(str(current_user.organization_id))
+        await log_audit_event(
+            db=db,
+            event_type="finance.chart_of_accounts_cleared",
+            event_category="finance",
+            severity="info",
+            event_data={},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # ============================================
@@ -4512,7 +5114,10 @@ async def get_dashboard(
 # A requester may still attach while the purchase has not been settled; a
 # finance manager may until the request is closed out.
 _PR_RECEIPT_CLOSED = {PurchaseRequestStatus.DENIED, PurchaseRequestStatus.CANCELLED}
-_PR_RECEIPT_CLOSED_TO_REQUESTER = _PR_RECEIPT_CLOSED | {PurchaseRequestStatus.PAID}
+_PR_RECEIPT_CLOSED_TO_REQUESTER = _PR_RECEIPT_CLOSED | {
+    PurchaseRequestStatus.PAID,
+    PurchaseRequestStatus.REIMBURSED,
+}
 # Line-item receipts are the evidence an approver reviews, so a requester may
 # change them only while the report itself is still editable.
 _ER_RECEIPT_CLOSED = {ExpenseReportStatus.DENIED, ExpenseReportStatus.CANCELLED}

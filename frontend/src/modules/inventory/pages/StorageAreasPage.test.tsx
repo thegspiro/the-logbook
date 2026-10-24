@@ -46,6 +46,10 @@ const mockUpdateStorageArea = vi.fn();
 const mockDeleteStorageArea = vi.fn();
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   locationsService: {
     getLocations: (...a: unknown[]) => mockGetLocations(...a) as unknown,
   },

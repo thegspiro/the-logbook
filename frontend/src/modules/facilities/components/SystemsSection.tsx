@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, Plus, Trash2, Loader2, Pencil, Save } from 'lucide-react';
+import { Archive, Settings, Plus, Loader2, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { FacilitySystemCreate } from '../../../services/facilitiesServices';
@@ -12,6 +12,8 @@ import { enumLabel, SYSTEM_TYPES } from '../types';
 import { inputCls, labelCls, CONDITION_OPTIONS, CONDITION_COLORS } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
+import { formCoercions } from '../../../utils/formValues';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
@@ -102,20 +104,23 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
     }
     setIsSaving(true);
     try {
+      // On edit, a cleared box is sent as null: the update endpoint treats an
+      // omitted key as "keep the stored value".
+      const { text, pick, num } = formCoercions(Boolean(editingSystem));
       const payload: FacilitySystemCreate = {
         facility_id: facilityId,
         name: formData.name.trim(),
         system_type: formData.system_type,
         condition: formData.condition,
+        description: text(formData.description),
+        manufacturer: text(formData.manufacturer),
+        model_number: text(formData.model_number),
+        serial_number: text(formData.serial_number),
+        install_date: pick(formData.install_date),
+        warranty_expiration: pick(formData.warranty_expiration),
+        notes: text(formData.notes),
+        test_frequency_days: num(formData.test_frequency_days),
       };
-      if (formData.description.trim()) payload.description = formData.description.trim();
-      if (formData.manufacturer.trim()) payload.manufacturer = formData.manufacturer.trim();
-      if (formData.model_number.trim()) payload.model_number = formData.model_number.trim();
-      if (formData.serial_number.trim()) payload.serial_number = formData.serial_number.trim();
-      if (formData.install_date) payload.install_date = formData.install_date;
-      if (formData.warranty_expiration) payload.warranty_expiration = formData.warranty_expiration;
-      if (formData.notes.trim()) payload.notes = formData.notes.trim();
-      if (formData.test_frequency_days) payload.test_frequency_days = Number(formData.test_frequency_days);
 
       if (editingSystem) {
         await facilitiesService.updateSystem(editingSystem.id, payload);
@@ -136,19 +141,21 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
   const handleDelete = async (sys: FacilitySystem) => {
     if (
       !(await confirm({
-        title: 'Delete system',
-        message: `Delete "${sys.name}"? This cannot be undone.`,
-        confirmLabel: 'Delete',
+        // The endpoint archives (`delete_system` sets is_active false and
+        // stamps archived_at); the record and its history are kept.
+        title: 'Archive system',
+        message: `Archive "${sys.name}"? It leaves this facility's systems list, but its record and history are kept.`,
+        confirmLabel: 'Archive',
         cancelLabel: 'Keep it',
       }))
     )
       return;
     try {
       await facilitiesService.deleteSystem(sys.id);
-      toast.success('System deleted');
+      toast.success('System archived');
       void loadSystems();
-    } catch {
-      toast.error('Failed to delete system');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to archive system'));
     }
   };
 
@@ -356,9 +363,9 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
                           void handleDelete(sys);
                         }}
                         className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                        aria-label={`Delete ${sys.name}`}
+                        aria-label={`Archive ${sys.name}`}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Archive className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>

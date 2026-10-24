@@ -29,6 +29,10 @@ vi.mock('../../admin-hours/services/api', () => ({
   adminHoursCategoryService: { list: (...args: unknown[]) => mockListCategories(...args) as unknown },
 }));
 
+vi.mock('../../../components/KioskSessionCard', () => ({
+  KioskSessionCard: () => <div data-testid="kiosk-session-card" />,
+}));
+
 vi.mock('../../../hooks/useIdleTimer', () => ({
   signalUserActivity: (...args: unknown[]) => mockSignalUserActivity(...args) as unknown,
 }));
@@ -121,6 +125,11 @@ describe('CheckInStationPage', () => {
   it("offers today's unfinalized shifts to check into", async () => {
     renderWithRouter(<CheckInStationPage />);
     expect(await screen.findByRole('option', { name: /E4/ })).toBeInTheDocument();
+  });
+
+  it('offers the kiosk session switch', async () => {
+    renderWithRouter(<CheckInStationPage />);
+    expect(await screen.findByTestId('kiosk-session-card')).toBeInTheDocument();
   });
 
   it('will not arm a reader before a target is chosen', async () => {
@@ -365,8 +374,8 @@ describe('CheckInStationPage', () => {
     // every day after. One request per day, not one widened range — the
     // endpoint pages at 100 and orders by shift_date ascending, so a busy
     // yesterday would otherwise fill the single page and hide today entirely.
-    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: YESTERDAY, end_date: YESTERDAY });
-    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: TODAY, end_date: TODAY });
+    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: YESTERDAY, end_date: YESTERDAY }, undefined);
+    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: TODAY, end_date: TODAY }, undefined);
   });
 
   it('drops a shift an officer has already finalized', async () => {

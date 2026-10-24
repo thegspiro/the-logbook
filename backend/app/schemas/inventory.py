@@ -19,7 +19,13 @@ from pydantic import (
     model_validator,
 )
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import (
+    FLOAT32_MAX,
+    INT32_MAX,
+    INT32_MIN,
+    MONEY_MAX,
+)
 from app.utils.garment_styles import FIT_VALUES, first_conflicting_axis
 from app.utils.item_aliases import normalize_aliases
 from app.utils.label_renderer import SHEET_LABELS_PER_PAGE, SYMBOLOGY_CODE128
@@ -30,6 +36,25 @@ _response_config = ConfigDict(from_attributes=True)
 # reasons on request schemas to prevent oversized payloads (DB bloat / abuse).
 # Applied to request schemas only; response schemas mirror stored data unchanged.
 FreeText = Annotated[str, StringConstraints(max_length=2000)]
+
+# A name that is only spaces is not a name: it stores, lists as a blank row, and
+# cannot be found or told apart. Trimmed before the length check so "   " is
+# refused the same way "" is.
+EntityName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+]
+
+
+def _blank_identifier_to_none(value: Optional[str]) -> Optional[str]:
+    """Trim an item identifier; a blank one means "none".
+
+    serial_number, asset_tag and barcode are unique per organization, and two
+    items each carrying "" collide on that constraint exactly as two carrying
+    the same real tag would.
+    """
+    if value is None:
+        return None
+    return value.strip() or None
 
 
 def _validate_external_website(value: Optional[str]) -> Optional[str]:
@@ -424,14 +449,14 @@ class VendorMergeResult(UTCResponseBase):
 class InventoryCategoryBase(BaseModel):
     """Base inventory category schema"""
 
-    name: str = Field(..., min_length=1, max_length=255)
+    name: EntityName
     description: Optional[FreeText] = None
     item_type: ItemTypeLiteral
     parent_category_id: Optional[UUID] = None
     requires_assignment: bool = False
     requires_serial_number: bool = False
     requires_maintenance: bool = False
-    low_stock_threshold: Optional[int] = Field(None, ge=0)
+    low_stock_threshold: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     nfpa_tracking_enabled: bool = False
     allow_self_checkout: bool = False
     self_checkout_loan_days: Optional[int] = Field(None, ge=1, le=365)
@@ -445,14 +470,14 @@ class InventoryCategoryCreate(InventoryCategoryBase):
 class InventoryCategoryUpdate(BaseModel):
     """Schema for updating an inventory category"""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    name: Optional[EntityName] = None
     description: Optional[FreeText] = None
     item_type: Optional[ItemTypeLiteral] = None
     parent_category_id: Optional[UUID] = None
     requires_assignment: Optional[bool] = None
     requires_serial_number: Optional[bool] = None
     requires_maintenance: Optional[bool] = None
-    low_stock_threshold: Optional[int] = Field(None, ge=0)
+    low_stock_threshold: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     nfpa_tracking_enabled: Optional[bool] = None
     allow_self_checkout: Optional[bool] = None
     self_checkout_loan_days: Optional[int] = Field(None, ge=1, le=365)
@@ -471,8 +496,121 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     created_by: Optional[UUID] = None
     # Override: DB column is "extra_data"; SQLAlchemy reserves "metadata" as a class attr
     metadata: Optional[Dict[str, Any]] = Field(None, validation_alias="extra_data")
+    # Active items filed here. Set by the medical category list only; other
+    # lists leave it empty rather than report a count they did not take.
+    item_count: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class UncountedPosition(BaseModel):
+    """A truck position whose stock is assumed at target: nobody counted it."""
+
+    template_item_id: str
+    # The vehicle, when the checklist names one; None for a template written
+    # for an apparatus type, which has no single truck to open.
+    apparatus_id: Optional[str] = None
+    where: str
+
+
+class MedicalExpiringStockRow(BaseModel):
+    """A medical supply expiring soon, on a shelf or aboard an apparatus.
+
+    ``where`` is the storage path for a shelf lot and the checklist's own
+    naming ("Medic 1 › Main Compartment › Jump Bag") for truck stock, so the
+    one list says where to go to pull it.
+    """
+
+    key: str
+    location: Literal["shelf", "apparatus"]
+    inventory_item_id: str
+    item_name: Optional[str] = None
+    item_size: Optional[str] = None
+    # The shelf lot, or the checklist position the units sit in.
+    lot_id: Optional[str] = None
+    template_item_id: Optional[str] = None
+    # The apparatus the units are aboard, when the checklist names one.
+    apparatus_id: Optional[str] = None
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_until_expiration: Optional[int] = None
+    quantity: int = 0
+    where: Optional[str] = None
+    # Under an active recall of its lot number: pull it, whatever its date.
+    recalled: bool = False
+
+
+class LotRecallCreate(BaseModel):
+    """Record a manufacturer's recall of one lot number of one supply."""
+
+    inventory_item_id: str = Field(..., min_length=1, max_length=36)
+    lot_number: str = Field(..., min_length=1, max_length=100)
+    reason: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("lot_number")
+    @classmethod
+    def _lot_number_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Enter the recalled lot number")
+        return value.strip()
+
+
+class LotRecallLift(BaseModel):
+    """Why a recall no longer applies (entered in error, or cleared)."""
+
+    note: str = Field(..., min_length=1, max_length=1000)
+
+    @field_validator("note")
+    @classmethod
+    def _note_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Say why the recall is lifted")
+        return value.strip()
+
+
+class LotRecallResponse(BaseModel):
+    """A recall, with what of the lot is still to be pulled."""
+
+    id: str
+    inventory_item_id: str
+    item_name: Optional[str] = None
+    item_size: Optional[str] = None
+    lot_number: str
+    reason: Optional[str] = None
+    recalled_at: Optional[datetime] = None
+    lifted_at: Optional[datetime] = None
+    lift_note: Optional[str] = None
+    # Units still carrying the number: in the stock room, and aboard trucks.
+    units_on_shelf: int = 0
+    units_aboard: int = 0
+
+
+class MedicalStorageRoom(BaseModel):
+    """A room or place a supply can be filed under."""
+
+    id: str
+    name: str
+
+
+class MedicalStorageAreaOption(BaseModel):
+    """An active storage area, with its room and readable path resolved."""
+
+    id: str
+    name: str
+    label: Optional[str] = None
+    storage_type: Optional[str] = None
+    parent_id: Optional[str] = None
+    location_id: Optional[str] = None
+    location_name: Optional[str] = None
+    # "Cabinet B › Shelf 2": the area's own name last.
+    path: str
+
+
+class MedicalStorageOptionsResponse(BaseModel):
+    """What the medical supply form can file a supply under."""
+
+    rooms: List[MedicalStorageRoom] = Field(default_factory=list)
+    areas: List[MedicalStorageAreaOption] = Field(default_factory=list)
 
 
 class InventoryCategoryDeleteResult(BaseModel):
@@ -538,7 +676,7 @@ class InventoryItemBase(BaseModel):
     """Base inventory item schema"""
 
     category_id: Optional[UUID] = None
-    name: str = Field(..., min_length=1, max_length=255)
+    name: EntityName
     description: Optional[FreeText] = None
     manufacturer: Optional[str] = Field(None, max_length=255)
     model_number: Optional[str] = Field(None, max_length=255)
@@ -547,21 +685,21 @@ class InventoryItemBase(BaseModel):
     asset_tag: Optional[str] = Field(None, max_length=255)
     barcode: Optional[str] = Field(None, max_length=255)
     purchase_date: Optional[date] = None
-    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    purchase_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     purchase_order: Optional[str] = Field(None, max_length=255)
     # Legacy free-text name; `vendor_id` is the tracked link and takes priority
     # in the UI wherever both are set.
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_id: Optional[UUID] = None
     warranty_expiration: Optional[date] = None
-    expected_lifetime_years: Optional[int] = Field(None, ge=0)
-    current_value: Optional[Decimal] = Field(None, ge=0)
+    expected_lifetime_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    current_value: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     replacement_cost: Optional[Decimal] = Field(
-        None, ge=0, description="Cost to charge for lost/damaged item"
+        None, ge=0, le=MONEY_MAX, description="Cost to charge for lost/damaged item"
     )
     size: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=50)
-    weight: Optional[float] = Field(None, ge=0)
+    weight: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     location_id: Optional[UUID] = None
     storage_location: Optional[str] = Field(None, max_length=255)
     storage_area_id: Optional[UUID] = None
@@ -570,11 +708,13 @@ class InventoryItemBase(BaseModel):
     status: ItemStatusLiteral = "available"
     status_notes: Optional[FreeText] = None
     tracking_type: TrackingTypeLiteral = "individual"
-    quantity: int = Field(default=1, ge=0)
+    quantity: int = Field(default=1, ge=0, le=INT32_MAX)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
-    reorder_point: Optional[int] = Field(None, ge=0)
-    inspection_interval_days: Optional[int] = Field(None, ge=0)
-    min_rank_order: Optional[int] = None
+    reorder_point: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    # Kept on the apparatus only; see InventoryItem.apparatus_only.
+    apparatus_only: bool = False
+    inspection_interval_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    min_rank_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     restricted_to_positions: Optional[List[str]] = None
     notes: Optional[FreeText] = None
     custom_fields: Optional[Dict[str, Any]] = None
@@ -586,6 +726,11 @@ class InventoryItemBase(BaseModel):
     # `style` above is the derived primary, kept for readers that predate this.
     style_attributes: Optional[List[GarmentStyleLiteral]] = None
     variant_group_id: Optional[UUID] = None
+
+    @field_validator("serial_number", "asset_tag", "barcode")
+    @classmethod
+    def _settle_identifier(cls, value: Optional[str]) -> Optional[str]:
+        return _blank_identifier_to_none(value)
 
     @field_validator("style_attributes")
     @classmethod
@@ -622,12 +767,12 @@ class InventoryItemBulkEntry(BaseModel):
     edited afterwards, on the item, where there is room for it.
     """
 
-    name: str = Field(..., min_length=1, max_length=255)
+    name: EntityName
     description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
     unit_of_measure: Optional[str] = Field(None, max_length=50)
-    quantity: Optional[int] = Field(None, ge=0)
-    reorder_point: Optional[int] = Field(None, ge=0)
+    quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    reorder_point: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     tracking_type: Optional[TrackingTypeLiteral] = None
 
 
@@ -651,7 +796,7 @@ class InventoryItemUpdate(BaseModel):
     """Schema for updating an inventory item"""
 
     category_id: Optional[UUID] = None
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    name: Optional[EntityName] = None
     description: Optional[FreeText] = None
     manufacturer: Optional[str] = Field(None, max_length=255)
     model_number: Optional[str] = Field(None, max_length=255)
@@ -660,17 +805,17 @@ class InventoryItemUpdate(BaseModel):
     asset_tag: Optional[str] = Field(None, max_length=255)
     barcode: Optional[str] = Field(None, max_length=255)
     purchase_date: Optional[date] = None
-    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    purchase_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     purchase_order: Optional[str] = Field(None, max_length=255)
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_id: Optional[UUID] = None
     warranty_expiration: Optional[date] = None
-    expected_lifetime_years: Optional[int] = Field(None, ge=0)
-    current_value: Optional[Decimal] = Field(None, ge=0)
-    replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    expected_lifetime_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    current_value: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    replacement_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     size: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=50)
-    weight: Optional[float] = Field(None, ge=0)
+    weight: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     location_id: Optional[UUID] = None
     storage_location: Optional[str] = Field(None, max_length=255)
     storage_area_id: Optional[UUID] = None
@@ -679,13 +824,14 @@ class InventoryItemUpdate(BaseModel):
     status: Optional[ItemStatusLiteral] = None
     status_notes: Optional[FreeText] = None
     tracking_type: Optional[TrackingTypeLiteral] = None
-    quantity: Optional[int] = Field(None, ge=0)
+    quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
-    reorder_point: Optional[int] = Field(None, ge=0)
+    reorder_point: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    apparatus_only: Optional[bool] = None
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
-    inspection_interval_days: Optional[int] = Field(None, ge=0)
-    min_rank_order: Optional[int] = None
+    inspection_interval_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    min_rank_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     restricted_to_positions: Optional[List[str]] = None
     notes: Optional[FreeText] = None
     custom_fields: Optional[Dict[str, Any]] = None
@@ -695,6 +841,11 @@ class InventoryItemUpdate(BaseModel):
     style_attributes: Optional[List[GarmentStyleLiteral]] = None
     variant_group_id: Optional[UUID] = None
     active: Optional[bool] = None
+
+    @field_validator("serial_number", "asset_tag", "barcode")
+    @classmethod
+    def _settle_identifier(cls, value: Optional[str]) -> Optional[str]:
+        return _blank_identifier_to_none(value)
 
     @field_validator("style_attributes")
     @classmethod
@@ -749,6 +900,34 @@ class InventoryItemResponse(InventoryItemBase):
     # the item has no lots — there is nothing to prefer over `quantity`.
     lot_stock: Optional[int] = None
     is_lot_stocked: bool = False
+    # The soonest expiry among units still in stock (expired ones included),
+    # on the shelf or aboard an apparatus, and its distance from the
+    # department's today; then which of the two it is and where ("Medic 1 ›
+    # Jump Bag", or the storage path). Set by the medical supply list only;
+    # other lists leave all four empty.
+    next_expiration_date: Optional[date] = None
+    days_until_next_expiration: Optional[int] = None
+    next_expiration_location: Optional[Literal["shelf", "apparatus"]] = None
+    next_expiration_where: Optional[str] = None
+    # Where it is: "Station 1 › Supply Room › Shelf 2" from the item's room
+    # and storage area, and how many apparatus checklists carry it. Set by the
+    # medical supply list only; other lists leave both empty.
+    storage_path: Optional[str] = None
+    apparatus_count: Optional[int] = None
+    # Each apparatus position carrying it, as the checklist names it:
+    # "Medic 1 › Main Compartment › Jump Bag". Medical supply list only.
+    apparatus_places: Optional[List[str]] = None
+    # In-date units on the trucks, how many positions entered that figure at
+    # their target because nobody has counted them, and whether the supply is
+    # at or below its reorder point on shelf plus trucks — the server's call,
+    # so the list cannot disagree with the Low stock tile it opens from.
+    # Medical supply list only.
+    apparatus_stock: Optional[int] = None
+    apparatus_uncounted: Optional[int] = None
+    # The positions behind apparatus_uncounted, named as the checklist names
+    # them, with the vehicle to open to count each. Medical supply list only.
+    apparatus_uncounted_places: Optional[List[UncountedPosition]] = None
+    is_low_stock: Optional[bool] = None
 
     # The requesting member's own pin position, 0-based, or null when they
     # have not pinned this item. Personal to the caller: two members reading
@@ -813,7 +992,7 @@ class InventoryLotBase(BaseModel):
 
     lot_number: Optional[str] = Field(None, max_length=100)
     expiration_date: Optional[date] = None
-    quantity: int = Field(0, ge=0)
+    quantity: int = Field(0, ge=0, le=INT32_MAX)
     received_date: Optional[date] = None
     notes: Optional[FreeText] = None
 
@@ -829,7 +1008,7 @@ class InventoryLotBulkEntry(InventoryLotBase):
     # A received line with no units is a data-entry slip, not an empty lot: the
     # base schema's 0 default is right for "I am tracking this lot but have
     # none left", and wrong for goods coming through the door.
-    quantity: int = Field(..., ge=1)
+    quantity: int = Field(..., ge=1, le=INT32_MAX)
 
 
 class InventoryLotBulkCreate(BaseModel):
@@ -843,7 +1022,7 @@ class InventoryLotUpdate(BaseModel):
 
     lot_number: Optional[str] = Field(None, max_length=100)
     expiration_date: Optional[date] = None
-    quantity: Optional[int] = Field(None, ge=0)
+    quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     received_date: Optional[date] = None
     notes: Optional[FreeText] = None
 
@@ -865,6 +1044,8 @@ class ExpiringLotResponse(InventoryLotResponse):
     """A stock lot nearing expiration, with its item name for display."""
 
     item_name: Optional[str] = None
+    # Set by the medical route only; gear lots leave it empty.
+    item_size: Optional[str] = None
     days_until_expiration: Optional[int] = None
 
 
@@ -948,7 +1129,9 @@ class ItemIssuanceCreate(BaseModel):
     """Schema for issuing units from a pool item to a member"""
 
     user_id: UUID
-    quantity: int = Field(default=1, ge=1, description="Number of units to issue")
+    quantity: int = Field(
+        default=1, ge=1, description="Number of units to issue", le=INT32_MAX
+    )
     issue_reason: Optional[FreeText] = None
     override_allowance: bool = Field(
         default=False,
@@ -962,7 +1145,10 @@ class ItemIssuanceReturnRequest(BaseModel):
     return_condition: Optional[ReturnConditionLiteral] = None
     return_notes: Optional[FreeText] = None
     quantity_returned: Optional[int] = Field(
-        None, ge=1, description="Partial return; defaults to full issuance quantity"
+        None,
+        ge=1,
+        description="Partial return; defaults to full issuance quantity",
+        le=INT32_MAX,
     )
 
 
@@ -1003,7 +1189,7 @@ class ItemIssuanceResponse(UTCResponseBase):
 class CheckOutRecordBase(BaseModel):
     """Base checkout record schema"""
 
-    expected_return_at: Optional[datetime] = None
+    expected_return_at: Optional[UTCDateTime] = None
     checkout_reason: Optional[FreeText] = None
 
 
@@ -1024,17 +1210,16 @@ class CheckInRequest(BaseModel):
 class CheckoutExtendRequest(BaseModel):
     """Schema for extending a checkout's return date"""
 
-    expected_return_at: datetime
+    expected_return_at: UTCDateTime
 
     @field_validator("expected_return_at")
     @classmethod
     def _return_date_within_bounds(cls, v: datetime) -> datetime:
+        # UTCDateTime has already made v an aware UTC value.
         now = datetime.now(timezone.utc)
-        # All API datetimes are UTC; treat a naive value as UTC for comparison.
-        compare = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
-        if compare <= now:
+        if v <= now:
             raise ValueError("expected_return_at must be in the future")
-        if compare > now + timedelta(days=365):
+        if v > now + timedelta(days=365):
             raise ValueError(
                 "expected_return_at cannot be more than 1 year in the future"
             )
@@ -1081,7 +1266,7 @@ class NFPAInspectionDetailCreate(BaseModel):
     contamination_level: Optional[ContaminationLevelLiteral] = None
     facepiece_seal: Optional[bool] = None
     regulator_function: Optional[bool] = None
-    cylinder_pressure: Optional[float] = None
+    cylinder_pressure: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     low_air_alarm: Optional[bool] = None
     recommendation: Optional[NFPARecommendationLiteral] = None
 
@@ -1095,13 +1280,13 @@ class MaintenanceRecordBase(BaseModel):
     next_due_date: Optional[date] = None
     performed_by: Optional[UUID] = None
     vendor_name: Optional[str] = Field(None, max_length=255)
-    cost: Optional[Decimal] = Field(None, ge=0)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     condition_before: Optional[ItemConditionLiteral] = None
     condition_after: Optional[ItemConditionLiteral] = None
     description: Optional[FreeText] = None
     parts_replaced: Optional[List[str]] = None
-    parts_cost: Optional[Decimal] = Field(None, ge=0)
-    labor_hours: Optional[float] = Field(None, ge=0)
+    parts_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    labor_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     passed: Optional[bool] = None
     notes: Optional[FreeText] = None
     issues_found: Optional[List[str]] = None
@@ -1155,13 +1340,13 @@ class MaintenanceRecordUpdate(BaseModel):
     next_due_date: Optional[date] = None
     performed_by: Optional[UUID] = None
     vendor_name: Optional[str] = Field(None, max_length=255)
-    cost: Optional[Decimal] = Field(None, ge=0)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     condition_before: Optional[ItemConditionLiteral] = None
     condition_after: Optional[ItemConditionLiteral] = None
     description: Optional[FreeText] = None
     parts_replaced: Optional[List[str]] = None
-    parts_cost: Optional[Decimal] = Field(None, ge=0)
-    labor_hours: Optional[float] = Field(None, ge=0)
+    parts_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    labor_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     passed: Optional[bool] = None
     notes: Optional[FreeText] = None
     issues_found: Optional[List[str]] = None
@@ -1319,6 +1504,29 @@ class ItemRetireRequest(BaseModel):
     """Schema for retiring an item"""
 
     notes: Optional[FreeText] = None
+
+
+class ItemBulkRetireRequest(BaseModel):
+    """Retire several items at once, with one note for all of them."""
+
+    # Capped like a received delivery: a selection larger than a page of the
+    # list is not something anyone ticked by hand.
+    item_ids: List[UUID] = Field(..., min_length=1, max_length=200)
+    notes: Optional[FreeText] = None
+
+
+class ItemBulkRetireFailure(BaseModel):
+    """One item a bulk retire left in place, and why."""
+
+    item_id: str
+    error: str
+
+
+class ItemBulkRetireResult(BaseModel):
+    """What a bulk retire did, item by item."""
+
+    retired: List[str]
+    failed: List[ItemBulkRetireFailure]
 
 
 class ItemGroupCount(BaseModel):
@@ -1481,7 +1689,9 @@ class BatchScanItem(BaseModel):
     item_id: Optional[UUID] = Field(
         default=None, description="Item ID for direct lookup (bypasses code search)"
     )
-    quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
+    quantity: int = Field(
+        default=1, ge=1, description="Quantity (for pool items)", le=INT32_MAX
+    )
     operation: Literal[
         "permanent_assignment", "temporary_assignment", "temporary_loan"
     ] = Field(
@@ -1588,7 +1798,7 @@ class BatchReturnItem(BaseModel):
     )
     damage_notes: Optional[FreeText] = None
     quantity: int = Field(
-        default=1, ge=1, description="Quantity returned (for pool items)"
+        default=1, ge=1, description="Quantity returned (for pool items)", le=INT32_MAX
     )
 
 
@@ -1728,7 +1938,7 @@ class EquipmentRequestCreate(BaseModel):
     item_name: str = Field(..., min_length=1, max_length=255)
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT32_MAX)
     requested_duration: RequestedDurationLiteral
     priority: RequestPriorityLiteral = Field(default="normal")
     reason: Optional[FreeText] = None
@@ -1849,8 +2059,8 @@ class EquipmentRequestFulfill(BaseModel):
 
     fulfillment_type: FulfillmentTypeLiteral
     item_id: Optional[UUID] = None
-    quantity: Optional[int] = Field(default=None, ge=1)
-    expected_return_at: Optional[datetime] = None
+    quantity: Optional[int] = Field(default=None, ge=1, le=INT32_MAX)
+    expected_return_at: Optional[UTCDateTime] = None
     override_allowance: bool = False
     substitution_override_reason: Optional[FreeText] = Field(
         default=None,
@@ -1873,7 +2083,7 @@ class StorageAreaCreate(BaseModel):
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
     barcode: Optional[str] = Field(None, max_length=255)
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
 
 
 class StorageAreaUpdate(BaseModel):
@@ -1886,7 +2096,7 @@ class StorageAreaUpdate(BaseModel):
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
     barcode: Optional[str] = Field(None, max_length=255)
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -2125,10 +2335,10 @@ class SizeVariantCreate(BaseModel):
     )
     category_id: Optional[UUID] = None
     quantity_per_variant: int = Field(
-        default=0, ge=0, description="Starting quantity for each variant"
+        default=0, ge=0, description="Starting quantity for each variant", le=INT32_MAX
     )
-    replacement_cost: Optional[Decimal] = Field(None, ge=0)
-    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    replacement_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    purchase_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     tracking_type: TrackingTypeLiteral = "pool"
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     location_id: Optional[UUID] = None
@@ -2184,7 +2394,7 @@ class BulkIssuanceTarget(BaseModel):
     """A single member + quantity in a bulk issuance."""
 
     user_id: UUID
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT32_MAX)
     issue_reason: Optional[FreeText] = None
 
 
@@ -2229,14 +2439,18 @@ class IssuanceAllowanceCreate(BaseModel):
     role_id: Optional[UUID] = Field(
         None, description="Role this applies to. NULL = all members."
     )
-    max_quantity: int = Field(..., ge=1, description="Max units per period")
+    # 0 is a deliberate setting: "none may be issued" for this role/category.
+    # It is distinct from having no allowance row, which leaves issuance uncapped.
+    max_quantity: int = Field(
+        ..., ge=0, description="Max units per period", le=INT32_MAX
+    )
     period_type: AllowancePeriodLiteral = "annual"
 
 
 class IssuanceAllowanceUpdate(BaseModel):
     """Update an issuance allowance."""
 
-    max_quantity: Optional[int] = Field(None, ge=1)
+    max_quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     period_type: Optional[AllowancePeriodLiteral] = None
     is_active: Optional[bool] = None
 
@@ -2284,7 +2498,10 @@ class IssuanceChargeRequest(BaseModel):
         ..., description="Set to 'charged' or 'waived'"
     )
     charge_amount: Optional[Decimal] = Field(
-        None, ge=0, description="Amount to charge (defaults to unit_cost_at_issuance)"
+        None,
+        ge=0,
+        description="Amount to charge (defaults to unit_cost_at_issuance)",
+        le=MONEY_MAX,
     )
 
 
@@ -2339,7 +2556,7 @@ class ReturnRequestCreate(BaseModel):
     assignment_id: Optional[UUID] = None
     issuance_id: Optional[UUID] = None
     checkout_id: Optional[UUID] = None
-    quantity_returning: int = Field(default=1, ge=1)
+    quantity_returning: int = Field(default=1, ge=1, le=INT32_MAX)
     reported_condition: ReturnConditionLiteral = "good"
     member_notes: Optional[FreeText] = None
 
@@ -2361,7 +2578,7 @@ class ReturnRequestReview(BaseModel):
         description="Condition independently observed during receipt or inspection",
     )
     verified_identifier: Optional[str] = Field(None, max_length=255)
-    received_quantity: Optional[int] = Field(None, ge=1)
+    received_quantity: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     follow_up: Literal["auto", "none", "maintenance", "charge_review", "write_off"] = (
         "auto"
     )
@@ -2415,11 +2632,11 @@ class ReorderRequestCreate(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     item_name: str = Field(..., min_length=1, max_length=255)
-    quantity_requested: int = Field(default=1, ge=1)
+    quantity_requested: int = Field(default=1, ge=1, le=INT32_MAX)
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_contact: Optional[str] = Field(None, max_length=255)
     vendor_id: Optional[UUID] = None
-    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     expected_delivery_date: Optional[date] = None
     urgency: ReorderUrgencyLiteral = "normal"
     notes: Optional[FreeText] = None
@@ -2431,14 +2648,17 @@ class ReorderRequestUpdate(BaseModel):
     # W41-5: link (or relink) the inventory item, which receiving requires.
     # Refused once stock has been received against the current link.
     item_id: Optional[UUID] = None
+    # Null clears the category; a non-null id must belong to the caller's org
+    # (checked by the service, as on create).
+    category_id: Optional[UUID] = None
     item_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    quantity_requested: Optional[int] = Field(None, ge=1)
-    quantity_received: Optional[int] = Field(None, ge=0)
+    quantity_requested: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    quantity_received: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_contact: Optional[str] = Field(None, max_length=255)
     vendor_id: Optional[UUID] = None
-    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
-    actual_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    actual_unit_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     purchase_order_number: Optional[str] = Field(None, max_length=255)
     expected_delivery_date: Optional[date] = None
     status: Optional[ReorderStatusLiteral] = None
@@ -2450,7 +2670,7 @@ class ReorderTransitionRequest(BaseModel):
     """A normal workflow transition. expected_version prevents stale writes."""
 
     action: Literal["approve", "mark_ordered", "cancel"]
-    expected_version: int = Field(..., ge=1)
+    expected_version: int = Field(..., ge=1, le=INT32_MAX)
     vendor_id: Optional[UUID] = None
     vendor: Optional[str] = Field(None, max_length=255)
     purchase_order_number: Optional[str] = Field(None, max_length=255)
@@ -2459,16 +2679,16 @@ class ReorderTransitionRequest(BaseModel):
 class ReorderCorrectionRequest(BaseModel):
     status: ReorderStatusLiteral
     reason: str = Field(..., min_length=3, max_length=2000)
-    expected_version: int = Field(..., ge=1)
+    expected_version: int = Field(..., ge=1, le=INT32_MAX)
 
 
 class ReorderReceiptCreate(BaseModel):
-    quantity: int = Field(..., gt=0)
-    expected_version: int = Field(..., ge=1)
+    quantity: int = Field(..., gt=0, le=INT32_MAX)
+    expected_version: int = Field(..., ge=1, le=INT32_MAX)
     idempotency_key: str = Field(..., min_length=1, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
     storage_location: str = Field(..., min_length=1, max_length=255)
-    unit_cost: Decimal = Field(..., ge=0)
+    unit_cost: Decimal = Field(..., ge=0, le=MONEY_MAX)
     expiration_date: Optional[date] = None
     confirm_over_receipt: bool = False
 
@@ -2522,8 +2742,8 @@ class ItemVariantGroupCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
-    base_price: Optional[Decimal] = Field(None, ge=0)
-    base_replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    base_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    base_replacement_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
 
 
@@ -2533,8 +2753,8 @@ class ItemVariantGroupUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
-    base_price: Optional[Decimal] = Field(None, ge=0)
-    base_replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    base_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    base_replacement_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     active: Optional[bool] = None
 
@@ -2576,7 +2796,7 @@ class EquipmentKitItemCreate(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     item_name: str = Field(..., min_length=1, max_length=255)
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT32_MAX)
     size_selectable: bool = False
     optional: bool = False
 
@@ -2587,7 +2807,7 @@ class EquipmentKitCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[FreeText] = None
     restricted_to_roles: Optional[List[str]] = None
-    min_rank_order: Optional[int] = None
+    min_rank_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     line_items: List[EquipmentKitItemCreate] = Field(
         ..., min_length=1, description="At least one item in the kit"
     )
@@ -2599,7 +2819,7 @@ class EquipmentKitUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[FreeText] = None
     restricted_to_roles: Optional[List[str]] = None
-    min_rank_order: Optional[int] = None
+    min_rank_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     active: Optional[bool] = None
     line_items: Optional[List[EquipmentKitItemCreate]] = Field(
         default=None, min_length=1
@@ -2648,6 +2868,64 @@ class EquipmentKitDetailResponse(EquipmentKitResponse):
     line_items: List[EquipmentKitItemResponse] = []
 
     model_config = _response_config
+
+
+class KitProductVariantResponse(BaseModel):
+    """One size/colour/style of a product a kit line can hand out."""
+
+    item_id: str
+    # Every row of this variant, so a line stored against any one of them is
+    # recognised as this variant (several serialized units share one).
+    item_ids: List[str] = []
+    label: str
+    size_label: Optional[str] = None
+    available: int = 0
+
+
+class KitProductOptionResponse(BaseModel):
+    """A catalog product, sizes collapsed, as the kit editor offers it."""
+
+    key: str
+    name: str
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    has_sizes: bool = False
+    variants: List[KitProductVariantResponse] = []
+
+
+class KitIssuePlanLine(BaseModel):
+    """One kit line as it would be issued to a specific member."""
+
+    line_id: str
+    item_name: str
+    quantity: int
+    optional: bool = False
+    size_selectable: bool = False
+    # False when the line names no catalog item, or its item is gone.
+    issuable: bool = True
+    # The member's recorded size for this kind of garment, if any.
+    member_size: Optional[str] = None
+    # The row that would be issued; None means a size must be chosen.
+    selected_item_id: Optional[str] = None
+    variants: List[KitProductVariantResponse] = []
+
+
+class KitIssuePlanResponse(BaseModel):
+    """Every line of a kit, sized for the member it is about to be issued to."""
+
+    kit_id: str
+    user_id: str
+    lines: List[KitIssuePlanLine] = []
+
+
+class KitIssueRequest(BaseModel):
+    """Optional quartermaster size choices when issuing a kit.
+
+    Maps a kit line id to the inventory row chosen for it. Lines left out use
+    the member's recorded size.
+    """
+
+    selections: Dict[UUID, UUID] = Field(default_factory=dict)
 
 
 # ============================================

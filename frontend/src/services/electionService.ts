@@ -2,7 +2,10 @@
  * electionService — extracted from services/api.ts
  */
 
+import type { AxiosRequestConfig } from 'axios';
 import api from './apiClient';
+import { BALLOT_SEND_POLL_INTERVAL_MS, BALLOT_SEND_POLL_MAX_FAILURES } from '../constants/config';
+import { BallotSendJobStatus } from '../constants/enums';
 import type {
   Attendee,
   AttendeeCheckInResponse,
@@ -28,6 +31,7 @@ import type {
   ElectionStats,
   ElectionUpdate,
   EligibilityRoster,
+  BallotSendJob,
   EmailBallot,
   EmailBallotResponse,
   ForensicsReport,
@@ -35,7 +39,6 @@ import type {
   ManualBallotBatch,
   PackageRecipient,
   PackageVariant,
-  PreMeetingPackageResponse,
   PreMeetingPackageSend,
   ProxyAuthorization,
   ProxyAuthorizationCreate,
@@ -203,17 +206,61 @@ export const electionService = {
   /**
    * Get election statistics
    */
-  async getStats(electionId: string): Promise<ElectionStats> {
-    const response = await api.get<ElectionStats>(`/elections/${electionId}/stats`);
+  async getStats(electionId: string, config?: AxiosRequestConfig): Promise<ElectionStats> {
+    const response = await api.get<ElectionStats>(`/elections/${electionId}/stats`, config);
     return response.data;
   },
 
   /**
-   * Send ballot notification emails
+   * Queue ballot notification emails. The send runs on the server after this
+   * returns; follow it with {@link waitForBallotSendJob}. Answers 409 while
+   * another send for the election is still running.
    */
-  async sendBallotEmail(electionId: string, emailData: EmailBallot): Promise<EmailBallotResponse> {
-    const response = await api.post<EmailBallotResponse>(`/elections/${electionId}/send-ballot`, emailData);
+  async startBallotSendJob(electionId: string, emailData: EmailBallot): Promise<BallotSendJob> {
+    const response = await api.post<BallotSendJob>(`/elections/${electionId}/ballot-send-jobs`, emailData);
     return response.data;
+  },
+
+  async getBallotSendJob(electionId: string, jobId: string): Promise<BallotSendJob> {
+    const response = await api.get<BallotSendJob>(`/elections/${electionId}/ballot-send-jobs/${jobId}`);
+    return response.data;
+  },
+
+  /**
+   * Poll a queued ballot send until it finishes, resolving with its outcome.
+   *
+   * Rejects with the server's reason when the send failed, and after
+   * BALLOT_SEND_POLL_MAX_FAILURES status checks in a row could not be made.
+   * Resolves `null` once `isCancelled()` turns true (the page unmounted); the
+   * send itself carries on regardless.
+   */
+  async waitForBallotSendJob(
+    electionId: string,
+    jobId: string,
+    isCancelled: () => boolean = () => false
+  ): Promise<EmailBallotResponse | null> {
+    let consecutiveFailures = 0;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, BALLOT_SEND_POLL_INTERVAL_MS));
+      if (isCancelled()) return null;
+      let job: BallotSendJob;
+      try {
+        job = await electionService.getBallotSendJob(electionId, jobId);
+        consecutiveFailures = 0;
+      } catch {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= BALLOT_SEND_POLL_MAX_FAILURES) {
+          throw new Error(
+            'Could not check on the ballot send. It may still be running: refresh the page to see who has received a ballot before sending again.'
+          );
+        }
+        continue;
+      }
+      if (job.status === BallotSendJobStatus.COMPLETED && job.result) return job.result;
+      if (job.status === BallotSendJobStatus.FAILED) {
+        throw new Error(job.error || 'The ballot send failed.');
+      }
+    }
   },
 
   /**
@@ -508,12 +555,14 @@ export const electionService = {
 
   /**
    * Record an in-room paper-ballot tally (one vote row per ballot,
-   * attributed to the recording officer).
+   * attributed to the recording officer). Ranked-choice contests go in
+   * `ranked_ballots`, ballot by ballot; the server refuses totals for them.
    */
   async recordManualBallots(
     electionId: string,
     payload: {
       entries: Array<{ candidate_id: string; count: number }>;
+      ranked_ballots?: Array<{ rankings: string[]; count: number }> | undefined;
       notes?: string | undefined;
       allow_over_count?: boolean | undefined;
       ballots_cast?: number | undefined;
@@ -631,15 +680,17 @@ export const electionService = {
   },
 
   /**
-   * Send a reminder ballot email (fresh voting link) to eligible voters
-   * who have not voted yet. Stamps reminder_sent_at server-side, which
-   * also suppresses the automatic pre-close reminder.
+   * Queue a reminder ballot email (fresh voting link) to eligible voters who
+   * have not voted yet. The send runs on the server after this returns; follow
+   * it with {@link waitForBallotSendJob}. Stamps reminder_sent_at server-side,
+   * which also suppresses the automatic pre-close reminder. Answers 409 while
+   * any ballot send or reminder for the election is still running.
    */
-  async remindNonVoters(
+  async startReminderSendJob(
     electionId: string,
     payload?: { subject?: string; message?: string }
-  ): Promise<EmailBallotResponse> {
-    const response = await api.post<EmailBallotResponse>(`/elections/${electionId}/remind-non-voters`, payload ?? {});
+  ): Promise<BallotSendJob> {
+    const response = await api.post<BallotSendJob>(`/elections/${electionId}/reminder-send-jobs`, payload ?? {});
     return response.data;
   },
 
@@ -701,10 +752,14 @@ export const electionService = {
   },
 
   /**
-   * Email the pre-meeting package PDF to a secretary-edited email list.
+   * Queue the pre-meeting package PDF to a secretary-edited email list, one
+   * message per address. The send runs on the server after this returns;
+   * follow it with {@link waitForBallotSendJob}, whose outcome names any
+   * address the package could not be sent to. Answers 409 while another
+   * package send for the election is running.
    */
-  async sendPreMeetingPackage(electionId: string, payload: PreMeetingPackageSend): Promise<PreMeetingPackageResponse> {
-    const response = await api.post<PreMeetingPackageResponse>(`/elections/${electionId}/send-package`, payload);
+  async startPackageSendJob(electionId: string, payload: PreMeetingPackageSend): Promise<BallotSendJob> {
+    const response = await api.post<BallotSendJob>(`/elections/${electionId}/package-send-jobs`, payload);
     return response.data;
   },
 

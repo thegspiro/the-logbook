@@ -20,7 +20,7 @@ import React from 'react';
 import { CheckType, daysUntil, normalizeCheckType, submitterMaySwap } from '@/modules/inventory/types/equipmentCheck';
 
 import { countAnswer, expiryAnswer, levelAnswer } from './checkAnswers';
-import { FaultDetail, type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
+import { FaultDetail, ReplacementDateFields, type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
 import {
   contentsAreSealed,
   expiryUrgency,
@@ -126,11 +126,20 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="border-theme-surface-border overflow-hidden rounded-lg border">
-        <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex items-center gap-2 border-b px-3 py-2 text-[11px] font-bold tracking-[.06em] uppercase">
-          <span className="flex-1">Item</span>
-          <span className="w-10 text-center">Par</span>
-          <span className="w-[132px] text-center">Found</span>
+      {/* The layout keys off this table's own width, not the window's. The
+          controls are 190px wide (three 44px targets, a 40px value, gaps), so
+          beside a name they need a ~420px table; under that the row stacks and
+          the controls drop below the name. A window breakpoint cannot say
+          this — the builder previews the same screen in a 256px frame inside a
+          1440px window. */}
+      <div
+        data-testid="tally-table"
+        className="border-theme-surface-border @container overflow-hidden rounded-lg border"
+      >
+        <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted hidden grid-cols-[minmax(0,1fr)_2.5rem_190px] items-center gap-2 border-b px-3 py-2 text-[11px] font-bold tracking-[.06em] uppercase @[26rem]:grid">
+          <span>Item</span>
+          <span className="text-center">Par</span>
+          <span className="text-center">Found</span>
         </div>
         {items.map((item) => {
           const par = item.expectedQuantity ?? null;
@@ -151,6 +160,8 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
           const found =
             (notOnTruck ? answer?.quantityFound : (answer?.quantityFound ?? item.carriedQuantity)) ?? undefined;
           const short = par !== null && found !== undefined && found < par;
+          // Below the pass floor the line fails; short of par alone is a restock.
+          const failing = item.passFloor != null && found !== undefined && found < item.passFloor;
           const carried = found !== undefined && !confirmed;
           const set = (next: number) => onAnswer(item.id, countAnswer(item, next));
           return (
@@ -162,15 +173,24 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               // severity on the ground and the border and keeps text white — so a
               // colour-only distinction between "at par" and "short" disappears
               // exactly where legibility matters most.
-              className={`border-theme-surface-border flex items-center gap-2 border-b px-3 py-2 last:border-b-0 ${
-                short && !carried ? 'bg-theme-alert-warning-bg' : ''
+              className={`border-theme-surface-border grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 border-b px-3 py-2 last:border-b-0 @[26rem]:grid-cols-[minmax(0,1fr)_2.5rem_190px] ${
+                failing && !carried ? 'bg-theme-alert-danger-bg' : short && !carried ? 'bg-theme-alert-warning-bg' : ''
               }`}
             >
-              <p className="text-theme-text-primary min-w-0 flex-1 text-[16px] font-semibold">{item.name}</p>
-              <span className="text-theme-text-secondary w-10 text-center font-mono text-[16px] tabular-nums">
+              <div className="min-w-0">
+                <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
+                {item.countUnit && <p className="text-theme-text-muted text-[12px]">counted in {item.countUnit}</p>}
+                {failing && !carried && (
+                  <p className="text-theme-alert-danger-title text-[12px] font-semibold">
+                    Below minimum ({item.passFloor}) — fails
+                  </p>
+                )}
+              </div>
+              <span className="text-theme-text-secondary text-right font-mono text-[16px] tabular-nums @[26rem]:text-center">
+                <span className="text-theme-text-muted font-sans text-[12px] @[26rem]:hidden">par </span>
                 {par ?? '—'}
               </span>
-              <div className="flex w-[132px] items-center justify-end gap-1.5">
+              <div className="col-span-2 flex items-center justify-end gap-1.5 @[26rem]:col-span-1">
                 <button
                   type="button"
                   disabled={disabled || notOnTruck}
@@ -182,12 +202,14 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
                 </button>
                 <span
                   data-testid={`tally-value-${item.id}`}
-                  className={`w-10 text-center font-mono text-[19px] font-bold tabular-nums ${
+                  className={`w-10 shrink-0 text-center font-mono text-[19px] font-bold tabular-nums ${
                     found === undefined || carried
                       ? 'text-theme-text-muted'
-                      : short
-                        ? 'text-theme-alert-warning-text'
-                        : 'text-theme-alert-success-text'
+                      : failing
+                        ? 'text-theme-alert-danger-title'
+                        : short
+                          ? 'text-theme-alert-warning-text'
+                          : 'text-theme-alert-success-text'
                   }`}
                 >
                   {found ?? '—'}
@@ -328,6 +350,16 @@ const GaugeCard: React.FC<{
 // Function — one line, the test beside it
 // ============================================================================
 
+/**
+ * A Present line asks a different question with the same two buttons: whether
+ * the thing is aboard, not whether it works. Absent explains itself, so it
+ * opens no fault detail.
+ */
+const VERDICT_WORDS = {
+  function: { yes: 'works', no: 'does not work' },
+  presence: { yes: 'is present', no: 'is absent' },
+} as const;
+
 const FunctionRow: React.FC<{
   item: CheckItemSpec;
   answer: CheckItemAnswer | undefined;
@@ -335,6 +367,8 @@ const FunctionRow: React.FC<{
   disabled?: boolean | undefined;
 }> = ({ item, answer, onAnswer, disabled }) => {
   const status = answer?.status;
+  const isPresence = normalizeCheckType(item.checkType) === CheckType.PRESENCE;
+  const words = isPresence ? VERDICT_WORDS.presence : VERDICT_WORDS.function;
   return (
     <div data-testid={`switch-${item.id}`} className="border-theme-surface-border border-b last:border-b-0">
       <div className="flex items-center gap-3 px-3 py-2">
@@ -348,7 +382,7 @@ const FunctionRow: React.FC<{
             type="button"
             disabled={disabled}
             onClick={() => onAnswer({ status: 'pass' })}
-            aria-label={`${item.name} works`}
+            aria-label={`${item.name} ${words.yes}`}
             aria-pressed={status === 'pass'}
             className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
               status === 'pass'
@@ -362,7 +396,7 @@ const FunctionRow: React.FC<{
             type="button"
             disabled={disabled}
             onClick={() => onAnswer({ status: 'fail' })}
-            aria-label={`${item.name} does not work`}
+            aria-label={`${item.name} ${words.no}`}
             aria-pressed={status === 'fail'}
             className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
               status === 'fail'
@@ -378,7 +412,7 @@ const FunctionRow: React.FC<{
       {/* A fault opens the same two fields here as in the accordion, from the
           same component — a note written on one screen and a note written on
           the other are the same field on the same record. */}
-      {status === 'fail' && (
+      {status === 'fail' && !isPresence && (
         <div className="px-3 pb-3">
           <FaultDetail item={item} answer={answer} onChange={onAnswer} disabled={disabled} />
         </div>
@@ -414,10 +448,15 @@ const ExpiryRow: React.FC<{
     (canManageSwap === false &&
       !submitterMaySwap(expired, item.expectedQuantity ?? null, item.carriedQuantity ?? null));
 
+  // A line nothing else tracks has no swap, so the crew dates the unit they
+  // put in instead. Offered once the date matters, and kept open after, when
+  // the line already reads the new unit's date.
+  const offerReplacement = item.takesReplacementDate === true && (expired || inWindow || !!answer?.expirationFound);
+
   return (
     <div
       data-testid={`expiry-${item.id}`}
-      className={`flex items-center gap-3 border-b px-3 py-2 last:border-b-0 ${
+      className={`border-b px-3 py-2 last:border-b-0 ${
         expired
           ? 'bg-theme-alert-danger-bg border-theme-alert-danger-border'
           : inWindow
@@ -425,64 +464,71 @@ const ExpiryRow: React.FC<{
             : 'border-theme-surface-border'
       }`}
     >
-      <div className="min-w-0 flex-1">
-        <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
-        <p
-          className={`font-mono text-[13px] ${
-            expired
-              ? 'text-theme-alert-danger-title font-bold'
-              : inWindow
-                ? 'text-theme-alert-warning-text font-bold'
-                : 'text-theme-text-muted'
-          }`}
-        >
-          {item.expirationDate ? `Expires ${item.expirationDate}` : 'No date on record'}
-          {days !== null && ` · ${expired ? `${Math.abs(days)} days ago` : `${days} days`}`}
-          {inWindow && ` · pull at ${pullAt}`}
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {/* The replacement the expiry rule is asking for, where there is ready
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
+          <p
+            className={`font-mono text-[13px] ${
+              expired
+                ? 'text-theme-alert-danger-title font-bold'
+                : inWindow
+                  ? 'text-theme-alert-warning-text font-bold'
+                  : 'text-theme-text-muted'
+            }`}
+          >
+            {item.expirationDate ? `Expires ${item.expirationDate}` : 'No date on record'}
+            {days !== null && ` · ${expired ? `${Math.abs(days)} days ago` : `${days} days`}`}
+            {inWindow && ` · pull at ${pullAt}`}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* The replacement the expiry rule is asking for, where there is ready
             stock to draw it from. Telling a crew to swap an expiring drug and
             then making them leave the walk to do it is the instruction with
             nowhere to go. */}
-        {onSwap && (expired || inWindow) && item.inventoryItemId ? (
-          <button
-            type="button"
-            disabled={disabled || swapRefused}
-            onClick={() => onSwap(item.id)}
-            title={
-              canSwap === false
-                ? 'Swaps from stock are recorded by a crew member on the check'
-                : swapRefused
-                  ? 'Only an officer can draw stock for an item that has not expired yet'
-                  : undefined
-            }
-            className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {/* Only an expired unit is *replaced*. The server refuses to retire
+          {onSwap && (expired || inWindow) && item.inventoryItemId ? (
+            <button
+              type="button"
+              disabled={disabled || swapRefused}
+              onClick={() => onSwap(item.id)}
+              title={
+                canSwap === false
+                  ? 'Swaps from stock are recorded by a crew member on the check'
+                  : swapRefused
+                    ? 'Only an officer can draw stock for an item that has not expired yet'
+                    : undefined
+              }
+              className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {/* Only an expired unit is *replaced*. The server refuses to retire
                 a lot that is still in date — "That lot has not expired, so it
                 cannot be replaced" — because the disposition it would file
                 against it is an expired-stock one, and recording an in-date box
                 as disposed of is a false account of where the unit went. An
                 in-window swap is therefore a top-up, which is what the
                 accordion has always called it. */}
-            {expired ? 'Replace' : 'Swap'}
+              {expired ? 'Replace' : 'Swap'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onAnswer(expiryAnswer(item, today))}
+            className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
+              confirmed
+                ? 'border-green-800 bg-green-800 text-white'
+                : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
+            }`}
+          >
+            {confirmed ? 'Read' : 'Confirm'}
           </button>
-        ) : null}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onAnswer(expiryAnswer(item, today))}
-          className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
-            confirmed
-              ? 'border-green-800 bg-green-800 text-white'
-              : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
-          }`}
-        >
-          {confirmed ? 'Read' : 'Confirm'}
-        </button>
+        </div>
       </div>
+      {offerReplacement && (
+        <div className="pt-2">
+          <ReplacementDateFields item={item} answer={answer} onChange={onAnswer} disabled={disabled} today={today} />
+        </div>
+      )}
     </div>
   );
 };
@@ -510,7 +556,12 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
   const gauges = of(CheckType.LEVEL);
-  const switches = of(CheckType.FUNCTION);
+  // Present lines share the switch rows' two-button layout, in template order
+  // among them, because both are a verdict read off the cabinet.
+  const switches = items.filter((i) => {
+    const t = normalizeCheckType(i.checkType);
+    return t === CheckType.FUNCTION || t === CheckType.PRESENCE;
+  });
   const dates = of(CheckType.EXPIRY);
   const labels = items.filter((i) => {
     const t = normalizeCheckType(i.checkType);

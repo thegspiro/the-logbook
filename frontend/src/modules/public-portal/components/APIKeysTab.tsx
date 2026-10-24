@@ -27,14 +27,24 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
     expires_at: undefined,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // The backend's min_length counts spaces, so a name of only spaces would
+    // be accepted and listed as a blank row.
+    const name = formData.name.trim();
+    if (!name) {
+      setNameError('Enter a name for the key.');
+      return;
+    }
+    setNameError(null);
     setIsSubmitting(true);
     try {
       const submitData = {
         ...formData,
-        expires_at: formData.expires_at ? localToUTC(formData.expires_at, tz) : undefined,
+        name,
+        expires_at: (formData.expires_at && localToUTC(formData.expires_at, tz)) || undefined,
       };
       await onCreate(submitData);
       setFormData({ name: '', rate_limit_override: undefined, expires_at: undefined });
@@ -91,12 +101,22 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
               id="api-key-name"
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, name: e.target.value });
+                setNameError(null);
+              }}
               placeholder="e.g., Department website"
               required
               aria-required="true"
+              aria-invalid={nameError ? 'true' : undefined}
+              aria-describedby={nameError ? 'api-key-name-error' : undefined}
               className="form-input"
             />
+            {nameError && (
+              <p id="api-key-name-error" role="alert" className="mt-1 text-xs text-red-700 dark:text-red-400">
+                {nameError}
+              </p>
+            )}
             <p className="text-theme-text-muted mt-1 text-xs">Name it after the website or app that will use it</p>
           </div>
 

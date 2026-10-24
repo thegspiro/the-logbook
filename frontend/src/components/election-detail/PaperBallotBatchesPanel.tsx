@@ -40,13 +40,13 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
     }
     if (batch.status === 'confirmed') {
       return (
-        <span className="badge inline-flex items-center gap-1 bg-green-500/10 text-green-700 dark:text-green-300">
+        <span className="badge inline-flex items-center gap-1 bg-green-500/10 text-green-800 dark:text-green-300">
           <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" /> Confirmed
         </span>
       );
     }
     return (
-      <span className="badge inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+      <span className="badge inline-flex items-center gap-1 bg-amber-500/10 text-amber-800 dark:text-amber-300">
         <Clock className="h-3.5 w-3.5" aria-hidden="true" /> Pending {batch.attestations.length}/
         {batch.required_attestations}
       </span>
@@ -81,7 +81,7 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
                   {/* Shown on pending and confirmed cards alike: the officers
                       attesting are confirming an implausible count (W50-66). */}
                   {batch.over_count_override && (
-                    <span className="badge inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                    <span className="badge inline-flex items-center gap-1 bg-amber-500/10 text-amber-800 dark:text-amber-300">
                       <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Over-count override
                     </span>
                   )}

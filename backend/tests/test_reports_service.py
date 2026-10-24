@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.models.user import UserStatus
 from app.services.reports_service import ReportsService, _is_valid_stage_groups
 
 
@@ -183,6 +184,58 @@ class TestGetAvailableReports:
         result = await service.get_available_reports()
         categories = {r["category"] for r in result["available_reports"]}
         assert "operations" in categories
+
+
+class TestMemberRosterActiveTally:
+    """CLAUDE.md Pitfall #32: a probationary account is a current member and
+    must not read as "inactive" in the roster's own Active/Inactive stat
+    cards, the same way every by-id and by-query gate in this file treats it."""
+
+    @staticmethod
+    def _user(status, **overrides):
+        user = MagicMock()
+        user.status = status
+        user.first_name = "Pat"
+        user.last_name = "Doe"
+        user.email = "pat@example.org"
+        user.membership_number = None
+        user.rank = None
+        user.station = None
+        user.created_at = None
+        user.roles = []
+        for key, value in overrides.items():
+            setattr(user, key, value)
+        return user
+
+    async def test_probationary_member_counts_as_active_not_inactive(
+        self, service, org_id
+    ):
+        users = [
+            self._user(UserStatus.ACTIVE, id="u-active"),
+            self._user(UserStatus.PROBATIONARY, id="u-probationary"),
+            self._user(UserStatus.SUSPENDED, id="u-suspended"),
+        ]
+        org_result = MagicMock()
+        org_result.scalar_one_or_none.return_value = None
+        users_result = _scalars_all(users)
+        rank_result = MagicMock()
+        rank_result.__iter__.return_value = iter([])
+        service.db.execute = AsyncMock(
+            side_effect=[org_result, users_result, rank_result]
+        )
+
+        result = await service._generate_member_roster(org_id)
+
+        assert result["total_members"] == 3
+        # Active + Probationary are both current; only Suspended is inactive.
+        assert result["active_members"] == 2
+        assert result["inactive_members"] == 1
+        statuses = {m["id"]: m["status"] for m in result["members"]}
+        assert statuses == {
+            "u-active": "active",
+            "u-probationary": "probationary",
+            "u-suspended": "suspended",
+        }
 
 
 class TestCertificationExpirationReport:

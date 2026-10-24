@@ -361,6 +361,13 @@ eligible member a unique voting token and emails a "Vote Now" link. It is
 available only while the election is **open**; drafts are previewed with a
 test ballot instead. The button shows in text why it is disabled when it is.
 
+The send runs in the background (`POST /elections/{id}/ballot-send-jobs`),
+so a large roster no longer hits the browser's 30-second timeout. The dialog
+stays in its sending state until it finishes. Leaving the page does not stop
+the send. A second send for the same election is refused while one is still
+running, so members are not mailed twice. A resend gives each member a new
+link and leaves the earlier one working; each member still votes only once.
+
 - Tokens are stored as SHA-256 hashes; the raw token exists only in the
   emailed link, and always travels in a POST body, never a query string or
   path.
@@ -545,7 +552,12 @@ Results Report** / **Send Report** (only after close).
 ### Reports
 
 - **Results report email** (`POST /elections/{id}/send-report`) is refused
-  with 400 until the election closes. It prints the close time and actor
+  with 400 until the election closes. **Send Report** emails it to the officer
+  who pressed it. The automatic copy at close goes, one message each, to the
+  election's creator and every leadership member who is a current member
+  (active or probationary) and receives election-administration email; a
+  creator who has left gets nothing. When nobody qualifies, the close logs an
+  error and audits `election_report_not_sent`. It prints the close time and actor
   ("… by Sam Ortiz", or "Automatic close"), per-item outcomes, tie wording
   ("Tie — co-winners per the election's tie policy" / "Tie — no winner
   declared; runoff round created") and recipient facts drawn from
@@ -627,6 +639,12 @@ member gets a fresh voting link; the previous link is stamped `superseded_at`.
 The vote dedup hash guarantees at most one vote per member regardless of how
 many links they hold.
 
+Like ballot sends, a reminder runs in the background
+(`POST /elections/{id}/reminder-send-jobs`), so many non-voters no longer hit
+the browser's 30-second timeout, and leaving the page does not stop it. A
+reminder cannot start while a ballot send or another reminder for the same
+election is still running.
+
 ---
 
 ## Pre-Meeting Package
@@ -644,7 +662,10 @@ and statements, the voter-eligibility roster and a per-item eligibility block
   attendance details are never broadcast to the general membership
 - **Editable recipients**: the send modal prefills from leadership or the
   eligible-voter roster, and the secretary edits the list freely — remove
-  anyone, add outside addresses (e.g. board counsel). Recipients are BCC'd
+  anyone, add outside addresses (e.g. board counsel). Each recipient gets
+  their own email, so nobody sees another's address, and the confirmation
+  names any address the package could not be sent to. The send runs in the
+  background, so a long list does not time out
 - **Download-only flow**: the PDF can be downloaded directly (no email) and
   attached to the secretary's own communication or filed with the minutes
 - **Email backends**: the PDF attaches on SMTP and on the Cloudflare email

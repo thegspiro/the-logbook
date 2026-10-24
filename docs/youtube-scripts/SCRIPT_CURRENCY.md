@@ -1,5 +1,141 @@
 # Script currency
 
+## Flagged by the 2026-10-23 → 10-24 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+| Script                    | Beat                    | Was                               | Now                                                                                                                                                              |
+| ------------------------- | ----------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **05** (training), **09** | Completing a member     | Only by meeting every requirement | Officers can **Mark pipeline complete** with a required reason; a pipeline with no active requirements shows **No active requirements** and completes nobody     |
+| **05**, **09**, **11**    | Deactivating a pipeline | Members keep progressing          | Deactivating from the edit form withdraws in-progress members after a confirmation                                                                               |
+| **03** (IT)               | Directory accounts      | Retired members keep the account  | Opt-in **Suspend the account when a member retires**; departures leave groups; name changes rename the account; Microsoft client secret expiry date and warnings |
+| **03** (IT)               | Backups                 | Plain encrypted archive           | Encrypt to an offline certificate with a server drill key (see `BACKUP.md`)                                                                                      |
+| **04** (finance)          | Reimbursement           | Not scripted                      | Reimburse a purchase by check; withdraw a draft; approver shown before submit; budget lines under an inactive category refuse new charges                        |
+| **Any inventory beat**    | Renaming a size group   | Group row only                    | **Rename** carries onto every size                                                                                                                               |
+
+## Flagged by the 2026-10-21 → 10-22 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                 | Beat                               | Was                                     | Now                                                                                                        |
+| ---------------------- | ---------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **05 / 09** (training) | Deleting a requirement or pipeline | Delete erases progress                  | An in-use one is deactivated; pipelines can be reactivated                                                 |
+| **05** (training)      | Target Solutions                   | Mapping matched future completions only | Mapping imports the member's waiting records; **Import matching pending records**                          |
+| **03** (IT)            | Member delete                      | Records by the member lose their link   | Others' records keep an empty owner shown as **Former member**; held gear returned; future shifts released |
+| **03**                 | Status                             | Type and status independent             | Probationary type sets Probationary status                                                                 |
+| **07** (secretary)     | Deleting events                    | Series delete removes everything        | **Delete this and future events**; an approved meeting cannot be deleted                                   |
+| **04** (finance)       | Budget categories                  | Delete cascades through budget lines    | In-use category is deactivated                                                                             |
+
+## Flagged by the 2026-10-20 → 10-21 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script             | Beat                  | Was                                      | Now                                                                                                                                |
+| ------------------ | --------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **06** (member)    | QR code check-in      | Scan the QR code to check in             | Also **Check In** on the event page itself; **View QR Code** is for managers and organizers only                                   |
+| **06**             | My Training history   | Pending record under "Awaiting approval" | Undated records sit under **No completion date**; each row shows its own status                                                    |
+| **12** (elections) | Paper ballots         | Totals per candidate for every race      | Ranked-choice races are entered ballot by ballot, with a copy count                                                                |
+| **03** (IT)        | Sessions and security | —                                        | Idle refresh and an absolute session cap; a member manager cannot delete, archive or change the status of a more-privileged member |
+
+## Flagged by the 2026-10-19 → 10-20 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes: Settings page and search).
+
+| Script                                    | Beat                | Was                                                                     | Now                                                                                          |
+| ----------------------------------------- | ------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **07** (secretary)                        | Adopting minutes    | Separate **Publishing settings**, **Roll listing**, **Signers** buttons | One **Settings** button; sections Attendance, Signatures, Reminders, Publishing              |
+| **07**                                    | Finding old minutes | Search by meeting title                                                 | Search words inside minutes; every word must appear; quotes for a phrase; newest 500         |
+| Medical screening narration (if scripted) | Requirements        | Applies to Roles, not enforced                                          | **Applies to Positions** limits who is graded; blank means everyone; Not applicable for none |
+| **11**-related finance narration          | Dashboard tile      | Overdue dues included part-paid                                         | Overdue count matches the dues page; Partial not counted                                     |
+
+## Flagged by the 2026-10-18 → 10-19 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes publishing), 12 (package send), 04 (purchase request draft), 06 / 05 (equipment check Present / Absent).
+
+| Script                  | Beat                   | Was                                         | Now                                                                                                             |
+| ----------------------- | ---------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **07** (secretary)      | Adopting minutes       | Library copy only                           | **Publishing settings**; optional public page; executive minutes to a leadership folder; **Roll listing**       |
+| **12** (elections)      | Pre-meeting package    | One email, everyone hidden in the copy line | One email per member, queued with progress; unreached addresses listed                                          |
+| **04** (finance)        | Purchase request       | Create Request, draft only after            | Saves as a draft while typed; **Save Draft**; amounts capped at $9,999,999,999.99                               |
+| **04**                  | Approval chains        | Boundary amount fit both chains             | Min and Max both included; the higher minimum wins; invalid ranges refused                                      |
+| **06 / 05**             | Equipment check        | Works / Count / Level / Date                | **Present / Absent** line; Date lines always expire; crew types a replacement's printed date; Items w/o heading |
+| **06**                  | Open Shifts            | Today's ended shifts still listed           | Ended shifts drop off; own sign-up lands confirmed                                                              |
+| **06**                  | Empty schedule         | "Nothing published"                         | **Go to the next shift**                                                                                        |
+| **06** (administrative) | Dashboard / Operations | Clear-to-respond verdict, crew rows         | Verdict hidden; My Checklists and Apparatus Inventory need a deliberate grant                                   |
+| **03** (IT)             | Upgrading              | —                                           | Finance timestamps corrected to UTC on upgrade; MySQL session pinned to UTC                                     |
+
+## Flagged by the 2026-10-16 → 10-18 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes agenda and signing), 12 (elections), 03 (Integrations and the security report), 05 (Medical Supplies on the trucks).
+
+| Script                                  | Beat                              | Was                                                       | Now                                                                                                                                        |
+| --------------------------------------- | --------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **07** (secretary)                      | Minutes outline (new beat)        | Pick an outline                                           | Meeting **Agenda** items (presenter, notes, prepared motion, linked documents) become the sections; **Sync from agenda**; **Not taken up** |
+| **07**                                  | Adopting minutes                  | Adopt, then print and sign on paper                       | **Minutes > Signers** slots; sign in the app with name and password; the PDF carries the signatures                                        |
+| **12** (elections)                      | Sending ballots                   | One request that could time out on a big roster           | **Send Ballot Emails** shows progress and keeps going; one send at a time; **Remind Non-Voters** the same                                  |
+| **12**                                  | Paper ballots                     | Plain blank ballot                                        | Logo, real mark boxes, each contest under its own voting method; item-only ballots print                                                   |
+| **12**                                  | Nominations and dates             | Nominee only emailed                                      | Bell notice opens Nominations; a linked meeting sets the voting window; no write-in on Approve/Deny                                        |
+| **03** (IT)                             | Weekly security report (new beat) | None                                                      | Counts-only email to the IT Manager, Monday 07:00; **Authentication > Security Report**                                                    |
+| **03**                                  | Calendars                         | Google and Outlook cards inert                            | **Connect with Google / Microsoft** creates the department calendar (needs `CALENDAR_SYNC_ENABLED`); department ICS feed                   |
+| **03**                                  | Member accounts                   | Google Workspace only                                     | Microsoft 365 as the other directory; one per department                                                                                   |
+| **03**                                  | Upgrading                         | —                                                         | Weekly report starts by default; `CALENDAR_SYNC_ENABLED`; twelve migrations                                                                |
+| **05** (training officer, if shown)     | Importing past training           | **Import History** tab                                    | **Import Past Training**; new **Sync History** tab on the integrations page                                                                |
+| **05 / 06** (if Medical Supplies shown) | Stock counts                      | Shelf only                                                | Shelf plus trucks; **Kept on apparatus only**; Next expiry names where                                                                     |
+| **06** (member)                         | Dashboard                         | Standby shows department hours; Take a Shift for everyone | Standby is your own; Take a Shift hidden if you cannot hold a seat                                                                         |
+| **06 / 05**                             | Equipment check counts            | Par decides pass and restock                              | **Min to Pass** fails; par sets the restock; unit shown ("8 / 10 each")                                                                    |
+| **03 / 05** (if Operations shown)       | Operations pages                  | Each page its own header                                  | One header and section strip; apparatus and supply worklist rework on a phone                                                              |
+| **04** (finance, if shown)              | Approval chains                   | Delete a used chain                                       | A used chain or step cannot be deleted; turn the chain off                                                                                 |
+| **08** (shorts)                         | Passwords                         | Silent change                                             | Member gets a notice by bell and email                                                                                                     |
+
+## Flagged by the 2026-10-15 → 10-16 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 03 / 05 (Medical Supplies), 06 (My Checklists on a phone).
+
+| Script                           | Beat                  | Was                                 | Now                                                                                     |
+| -------------------------------- | --------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- |
+| **03 / 05** (if inventory shown) | Medical Supplies      | Flat list, free-text location       | Room and storage area, **Where it is** dialog, sort, bulk retire, Lots, clickable tiles |
+| **05 / 07** (if shown)           | Catalog Links         | Link by hand                        | **Link matches automatically**, then **Undo**                                           |
+| **06** (member)                  | My Checklists         | Cards with All / Start / End filter | Compact rows by day on a phone; filter removed                                          |
+| **06 / 05**                      | Equipment check count | CRITICAL at the minimum             | CRITICAL only below the minimum                                                         |
+| **03** (IT, if Google shown)     | Google Workspace      | Accounts suspended at five places   | **Link existing members**; one departure hook                                           |
+| **03**                           | Upgrading             | —                                   | Unraid and minimal compose need explicit secrets                                        |
+| **07** (if documents shown)      | Admin-only folders    | Page list only                      | Weekly email to full administrators                                                     |
+
+## Flagged by the 2026-10-14 → 10-15 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes: the largest change), 05 / 07 (checklist item matching).
+
+| Script                           | Beat                        | Was                                                          | Now                                                                                                                                                           |
+| -------------------------------- | --------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **07** (secretary)               | Meeting minutes             | Submit for Approval, then Approve; members saw approved only | **Circulate for Review** (members are emailed and can read), **Suggest a change** from a section, **Recall to Draft**, **Adopt Minutes** with the voting date |
+| **07**                           | Minutes content (new beat)  | Free-text sections                                           | Rich-text sections; roll call with six statuses and quorum; closed sessions; election results; attachments and the signed copy; printable copy                |
+| **07**                           | Minutes template (new beat) | Built-in order of business                                   | **Minutes > Outlines**: required sections, default outline, **Apply outline**                                                                                 |
+| **07**                           | Action items                | Typed per minutes                                            | **Carry action items forward** from earlier adopted minutes; assignees emailed on adoption                                                                    |
+| **05 / 07** (if inventory shown) | Linking checklist items     | Exact-word search                                            | Near-match search; **Also called** names; only exact matches are pre-ticked                                                                                   |
+| **05** (if shown)                | Medical supplies            | A category could not be deleted                              | Delete asks where the supplies go                                                                                                                             |
+| **04** (finance, if shown)       | Start from last year        | Copied every line                                            | Lines on retired categories are skipped and counted                                                                                                           |
+| **03** (IT, if shown)            | Backups                     | Uploads missing from a Docker backup                         | `backup.sh` streams uploads from the backend container                                                                                                        |
+| **03**                           | Upgrading                   | —                                                            | Rebuild the backend image (rich-text minutes need `nh3`)                                                                                                      |
+| **All**                          | Dark mode, item pickers     | Result lists see-through                                     | Opaque lists                                                                                                                                                  |
+
 ## Flagged by the 2026-10-13 → 10-14 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-13--14-2026).

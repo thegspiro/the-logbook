@@ -28,6 +28,7 @@ from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
 from app.models.user import Organization, User
 from app.schemas.equipment_check import (
     ApparatusInventoryResponse,
+    AutoLinkResponse,
     CheckLogResponse,
     CheckTemplateCompartmentClone,
     CheckTemplateCompartmentCreate,
@@ -44,6 +45,8 @@ from app.schemas.equipment_check import (
     ComplianceReportResponse,
     CrossTemplateLinkRequest,
     CrossTemplateLinkResponse,
+    CrossTemplateUnlinkRequest,
+    CrossTemplateUnlinkResponse,
     DeployedLotUpdateRequest,
     EquipmentCheckCompleteItems,
     EquipmentCheckTemplateCreate,
@@ -430,6 +433,58 @@ async def link_inventory_items_across_templates(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
+@router.post("/inventory-links/auto", response_model=AutoLinkResponse)
+async def auto_link_inventory_items(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Link every unlinked position whose catalog match is clear.
+
+    A name is linked when its best match on the department-wide report is
+    exact or strong and beats the runner-up; ties, weak matches and names
+    with no match are left on the report (``leftForReview``). All or nothing,
+    and positions linked by hand meanwhile are kept, as in
+    ``POST /inventory-links``.
+
+    **Requires permission: inventory.check_manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        return await service.auto_link_report(
+            str(current_user.organization_id),
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.post("/inventory-links/undo", response_model=CrossTemplateUnlinkResponse)
+async def unlink_inventory_items_across_templates(
+    data: CrossTemplateUnlinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Undo links made on the department-wide report, across templates.
+
+    Each position is cleared only while it is still linked to the item named
+    in the request; one re-linked since is left as it is and counted in
+    ``skipped``. All or nothing.
+
+    **Requires permission: inventory.check_manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        return await service.unlink_inventory_items_across_templates(
+            str(current_user.organization_id),
+            data.links,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
 # =====================================================================
 # Compartment CRUD
 # =====================================================================
@@ -744,6 +799,9 @@ async def update_item(
 
     service = EquipmentCheckService(db)
     changes = data.model_dump(exclude_unset=True)
+    # The change log is a JSON column, which cannot hold the `date` an
+    # expiration carries; the update itself keeps the typed values.
+    logged_changes = data.model_dump(mode="json", exclude_unset=True)
     try:
         item = await service.update_item(
             item_id,
@@ -768,7 +826,7 @@ async def update_item(
             entity_type="item",
             entity_id=item_id,
             entity_name=item.name,
-            changes=changes,
+            changes=logged_changes,
         )
         await db.commit()
     return item
@@ -1143,6 +1201,9 @@ async def get_my_checklists(
                 "templateName": tmpl.name,
                 "checkTiming": tmpl.check_timing,
                 "status": status,
+                # Decided by the service from the shift's end time; both member
+                # screens show it rather than re-deriving it from shiftDate.
+                "isOverdue": bool(cl.get("is_overdue")),
                 "totalItems": (
                     check.total_items
                     if check
@@ -1743,6 +1804,13 @@ async def export_pdf(
                     "check_type": i.check_type,
                     "status": i.status,
                     "notes": i.notes,
+                    "quantity_found": i.quantity_found,
+                    "expected_quantity": (
+                        i.expected_quantity
+                        if i.expected_quantity is not None
+                        else i.required_quantity
+                    ),
+                    "count_unit": i.count_unit,
                 }
                 for i in (check.items or [])
             ],

@@ -19,10 +19,11 @@ import {
   Layers,
   Loader2,
   Edit,
+  ArchiveRestore,
 } from 'lucide-react';
 import { trainingProgramService, trainingService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
-import { Breadcrumbs } from '../components/ux/Breadcrumbs';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import RegistryImportModal from './RegistryImportModal';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -60,6 +61,11 @@ const TrainingProgramsPage: React.FC = () => {
   const [instantiatingKey, setInstantiatingKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  // Deleting a pipeline someone graduated from deactivates it, which drops it
+  // from the list; this is the way back to it. Manager-only, like reactivating.
+  const [showInactive, setShowInactive] = useState(false);
+  const includeInactive = canManage && showInactive;
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null);
   const [registryModal, setRegistryModal] = useState<{ key: string; name: string } | null>(null);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [showRequirementModal, setShowRequirementModal] = useState(false);
@@ -132,6 +138,7 @@ const TrainingProgramsPage: React.FC = () => {
       if (visibleTab === 'programs' || visibleTab === 'templates') {
         const data = await trainingProgramService.getPrograms({
           is_template: visibleTab === 'templates',
+          ...(includeInactive ? { include_inactive: true } : {}),
         });
         if (isStale()) return;
         setPrograms(data);
@@ -176,7 +183,7 @@ const TrainingProgramsPage: React.FC = () => {
       // A superseded request must not clear the spinner the newer one owns.
       if (!isStale()) setLoading(false);
     }
-  }, [visibleTab, canManage]);
+  }, [visibleTab, canManage, includeInactive]);
 
   useEffect(() => {
     void loadData();
@@ -208,6 +215,30 @@ const TrainingProgramsPage: React.FC = () => {
       setEditingRequirement(null);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save requirement'));
+    }
+  };
+
+  const handleReactivateProgram = async (e: React.MouseEvent, program: TrainingProgram) => {
+    e.stopPropagation();
+    const confirmed = await confirm({
+      title: 'Reactivate pipeline',
+      message:
+        `Reactivate "${program.name}"? It returns to the pipeline list and members can be enrolled in it again. ` +
+        `Members who were withdrawn when it was deactivated are not re-enrolled; enroll them again if they should continue.`,
+      confirmLabel: 'Reactivate',
+      cancelLabel: 'Leave inactive',
+      variant: 'info',
+    });
+    if (!confirmed) return;
+    setReactivatingId(program.id);
+    try {
+      await trainingProgramService.updateProgram(program.id, { active: true });
+      toast.success(`${program.name} reactivated`);
+      void loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reactivate pipeline'));
+    } finally {
+      setReactivatingId(null);
     }
   };
 
@@ -255,66 +286,66 @@ const TrainingProgramsPage: React.FC = () => {
             registry's own label and gate: a member without training.manage
             does not see it, and it can no longer drift from the hub's name —
             this trail used to call the page "Admin". */}
-        <Breadcrumbs underHub="/training/admin" />
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-              <GraduationCap className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
-              <span>Training Programs</span>
-            </h1>
-            <p className="text-theme-text-muted mt-2">
-              {canManage
-                ? 'Build programs, import requirements, and track member progress'
-                : "Your department's training programs and what each one covers"}
-            </p>
-          </div>
-
-          {/* Every action in this header creates a program or a requirement,
+        <TrainingPageHeader
+          icon={GraduationCap}
+          title="Training Programs"
+          subtitle={
+            canManage
+              ? 'Build programs, import requirements, and track member progress'
+              : "Your department's training programs and what each one covers"
+          }
+          underHub="/training/admin"
+          actions={
+            canManage && visibleTab !== 'templates' ? (
+              <>
+                {/* Every action in this header creates a program or a requirement,
               and each one is training.manage-gated on the backend. Members get
               the read-only view rather than affordances that 403 on use. */}
-          {canManage && visibleTab === 'programs' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                ref={importFileRef}
-                type="file"
-                accept=".json"
-                onChange={(e) => {
-                  void handleImportProgram(e);
-                }}
-                className="hidden"
-                aria-label="Import pipeline JSON file"
-              />
-              <button
-                onClick={() => importFileRef.current?.click()}
-                className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
-              >
-                <Upload className="h-5 w-5" aria-hidden="true" />
-                <span>Import</span>
-              </button>
-              <button
-                onClick={() => void navigate('/training/programs/new')}
-                className="btn-primary flex items-center space-x-2"
-              >
-                <Plus className="h-5 w-5" aria-hidden="true" />
-                <span>New Pipeline</span>
-              </button>
-            </div>
-          )}
+                {canManage && visibleTab === 'programs' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={importFileRef}
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => {
+                        void handleImportProgram(e);
+                      }}
+                      className="hidden"
+                      aria-label="Import pipeline JSON file"
+                    />
+                    <button
+                      onClick={() => importFileRef.current?.click()}
+                      className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+                    >
+                      <Upload className="h-5 w-5" aria-hidden="true" />
+                      <span>Import</span>
+                    </button>
+                    <button
+                      onClick={() => void navigate('/training/programs/new')}
+                      className="btn-primary flex items-center space-x-2"
+                    >
+                      <Plus className="h-5 w-5" aria-hidden="true" />
+                      <span>New Pipeline</span>
+                    </button>
+                  </div>
+                )}
 
-          {canManage && visibleTab === 'requirements' && (
-            <button
-              onClick={() => {
-                setEditingRequirement(null);
-                setShowRequirementModal(true);
-              }}
-              className="btn-primary flex items-center space-x-2"
-            >
-              <Plus className="h-5 w-5" aria-hidden="true" />
-              <span>New Requirement</span>
-            </button>
-          )}
-        </div>
+                {canManage && visibleTab === 'requirements' && (
+                  <button
+                    onClick={() => {
+                      setEditingRequirement(null);
+                      setShowRequirementModal(true);
+                    }}
+                    className="btn-primary flex items-center space-x-2"
+                  >
+                    <Plus className="h-5 w-5" aria-hidden="true" />
+                    <span>New Requirement</span>
+                  </button>
+                )}
+              </>
+            ) : undefined
+          }
+        />
 
         {/* Tabs. Requirements and Templates are manager-only views, so a member
             sees the Programs list on its own with no strip above it. */}
@@ -392,6 +423,17 @@ const TrainingProgramsPage: React.FC = () => {
               className="form-input pr-4 pl-10"
             />
           </div>
+          {canManage && visibleTab !== 'requirements' && (
+            <label className="text-theme-text-secondary mobile-touch-target mt-2 inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="form-checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+              />
+              Show inactive
+            </label>
+          )}
         </div>
 
         {/* Content */}
@@ -518,13 +560,16 @@ const TrainingProgramsPage: React.FC = () => {
                               <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                                 <h3 className="text-theme-text-primary text-xl font-semibold">{program.name}</h3>
                                 {program.target_position && (
-                                  <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 dark:text-red-400">
+                                  <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-800 dark:text-red-400">
                                     {program.target_position}
                                   </span>
                                 )}
                                 <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs text-blue-700 dark:text-blue-400">
                                   {enumLabel(program.structure_type)}
                                 </span>
+                                {!program.active && (
+                                  <span className="badge bg-theme-surface text-theme-text-secondary">Inactive</span>
+                                )}
                               </div>
                               {program.description && (
                                 <p className="text-theme-text-muted mb-3">{program.description}</p>
@@ -543,11 +588,36 @@ const TrainingProgramsPage: React.FC = () => {
                               </div>
                             </div>
                             <div className="flex items-center space-x-2">
+                              {canManage && !program.active && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    void handleReactivateProgram(e, program);
+                                  }}
+                                  // The card navigates on Enter/Space; keep the
+                                  // key on the button.
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                  disabled={reactivatingId === program.id}
+                                  aria-label={`Reactivate ${program.name}`}
+                                  className="btn-secondary btn-sm"
+                                >
+                                  {reactivatingId === program.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                                  ) : (
+                                    <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
+                                  )}
+                                  Reactivate
+                                </button>
+                              )}
                               {canManage && (
                                 <button
                                   onClick={(e) => {
                                     void handleExportProgram(e, program.id, program.name);
                                   }}
+                                  // The card navigates on Enter/Space and
+                                  // prevents the default, which swallowed the
+                                  // keyboard activation of this button.
+                                  onKeyDown={(e) => e.stopPropagation()}
                                   className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2 transition-colors"
                                   title="Export as JSON"
                                   aria-label={`Export ${program.name}`}
@@ -647,7 +717,7 @@ const TrainingProgramsPage: React.FC = () => {
                                     req.source === 'national'
                                       ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
                                       : req.source === 'state'
-                                        ? 'bg-green-500/20 text-green-700 dark:text-green-400'
+                                        ? 'bg-green-500/20 text-green-800 dark:text-green-400'
                                         : 'bg-theme-surface-secondary text-theme-text-muted'
                                   }`}
                                 >
@@ -658,7 +728,7 @@ const TrainingProgramsPage: React.FC = () => {
                                     {req.registry_name}
                                   </span>
                                 )}
-                                <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-700 dark:text-orange-400">
+                                <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-800 dark:text-orange-400">
                                   {req.requirement_type}
                                 </span>
                               </div>

@@ -7,12 +7,13 @@ donations, donors, pledges, and fundraising events.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import (
     BaseModel,
     ConfigDict,
+    EmailStr,
     Field,
     computed_field,
     field_validator,
@@ -21,7 +22,8 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 from app.models.grant import allowed_next_statuses as _allowed_next_statuses
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN, MONEY_MAX, decimal_max
 from app.utils.external_url import validate_external_http_url
 from app.utils.grant_spending import application_overspend, budget_item_overspend
 from app.utils.grant_spending import total_expended as _total_expended
@@ -31,6 +33,14 @@ _response_config = ConfigDict(
 )
 
 _request_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+# GF-9: the largest amount a money field accepts on a write. A cap catches a
+# mistyped extra zero before it flows into every total and report; it is not
+# a statement of what a department may raise. Gifts (a donation, a pledge, a
+# ticket) are capped lower than awards, budgets and goals. Applied to request
+# schemas only: a response must still serialize a row written before the cap.
+MAX_GIFT_AMOUNT = Decimal("1000000")
+MAX_AMOUNT = Decimal("100000000")
 
 # ============================================
 # Enum Literal Types
@@ -210,8 +220,8 @@ class GrantOpportunityBase(BaseModel):
     agency: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     eligible_uses: Optional[str] = None
-    typical_award_min: Optional[Decimal] = Field(None, ge=0)
-    typical_award_max: Optional[Decimal] = Field(None, ge=0)
+    typical_award_min: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    typical_award_max: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     eligibility_criteria: Optional[str] = None
     application_url: Optional[str] = Field(None, max_length=500)
     program_url: Optional[str] = Field(None, max_length=500)
@@ -235,6 +245,10 @@ class GrantOpportunityBase(BaseModel):
 class GrantOpportunityCreate(GrantOpportunityBase):
     """Schema for creating a new grant opportunity"""
 
+    # Request-only bounds (GF-9); the shared base stays loose for responses.
+    typical_award_min: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    typical_award_max: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+
 
 class GrantOpportunityUpdate(BaseModel):
     """Schema for updating a grant opportunity"""
@@ -245,8 +259,8 @@ class GrantOpportunityUpdate(BaseModel):
     agency: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     eligible_uses: Optional[str] = None
-    typical_award_min: Optional[Decimal] = Field(None, ge=0)
-    typical_award_max: Optional[Decimal] = Field(None, ge=0)
+    typical_award_min: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    typical_award_max: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     eligibility_criteria: Optional[str] = None
     application_url: Optional[str] = Field(None, max_length=500)
     program_url: Optional[str] = Field(None, max_length=500)
@@ -286,6 +300,40 @@ class GrantOpportunityResponse(GrantOpportunityBase):
 # ============================================
 
 
+class GrantBudgetSummary(BaseModel):
+    """An application's budget at a glance: an amount per budget category.
+
+    The categories are the ones ``GrantBudgetItem`` lines use
+    (``BudgetItemCategory``), so the summary and the line-item budget speak
+    the same language. Amounts are floats rather than ``Decimal`` because the
+    summary is stored in a JSON column, which cannot serialize a Decimal.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    equipment: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    personnel: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    training: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    contractual: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    supplies: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    travel: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    construction: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    indirect: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    other: Optional[float] = Field(None, ge=0, le=float(MAX_AMOUNT))
+    notes: Optional[str] = Field(None, max_length=5000)
+
+
+class GrantKeyContact(BaseModel):
+    """One person attached to an application (program officer, signatory...)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=255)
+    role: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[EmailStr] = None
+
+
 class GrantApplicationBase(BaseModel):
     """Base grant application schema"""
 
@@ -294,9 +342,9 @@ class GrantApplicationBase(BaseModel):
     grant_program_name: Optional[str] = Field(None, max_length=255)
     grant_agency: Optional[str] = Field(None, max_length=255)
     application_status: ApplicationStatusLiteral = "researching"
-    amount_requested: Optional[Decimal] = Field(None, ge=0)
-    amount_awarded: Optional[Decimal] = Field(None, ge=0)
-    match_amount: Optional[Decimal] = Field(None, ge=0)
+    amount_requested: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    amount_awarded: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    match_amount: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     match_source: Optional[str] = Field(None, max_length=255)
     application_deadline: Optional[date] = None
     submitted_date: Optional[date] = None
@@ -305,14 +353,9 @@ class GrantApplicationBase(BaseModel):
     grant_end_date: Optional[date] = None
     project_description: Optional[str] = None
     narrative_summary: Optional[str] = None
-    # W68: the application form edits both as free text, so a str is accepted
-    # beside the structured shapes; refusing it made every save with either
-    # field filled a 422. The JSON columns hold a JSON string without change.
-    budget_summary: Optional[Union[str, Dict[str, Any]]] = None
-    key_contacts: Optional[Union[str, List[Dict[str, Any]]]] = None
     federal_award_id: Optional[str] = Field(None, max_length=100)
     nfirs_compliant: Optional[bool] = None
-    performance_period_months: Optional[int] = Field(None, ge=0)
+    performance_period_months: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     reporting_frequency: Optional[ReportingFrequencyLiteral] = None
     next_report_due: Optional[date] = None
     final_report_due: Optional[date] = None
@@ -323,9 +366,16 @@ class GrantApplicationBase(BaseModel):
 class GrantApplicationCreate(GrantApplicationBase):
     """Schema for creating a new grant application"""
 
+    amount_requested: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    amount_awarded: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    match_amount: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+
     opportunity_id: Optional[UUID] = None
-    # W68: without this the form's "Assigned To" was silently dropped on create.
     assigned_to: Optional[UUID] = None
+    # Declared on the request schemas, not the shared base, because the
+    # response reads both columns back in a looser shape (see below).
+    budget_summary: Optional[GrantBudgetSummary] = None
+    key_contacts: Optional[List[GrantKeyContact]] = Field(None, max_length=50)
 
 
 class GrantApplicationUpdate(BaseModel):
@@ -336,9 +386,9 @@ class GrantApplicationUpdate(BaseModel):
     grant_program_name: Optional[str] = Field(None, max_length=255)
     grant_agency: Optional[str] = Field(None, max_length=255)
     application_status: Optional[ApplicationStatusLiteral] = None
-    amount_requested: Optional[Decimal] = Field(None, ge=0)
-    amount_awarded: Optional[Decimal] = Field(None, ge=0)
-    match_amount: Optional[Decimal] = Field(None, ge=0)
+    amount_requested: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    amount_awarded: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    match_amount: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     match_source: Optional[str] = Field(None, max_length=255)
     application_deadline: Optional[date] = None
     submitted_date: Optional[date] = None
@@ -347,11 +397,11 @@ class GrantApplicationUpdate(BaseModel):
     grant_end_date: Optional[date] = None
     project_description: Optional[str] = None
     narrative_summary: Optional[str] = None
-    budget_summary: Optional[Union[str, Dict[str, Any]]] = None
-    key_contacts: Optional[Union[str, List[Dict[str, Any]]]] = None
+    budget_summary: Optional[GrantBudgetSummary] = None
+    key_contacts: Optional[List[GrantKeyContact]] = Field(None, max_length=50)
     federal_award_id: Optional[str] = Field(None, max_length=100)
     nfirs_compliant: Optional[bool] = None
-    performance_period_months: Optional[int] = Field(None, ge=0)
+    performance_period_months: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     reporting_frequency: Optional[ReportingFrequencyLiteral] = None
     next_report_due: Optional[date] = None
     final_report_due: Optional[date] = None
@@ -364,6 +414,13 @@ class GrantApplicationUpdate(BaseModel):
 
 class GrantApplicationResponse(GrantApplicationBase):
     """Schema for grant application response with nested relations"""
+
+    # Read back as stored rather than through the request models: the columns
+    # are untyped JSON and a direct API caller could have written any shape
+    # before the request schemas were tightened, so a strict read would turn
+    # one odd row into a 500 on the whole application.
+    budget_summary: Optional[Dict[str, Any]] = None
+    key_contacts: Optional[List[Dict[str, Any]]] = None
 
     id: UUID
     organization_id: UUID
@@ -431,20 +488,24 @@ class GrantBudgetItemBase(BaseModel):
 
     category: BudgetItemCategoryLiteral
     description: Optional[str] = Field(None, max_length=500)
-    amount_budgeted: Decimal = Field(..., ge=0)
-    federal_share: Optional[Decimal] = Field(None, ge=0)
-    local_match: Optional[Decimal] = Field(None, ge=0)
+    amount_budgeted: Decimal = Field(..., ge=0, le=decimal_max(12, 2))
+    federal_share: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    local_match: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     notes: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
 
 
 class GrantBudgetItemCreate(GrantBudgetItemBase):
-    """Schema for creating a new grant budget item"""
+    """Schema for creating a new grant budget item.
 
-    # The route's path names the application and the endpoint discards this;
-    # it stays accepted for callers that send it, but is not required
-    # (W68: the detail page never sent it, so every add was a 422).
-    application_id: Optional[UUID] = None
+    The parent application comes from the URL path
+    (``/applications/{app_id}/budget-items``) and nowhere else. The same is
+    true of the expenditure, compliance task and note create schemas below.
+    """
+
+    amount_budgeted: Decimal = Field(..., ge=0, le=MAX_AMOUNT)
+    federal_share: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    local_match: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
 
 
 class GrantBudgetItemUpdate(BaseModel):
@@ -454,11 +515,11 @@ class GrantBudgetItemUpdate(BaseModel):
 
     category: Optional[BudgetItemCategoryLiteral] = None
     description: Optional[str] = Field(None, max_length=500)
-    amount_budgeted: Optional[Decimal] = Field(None, ge=0)
-    federal_share: Optional[Decimal] = Field(None, ge=0)
-    local_match: Optional[Decimal] = Field(None, ge=0)
+    amount_budgeted: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    federal_share: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    local_match: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     notes: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
 
 class GrantBudgetItemResponse(GrantBudgetItemBase):
@@ -491,7 +552,7 @@ class GrantExpenditureBase(BaseModel):
     model_config = _request_config
 
     description: str = Field(..., min_length=1, max_length=500)
-    amount: Decimal = Field(..., ge=0)
+    amount: Decimal = Field(..., ge=0, le=decimal_max(12, 2))
     expenditure_date: date
     vendor: Optional[str] = Field(None, max_length=255)
     invoice_number: Optional[str] = Field(None, max_length=100)
@@ -507,10 +568,8 @@ class GrantExpenditureBase(BaseModel):
 class GrantExpenditureCreate(GrantExpenditureBase):
     """Schema for creating a new grant expenditure"""
 
-    # The route's path names the application and the endpoint discards this;
-    # it stays accepted for callers that send it, but is not required
-    # (W68: the detail page never sent it, so every add was a 422).
-    application_id: Optional[UUID] = None
+    amount: Decimal = Field(..., ge=0, le=MAX_AMOUNT)
+
     budget_item_id: Optional[UUID] = None
 
 
@@ -520,7 +579,7 @@ class GrantExpenditureUpdate(BaseModel):
     model_config = _request_config
 
     description: Optional[str] = Field(None, min_length=1, max_length=500)
-    amount: Optional[Decimal] = Field(None, ge=0)
+    amount: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     expenditure_date: Optional[date] = None
     vendor: Optional[str] = Field(None, max_length=255)
     invoice_number: Optional[str] = Field(None, max_length=100)
@@ -567,7 +626,7 @@ class GrantComplianceTaskBase(BaseModel):
     description: Optional[str] = None
     due_date: date
     priority: GrantPriorityLiteral = "medium"
-    reminder_days_before: int = Field(default=14, ge=0)
+    reminder_days_before: int = Field(default=14, ge=0, le=INT32_MAX)
     report_template: Optional[str] = None
     submission_url: Optional[str] = Field(None, max_length=500)
     _validate_submission_url = field_validator("submission_url", mode="before")(
@@ -578,11 +637,6 @@ class GrantComplianceTaskBase(BaseModel):
 
 class GrantComplianceTaskCreate(GrantComplianceTaskBase):
     """Schema for creating a new grant compliance task"""
-
-    # The route's path names the application and the endpoint discards this;
-    # it stays accepted for callers that send it, but is not required
-    # (W68: the detail page never sent it, so every add was a 422).
-    application_id: Optional[UUID] = None
 
 
 class GrantComplianceTaskUpdate(BaseModel):
@@ -597,7 +651,7 @@ class GrantComplianceTaskUpdate(BaseModel):
     completed_date: Optional[date] = None
     status: Optional[ComplianceTaskStatusLiteral] = None
     priority: Optional[GrantPriorityLiteral] = None
-    reminder_days_before: Optional[int] = Field(None, ge=0)
+    reminder_days_before: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     report_template: Optional[str] = None
     submission_url: Optional[str] = Field(None, max_length=500)
     _validate_submission_url = field_validator("submission_url", mode="before")(
@@ -632,10 +686,6 @@ class GrantComplianceTaskResponse(GrantComplianceTaskBase):
 class GrantNoteCreate(BaseModel):
     """Schema for creating a new grant note"""
 
-    # The route's path names the application and the endpoint discards this;
-    # it stays accepted for callers that send it, but is not required
-    # (W68: the detail page never sent it, so every add was a 422).
-    application_id: Optional[UUID] = None
     note_type: GrantNoteTypeLiteral = "general"
     content: str = Field(..., min_length=1)
     note_metadata: Optional[Dict[str, Any]] = Field(
@@ -677,7 +727,7 @@ class CampaignBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     campaign_type: CampaignTypeLiteral
-    goal_amount: Decimal = Field(..., ge=0)
+    goal_amount: Decimal = Field(..., ge=0, le=decimal_max(12, 2))
     start_date: date
     end_date: Optional[date] = None
     public_page_enabled: bool = False
@@ -687,7 +737,7 @@ class CampaignBase(BaseModel):
     )
     thank_you_message: Optional[str] = None
     allow_anonymous: bool = True
-    minimum_donation: Optional[Decimal] = Field(None, ge=0)
+    minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     suggested_amounts: Optional[List[Decimal]] = None
     # A restricted fund: donors gave for this purpose, and finance payments
     # can be charged to it (app/services/restricted_funds.py).
@@ -697,6 +747,9 @@ class CampaignBase(BaseModel):
 
 class CampaignCreate(CampaignBase):
     """Schema for creating a new fundraising campaign"""
+
+    goal_amount: Decimal = Field(..., ge=0, le=MAX_AMOUNT)
+    minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
 
     # W69: the form offers a starting status; without this field a campaign
     # created as Active was stored as Draft, and nothing could change it after.
@@ -717,7 +770,7 @@ class CampaignUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     campaign_type: Optional[CampaignTypeLiteral] = None
-    goal_amount: Optional[Decimal] = Field(None, ge=0)
+    goal_amount: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     status: Optional[CampaignStatusLiteral] = None
@@ -728,7 +781,7 @@ class CampaignUpdate(BaseModel):
     )
     thank_you_message: Optional[str] = None
     allow_anonymous: Optional[bool] = None
-    minimum_donation: Optional[Decimal] = Field(None, ge=0)
+    minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
     suggested_amounts: Optional[List[Decimal]] = None
     is_restricted: Optional[bool] = None
     restriction_purpose: Optional[str] = Field(None, max_length=2000)
@@ -816,6 +869,9 @@ class DonorResponse(DonorBase):
     first_donation_date: Optional[date] = None
     last_donation_date: Optional[date] = None
     active: bool = True
+    # True when the caller holds only fundraising.view and the contact details
+    # were left out, so a screen can say why they are blank (GF-9).
+    contact_hidden: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -832,8 +888,8 @@ class DonationBase(BaseModel):
 
     model_config = _request_config
 
-    amount: Decimal = Field(..., ge=0)
-    donation_date: datetime
+    amount: Decimal = Field(..., ge=0, le=MONEY_MAX)
+    donation_date: UTCDateTime
     payment_method: PaymentMethodLiteral
     payment_status: PaymentStatusLiteral = "completed"
     is_recurring: bool = False
@@ -850,6 +906,8 @@ class DonationBase(BaseModel):
 class DonationCreate(DonationBase):
     """Schema for creating a new donation"""
 
+    amount: Decimal = Field(..., gt=0, le=MAX_GIFT_AMOUNT)
+
     campaign_id: Optional[UUID] = None
     donor_id: Optional[UUID] = None
 
@@ -859,8 +917,8 @@ class DonationUpdate(BaseModel):
 
     model_config = _request_config
 
-    amount: Optional[Decimal] = Field(None, ge=0)
-    donation_date: Optional[datetime] = None
+    amount: Optional[Decimal] = Field(None, gt=0, le=MAX_GIFT_AMOUNT)
+    donation_date: Optional[UTCDateTime] = None
     payment_method: Optional[PaymentMethodLiteral] = None
     payment_status: Optional[PaymentStatusLiteral] = None
     is_recurring: Optional[bool] = None
@@ -906,7 +964,7 @@ class PledgeBase(BaseModel):
 
     model_config = _request_config
 
-    pledged_amount: Decimal = Field(..., ge=0)
+    pledged_amount: Decimal = Field(..., ge=0, le=MONEY_MAX)
     pledge_date: date
     due_date: Optional[date] = None
     payment_schedule: Optional[Dict[str, Any]] = None
@@ -917,6 +975,8 @@ class PledgeBase(BaseModel):
 class PledgeCreate(PledgeBase):
     """Schema for creating a new pledge"""
 
+    pledged_amount: Decimal = Field(..., gt=0, le=MAX_GIFT_AMOUNT)
+
     campaign_id: Optional[UUID] = None
     donor_id: Optional[UUID] = None
 
@@ -926,8 +986,8 @@ class PledgeUpdate(BaseModel):
 
     model_config = _request_config
 
-    pledged_amount: Optional[Decimal] = Field(None, ge=0)
-    fulfilled_amount: Optional[Decimal] = Field(None, ge=0)
+    pledged_amount: Optional[Decimal] = Field(None, gt=0, le=MAX_GIFT_AMOUNT)
+    fulfilled_amount: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
     pledge_date: Optional[date] = None
     due_date: Optional[date] = None
     status: Optional[PledgeStatusLiteral] = None
@@ -968,11 +1028,11 @@ class FundraisingEventBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     event_type: FundraisingEventTypeLiteral
-    event_date: datetime
+    event_date: UTCDateTime
     location: Optional[str] = Field(None, max_length=300)
-    ticket_price: Optional[Decimal] = Field(None, ge=0)
-    max_attendees: Optional[int] = Field(None, ge=0)
-    revenue_goal: Optional[Decimal] = Field(None, ge=0)
+    ticket_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    max_attendees: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    revenue_goal: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     registration_url: Optional[str] = Field(None, max_length=500)
     _validate_registration_url = field_validator("registration_url", mode="before")(
         validate_external_http_url
@@ -983,6 +1043,9 @@ class FundraisingEventBase(BaseModel):
 
 class FundraisingEventCreate(FundraisingEventBase):
     """Schema for creating a new fundraising event"""
+
+    ticket_price: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
+    revenue_goal: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
 
     campaign_id: Optional[UUID] = None
     event_id: Optional[UUID] = None
@@ -996,11 +1059,11 @@ class FundraisingEventUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     event_type: Optional[FundraisingEventTypeLiteral] = None
-    event_date: Optional[datetime] = None
+    event_date: Optional[UTCDateTime] = None
     location: Optional[str] = Field(None, max_length=300)
-    ticket_price: Optional[Decimal] = Field(None, ge=0)
-    max_attendees: Optional[int] = Field(None, ge=0)
-    revenue_goal: Optional[Decimal] = Field(None, ge=0)
+    ticket_price: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
+    max_attendees: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    revenue_goal: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
     registration_url: Optional[str] = Field(None, max_length=500)
     _validate_registration_url = field_validator("registration_url", mode="before")(
         validate_external_http_url
@@ -1008,9 +1071,9 @@ class FundraisingEventUpdate(BaseModel):
     sponsors: Optional[List[Dict[str, Any]]] = None
     notes: Optional[str] = None
     status: Optional[FundraisingEventStatusLiteral] = None
-    actual_revenue: Optional[Decimal] = Field(None, ge=0)
-    expenses: Optional[Decimal] = Field(None, ge=0)
-    current_attendees: Optional[int] = Field(None, ge=0)
+    actual_revenue: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    expenses: Optional[Decimal] = Field(None, ge=0, le=MAX_AMOUNT)
+    current_attendees: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     campaign_id: Optional[UUID] = None
     event_id: Optional[UUID] = None
 

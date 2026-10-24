@@ -10,11 +10,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import { Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert, Users } from 'lucide-react';
 import { schedulingService, type PlatoonOverview } from '../../modules/scheduling/services/api';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useRanks } from '../../hooks/useRanks';
-import SchedulingHeader from './SchedulingHeader';
+import { SchedulingPageHeader } from '../../components/scheduling/SchedulingPageHeader';
 
 // Standard platoon labels offered in the assign dropdown, merged with any
 // platoons already present in the org.
@@ -83,11 +83,11 @@ const SchedulingPlatoonsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingHeader
+        <SchedulingPageHeader
+          icon={Users}
           title="Platoons"
-          backTo="/scheduling/admin"
-          backLabel="Back to scheduling administration"
-          description="Assign and manage department rosters"
+          subtitle="Assign and manage department rosters"
+          underHub="/scheduling/admin"
         />
 
         {loading ? (
@@ -98,7 +98,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
           <>
             {!overview.platoons_enabled && (
               <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" />
                 <div className="text-sm text-amber-700 dark:text-amber-400">
                   Platoon scheduling is turned off for your department. You can still assign members here, but platoon
                   features won't appear until you enable it in{' '}
@@ -132,7 +132,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
               <button
                 onClick={() => void assign(target)}
                 disabled={saving || selected.size === 0}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />} Assign to platoon
               </button>

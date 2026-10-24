@@ -4,7 +4,10 @@
 
 export type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'trustee' | 'executive' | 'annual' | 'other';
 export type MinutesStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
-export type MotionStatus = 'passed' | 'failed' | 'tabled' | 'withdrawn';
+/** `pending` is a motion the outline prepared that the meeting has not acted on; it is never part of the record. */
+export type MotionStatus = 'pending' | 'passed' | 'failed' | 'tabled' | 'withdrawn';
+/** The previous minutes were accepted as submitted, or as revised. */
+export type MotionAcceptance = 'as_submitted' | 'as_revised';
 export type ActionItemStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'overdue';
 export type ActionItemPriority = 'low' | 'medium' | 'high' | 'urgent';
 
@@ -23,6 +26,14 @@ export interface SectionEntry {
   needs_motion?: boolean | undefined;
   /** From the outline: the wording the section's motion starts with. */
   motion_text?: string | undefined;
+  /** From the agenda item: who reports on this item. */
+  presenter?: string | undefined;
+  /** The meeting never reached this item; it stays in the record, marked so. */
+  not_taken_up?: boolean | undefined;
+  /** The agenda item this section was made from (set by the server). */
+  agenda_key?: string | null | undefined;
+  /** Documents-library files linked from the agenda item (set by the server). */
+  documents?: { id: string; name: string }[] | undefined;
 }
 
 export interface TemplateSectionEntry {
@@ -118,6 +129,16 @@ export interface AttendeeEntry {
   note?: string | null;
 }
 
+export type MotionThreshold = 'majority_cast' | 'majority_present' | 'two_thirds';
+export type RollCallVote = 'yes' | 'no' | 'abstain' | 'recuse';
+
+/** One member's vote in a roll call. The server fills in `user_id` from the minutes' roll. */
+export interface RollCallEntry {
+  name: string;
+  vote: RollCallVote;
+  user_id?: string | null;
+}
+
 export interface Motion {
   id: string;
   minutes_id: string;
@@ -129,9 +150,22 @@ export interface Motion {
   section_key?: string | null;
   discussion_notes?: string;
   status: MotionStatus;
+  /** For the motion accepting the previous minutes: how they were accepted. */
+  acceptance?: MotionAcceptance | null;
+  /** The minutes this motion accepts, set by the server; and where they stand. */
+  previous_minutes_id?: string | null;
+  previous_minutes_title?: string | null;
+  previous_minutes_status?: string | null;
   votes_for?: number;
   votes_against?: number;
   votes_abstain?: number;
+  votes_recused?: number | null;
+  /** What the motion needed to carry; a majority of the votes cast when absent. */
+  threshold?: MotionThreshold | null;
+  /** Each member's vote, when taken by roll call. */
+  roll_call?: RollCallEntry[] | null;
+  /** passed or failed when the counts and threshold decide it, as the server reads them. */
+  suggested_status?: 'passed' | 'failed' | null;
   /** The ballot that decided the motion, when it went to a ballot. */
   election_id?: string | null;
   ballot_item_id?: string | null;
@@ -172,10 +206,15 @@ export interface MyActionItem extends ActionItem {
   minutes_status: MinutesStatus;
 }
 
+/** Which attendance statuses minutes name; the roll is always recorded in full. */
+export type AttendanceListing = 'all' | 'present_excused' | 'present';
+
 export interface MeetingMinutes {
   id: string;
   organization_id: string;
   title: string;
+  /** The meeting record these minutes were drafted from, if any. */
+  meeting_id?: string | null;
   meeting_type: MeetingType;
   meeting_date: string;
   location?: string;
@@ -183,6 +222,10 @@ export interface MeetingMinutes {
   called_to_order_at?: string;
   adjourned_at?: string;
   attendees?: AttendeeEntry[];
+  /** This set's own choice; null follows the department default. */
+  attendance_listing?: AttendanceListing | null;
+  /** What is in force: the choice above, else the department default. */
+  attendance_listing_effective?: AttendanceListing;
   quorum_met?: boolean;
   quorum_count?: number;
   event_id?: string;
@@ -264,26 +307,35 @@ export interface MotionCreate {
   section_key?: string | undefined;
   discussion_notes?: string | undefined;
   status?: MotionStatus | undefined;
+  acceptance?: MotionAcceptance | null | undefined;
   votes_for?: number | undefined;
   votes_against?: number | undefined;
   votes_abstain?: number | undefined;
+  votes_recused?: number | undefined;
+  threshold?: MotionThreshold | undefined;
+  roll_call?: RollCallEntry[] | undefined;
   order?: number | undefined;
   election_id?: string | undefined;
   ballot_item_id?: string | undefined;
 }
 
 export interface MotionUpdate {
-  motion_text?: string;
-  moved_by?: string;
-  seconded_by?: string;
-  discussion_notes?: string;
-  status?: MotionStatus;
-  votes_for?: number;
-  votes_against?: number;
-  votes_abstain?: number;
-  order?: number;
-  election_id?: string | null;
-  ballot_item_id?: string | null;
+  motion_text?: string | undefined;
+  moved_by?: string | undefined;
+  seconded_by?: string | undefined;
+  discussion_notes?: string | undefined;
+  status?: MotionStatus | undefined;
+  /** An explicit null clears it. */
+  acceptance?: MotionAcceptance | null | undefined;
+  votes_for?: number | undefined;
+  votes_against?: number | undefined;
+  votes_abstain?: number | undefined;
+  votes_recused?: number | undefined;
+  threshold?: MotionThreshold | undefined;
+  roll_call?: RollCallEntry[] | null | undefined;
+  order?: number | undefined;
+  election_id?: string | null | undefined;
+  ballot_item_id?: string | null | undefined;
 }
 
 /** A member an action item may be assigned to (W52-6). */
@@ -325,6 +377,36 @@ export interface MinutesSearchResult {
   status: MinutesStatus;
   snippet: string;
   match_field: string;
+}
+
+// ── Archive search ──
+
+export interface ArchiveSnippetPart {
+  text: string;
+  hit: boolean;
+}
+
+export interface ArchiveMatch {
+  kind: 'title' | 'section' | 'motion' | 'action_item';
+  label: string;
+  parts: ArchiveSnippetPart[];
+}
+
+export interface ArchiveHit {
+  id: string;
+  title: string;
+  meeting_type: MeetingType;
+  meeting_date: string;
+  status: MinutesStatus;
+  match_count: number;
+  matches: ArchiveMatch[];
+}
+
+export interface ArchiveSearchResponse {
+  terms: string[];
+  hits: ArchiveHit[];
+  searched: number;
+  truncated: boolean;
 }
 
 // ── Roll call suggestions ──
@@ -514,10 +596,120 @@ export interface MinutesSuggestion {
   created_at: string;
 }
 
+/** What a later meeting's passed acceptance motion implies for these minutes' adoption. */
+export interface AdoptionProposal {
+  motion_id: string;
+  adopted_on: string;
+  adopting_minutes_id: string;
+  adopting_minutes_title: string;
+  as_amended: boolean;
+  moved_by?: string | null;
+  seconded_by?: string | null;
+}
+
 export interface AdoptionDetails {
   adopted_on?: string | undefined;
   adopting_minutes_id?: string | undefined;
   as_amended?: boolean | undefined;
   moved_by?: string | undefined;
   seconded_by?: string | undefined;
+}
+
+/** The department's action item reminder settings, as the server applies them. */
+export interface MinutesReminderSettings {
+  action_item_reminders: boolean;
+  reminder_days_before_due: number;
+  overdue_repeat_days: number;
+  open_items_digest: boolean;
+  signature_slots: SignatureSlot[];
+  /** Also post published minutes on the public minutes page. */
+  public_posting: boolean;
+  executive_library_publishing: boolean;
+  executive_public_posting: boolean;
+  /** What the server will actually do for executive-session minutes, whatever the switches read. */
+  executive_effective_library: boolean;
+  executive_effective_public: boolean;
+  attendance_listing: AttendanceListing;
+  /** File a closed election's result with its meeting's minutes without being asked. */
+  auto_file_election_results: boolean;
+}
+
+/** What every panel on the minutes settings page is given. */
+export interface MinutesSettingsPanelProps {
+  /** The department's settings as the server applies them. */
+  settings: MinutesReminderSettings;
+  /** Whether the viewer may change them (`settings.manage`); anyone else reads. */
+  canEdit: boolean;
+  /** Called after a save so the page re-reads what the server now holds. */
+  onSaved: () => Promise<void> | void;
+}
+
+/** Where one set of minutes stands: the library copy, the public copy, and what the settings allow. */
+export interface MinutesPublishingStatus {
+  library_allowed: boolean;
+  library_published: boolean;
+  library_version: number | null;
+  library_published_at: string | null;
+  public_allowed: boolean;
+  public_posted: boolean;
+  public_withdrawn: boolean;
+  public_version: number | null;
+  public_posted_at: string | null;
+  public_replaced_version: number | null;
+  public_under_correction: boolean;
+  public_copy_id: string | null;
+}
+
+/** What publishing did, so the screen can say posted or not posted. */
+export interface MinutesPublishResult {
+  public_allowed: boolean;
+  public_posted: boolean;
+}
+
+/** A place on adopted minutes for a signature. */
+export interface SignatureSlot {
+  key: string;
+  title: string;
+  /** The position whose holders may sign; anyone who manages minutes may when absent. */
+  position_slug?: string | null;
+}
+
+export interface MinutesSignature {
+  id: string;
+  slot_key: string;
+  slot_title: string;
+  signed_name: string;
+  signed_at: string;
+  /** The signature was given on the version now on file. */
+  intact: boolean;
+}
+
+export interface SignatureStatusSlot extends SignatureSlot {
+  can_sign: boolean;
+  signature: MinutesSignature | null;
+}
+
+export interface SignatureStatus {
+  /** The adopted version being signed; null before adoption. */
+  version: number | null;
+  slots: SignatureStatusSlot[];
+}
+
+// ── Agenda sync ──
+
+export type AgendaSyncChangeType = 'add' | 'update' | 'remove' | 'reorder';
+
+export interface AgendaSyncChange {
+  id: string;
+  type: AgendaSyncChangeType;
+  key: string;
+  title: string;
+  /** The section already holds text, so removing its item detaches it instead of deleting it. */
+  has_content: boolean;
+  fields: { field: string; before: unknown; after: unknown }[];
+}
+
+export interface AgendaSyncPreview {
+  meeting_id: string;
+  changes: AgendaSyncChange[];
 }

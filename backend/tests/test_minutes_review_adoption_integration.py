@@ -932,7 +932,7 @@ class TestMotionBallots:
             detail = (await c.get(f"/minutes/{minutes['id']}")).json()
         assert resp.status_code == 201, resp.text
         assert resp.json()["election_title"] == "Bylaw vote"
-        (motion,) = detail["motions"]
+        (motion,) = [m for m in detail["motions"] if m["status"] != "pending"]
         assert (motion["election_id"], motion["ballot_item_id"]) == (
             election.id,
             "item-1",
@@ -1030,7 +1030,10 @@ class TestMotionBallots:
         )
         rows = (
             await world.db.execute(
-                text("SELECT election_id FROM meeting_motions WHERE minutes_id = :i"),
+                text(
+                    "SELECT election_id FROM meeting_motions "
+                    "WHERE minutes_id = :i AND status != 'pending'"
+                ),
                 {"i": minutes["id"]},
             )
         ).all()

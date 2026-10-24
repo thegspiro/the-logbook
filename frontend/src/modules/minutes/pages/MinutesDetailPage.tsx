@@ -13,13 +13,25 @@ import { RichTextEditor } from '../../../components/ux/RichTextEditor';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle, FileDown, Gavel, ListChecks } from 'lucide-react';
+import {
+  ArrowUp,
+  ArrowDown,
+  Plus,
+  Trash2,
+  BookOpen,
+  CheckCircle,
+  ClipboardList,
+  FileDown,
+  Gavel,
+  ListChecks,
+} from 'lucide-react';
 import { eventService } from '../../../services/api';
 import { electionService } from '../../../services/electionService';
 import { minutesService } from '../services/api';
 import type { ElectionListItem } from '../../../types/election';
 import { getStatusBadgeClass } from '../../../utils/electionHelpers';
 import { useAuthStore } from '../../../stores/authStore';
+import { PublishingStatusNote } from '../components/PublishingStatusNote';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -34,25 +46,35 @@ import type {
   SectionEntry,
   AdoptionDetails,
   ImportableElection,
+  MinutesPublishingStatus,
+  AdoptionProposal,
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { saveBlob } from '../../../utils/saveBlob';
 import { PanelDisclosure } from '../components/PanelDisclosure';
 import { AdoptDialog } from '../components/AdoptDialog';
+import { AgendaSyncDialog } from '../components/AgendaSyncDialog';
 import { AttachmentsPanel } from '../components/AttachmentsPanel';
 import { AttendancePanel } from '../components/AttendancePanel';
 import { CarryForwardDialog } from '../components/CarryForwardDialog';
 import { ClosedSessionsPanel } from '../components/ClosedSessionsPanel';
 import { ElectionResultsPanel } from '../components/ElectionResultsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { MotionVoteFields } from '../components/MotionVoteFields';
+import { MotionVoteSummary } from '../components/MotionVoteSummary';
 import { MeetingTimeCapture } from '../components/MeetingTimeCapture';
 import { PersonPicker } from '../components/PersonPicker';
 import { SectionMotion } from '../components/SectionMotion';
 import { RevisionsPanel } from '../components/RevisionsPanel';
+import { SignaturesPanel } from '../components/SignaturesPanel';
 import { SuggestChangeForm } from '../components/SuggestChangeForm';
 import { SuggestionsPanel } from '../components/SuggestionsPanel';
 import { useMinutesSuggestions } from '../hooks/useMinutesSuggestions';
+import { motionMakers } from '../utils/motionMakers';
+import { emptyVoteDraft, voteDraftPayload } from '../utils/voteDraft';
+import type { VoteDraft } from '../utils/voteDraft';
+import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -78,7 +100,7 @@ const MOTION_STATUS_BADGES: Record<string, string> = {
 const PRIORITY_BADGES: Record<string, string> = {
   low: 'bg-theme-surface-secondary text-theme-text-secondary',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
@@ -122,13 +144,17 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Publishing
   const [publishing, setPublishing] = useState(false);
+  const [publishingStatus, setPublishingStatus] = useState<MinutesPublishingStatus | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Adopting, and laying an outline over the draft
   const [showAdopt, setShowAdopt] = useState(false);
   const [adopting, setAdopting] = useState(false);
   const [hasAcceptedSuggestions, setHasAcceptedSuggestions] = useState(false);
+  const [proposal, setProposal] = useState<AdoptionProposal | null>(null);
   const [showApplyOutline, setShowApplyOutline] = useState(false);
+  const [showAgendaSync, setShowAgendaSync] = useState(false);
   const [applyingOutline, setApplyingOutline] = useState(false);
 
   // Closed elections a motion can be tied to; loaded when the motion form opens
@@ -144,10 +170,8 @@ export const MinutesDetailPage: React.FC = () => {
     moved_by: '',
     seconded_by: '',
     status: 'passed',
-    votes_for: undefined,
-    votes_against: undefined,
-    votes_abstain: undefined,
   });
+  const [voteDraft, setVoteDraft] = useState<VoteDraft>(emptyVoteDraft());
 
   // Action item form
   const [showActionForm, setShowActionForm] = useState(false);
@@ -289,6 +313,18 @@ export const MinutesDetailPage: React.FC = () => {
     }
   };
 
+  // Sent as a full sections list like every other section edit; an omitted
+  // flag would read as "taken up", so the unchecked state is sent explicitly.
+  const handleSetNotTakenUp = async (sectionKey: string, notTakenUp: boolean) => {
+    if (!minutesId || !minutes) return;
+    try {
+      const sections = minutes.sections.map((s) => (s.key === sectionKey ? { ...s, not_taken_up: notTakenUp } : s));
+      setMinutes(await minutesService.updateMinutes(minutesId, { sections }));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update the section'));
+    }
+  };
+
   // A time is a field of its own on the minutes, not part of a section. Sent as
   // an explicit null to clear it, since an omitted key means "leave it alone".
   const handleSaveTime = async (field: 'called_to_order_at' | 'adjourned_at', iso: string | null) => {
@@ -377,17 +413,81 @@ export const MinutesDetailPage: React.FC = () => {
 
   // ── Publishing ──
 
+  // Only people who manage minutes may ask where publishing stands, and only
+  // minutes that were ever adopted can have been published.
+  const publishedDocumentId = minutes?.published_document_id;
+  const minutesStatus = minutes?.status;
+  const loadPublishingStatus = useCallback(async () => {
+    if (!minutesId || !canManage || (minutesStatus !== 'approved' && !publishedDocumentId)) {
+      setPublishingStatus(null);
+      return;
+    }
+    try {
+      setPublishingStatus(await minutesService.getPublishingStatus(minutesId));
+    } catch {
+      // The status is a convenience; publishing itself reports its own errors.
+      setPublishingStatus(null);
+    }
+  }, [minutesId, canManage, minutesStatus, publishedDocumentId]);
+
+  useEffect(() => {
+    void loadPublishingStatus();
+  }, [loadPublishingStatus]);
+
+  // A later meeting may already have accepted these minutes; its motion fills in
+  // the adoption form. Only circulated minutes can be adopted.
+  useEffect(() => {
+    if (!minutesId || !canManage || minutesStatus !== 'submitted') {
+      setProposal(null);
+      return;
+    }
+    const load = async () => {
+      try {
+        setProposal(await minutesService.getAdoptionProposal(minutesId));
+      } catch {
+        // A hint only: adopting works without it.
+        setProposal(null);
+      }
+    };
+    void load();
+  }, [minutesId, canManage, minutesStatus]);
+
   const handlePublish = async () => {
     if (!minutesId) return;
     try {
       setPublishing(true);
-      await minutesService.publishMinutes(minutesId);
+      const result = await minutesService.publishMinutes(minutesId);
       await fetchMinutes();
-      toast.success('Minutes published to Documents');
+      await loadPublishingStatus();
+      toast.success(
+        result.public_posted ? 'Minutes published to Documents and posted publicly' : 'Minutes published to Documents'
+      );
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to publish minutes'));
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handleWithdrawPublic = async () => {
+    if (!minutesId) return;
+    const ok = await confirm({
+      title: 'Take the public copy down?',
+      message:
+        'The public page stops showing these minutes right away. The copy in Documents stays. Publishing them again posts a fresh public copy.',
+      confirmLabel: 'Take it down',
+      cancelLabel: 'Keep it up',
+    });
+    if (!ok) return;
+    try {
+      setWithdrawing(true);
+      await minutesService.withdrawPublicCopy(minutesId);
+      await loadPublishingStatus();
+      toast.success('The public copy was taken down');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to take the public copy down'));
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -498,6 +598,7 @@ export const MinutesDetailPage: React.FC = () => {
       try {
         await minutesService.addMotion(minutesId, {
           ...motionForm,
+          ...voteDraftPayload(voteDraft, motionMakers(minutes?.attendees ?? [])),
           order: minutes?.motions.length || 0,
         });
         setShowMotionForm(false);
@@ -506,16 +607,25 @@ export const MinutesDetailPage: React.FC = () => {
           moved_by: '',
           seconded_by: '',
           status: 'passed',
-          votes_for: undefined,
-          votes_against: undefined,
-          votes_abstain: undefined,
         });
+        setVoteDraft(emptyVoteDraft());
         void fetchMinutes();
         toast.success('Motion added');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add motion'));
       }
     });
+
+  const handleUseSuggestedResult = async (motionId: string, status: 'passed' | 'failed') => {
+    if (!minutesId) return;
+    try {
+      await minutesService.updateMotion(minutesId, motionId, { status });
+      await fetchMinutes();
+      toast.success(`Result changed to ${status}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change the result'));
+    }
+  };
 
   const handleDeleteMotion = async (motionId: string) => {
     if (!minutesId) return;
@@ -659,7 +769,7 @@ export const MinutesDetailPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-5xl px-4 py-8">
+        <div className="mx-auto max-w-7xl">
           <div className="text-theme-text-muted py-12 text-center" role="status" aria-live="polite">
             Loading minutes...
           </div>
@@ -671,7 +781,7 @@ export const MinutesDetailPage: React.FC = () => {
   if (error || !minutes) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-5xl px-4 py-8">
+        <div className="mx-auto max-w-7xl">
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-300">{error || 'Minutes not found'}</p>
           </div>
@@ -680,66 +790,72 @@ export const MinutesDetailPage: React.FC = () => {
     );
   }
 
+  const recordedMotions = minutes.motions.filter((m) => m.status !== 'pending');
+
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <Link to="/minutes" className="text-sm text-blue-600 hover:text-blue-700">
-            &larr; Back to Minutes
-          </Link>
-          <div className="mt-2 flex items-start justify-between">
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">{minutes.title}</h1>
-              <p className="text-theme-text-muted mt-1">
+      <div className="mx-auto max-w-7xl">
+        <GovernancePageHeader
+          icon={ClipboardList}
+          breadcrumbLabel={minutes.title}
+          title={
+            <span className="flex flex-wrap items-center gap-3">
+              {minutes.title}{' '}
+              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
+                {STATUS_LABELS[minutes.status] ?? minutes.status}
+              </span>
+            </span>
+          }
+          subtitle={
+            <>
+              <p>
                 {formatDateTime(minutes.meeting_date, tz)}
                 {minutes.location && ` \u00b7 ${minutes.location}`}
                 {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
               </p>
-            </div>
-            <div className="flex shrink-0 flex-col items-end gap-2">
-              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
-                {STATUS_LABELS[minutes.status] ?? minutes.status}
-              </span>
-              <button
-                type="button"
-                disabled={downloadingPdf}
-                onClick={() => {
-                  void handleDownloadPdf();
-                }}
-                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2 text-sm"
-              >
-                <FileDown className="h-4 w-4" aria-hidden="true" />
-                {downloadingPdf ? 'Preparing…' : 'Download PDF'}
-              </button>
-            </div>
-          </div>
-
-          {/* How the body adopted them */}
-          {minutes.status === 'approved' && minutes.adopted_on && (
-            <p className="text-theme-text-secondary mt-1 text-sm">
-              Adopted {formatDate(minutes.adopted_on, tz)}
-              {minutes.adopted_as_amended === true && ' as amended'}
-              {minutes.adopted_as_amended === false && ' as presented'}
-              {minutes.adopting_minutes_id && (
-                <>
-                  {' at '}
-                  <Link to={`/minutes/${minutes.adopting_minutes_id}`} className="text-blue-600 hover:text-blue-700">
-                    {minutes.adopting_minutes_title ?? 'the adopting meeting'}
-                  </Link>
-                </>
+              {/* How the body adopted them */}
+              {minutes.status === 'approved' && minutes.adopted_on && (
+                <p className="text-theme-text-secondary mt-1 text-sm">
+                  Adopted {formatDate(minutes.adopted_on, tz)}
+                  {minutes.adopted_as_amended === true && ' as amended'}
+                  {minutes.adopted_as_amended === false && ' as presented'}
+                  {minutes.adopting_minutes_id && (
+                    <>
+                      {' at '}
+                      <Link
+                        to={`/minutes/${minutes.adopting_minutes_id}`}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        {minutes.adopting_minutes_title ?? 'the adopting meeting'}
+                      </Link>
+                    </>
+                  )}
+                </p>
               )}
-            </p>
-          )}
+            </>
+          }
+          actions={
+            <button
+              type="button"
+              disabled={downloadingPdf}
+              onClick={() => {
+                void handleDownloadPdf();
+              }}
+              className="btn-secondary touch:min-h-11 inline-flex items-center gap-2 text-sm"
+            >
+              <FileDown className="h-4 w-4" aria-hidden="true" />
+              {downloadingPdf ? 'Preparing…' : 'Download PDF'}
+            </button>
+          }
+        />
 
-          {/* Rejection notice */}
-          {minutes.status === 'rejected' && minutes.rejection_reason && (
-            <div className="mt-3 border-l-4 border-red-500 bg-red-500/10 p-4">
-              <p className="text-sm font-medium text-red-700 dark:text-red-300">Rejection Reason:</p>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{minutes.rejection_reason}</p>
-            </div>
-          )}
-        </div>
+        {/* Rejection notice */}
+        {minutes.status === 'rejected' && minutes.rejection_reason && (
+          <div className="mb-6 border-l-4 border-red-500 bg-red-500/10 p-4">
+            <p className="text-sm font-medium text-red-700 dark:text-red-300">Rejection Reason:</p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">{minutes.rejection_reason}</p>
+          </div>
+        )}
 
         {/* Linked Event */}
         {(linkedEvent || (canManage && isEditable)) && (
@@ -835,6 +951,24 @@ export const MinutesDetailPage: React.FC = () => {
                 re-publish them to replace it.
               </p>
             )}
+            {minutes.status === 'submitted' && proposal && (
+              <p className="alert-info text-theme-text-primary mb-3 text-sm" role="status">
+                <Link to={`/minutes/${proposal.adopting_minutes_id}`} className="underline">
+                  {proposal.adopting_minutes_title}
+                </Link>{' '}
+                accepted these minutes {proposal.as_amended ? 'as revised' : 'as submitted'}
+                {proposal.moved_by ? `, moved by ${proposal.moved_by}` : ''}
+                {proposal.seconded_by ? `, seconded by ${proposal.seconded_by}` : ''}. Adopt Minutes opens already
+                filled in from that motion; an officer other than the one who circulated them confirms it.
+              </p>
+            )}
+            <PublishingStatusNote
+              status={publishingStatus}
+              withdrawing={withdrawing}
+              onWithdraw={() => {
+                void handleWithdrawPublic();
+              }}
+            />
             <div className="flex flex-wrap gap-3">
               {(minutes.status === 'draft' || minutes.status === 'rejected') && (
                 <button
@@ -971,6 +1105,8 @@ export const MinutesDetailPage: React.FC = () => {
           <AttendancePanel
             minutesId={minutes.id}
             attendees={minutes.attendees ?? []}
+            listing={minutes.attendance_listing_effective ?? 'all'}
+            listingOverride={minutes.attendance_listing ?? null}
             canEdit={Boolean(canManage && isEditable)}
             onSaved={refreshMinutes}
           />
@@ -982,6 +1118,15 @@ export const MinutesDetailPage: React.FC = () => {
             <h2 className="text-theme-text-primary text-lg font-semibold">Meeting Sections</h2>
             {canManage && isEditable && (
               <div className="flex flex-wrap gap-2">
+                {minutes.meeting_id && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAgendaSync(true)}
+                    className="btn-secondary touch:min-h-11 text-sm"
+                  >
+                    Sync from agenda
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowApplyOutline(true)}
@@ -1043,7 +1188,7 @@ export const MinutesDetailPage: React.FC = () => {
               {canManage && isEditable && (
                 <button
                   onClick={() => setShowAddSection(true)}
-                  className="mt-3 text-sm text-cyan-600 hover:text-cyan-800"
+                  className="mt-3 text-sm text-cyan-700 hover:text-cyan-800 dark:text-cyan-600"
                 >
                   Add your first section
                 </button>
@@ -1089,6 +1234,11 @@ export const MinutesDetailPage: React.FC = () => {
                             <span className="ml-2 rounded-sm bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                               {openSuggestionCount(section.key)} open{' '}
                               {openSuggestionCount(section.key) === 1 ? 'suggestion' : 'suggestions'}
+                            </span>
+                          )}
+                          {section.not_taken_up && (
+                            <span className="bg-theme-surface-secondary text-theme-text-primary ml-2 rounded-sm px-2 py-0.5 text-xs font-medium">
+                              Not taken up
                             </span>
                           )}
                           {section.required && sectionIsBlank(section) && isEditable && (
@@ -1138,6 +1288,25 @@ export const MinutesDetailPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {(section.presenter || (section.documents ?? []).length > 0) && (
+                      <div className="text-theme-text-muted mb-2 space-y-1 text-xs">
+                        {section.presenter && <p>Presented by {section.presenter}</p>}
+                        {(section.documents ?? []).length > 0 && (
+                          <p>
+                            Documents:{' '}
+                            {(section.documents ?? []).map((doc, n) => (
+                              <React.Fragment key={doc.id}>
+                                {n > 0 && ', '}
+                                <Link to="/documents" className="text-blue-700 underline dark:text-blue-400">
+                                  {doc.name || 'Document'}
+                                </Link>
+                              </React.Fragment>
+                            ))}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {isEditing ? (
                       <div>
                         <RichTextEditor
@@ -1171,6 +1340,8 @@ export const MinutesDetailPage: React.FC = () => {
                         format={section.format}
                         className="text-theme-text-secondary text-sm"
                       />
+                    ) : section.not_taken_up ? (
+                      <p className="text-theme-text-muted text-sm italic">Not taken up.</p>
                     ) : (
                       <p className="text-theme-text-muted text-sm italic">
                         No content yet.{' '}
@@ -1186,6 +1357,20 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                         )}
                       </p>
+                    )}
+
+                    {canManage && isEditable && sectionIsBlank(section) && (
+                      <label className="mt-2 flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(section.not_taken_up)}
+                          onChange={(e) => {
+                            void handleSetNotTakenUp(section.key, e.target.checked);
+                          }}
+                          className="form-checkbox"
+                        />
+                        <span className="text-theme-text-secondary">The meeting did not take this up</span>
+                      </label>
                     )}
 
                     {(section.key === 'call_to_order' || section.key === 'adjournment') && (
@@ -1235,7 +1420,7 @@ export const MinutesDetailPage: React.FC = () => {
           id="motions-heading"
           icon={<Gavel className="h-5 w-5" aria-hidden="true" />}
           title="Motions"
-          count={minutes.motions.length}
+          count={recordedMotions.length}
           defaultOpen={false}
           actions={
             canManage &&
@@ -1297,65 +1482,12 @@ export const MinutesDetailPage: React.FC = () => {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <label htmlFor="votes-for" className="sr-only">
-                    Votes for
-                  </label>
-                  <input
-                    id="votes-for"
-                    type="number"
-                    min={0}
-                    value={motionForm.votes_for ?? ''}
-                    onChange={(e) =>
-                      setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })
-                    }
-                    placeholder="Votes for"
-                    aria-label="Votes for"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="votes-against" className="sr-only">
-                    Votes against
-                  </label>
-                  <input
-                    id="votes-against"
-                    type="number"
-                    min={0}
-                    value={motionForm.votes_against ?? ''}
-                    onChange={(e) =>
-                      setMotionForm({
-                        ...motionForm,
-                        votes_against: e.target.value ? parseInt(e.target.value) : undefined,
-                      })
-                    }
-                    placeholder="Votes against"
-                    aria-label="Votes against"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="votes-abstain" className="sr-only">
-                    Abstentions
-                  </label>
-                  <input
-                    id="votes-abstain"
-                    type="number"
-                    min={0}
-                    value={motionForm.votes_abstain ?? ''}
-                    onChange={(e) =>
-                      setMotionForm({
-                        ...motionForm,
-                        votes_abstain: e.target.value ? parseInt(e.target.value) : undefined,
-                      })
-                    }
-                    placeholder="Abstentions"
-                    aria-label="Abstentions"
-                    className="form-input"
-                  />
-                </div>
-              </div>
+              <MotionVoteFields
+                idPrefix="motion"
+                attendees={minutes.attendees ?? []}
+                value={voteDraft}
+                onChange={setVoteDraft}
+              />
               {ballots && ballots.length > 0 && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
@@ -1419,11 +1551,11 @@ export const MinutesDetailPage: React.FC = () => {
             </div>
           )}
 
-          {minutes.motions.length === 0 ? (
+          {recordedMotions.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No motions recorded.</p>
           ) : (
             <div className="space-y-3">
-              {minutes.motions.map((motion, i) => (
+              {recordedMotions.map((motion, i) => (
                 <div key={motion.id} className="border-theme-surface-border rounded-lg border p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -1439,12 +1571,6 @@ export const MinutesDetailPage: React.FC = () => {
                       <div className="text-theme-text-muted mt-2 space-x-4 text-xs">
                         {motion.moved_by && <span>Moved by: {motion.moved_by}</span>}
                         {motion.seconded_by && <span>Seconded by: {motion.seconded_by}</span>}
-                        {motion.votes_for !== null && motion.votes_for !== undefined && (
-                          <span>
-                            Vote: {motion.votes_for}-{motion.votes_against || 0}
-                            {motion.votes_abstain ? ` (${motion.votes_abstain} abstain)` : ''}
-                          </span>
-                        )}
                         {motion.election_id && (
                           <span>
                             Decided by ballot:{' '}
@@ -1457,6 +1583,16 @@ export const MinutesDetailPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      <MotionVoteSummary
+                        motion={motion}
+                        onUseSuggested={
+                          canManage && isEditable
+                            ? (status) => {
+                                void handleUseSuggestedResult(motion.id, status);
+                              }
+                            : undefined
+                        }
+                      />
                     </div>
                     {canManage && isEditable && (
                       <button
@@ -1666,6 +1802,14 @@ export const MinutesDetailPage: React.FC = () => {
 
         <AttachmentsPanel minutesId={minutes.id} status={minutes.status} canManage={canManage} defaultOpen={false} />
 
+        <SignaturesPanel
+          minutesId={minutes.id}
+          minutesTitle={minutes.title}
+          status={minutes.status}
+          version={minutes.updated_at}
+          defaultOpen={false}
+        />
+
         <RevisionsPanel
           minutesId={minutes.id}
           status={minutes.status}
@@ -1677,6 +1821,7 @@ export const MinutesDetailPage: React.FC = () => {
           isOpen={showAdopt}
           minutesId={minutes.id}
           hasAcceptedSuggestions={hasAcceptedSuggestions}
+          proposal={proposal}
           attendees={minutes.attendees ?? []}
           busy={adopting}
           onClose={() => setShowAdopt(false)}
@@ -1695,6 +1840,16 @@ export const MinutesDetailPage: React.FC = () => {
           onClose={() => setShowApplyOutline(false)}
           onChoose={(id) => {
             void handleApplyOutline(id);
+          }}
+        />
+
+        <AgendaSyncDialog
+          isOpen={showAgendaSync}
+          minutesId={minutes.id}
+          onClose={() => setShowAgendaSync(false)}
+          onApplied={async () => {
+            await fetchMinutes();
+            toast.success('Agenda synced. Nothing you had written was changed.');
           }}
         />
 

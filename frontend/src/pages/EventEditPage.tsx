@@ -5,9 +5,10 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
+import { useParams, useNavigate } from 'react-router';
 import { Breadcrumbs } from '../components/ux';
-import { Calendar, ArrowLeft, Info } from 'lucide-react';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
+import { Calendar, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { EventCreate, Event, EventUpdate } from '../types/event';
@@ -77,8 +78,8 @@ export const EventEditPage: React.FC = () => {
       // leaving them out keeps what the server has, so a value the browser
       // rounded or defaulted (a time's seconds, an unset lead time) cannot be
       // refused as a change nobody made. An open event's save keeps them as
-      // the form produced them (a blank category is still left out rather than
-      // cleared; see "Events — Edit Form Gaps" in docs/KNOWN_LIMITATIONS.md).
+      // the form produced them, including the nulls it sends for a cleared
+      // field (Category → None among them).
       const payload: EventUpdate = event?.attendance_finalized_at ? withoutAttendanceLockedFields(data) : data;
       const isRecurring = event?.is_recurring || event?.recurrence_parent_id;
       if (isRecurring && updateScope === 'future') {
@@ -192,26 +193,16 @@ export const EventEditPage: React.FC = () => {
       : undefined;
 
   return (
-    <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
-
-        {/* Header */}
-        <div className="mb-8">
-          <Link
-            to={`/events/${eventId}`}
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
-          >
-            <ArrowLeft className="mr-2 h-5 w-5" />
-            Back to Event
-          </Link>
-          <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-            <Calendar className="h-8 w-8 text-red-700" />
-            <span>Edit Event</span>
-          </h1>
-          <p className="text-theme-text-muted mt-1">Update the details for &ldquo;{event.title}&rdquo;.</p>
-        </div>
-
+    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <EventsPageHeader
+        icon={Calendar}
+        title="Edit Event"
+        breadcrumbLabel="Edit"
+        subtitle={<>Update the details for &ldquo;{event.title}&rdquo;.</>}
+        parentCrumbs={[{ label: event.title, path: `/events/${eventId ?? ''}` }]}
+      />
+      {/* The form keeps its reading width under the full-width strip. */}
+      <div className="mx-auto max-w-5xl">
         {error && (
           <div
             className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"

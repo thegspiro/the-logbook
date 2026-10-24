@@ -12,10 +12,21 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Gavel } from 'lucide-react';
+import { Link } from 'react-router';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { minutesService } from '../services/api';
+import { MotionVoteFields } from './MotionVoteFields';
+import { MotionVoteSummary } from './MotionVoteSummary';
 import { PersonPicker } from './PersonPicker';
-import type { AttendeeEntry, Motion, MotionStatus, SectionEntry } from '../types/minutes';
+import { motionMakers } from '../utils/motionMakers';
+import { emptyVoteDraft, voteDraftPayload } from '../utils/voteDraft';
+import type { VoteDraft } from '../utils/voteDraft';
+import type { AttendeeEntry, Motion, MotionAcceptance, MotionStatus, SectionEntry } from '../types/minutes';
+
+const ACCEPTANCES: { value: MotionAcceptance; label: string }[] = [
+  { value: 'as_submitted', label: 'As submitted' },
+  { value: 'as_revised', label: 'As revised' },
+];
 
 const RESULTS: { value: MotionStatus; label: string }[] = [
   { value: 'passed', label: 'Passed' },
@@ -25,6 +36,7 @@ const RESULTS: { value: MotionStatus; label: string }[] = [
 ];
 
 const RESULT_BADGE: Record<MotionStatus, string> = {
+  pending: 'bg-theme-surface-secondary text-theme-text-primary',
   passed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
   tabled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -50,11 +62,17 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
   canRecord,
   onRecorded,
 }) => {
-  const recorded = motions.filter((m) => m.section_key === section.key);
-  const [text, setText] = useState(section.motion_text ?? '');
+  const forSection = motions.filter((m) => m.section_key === section.key);
+  // The outline prepares this section's motion with the minutes; it stays
+  // pending, wording only, until the meeting acts on it.
+  const prepared = forSection.find((m) => m.status === 'pending');
+  const recorded = forSection.filter((m) => m.status !== 'pending');
+  const [text, setText] = useState(prepared?.motion_text ?? section.motion_text ?? '');
+  const [acceptance, setAcceptance] = useState<MotionAcceptance | ''>('');
   const [movedBy, setMovedBy] = useState('');
   const [secondedBy, setSecondedBy] = useState('');
   const [result, setResult] = useState<MotionStatus>('passed');
+  const [voteDraft, setVoteDraft] = useState<VoteDraft>(emptyVoteDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,23 +88,43 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
       setError('The person who moved cannot also second.');
       return;
     }
+    const accepts = Boolean(prepared?.previous_minutes_id);
+    if (accepts && result === 'passed' && !acceptance) {
+      setError('Say whether the minutes were accepted as submitted or as revised.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await minutesService.addMotion(minutesId, {
+      const fields = {
         motion_text: wording,
         moved_by: movedBy.trim() || undefined,
         seconded_by: secondedBy.trim() || undefined,
         status: result,
-        section_key: section.key,
-        order: motions.length,
-      });
+        ...(accepts && result === 'passed' && acceptance ? { acceptance } : {}),
+        ...voteDraftPayload(voteDraft, motionMakers(attendees)),
+      };
+      if (prepared) {
+        await minutesService.updateMotion(minutesId, prepared.id, fields);
+      } else {
+        await minutesService.addMotion(minutesId, { ...fields, section_key: section.key, order: motions.length });
+      }
       toast.success('Motion recorded');
       await onRecorded();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to record the motion'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const changeToSuggested = async (motionId: string, status: 'passed' | 'failed') => {
+    try {
+      await minutesService.updateMotion(minutesId, motionId, { status });
+      await onRecorded();
+      toast.success(`Result changed to ${status}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change the result'));
     }
   };
 
@@ -110,6 +148,32 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
             <span>Seconded by: {motion.seconded_by || 'not recorded'}</span>
             <span className={`rounded-sm px-2 py-0.5 font-medium ${RESULT_BADGE[motion.status]}`}>{motion.status}</span>
           </div>
+          {motion.acceptance && motion.status === 'passed' && (
+            <p className="text-theme-text-primary mt-1 text-xs font-medium">
+              {motion.acceptance === 'as_revised' ? 'Accepted as revised' : 'Accepted as submitted'}
+              {motion.previous_minutes_id && (
+                <>
+                  {' · '}
+                  <Link to={`/minutes/${motion.previous_minutes_id}`} className="underline">
+                    {motion.previous_minutes_title ?? 'the previous minutes'}
+                  </Link>
+                  {motion.previous_minutes_status === 'approved'
+                    ? ' (adopted)'
+                    : ' (waiting for an officer other than the one who circulated them to confirm the adoption)'}
+                </>
+              )}
+            </p>
+          )}
+          <MotionVoteSummary
+            motion={motion}
+            onUseSuggested={
+              canRecord
+                ? (status) => {
+                    void changeToSuggested(motion.id, status);
+                  }
+                : undefined
+            }
+          />
         </div>
       ))}
 
@@ -122,6 +186,15 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
           {error && (
             <p className="alert-danger text-sm" role="alert">
               {error}
+            </p>
+          )}
+          {prepared?.previous_minutes_id && (
+            <p className="text-theme-text-secondary text-sm">
+              Accepting the minutes of{' '}
+              <Link to={`/minutes/${prepared.previous_minutes_id}`} className="underline">
+                {prepared.previous_minutes_title ?? 'the previous meeting'}
+              </Link>
+              .
             </p>
           )}
           <div>
@@ -171,6 +244,32 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
               </select>
             </div>
           </div>
+          {prepared?.previous_minutes_id && result === 'passed' && (
+            <fieldset>
+              <legend className="form-label">The minutes were accepted</legend>
+              {ACCEPTANCES.map((option) => (
+                <label key={option.value} className="mr-4 inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name={`motion-acceptance-${section.key}`}
+                    checked={acceptance === option.value}
+                    onChange={() => setAcceptance(option.value)}
+                  />
+                  {option.label}
+                </label>
+              ))}
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Recording this fills in the adoption of those minutes; an officer other than the one who circulated them
+                confirms it.
+              </p>
+            </fieldset>
+          )}
+          <MotionVoteFields
+            idPrefix={`motion-${section.key}`}
+            attendees={attendees}
+            value={voteDraft}
+            onChange={setVoteDraft}
+          />
           <button
             type="button"
             onClick={() => {

@@ -118,6 +118,8 @@ export interface TrainingSessionCreate {
   training_type: TrainingType;
   credit_hours: number;
   instructor?: string | undefined;
+  /** The member teaching it; the backend checks they are in the org and runs qualification checks against them. */
+  instructor_id?: string | undefined;
 
   // Certification
   issues_certification?: boolean | undefined;
@@ -989,6 +991,12 @@ export interface ReminderConditions {
 export interface PrerequisiteProgramSummary {
   id: string;
   name: string;
+  /**
+   * False while the prerequisite pipeline is deactivated: still stored, but not
+   * enforced until it is reactivated. Absent on summaries built client-side
+   * from the active program list.
+   */
+  active?: boolean | undefined;
 }
 
 // Training Program
@@ -1208,6 +1216,12 @@ export interface ProgramEnrollment {
   progress_percentage: number;
   status: EnrollmentStatus;
   completed_at?: string;
+  /**
+   * An officer's reason for completing the enrollment by hand; null for an
+   * automatic completion. The API blanks it for a member reading their own
+   * enrollment, and the UI shows it only to training.manage holders.
+   */
+  completion_reason?: string | null;
   deadline_warning_sent: boolean;
   next_recert_reset_at?: string;
   last_recert_reset_at?: string;
@@ -1318,6 +1332,14 @@ export interface MemberProgramProgress {
    * then refused by the API.
    */
   locked_requirements?: Record<string, string[]>;
+  /**
+   * Nothing counts toward completing this pipeline (every required item is
+   * inactive, or none is required). The server completes nobody then, so the
+   * enrollment's percentage and "N of M" mean nothing: show this instead.
+   */
+  no_active_requirements?: boolean;
+  /** Phases whose required items are all inactive: none of them completes. */
+  phases_without_active_requirements?: string[];
 }
 
 export interface RegistryImportResult {
@@ -1623,7 +1645,7 @@ export interface ExternalTrainingSyncLog {
   id: string;
   provider_id: string;
   organization_id: string;
-  sync_type: 'full' | 'incremental' | 'manual' | 'review';
+  sync_type: 'full' | 'incremental' | 'manual' | 'review' | 'upload';
   status: SyncStatus;
   started_at: string;
   completed_at?: string;
@@ -1650,6 +1672,7 @@ export interface ExternalTrainingImport {
   course_code?: string;
   description?: string;
   duration_minutes?: number;
+  credit_hours?: number;
   completion_date?: string;
   score?: number;
   passed?: boolean;
@@ -1706,6 +1729,11 @@ export interface BulkImportRequest {
   external_import_ids: string[];
   auto_map_users?: boolean;
   default_category_id?: string;
+}
+
+export interface ImportMatchedResponse {
+  imported: number;
+  failed: number;
 }
 
 export interface BulkImportResponse {
@@ -1966,9 +1994,10 @@ export interface ShiftCompletionReport {
   shift_id?: string;
   shift_date: string;
   trainee_id: string;
-  officer_id: string;
+  /** Null once the filing officer's account has been permanently deleted. */
+  officer_id: string | null;
   trainee_name?: string;
-  officer_name?: string;
+  officer_name?: string | null;
   /** The apparatus the report's shift ran, e.g. "B-5 — Brush 5". Absent for a shift with none. */
   shift_label?: string;
   /** The shift's start, UTC. Formatted in the department's timezone for display. */
@@ -2087,6 +2116,16 @@ export interface OfficerShiftAnalytics {
   status_counts: Record<string, number>;
   trainees: OfficerAnalyticsTrainee[];
   monthly: MonthlyShiftData[];
+}
+
+// ============================================
+// Certification expiry alerts
+// ============================================
+
+export interface CertAlertSettings {
+  enabled: boolean;
+  cc_chief_on_escalation: boolean;
+  include_personal_email_on_final: boolean;
 }
 
 // ============================================

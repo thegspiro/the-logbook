@@ -432,11 +432,21 @@ class StartSessionResponse(BaseModel):
 class DepartmentInfoRequest(BaseModel):
     """Request model for saving department information"""
 
-    name: str = Field(..., min_length=3, max_length=100, description="Department name")
+    # The same bounds as OrganizationSetupCreate.name (and organizations.name,
+    # String(255)): the navigation step resends the name step 1 accepted, so a
+    # narrower range here left a 2-character or 101-character name unable to
+    # finish setup.
+    name: str = Field(..., min_length=2, max_length=255, description="Department name")
     logo: str | None = Field(None, description="Base64-encoded logo image")
     navigation_layout: str = Field(
         ..., description="Navigation layout: 'top' or 'left'"
     )
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, v: Any) -> Any:
+        # Before the length check, so "  A  " is measured as "A" and refused.
+        return v.strip() if isinstance(v, str) else v
 
     @field_validator("navigation_layout")
     @classmethod
@@ -1071,8 +1081,12 @@ async def _persist_session_data_to_org(
             # Map camelCase onboarding keys to snake_case org settings keys
             storage_settings = {
                 "platform": storage_data["platform"],
-                "google_drive_client_id": raw_config.get("googleDriveClientId"),
-                "google_drive_client_secret": raw_config.get("googleDriveClientSecret"),
+                "google_drive_service_account_key": raw_config.get(
+                    "googleDriveServiceAccountKey"
+                ),
+                "google_drive_shared_drive_id": raw_config.get(
+                    "googleDriveSharedDriveId"
+                ),
                 "google_drive_folder_id": raw_config.get("googleDriveFolderId"),
                 "onedrive_tenant_id": raw_config.get("oneDriveTenantId"),
                 "onedrive_client_id": raw_config.get("oneDriveClientId"),
@@ -1723,6 +1737,19 @@ async def verify_email_configuration(
     """
     # Require valid session to prevent unauthenticated SSRF
     await validate_session(raw_request, db)
+
+    # A session issued before completion stays valid until it idles out or
+    # reaches SESSION_MAX_LIFETIME_HOURS, and this route opens outbound SMTP
+    # connections to a host the caller chooses. Every other session route
+    # refuses once setup is done; this one must not be the exception.
+    service = OnboardingService(db)
+    if not await service.needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+
     platform = request.platform
     config = request.config
 
@@ -1836,14 +1863,23 @@ async def save_department_info(
     # Validate and sanitize logo before storing
     validated_logo = await scan_and_validate_logo(db, data.logo, user=None)
 
-    # Update session data with department info
-    session.data = session.data or {}
-    session.data["department"] = {
-        "name": data.name,
-        "logo": validated_logo,
-        "navigation_layout": data.navigation_layout,
-        "saved_at": datetime.now(timezone.utc).isoformat(),
-    }
+    # Merge into what the organization step stored rather than replacing it:
+    # that entry carries organization_id, which the stations, apparatus and
+    # key-custody steps resolve their organization from. Every key this step
+    # owns is written explicitly, so none of them survives stale. Deep-copied
+    # and reassigned because MutableDict tracks top-level changes only
+    # (CLAUDE.md pitfall #12).
+    existing = copy.deepcopy(session.data or {})
+    department = dict(existing.get("department") or {})
+    department.update(
+        {
+            "name": data.name,
+            "logo": validated_logo,
+            "navigation_layout": data.navigation_layout,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    session.data = {**existing, "department": department}
 
     await db.commit()
 

@@ -120,13 +120,17 @@ GET    /elections/{id}/forensics                    # Forensic report (manage)
 DELETE /elections/{id}/votes/{vote_id}              # Void a vote; ?reason= 3-500 chars (manage)
 
 # Ballot email and communication
-POST   /elections/{id}/send-ballot                  # Email ballots with unique tokens; open elections only (manage)
+POST   /elections/{id}/send-ballot                  # Email ballots with unique tokens; open elections only synchronous, kept for API callers (manage)
+POST   /elections/{id}/ballot-send-jobs             # Queue the same send in the background; 202, 409 while any send runs (manage)
+GET    /elections/{id}/ballot-send-jobs/{job_id}    # Status of a queued ballot, reminder or package send and its outcome (manage)
 POST   /elections/{id}/send-test-ballot             # Test ballot to yourself; excluded from results (manage)
 GET    /elections/{id}/non-voters                   # Eligible voters who haven't voted (manage)
-POST   /elections/{id}/remind-non-voters            # Reminder with fresh link to non-voters only (manage)
+POST   /elections/{id}/remind-non-voters            # Reminder with fresh link to non-voters only; synchronous, kept for API callers (manage)
+POST   /elections/{id}/reminder-send-jobs           # Queue the same reminder in the background; 202, 409 while any send runs (manage)
 GET    /elections/{id}/package-recipients           # Prefill list for the pre-meeting package (manage)
 GET    /elections/{id}/package-pdf                  # Pre-meeting package PDF; variant=member|full (manage)
-POST   /elections/{id}/send-package                 # Email pre-meeting package to an edited address list (manage)
+POST   /elections/{id}/send-package                 # Email pre-meeting package, one message per address; synchronous, kept for API callers (manage)
+POST   /elections/{id}/package-send-jobs            # Queue the same package send in the background; 202, 409 while another package send runs (manage)
 
 # Paper ballots
 POST   /elections/{id}/manual-ballots               # Record an in-room paper tally (manage)
@@ -159,8 +163,20 @@ They are read and written through `GET/PATCH /elections/settings`.
 or open elections. `package-recipients` takes `mode=leadership` or
 `mode=eligible_voters`; `package-pdf` takes `variant=member` (eligible
 voters and counts) or `variant=full` (adds per-member ineligibility
-detail). `send-package` mails the edited address list on BCC with the PDF
-attached.
+detail). Each address on the edited list gets its own message with the PDF
+attached, plus a copy to the sender, so the outcome names any address that was
+not sent. The page queues it through `package-send-jobs` and polls the job;
+`send-package` does the same send synchronously for API callers. A package
+send has its own one-at-a-time guard and does not wait on a ballot send.
+
+**Nominations-open announcement.** Opening nominations emails each opted-in
+active member a separate message. `open-nominations` queues it as a
+`ballot_send_jobs` row of `kind = 'announcement'` (`NominationsAnnouncementSend`,
+its own one-at-a-time guard), and the election response carries the latest
+one as `nominations_announcement` for election managers, which the
+Nominations tab follows. A miss or an outright failure is audited
+(`nominations_announcement_failed`) and emails the managers. A failed
+announcement never undoes the phase change.
 
 **Paper ballots.** A recorded tally is plausibility-guarded; exceeding it
 needs `allow_over_count`, which is audited. The recording officer cannot
@@ -170,6 +186,13 @@ batch requires a reason.
 **Reminders.** `remind-non-voters` sends a fresh ballot link to eligible
 members who have not voted, with a one-hour cooldown that starts only when
 a reminder is delivered.
+The page queues it through `reminder-send-jobs` and polls the job, as it
+does for ballot sends; the two kinds share the `ballot_send_jobs` table and
+the one-send-at-a-time guard.
+The election lifecycle task queues its own sends the same way — the ballots
+after an automatic open, and the pre-close reminder — so they share that
+guard too, and the task never waits on a send. An automatic reminder that
+fails for anyone emails the managers once per election.
 
 **Saved ballot templates** store reusable ballot configuration only —
 `name` (1–200), `description`, `ballot_items` (1–250), `voting_method` and

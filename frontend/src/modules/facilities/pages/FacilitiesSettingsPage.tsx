@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { Loader2, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { DialogPortal } from '@/components/DialogPortal';
@@ -8,6 +7,7 @@ import { DialogPanel } from '@/components/ux/DialogPanel';
 import { facilitiesService } from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import type { FacilityStatus, FacilityType, MaintenanceType } from '../types';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 type Lookup = FacilityType | FacilityStatus | MaintenanceType;
 type Kind = 'types' | 'statuses' | 'maintenance';
 const definitions: Record<Kind, { title: string; singular: string; offeredOn: string }> = {
@@ -25,8 +25,7 @@ const definitions: Record<Kind, { title: string; singular: string; offeredOn: st
 };
 const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 export default function FacilitiesSettingsPage() {
-  const navigate = useNavigate(),
-    [data, setData] = useState<Record<Kind, Lookup[]>>({ types: [], statuses: [], maintenance: [] }),
+  const [data, setData] = useState<Record<Kind, Lookup[]>>({ types: [], statuses: [], maintenance: [] }),
     [loading, setLoading] = useState(true),
     [editing, setEditing] = useState<{ kind: Kind; item?: Lookup } | null>(null);
   const { confirm } = useConfirm();
@@ -72,18 +71,12 @@ export default function FacilitiesSettingsPage() {
     }
   };
   return (
-    <div className="space-y-6">
-      <header className="flex items-start gap-3">
-        <button className="btn-icon" aria-label="Back to Facilities" onClick={() => void navigate('/facilities')}>
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Facility Settings</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            Choose the types and statuses offered on facility and maintenance record forms.
-          </p>
-        </div>
-      </header>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <OperationsPageHeader
+        icon={Settings}
+        title="Facility Settings"
+        subtitle="Choose the types and statuses offered on facility and maintenance record forms."
+      />
       {loading ? (
         <div className="flex justify-center py-16" role="status">
           <Loader2 className="h-7 w-7 animate-spin" />

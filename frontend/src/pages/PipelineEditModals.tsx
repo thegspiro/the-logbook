@@ -37,6 +37,7 @@ import type {
   TrainingProgram,
 } from '../types/training';
 import { useTablist } from '../hooks/useTablist';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // "Sequential" is deliberately absent: nothing in the system ever enforced an
 // order between requirements, so it behaved exactly like Flexible while telling
@@ -154,6 +155,31 @@ export const EditProgramModal: React.FC<{
   );
   const [allowsConcurrent, setAllowsConcurrent] = useState(program.allows_concurrent_enrollment !== false);
   const [submitting, setSubmitting] = useState(false);
+  const { confirm } = useConfirm();
+
+  // Unticking Active withdraws everyone still in progress, as deleting a
+  // pipeline with graduates does, so the officer is told how many first. The
+  // count comes from every enrollment, not a status-filtered list.
+  const confirmDeactivation = async (): Promise<boolean> => {
+    const all = await trainingProgramService.getProgramEnrollments(program.id).catch(() => null);
+    const inProgress = all?.filter((e) => e.status === 'active' || e.status === 'on_hold').length;
+    const withdrawn =
+      inProgress === undefined
+        ? 'Every member still in progress on it (active or on hold) will be withdrawn.'
+        : inProgress === 0
+          ? 'No members are in progress on it, so nobody is withdrawn.'
+          : `${inProgress} ${inProgress === 1 ? 'member is' : 'members are'} in progress on it and will be withdrawn.`;
+    return confirm({
+      title: 'Deactivate pipeline',
+      message:
+        `Deactivate "${program.name}"? It leaves the pipeline list and nobody new can be enrolled. ${withdrawn} ` +
+        `Graduates and other finished enrollments are kept. Reactivating it later will not re-enroll anyone ` +
+        `who was withdrawn.`,
+      confirmLabel: inProgress === 0 ? 'Deactivate' : 'Deactivate and withdraw',
+      cancelLabel: 'Keep it active',
+      variant: 'warning',
+    });
+  };
 
   const submit = async () => {
     if (!name.trim()) {
@@ -176,6 +202,7 @@ export const EditProgramModal: React.FC<{
       toast.error('Reminder days must be whole numbers separated by commas, e.g. 30, 14, 7');
       return;
     }
+    if (program.active !== false && !active && !(await confirmDeactivation())) return;
     setSubmitting(true);
     try {
       // An emptied field goes out as null, not an omitted key: the update is
@@ -778,7 +805,7 @@ export const RequirementFormModal: React.FC<{
 
       {editingShared && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
           <p className="text-theme-text-secondary text-sm">
             This is a department requirement linked into the program. Changes here apply everywhere it is used — only
             &ldquo;Required to complete the phase&rdquo; and the &ldquo;In this program&rdquo; settings are specific to
@@ -914,7 +941,7 @@ export const RequirementFormModal: React.FC<{
           {linksCourses && <RecencyWindowField idPrefix="rq" value={recencyDays} onChange={setRecencyDays} />}
           {(type === 'hours' || type === 'courses') && (
             <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
               <div className="space-y-2">
                 <p className="text-theme-text-secondary text-sm">
                   {allowsExternal ? (

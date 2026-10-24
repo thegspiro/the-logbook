@@ -7,6 +7,7 @@ Business logic for event management.
 import calendar
 import copy
 import csv
+import html as _html
 import io
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -50,10 +51,18 @@ from app.schemas.event import (
 )
 from app.schemas.training_session import TrainingSessionAttach
 from app.services.admin_hours_service import AdminHoursService
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+    recipients_for,
+)
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
 from app.utils.event_attachments import validate_attachments_for_org
+from app.utils.model_updates import apply_updates, reject_null_for_required
 from app.utils.org_timezone import (
+    format_in_org_timezone,
     local_and_utc_dates,
     local_date,
     resolve_scheduling_timezone,
@@ -61,6 +70,49 @@ from app.utils.org_timezone import (
 )
 
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
+
+# Which member email switch governs each kind of notice an organizer sends
+# from an event's Notify action. An announcement is a department message, so
+# it is always sent. Reminders, check-in confirmations and missed-event
+# notices go under Event reminders, which already covers the answer to an
+# attendance request: all three are about the member's own attendance, not
+# news about the event. A follow-up is the organizer telling attendees
+# something new about the event, the same kind of news as a change to it.
+NOTIFICATION_EMAIL_KINDS: Dict[str, EmailKind] = {
+    "announcement": EmailKind.DEPARTMENT_MESSAGES,
+    "reminder": EmailKind.EVENT_REMINDERS,
+    "check_in_confirmation": EmailKind.EVENT_REMINDERS,
+    "missed_event": EmailKind.EVENT_REMINDERS,
+    "follow_up": EmailKind.EVENT_CHANGES,
+}
+
+
+# The columns that describe a recurring series as a whole. create_recurring_event
+# writes them only on the series parent (children carry recurrence_pattern and
+# nothing else), and run_rolling_recurrence_extend and the series-end reminder
+# read them only from the parent — so when the parent row goes, they have to
+# move to whichever occurrence takes its place or the series loses them.
+SERIES_PARENT_FIELDS = (
+    "recurrence_pattern",
+    "recurrence_end_date",
+    "rolling_recurrence",
+    "recurrence_custom_days",
+    "recurrence_weekday",
+    "recurrence_week_ordinal",
+    "recurrence_month",
+    "recurrence_exceptions",
+)
+
+
+def _utc_instant(value: datetime) -> datetime:
+    """Read a stored time as aware UTC, for ordering and comparing occurrences.
+
+    The non-optional twin of ``EventService._as_utc``: start_datetime is NOT
+    NULL, and a sort key typed Optional would not order.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=dt_timezone.utc)
+    return value.astimezone(dt_timezone.utc)
 
 
 def _wall_time(value: datetime, tz: ZoneInfo) -> datetime:
@@ -71,6 +123,36 @@ def _wall_time(value: datetime, tz: ZoneInfo) -> datetime:
 def _stored_time(wall: datetime, tz: ZoneInfo) -> datetime:
     """A naive wall-clock time in ``tz`` back as the UTC instant to store."""
     return wall.replace(tzinfo=tz).astimezone(dt_timezone.utc)
+
+
+def rsvp_deadline_lead(
+    deadline: datetime, start_wall: datetime, tz: ZoneInfo
+) -> timedelta:
+    """How far an RSVP deadline sits before a start given as wall time in ``tz``.
+
+    Measured in the department's wall-clock time, so a deadline "two days
+    before at 7pm" stays at 7pm on an occurrence across a daylight-saving
+    change. Negative when the deadline is after the start.
+    """
+    return _wall_time(deadline, tz) - start_wall
+
+
+def rsvp_deadline_at(
+    occurrence_start: datetime, lead: timedelta, tz: ZoneInfo
+) -> datetime:
+    """An occurrence's own RSVP deadline: ``lead`` (from
+    :func:`rsvp_deadline_lead`) applied to its start.
+
+    The one rule for every occurrence of a series: creating it, extending a
+    rolling one, and editing "this and all future". A series given one
+    absolute deadline closed RSVPs for every later occurrence on the first
+    one's date. The result is naive UTC when the start is, matching how
+    ``_generate_recurrence_dates`` hands occurrences back.
+    """
+    deadline = _stored_time(_wall_time(occurrence_start, tz) + lead, tz)
+    return (
+        deadline.replace(tzinfo=None) if occurrence_start.tzinfo is None else deadline
+    )
 
 
 BULK_ADD_MAX_SIZE = 200
@@ -870,6 +952,20 @@ class EventService:
             item["credited_hours"] = credited_hours
             item["hour_category_label"] = hour_category_label
 
+    async def resolve_credited_hours(
+        self, event: Event, organization_id: UUID | str
+    ) -> Tuple[Optional[float], Optional[str]]:
+        """One event's credited hours, for the detail screen.
+
+        The list annotates many events against one load of the mappings; this
+        is that same rule for a single event, so the card and the detail page
+        cannot state different credits.
+        """
+        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
+            str(organization_id)
+        )
+        return self._resolve_credited_hours(event, mappings)
+
     @staticmethod
     def _resolve_credited_hours(
         event: Event,
@@ -993,6 +1089,10 @@ class EventService:
             update_data["custom_fields"] = self._with_own_lifecycle_markers(
                 event, update_data["custom_fields"]
             )
+
+        # Before the date arithmetic below: a null start or end would raise a
+        # TypeError there, and a null title or flag an IntegrityError at flush.
+        reject_null_for_required(event, update_data)
 
         # Validate dates if being updated
         start_dt = update_data.get("start_datetime", event.start_datetime)
@@ -1152,6 +1252,8 @@ class EventService:
             "end_datetime" in timing and timing["end_datetime"] is None
         ):
             raise ValueError("An event's start and end cannot be cleared")
+        if future_events:
+            reject_null_for_required(future_events[0], update_data)
         times_change = False
         shift = length = timedelta(0)
         deadline_lead: Optional[timedelta] = None
@@ -1179,7 +1281,9 @@ class EventService:
                 - _wall_time(anchor.start_datetime, tz)
             )
             if timing.get("rsvp_deadline") is not None:
-                deadline_lead = _wall_time(timing["rsvp_deadline"], tz) - new_start
+                deadline_lead = rsvp_deadline_lead(
+                    timing["rsvp_deadline"], new_start, tz
+                )
 
         # EV-17 / XC-1: this path writes the same client-supplied attachment
         # dictionaries as update_event, across every future occurrence.
@@ -1258,9 +1362,7 @@ class EventService:
                 event.rsvp_deadline = (
                     None
                     if deadline_lead is None
-                    else _stored_time(
-                        _wall_time(event.start_datetime, tz) + deadline_lead, tz
-                    )
+                    else rsvp_deadline_at(event.start_datetime, deadline_lead, tz)
                 )
             if updated_by:
                 event.updated_by = str(updated_by)
@@ -1338,20 +1440,206 @@ class EventService:
 
         # Send cancellation notifications if requested
         if send_notifications and rsvps_to_notify:
-            notifications_service = NotificationsService(self.db)
-            for rsvp in rsvps_to_notify:
-                if rsvp.status == RSVPStatus.GOING or rsvp.status == RSVPStatus.MAYBE:
+            notify_ids = [
+                str(rsvp.user_id)
+                for rsvp in rsvps_to_notify
+                if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
+            ]
+            # Bell first, then email, each non-fatal: the event is already
+            # cancelled and committed, and a failed notice must not turn that
+            # into an error response.
+            try:
+                notifications_service = NotificationsService(self.db)
+                for uid in notify_ids:
                     await notifications_service.log_notification(
                         organization_id=organization_id,
                         log_data={
                             "channel": NotificationChannel.IN_APP,
-                            "recipient_id": str(rsvp.user_id),
+                            "category": "event_cancellation",
+                            "recipient_id": uid,
                             "subject": f"Event Cancelled: {event.title}",
                             "message": f'The event "{event.title}" has been cancelled. Reason: {reason}',
+                            "action_url": f"/events/{event.id}",
                         },
                     )
+            except Exception as e:
+                logger.error(
+                    "Failed to notify cancellation of event {}: {}", event.id, e
+                )
+            # Email is the channel of record (CLAUDE.md pitfall 18); the
+            # member's "Event changes and cancellations" switch is its reader.
+            try:
+                await self._email_event_cancellation(
+                    event, notify_ids, organization_id, reason
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to email cancellation of event {}: {}", event.id, e
+                )
 
         return event
+
+    async def _event_email_recipients(
+        self,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        kind: EmailKind,
+    ) -> Tuple[Optional[Organization], List[User]]:
+        """The members among *user_ids* who are emailed a notice of *kind*.
+
+        One query for the organization and one for the users however many
+        ids there are, so a notice to every member costs the same two round
+        trips as a notice to one. Users are loaded inside *organization_id*
+        only; a member without an address is dropped.
+        """
+        ids = {str(uid) for uid in user_ids}
+        if not ids:
+            return None, []
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        users = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .where(User.organization_id == str(organization_id))
+                    .where(User.id.in_(ids))
+                    .where(User.deleted_at.is_(None))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        with_address = [user for user in users if user.email]
+        return org, recipients_for(with_address, kind, department_required_kinds(org))
+
+    async def _event_location_name(
+        self, event: Event, organization_id: UUID | str
+    ) -> Optional[str]:
+        """The named room when the event has one, else its free-text location."""
+        from app.models.location import Location
+
+        location_name = event.location
+        if event.location_id:
+            location_name = (
+                await self.db.execute(
+                    select(Location.name)
+                    .where(Location.id == str(event.location_id))
+                    .where(Location.organization_id == str(organization_id))
+                )
+            ).scalar_one_or_none() or location_name
+        return location_name
+
+    async def _email_event_cancellation(
+        self,
+        event: Event,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        reason: str,
+    ) -> int:
+        """Email the members in *user_ids* that *event* is cancelled, through
+        the Event Cancelled template. Returns how many emails were handed to
+        the mailer. One member's failed send does not stop the rest."""
+        from app.services.email_service import EmailService
+
+        org, recipients = await self._event_email_recipients(
+            user_ids, organization_id, EmailKind.EVENT_CHANGES
+        )
+        if not recipients:
+            return 0
+        mailer = EmailService(organization=org)
+        sent = 0
+        for user in recipients:
+            try:
+                if await mailer.send_event_cancellation_email(
+                    to_email=user.email,
+                    recipient_name=user.display_name or user.email,
+                    event_title=event.title,
+                    event_start=event.start_datetime,
+                    reason=reason,
+                    db=self.db,
+                    organization_id=str(organization_id),
+                ):
+                    sent += 1
+            except Exception as e:
+                logger.error(
+                    "Failed to email cancellation of event {} to user {}: {}",
+                    event.id,
+                    user.id,
+                    e,
+                )
+        return sent
+
+    async def email_event_change(
+        self,
+        event: Event,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        changes_desc: str,
+    ) -> int:
+        """Email the members in *user_ids* that *event*'s title, time or
+        location changed, showing the details as they now stand.
+
+        There is no template for this notice: it is built inline through
+        ``wrap_email_body``. Gated by the member's "Event changes and
+        cancellations" email switch. Returns how many emails were accepted.
+        """
+        from app.services.email_service import EmailService, wrap_email_body
+
+        org, recipients = await self._event_email_recipients(
+            user_ids, organization_id, EmailKind.EVENT_CHANGES
+        )
+        if not recipients:
+            return 0
+
+        location_name = await self._event_location_name(event, organization_id)
+        when = format_in_org_timezone(event.start_datetime, org)
+        if event.end_datetime:
+            day = "%Y-%m-%d"
+            same_day = format_in_org_timezone(
+                event.start_datetime, org, day
+            ) == format_in_org_timezone(event.end_datetime, org, day)
+            if same_day:
+                when += " to " + format_in_org_timezone(
+                    event.end_datetime, org, "%I:%M %p"
+                )
+            else:
+                when += " to " + format_in_org_timezone(event.end_datetime, org)
+        url = f"{settings.FRONTEND_URL}/events/{event.id}"
+        intro = (
+            f'The event "{event.title}" has been updated ({changes_desc}). '
+            f"Please review the latest details."
+        )
+        facts = [("When", when)]
+        if location_name:
+            facts.append(("Where", location_name))
+
+        body_html = (
+            f"<p>{_html.escape(intro)}</p>"
+            + "".join(
+                f"<p><strong>{label}:</strong> {_html.escape(value)}</p>"
+                for label, value in facts
+            )
+            + '<p style="text-align: center;">'
+            f'<a href="{_html.escape(url)}" class="button" role="link">'
+            "View Event</a></p>"
+        )
+        text_body = "\n".join(
+            [intro, ""]
+            + [f"{label}: {value}" for label, value in facts]
+            + ["", f"View Event: {url}"]
+        )
+        success, _ = await EmailService(organization=org).send_email(
+            to_emails=[user.email for user in recipients],
+            subject=f"Event Updated: {event.title}",
+            html_body=wrap_email_body(org, "Event Updated", body_html, chip="Updated"),
+            text_body=text_body,
+            db=self.db,
+            template_type="event_update",
+        )
+        return success
 
     async def cancel_series(
         self,
@@ -1501,8 +1789,88 @@ class EventService:
 
         return new_event
 
+    async def _lock_series(
+        self, parent_id: UUID | str, organization_id: UUID | str
+    ) -> List[Event]:
+        """The series parent and every occurrence pointing at it, row-locked.
+
+        Taken before a parent is removed or a series is cut short, so a
+        concurrent "this and future" edit or organizer handover — both of
+        which lock the same rows — cannot land on an occurrence between the
+        decision about which one inherits the series and the write.
+        """
+        result = await self.db.execute(
+            select(Event)
+            .where(
+                Event.organization_id == str(organization_id),
+                or_(
+                    Event.id == str(parent_id),
+                    Event.recurrence_parent_id == str(parent_id),
+                ),
+            )
+            .order_by(Event.start_datetime, Event.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    def _promote_series_successor(
+        old_parent: Event, survivors: List[Event], now: datetime
+    ) -> Optional[Event]:
+        """Hand the series from ``old_parent`` to the earliest survivor.
+
+        Removing the parent row would otherwise orphan the series: the ORM
+        nulls every child's ``recurrence_parent_id``, each child is left a
+        "recurring" event of one, a later series delete or cancel reaches only
+        the row it was started from, and the pattern, end date, exceptions and
+        rolling flag — stored only on the parent — are gone.
+
+        The earliest occurrence that is not cancelled is preferred: the
+        rolling-extension job and the series-end reminder both skip a
+        cancelled parent, so promoting one would quietly stop the series.
+        The caller flushes before deleting the old parent.
+        """
+        if not survivors:
+            return None
+        candidates = [e for e in survivors if not e.is_cancelled] or survivors
+        successor = min(
+            candidates, key=lambda e: (_utc_instant(e.start_datetime), str(e.id))
+        )
+
+        for field in SERIES_PARENT_FIELDS:
+            setattr(successor, field, copy.deepcopy(getattr(old_parent, field)))
+        successor.is_recurring = True
+        successor.recurrence_parent_id = None
+
+        # The series-end reminder records that it has fired on the parent's
+        # custom_fields; without carrying it the organizer is told twice.
+        custom_fields = copy.deepcopy(successor.custom_fields or {})
+        if (old_parent.custom_fields or {}).get("series_end_reminder_sent"):
+            custom_fields["series_end_reminder_sent"] = True
+        else:
+            custom_fields.pop("series_end_reminder_sent", None)
+        successor.custom_fields = custom_fields or None
+
+        # The parent's organizer pair is the one a rolling series copies onto
+        # new occurrences (a "this and future" handover always writes it), so
+        # an upcoming successor takes it. A successor that already happened
+        # keeps the organizer who ran it: past occurrences are a record.
+        if _utc_instant(successor.start_datetime) >= now:
+            successor.organizer_id = old_parent.organizer_id
+            successor.alternate_organizer_id = old_parent.alternate_organizer_id
+
+        for child in survivors:
+            if child is not successor:
+                child.recurrence_parent_id = successor.id
+        return successor
+
     async def delete_event(self, event_id: UUID, organization_id: UUID | str) -> bool:
-        """Delete an event"""
+        """Delete an event.
+
+        Deleting the parent of a recurring series passes the series to its
+        next occurrence rather than breaking it up.
+        """
         result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
@@ -1521,6 +1889,18 @@ class EventService:
         if attendance_is_finalized(event):
             raise ValueError(attendance_locked_error("deleting the event"))
 
+        if event.is_recurring and event.recurrence_parent_id is None:
+            series = await self._lock_series(event.id, organization_id)
+            survivors = [e for e in series if str(e.id) != str(event.id)]
+            if self._promote_series_successor(
+                event, survivors, datetime.now(dt_timezone.utc)
+            ):
+                # The re-pointing has to reach the database before the delete:
+                # at flush the ORM reloads the parent's children collection
+                # and nulls the foreign key of every row still in it.
+                await self.db.flush()
+                self.db.expire(event, ["recurrence_children"])
+
         # Reachable on a reopened event, where entries from the earlier
         # finalize are still on the ledger waiting to be resynced by a
         # re-finalize that is now never going to happen.
@@ -1531,11 +1911,17 @@ class EventService:
         await self.db.delete(event)
         try:
             await self.db.commit()
-        except Exception:
+        except Exception as exc:
             await self.db.rollback()
+            logger.warning(f"Event {event_id} delete refused by the database: {exc}")
+            # meeting_minutes.event_id and every other reference to an event
+            # is CASCADE or SET NULL; the one RESTRICT left is a series
+            # occurrence pointing at this row, which can only appear here if
+            # the series was extended after the lock above was taken.
             raise ValueError(
-                "Cannot delete event because it has linked records "
-                "(e.g. meeting minutes). Remove or unlink them first."
+                "Cannot delete event because another event still references "
+                "it (an occurrence was added to its series while deleting). "
+                "Refresh and try again."
             )
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
@@ -1546,29 +1932,41 @@ class EventService:
         parent_event_id: UUID,
         organization_id: UUID | str,
         delete_future_only: bool = False,
+        from_event_id: Optional[UUID | str] = None,
     ) -> int:
-        """Delete all events in a recurring series.
+        """Delete all events in a recurring series, or the tail of it.
+
+        ``from_event_id`` names an occurrence of the series: it and every
+        later occurrence are deleted and the earlier ones kept ("this and
+        future occurrences"). Without it, ``delete_future_only`` cuts at the
+        current time instead, and with neither the whole series goes.
+
+        When occurrences are kept, the series stays whole: if the parent is
+        among the deleted the earliest kept occurrence inherits the series,
+        and the series ends at the last kept occurrence with rolling extension
+        switched off — the extension job continues a series from its latest
+        occurrence and would otherwise recreate the deleted ones.
 
         Returns the number of events deleted.
         """
-        conditions = [
-            Event.organization_id == str(organization_id),
-            or_(
-                Event.id == str(parent_event_id),
-                Event.recurrence_parent_id == str(parent_event_id),
-            ),
-        ]
+        series = await self._lock_series(parent_event_id, organization_id)
+        if not series:
+            return 0
 
-        if delete_future_only:
-            conditions.append(Event.start_datetime >= datetime.now(dt_timezone.utc))
+        cutoff: Optional[datetime] = None
+        if from_event_id is not None:
+            anchor = next((e for e in series if str(e.id) == str(from_event_id)), None)
+            if anchor is None:
+                raise ValueError("That occurrence is not part of this series")
+            cutoff = _utc_instant(anchor.start_datetime)
+        elif delete_future_only:
+            cutoff = datetime.now(dt_timezone.utc)
 
-        result = await self.db.execute(
-            select(Event)
-            .where(*conditions)
-            .with_for_update()
-            .execution_options(populate_existing=True)
+        events = (
+            series
+            if cutoff is None
+            else [e for e in series if _utc_instant(e.start_datetime) >= cutoff]
         )
-        events = result.scalars().all()
 
         if not events:
             return 0
@@ -1578,7 +1976,9 @@ class EventService:
         # could delete finalized attendance through the series door without
         # ever holding events.reopen_attendance. Refuse the whole batch rather
         # than silently deleting the open siblings and keeping the closed ones
-        # — a partial series delete is not what the caller asked for.
+        # — a partial series delete is not what the caller asked for. Only the
+        # occurrences being deleted are checked: a finalized one before the
+        # cutoff is kept, so it has nothing to refuse.
         locked = [e for e in events if attendance_is_finalized(e)]
         if locked:
             raise ValueError(
@@ -1587,6 +1987,24 @@ class EventService:
                     "occurrences have finalized attendance)"
                 )
             )
+
+        deleting = {str(e.id) for e in events}
+        survivors = [e for e in series if str(e.id) not in deleting]
+        parent = next((e for e in series if str(e.id) == str(parent_event_id)), None)
+        if survivors and parent is not None and parent.is_recurring:
+            head: Optional[Event] = parent
+            if str(parent.id) in deleting:
+                head = self._promote_series_successor(
+                    parent, survivors, datetime.now(dt_timezone.utc)
+                )
+            if head is not None:
+                head.recurrence_end_date = max(
+                    (e.start_datetime for e in survivors), key=_utc_instant
+                )
+                head.rolling_recurrence = False
+            await self.db.flush()
+            if str(parent.id) in deleting:
+                self.db.expire(parent, ["recurrence_children"])
 
         pending_reversals = await self._void_training_credit_before_removal(
             list(events), organization_id
@@ -1597,11 +2015,17 @@ class EventService:
 
         try:
             await self.db.commit()
-        except Exception:
+        except Exception as exc:
             await self.db.rollback()
+            logger.warning(
+                f"Series {parent_event_id} delete refused by the database: {exc}"
+            )
+            # See delete_event: the one RESTRICT reference to an event is an
+            # occurrence pointing at its series parent.
             raise ValueError(
-                "Cannot delete series because some events have linked records "
-                "(e.g. meeting minutes). Remove or unlink them first."
+                "Cannot delete series because another event still references "
+                "one of its occurrences (the series was extended while "
+                "deleting). Refresh and try again."
             )
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
@@ -2236,12 +2660,6 @@ class EventService:
         """Email a member promoted off *event*'s waitlist, unless they have
         turned that email off. Returns whether an email was handed to the
         mailer."""
-        from app.models.location import Location
-        from app.services.email_policy import (
-            EmailKind,
-            department_required_kinds,
-            member_receives_email,
-        )
         from app.services.email_service import EmailService
 
         user = (
@@ -2266,15 +2684,7 @@ class EventService:
         ):
             return False
 
-        location_name = event.location
-        if event.location_id:
-            location_name = (
-                await self.db.execute(
-                    select(Location.name)
-                    .where(Location.id == str(event.location_id))
-                    .where(Location.organization_id == str(organization_id))
-                )
-            ).scalar_one_or_none() or location_name
+        location_name = await self._event_location_name(event, organization_id)
 
         return await EmailService(organization=org).send_waitlist_promotion_email(
             to_email=user.email,
@@ -2636,6 +3046,29 @@ class EventService:
         if check_in and check_out and check_out <= check_in:
             return None, "Override check-out time must be after check-in time"
 
+        # A duration auto-derived from the previous pair of override times
+        # stops describing anything once either time is cleared, yet it would
+        # still outrank the remaining clock when finalize credits training and
+        # admin hours. Only a derived value is dropped: one that differs from
+        # the old span was entered on purpose (here or by a training session's
+        # correction), stands independently of the times, and a request that
+        # names the duration itself always wins.
+        previous_in = rsvp.override_check_in_at
+        previous_out = rsvp.override_check_out_at
+        clears_derived_duration = False
+        if (
+            previous_in
+            and previous_out
+            and not (check_in and check_out)
+            and "override_duration_minutes" not in override_fields
+            and rsvp.override_duration_minutes is not None
+        ):
+            previous_span = int((previous_out - previous_in).total_seconds() / 60)
+            clears_derived_duration = rsvp.override_duration_minutes in {
+                previous_span,
+                max(0, previous_span),
+            }
+
         for field, value in override_fields.items():
             setattr(rsvp, field, value)
 
@@ -2655,6 +3088,8 @@ class EventService:
                 rsvp.override_check_out_at - rsvp.override_check_in_at
             ).total_seconds() / 60
             rsvp.override_duration_minutes = int(duration)
+        elif clears_derived_duration:
+            rsvp.override_duration_minutes = None
 
         rsvp.overridden_by = str(manager_id)
         rsvp.overridden_at = now
@@ -3707,7 +4142,10 @@ class EventService:
         return event, len(rsvps), None
 
     async def get_qr_check_in_data(
-        self, event_id: UUID, organization_id: UUID | str
+        self,
+        event_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str | None = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Get QR code check-in data for an event
@@ -3715,6 +4153,10 @@ class EventService:
         Returns check-in URL and validates that the event is within the valid
         check-in window based on the event's check_in_window_type settings
         (same logic as self_check_in).
+
+        ``user_id`` is the member who scanned. When given, the answer carries
+        that member's own check-in and check-out times so the page can offer
+        check-out to someone already checked in; without it both are None.
 
         Returns: (data_dict, error_message)
         """
@@ -3775,6 +4217,21 @@ class EventService:
             )
             training_requires_approval = bool(session_result.scalars().first())
 
+        user_checked_in_at: Optional[datetime] = None
+        user_checked_out_at: Optional[datetime] = None
+        if user_id is not None:
+            own_result = await self.db.execute(
+                select(EventRSVP.checked_in, EventRSVP.checked_in_at)
+                .add_columns(EventRSVP.checked_out_at)
+                .where(EventRSVP.event_id == str(event.id))
+                .where(EventRSVP.user_id == str(user_id))
+                .where(EventRSVP.organization_id == str(organization_id))
+            )
+            own = own_result.first()
+            if own is not None and own.checked_in and own.checked_in_at:
+                user_checked_in_at = own.checked_in_at
+                user_checked_out_at = own.checked_out_at
+
         return {
             "event_id": str(event.id),
             "event_name": event.title,
@@ -3799,6 +4256,16 @@ class EventService:
             "timezone": org_timezone,
             "records_training": records_training,
             "training_requires_approval": training_requires_approval,
+            "user_checked_in_at": (
+                user_checked_in_at.replace(tzinfo=None).isoformat() + "Z"
+                if user_checked_in_at
+                else None
+            ),
+            "user_checked_out_at": (
+                user_checked_out_at.replace(tzinfo=None).isoformat() + "Z"
+                if user_checked_out_at
+                else None
+            ),
         }, None
 
     # A self check-in this far ahead of the scheduled start is worth putting in
@@ -4651,8 +5118,7 @@ class EventService:
                 update_data.get("default_location_id"), organization_id
             )
 
-        for field, value in update_data.items():
-            setattr(template, field, value)
+        apply_updates(template, update_data)
 
         if updated_by:
             template.updated_by = str(updated_by)
@@ -4965,8 +5431,9 @@ class EventService:
             return [], str(exc)
 
         # Generate occurrence dates
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         occurrences = self._generate_recurrence_dates(
-            timezone_=await resolve_scheduling_timezone(self.db, organization_id),
+            timezone_=tz,
             start_datetime=event_data["start_datetime"],
             end_datetime=event_data["end_datetime"],
             pattern=recurrence_pattern,
@@ -4984,6 +5451,22 @@ class EventService:
         if len(occurrences) > 365:
             return [], "Too many occurrences (max 365). Please narrow the date range."
 
+        # The deadline is entered against the series' start; each occurrence
+        # keeps that same lead before its own start (see rsvp_deadline_at).
+        rsvp_deadline = event_data.pop("rsvp_deadline", None)
+        deadline_lead = (
+            None
+            if rsvp_deadline is None
+            else rsvp_deadline_lead(
+                rsvp_deadline, _wall_time(event_data["start_datetime"], tz), tz
+            )
+        )
+
+        def _occurrence_deadline(start: datetime) -> Optional[datetime]:
+            if deadline_lead is None:
+                return None
+            return rsvp_deadline_at(start, deadline_lead, tz)
+
         # Create parent event (first occurrence)
         parent_event = Event(
             organization_id=str(organization_id),
@@ -4999,6 +5482,7 @@ class EventService:
             recurrence_exceptions=recurrence_exceptions,
             start_datetime=occurrences[0][0],
             end_datetime=occurrences[0][1],
+            rsvp_deadline=_occurrence_deadline(occurrences[0][0]),
             **{
                 k: v
                 for k, v in event_data.items()
@@ -5020,6 +5504,7 @@ class EventService:
                 recurrence_pattern=RecurrencePattern(recurrence_pattern),
                 start_datetime=start,
                 end_datetime=end,
+                rsvp_deadline=_occurrence_deadline(start),
                 **{
                     k: v
                     for k, v in event_data.items()
@@ -5665,6 +6150,65 @@ class EventService:
                     error,
                 )
 
+        # And by email, the channel of record (CLAUDE.md pitfall 18).
+        # Non-fatal: the bell entries are already written, and a mail outage
+        # must not turn a delivered notice into an error for the organizer.
+        try:
+            await self._email_event_notification(
+                event,
+                recipient_ids,
+                organization_id,
+                notification_type,
+                subject,
+                body,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to email {} notification for event {}: {}",
+                notification_type,
+                event_id,
+                e,
+            )
+
         summary = f"{label} notification sent to " f"{delivered_count} recipient(s)"
 
         return delivered_count, summary
+
+    async def _email_event_notification(
+        self,
+        event: Event,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        notification_type: str,
+        subject: str,
+        body: str,
+    ) -> int:
+        """Email an organizer's notice to the members in *user_ids* who
+        receive its kind, in one send however many members it reaches.
+        Returns how many emails were accepted."""
+        from app.services.email_service import EmailService, wrap_email_body
+
+        kind = NOTIFICATION_EMAIL_KINDS.get(notification_type)
+        if kind is None:
+            return 0
+        org, recipients = await self._event_email_recipients(
+            user_ids, organization_id, kind
+        )
+        if not recipients:
+            return 0
+        url = f"{settings.FRONTEND_URL}/events/{event.id}"
+        body_html = (
+            f"<p>{_html.escape(body)}</p>"
+            '<p style="text-align: center;">'
+            f'<a href="{_html.escape(url)}" class="button" role="link">'
+            "View Event</a></p>"
+        )
+        success, _ = await EmailService(organization=org).send_email(
+            to_emails=[user.email for user in recipients],
+            subject=subject,
+            html_body=wrap_email_body(org, event.title, body_html),
+            text_body=f"{body}\n\nView Event: {url}",
+            db=self.db,
+            template_type="event_notification",
+        )
+        return success

@@ -8,14 +8,14 @@ meeting records, motions and action items. Elections have their own guide.
 
 ## Lesson at a Glance
 
-|                     |                                                                                                                  |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Who this is for** | Every member, for RSVPs and check-in. Event organizers and officers, for creating and closing out events         |
-| **What you need**   | A Logbook account. Creating events needs a position that lets you manage events                                  |
-| **Essential path**  | Members: about 20 minutes. Event organizers: about 60 minutes. Secretaries: add about 30 minutes for minutes      |
-| **Full guide**      | About 2½ hours                                                                                                   |
-| **Last verified**   | 2026-10-14                                                                                                       |
-| **Owner**           | Your department's secretary or events officer                                                                    |
+|                     |                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Who this is for** | Every member, for RSVPs and check-in. Event organizers and officers, for creating and closing out events     |
+| **What you need**   | A Logbook account. Creating events needs a position that lets you manage events                              |
+| **Essential path**  | Members: about 20 minutes. Event organizers: about 60 minutes. Secretaries: add about 30 minutes for minutes |
+| **Full guide**      | About 2½ hours                                                                                               |
+| **Last verified**   | 2026-10-14                                                                                                   |
+| **Owner**           | Your department's secretary or events officer                                                                |
 
 **Members:** read [Events Overview](#events-overview),
 [Viewing and RSVPing to Events](#viewing-and-rsvping-to-events) and
@@ -67,16 +67,16 @@ Past events are hidden until you ask for them.
 
 Every event has a type:
 
-| Type                 | Used for                                                       |
-| -------------------- | -------------------------------------------------------------- |
-| **Business Meeting** | Regular department meetings                                    |
-| **Public Education** | Fire-safety talks, station tours and other outreach            |
-| **Training**         | Drills and training sessions                                   |
-| **Social**           | Department social events                                       |
-| **Fundraiser**       | Fundraising events                                             |
-| **Ceremony**         | Ceremonies and formal occasions                                |
+| Type                 | Used for                                                                      |
+| -------------------- | ----------------------------------------------------------------------------- |
+| **Business Meeting** | Regular department meetings                                                   |
+| **Public Education** | Fire-safety talks, station tours and other outreach                           |
+| **Training**         | Drills and training sessions                                                  |
+| **Social**           | Department social events                                                      |
+| **Fundraiser**       | Fundraising events                                                            |
+| **Ceremony**         | Ceremonies and formal occasions                                               |
 | **Recruitment**      | Open houses and recruitment nights (see [below](#the-recruitment-event-type)) |
-| **Other**            | Anything else                                                  |
+| **Other**            | Anything else                                                                 |
 
 Your department can also add its own **custom categories**, each with a
 coloured badge. An administrator sets them up under **Event settings →
@@ -117,9 +117,7 @@ end."
 
 ![Events listing page with upcoming events and type badges](./images/04-01-events-list.png)
 
-<!-- Screenshot needed:
-_[Events page as a regular member on a department with no upcoming events → the "No upcoming events yet" empty state with its explanation and the "Take the short walkthrough in the Learning Center" link.]_
--->
+![The Events page as a member when nothing is scheduled: "No upcoming events yet", what appears there once events are scheduled, and the link to the Learning Center walkthrough](./images/04-51-events-empty-member.png)
 
 ---
 
@@ -191,10 +189,10 @@ and going status only — when the department allows it. Contact details, notes,
 dietary and accessibility needs, guest counts and check-in times are never
 shown to members; they stay in the organizer's view.
 
-| Setting                           | Where                                                         | Starts as                                   |
-| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------- |
-| The department default            | **Manage Events → Settings → Attendance**                     | **Only event managers**                     |
-| One event's choice                | **Who can see who's going** in the event's **RSVP Settings**  | **Use organization default**                |
+| Setting                | Where                                                        | Starts as                    |
+| ---------------------- | ------------------------------------------------------------ | ---------------------------- |
+| The department default | **Manage Events → Settings → Attendance**                    | **Only event managers**      |
+| One event's choice     | **Who can see who's going** in the event's **RSVP Settings** | **Use organization default** |
 
 On an event, **Everyone in the department** or **Only event managers**
 overrides the default in either direction.
@@ -332,13 +330,9 @@ and **All events**.
 - The member hears the decision in the app and by email (**Event
   reminders**).
 
-<!-- Screenshot needed:
-_[Event detail as a member, for an event whose check-in window closed today and with no check-in recorded → the "Were you at this event but never checked in?" card with its "I was there" button.]_
--->
+![An ended event as a member with no check-in: "Were you at this event but never checked in?" with the I was there button](./images/04-52-attendance-request-prompt.png)
 
-<!-- Screenshot needed:
-_[Event detail as the event's organizer → the Attendance Requests card listing one pending request (name, "Asked …", the reason, "Says they were there from … until …") with Approve and Decline.]_
--->
+![The Attendance Requests card on an ended event, as its organizer: one pending request with the member's name, when they asked, their reason and the times they say they were there, with Approve and Decline](./images/04-53-attendance-requests-card.png)
 
 ---
 
@@ -368,6 +362,18 @@ in."_
 
 ### For Members (Checking In)
 
+You can also check in from the event page itself. While check-in is open the page
+offers **Check In**; afterwards it reads **You're checked in** and states the hours
+and category credited, as the event card does. **View QR Code** is shown only to
+people who can manage the event or are its organizers, because it opens the page
+meant to be put up at the door. The optional RSVP button on an event that does
+not require a response reads **Going**. The attendee list is requested only when
+your department shares it.
+
+![A member's event detail page while check-in is open: the Check In button beside the event's details](./images/04-79-event-check-in-open.png)
+
+![The same event page after check-in: You're checked in in place of the Check In button, with the hours and category credited](./images/04-80-event-checked-in.png)
+
 1. Scan the QR code with your phone's camera.
 2. Sign in if you are not already. The self check-in page opens.
 3. Tap **Check In to This Event**. The confirmation reads **You're Checked
@@ -384,20 +390,18 @@ added to your training record when the event's attendance is finalized."_ On
 any other event no such notice appears. See
 [Training Credit from Events](#training-credit-from-events).
 
-<!-- Screenshot needed:
-_[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_
--->
+![A member's check-in confirmation on a Training event: You're Checked In, the event name, and the Training Record panel saying the attendance is added to their training record when the event's attendance is finalized](./images/04-54-training-check-in-confirmation.png)
 
 ### Check-In Window Types
 
 Each event has a **check-in window**: the time during which members can check
 themselves in. The organizer picks one of three kinds on the event form.
 
-| Window type            | Check-in opens                                         | Check-in closes                                           |
-| ---------------------- | ------------------------------------------------------ | --------------------------------------------------------- |
-| **Flexible** (default) | A set number of minutes before the start (default 60)  | When the event ends (the recorded end, if there is one)   |
-| **Strict**             | At the start (the recorded start, if there is one)     | When the event ends (the recorded end, if there is one)   |
-| **Window**             | A set number of minutes before the start (default 15)  | A set number of minutes after the end (default 15)        |
+| Window type            | Check-in opens                                        | Check-in closes                                         |
+| ---------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| **Flexible** (default) | A set number of minutes before the start (default 60) | When the event ends (the recorded end, if there is one) |
+| **Strict**             | At the start (the recorded start, if there is one)    | When the event ends (the recorded end, if there is one) |
+| **Window**             | A set number of minutes before the start (default 15) | A set number of minutes after the end (default 15)      |
 
 On the form they read "Flexible - Opens before the start, closes when the
 event ends", "Strict - Only while the event is running" and "Window - Opens
@@ -510,12 +514,12 @@ Tags** list instead of the kiosk cards.
 **Tapping one.** The member signs in if needed. The page then looks for
 events whose check-in window is open in that room:
 
-| What is open in the room   | What the member sees                                                                                                   |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| One event                  | Taken straight to that event's check-in page                                                                           |
-| Several                    | **Which event are you here for?** — the member picks; the page does not guess                                          |
-| None                       | **Nothing to check in to**, with **Check again** and **Go to Events**                                                  |
-| The room no longer exists  | **Room unavailable** — "This tag points at a room that no longer exists. Let an officer know so it can be rewritten." |
+| What is open in the room  | What the member sees                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| One event                 | Taken straight to that event's check-in page                                                                          |
+| Several                   | **Which event are you here for?** — the member picks; the page does not guess                                         |
+| None                      | **Nothing to check in to**, with **Check again** and **Go to Events**                                                 |
+| The room no longer exists | **Room unavailable** — "This tag points at a room that no longer exists. Let an officer know so it can be rewritten." |
 
 The event's own check-in window and rules still apply. Tapping needs Chrome on
 Android over a secure connection, as above.
@@ -554,13 +558,9 @@ the member's first name and last initial.
 > recorded in the project's known-limitations notes. Turn badge check-in on
 > only for rooms where that is acceptable.
 
-<!-- Screenshot needed:
-_[Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC ID Cards integration on → a room card showing its QR code, **Write NFC tag** and the **Badge check-in** switch.]_
--->
+![A room's card on Check-In QR Codes on an Android phone with ID cards turned on: its QR code, Write NFC tag and the Badge check-in switch](./images/04-55-qr-codes-badge-switch.png)
 
-<!-- Screenshot needed:
-_[A phone after tapping a room tag while two events are in their check-in window in that room → "Which event are you here for?" with both events listed.]_
--->
+![A phone after tapping a room tag while two events are open for check-in there: "Which event are you here for?" listing both with their times](./images/04-56-room-tag-event-chooser.png)
 
 ### Checking Members In With an ID Card
 
@@ -641,10 +641,10 @@ in.
 
 Both settings are on **Edit Event → Check-In Settings**. Both start off.
 
-| Setting                                            | What it does                                                                                     |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Allow guest (non-member) sign-in**               | Adds the guest QR code to the room display and opens the public sign-in page for this event      |
-| **Add guests to the prospective members pipeline** | Also opens a record in the recruitment pipeline for every guest who leaves an email address      |
+| Setting                                            | What it does                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Allow guest (non-member) sign-in**               | Adds the guest QR code to the room display and opens the public sign-in page for this event |
+| **Add guests to the prospective members pipeline** | Also opens a record in the recruitment pipeline for every guest who leaves an email address |
 
 The second appears only once the first is ticked. A
 [Recruitment](#the-recruitment-event-type) event switches both on for you.
@@ -673,10 +673,10 @@ that, add it to the guest's entry by hand afterwards.
 
 ### Where the guest ends up
 
-| Record                                          | When                                                                       |
-| ----------------------------------------------- | -------------------------------------------------------------------------- |
-| An entry on the event's guest list              | Always                                                                     |
-| A card in the **prospective members** pipeline  | Only if the event has the second switch on **and** the guest left an email |
+| Record                                         | When                                                                       |
+| ---------------------------------------------- | -------------------------------------------------------------------------- |
+| An entry on the event's guest list             | Always                                                                     |
+| A card in the **prospective members** pipeline | Only if the event has the second switch on **and** the guest left an email |
 
 **Seeing who came.** Officers who manage events see a **Guests (_n_)** card
 on the event page. It lists each guest's name, organization, email and phone,
@@ -694,17 +694,17 @@ so at the next pipeline review you can see where each lead came from.
 
 ### Edge cases
 
-| What happens                                                                                    | Why                                                                                                                                                                       |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A guest who arrives early is turned away** until the check-in window opens                     | Members get the one-hour early grace; guests do not. A member's early check-in can be identified and corrected later. An anonymous one cannot                              |
-| **A guest who taps the code twice is not counted twice** — they see "already checked in"         | Matched on their email if they gave one, on their name if they did not                                                                                                    |
-| **Two guests with the same name and no email become one entry**                                  | The name match is the weaker fallback, chosen on purpose: a double-tap at a kiosk is far more common than two Chris Smiths at one open house                               |
-| **A guest you added in advance keeps the details you typed**                                     | The kiosk sign-in only fills in blanks. It never overwrites something a person entered on purpose                                                                         |
-| **A guest already in your pipeline does not get a second card**                                  | Their existing card is linked to the event instead                                                                                                                        |
-| **A guest with no email is still signed in** — they just get no pipeline card                    | There would be no way to follow up                                                                                                                                        |
-| **If the pipeline card cannot be created, the guest is still signed in**                         | Signing in is what they came to do. The failure is logged for your administrator                                                                                          |
-| **Deleting a prospect does not delete the attendance**                                           | Who was in the room is the event's history, not the prospect's                                                                                                            |
-| **A busy night can hit the daily limit** — 300 guest sign-ins per event per day                   | Sized for an open house, not a stadium. Ask your administrator if you really need it raised                                                                               |
+| What happens                                                                             | Why                                                                                                                                           |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A guest who arrives early is turned away** until the check-in window opens             | Members get the one-hour early grace; guests do not. A member's early check-in can be identified and corrected later. An anonymous one cannot |
+| **A guest who taps the code twice is not counted twice** — they see "already checked in" | Matched on their email if they gave one, on their name if they did not                                                                        |
+| **Two guests with the same name and no email become one entry**                          | The name match is the weaker fallback, chosen on purpose: a double-tap at a kiosk is far more common than two Chris Smiths at one open house  |
+| **A guest you added in advance keeps the details you typed**                             | The kiosk sign-in only fills in blanks. It never overwrites something a person entered on purpose                                             |
+| **A guest already in your pipeline does not get a second card**                          | Their existing card is linked to the event instead                                                                                            |
+| **A guest with no email is still signed in** — they just get no pipeline card            | There would be no way to follow up                                                                                                            |
+| **If the pipeline card cannot be created, the guest is still signed in**                 | Signing in is what they came to do. The failure is logged for your administrator                                                              |
+| **Deleting a prospect does not delete the attendance**                                   | Who was in the room is the event's history, not the prospect's                                                                                |
+| **A busy night can hit the daily limit** — 300 guest sign-ins per event per day          | Sized for an open house, not a stadium. Ask your administrator if you really need it raised                                                   |
 
 > **Troubleshooting: the guest QR code is missing from the display.** Check
 > three things, in this order: the event has **Allow guest (non-member)
@@ -750,7 +750,10 @@ of **Manage Events**.
 > **What if Require RSVP is on but there is no deadline?** On a single event,
 > **RSVP Deadline** is then required and marked with an asterisk. The form
 > says _"Set an RSVP deadline, or turn off Require RSVP"_. A recurring series
-> does not need one — one fixed deadline makes no sense across a series.
+> does not need one. If you set one, it is read against the first
+> occurrence's start, and every occurrence keeps that same lead time before
+> its own start — a deadline two days before the first drill closes RSVPs two
+> days before each drill.
 
 > **Attachments cannot be added from The Logbook.** The attachments area says
 > _"Files can't be attached from the app yet."_ — and there is no upload on
@@ -825,11 +828,11 @@ The **Notifications** section separates **who** gets reminders from **when**.
 
 **Who should receive reminders?**
 
-| Choice                  | Who gets the in-app reminder                                | Email                                            |
-| ----------------------- | ----------------------------------------------------------- | ------------------------------------------------ |
-| **Members who sign up** | Active members who answered **Going** or **Maybe**          | Follows each member's notification preferences   |
-| **All active members**  | Every active member of your department                      | Follows each member's notification preferences   |
-| **No reminders**        | Nobody                                                      | None                                             |
+| Choice                  | Who gets the in-app reminder                       | Email                                          |
+| ----------------------- | -------------------------------------------------- | ---------------------------------------------- |
+| **Members who sign up** | Active members who answered **Going** or **Maybe** | Follows each member's notification preferences |
+| **All active members**  | Every active member of your department             | Follows each member's notification preferences |
+| **No reminders**        | Nobody                                             | None                                           |
 
 **When:** pick one or more reminder times, such as 24 hours and 1 hour
 before. New events start with one reminder, 24 hours before.
@@ -903,13 +906,11 @@ hand the event over.
   type starts on **Default (Secretary)**), then to the Secretary, then to
   every officer who can manage events.
 
-<!-- Screenshot needed:
-_[Event detail as an administrator → the details card's "Organized by" row with the alternate's name and the "Transfer event" link; then the Transfer Event dialog on a recurring event with "This and all future events in the series" selected.]_
--->
+![The event's details card as an administrator: the Organized by row naming the organizer and the alternate, with the Transfer event link](./images/04-57-organized-by-row.png)
 
-<!-- Screenshot needed:
-_[Manage Events → Event settings → Attendance → the "Attendance requests" block with one select per event type, each on "Default (Secretary)".]_
--->
+![The Transfer Event dialog on a recurring meeting: the organizer and alternate pickers and Apply to with This and all future events in the series selected](./images/04-58-transfer-event-series.png)
+
+![Event settings, Attendance: the Attendance requests block with one position select per event type, each on Default (Secretary)](./images/04-59-attendance-request-routing.png)
 
 ---
 
@@ -953,8 +954,9 @@ Once an event has ended, the event page offers **Finalize Attendance**.
 **More → Record Times** lets you record the real start and end first;
 recording an end time also finalizes attendance.
 
-Soon after an event ends, the member who created it gets a notification
-asking them to check the attendance and close it out.
+Soon after an event ends, its organizer and alternate (or its creator, if
+neither can be reached) get a notification asking them to check the attendance
+and close it out.
 
 **Finalizing closes the event.** The roster is fixed and hours are credited.
 Members who checked in but never checked out are credited to the event's end.
@@ -996,9 +998,7 @@ actual change is refused, and the message names just the fields that would
 change. A category your department no longer lists still shows, so it is not
 lost when you save.
 
-<!-- Screenshot needed:
-_[Event organizer at /events/:id/edit on a finalized demo event: the "Attendance for this event is finalized" notice at the top, with the type, category, schedule and check-in controls greyed out and the title editable.]_
--->
+![Editing a finalized event: the "Attendance for this event is finalized" notice at the top, the type, schedule and check-in controls greyed out, and the title still editable](./images/04-60-finalized-event-edit.png)
 
 ### Training Credit from Events
 
@@ -1021,9 +1021,7 @@ its attendance is finalized — however the event was created.
 4. To correct a finalized event, someone who can reopen attendance reopens it.
    Change the details or times, then finalize again.
 
-<!-- Screenshot needed:
-_[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_
--->
+![Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link](./images/04-61-training-details-create.png)
 
 **What each member is credited.** Finalizing gives every checked-in member a
 **Completed** training record for:
@@ -1043,9 +1041,7 @@ class as **In Progress** until an officer approves it. The approval page is
 linked from their email and from the event's **Requirements & Programs**
 card.
 
-<!-- Screenshot needed:
-_[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_
--->
+![The Finalize attendance? confirmation on an ended Training event: how each member's time is decided, that members with no credited time get no record, that earlier admin-hours entries are removed, and Finalize and close beside Keep it open](./images/04-62-finalize-training-confirm.png)
 
 **Training events do not credit admin hours.** Their attendance goes to
 training records; crediting admin hours too would count the same hours twice.
@@ -1199,22 +1195,20 @@ the events list. On any occurrence's page:
 > **Hint:** Deleting a single occurrence does not affect the others. The
 > Logbook warns you when an edit will affect several events.
 
-<!-- Screenshot needed:
-_[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_
--->
+![Editing one event of a recurring series: the "This event is part of a recurring series." panel above the form with This and all future events selected](./images/04-63-recurring-edit-scope.png)
 
 ### Recurring Event Edge Cases
 
-| Scenario                                          | What happens                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Monthly or annual by weekday, **Last**            | Uses the last such weekday of the month, whether the month has four or five of them                                                                                                                                                                                                                                                  |
-| Monthly on the 31st                               | Falls on the last day of shorter months, and goes back to the 31st in longer ones                                                                                                                                                                                                                                                    |
-| Annual event on 29 February                       | Falls on 28 February in other years, and goes back to the 29th in leap years                                                                                                                                                                                                                                                         |
-| A series using a booked room                      | Creating a series does not check the room for double-booking. Check the room's calendar yourself                                                                                                                                                                                                                                     |
-| Series spanning a daylight-saving change          | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM                                                                                                                                                                                                                                                              |
-| Editing a series with finalized occurrences       | Refused when the save would change a finalized occurrence's times, type, category or check-in rules — for example "(2 of 3 finalized occurrences would change)". Saved from a finalized occurrence, those fields are left out, so a description-only edit goes through. Saved from an open occurrence, its type, category and check-in rules are copied onto every later one, so even a description-only edit is refused when a finalized later one differs. Edit those occurrences one at a time |
-| Cancelling or deleting a series                   | Refused whenever any occurrence is finalized                                                                                                                                                                                                                                                                                         |
-| Duplicating an occurrence                         | Makes a stand-alone event. The recurrence is not copied                                                                                                                                                                                                                                                                              |
+| Scenario                                    | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Monthly or annual by weekday, **Last**      | Uses the last such weekday of the month, whether the month has four or five of them                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Monthly on the 31st                         | Falls on the last day of shorter months, and goes back to the 31st in longer ones                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Annual event on 29 February                 | Falls on 28 February in other years, and goes back to the 29th in leap years                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| A series using a booked room                | Creating a series does not check the room for double-booking. Check the room's calendar yourself                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Series spanning a daylight-saving change    | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Editing a series with finalized occurrences | Refused when the save would change a finalized occurrence's times, type, category or check-in rules — for example "(2 of 3 finalized occurrences would change)". Saved from a finalized occurrence, those fields are left out, so a description-only edit goes through. Saved from an open occurrence, its type, category and check-in rules are copied onto every later one, so even a description-only edit is refused when a finalized later one differs. Edit those occurrences one at a time |
+| Cancelling or deleting a series             | Refused whenever any occurrence is finalized                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Duplicating an occurrence                   | Makes a stand-alone event. The recurrence is not copied                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ---
 
@@ -1264,23 +1258,34 @@ the **Period** you choose:
 
 On an event's page, the **Notifications** panel sends a message about that
 event. Choose a **Notification Type**, the audience, and an optional message,
-then send. It arrives in each member's Notifications inbox in The Logbook.
+then send. It arrives in each member's Notifications inbox in The Logbook and
+by email.
 
-| Notification Type         | Purpose                                         |
-| ------------------------- | ----------------------------------------------- |
-| **Announcement**          | General news about the event                    |
-| **Pre-Event Reminder**    | A reminder before the event                     |
-| **Post-Event Follow-Up**  | A message after the event                       |
-| **Missed Event Notice**   | For members who said Going but did not attend   |
-| **Check-In Confirmation** | For members who checked in                      |
+Whether a member gets the email depends on the type:
 
-| Audience                                | Who receives it                                     |
-| --------------------------------------- | --------------------------------------------------- |
-| **All members**                         | Every active member of your department              |
-| **Going (RSVP'd yes)**                  | Members who answered **Going**                      |
-| **Not responded**                       | Active members who have not answered                |
-| **Checked in**                          | Members who checked in                              |
-| **Not checked in (RSVP'd but absent)**  | Members who answered **Going** but did not check in |
+- **Announcement** is always emailed, like a department message.
+- **Pre-Event Reminder**, **Missed Event Notice** and **Check-In
+  Confirmation** follow the member's **Event reminders** email switch.
+- **Post-Event Follow-Up** follows their **Event changes and cancellations**
+  email switch.
+
+The inbox entry arrives either way.
+
+| Notification Type         | Purpose                                       |
+| ------------------------- | --------------------------------------------- |
+| **Announcement**          | General news about the event                  |
+| **Pre-Event Reminder**    | A reminder before the event                   |
+| **Post-Event Follow-Up**  | A message after the event                     |
+| **Missed Event Notice**   | For members who said Going but did not attend |
+| **Check-In Confirmation** | For members who checked in                    |
+
+| Audience                               | Who receives it                                     |
+| -------------------------------------- | --------------------------------------------------- |
+| **All members**                        | Every active member of your department              |
+| **Going (RSVP'd yes)**                 | Members who answered **Going**                      |
+| **Not responded**                      | Active members who have not answered                |
+| **Checked in**                         | Members who checked in                              |
+| **Not checked in (RSVP'd but absent)** | Members who answered **Going** but did not check in |
 
 ![Event notification panel with its type and audience controls](./images/04-11-event-notifications.png)
 
@@ -1331,9 +1336,22 @@ selecting.
 **More → Cancel Event** asks for a reason (at least 10 characters) and offers
 **Notify members who RSVP'd Going or Maybe**. **Keep Event** backs out.
 
-On a recurring event, **More → Cancel Entire Series** does the same for the
+With **Notify** ticked, those members are told in the app and by email, with
+the reason. The email's wording is the **Event Cancelled** template under
+**Communications → Email Templates**. A member can turn the email off under
+**Settings → Notifications → Event changes and cancellations**; the in-app
+notice stays either way, and a department can make the email required.
+
+On a recurring event, **More → Cancel Entire Series** cancels the whole
 series, with **Only cancel future events (keep past events)**. Its buttons are
-**Cancel Series** and **Keep Series**.
+**Cancel Series** and **Keep Series**. It shows the same **Notify** box, but
+notifies no one even when it is ticked. **Cancel Selected** notifies no one
+either.
+
+**Changing an event.** When you change an event's title, start or end time, or
+location, members who answered **Going** or **Maybe** are told in the app and
+by an "Event Updated" email showing the new time and place. The email follows
+the same **Event changes and cancellations** switch.
 
 A cancelled event stays on the calendar with its attendance intact, and reads
 "This event has been cancelled. Reason: …". A finalized event cannot be
@@ -1342,16 +1360,28 @@ cancelled.
 ### Deleting an event or a series
 
 1. On the event's page, select **More → Delete Event**.
-2. On a recurring event, choose **Delete only this event** or **Delete all
-   events in this series**.
+2. On a recurring event, choose **Delete only this event**, **Delete this
+   and future events in this series**, or **Delete all events in this
+   series**.
 3. The dialog reads "Permanently delete "…"? Its RSVPs and attendance records
    are deleted too. You can't undo this." Select **Delete Event** (or **Delete
    Entire Series**), or **Keep Event** to back out.
 
-> **What if I want to keep the history?** Deleting a series removes every
-> occurrence, past ones included — there is no "delete future occurrences
-> only". To keep the record, use **Cancel Entire Series** instead: cancelled
-> events stay on the calendar with their attendance.
+> **What if I want to keep the history?** **Delete all events** removes every
+> occurrence, past ones included. To keep the past, choose **Delete this and
+> future events in this series** from the first occurrence you want gone: earlier
+> events, with their attendance, stay, and the series is ended at its last
+> remaining occurrence with rolling extension off, so the deleted ones are not
+> created again. Only the occurrences being deleted are checked for finalized
+> attendance. To keep every event on the calendar, use **Cancel Entire Series**
+> instead.
+
+> **Deleting the first event of a series no longer loses the series.** The
+> earliest surviving occurrence takes over the recurrence settings, so a later
+> **Delete all events in this series** still removes every remaining occurrence.
+
+> **An approved meeting cannot be deleted.** Its attendance is part of the
+> membership record.
 
 > **What if the event has minutes?** An event with linked records, such as
 > meeting minutes, cannot be deleted: "Cannot delete event because it has
@@ -1401,17 +1431,17 @@ and who may see the list, is covered in
 
 **The Event settings sections:**
 
-| Section              | What it holds                                                                 |
-| -------------------- | ----------------------------------------------------------------------------- |
+| Section              | What it holds                                                                  |
+| -------------------- | ------------------------------------------------------------------------------ |
 | **Visibility**       | Which event types and categories appear as filters (**Event Type Visibility**) |
-| **Categories**       | Your **Custom Event Categories** and their colours                            |
-| **Attendance**       | _"Who sees who's going; who takes requests"_                                  |
-| **Outreach Types**   | The kinds of outreach the public can request                                  |
-| **Hour Tracking**    | Mapping events to admin hours                                                 |
-| **Pipeline**         | _"How requests are handled"_ — the public request pipeline                    |
-| **Email**            | Request email triggers and templates                                          |
-| **Public Form**      | The public event-request form                                                 |
-| **Headline Metrics** | The four numbers at the top of the page                                       |
+| **Categories**       | Your **Custom Event Categories** and their colours                             |
+| **Attendance**       | _"Who sees who's going; who takes requests"_                                   |
+| **Outreach Types**   | The kinds of outreach the public can request                                   |
+| **Hour Tracking**    | Mapping events to admin hours                                                  |
+| **Pipeline**         | _"How requests are handled"_ — the public request pipeline                     |
+| **Email**            | Request email triggers and templates                                           |
+| **Public Form**      | The public event-request form                                                  |
+| **Headline Metrics** | The four numbers at the top of the page                                        |
 
 On a phone the sections become a scrollable strip of tabs, and every control
 is a full-size touch target.
@@ -1423,13 +1453,46 @@ is a full-size touch target.
 Select **Minutes** in the sidebar. The **Meeting Minutes** page — _"Record
 meetings, write up their minutes, and track action items"_ — lists
 **meetings**. Under each meeting card are the **minutes** written from it, as
-links that show their state: **Draft**, **Awaiting approval**, **Approved**
-or **Returned for changes**.
+links that show their state: **Draft**, **Circulated for review**, **Adopted**
+or **Returned for changes**. (Before 2026-10-14 the middle two read **Awaiting
+approval** and **Approved**; see
+[Circulating and adopting minutes](#circulating-and-adopting-minutes).)
 
-Who sees which minutes is decided for you: members see only approved minutes.
+Who sees which minutes is decided for you: members see circulated and adopted minutes, never drafts or executive sessions.
 The **Pending Approval** tile counts minutes awaiting approval.
 
-![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
+**Search the minutes themselves.** _(2026-10-19)_ The search box above the list
+finds meetings by title and also searches the **words inside the minutes**. Type
+two or more characters and a **Found in the minutes** card appears under the box:
+one entry per set of minutes, newest meeting first, each showing where it matched
+(a section, a motion and its discussion, an action item and its notes or
+assignee) with the found words highlighted. Every word you type must appear
+somewhere in the minutes, not necessarily in the same section, and a word matches
+where a word starts (`hose` finds `hoses`, not `purchase`). Put a phrase in
+double quotes to find it exactly as typed. The meeting-type filter beside the box
+narrows the search. Members search only circulated and adopted minutes, never a
+draft or an executive session; people who manage minutes search everything, and
+each result shows its status.
+
+![The Minutes page with the word budget typed in the search box and the Found in the minutes card listing the matching minutes with the word highlighted](./images/04-70-minutes-archive-search.png)
+
+**Minutes Settings.** _(2026-10-19)_ The department-wide choices about minutes
+are on one screen, opened with the **Settings** button beside **Outlines** at the
+top of the Minutes page (`minutes.manage`). It has four sections: **Attendance**
+(who the minutes name), **Signatures** (who signs adopted minutes), **Reminders**
+(following up action items) and **Publishing** (the library and the public page).
+Anyone who manages minutes can read every section. Changing one needs the
+settings permission; without it the controls are greyed out, the section says a
+settings administrator changes it, and there is no Save. **Save** stays disabled
+until something changes. Before 2026-10-19 these were four separate buttons on the
+Minutes page (**Reminders**, **Roll listing**, **Publishing**, **Signers**), each
+opening its own dialog.
+
+![Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row](./images/04-71-minutes-settings-attendance.png)
+
+![Minutes Settings as a minutes manager without the settings permission: the Attendance section with disabled controls, a note that a settings administrator changes it, and no Save row](./images/04-72-minutes-settings-read-only.png)
+
+![The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted](./images/04-14-meeting-minutes.png)
 
 ### Creating Minutes
 
@@ -1457,6 +1520,28 @@ Record each formal motion with:
 - the seconder;
 - the result (Passed, Failed, Tabled).
 
+**Prepared motions, and accepting the previous minutes.** _(2026-10-18)_ A
+section marked **Needs a motion and a second** has its motion from the moment the
+minutes are made, so you record who moved and the vote instead of building the
+motion. Out of the box those are **Approval of Previous Minutes** and
+**Adjournment**; a department marks others on the Outlines screen (an outline
+saved earlier is not changed until you tick the box). A prepared motion is wording
+only until the meeting acts on it: it is not printed, published or counted among
+the motions until you record a result, and it disappears again if its section
+stops needing one.
+
+The **Approval of Previous Minutes** motion names the most recent earlier minutes
+of the same kind of meeting that have been circulated or adopted ("Accepting the
+minutes of the September 3, 2026 business meeting", linked). When you record it
+as **Passed**, say whether the minutes were accepted **As submitted** or **As
+revised**. Recording it fills in the adoption of those minutes; it does not adopt
+them. An officer other than the one who circulated them still confirms it, and
+the earlier minutes show a note that this meeting accepted them, and **Adopt
+Minutes** then opens already filled in from the motion (see
+[Circulating and adopting minutes](#circulating-and-adopting-minutes)).
+
+![Draft minutes with the Approval of Previous Minutes motion prepared: the line naming the minutes being accepted, Result set to Passed and the As submitted / As revised choice](./images/04-76-minutes-prepared-acceptance-motion.png)
+
 ### Creating Minutes from a Meeting or an Event
 
 - **From a meeting:** the book icon on a meeting card reads **Create minutes
@@ -1468,6 +1553,36 @@ Record each formal motion with:
   Meeting** creates the meeting record and opens the Minutes page. Attendees
   are taken from the event's **check-ins**, not its RSVPs. Write the minutes
   from the meeting's card as above.
+
+**Agenda items become the minutes outline.** A meeting can carry a structured
+agenda. On **Minutes → Meetings**, select the clipboard icon on the meeting's
+card (**Agenda**; it needs permission to manage meetings). For each item enter a
+title, an optional **presenter** and notes, tick **Needs a motion and a second**
+and type the prepared motion wording if one is ready, and link library
+documents (you can only link a file in a folder you could open yourself). Move,
+add or remove items with the arrows and buttons beside them; there can be up to 60.
+
+When minutes are created from a meeting that has agenda items, the sections are
+those items, in order, each carrying its presenter, notes, prepared motion and
+linked documents. They replace the outline's sections, so Call to Order and
+Adjournment are agenda items like any other if you want them; the outline still
+supplies the header and footer, and you are not asked to choose one. A meeting
+with no agenda items behaves as before.
+
+- **Sync from agenda** on draft minutes lists what changed in the agenda since
+  the minutes were started (new, changed, removed, reordered items). Tick the
+  changes to apply. Text you have written is never touched: an item removed from
+  the agenda whose section holds text keeps the section as an ordinary one.
+  Saving the agenda never alters minutes already drafted.
+- **Not taken up.** A section left blank can be marked **The meeting did not
+  take this up**. It stays in the record and prints as _Not taken up_ instead of
+  vanishing.
+
+![The Agenda dialog for the Station Operations Meeting: its items in order, one with a presenter and notes, a prepared motion and a linked document](./images/04-87-agenda-dialog.png)
+
+![The Sync from the agenda dialog on draft minutes: one new agenda item and one changed item, each with a box to tick before applying](./images/04-88-agenda-sync-dialog.png)
+
+![A section of draft minutes marked Not taken up: the badge beside its heading and the line that the meeting did not take it up](./images/04-89-section-not-taken-up.png)
 
 **Linked events.** Minutes can be linked to an event, and **Unlink** removes
 the link for good.
@@ -1483,14 +1598,19 @@ card.
 **Who can do this:** officers with the **Create, edit, and manage meeting
 minutes** permission.
 
-1. On a draft (or returned) record, select **Submit for Approval**.
-2. A second officer opens it and selects **Approve Minutes** or **Reject
-   Minutes**.
+> **Renamed 2026-10-14.** **Submit for Approval** now reads **Circulate for
+> Review**, **Approve Minutes** reads **Adopt Minutes** and **Reject Minutes**
+> reads **Return for Changes**. The rules below are unchanged; the new steps are
+> in [Circulating and adopting minutes](#circulating-and-adopting-minutes).
+
+1. On a draft (or returned) record, select **Circulate for Review**.
+2. A second officer opens it and selects **Adopt Minutes** or **Return for
+   Changes**.
 
 **You cannot approve minutes you submitted yourself.** Approval needs a
-second person. The submitter is not offered **Approve Minutes**; they read
+second person. The submitter is not offered **Adopt Minutes**; they read
 _"Waiting for another officer to approve. You submitted these minutes, so you
-cannot approve them."_ **Reject Minutes** stays available to them as a way to
+cannot approve them."_ **Return for Changes** stays available to them as a way to
 withdraw the submission. So a secretary who writes and submits the minutes
 needs a second officer with the same permission to approve them.
 
@@ -1503,7 +1623,7 @@ department approved — including whether quorum was met — stays as it was.
 1. Open the minutes and select **Reopen for Correction**.
 2. Say what needs correcting (at least 10 characters). The minutes go back to
    **Draft**, and members cannot see them until they are approved again.
-3. Make the correction, then **Submit for Approval**. Another officer
+3. Make the correction, then **Circulate for Review**. Another officer
    approves them as before.
 
 The earlier approval and your reason are kept in the audit log.
@@ -1534,6 +1654,162 @@ One officer may take it through all three, but only in that order:
 So every approved meeting records who approved it and when. Creating,
 editing, deleting or approving a meeting — and changing its attendees or
 action items — is recorded in the audit log.
+
+### Who is listed on the roll (department default and per minutes)
+
+_(2026-10-18)_ The roll is always recorded in full; quorum and the attendance
+reports read all of it. A new setting chooses which statuses a **reader** of the
+minutes sees: **everyone**, **present and excused**, or **present only**. Guests
+are named under every choice. Open **Minutes → Settings → Attendance** to set
+the department default (a settings administrator changes it; other minutes
+managers can read it). On draft or rejected minutes the roll panel has its own
+selector that overrides the default for that one set of minutes (leave it on
+"follow the department" to inherit). The choice applies to the minutes page, the
+PDF, the library copy and the public copy; the public copy leaves out counts that
+are not listed rather than showing zero. Nothing changes until someone sets it.
+
+![The roll panel on draft minutes with its own selector for which attendance statuses a reader sees, set to follow the department default](./images/04-81-minutes-roll-listing-selector.png)
+
+### Publishing adopted minutes (library and public page)
+
+_(2026-10-18)_ Publishing adopted minutes files the library copy in Documents.
+When the department allows it, it also posts a **public copy** on a hosted
+`/public/minutes` page. Three settings, all **off** by default, are in the
+**Minutes → Settings → Publishing**: **Also post a public copy on the public
+minutes page**, and under **Executive-session minutes** two switches, **Allow
+publishing to the library** and **Allow posting them on the public minutes page**
+(the second needs the first and public posting). Turning on the last one asks
+for confirmation.
+
+- **Republishing** replaces the library document and the public copy in place and
+  notes which version it replaced. Reopening adopted minutes marks the public copy
+  as **under correction**; a public copy can also be withdrawn on its own.
+- **The public copy is deliberately thinner than the PDF:** attendance as counts
+  plus the officers present, no individual votes, no closed-session participants
+  and no attachments. Settings are checked when posting and again on every public
+  read, so turning posting off hides the page at once.
+- **Executive-session minutes** go only to a leadership-only folder, and
+  publishing refuses if that folder's access was loosened.
+- The Minutes page shows a publishing status line for each set of minutes.
+
+![Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches](./images/04-73-minutes-settings-publishing.png)
+
+![Adopted minutes with the publishing status note: filed in Documents with its version and date, and posted on the public minutes page](./images/04-82-minutes-publishing-note.png)
+
+![The public minutes page at desktop width: the meeting's minutes read without signing in, with attendance as counts and the officers present](./images/04-83-public-minutes-desktop.png)
+
+![The public minutes page at phone width](./images/04-84-public-minutes-phone.png)
+
+### Circulating and adopting minutes
+
+_(2026-10-14)_ Most departments send the draft minutes round, take corrections
+and adopt them at the next meeting. The screen now follows that order:
+
+**Draft → Circulated for review → Adopted.** The buttons on the minutes page are
+**Circulate for Review**, **Recall to Draft**, **Return for Changes** and
+**Adopt Minutes**.
+
+- **Circulating sends the minutes to members.** Everyone without
+  `minutes.manage` can now read circulated minutes (before, only adopted ones),
+  and every active member with an email address, except the officer who
+  circulated them, gets an email linking to them. A member can switch that email
+  off under their notification settings; a department can make it required.
+  Executive-session minutes are never announced and members cannot read them.
+- **Required sections.** An outline can mark a section **required**. Minutes
+  cannot be circulated until each required section has words in it (the roll-call
+  section is satisfied by a recorded roll). An empty paragraph does not count.
+- **Members suggest changes from the section.** While minutes are circulating,
+  each section card carries **Suggest a change**. It opens a form under the text
+  with a comment and, optionally, the wording you suggest. A member sees only
+  their own suggestions. A suggestion never edits the minutes.
+- **The secretary works the suggestions.** Someone with `minutes.manage` sees all
+  suggestions, a count of open ones on each section, and **Accept** or
+  **Decline** (with a note). To work accepted changes in, click **Recall to
+  Draft** (suggestions are kept), edit, and circulate again, which emails
+  members again. **Return for Changes** sends the minutes back as rejected.
+- **Adopting.** **Adopt Minutes** opens **Adopt these minutes**: the date the
+  body voted (**When the body voted**), the minutes of the meeting at which it
+  voted, and whether they were adopted **as amended** (ticked for you when any
+  suggestion was accepted). The same rule as before applies: you cannot adopt
+  minutes you circulated yourself. When a later meeting has already recorded
+  its **Approval of Previous Minutes** motion for these minutes, the dialog opens
+  filled in from it (the meeting, the date, as submitted or as amended, mover and
+  seconder) under a note saying so; check it, then adopt.
+
+![Circulated minutes with the note that the Membership Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in](./images/04-77-minutes-accepted-by-later-meeting.png)
+
+![The Adopt these minutes dialog filled in from the motion recorded at the Membership Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from](./images/04-78-minutes-adopt-dialog-prefilled.png)
+- **Adopted minutes are locked.** **Reopen for Correction** works as described
+  above; it clears the adoption details but keeps the earlier version.
+
+![Circulated minutes as a member: Suggest a change open under the Roll Call section, with a comment typed in](./images/04-64-minutes-suggest-change.png)
+
+![The Adopt these minutes dialog: When the body voted, the minutes of the meeting that adopted them, and the as-amended tick](./images/04-65-minutes-adopt-dialog.png)
+
+**Writing sections with formatting.** A section's text now has a small editor:
+bold, italic, underline, two heading levels, bulleted and numbered lists, block
+quotes and links. Nothing else (no tables, pictures or colours) is accepted, and
+that is what the printed copy and the copy published to Documents can show.
+Sections written before the editor stay plain text, exactly as typed, until
+someone edits them.
+
+**Keeping the record.** Under the minutes themselves, these panels start folded
+and show their count ("Motions (3)"); open one to add to it. Attendance, the
+suggestions and the sections stay open.
+
+| Panel                 | What it holds                                                                                                                                                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Attendance**        | Roll call with six statuses: present, late, left early, excused, absent, guest. **Present, late and left early count toward quorum**; the rest do not. A suggested roll is built from the event's check-ins, or the member list if there is no event |
+| **Motions**           | Mover, seconder and result; a motion can link to the election or ballot item that decided it                                                                                                                                                         |
+| **Closed sessions**   | Reason, legal basis, start and end times, who stayed (someone who stepped out is recorded), a summary, and the motion that moved into it                                                                                                             |
+| **Election results**  | A closed election's certified tally, frozen into the minutes. If the election ends after minutes are circulated, the result is filed as a permanent, labelled **addendum**                                                                           |
+| **Action items**      | Items, with **Carry action items forward** to bring open ones from earlier adopted minutes of the same meeting type (an item is open in only one place)                                                                                              |
+| **Attachments**       | Reports, handouts and the signed copy. Files are scanned and stored encrypted; members see them only once the minutes are adopted. The scanned **signed copy** can be added after adoption and cannot be removed                                     |
+| **Approved versions** | One entry per adoption, with a SHA-256 fingerprint. It opens itself and says **Needs attention** if the record no longer matches the adopted version                                                                                                 |
+
+![Below the sections of circulated minutes, the folded panels with their counts: Motions (1), Closed sessions (1), Election results (0) and Action Items (0)](./images/04-66-minutes-folded-panels.png)
+
+![The Closed sessions panel opened: the reason, start and end times, legal basis, who was in the room with the member who stepped out, and the summary](./images/04-67-minutes-closed-session.png)
+
+**Print the minutes** for the signature lines. The printed copy shows
+attendance by status, quorum, sections, motions, action items, filed election
+results and the attachment list, and — once adopted — the approver, version and
+fingerprint.
+
+**Signing adopted minutes.** Once minutes are adopted, the people named in the
+department's signature slots sign them in the app. The slots default to a
+**Recording Secretary** and a **Presiding Officer**, both open to anyone who
+manages minutes; a settings administrator can rename them or name positions
+instead (up to six) under **Minutes → Settings → Signatures**. To sign, type your name as it
+stands on your account and confirm your password, so the signature belongs to a
+person at the keyboard. An account that signs in only through single sign-on
+cannot sign. A slot is signed once, a person may sign more than one slot, and
+the person who circulated or adopted the minutes may sign too. A signature is
+tied to the adopted version and prints on the PDF. If the minutes are reopened
+and corrected, the new version starts unsigned and the earlier signatures stay
+on file against the text they were given for. Signing is rate-limited, since it
+is a place a password could be guessed from a signed-in session.
+
+![Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes](./images/04-74-minutes-settings-signatures.png)
+
+![The Signatures panel on adopted minutes: 1 of 2 signed, the Recording Secretary slot signed with the signer's name and date, and the Presiding Officer slot waiting with its Sign as Presiding Officer button](./images/04-85-minutes-signatures-panel.png)
+
+![The Sign dialog: the slot being signed, the name as it stands on the account and the password confirmation](./images/04-86-minutes-sign-dialog.png)
+
+**Outlines (the standard order of business).** **Minutes > Outlines**
+(`minutes.manage`) edits the department's standard sections for each meeting
+type: title, prefilled text and a **required** flag. **Make default** chooses the
+one new minutes start from. When a meeting type has more than one outline,
+starting minutes asks which; **Apply outline** on a draft lays an outline over
+it, keeping every section that already has text. Deleting an outline does not
+change minutes already written from it.
+
+![Minutes > Outlines: each meeting type's outlines, with Make default beside Edit and Duplicate on the business outline that is not the default](./images/04-68-minutes-outlines.png)
+
+![The outline editor on a short business outline: its name, kind of meeting and default switch, then the order of business with Required ticked on Call to Order](./images/04-69-minutes-outline-editor.png)
+
+**Upgrading?** Minutes' rich-text editor needs the `nh3` package on the
+server; rebuild the backend image (see [`UPGRADING.md`](../UPGRADING.md)).
 
 ---
 
@@ -1567,8 +1843,21 @@ it came from. Set it to Pending, In Progress, Completed or Cancelled, and add
 priority or assignee — is changed by whoever keeps the minutes.
 
 **Reminders.** An open or in-progress item with a due date reminds its
-assignee three days before it is due, one day before, on the due date, and on
-the day after. The check runs once a day.
+assignee in the app three days before it is due, one day before, on the due date,
+and on the day after. The check runs once a day.
+
+**Reminder emails.** _(2026-10-15)_ Assignees also get an email, one per member
+per day, listing their items that are due soon or overdue. It covers items on
+**adopted** minutes with a due date; an item more than 90 days overdue is no
+longer chased by email. People who manage minutes also get a weekly list of every
+open item, overdue first. A member can turn either email off in their
+notification settings. The department sets the timing under **Minutes → Settings
+→ Reminders**: **Email reminders to assignees** (on or off), **First reminder,
+days before the due date** (default 3; 0 is the due date itself), **Repeat while
+overdue, every this many days** (default 7; 0 is one overdue reminder only) and
+the weekly open-items list. Changing them needs the settings permission.
+
+![Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch](./images/04-75-minutes-settings-reminders.png)
 
 ### Attendance Dashboard (Secretary)
 
@@ -1636,21 +1925,21 @@ dashboard. Each lowers the count on its own.
 Elections have their own guide: [Elections & Voting](./14-elections.md). The
 parts most often looked for from here:
 
-| To learn about                                   | Read                                                                                              |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| Viewing elections and how they work              | [Elections Overview](./14-elections.md#elections-overview)                                        |
-| Voting in The Logbook or from an emailed ballot  | [Casting Votes](./14-elections.md#casting-votes)                                                  |
-| Creating an election                             | [Creating an Election](./14-elections.md#creating-an-election)                                    |
-| Ballot items, candidates and write-ins           | [Configuring Ballot Items](./14-elections.md#configuring-ballot-items)                            |
-| Saved ballots                                    | [Saved Ballot Templates](./14-elections.md#saved-ballot-templates)                                |
-| Who may vote, and secretary overrides            | [Voter Eligibility & Overrides](./14-elections.md#voter-eligibility--overrides)                   |
-| The pre-meeting package                          | [The Pre-Meeting Package](./14-elections.md#the-pre-meeting-package)                              |
-| Sending ballots and the eligibility summary      | [Opening an Election](./14-elections.md#opening-an-election)                                      |
-| Proxy voting                                     | [Proxy Voting](./14-elections.md#proxy-voting)                                                    |
-| Results, publishing and the emailed report       | [Monitoring & Results](./14-elections.md#monitoring--results)                                     |
-| Receipts and vote integrity                      | [Vote Integrity & Forensics](./14-elections.md#vote-integrity--forensics)                         |
-| Linking an election to a meeting or event        | [Meeting Attendance Integration](./14-elections.md#meeting-attendance-integration)                 |
-| Election problems                                | [Elections troubleshooting](./14-elections.md#troubleshooting)                                    |
+| To learn about                                  | Read                                                                               |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Viewing elections and how they work             | [Elections Overview](./14-elections.md#elections-overview)                         |
+| Voting in The Logbook or from an emailed ballot | [Casting Votes](./14-elections.md#casting-votes)                                   |
+| Creating an election                            | [Creating an Election](./14-elections.md#creating-an-election)                     |
+| Ballot items, candidates and write-ins          | [Configuring Ballot Items](./14-elections.md#configuring-ballot-items)             |
+| Saved ballots                                   | [Saved Ballot Templates](./14-elections.md#saved-ballot-templates)                 |
+| Who may vote, and secretary overrides           | [Voter Eligibility & Overrides](./14-elections.md#voter-eligibility--overrides)    |
+| The pre-meeting package                         | [The Pre-Meeting Package](./14-elections.md#the-pre-meeting-package)               |
+| Sending ballots and the eligibility summary     | [Opening an Election](./14-elections.md#opening-an-election)                       |
+| Proxy voting                                    | [Proxy Voting](./14-elections.md#proxy-voting)                                     |
+| Results, publishing and the emailed report      | [Monitoring & Results](./14-elections.md#monitoring--results)                      |
+| Receipts and vote integrity                     | [Vote Integrity & Forensics](./14-elections.md#vote-integrity--forensics)          |
+| Linking an election to a meeting or event       | [Meeting Attendance Integration](./14-elections.md#meeting-attendance-integration) |
+| Election problems                               | [Elections troubleshooting](./14-elections.md#troubleshooting)                     |
 
 ![The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, and the per-position submit button beneath them](./images/04-42-cast-ballot.png)
 
@@ -1923,10 +2212,10 @@ handouts for the K-2 age group, then ticks "Prep Equipment".
 
 Lt. Chen selects **Schedule Event** and fills in:
 
-| Field                 | Value                                 |
-| --------------------- | ------------------------------------- |
-| **Start Date & Time** | October 7, 9:00 AM                    |
-| **End Date & Time**   | October 7, 10:30 AM                   |
+| Field                 | Value                                  |
+| --------------------- | -------------------------------------- |
+| **Start Date & Time** | October 7, 9:00 AM                     |
+| **End Date & Time**   | October 7, 10:30 AM                    |
 | **Location / Room**   | Off-site or none (it is at the school) |
 
 She selects **Confirm & Create Calendar Event**. The Logbook:
@@ -2001,14 +2290,14 @@ Scheduled Date: October 7, 9:00 AM
 
 ### What This Looked Like for Each Person
 
-| Step      | Maria (requester)                                  | Lt. Chen (coordinator)                                  |
-| --------- | -------------------------------------------------- | ------------------------------------------------------- |
-| Submit    | Fills in the public form                           | Gets an email, sees the request in the queue, sends Maria the status link |
-| Review    | Sees "Submitted" on her status page                | Reviews the details, adds internal comments             |
-| Pipeline  | Sees nothing of it (public progress is off)        | Ticks Chief Approval, Volunteers, Equipment, Email      |
-| Schedule  | Gets the "scheduled" email; status page updates    | Sets the date, creates the calendar event               |
-| Pre-Event | Gets the "What to Expect" email                    | Sends the template from the request                     |
-| Complete  | Gets the completion email; status page shows done  | Selects Mark as Completed; the request is closed        |
+| Step      | Maria (requester)                                 | Lt. Chen (coordinator)                                                    |
+| --------- | ------------------------------------------------- | ------------------------------------------------------------------------- |
+| Submit    | Fills in the public form                          | Gets an email, sees the request in the queue, sends Maria the status link |
+| Review    | Sees "Submitted" on her status page               | Reviews the details, adds internal comments                               |
+| Pipeline  | Sees nothing of it (public progress is off)       | Ticks Chief Approval, Volunteers, Equipment, Email                        |
+| Schedule  | Gets the "scheduled" email; status page updates   | Sets the date, creates the calendar event                                 |
+| Pre-Event | Gets the "What to Expect" email                   | Sends the template from the request                                       |
+| Complete  | Gets the completion email; status page shows done | Selects Mark as Completed; the request is closed                          |
 
 > **Hint:** With **Public Progress Visibility** switched on, Maria would also
 > see the pipeline tasks on her status page. That is open, but some
@@ -2020,62 +2309,62 @@ Scheduled Date: October 7, 9:00 AM
 
 ### Check-In Behavior
 
-| Scenario                                  | What happens                                                                                     |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Check-in without an RSVP                  | You are recorded as **Going** and checked in                                                     |
-| Scanning again while checked in           | The page offers **Check Out of This Event**                                                      |
-| Check-out without a check-in              | "Cannot check out without checking in first."                                                    |
-| Checking out twice                        | "You have already checked out of this event."                                                    |
-| Check-in to a cancelled event             | "Event has been cancelled."                                                                      |
-| Check-in after attendance is finalized    | Refused, with the finalized-attendance message                                                   |
-| An officer checks in someone already in   | "Already checked in." Use **Edit Times** on the attendance list to change their times            |
+| Scenario                                | What happens                                                                          |
+| --------------------------------------- | ------------------------------------------------------------------------------------- |
+| Check-in without an RSVP                | You are recorded as **Going** and checked in                                          |
+| Scanning again while checked in         | The page offers **Check Out of This Event**                                           |
+| Check-out without a check-in            | "Cannot check out without checking in first."                                         |
+| Checking out twice                      | "You have already checked out of this event."                                         |
+| Check-in to a cancelled event           | "Event has been cancelled."                                                           |
+| Check-in after attendance is finalized  | Refused, with the finalized-attendance message                                        |
+| An officer checks in someone already in | "Already checked in." Use **Edit Times** on the attendance list to change their times |
 
 ### RSVP Behavior
 
-| Scenario                                  | What happens                                                                                                                         |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| RSVP to a cancelled event                 | "Cannot RSVP to cancelled event."                                                                                                    |
-| RSVP after the deadline                   | "RSVP deadline has passed."                                                                                                          |
-| A choice the event does not offer         | Refused. Events offer only the choices their organizer ticked (for example no **Maybe**)                                             |
-| **Going** on a full event                 | You are put on the waitlist. There is no error: **Your RSVP** reads **Waitlisted**                                                   |
-| Series RSVP on a series with full events  | Each occurrence is handled on its own. You are waitlisted on the full ones                                                           |
-| Waitlist promotion                        | Happens when seats are released: a **Going** member changes their answer or brings fewer guests, or an officer removes a **Going** attendee. Raising the limit does not promote anyone by itself |
+| Scenario                                 | What happens                                                                                                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| RSVP to a cancelled event                | "Cannot RSVP to cancelled event."                                                                                                                                                                |
+| RSVP after the deadline                  | "RSVP deadline has passed."                                                                                                                                                                      |
+| A choice the event does not offer        | Refused. Events offer only the choices their organizer ticked (for example no **Maybe**)                                                                                                         |
+| **Going** on a full event                | You are put on the waitlist. There is no error: **Your RSVP** reads **Waitlisted**                                                                                                               |
+| Series RSVP on a series with full events | Each occurrence is handled on its own. You are waitlisted on the full ones                                                                                                                       |
+| Waitlist promotion                       | Happens when seats are released: a **Going** member changes their answer or brings fewer guests, or an officer removes a **Going** attendee. Raising the limit does not promote anyone by itself |
 
 ---
 
 ## Troubleshooting
 
-| Issue                                                        | What to do                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| QR code not scanning                                         | Check the lighting and that the code is shown large enough. An officer can check the member in by hand                                                                                                                                                           |
-| QR page shows a blank square                                 | Check-in has not opened yet. The code appears on its own when it does                                                                                                                                                                                            |
-| "Check-in is not available yet"                              | You are more than an hour early (or any time early on a **Strict** event). The message gives the opening time                                                                                                                                                    |
-| "Check-in has closed for this event"                         | Ask an event organizer to record a late check-in, or use **I was there**                                                                                                                                                                                         |
-| "Already checked in"                                         | The member is already checked in. Use **Edit Times** on the attendance list to check or change their times                                                                                                                                                       |
-| Cannot RSVP to an event                                      | Check that the event is published, has not ended, and its deadline has not passed                                                                                                                                                                                |
-| Members show 0 hours despite checking in                     | Attendance is credited when it is finalized. Use **Finalize Attendance** (or **End Event** while it is running)                                                                                                                                                  |
-| Training records not created from an event                   | Records are written when a **Training** event's attendance is **finalized** — not at check-in, and not for other event types. A member with no time to credit is named in the finalize message. If the session needs officer confirmation, records complete when a training officer approves |
-| End Event button is missing                                  | It shows only while the event is running. After the scheduled end, use **Finalize Attendance**                                                                                                                                                                   |
-| Minutes not showing attendees                                | Minutes made from an event take attendees from check-ins, not RSVPs. Make sure members checked in                                                                                                                                                                |
-| Event request form not showing outreach types                | Add outreach types under **Manage Events → Settings → Outreach Types**. At least one is needed                                                                                                                                                                   |
-| A published request form is not creating requests            | Switch on **Accept Public Requests** under **Settings → Pipeline**                                                                                                                                                                                               |
-| Submitted request not appearing for coordinator              | The coordinator needs permission to manage events. Check their position in Role Management                                                                                                                                                                       |
-| Room double-booking error when scheduling or saving          | Another event already has that room at that time. Choose a different room or time                                                                                                                                                                                |
-| Email template shows `{{something}}` instead of a value      | Use double curly braces with no spaces, and one of the supported fields: `{{contact_name}}`, `{{event_date}}`, `{{organization_name}}`, `{{outreach_type}}`                                                                                                      |
-| Requester cannot cancel from the status page                 | A completed, declined or cancelled request cannot be changed                                                                                                                                                                                                     |
-| Pipeline tasks not visible to the requester                  | **Public Progress Visibility** is off by default. Turn it on under **Settings → Pipeline**                                                                                                                                                                       |
-| Custom categories not on the event form or as filter tabs    | Add them under **Event settings → Categories**, then switch each one on under **Visibility**                                                                                                                                                                     |
-| Calendar view not showing events                             | Check the month — use the arrows. The calendar also follows the type filter                                                                                                                                                                                      |
-| Attendance Trends shows no data                              | You need the **View analytics and dashboards** permission. Widen the **Period**                                                                                                                                                                                  |
-| Template picker shows no templates                           | No active templates exist. Create one, or switch a deactivated one back on, under **Event Templates**                                                                                                                                                            |
-| Waitlist not promoting anyone                                | Promotion happens only when seats are released. Raising the limit does not promote by itself                                                                                                                                                                     |
-| CSV import skipped rows                                      | The result lists each skipped row with its reason. Fix those rows and import them again                                                                                                                                                                          |
-| Draft event visible to members                               | It was published. Drafts are visible only to officers who can manage events                                                                                                                                                                                      |
-| Non-respondent reminder reached someone who answered         | **Non-respondents only** leaves out everyone who answered Going, Not Going or Maybe. Refresh the page and check their answer                                                                                                                                     |
-| "Schedule Conflict" on the form                              | The time overlaps an event you have RSVP'd to. It is only a warning                                                                                                                                                                                              |
-| Series-end reminder not received                             | It is sent once a series with an end date is within six months of its last occurrence, to the organizer and alternate. A rolling series has no end date                                                                                                         |
-| Recurring event dates look wrong                                 | "Last" picks the final such weekday; a 31st or 29 February falls back in short months or years. An evening series created before 28 September 2026 may need checking — see [If You Learned an Older Version](#if-you-learned-an-older-version)                    |
-| Election problems                                            | See [Elections troubleshooting](./14-elections.md#troubleshooting)                                                                                                                                                                                               |
+| Issue                                                     | What to do                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| QR code not scanning                                      | Check the lighting and that the code is shown large enough. An officer can check the member in by hand                                                                                                                                                                                       |
+| QR page shows a blank square                              | Check-in has not opened yet. The code appears on its own when it does                                                                                                                                                                                                                        |
+| "Check-in is not available yet"                           | You are more than an hour early (or any time early on a **Strict** event). The message gives the opening time                                                                                                                                                                                |
+| "Check-in has closed for this event"                      | Ask an event organizer to record a late check-in, or use **I was there**                                                                                                                                                                                                                     |
+| "Already checked in"                                      | The member is already checked in. Use **Edit Times** on the attendance list to check or change their times                                                                                                                                                                                   |
+| Cannot RSVP to an event                                   | Check that the event is published, has not ended, and its deadline has not passed                                                                                                                                                                                                            |
+| Members show 0 hours despite checking in                  | Attendance is credited when it is finalized. Use **Finalize Attendance** (or **End Event** while it is running)                                                                                                                                                                              |
+| Training records not created from an event                | Records are written when a **Training** event's attendance is **finalized** — not at check-in, and not for other event types. A member with no time to credit is named in the finalize message. If the session needs officer confirmation, records complete when a training officer approves |
+| End Event button is missing                               | It shows only while the event is running. After the scheduled end, use **Finalize Attendance**                                                                                                                                                                                               |
+| Minutes not showing attendees                             | Minutes made from an event take attendees from check-ins, not RSVPs. Make sure members checked in                                                                                                                                                                                            |
+| Event request form not showing outreach types             | Add outreach types under **Manage Events → Settings → Outreach Types**. At least one is needed                                                                                                                                                                                               |
+| A published request form is not creating requests         | Switch on **Accept Public Requests** under **Settings → Pipeline**                                                                                                                                                                                                                           |
+| Submitted request not appearing for coordinator           | The coordinator needs permission to manage events. Check their position in Role Management                                                                                                                                                                                                   |
+| Room double-booking error when scheduling or saving       | Another event already has that room at that time. Choose a different room or time                                                                                                                                                                                                            |
+| Email template shows `{{something}}` instead of a value   | Use double curly braces with no spaces, and one of the supported fields: `{{contact_name}}`, `{{event_date}}`, `{{organization_name}}`, `{{outreach_type}}`                                                                                                                                  |
+| Requester cannot cancel from the status page              | A completed, declined or cancelled request cannot be changed                                                                                                                                                                                                                                 |
+| Pipeline tasks not visible to the requester               | **Public Progress Visibility** is off by default. Turn it on under **Settings → Pipeline**                                                                                                                                                                                                   |
+| Custom categories not on the event form or as filter tabs | Add them under **Event settings → Categories**, then switch each one on under **Visibility**                                                                                                                                                                                                 |
+| Calendar view not showing events                          | Check the month — use the arrows. The calendar also follows the type filter                                                                                                                                                                                                                  |
+| Attendance Trends shows no data                           | You need the **View analytics and dashboards** permission. Widen the **Period**                                                                                                                                                                                                              |
+| Template picker shows no templates                        | No active templates exist. Create one, or switch a deactivated one back on, under **Event Templates**                                                                                                                                                                                        |
+| Waitlist not promoting anyone                             | Promotion happens only when seats are released. Raising the limit does not promote by itself                                                                                                                                                                                                 |
+| CSV import skipped rows                                   | The result lists each skipped row with its reason. Fix those rows and import them again                                                                                                                                                                                                      |
+| Draft event visible to members                            | It was published. Drafts are visible only to officers who can manage events                                                                                                                                                                                                                  |
+| Non-respondent reminder reached someone who answered      | **Non-respondents only** leaves out everyone who answered Going, Not Going or Maybe. Refresh the page and check their answer                                                                                                                                                                 |
+| "Schedule Conflict" on the form                           | The time overlaps an event you have RSVP'd to. It is only a warning                                                                                                                                                                                                                          |
+| Series-end reminder not received                          | It is sent once a series with an end date is within six months of its last occurrence, to the organizer and alternate. A rolling series has no end date                                                                                                                                      |
+| Recurring event dates look wrong                          | "Last" picks the final such weekday; a 31st or 29 February falls back in short months or years. An evening series created before 28 September 2026 may need checking — see [If You Learned an Older Version](#if-you-learned-an-older-version)                                               |
+| Election problems                                         | See [Elections troubleshooting](./14-elections.md#troubleshooting)                                                                                                                                                                                                                           |
 
 ---
 

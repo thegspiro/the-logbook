@@ -30,16 +30,17 @@ const MyIPExceptionsPage: React.FC = () => {
     }
   }, [error, clearError]);
 
+  // Resolves false on a refusal so the form keeps what the member typed; the
+  // store has already put the reason in `error`, which the effect above toasts.
   const handleRequestSubmit = async (data: IPExceptionRequestCreate): Promise<boolean> => {
     try {
       await requestException(data);
-      toast.success('IP exception request submitted');
-      setShowForm(false);
-      return true;
     } catch {
-      // The store has set `error`, which the effect above shows as a toast.
       return false;
     }
+    toast.success('IP exception request submitted');
+    setShowForm(false);
+    return true;
   };
 
   return (

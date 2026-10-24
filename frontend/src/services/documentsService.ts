@@ -69,6 +69,22 @@ export const documentsService = {
     return response.data;
   },
 
+  /**
+   * Folders nobody but full administrators can open now and nobody has
+   * confirmed are meant that way (decision 30). Empty for anyone but a full
+   * administrator.
+   */
+  async getAdminOnlyFolders(): Promise<DocumentFolder[]> {
+    const response = await api.get<DocumentFolder[]>('/documents/folders/admin-only');
+    return response.data;
+  },
+
+  /** Confirm a folder is meant for full administrators alone; it stops being listed. */
+  async confirmAdminOnlyFolder(folderId: string): Promise<DocumentFolder> {
+    const response = await api.post<DocumentFolder>(`/documents/folders/${folderId}/confirm-admin-only`);
+    return response.data;
+  },
+
   async deleteFolder(folderId: string): Promise<void> {
     await api.delete(`/documents/folders/${folderId}`);
   },
@@ -115,6 +131,24 @@ export const documentsService = {
 // Meetings (Minutes) Service
 // ============================================
 
+/** A Documents-library file linked from an agenda item. */
+export interface AgendaDocument {
+  id: string;
+  name: string;
+}
+
+/** One item of a meeting's agenda; it becomes a section of the meeting's minutes. */
+export interface AgendaItem {
+  /** Stable across edits; the minutes section made from this item is `agenda-<key>`. */
+  key: string;
+  title: string;
+  presenter: string;
+  notes: string;
+  needs_motion: boolean;
+  motion_text: string;
+  documents: AgendaDocument[];
+}
+
 export interface MeetingRecord {
   id: string;
   organization_id: string;
@@ -127,6 +161,7 @@ export interface MeetingRecord {
   called_by?: string;
   status: string;
   agenda?: string;
+  agenda_items?: AgendaItem[];
   notes?: string;
   motions?: string;
   approved_by?: string;

@@ -133,6 +133,8 @@ export interface CSVMemberRow {
   email: string;
   joinDate: string;
   status?: string | undefined;
+  /** One of the membership types the Add Member form offers; blank imports as a regular member. */
+  membershipType?: string | undefined;
   rank?: string | undefined;
   role?: string | undefined;
   station?: string | undefined;

@@ -16,6 +16,10 @@ const mockGetFacilitiesPage = vi.fn();
 const mockGetDashboard = vi.fn();
 
 vi.mock('../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   facilitiesService: {
     getFacilities: (...args: unknown[]) => mockGetFacilities(...args) as unknown,
     getTypes: (...args: unknown[]) => mockGetTypes(...args) as unknown,

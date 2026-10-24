@@ -379,26 +379,32 @@ const InventoryMembersPage: React.FC = () => {
             const name = displayNameOf(member) || member.username;
             return (
               <div key={member.user_id} className="card-secondary overflow-hidden">
-                {/* Row — a clickable region (not a <button>) so the nested
-                    profile link and action buttons remain valid HTML. */}
+                {/* Row — clicking anywhere expands it for a pointer user. The
+                    keyboard and assistive-technology control is the chevron
+                    button, because a role="button" row would nest the profile
+                    link and the action buttons inside another control. */}
                 <div
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={isExpanded}
                   className="hover:bg-theme-surface-hover flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors"
                   onClick={() => {
                     void handleExpand(member.user_id);
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      void handleExpand(member.user_id);
-                    }
-                  }}
                 >
-                  <div className="text-theme-text-muted shrink-0">
-                    {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </div>
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    aria-label={`${isExpanded ? 'Hide' : 'Show'} items assigned to ${name}`}
+                    className="text-theme-text-muted touch:min-h-11 touch:min-w-11 inline-flex shrink-0 items-center justify-center"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleExpand(member.user_id);
+                    }}
+                  >
+                    {isExpanded ? (
+                      <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </button>
                   <User className="text-theme-text-muted h-5 w-5 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -422,7 +428,7 @@ const InventoryMembersPage: React.FC = () => {
                       <CountBadge
                         label="checked out"
                         count={member.checkout_count}
-                        color="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                        color="bg-yellow-500/10 text-yellow-800 dark:text-yellow-400"
                       />
                       <CountBadge
                         label="issued"

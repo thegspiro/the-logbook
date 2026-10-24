@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document import Document
 from app.models.meeting import (
     ActionItemStatus,
     Meeting,
@@ -22,6 +23,8 @@ from app.models.meeting import (
     MeetingType,
 )
 from app.models.user import User
+from app.services.agenda_document_access import openable_document_ids
+from app.utils.agenda_items import normalize_agenda_items
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -34,6 +37,15 @@ from app.utils.org_timezone import (
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
+APPROVED_MEETING_DELETE_REFUSAL = (
+    "An approved meeting cannot be deleted. Its attendance is part of the "
+    "department's record and counts toward membership tier eligibility."
+)
+
+
+class MeetingDeleteRefusedError(Exception):
+    """A meeting that may not be deleted. Answered 409 by the endpoint."""
+
 
 class MeetingsService:
     """Service for meeting minutes management"""
@@ -44,6 +56,78 @@ class MeetingsService:
     # ============================================
     # Meeting Management
     # ============================================
+
+    async def settle_agenda_items(
+        self,
+        items: Optional[List[Dict[str, Any]]],
+        organization_id: UUID | str,
+        user: User,
+        existing: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """The agenda items to store, with every linked document verified.
+
+        A document link is a client-supplied id (XC-1): it must be in the
+        caller's organization, and in a folder the caller could open
+        themselves. The stored name comes from the document, never from the
+        request. Reads narrow the links again per viewer
+        (``agenda_document_access``), because the name is returned to everyone
+        who can read the meeting or the minutes.
+
+        On an update, *existing* is the agenda as stored. A viewer is shown only
+        the linked documents they could open themselves, so the editor they
+        save from may be missing some; those are kept, not silently unlinked.
+        Only a document the editor could see and chose to remove is removed.
+        """
+        if items is None:
+            return None
+        from app.services.documents_service import DocumentsService
+
+        documents = DocumentsService(self.db)
+        settled = normalize_agenda_items(items)
+        for item in settled:
+            linked = []
+            for ref in item["documents"]:
+                row = (
+                    await self.db.execute(
+                        select(Document).where(
+                            Document.id == str(ref["id"]),
+                            Document.organization_id == str(organization_id),
+                        )
+                    )
+                ).scalar_one_or_none()
+                if row is None or not await documents.can_access_document(
+                    row, organization_id, user
+                ):
+                    raise ValueError(
+                        f"You can only link documents you can open "
+                        f"(agenda item '{item['title']}')"
+                    )
+                linked.append({"id": row.id, "name": row.name})
+            item["documents"] = linked
+        if existing:
+            await self._keep_hidden_documents(settled, existing, organization_id, user)
+        return settled
+
+    async def _keep_hidden_documents(
+        self,
+        settled: List[Dict[str, Any]],
+        existing: List[Dict[str, Any]],
+        organization_id: UUID | str,
+        user: User,
+    ) -> None:
+        """Re-attach stored links the editor could not have seen to their items."""
+        before = {
+            item["key"]: item["documents"] for item in normalize_agenda_items(existing)
+        }
+        stored_ids = {ref["id"] for refs in before.values() for ref in refs}
+        visible = await openable_document_ids(
+            self.db, organization_id, user, stored_ids
+        )
+        for item in settled:
+            have = {ref["id"] for ref in item["documents"]}
+            for ref in before.get(item["key"], []):
+                if ref["id"] not in visible and ref["id"] not in have:
+                    item["documents"].append(dict(ref))
 
     async def create_meeting(
         self,
@@ -294,12 +378,22 @@ class MeetingsService:
     async def delete_meeting(
         self, meeting_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a meeting and all its attendees/action items"""
-        try:
-            meeting = await self.get_meeting_by_id(meeting_id, organization_id)
-            if not meeting:
-                return False, "Meeting not found"
+        """Delete a meeting and all its attendees/action items.
 
+        An approved meeting is refused with ``MeetingDeleteRefusedError``.
+        Its attendees cascade away with it, and attendance counts toward
+        membership tier eligibility (``membership_tier_service``); once the
+        minutes are approved that attendance is the settled record, so
+        deleting the meeting would quietly cost members credit they earned.
+        Meetings have no active/archived flag to fall back on, so this is a
+        refusal rather than a deactivation.
+        """
+        meeting = await self.get_meeting_by_id(meeting_id, organization_id)
+        if not meeting:
+            return False, "Meeting not found"
+        if meeting.status == MeetingStatus.APPROVED:
+            raise MeetingDeleteRefusedError(APPROVED_MEETING_DELETE_REFUSAL)
+        try:
             await self.db.delete(meeting)
             await self.db.commit()
             return True, None

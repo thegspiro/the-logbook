@@ -11,13 +11,14 @@ import type { CheckType } from '@/modules/inventory/types/equipmentCheck';
 // Check-type metadata
 // ============================================================================
 
-// What the admin picks from. Four answer shapes, then the two structural rows.
-// The order is the design's: level, function, count, expiry.
+// What the admin picks from. Five answer shapes, then the two structural rows.
+// The order is the design's: level, function, count, expiry, presence.
 export const CHECK_TYPES = [
   { value: 'level', label: 'Level' },
   { value: 'function', label: 'Function' },
   { value: 'count', label: 'Count' },
   { value: 'expiry', label: 'Expiry' },
+  { value: 'presence', label: 'Present' },
   { value: 'text', label: 'Statement' },
   { value: 'header', label: 'Section Header' },
 ] as const;
@@ -30,7 +31,9 @@ export const CHECK_TYPE_HELP: Record<string, string> = {
   count:
     'A par level to match. One tap confirms par; the stepper is for when it does not. Short of par becomes a restock line, not a failure.',
   expiry:
-    'A date already on record, shown and confirmed rather than retyped, so the check is a glance at the vial. Inside the pull window the line stays amber on every shift until it is replaced.',
+    'A date already on record, shown and confirmed rather than retyped, so the check is a glance at the vial. Inside the pull window the line stays amber on every shift until it is replaced. A line not linked to inventory needs its date before the checklist can be published, and the crew records the new date when they put in a replacement.',
+  presence:
+    'Whether the thing is aboard at all — a spare bottle, wheel chocks, the map book. The crew answers Present or Absent. Absent fails the line and needs no note: missing explains itself.',
   text: 'Read-only statement or instruction. Displayed as informational text — no action required from the member.',
   header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
@@ -42,13 +45,21 @@ export const CHECK_TYPE_HELP: Record<string, string> = {
 export const CHECK_TYPE_SUMMARY: Record<string, string> = {
   level: 'A reading; under the threshold fails and opens a swap.',
   function: 'Switched on and watched; a fail takes a note and a photo.',
-  count: 'A par level to match; short of par becomes a restock line.',
+  count: 'A par level to match; short of par is a restock, below Min to Pass fails.',
   expiry: 'A date on record, confirmed at a glance.',
+  presence: 'Present or absent; absent fails without a note.',
   text: 'A read-only statement; nothing to answer.',
   header: 'A section divider; not a checkable item.',
 };
 
 export const LEVEL_UNIT_PRESETS = ['psi', '%', 'gallons', 'liters', 'inches', 'feet', 'bar', 'mmHg', 'quarts'] as const;
+
+/**
+ * What a count position counts in. A partial pack is counted in the smaller
+ * unit (12 each rather than half a box), which keeps every quantity whole;
+ * a department may type its own label instead.
+ */
+export const COUNT_UNIT_PRESETS = ['each', 'rolls', 'boxes', 'pairs', 'packs', 'bottles'] as const;
 
 // ============================================================================
 // Positions & apparatus types
@@ -240,7 +251,7 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         name: 'Safety & Cab Interior',
         items: [
           { name: 'Seat belts', checkType: 'function', description: 'Switch it on and confirm it works.' },
-          { name: 'SCBA mounted & secured', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'SCBA mounted & secured', checkType: 'presence', description: 'Confirm the item is in place.' },
           { name: 'Radio(s) operational', checkType: 'function', description: 'Switch it on and confirm it works.' },
           {
             name: 'MDT / computer operational',
@@ -527,12 +538,12 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
           { name: 'Cribbing blocks', checkType: 'count' },
           {
             name: 'Step chocks / stabilization struts',
-            checkType: 'function',
+            checkType: 'presence',
             description: 'Confirm the item is in place.',
           },
           {
             name: 'Hand tools (pry bars, axes, etc.)',
-            checkType: 'function',
+            checkType: 'presence',
             description: 'Confirm the item is in place.',
           },
         ],
@@ -548,8 +559,8 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
             description: 'Switch it on and confirm it works.',
           },
           { name: 'Ventilation fan (PPV)', checkType: 'function', description: 'Switch it on and confirm it works.' },
-          { name: 'Air bags / lifting equipment', checkType: 'function', description: 'Confirm the item is in place.' },
-          { name: 'Rope & rigging gear', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Air bags / lifting equipment', checkType: 'presence', description: 'Confirm the item is in place.' },
+          { name: 'Rope & rigging gear', checkType: 'presence', description: 'Confirm the item is in place.' },
         ],
       },
       {
@@ -608,7 +619,7 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
           },
           {
             name: 'Nozzle(s) present & operational',
-            checkType: 'function',
+            checkType: 'presence',
             description: 'Confirm the item is in place.',
           },
           {
@@ -622,7 +633,7 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         name: 'Wildland Equipment',
         items: [
           { name: 'Hand tools (Pulaski, McLeod, shovel)', checkType: 'count' },
-          { name: 'Drip torches', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Drip torches', checkType: 'presence', description: 'Confirm the item is in place.' },
           { name: 'Fire shelters', checkType: 'count' },
           { name: 'Portable radio(s)', checkType: 'count' },
           { name: 'Chain saw & fuel', checkType: 'function', description: 'Switch it on and confirm it works.' },
@@ -652,7 +663,7 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
             checkType: 'function',
             description: 'Switch it on and confirm it works.',
           },
-          { name: 'Drain plug installed', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Drain plug installed', checkType: 'presence', description: 'Confirm the item is in place.' },
         ],
       },
       {
@@ -666,7 +677,7 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
             checkType: 'function',
             description: 'Switch it on and confirm it works.',
           },
-          { name: 'Kill switch / lanyard', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Kill switch / lanyard', checkType: 'presence', description: 'Confirm the item is in place.' },
           { name: 'Propeller condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
@@ -674,11 +685,11 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         name: 'Safety Equipment',
         items: [
           { name: 'PFDs / life jackets', checkType: 'count' },
-          { name: 'Throw bag / ring buoy', checkType: 'function', description: 'Confirm the item is in place.' },
-          { name: 'First aid kit', checkType: 'function', description: 'Confirm the item is in place.' },
-          { name: 'Fire extinguisher', checkType: 'function', description: 'Confirm the item is in place.' },
-          { name: 'Anchor & line', checkType: 'function', description: 'Confirm the item is in place.' },
-          { name: 'Paddle / oar', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Throw bag / ring buoy', checkType: 'presence', description: 'Confirm the item is in place.' },
+          { name: 'First aid kit', checkType: 'presence', description: 'Confirm the item is in place.' },
+          { name: 'Fire extinguisher', checkType: 'presence', description: 'Confirm the item is in place.' },
+          { name: 'Anchor & line', checkType: 'presence', description: 'Confirm the item is in place.' },
+          { name: 'Paddle / oar', checkType: 'presence', description: 'Confirm the item is in place.' },
           { name: 'VHF marine radio', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
@@ -722,9 +733,9 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Mobile radio(s)', checkType: 'function', description: 'Switch it on and confirm it works.' },
           { name: 'MDT / laptop & charger', checkType: 'function', description: 'Switch it on and confirm it works.' },
-          { name: 'Accountability system / tags', checkType: 'function', description: 'Confirm the item is in place.' },
-          { name: 'Command board / ICS forms', checkType: 'function', description: 'Confirm the item is in place.' },
-          { name: 'Vest (IC, Safety, etc.)', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Accountability system / tags', checkType: 'presence', description: 'Confirm the item is in place.' },
+          { name: 'Command board / ICS forms', checkType: 'presence', description: 'Confirm the item is in place.' },
+          { name: 'Vest (IC, Safety, etc.)', checkType: 'presence', description: 'Confirm the item is in place.' },
         ],
       },
       {
@@ -798,11 +809,11 @@ export const EQUIPMENT_PRESETS: Record<string, EquipmentPreset> = {
     label: 'SCBA Kit',
     items: [
       { name: 'SCBA pack & harness', checkType: 'function', description: 'Switch it on and confirm it works.' },
-      { name: 'SCBA mask (face piece)', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'SCBA mask (face piece)', checkType: 'presence', description: 'Confirm the item is in place.' },
       { name: 'SCBA cylinder pressure', checkType: 'level' },
       { name: 'SCBA regulator', checkType: 'function', description: 'Switch it on and confirm it works.' },
       { name: 'PASS device activates', checkType: 'function', description: 'Switch it on and confirm it works.' },
-      { name: 'Spare SCBA cylinder', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Spare SCBA cylinder', checkType: 'presence', description: 'Confirm the item is in place.' },
     ],
   },
   aed: {
@@ -817,9 +828,9 @@ export const EQUIPMENT_PRESETS: Record<string, EquipmentPreset> = {
   vitals: {
     label: 'Basic Vitals Set',
     items: [
-      { name: 'Blood pressure cuff (adult)', checkType: 'function', description: 'Confirm the item is in place.' },
-      { name: 'Blood pressure cuff (pediatric)', checkType: 'function', description: 'Confirm the item is in place.' },
-      { name: 'Stethoscope', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Blood pressure cuff (adult)', checkType: 'presence', description: 'Confirm the item is in place.' },
+      { name: 'Blood pressure cuff (pediatric)', checkType: 'presence', description: 'Confirm the item is in place.' },
+      { name: 'Stethoscope', checkType: 'presence', description: 'Confirm the item is in place.' },
       { name: 'Pulse oximeter', checkType: 'function', description: 'Switch it on and confirm it works.' },
       { name: 'Glucometer & test strips', checkType: 'expiry' },
       { name: 'Thermometer', checkType: 'function', description: 'Switch it on and confirm it works.' },
@@ -828,10 +839,10 @@ export const EQUIPMENT_PRESETS: Record<string, EquipmentPreset> = {
   airway: {
     label: 'Airway Management',
     items: [
-      { name: 'BVM (adult)', checkType: 'function', description: 'Confirm the item is in place.' },
-      { name: 'BVM (pediatric)', checkType: 'function', description: 'Confirm the item is in place.' },
-      { name: 'OPA set', checkType: 'function', description: 'Confirm the item is in place.' },
-      { name: 'NPA set', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'BVM (adult)', checkType: 'presence', description: 'Confirm the item is in place.' },
+      { name: 'BVM (pediatric)', checkType: 'presence', description: 'Confirm the item is in place.' },
+      { name: 'OPA set', checkType: 'presence', description: 'Confirm the item is in place.' },
+      { name: 'NPA set', checkType: 'presence', description: 'Confirm the item is in place.' },
       { name: 'Suction unit', checkType: 'function', description: 'Switch it on and confirm it works.' },
       { name: 'Oxygen regulator', checkType: 'function', description: 'Switch it on and confirm it works.' },
       { name: 'Oxygen cylinder pressure', checkType: 'level' },
@@ -857,22 +868,22 @@ export const EQUIPMENT_PRESETS: Record<string, EquipmentPreset> = {
       { name: 'Supply line (5")', checkType: 'function', description: 'Confirm the item passes inspection.' },
       { name: 'Backup line (2.5")', checkType: 'function', description: 'Confirm the item passes inspection.' },
       { name: 'Nozzle (combination)', checkType: 'function', description: 'Switch it on and confirm it works.' },
-      { name: 'Nozzle (smooth bore)', checkType: 'function', description: 'Confirm the item is in place.' },
-      { name: 'Wye / gated valve', checkType: 'function', description: 'Confirm the item is in place.' },
-      { name: 'Spanner wrenches', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Nozzle (smooth bore)', checkType: 'presence', description: 'Confirm the item is in place.' },
+      { name: 'Wye / gated valve', checkType: 'presence', description: 'Confirm the item is in place.' },
+      { name: 'Spanner wrenches', checkType: 'presence', description: 'Confirm the item is in place.' },
     ],
   },
   firstaid: {
     label: 'First Aid / Trauma',
     items: [
-      { name: 'Trauma shears', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Trauma shears', checkType: 'presence', description: 'Confirm the item is in place.' },
       { name: 'Tourniquets', checkType: 'count' },
       { name: 'Hemostatic gauze', checkType: 'expiry' },
       { name: 'Chest seals', checkType: 'expiry' },
       { name: 'Gauze / bandages', checkType: 'count' },
-      { name: 'Splint set', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Splint set', checkType: 'presence', description: 'Confirm the item is in place.' },
       { name: 'Cervical collars', checkType: 'count' },
-      { name: 'Backboard & straps', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Backboard & straps', checkType: 'presence', description: 'Confirm the item is in place.' },
     ],
   },
   lighting: {
@@ -882,8 +893,8 @@ export const EQUIPMENT_PRESETS: Record<string, EquipmentPreset> = {
       { name: 'Portable spotlight', checkType: 'function', description: 'Switch it on and confirm it works.' },
       { name: 'Flashlights', checkType: 'count' },
       { name: 'Light tower', checkType: 'function', description: 'Switch it on and confirm it works.' },
-      { name: 'Extension cords', checkType: 'function', description: 'Confirm the item is in place.' },
-      { name: 'Power strip / adapter', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Extension cords', checkType: 'presence', description: 'Confirm the item is in place.' },
+      { name: 'Power strip / adapter', checkType: 'presence', description: 'Confirm the item is in place.' },
     ],
   },
 };

@@ -145,6 +145,9 @@ from app.schemas.inventory import (
     ItemVariantGroupDetailResponse,
     ItemVariantGroupResponse,
     ItemVariantGroupUpdate,
+    KitIssuePlanResponse,
+    KitIssueRequest,
+    KitProductOptionResponse,
     LabelGenerateRequest,
     LabelMarkPrintedRequest,
     LabelMarkPrintedResponse,
@@ -201,13 +204,19 @@ from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.equipment_request_notifications import (
     send_equipment_request_notice,
 )
-from app.services.inventory_service import InventoryService, is_pool_without_stock
+from app.services.inventory_service import (
+    InventoryService,
+    LotReceivedAgainstReorderError,
+    StorageAreaNotEmptyError,
+    is_pool_without_stock,
+)
 from app.services.label_printer_service import LabelPrinterService
 from app.services.label_service import UNSET, LabelService
 from app.services.organization_service import OrganizationService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import label_renderer
 from app.utils.item_aliases import normalize_aliases
+from app.utils.model_updates import reject_null_for_required
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
@@ -644,11 +653,15 @@ async def list_items(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     fuzzy: bool = False,
+    low_stock: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
     List inventory items with filtering, sorting, and pagination
+
+    ``low_stock=true`` narrows to the gear and uniform items at or below their
+    reorder point — the set the daily low-stock alert email lists.
 
     **Authentication required**
     **Requires permission: inventory.view**
@@ -700,6 +713,15 @@ async def list_items(
     # whether `groups` comes back populated.
     grouping = group_by if group_by in InventoryService.GROUPABLE else None
 
+    # The alert email's own scan, so the list its link opens holds exactly the
+    # items it named; a second definition of "low" here would let them disagree.
+    low_stock_ids = None
+    if low_stock:
+        low_rows = await service.get_low_stock_items_for_alerts(
+            current_user.organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
+        low_stock_ids = [str(item.id) for item, _on_hand, _from_lots in low_rows]
+
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
         category_id=category_id,
@@ -728,6 +750,7 @@ async def list_items(
         skip=skip,
         limit=limit,
         fuzzy=fuzzy,
+        item_ids=low_stock_ids,
     )
 
     # Counted over the whole filtered set rather than the page above, so a
@@ -752,6 +775,7 @@ async def list_items(
             style=style,
             active_only=active_only,
             label_printed=label_printed,
+            item_ids=low_stock_ids,
         )
         if grouping
         else []
@@ -1048,6 +1072,7 @@ async def export_items_csv(
     label_printed: bool | None = None,
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
+    low_stock: bool = False,
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Export inventory items as CSV.
@@ -1120,6 +1145,12 @@ async def export_items_csv(
         # accepted risk.
         async with async_session_factory() as db:
             service = InventoryService(db)
+            low_stock_ids = None
+            if low_stock:
+                low_rows = await service.get_low_stock_items_for_alerts(
+                    organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
+                )
+                low_stock_ids = [str(item.id) for item, _oh, _fl in low_rows]
             skip = 0
             while True:
                 # get_items_page, not get_items: the latter COUNTs the whole
@@ -1147,6 +1178,7 @@ async def export_items_csv(
                     label_printed=label_printed,
                     sort_by=sort_by,
                     sort_order=sort_order,
+                    item_ids=low_stock_ids,
                     skip=skip,
                     limit=_EXPORT_PAGE_SIZE,
                 )
@@ -2200,6 +2232,14 @@ async def assign_item(
     **Authentication required**
     **Requires permission: inventory.manage**
     """
+    # The body repeats the item id the URL already names. Acting on the body's
+    # while ignoring the URL's let POST /items/A/assign hand item B to a member.
+    if assignment_data.item_id != item_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="item_id in the request body does not match the item in the URL",
+        )
+
     service = InventoryService(db)
 
     # Convert assignment_type string to enum
@@ -4935,18 +4975,20 @@ async def delete_storage_area(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
-    """Delete (deactivate) a storage area"""
-    result = await db.execute(
-        select(StorageArea)
-        .where(StorageArea.id == str(area_id))
-        .where(StorageArea.organization_id == str(current_user.organization_id))
-    )
-    area = result.scalar_one_or_none()
+    """Delete (deactivate) a storage area.
+
+    Refused (409) while it holds active items or active nested areas.
+    """
+    try:
+        area = await InventoryService(db).deactivate_storage_area(
+            str(area_id), str(current_user.organization_id)
+        )
+    except StorageAreaNotEmptyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not area:
         raise HTTPException(status_code=404, detail="Storage area not found")
-
-    area.is_active = False
-    await db.commit()
 
     await log_audit_event(
         db=db,
@@ -5640,6 +5682,10 @@ async def update_nfpa_compliance(
         )
 
     update_data = data.model_dump(exclude_unset=True)
+    try:
+        reject_null_for_required(record, update_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     for field, value in update_data.items():
         setattr(record, field, value)
 
@@ -7093,15 +7139,36 @@ async def update_variant_group(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
+    updates = data.model_dump(exclude_unset=True)
     group, error = await service.update_variant_group(
         group_id,
         current_user.organization_id,
-        data.model_dump(exclude_unset=True),
+        updates,
     )
-    if error:
-        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    if error or group is None:
+        raise HTTPException(
+            status_code=400,
+            detail=sanitize_error_message(error or "Variant group not found"),
+        )
     await db.commit()
     await db.refresh(group)
+    if "name" in updates:
+        # A rename also rewrites the product segment of every member item's
+        # name, so it is recorded and broadcast like any other item edit.
+        await log_audit_event(
+            db=db,
+            event_type="inventory_variant_group_renamed",
+            event_category="inventory",
+            severity="info",
+            event_data={"variant_group_id": str(group.id), "name": group.name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "variant_group_renamed",
+            {"variant_group_id": str(group.id)},
+        )
     return ItemVariantGroupResponse.model_validate(group)
 
 
@@ -7196,6 +7263,23 @@ async def create_equipment_kit(
     return EquipmentKitDetailResponse.model_validate(kit)
 
 
+# Declared before /kits/{kit_id}: that route would otherwise claim the path and
+# reject "product-options" as an invalid UUID.
+@router.get("/kits/product-options", response_model=List[KitProductOptionResponse])
+async def list_kit_product_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    The catalog grouped into products, for choosing what a kit line issues.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_kit_product_options(current_user.organization_id)
+
+
 @router.get("/kits/{kit_id}", response_model=EquipmentKitDetailResponse)
 async def get_equipment_kit(
     kit_id: UUID,
@@ -7271,25 +7355,57 @@ async def delete_equipment_kit(
     )
 
 
+@router.get("/kits/{kit_id}/issue-plan", response_model=KitIssuePlanResponse)
+async def get_kit_issue_plan(
+    kit_id: UUID,
+    user_id: UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Preview a kit issue: each line sized from the member's size preferences.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    plan, error = await service.get_kit_issue_plan(
+        kit_id, user_id, current_user.organization_id
+    )
+    if error or plan is None:
+        raise HTTPException(status_code=404, detail=sanitize_error_message(error or ""))
+    return plan
+
+
 @router.post("/kits/{kit_id}/issue/{user_id}")
 async def issue_kit_to_member(
     kit_id: UUID,
     user_id: UUID,
+    body: Optional[KitIssueRequest] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Issue all items in a kit to a member.
 
+    The optional body carries the quartermaster's size choices per line;
+    lines left out are issued in the member's recorded size.
+
     **Authentication required**
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
+    selections = (
+        {str(line): str(item) for line, item in body.selections.items()}
+        if body
+        else None
+    )
     issuances, error = await service.issue_kit_to_member(
         kit_id=kit_id,
         user_id=user_id,
         organization_id=current_user.organization_id,
         issued_by=UUID(current_user.id),
+        selections=selections,
     )
     if error or issuances is None:
         raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
@@ -7655,9 +7771,14 @@ async def delete_item_lot(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
-    """Delete a stock lot."""
+    """Delete a stock lot. A lot received against a reorder is refused (409)."""
     service = InventoryService(db)
-    deleted = await service.delete_lot(lot_id, str(current_user.organization_id))
+    try:
+        deleted = await service.delete_lot(lot_id, str(current_user.organization_id))
+    except LotReceivedAgainstReorderError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not deleted:
         raise HTTPException(status_code=404, detail="Lot not found")
 

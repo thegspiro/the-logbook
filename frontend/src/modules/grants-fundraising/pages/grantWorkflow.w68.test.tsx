@@ -5,7 +5,8 @@
  * - The budget dialog sent "Equipment" / "Indirect Costs"; the API takes the
  *   lowercase codes, and the totals concatenated the Decimal strings.
  * - Notes went out as type "comment", which the API does not accept, and
- *   "Mark Complete" sent a UTC instant to a date-only field.
+ *   "Mark Complete" sent a UTC instant to a date-only field; it now sends the
+ *   department's calendar date.
  * - "Assigned To" was a free-text box for a field that stores a member's id,
  *   and the form had no way to record what was awarded or when reports fall due.
  * - The dashboard read a date-only due date as UTC midnight, so a task due
@@ -26,6 +27,7 @@ const {
   addGrantNote,
   updateComplianceTask,
   getDirectory,
+  getUsers,
   getApplication,
   createApplication,
   listOpportunities,
@@ -40,6 +42,7 @@ const {
     addGrantNote: vi.fn(),
     updateComplianceTask: vi.fn(),
     getDirectory: vi.fn(),
+    getUsers: vi.fn(),
     getApplication: vi.fn(),
     createApplication: vi.fn(),
     listOpportunities: vi.fn(),
@@ -64,6 +67,11 @@ vi.mock('../store/grantsStore', () => ({
 }));
 vi.mock('@/services/memberDirectoryService', () => ({
   memberDirectoryService: { getDirectory: (...args: unknown[]) => getDirectory(...args) as unknown },
+}));
+// The application form's assignee picker reads the user list; the detail page
+// names assignees through the member directory.
+vi.mock('@/services/api', () => ({
+  userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
 }));
 vi.mock('../services/api', () => ({
   grantsService: {
@@ -116,6 +124,7 @@ beforeEach(() => {
     addGrantNote,
     updateComplianceTask,
     getDirectory,
+    getUsers,
     getApplication,
     createApplication,
     listOpportunities,
@@ -127,6 +136,7 @@ beforeEach(() => {
   addGrantNote.mockResolvedValue({});
   updateComplianceTask.mockResolvedValue({});
   getDirectory.mockResolvedValue([TESS]);
+  getUsers.mockResolvedValue([{ ...TESS, username: 'tpark' }]);
   listOpportunities.mockResolvedValue([]);
   createApplication.mockResolvedValue({ id: 'app-2' });
   granted.current = ['fundraising.view', 'fundraising.manage'];
@@ -208,7 +218,7 @@ describe('Grant detail page (W68)', () => {
     expect(screen.getByText('$15,100.00')).toBeInTheDocument();
   });
 
-  it('marks a task complete with the status alone, leaving the date to the server', async () => {
+  it("marks a task complete with the department's calendar date", async () => {
     storeState.current = {
       ...storeState.current,
       currentApplication: application({
@@ -232,7 +242,12 @@ describe('Grant detail page (W68)', () => {
     expect(await screen.findByText('Assigned: Tess Park')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Mark Complete' }));
 
-    await waitFor(() => expect(updateComplianceTask).toHaveBeenCalledWith('app-1', 't1', { status: 'completed' }));
+    await waitFor(() =>
+      expect(updateComplianceTask).toHaveBeenCalledWith('app-1', 't1', {
+        status: 'completed',
+        completedDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) as unknown,
+      })
+    );
   });
 
   it('files a note under a type the API accepts', async () => {
@@ -279,7 +294,7 @@ describe('Grant application form (W68)', () => {
   });
 
   it('keeps a saved assignee the member list cannot show', async () => {
-    getDirectory.mockRejectedValue(createMockApiError('Forbidden', 403));
+    getUsers.mockRejectedValue(createMockApiError('Forbidden', 403));
     getApplication.mockResolvedValue({
       ...application({ assignedTo: 'u-archived' }),
       opportunityId: null,

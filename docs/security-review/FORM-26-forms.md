@@ -1,6 +1,329 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 9 (2026-10-24) — three real commits since pass 8, all verified clean; 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup:** the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents` returned
+no other running session). PR #3638 (Feature 25, Messaging & notifications,
+pass 9) had already merged; a fresh `search_pull_requests`
+(`head:claude/security-review-`, state=open) and `list_pull_requests`
+(state=open) both returned no rotation PR, and `docs/security-review/PROGRESS.md`'s
+rotation table confirmed row 26 (Forms) as the next `⬜` row on a freshly
+fetched `main`.
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-8) before touching code. Baseline: pass 8's merge (`322c41fb`, PR #3458).
+`git log 322c41fb..main` on the five backend scope files
+(`endpoints/forms.py`, `public/forms.py`, `forms_service.py`,
+`models/forms.py`, `schemas/forms.py`) shows a real, non-trivial delta this
+time — three substantive commits plus one merge commit with no diff of its
+own:
+
+- **`74638250` ("fix(api): bound every numeric request field to its column
+  range")** — `schemas/forms.py` only. `FormFieldBase`/`FormFieldUpdate`'s
+  `min_length`/`max_length`/`min_value`/`max_value`/`sort_order` gained
+  `le=INT32_MAX` (and `ge=INT32_MIN` on the two signed fields) from the new
+  `app.schemas.column_bounds` constants, closing the class of unbounded
+  numeric input that previously reached MySQL as a raw integer and came back
+  as a generic 500 (error 1264). Pure input-tightening — strengthens
+  checklist dimension 6 (abuse resistance), introduces no new exposure.
+- **`0eefe3c5` ("...archive forms with submissions")** — `endpoints/forms.py`
+  (+15/-4) and `forms_service.py` (+36/-10, net +22, only `delete_form`
+  touched). `delete_form` now archives (`form.status = FormStatus.ARCHIVED`)
+  instead of hard-deleting when the form already has submissions, so the
+  cascade can no longer take a department's filed records with it; a form
+  with no submissions still deletes as before. Verified, not assumed:
+  - the form is still resolved through the existing org-scoped
+    `get_form_by_id(form_id, organization_id)` before either branch runs —
+    no new client-supplied id reaches an unscoped query;
+  - the new `submission_count` query filters both `FormSubmission.form_id`
+    and `FormSubmission.organization_id` — no cross-org leak in the count
+    that decides archive-vs-delete;
+  - `FormStatus.ARCHIVED` is not a new enum value — `models/forms.py` is not
+    in this delta's diffstat at all, confirming the value already existed
+    and only its use is new;
+  - archived forms cannot be used to bypass the submission gate: both
+    submission paths require `form.status == FormStatus.PUBLISHED`
+    (`forms_service.py:1363`, the in-app path) and `get_form_by_slug`
+    itself filters `Form.status == FormStatus.PUBLISHED` (`:864`), so a
+    public lookup can't even find an archived form by slug — archiving
+    correctly stops new submissions on both the authenticated and public
+    paths, same as the pre-existing delete-blocked-by-pipeline-step branch
+    it sits beside;
+  - the endpoint's audit event now distinguishes `form_archived` from
+    `form_deleted` with an `action` field — no reduction in what gets
+    logged.
+  - Correctness/data-preservation change, no security finding.
+- **`8a57d069` ("Count a probationary account as a current member at every
+  status gate")** — `forms_service.py` only (2 lines, `search_members`'s
+  member-lookup query). Swaps `User.status == UserStatus.ACTIVE` for
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, the same repo-wide sweep
+  CLAUDE.md Pitfall #32 and `tests/test_account_status_gates.py` govern.
+  Widens the member-lookup field type's result set to include probationary
+  members (a correctness fix — this module's own search was one of the
+  "forty-odd" sites the commit message names), with no change to the
+  existing `organization_id` filter, `ContactPolicy`-gated email handling,
+  or `like_pattern()`/`escape=LIKE_ESCAPE_CHAR` usage. No finding.
+- **`eef7a9ec`** — merge commit only; confirmed empty diff against the five
+  scope files (it is the single commit `git log` lists beyond the three
+  above, and `git diff --stat` across the full range attributes every
+  changed line to one of the three).
+
+**Frontend delta:** `git log 322c41fb..main` on `frontend/src/components/forms/`
+turns up five commits, of which only two actually touch the two files in
+scope (confirmed by `git diff --stat`, not the commit-list proxy, per this
+file's pass-6 correction precedent):
+
+- `FormBuilder.tsx` (3 lines) — `text-yellow-700`/`text-red-700` →
+  `-800` on two field-row badges. The accessibility-contrast sweep CLAUDE.md
+  already documents (2026-09-07 entry); not security-relevant.
+- `SubmissionViewer.tsx` (+13/-5, plus a new 92-line
+  `SubmissionViewer.delete.test.tsx`) — submission delete now goes through
+  `useConfirm()` (title/message naming the submitter, "Delete submission?" /
+  "Keep it") instead of deleting immediately on click, closing a Pitfall #16
+  gap this specific control had (no `window.confirm` was ever used here —
+  there was simply no confirmation step at all before an irreversible
+  delete). The catch block also switched from a hardcoded string to
+  `getErrorMessage(err, 'Failed to delete submission.')`, matching this
+  codebase's standard error-surfacing pattern. Read the full diff: no new API
+  call, no new client-supplied id, the delete still goes through the
+  existing `formsService.deleteSubmission(formId, submissionId)` call
+  unchanged. Correctness/UX hardening, not a finding.
+- The other three commits in the five-commit list (`f5ddf81b`, `91862b98`,
+  `75501134`) touch no file under `frontend/src/components/forms/` or
+  `frontend/src/modules/forms/` once checked against the actual diffstat —
+  they appear in the path-filtered `git log` only through this repository's
+  squashed/grafted merge history (CLAUDE.md's standing note on why this
+  module's git-blame is unreliable), not because they changed anything here.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **Route inventory** — re-enumerated: 22 routes (20 in `endpoints/forms.py`
+  - 2 in `public/forms.py`), same count as pass 8. No route added or
+    removed this pass.
+- All of pass 8's "Verified good" items (FORM-1/2/3/5/6/7/8/9/11/12, BXC-1,
+  tenant isolation, LIKE escaping, JSON column mutation, CSV export n/a) —
+  re-checked against the three real commits above; none of them touch a line
+  any of these findings concern, and nothing regressed.
+
+### Completion gate (pass 9)
+
+| Check                                             | Result                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                        |
+| `black --check app/ tests/ alembic/`              | ✅ clean, 2610 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (isort 9.0.1, matches CI's pin)               |
+| `python3 scripts/validate_migrations.py --strict` | ✅ PASSED — 650 revisions, single head `a8c3b50b6d9b`  |
+| `pytest tests/ -q -k form`                        | ✅ 850 passed, 1 skipped (pywebpush, environment-only) |
+| `cd frontend && npm run typecheck`                | ✅ 0 errors                                            |
+| `cd frontend && npm run lint`                     | ✅ exit 0                                              |
+
+---
+
+## Pass 8 (2026-10-20) — true zero-delta on backend scope, one out-of-scope frontend correctness fix re-verified, 0 fixed, 0 new findings
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-7) before touching code. Baseline: pass 7's merge (`8372581e`, PR #3374).
+`git log 8372581e..HEAD` on all five backend scope files
+(`endpoints/forms.py`, `public/forms.py`, `forms_service.py`,
+`models/forms.py`, `schemas/forms.py`) returns **zero commits** — confirmed
+by `git diff --stat` on the same five files, which is also empty. File sizes
+are therefore byte-identical to pass 7: 813 L / 236 L / 3,492 L / 397 L /
+471 L.
+
+Re-verified rather than assumed from the zero diff:
+
+- **Route inventory** — re-enumerated programmatically: 22 routes total (20 in
+  `endpoints/forms.py` + 2 in `public/forms.py`), matching pass 7's count
+  exactly. Auth dependency distribution: 17 × `require_permission("forms.manage")`,
+  3 × `require_permission("forms.view")`, 2 × bare `get_current_user`
+  (`submit_form` and `GET /member-lookup`, by design, unchanged) — the two
+  public routes remain unauthenticated behind the slug regex / rate-limit /
+  honeypot / CAPTCHA stack pass 5-7 already documented.
+- All of pass 7's "Verified good" and "Re-verified this pass" items
+  (FORM-1/2/3/5/6/7/8/9/11/12, BXC-1, tenant isolation, LIKE escaping, JSON
+  column mutation, CSV export n/a) hold unchanged — there is no code delta
+  for any of them to have regressed against.
+
+**Frontend delta:** one commit touched the Forms frontend module since pass 7,
+`4327cb29` ("Fix create forms that sent impossible values or lost input on
+failure"), to `frontend/src/components/forms/FieldEditor.tsx` (+18 lines,
+plus a new `FieldEditor.test.tsx`). It adds client-side validation rejecting
+a fractional `min_value`/`max_value` on a numeric field — matching the
+backend's existing integer-only storage, which already 422s a fraction
+server-side — plus `step="1"` on the two number inputs and
+`aria-invalid`/`aria-describedby`/`role="alert"` wiring for the new error
+message. No new API call, no new client-supplied id, no change to what
+reaches the server: this tightens client-side UX/accessibility around a
+constraint the backend already enforced. Correctness/accessibility fix, not
+security-relevant — no finding.
+
+### Completion gate (pass 8)
+
+| Check                                             | Result                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                        |
+| `black --check app/ tests/ alembic/`              | ✅ clean                                               |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (reinstalled to CI's pinned 9.0.1)            |
+| `python3 scripts/validate_migrations.py --strict` | ✅ PASSED — single head, no migration this pass        |
+| `pytest tests/ -q -k form`                        | ✅ 821 passed, 1 skipped (pywebpush, environment-only) |
+| `npm run typecheck`                               | ✅ 0 errors                                            |
+| `npm run lint`                                    | ✅ exit 0                                              |
+
+---
+
+## Pass 7 (2026-10-17) — XC-1/FORM-10 fixes and a new publish-warnings route re-verified, 0 fixed, 0 new findings
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-6) before touching code. File sizes since pass 6: `endpoints/forms.py` 784 L
+→ 813 L (+29), `public/forms.py` 236 L (unchanged, confirmed byte-identical by
+full re-read), `forms_service.py` 3,317 L → 3,492 L (+175), `models/forms.py`
+347 L → 397 L (+50, but a full read of the current file found nothing beyond
+what passes 1-6 already described — `FieldType`, `Form`/`FormField`/
+`FormSubmission`/`FormIntegration` and every FK/index/`ondelete` match the
+prior description exactly; this repository's squashed/grafted megacommit
+history, per CLAUDE.md, makes the file's own git-blame unreliable, so the
+discrepancy is a measurement artifact from an earlier pass and not a change
+this pass could locate), `schemas/forms.py` 430 L → 471 L (+41, fully
+accounted for below).
+
+Commits touching scope files since pass 6 (`git log --since=2026-10-07` on the
+five scope files): `2d673132` (XC-1 fix), `f460cd48`/`51f26550` (FORM-10
+feature + its org-scoping follow-up), `0ccba3d8` (new publish-warnings route),
+`44d8edb6` (suggestion-box answer types — mostly out of this feature's scope,
+see below), `48a163e6` (app-review B13 null-rejection fix), and four
+mypy-only cleanup commits (`f5ad6018`, `51c77a9c`, `0d4d7c5a`, `62828a9e`).
+Each read in full, not inferred from its message:
+
+- **XC-1 (`2d673132`, verified fixed):** `create_form`'s inline
+  `fields` had no sibling list yet to validate `condition_field_id` against,
+  so a client could set it to any field id — including one on another
+  organization's form — and it would persist unchecked. `create_form`
+  (`forms_service.py:627-633`) now calls `_condition_error(None,
+field_data.get("condition_field_id"), [])` for every inline field; passing
+  an empty sibling list means any non-null `condition_field_id` always comes
+  back `parent is None` → refused with "The question this field depends on is
+  not on this form". Confirmed by direct read, not the commit message: the
+  only way to set a field's `condition_field_id` at creation is now to leave
+  it null and set it afterward via `add_field`/`update_field`, which already
+  validate the id against the (now real) sibling list.
+- **FORM-10 org-scoping (`51f26550`, verified fixed):** `_already_submitted`
+  (`forms_service.py:1301-1329`) now filters `Form.organization_id` as well
+  as `Form.id` on its row-lock, in addition to the org-scoped `form` already
+  having been resolved by `get_form_by_id`/`get_form_by_slug` before this is
+  called — re-confirmed at both call sites (`_create_member_submission:1341`,
+  the public retry loop's `get_form_by_slug` at `:1504`). The
+  `FormSubmission` lock that follows filters only `form_id` + `submitted_by`
+  (not `organization_id`), which is safe because `form_id` is only ever the
+  id of the already org-scoped `form` object, never a client-supplied value
+  reaching this query directly.
+- **FORM-10 feature (`f460cd48`, re-verified as the currently-documented
+  behavior):** the in-app submit path now runs the same locked
+  duplicate-submission check as the public path; an
+  `allow_multiple_submissions=False` form refuses a member's second
+  submission. This is the FORM-10-scope/FORM-10-builder owner decision
+  pass 3-6 already tracked as the remaining hardening item — now shipped, not
+  a new finding.
+- **New route, `GET /{form_id}/publish-warnings` (`0ccba3d8`):** gated by
+  `require_permission("forms.manage")` (`endpoints/forms.py:314-318`); the
+  service method (`forms_service.py:956-982`) resolves the form through the
+  org-scoped `get_form_by_id(form_id, organization_id)` (404 on a miss or a
+  foreign-org id) and reads `Organization` by the caller's own
+  `organization_id` — no client-supplied id reaches an unscoped query. Route
+  inventory therefore grows from 21 to **22**, all 22 re-enumerated against
+  their `Depends`: 20 carry `require_permission("forms.view"/"forms.manage")`,
+  and `submit_form`/`GET /member-lookup` remain on bare `get_current_user` by
+  design (unchanged from pass 6).
+- **Suggestion-box answer types (`44d8edb6`) — mostly out of scope:** this
+  commit's `suggestions.py`/`suggestion_service.py`/`suggestion_intake.py`
+  changes belong to Feature 25 (Messaging & notifications — see
+  `docs/COMMUNICATIONS_MODULE.md`'s suggestion-box material and
+  `MSG-25-messaging-notifications.md`'s own coverage of the same feature,
+  confirmed present there so this is not an orphaned surface), not Forms. Its
+  only in-scope hunks are `forms_service.py` (+two "at least"/"at most"
+  numeric condition operators, shared so forms' own number-field branching
+  gets them too — `NUMERIC_CONDITION_OPERATORS`,
+  `_condition_matches:437-449`, `_condition_error:533-537`) and
+  `schemas/forms.py` (the `condition_operator` pattern extended to include
+  them). Both read in full: the new comparison only ever reads
+  `parent_value`/`expected` already reached through the existing, org-scoped
+  `form.fields` lookup — no new client-supplied id, no new unescaped input,
+  fails closed (an unparsable threshold or answer is treated as not meeting
+  the rule, matching the existing unknown-operator default).
+- **App-review B13 (`48a163e6`) — correctness, not security:** seven
+  `FormUpdate`/`FormFieldUpdate`/`FormIntegrationUpdate` flags could be set to
+  an explicit `null` (the column is nullable but the response field is a
+  plain `bool`), which 500'd the form's own detail view afterward. The new
+  `_reject_null` validator (`schemas/forms.py:53-69`) now 422s an explicit
+  null on all seven while still letting the key be omitted — matches
+  CLAUDE.md Pitfall #1's "omit vs. null vs. value" contract exactly, verified
+  by reading `apply_updates`'s call sites are unaffected (validation happens
+  before `apply_updates` ever sees the payload).
+- **Four mypy-only commits** (`f5ad6018`, `51c77a9c`, `0d4d7c5a`,
+  `62828a9e`): each hunk touching the five scope files read in full — every
+  change is a type annotation, an `Optional`/`UUID | str` widening, or a
+  `getattr(x, "value", x)` rewrite of an existing `hasattr` check. No
+  behavior change on any path these five files expose.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **Route inventory** — 22 routes (21 + the new publish-warnings route above),
+  every one carrying `require_permission` or (by design) bare
+  `get_current_user`. Both `public/forms.py` routes unauthenticated behind
+  slug regex + rate limiting + honeypot + CAPTCHA — re-read the full file,
+  byte-identical to pass 6's description.
+- **FORM-1/FORM-2** (`_entity_in_org` gates `member_id`/`item_id`/`event_id`
+  before every cross-module integration write) — unchanged.
+- **FORM-3/FORM-6** (`MULTISELECT` option-membership validation;
+  `_is_empty_value`) — unchanged.
+- **FORM-5** (`require_authentication`/`allow_multiple_submissions`
+  enforcement, cross-org 404 for an authenticated foreign-org submitter) —
+  re-read `public/forms.py` in full; unchanged (`:175-186`).
+- **FORM-7/FORM-9** (`safe_error_detail`/`sanitize_error_message` on every
+  client-facing error path) — spot-checked via grep; no bare `str(e)`
+  reintroduced.
+- **FORM-8** (`apply_updates` on `update_form`/`update_field`/
+  `update_integration`) — unchanged; the new `_reject_null` validators run
+  before `apply_updates`, not instead of it.
+- **FORM-11** (event-request `status_token` dropped from
+  `integration_result`) — unchanged.
+- **FORM-12** (`get_submission_by_id`/`delete_submission`/
+  `reprocess_submission_integrations` ignore the `form_id` path segment,
+  relying on `submission.id` + `organization_id` instead) — re-read all three
+  (`forms_service.py:1615-1679`): each still filters
+  `FormSubmission.organization_id`, so this remains a correctness-only gap
+  (the URL's `form_id` is decorative), not a tenant-isolation one. Still
+  flagged, unchanged reasoning.
+- **BXC-1** (closed by pass 5's W60 same-form/cycle check) — re-read
+  `_condition_error`/`_visible_field_ids`/`_condition_matches`; still closed.
+- **Tenant isolation** — every by-id read/update/delete still filters
+  `organization_id` or resolves through an org-scoped parent; the pass's two
+  real additions (publish-warnings, numeric condition operators) introduce no
+  new client-supplied id.
+- **LIKE escaping** — `get_forms`/`search_members` unchanged, both still use
+  `like_pattern()` + `escape=LIKE_ESCAPE_CHAR`.
+- **JSON column mutation (Pitfall #12)** — unchanged; no new JSON-column
+  write this pass.
+- **CSV export (Pitfall #15)** — n/a, unchanged (grepped, zero matches).
+
+### Completion gate (pass 7)
+
+| Check                                             | Result                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                        |
+| `black --check app/ tests/ alembic/`              | ✅ clean                                               |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (reinstalled to CI's pinned version)          |
+| `python3 scripts/validate_migrations.py --strict` | ✅ PASSED — single head, no migration this pass        |
+| `pytest tests/ -q -k form`                        | ✅ 800 passed, 1 skipped (pywebpush, environment-only) |
+| `npm run typecheck`                               | ✅ 0 errors                                            |
+| `npm run lint`                                    | ✅ exit 0, no warnings                                 |
 
 ---
 

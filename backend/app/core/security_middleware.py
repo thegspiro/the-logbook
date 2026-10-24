@@ -1289,8 +1289,10 @@ class _ExceptionCache:
 
     Only requests the country check would block reach the lookup, but a
     blocked address hammering the API would otherwise cost a query each time.
-    Entries live ``TTL_SECONDS``, so an approval or a revocation takes effect
-    within that; past ``MAX_ENTRIES`` the oldest entry is dropped.
+    Entries live ``TTL_SECONDS``, so an approval takes effect within that; a
+    revocation clears the cache in every worker at once (see
+    ``invalidate_ip_exception_cache``). Past ``MAX_ENTRIES`` the oldest entry
+    is dropped.
     """
 
     TTL_SECONDS = 60.0
@@ -1320,6 +1322,17 @@ class _ExceptionCache:
 
 
 _exception_cache = _ExceptionCache()
+
+
+def invalidate_ip_exception_cache() -> None:
+    """Forget every cached exception answer in this worker.
+
+    Called when an exception is revoked, so the address is looked up again on
+    its next request instead of riding a cached "allowed" for up to
+    ``TTL_SECONDS``. Other workers are reached through
+    ``geoip_sync.publish_ip_exception_invalidation``.
+    """
+    _exception_cache.clear()
 
 
 async def _has_ip_exception(client_ip: str) -> bool:
@@ -1376,7 +1389,9 @@ class IPBlockingMiddleware:
     # Paths that bypass IP blocking (health checks, onboarding, etc.)
     # Onboarding must be accessible from any location since it's the
     # first-time setup process before any configuration exists.
-    BYPASS_PATHS = {"/health", "/health/detailed", "/"}
+    # /health/detailed is deliberately absent: it reports configuration and
+    # host load, so a blocked IP or country must not be able to reach it.
+    BYPASS_PATHS = {"/health", "/"}
     BYPASS_PREFIXES = ("/api/v1/onboarding",)
 
     def __init__(
@@ -1696,13 +1711,18 @@ class SecurityMonitoringMiddleware:
         "/api/v1/equipment-checks/reports/export/pdf",
         "/api/v1/errors/export",
         "/api/v1/finance/export/advance-accounts",
+        "/api/v1/finance/export/chart-of-accounts",
         "/api/v1/finance/export/dues-accounts",
         "/api/v1/finance/export/logs",
         "/api/v1/finance/export/mappings",
         "/api/v1/finance/export/readiness",
         "/api/v1/finance/export/transactions",
         "/api/v1/inventory/items/export",
+        "/api/v1/inventory/nfc-tags/export",
         "/api/v1/inventory/not-seen/export",
+        "/api/v1/medical-supplies/items/export",
+        "/api/v1/medical-supplies/lots/export",
+        "/api/v1/nfc-tags/taps/export",
         "/api/v1/organization/template/export",
         "/api/v1/security/audit-log/export",
         "/api/v1/store/orders/export",
@@ -1712,6 +1732,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/users/me/data-export",
     }
     EXPORT_ENDPOINT_TEMPLATES = (
+        "/api/v1/finance/export/logs/{log_id}/imported",
         "/api/v1/training/programs/programs/{program_id}/export",
     )
     _EXPORT_PATTERNS = tuple(

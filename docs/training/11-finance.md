@@ -53,8 +53,14 @@ Every member holds the permission to raise requests, which is what lets them
 raise their own. A member who holds nothing else sees **Finance > My Purchase
 Requests**, **My Expense Reports** and **My Check Requests** — only the
 requests they raised, never anyone else's — and picks a budget line by its name
-and the amount left on it ("Training — $1,250.00 remaining"), without seeing
-the budget pages. They can edit a request until they submit it and withdraw a
+and, if they own the line or hold `finance.view` / `finance.manage`, the amount
+left on it ("Training — $1,250.00 remaining"), without seeing the budget pages.
+_(2026-10-18)_ Everyone else sees the line's name alone; the remaining amount is
+no longer sent to them. An expense report or check request is routed only
+through a chain set for its own type (a purchase-request chain never catches
+them); with no chain for the type it waits in Pending Approval to be decided by
+hand. Finance timestamps (Created, Updated) were corrected to UTC; see
+`UPGRADING.md`. They can edit a request until they submit it and withdraw a
 draft; once submitted, only the finance office can cancel it. A department that
 does not want members raising requests removes that permission from the
 **Member** position.
@@ -200,7 +206,7 @@ Next year's budget is built in a **Draft** fiscal year. As a finance manager, op
 2. Select **Copy lines**, then **Copy lines** again in the confirmation.
 3. The message tells you how many lines were copied and how many the draft already had (for example _"12 lines copied, 2 already there"_).
 
-Each copy keeps the line's category, station, notes and its own owner position, and starts at the line's **current** budget (amendments included), with nothing spent. Treat that amount as a starting point and edit it. A category and station the draft already has is left alone, so running it again copies nothing new. Lines whose owner comes from their category keep getting it from the category.
+Each copy keeps the line's category, station, notes and its own owner position, and starts at the line's **current** budget (amendments included), with nothing spent. Treat that amount as a starting point and edit it. A category and station the draft already has is left alone, so running it again copies nothing new. **Lines on a category you have retired are not copied** _(2026-10-14)_; the confirmation message counts them as "retired". A sub-line still in use under a retired parent is copied, because only the line's own category is checked. Lines whose owner comes from their category keep getting it from the category.
 
 **2. Set the request deadline.** Budget-line owners propose next year's amounts for their lines until this date:
 
@@ -290,7 +296,7 @@ Budget categories organize your department's spending into logical groups. Categ
 
 To change a category later, select the pencil beside it.
 
-![Budget categories list with QuickBooks account mapping](./images/11-03-budget-categories.png)
+![Budget categories as a tree: Officer brass and Station boots nested under Personal Protective Equipment, each line with its owner and who can charge it](./images/11-03-budget-categories.png)
 
 ### Category Hierarchy
 
@@ -333,23 +339,36 @@ Nobody else sees a restricted line in the request form's picker, and a request t
 - **A request already on a line stays editable** after the line is restricted; the rule applies to choosing the line.
 - **A budget owner needs no Treasurer for this.** On **Finance > My Budgets**, **Who can charge your lines** lists the categories you own (or that sit under one you own). **Edit** opens **Who can charge** _category_ with the same choices. The Treasurer sets any category from **Finance > Settings**.
 
-_[Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked.]_
+![The category settings dialog for Officer brass with Who can charge these lines set to Only the owner and the positions chosen below, and the positions ticked under Also allow these positions](./images/11-24-category-charge-access.png)
 
-_[Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog.]_
+![My Budgets with the Who can charge your lines card: each category the budget owner holds with a one-line summary of its rule and a pencil button to change it](./images/11-25-my-budgets-charge-access.png)
+
+![The Who can charge dialog for a category opened from My Budgets, with the same choices and the positions list as the Treasurer's category settings](./images/11-26-my-budgets-charge-dialog.png)
 
 ### Retiring a Category
 
-There is no way to switch a category off on the settings screen, and deleting
-one destroys its history (see below). To retire a category, leave it in place
-and stop adding budget lines to it.
+To retire a category, delete it. A category that has budget lines, requests or
+approval chains is **deactivated** instead of deleted: its budget lines in every
+fiscal year are kept, and a category-specific approval chain stays specific
+rather than becoming a catch-all. The confirmation and the toast say which
+happened. A deactivated category is hidden from new-record pickers but still
+resolves on existing rows. Its budget lines also **take no new charges**: a new
+purchase request, check request or expense line on one is refused, and so is
+moving a request onto one or submitting a draft that is on one. Requests already
+submitted or approved finish normally, and their spending still shows in
+reports. Deactivating a parent closes everything beneath it the same way: its
+sub-categories are listed as **Inactive through** the parent, their lines take
+no new charges, no new budget line or proposal can name them, and **Start from
+last year** leaves their lines behind. Reactivating the parent reopens them. A
+category nothing uses is deleted outright.
 
 ### Edge Cases
 
-| Scenario                                  | Behavior                                                                                                                                                                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deleting a category with existing budgets | Permitted, and destructive -- its budgets in every fiscal year are deleted with it, and requests charged to them are left with no budget. The confirmation says so. Leave the category in place to keep its history |
-| Category with no QuickBooks account       | The category can still be used for budgets; its export accounts can be set on **QuickBooks Export**                                                                                                                 |
-| A category as its own parent or ancestor  | Refused. Deleting a parent leaves its children as top-level categories                                                                                                                                              |
+| Scenario                                  | Behavior                                                                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deleting a category with existing budgets | The category is deactivated, not deleted. Its budgets, requests and approval chains are kept; it no longer appears when you add a budget line |
+| Category with no QuickBooks account       | The category can still be used for budgets; its export accounts can be set on **QuickBooks Export**                                           |
+| A category as its own parent or ancestor  | Refused. Deleting a parent leaves its children as top-level categories                                                                        |
 
 ---
 
@@ -671,8 +690,8 @@ The chain with the highest score wins. If no chain matches at all (or the matchi
 | **Name**            | A descriptive name for the chain (e.g., "Standard Purchase Approval")                       |
 | **Description**     | Optional notes about when this chain applies                                                |
 | **Applies To**      | Which request type this chain governs: Purchase Requests, Expense Reports or Check Requests |
-| **Min Amount**      | The minimum dollar amount for this chain to apply (leave blank for no minimum)              |
-| **Max Amount**      | The maximum dollar amount for this chain to apply (leave blank for no maximum)              |
+| **Min Amount**      | The lowest dollar amount this chain applies to, included (leave blank for no minimum)       |
+| **Max Amount**      | The highest dollar amount this chain applies to, included (leave blank for no maximum)      |
 | **Budget Category** | Optionally restrict this chain to requests in a specific budget category                    |
 | **Default chain**   | Whether this chain is the default fallback for its request type                             |
 | **Active**          | Whether the chain is in use. Inactive chains are ignored for new requests                   |
@@ -684,7 +703,7 @@ The chain with the highest score wins. If no chain matches at all (or the matchi
 3. Enter the chain **Name** and optional **Description**.
 4. Choose what it **Applies To**: Purchase Requests, Expense Reports, or Check Requests.
 5. Optionally choose a **Budget Category** (or leave **Any category**).
-6. Optionally set **Min Amount ($)** and **Max Amount ($)**.
+6. Optionally set **Min Amount ($)** and **Max Amount ($)**. Both are included in the range, the minimum cannot be above the maximum, and neither can be negative or more than $9,999,999,999.99. When an amount fits two chains (for example exactly $500.00 with one chain up to $500 and another from $500), it goes to the chain with the higher minimum.
 7. Tick **Default chain (preferred when no more specific chain matches)** if this should be the fallback for its request type.
 8. Select **Create Chain**.
 
@@ -747,31 +766,25 @@ What the dialog says about approvers is the rule The Logbook applies:
 The dialog has no notification-email, email-template or required settings.
 Nothing would act on them, so they are not offered.
 
-**Deleting a step is not a tidy-up.** The confirmation says what it does: the
-step is removed from every request routed through the chain, including the
-record of who approved or denied it and their notes. A request waiting on that
-step moves to the next one — and an Email approver on that next step is **not**
-sent a link — and a request with no later step is left waiting with nothing to
-approve. It cannot be undone. When requests are in flight, turn the chain off
-(**Edit chain**, untick **Active**) and build a new one instead.
+**Only a step or chain no request has used can be deleted.** Every request
+routed through a chain carries a record of each of its steps — who approved or
+denied it, and their notes — and deleting the step or chain would erase those
+records. So The Logbook refuses: _"This approval chain can't be deleted: 2
+requests have been routed through it, and deleting it would erase their approval
+history. Turn the chain off instead (edit it and clear Active) so nothing new is
+routed through it."_ A step gets the same answer. A chain nobody has used yet,
+or a step added since the chain was last used, deletes as normal.
 
-**Deleting a whole chain goes further.** Its confirmation says requests that
-went through the chain keep their approval history. They do not: deleting the
-chain removes its steps, and with them every request's approval records for
-those steps, exactly as deleting each step would. Turn the chain off instead of
-deleting it.
+To retire a chain, turn it off (**Edit chain**, untick **Active**); to change
+who approves future requests, edit the step, or build a new chain and turn the
+old one off. Every chain and step change — create, edit, delete — is recorded in
+the audit log.
 
-<!-- Screenshot needed:
-_[Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable.]_
--->
+![The Add step dialog with Step type Approval and Approver type Email: the help text under Approver type, an approver email filled in, the Allow self-approval by email box and the Auto-approve under ($) field](./images/11-18-approval-step-email.png)
 
-<!-- Screenshot needed:
-_[Treasurer or admin holding finance.configure_approvals and positions.view, /finance/settings/approval-chains. The Add step dialog over an expanded purchase-request chain: Step type Approval, Approver type Position, the position picker set to Treasurer, Auto-approve under ($) = 250. The finance.approve help text under Approver type must be visible.]_
--->
+![The Add step dialog as the Treasurer, over the Purchase Request Approval chain: Step type Approval, Approver type Position with Treasurer chosen, Auto-approve under ($) set to 250, and the help text naming the finance.approve permission](./images/11-19-approval-step-position.png)
 
-<!-- Screenshot needed:
-_[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_
--->
+![The Delete step confirmation for a step in an approval chain: it can be deleted only if no request has been routed through it yet, otherwise deleting is refused so the record of who approved or denied it is kept, with Delete step and Keep it buttons](./images/11-17-approval-step-delete.png)
 
 ### Steps nobody can act on
 
@@ -789,14 +802,21 @@ the meantime. Saving a step also checks its approver: a position must exist, a
 member must be active, a permission must be a real permission name, and an Email
 step takes exactly one address.
 
-<!-- Screenshot needed:
-_[Treasurer at /finance/settings/approval-chains with a demo chain whose step names a position nobody holds: the page banner and the amber "No active member can act on this step" chip with "N requests waiting" under that step.]_
--->
+![Approval Chains as the Treasurer: the amber banner counting approval steps no one can act on, and the Purchase Request Approval chain expanded with its Company officer review step warning that no active member can act on it and how many requests are waiting](./images/11-20-approval-step-unreachable.png)
 
 ### Previewing Chain Resolution
 
-There is no preview tool on the Approval Chains page. To check which chain a
-request would get, submit a test request and read its approval timeline.
+Members see it for themselves: the purchase request, expense report and check
+request forms show **Who will approve this** as the amount and budget line are
+filled in, and a draft shows it again beside **Submit for Approval**. It lists
+the chain that will apply, who each step waits on, which steps the amount
+approves automatically, and whether a second approver is needed. When no chain
+applies it says a finance approver decides by hand.
+
+There is no preview tool on the Approval Chains page itself. To check how a
+chain you are configuring will route, start a request with the amount and
+budget line in question and read the panel; nothing is sent until it is
+submitted.
 
 > **Hint:** Set up at least one default chain for each request type (Purchase Request, Expense Report, Check Request) before members begin submitting requests. Without a matching chain, a request waits in Pending Approval with no approval steps, and an approver has to decide it from its detail page.
 
@@ -806,7 +826,7 @@ A typical fire department might configure these chains:
 
 **Purchase Requests:**
 
-- "Small Purchases" (under $500): 1 step -- Captain Approval
+- "Small Purchases" (up to $499.99): 1 step -- Captain Approval
 - "Standard Purchases" ($500--$5,000): 2 steps -- Captain Approval, then Chief Approval
 - "Large Purchases" (over $5,000): 3 steps -- Captain Approval, Chief Approval, then Board Notification
 - "Training Purchases" (category: Training, any amount): 2 steps -- Training Officer Approval, then Chief Approval
@@ -879,17 +899,9 @@ waiting on you the page says _"Nothing is waiting on you."_ The dashboard's
 If you raised the request yourself, the approval is refused with the
 separation-of-duties message (see [Separation of Duties](#separation-of-duties)).
 
-<!-- Screenshot needed:
-_[Finance → Approvals as an approvals administrator (finance.configure_approvals), with one request assigned to them and one assigned to someone else: the "Requests waiting on you." heading, the admin explanation line, the Waiting on column, the "Not assigned to you" badge and the "Approve as approvals admin" / "Deny as approvals admin" buttons on the second row. Demo data only.]_
--->
+![Approvals as the Treasurer, an approvals administrator: "Requests waiting on you." and the administrator line above a table whose first rows wait on the Treasurer with Approve and Deny, and whose later rows wait on the Captain position, marked Not assigned to you with Approve as admin and Deny as admin](./images/11-21-approvals-admin-view.png)
 
-<!-- Screenshot needed:
-_[Finance → Approvals, a "Approve as approvals admin" dialog open on a step assigned to another member: the "This step is assigned to <name>…" text, Notes, and the Override reason box with its help text "Why you are acting on a step assigned to someone else. Recorded in the audit log." Do not submit.]_
--->
-
-<!-- Screenshot needed (replace):
-_[Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row.]_
--->
+![The Approve as approvals admin dialog on a step assigned to the Captain position: the text naming who the step is assigned to, Notes, and the required Override reason box with its help text](./images/11-22-approvals-admin-override.png)
 
 ### On the request's own page
 
@@ -950,9 +962,7 @@ approved only once two different people have approved it.
 - The budget is committed (encumbered) once, when the request is fully
   approved.
 
-<!-- Screenshot needed:
-_[A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps."]_
--->
+![A purchase request pending approval with no approval chain, viewed by the Treasurer: the panel reading "No approval chain applies to this request. Approve or deny it here." with Approve and Deny, above a timeline with no approval steps](./images/11-23-unrouted-request.png)
 
 ---
 
@@ -1008,7 +1018,7 @@ Purchase request numbers are made automatically in the form **PR-YYYY-0001**. YY
 | **Facility**         | No       | If the purchase is for a specific fire station or facility            |
 | **Notes**            | No       | Additional notes for approvers                                        |
 
-4. Select **Create Request**. The request is saved as a **Draft** — the form says so: _"Saved as a draft. Submit it for approval from the next page."_ Editing a draft later saves with **Save Changes**.
+4. The request is saved as a **Draft** on its own as you type, as soon as it has a title, a fiscal year and an amount above zero; the line under the form shows _"Draft saved at …"_. **Save Draft** saves the latest entries and opens the request, where you submit it for approval. **Close** leaves the form with the draft kept, and asks first only when what you have entered cannot be saved yet. **Discard draft** withdraws a saved draft. A draft you reopen from the list keeps saving as you edit; once a request is submitted, changes are saved with **Save Changes**.
 
 ![Create Purchase Request form with budget, vendor, and priority fields](./images/11-08-create-purchase-request.png)
 
@@ -1045,10 +1055,24 @@ Once approved, officers can progress the request through the fulfillment stages:
 
 > **Hint:** If the actual amount differs from the estimated amount, the budget adjusts automatically. For example, if $500 was encumbered but the actual payment was $475, only $475 moves to "spent" and the full $500 encumbrance is released (the $25 difference returns to the available balance). Payment can also be recorded directly from the Approved or Ordered status -- the Received step is optional.
 
+### Paying Yourself Back for a Purchase
+
+If you bought an approved item with your own money, claim it back from the request rather than starting an expense report from scratch:
+
+1. Open your purchase request. It must be **Approved**, **Ordered** or **Received**.
+2. Select **Request Reimbursement**.
+3. Enter what you actually paid, the day you paid it, and where. Each field starts from the request's own figures.
+4. Select **Start expense report**. A draft expense report opens, charged to the same budget line and carrying the request's receipt.
+5. Check the line and its receipt, then select **Submit for Approval**.
+
+The request now links to the report, and the report links back. Once the report is approved, the finance office pays you, usually by check (see [Paying a Report by Check](#paying-a-report-by-check)). When the report is paid, the request reads **Reimbursed**.
+
+> **Hint:** Only the member who raised the request can claim it back, because the report pays whoever submits it. While a submitted report claims a purchase, the finance office cannot also mark it paid or cancel it. A denied claim frees the purchase, so you can start another.
+
 ### Editing and Cancelling
 
 - **Editing:** A purchase request can only be edited while in **Draft** or **Submitted** status. Once it reaches Pending Approval, it cannot be modified.
-- **Cancelling:** A request can be cancelled from any status except **Paid**. If an approved, ordered, or received request is cancelled, the encumbrance is released back to the budget.
+- **Cancelling:** A request can be cancelled from any status except **Paid** or **Reimbursed**. If an approved, ordered, or received request is cancelled, the encumbrance is released back to the budget.
 
 ### Edge Cases
 
@@ -1144,6 +1168,24 @@ Each line item on an expense report has an expense type that classifies the spen
 | **Equipment Purchase**     | Equipment purchased by the member for department use        |
 | **Other**                  | Expenses that do not fit other categories                   |
 
+### Correcting or Withdrawing a Draft Report
+
+While an expense report is a **Draft**, its detail page lets you fix it before
+anyone is asked to approve it:
+
+- **Add line** adds another expense, with its own receipt.
+- The **pencil** beside a line edits it (description, amount, date, type,
+  merchant and fund); the **bin** removes it. The total is recalculated.
+- **Withdraw Report** closes the draft for good. Use it for a report started by
+  mistake; a reimbursement claimed from a purchase request can then be claimed
+  again with the right amount.
+
+Once submitted, the report cannot be changed or withdrawn by its member. The
+finance office can **Cancel Report** while it is submitted, awaiting approval or
+approved but not yet paid; any approval still outstanding is withdrawn. A
+report a check is already paying is cancelled by first cancelling or voiding
+that check.
+
 ### Submitting an Expense Report
 
 Only **Draft** reports can be submitted. The total must be more than zero (at least one line with an amount), and **every line must have a receipt** — otherwise it is refused, naming the lines missing one. A member can still replace a receipt while the report is only submitted; once it is in approval, only the finance office can, and a replaced receipt stays on record. The approval chain is chosen by the request type, the total and the budget category of its lines.
@@ -1175,6 +1217,22 @@ Once an expense report is approved:
 Each line's amount is recorded as spent against the budget that line names.
 
 > **Hint:** Receipts are required on every line, which is what an IRS accountable plan expects of a reimbursement.
+
+### Paying a Report by Check
+
+**Required Permission:** finance manager
+
+To send the member a check rather than recording a payment made some other way:
+
+1. Open the approved expense report.
+2. Select **Pay by Check**.
+3. Optionally enter a mailing address and a memo, then select **Request check**.
+
+This creates a check request made out to the member's legal name, for what the report still owes them (the total, less anything a cash advance already covered). It goes through the department's check-request approval chain like any other check. Once it is approved, [issue it](#issuing-a-check) as usual; issuing it marks the report **Paid** with the check's number and date, and closes the purchase request the report claims back, if any.
+
+While a check is paying a report, neither **Pay by Check** nor **Mark as Paid** is offered. If the check is denied, the report waits for payment again.
+
+> **Hint:** A reimbursement check is not charged to a budget line itself; the report's lines are. In the payments register and the QuickBooks export, the report appears once, dated by the check and showing its number.
 
 ### The Deadline for Claiming Expenses
 
@@ -1278,7 +1336,16 @@ The system records the check number and the issuance date. The check amount is a
 
 ![Check request detail with payee, amount and approval status](./images/11-16-check-request-detail.png)
 
+### Withdrawing or Cancelling a Check Request
+
+A member can **Withdraw Request** while their check request is a draft. After it
+is submitted, the finance office can **Cancel Request** at any point before the
+check is issued; nothing has been paid, so nothing is reversed. An issued check
+is **voided** instead (below).
+
 ### Voiding an Issued Check
+
+> **Voiding a reimbursement check** puts its expense report back to **Approved**, takes its spending off the budget lines, and reopens the purchase request it claimed back, so the finance office can send another check. If the check had already gone to QuickBooks, the next export reverses exactly the entry it sent.
 
 If a check needs to be voided after issuance (e.g., lost in the mail, payment cancelled):
 
@@ -1378,9 +1445,9 @@ A dues schedule defines the terms of a recurring fee:
 | **Notes**     | Optional notes about the schedule                                                              |
 
 > **No grace period, late fee or membership-type filter.** None of these can be
-> set. No late fee is ever charged. A daily check marks unpaid dues Overdue the
-> day after the due date. **Generate dues** bills every active member,
-> whatever their membership type.
+> set. No late fee is ever charged. Dues with nothing paid show as Overdue the
+> day after the due date; part-paid dues stay Partial. **Generate dues** bills
+> every active member, whatever their membership type.
 
 ### Frequencies
 
@@ -1425,6 +1492,12 @@ After creating a schedule, you need to generate individual dues records for each
 | **Overdue** | The due date has passed with nothing paid (a daily check moves Pending to Overdue; Partial stays Partial) |
 | **Waived**  | The dues have been waived by an officer (e.g., financial hardship, service credit)                        |
 | **Exempt**  | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues)                 |
+
+_(2026-10-19)_ The **overdue dues** number on the dashboard's finance tile uses
+the same rule as this page: Overdue records, plus Pending records past their due
+date with nothing paid. A Partial record is not counted, because it shows as
+Partial here. Before, the tile counted part-paid records too and read higher than
+the list it links to.
 
 ### Recording Payments
 
@@ -1710,13 +1783,15 @@ The export produces a **QuickBooks Online journal-entry import file** (CSV). Eac
 
 Open **Finance › QuickBooks Export**. The **Budget categories** table shows, for every category, the account its spending posts to, the account it is paid from, and whether an export would accept it:
 
-| Status                         | What to do                                                                                     |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Ready**                      | Nothing — its spending exports                                                                 |
-| **No account**                 | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
-| **No paid-from account**       | Add the account it is paid from to its mapping                                                 |
-| **More than one mapping**      | Delete all but one of its mappings                                                             |
-| **Payable/receivable account** | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
+| Status                          | What to do                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Ready**                       | Nothing — its spending exports                                                                 |
+| **No account**                  | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
+| **No paid-from account**        | Add the account it is paid from to its mapping                                                 |
+| **More than one mapping**       | Delete all but one of its mappings                                                             |
+| **Payable/receivable account**  | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
+| **Not in chart of accounts**    | Fix the spelling to match QuickBooks, or upload the chart again if you added the account since |
+| **Account name not importable** | Rename the account so it doesn't start with `=`, `+`, `-` or `@`, in QuickBooks and here       |
 
 Select **Add mapping** (or **Edit mapping**) on a category and enter:
 
@@ -1728,6 +1803,15 @@ A category's own **QuickBooks account** (set in its dialog on Finance Settings) 
 **Subcategories use their parent's accounts.** A subcategory with no account or mapping of its own posts where its parent does — map **Operations** once and **Turnout gear** under it exports too. The table shows where each account came from (**From Operations**). A subcategory can still name its own expense account; it then keeps its parent's paid-from account unless its own mapping gives one.
 
 > **Accounts Payable and Accounts Receivable can't be used.** QuickBooks requires a vendor or customer on every journal line posting to those accounts, and the export carries none, so the import would fail. The mapping and category dialogs refuse them, and an older mapping that uses one shows **Payable/receivable account**. The check recognizes QuickBooks' standard names ("Accounts Payable (A/P)", "Accounts Receivable (A/R)"); if you renamed those accounts, the check can't tell, so don't use them.
+
+### Checking Account Names Against QuickBooks
+
+QuickBooks matches the file's accounts by name, so a misspelled or renamed account only fails once you import. Upload your chart of accounts and the export catches it first:
+
+1. In QuickBooks Online, open **Reports › Account List** and export it to Excel (or CSV).
+2. On **Finance › QuickBooks Export**, under **QuickBooks chart of accounts**, select **Upload chart of accounts** and choose that file.
+
+Every category, dues schedule and cash-advance account is then checked against it, and any account the chart doesn't list shows **Not in chart of accounts**, naming the account. An export that would post to one is refused until it is fixed. Names must match exactly, capitals included. Upload the chart again whenever you add or rename an account in QuickBooks; **Remove chart** turns the check off.
 
 ### Dues Payments
 
@@ -1804,13 +1888,14 @@ Intuit's requirements for a journal-entry import. They are also listed at the bo
 
 **Finance › QuickBooks Export** lists every export run under **Export history**, newest first, 25 at a time (**Show older exports** loads the next 25):
 
-| Column           | Contents                                                                     |
-| ---------------- | ---------------------------------------------------------------------------- |
-| **Exported**     | When the export was run                                                      |
-| **Period**       | The start and end dates of the exported period                               |
-| **Transactions** | How many transactions (an expense report counts once per line) were included |
-| **Status**       | Whether the file was delivered whole (see below)                             |
-| **By**           | The officer who ran it                                                       |
+| Column            | Contents                                                                     |
+| ----------------- | ---------------------------------------------------------------------------- |
+| **Exported**      | When the export was run                                                      |
+| **Period**        | The start and end dates of the exported period                               |
+| **Transactions**  | How many transactions (an expense report counts once per line) were included |
+| **Status**        | Whether the file was delivered whole (see below)                             |
+| **By**            | The officer who ran it                                                       |
+| **In QuickBooks** | Whether you marked the file as imported into QuickBooks, when, and by whom   |
 
 | Status           | Meaning                                                                                                   |
 | ---------------- | --------------------------------------------------------------------------------------------------------- |
@@ -1818,6 +1903,8 @@ Intuit's requirements for a journal-entry import. They are also listed at the bo
 | **Interrupted**  | Some transactions reached the browser before an error or a closed tab stopped it. Do not import that file |
 | **Failed**       | Nothing was delivered                                                                                     |
 | **Not finished** | The log was opened but the download never reported an end. Run the period again                           |
+
+**Mark each file as imported.** After importing a complete file into QuickBooks, select **Mark as imported** on its row (**Undo** reverses a mistake). If you later tick **Include payments already sent to QuickBooks** for a period that includes those payments, the export stops and tells you how many were in a file already imported. Choose **They were deleted, include them** only if you deleted those entries in QuickBooks first; otherwise choose **Leave them out**. A file you never mark is not protected this way.
 
 > **Hint:** Export frequently (monthly or quarterly) rather than waiting for year-end. This makes reconciliation with QuickBooks easier and catches mapping issues early. Each export creates a log entry so you can track what has been exported and when.
 
@@ -1862,7 +1949,7 @@ The Falls Church Fire Department operates on a July 1 -- June 30 fiscal year. In
    - (and so on for each category)
 
 4. **Configure approval chains:** Open **Finance > Settings > Approval Chains** and set up:
-   - "Small Purchases" (Purchase Requests under $500): 1 step -- Captain Approval
+   - "Small Purchases" (Purchase Requests up to $499.99): 1 step -- Captain Approval
    - "Standard Purchases" (Purchase Requests $500--$2,500): 2 steps -- Captain Approval, then Chief Approval
    - "Large Purchases" (Purchase Requests over $2,500): 3 steps -- Captain Approval, Chief Approval, then Board Treasurer Notification
    - "Training Expenses" (Expense Reports, category: Training): 2 steps -- Training Officer Approval, then Chief Approval
@@ -1888,8 +1975,8 @@ At the June board meeting the board adopts FY 2027, and the Treasurer clicks **R
 
 1. The captain opens **Finance > Purchase Requests** and selects **New Purchase Request**.
 2. Fills in: Title "Hose Coupling Replacements", Budget "Equipment > Tools", Estimated Amount $350, Vendor "Fire Supply Co.", Priority "Medium".
-3. Selects **Create Request**, then **Submit for Approval** on the draft.
-4. The $350 request matches the "Small Purchases" chain (under $500) -- only Captain approval is needed.
+3. Selects **Save Draft**, then **Submit for Approval** on the draft.
+4. The $350 request matches the "Small Purchases" chain (up to $499.99) -- only Captain approval is needed.
 5. The captain cannot approve their own request. A Position step sends no email, so the other captain sees it on **Finance > Approvals**.
 6. The other captain approves it there. The request moves to **Approved** and $350 is **encumbered** against the Tools budget.
 7. The captain orders the couplings, and the Treasurer selects **Mark as Ordered**.
@@ -1960,7 +2047,7 @@ The Treasurer regularly:
 | "Cannot void an issued check"                                         | Voiding is only permitted for checks with **Issued** status. If the check has already been voided, it cannot be voided again.                                                                                                                                                                                                                                   |
 | "Member dues not generated for a new member"                          | The **Generate Dues** action only creates records for members who do not already have a record for that schedule. If a member joined after the initial generation, run Generate Dues again -- it will create a record only for that member.                                                                                                                     |
 | "Deleting a category removed its budgets"                             | That is what deleting does: a category's budgets in every fiscal year are deleted with it, and requests charged to them lose their budget. It cannot be undone. To retire a category and keep its history, leave it in place and stop adding lines to it.                                                                                                       |
-| "Should I delete an old approval chain?"                              | No. Deleting a chain also deletes the approval records of every request that went through it. Turn it off instead: **Edit chain**, untick **Active**.                                                                                                                                                                                                           |
+| "Should I delete an old approval chain?"                              | Turn it off instead: **Edit chain**, untick **Active**. A chain any request has been routed through cannot be deleted, because that would erase those requests' approval history.                                                                                                                                                                               |
 | "Encumbered amount not released after denial"                         | This is expected behavior. Denial happens during the approval flow, before the request reaches Approved status, so no encumbrance was ever created. The budget was never affected.                                                                                                                                                                              |
 | "Late fee not applied"                                                | The Logbook does not charge late fees. If your department charges one, record it outside The Logbook.                                                                                                                                                                                                                                                           |
 | "I need to change the amount on an approved purchase request"         | The estimated amount cannot be changed after the request leaves Draft/Submitted status. However, when marking the request as **Paid**, you can enter the **actual amount**, which is what gets recorded against the budget. The difference between estimated (encumbered) and actual (spent) is reconciled automatically.                                       |

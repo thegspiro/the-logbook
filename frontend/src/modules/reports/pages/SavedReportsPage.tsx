@@ -93,15 +93,28 @@ const EMPTY_FORM: FormState = {
   recipients: '',
 };
 
+/**
+ * The day select only offers 1–7 for weekly and 1–31 otherwise, and a select
+ * whose value matches no option shows its first one. A day left over from
+ * another frequency (monthly on the 15th, switched to weekly) therefore read
+ * "Monday" on screen while 15 was sent — and refused by validate_schedule.
+ */
+function dayValidFor(frequency: SavedReportFrequency, day: string): string {
+  const n = Number(day);
+  const max = frequency === SavedReportFrequency.WEEKLY ? WEEKDAYS.length : 31;
+  return Number.isInteger(n) && n >= 1 && n <= max ? String(n) : '1';
+}
+
 function formFrom(report: SavedReportConfig): FormState {
+  const frequency = report.schedule_frequency ?? SavedReportFrequency.WEEKLY;
   return {
     name: report.name,
     description: report.description ?? '',
     reportType: report.report_type,
     period: periodOf(report),
     isScheduled: report.is_scheduled,
-    frequency: report.schedule_frequency ?? SavedReportFrequency.WEEKLY,
-    day: String(report.schedule_day ?? 1),
+    frequency,
+    day: dayValidFor(frequency, String(report.schedule_day ?? 1)),
     recipients: (report.email_recipients ?? []).join(', '),
   };
 }
@@ -459,7 +472,10 @@ export const SavedReportsPage: React.FC = () => {
                         id="saved-report-frequency"
                         className="form-input"
                         value={form.frequency}
-                        onChange={(e) => update('frequency', e.target.value as SavedReportFrequency)}
+                        onChange={(e) => {
+                          const frequency = e.target.value as SavedReportFrequency;
+                          setForm((prev) => ({ ...prev, frequency, day: dayValidFor(frequency, prev.day) }));
+                        }}
                       >
                         {Object.entries(FREQUENCY_LABELS).map(([value, label]) => (
                           <option key={value} value={value}>

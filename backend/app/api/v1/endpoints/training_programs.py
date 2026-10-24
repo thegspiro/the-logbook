@@ -30,6 +30,7 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     MemberProgramProgress,
     PhaseReorderRequest,
     ProgramBuildRequest,
+    ProgramEnrollmentComplete,
     ProgramEnrollmentCreate,
     ProgramEnrollmentReopen,
     ProgramEnrollmentResponse,
@@ -65,7 +66,10 @@ from app.services.sample_program_templates import (
     SAMPLE_TEMPLATES,
     list_sample_template_summaries,
 )
-from app.services.training_program_service import TrainingProgramService
+from app.services.training_program_service import (
+    TrainingProgramService,
+    link_counts_toward_completion,
+)
 from app.utils.org_timezone import (
     local_date,
     resolve_scheduling_timezone,
@@ -163,6 +167,23 @@ def _member_progress(progress) -> RequirementProgressResponse:
         ]
     member_view: RequirementProgressResponse = response.model_copy(
         update={"requirement": visible_requirement, "progress_notes": notes or None}
+    )
+    return member_view
+
+
+def _member_enrollment(enrollment) -> ProgramEnrollmentResponse:
+    """Return an enrollment without the officer's manual-completion reason.
+
+    ``completion_reason`` is the note an officer wrote when completing the
+    pipeline by hand — for the department's record and the audit log, not a
+    message to the member, who may read it as a verdict on the items they had
+    not met. The member still sees that the enrollment is complete and when.
+    """
+    response: ProgramEnrollmentResponse = ProgramEnrollmentResponse.model_validate(
+        enrollment
+    )
+    member_view: ProgramEnrollmentResponse = response.model_copy(
+        update={"completion_reason": None}
     )
     return member_view
 
@@ -677,6 +698,13 @@ async def instantiate_sample_template(
 async def get_training_programs(
     target_position: str | None = Query(None, description="Filter by target position"),
     is_template: bool | None = Query(None, description="Filter by template status"),
+    include_inactive: bool = Query(
+        False,
+        description=(
+            "Also return deactivated programs, so an officer can find one to "
+            "reactivate"
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -691,6 +719,7 @@ async def get_training_programs(
         organization_id=current_user.organization_id,
         target_position=target_position,
         is_template=is_template,
+        include_inactive=include_inactive,
     )
 
     return programs
@@ -747,6 +776,12 @@ async def get_training_program(
 
     await service.attach_prerequisite_summaries([program], current_user.organization_id)
 
+    # Required *and active*: a deactivated requirement is not required while
+    # inactive, the same rule the member percentages use.
+    total_required = sum(
+        1 for pr in program_requirements if link_counts_toward_completion(pr)
+    )
+
     return ProgramWithPhasesAndRequirements(
         id=program.id,
         organization_id=program.organization_id,
@@ -779,7 +814,11 @@ async def get_training_program(
         requirements=visible_requirements,
         milestones=milestones,
         total_requirements=len(requirements),
-        total_required=sum(1 for pr in program_requirements if pr.is_required),
+        total_required=total_required,
+        no_active_requirements=total_required == 0,
+        phases_without_active_requirements=(
+            await service.phases_without_active_requirements(program.id)
+        ),
     )
 
 
@@ -794,10 +833,25 @@ async def update_training_program(
     Update a training program's own fields (name, description, code, structure,
     time limits, target position/roles, template flag, active).
 
+    ``active: true`` on a deactivated program is how it is reactivated, and is
+    audited as ``program_reactivated``. It restores the program to the lists
+    and nothing else: enrollments withdrawn when it was deactivated stay
+    withdrawn.
+
+    ``active: false`` on an active program deactivates it the way deleting a
+    program with graduates does: enrollments still in progress (active or on
+    hold) are withdrawn, completed and other closed ones are kept, and it is
+    audited as ``program_deactivated``.
+
     **Authentication required**
     **Requires permission: training.manage**
     """
     service = TrainingProgramService(db)
+    # Read before the update so the audit can tell a reactivation from an
+    # edit that merely resends ``active: true``. Org-scoped like the update
+    # itself; a miss is left to the update, which answers the 404.
+    before = await service.get_program_by_id(program_id, current_user.organization_id)
+    was_active = before.active if before else None
     program, error = await service.update_training_program(
         program_id=program_id,
         organization_id=current_user.organization_id,
@@ -810,12 +864,24 @@ async def update_training_program(
             else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=code, detail=error)
+    reactivated = was_active is not True and updates.active is True
+    deactivated = was_active is True and updates.active is False
+    if deactivated:
+        action = "program_deactivated"
+    elif reactivated:
+        action = "program_reactivated"
+    else:
+        action = "program_updated"
     await log_audit_event(
         db=db,
         event_type="training_program_updated",
         event_category="training",
-        severity="info",
-        event_data={"program_id": str(program_id), "action": "program_updated"},
+        # Deactivating withdraws members, as the delete path's does.
+        severity="warning" if deactivated else "info",
+        event_data={
+            "program_id": str(program_id),
+            "action": action,
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )
@@ -832,26 +898,34 @@ async def delete_training_program(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Permanently delete a training program and everything under it (phases,
-    requirements, milestones, enrollments, and enrolled members' progress).
-    Irreversible — the UI guards it behind a confirmation.
+    Delete a training program and everything under it (phases, requirements,
+    milestones, enrollments, and enrolled members' progress).
+
+    A program any member has graduated from is deactivated instead, keeping
+    its structure and every enrollment; enrollments still in progress are
+    withdrawn. The UI guards both behind a confirmation that says which.
 
     **Authentication required**
     **Requires permission: training.manage**
     """
     service = TrainingProgramService(db)
-    ok, error = await service.delete_training_program(
+    outcome, error = await service.delete_training_program(
         program_id=program_id,
         organization_id=current_user.organization_id,
     )
-    if not ok:
+    if not outcome:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
     await log_audit_event(
         db=db,
         event_type="training_program_updated",
         event_category="training",
         severity="warning",
-        event_data={"program_id": str(program_id), "action": "program_deleted"},
+        event_data={
+            "program_id": str(program_id),
+            "action": (
+                "program_deactivated" if outcome == "deactivated" else "program_deleted"
+            ),
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )
@@ -1442,7 +1516,9 @@ async def get_my_enrollments(
             status=status,
         )
 
-    return enrollments
+    if can_view_officer_training_data(current_user):
+        return enrollments
+    return [_member_enrollment(enrollment) for enrollment in enrollments]
 
 
 @router.get(
@@ -1624,7 +1700,9 @@ async def get_enrollment_progress(
     )
 
     return MemberProgramProgress(
-        enrollment=enrollment,
+        enrollment=(
+            enrollment if can_view_officer_data else _member_enrollment(enrollment)
+        ),
         program=enrollment.program,
         current_phase=enrollment.current_phase,
         requirement_progress=visible_progress,
@@ -1635,6 +1713,11 @@ async def get_enrollment_progress(
         is_behind_schedule=is_behind_schedule,
         locked_requirements=await service.prerequisite_locks(
             enrollment.id, enrollment.program_id
+        ),
+        # The same empty required set the rollup refuses to complete on.
+        no_active_requirements=not required_ids,
+        phases_without_active_requirements=(
+            await service.phases_without_active_requirements(enrollment.program_id)
         ),
     )
 
@@ -1911,6 +1994,62 @@ async def reopen_enrollment(
                 else None
             ),
             "action": "enrollment_reopened",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return enrollment
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/complete", response_model=ProgramEnrollmentResponse
+)
+async def complete_enrollment(
+    enrollment_id: UUID,
+    payload: ProgramEnrollmentComplete,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Mark a member's whole pipeline enrollment complete by hand, with a reason.
+
+    For an active or on-hold enrollment, finished or not — including a
+    pipeline whose required items are all inactive, which never completes on
+    its own. The member is completed now, through the same path as an
+    automatic completion (completion notice, EVOC operator handling); required
+    items they had not met stay unmet on record. Audited with the reason and
+    the unmet count.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    enrollment, error, unmet = await service.complete_enrollment_manually(
+        enrollment_id=enrollment_id,
+        organization_id=current_user.organization_id,
+        reason=payload.reason,
+    )
+    if error == "Enrollment not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error or "An unexpected error occurred",
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_completed_manually",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "enrollment_id": str(enrollment_id),
+            "target_user_id": str(enrollment.user_id),
+            "program_id": str(enrollment.program_id),
+            "program_name": enrollment.program.name if enrollment.program else None,
+            "reason": payload.reason,
+            "unmet_required_count": unmet,
+            "action": "enrollment_completed_manually",
         },
         user_id=str(current_user.id),
         username=current_user.username,

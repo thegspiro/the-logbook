@@ -57,6 +57,12 @@ from app.models.compliance_config import (
     ReportStatus,
 )
 from app.models.consent import ConsentType, UserConsent
+from app.models.directory_account import (
+    DirectoryAccountProvision,
+    DirectoryAccountStatus,
+    DirectoryProvider,
+)
+from app.models.directory_account_departure import DEPARTED_STATUSES
 from app.models.document import (
     SYSTEM_FOLDERS,
     Document,
@@ -65,6 +71,9 @@ from app.models.document import (
     DocumentType,
 )
 from app.models.election import (
+    BallotSendJob,
+    BallotSendJobKind,
+    BallotSendJobStatus,
     Candidate,
     Election,
     ElectionStatus,
@@ -159,6 +168,7 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestPriority,
     PurchaseRequestStatus,
+    QuickBooksChartAccount,
 )
 from app.models.forms import (
     FieldType,
@@ -203,7 +213,11 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
-from app.models.integration import Integration, IntegrationSyncLog
+from app.models.integration import (
+    CalendarSyncMapping,
+    Integration,
+    IntegrationSyncLog,
+)
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -220,6 +234,7 @@ from app.models.inventory import (
     InventoryItem,
     InventoryLabelPrint,
     InventoryLot,
+    InventoryLotRecall,
     InventoryNfcAudit,
     InventoryNfcAuditDigest,
     InventoryNfcAuditItem,
@@ -321,7 +336,13 @@ from app.models.minute import (
     Motion,
     MotionStatus,
 )
-from app.models.nfc_tag import NfcCredentialType, NfcTag, NfcTagStatus
+from app.models.nfc_tag import (
+    NfcCardTap,
+    NfcCredentialType,
+    NfcTag,
+    NfcTagStatus,
+    NfcTapSource,
+)
 from app.models.notification import (
     DepartmentMessage,
     DepartmentMessageDelivery,
@@ -522,8 +543,13 @@ __all__ = [
     "MessagePriority",
     "MessageTargetType",
     # Integration models
+    "DEPARTED_STATUSES",
+    "DirectoryAccountProvision",
+    "DirectoryAccountStatus",
+    "DirectoryProvider",
     "Integration",
     "IntegrationSyncLog",
+    "CalendarSyncMapping",
     "McpServiceKey",
     "McpOAuthClient",
     "McpOAuthGrant",
@@ -579,6 +605,9 @@ __all__ = [
     "ActionItemPriority",
     # Election models
     "Election",
+    "BallotSendJob",
+    "BallotSendJobKind",
+    "BallotSendJobStatus",
     "Candidate",
     "VotingToken",
     "Vote",
@@ -676,6 +705,7 @@ __all__ = [
     "InventoryItem",
     "InventoryLabelPrint",
     "InventoryLot",
+    "InventoryLotRecall",
     "InventoryAuditFrequency",
     "InventoryNfcAudit",
     "InventoryNfcAuditDigest",
@@ -783,6 +813,7 @@ __all__ = [
     "DuesStatus",
     "ExportMapping",
     "ExportLog",
+    "QuickBooksChartAccount",
     # Grant & Fundraising models
     "GrantOpportunity",
     "GrantApplication",
@@ -851,8 +882,10 @@ __all__ = [
     "UserConsent",
     # NFC tag (member ID card) models
     "NfcCredentialType",
+    "NfcCardTap",
     "NfcTag",
     "NfcTagStatus",
+    "NfcTapSource",
     # Legal document models
     "LegalDocumentRevision",
     "LegalDocumentType",

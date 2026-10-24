@@ -276,3 +276,36 @@ describe('extended facility sections', () => {
     expect(screen.getByRole('option', { name: 'Equipment' })).toBeInTheDocument();
   });
 });
+
+describe('deleting a utility account', () => {
+  beforeEach(() => {
+    getUtilityAccounts.mockReset();
+    getUtilityReadings.mockReset();
+    getUtilityAccounts.mockResolvedValue([
+      {
+        id: 'utility-1',
+        facilityId: 'facility-1',
+        utilityType: 'electric',
+        providerName: 'Municipal Power',
+        accountNumber: 'ACCT-100',
+      },
+    ]);
+    getUtilityReadings.mockResolvedValue([]);
+  });
+
+  it('says its meter readings go with it', async () => {
+    // facility_utility_readings cascade on the account: the dialog said only
+    // "This cannot be undone." while a year of readings went with the record.
+    render(
+      <ConfirmProvider>
+        <UtilitiesSection facilityId="facility-1" canDelete canCreate canEdit />
+      </ConfirmProvider>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete utility account' }));
+
+    expect(
+      await screen.findByText('Its meter readings are deleted with it. This cannot be undone.')
+    ).toBeInTheDocument();
+  });
+});

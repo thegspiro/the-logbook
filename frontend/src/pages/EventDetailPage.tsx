@@ -45,7 +45,6 @@ import {
   CalendarPlus,
   CheckCircle,
   ChevronDown,
-  ChevronLeft,
   ClipboardCheck,
   Clock,
   EllipsisVertical,
@@ -61,6 +60,7 @@ import {
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
@@ -76,7 +76,7 @@ import EventCheckInModal from '../components/event-detail/EventCheckInModal';
 import EventRecordTimesModal from '../components/event-detail/EventRecordTimesModal';
 import EventOverrideAttendanceModal from '../components/event-detail/EventOverrideAttendanceModal';
 import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModal';
-import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
+import EventDeleteConfirmModal, { type EventDeleteScope } from '../components/event-detail/EventDeleteConfirmModal';
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
@@ -85,6 +85,11 @@ import EventAttendancePetitionPrompt from '../components/event-detail/EventAtten
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
 import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
+import { formatHoursExact } from '../utils/hoursFormatting';
+import { CREDITED_HOURS_BASIS } from '../components/events/creditedHours';
+import { EventCardTapsCard } from '../components/event-detail/EventCardTapsCard';
+import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
+import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 
 /**
  * `custom_fields` keys that are not custom fields.
@@ -159,6 +164,12 @@ const hasVisibleCustomFields = (event: Event, sessionReported: boolean): boolean
 
 /** Past this many, the uncredited toast counts the rest instead of naming them. */
 const MAX_NAMED_UNCREDITED = 5;
+
+/** The backend's BULK_ADD_MAX_SIZE: `BulkAddAttendees.user_ids` is capped at 200. */
+const BULK_ADD_BATCH_SIZE = 200;
+
+/** Past this many, the bulk-add failure toast counts the rest instead of naming them. */
+const BULK_ADD_ERRORS_SHOWN = 5;
 
 const pluralize = (count: number, singular: string, plural = `${singular}s`): string =>
   `${count} ${count === 1 ? singular : plural}`;
@@ -257,6 +268,9 @@ export const EventDetailPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
+  // Card taps are shown to event managers; the integration only decides
+  // whether an event with none yet still gets an (empty) section.
+  const { isConnected: isIntegrationConnected } = useConnectedIntegrations({ enabled: canManage });
   // Deliberately a separate grant from events.manage: whoever closed the event
   // should not also be able to quietly reopen it and move the numbers.
   const canReopenAttendance = checkPermission('events.reopen_attendance');
@@ -276,7 +290,7 @@ export const EventDetailPage: React.FC = () => {
       if (canManage) {
         await fetchRSVPs();
         await fetchStats();
-      } else {
+      } else if (event?.can_view_attendees) {
         await fetchAttendees();
       }
     },
@@ -316,15 +330,21 @@ export const EventDetailPage: React.FC = () => {
         void fetchRSVPs();
         void fetchStats();
         void fetchRSVPHistory();
-      } else {
-        // Outside the canManage branch on purpose: this is the one roster an
-        // ordinary member can see. A 403 (the event is not shared) resolves to
-        // an empty list in the service, so there is nothing to handle here.
-        void fetchAttendees();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, canManage]);
+
+  // The one roster an ordinary member can see, asked for only once the event
+  // says it will answer: requesting it regardless took a 403, logged twice,
+  // on every visit to an event whose roster is not shared with members.
+  const canViewAttendees = Boolean(event?.can_view_attendees);
+  useEffect(() => {
+    if (eventId && !canManage && canViewAttendees) {
+      void fetchAttendees();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, canManage, canViewAttendees]);
 
   const fetchEvent = async () => {
     if (!eventId) return;
@@ -497,19 +517,57 @@ export const EventDetailPage: React.FC = () => {
       return;
     }
 
+    const ids = notRsvpd.map((m) => m.id);
+    const nameById = new Map(notRsvpd.map((m) => [m.id, `${m.first_name} ${m.last_name}`.trim()]));
+    let createdCount = 0;
+    const rowErrors: Array<{ user_id: string; error: string }> = [];
+    let batchFailure: { message: string; notAttempted: number } | null = null;
+
+    setBulkAddLoading(true);
     try {
-      setBulkAddLoading(true);
-      const result = await eventService.bulkAddAttendees(
-        eventId,
-        notRsvpd.map((m) => m.id),
-        'going'
-      );
-      toast.success(`Added ${result.created_count} members to the event`);
-      await fetchRSVPs();
-      await fetchStats();
-      await fetchEligibleMembers();
-    } catch (err) {
-      toast.error(getErrorDetail(err) || 'Failed to bulk add attendees');
+      // The endpoint refuses more than BULK_ADD_MAX_SIZE ids per request.
+      // Batches run one at a time so a lock or permission refusal stops the
+      // run instead of being repeated by every remaining batch at once.
+      for (let start = 0; start < ids.length; start += BULK_ADD_BATCH_SIZE) {
+        const batch = ids.slice(start, start + BULK_ADD_BATCH_SIZE);
+        try {
+          const result = await eventService.bulkAddAttendees(eventId, batch, 'going');
+          createdCount += result.created_count;
+          rowErrors.push(...result.errors);
+        } catch (err) {
+          batchFailure = {
+            message: (getErrorDetail(err) || 'Failed to bulk add attendees').replace(/\.$/, ''),
+            notAttempted: ids.length - start,
+          };
+          break;
+        }
+      }
+
+      if (createdCount > 0 || (rowErrors.length === 0 && !batchFailure)) {
+        toast.success(`Added ${createdCount} members to the event`);
+      }
+      if (rowErrors.length > 0) {
+        const shown = rowErrors
+          .slice(0, BULK_ADD_ERRORS_SHOWN)
+          .map((e) => `${nameById.get(e.user_id) || e.user_id}: ${e.error}`);
+        const more = rowErrors.length - shown.length;
+        toast.error(
+          `${pluralize(rowErrors.length, 'member was', 'members were')} not added. ${shown.join('; ')}${
+            more > 0 ? `; and ${more} more` : ''
+          }`
+        );
+      }
+      if (batchFailure) {
+        toast.error(
+          `${batchFailure.message}. ${pluralize(batchFailure.notAttempted, 'member was', 'members were')} not added.`
+        );
+      }
+
+      if (createdCount > 0) {
+        await fetchRSVPs();
+        await fetchStats();
+        await fetchEligibleMembers();
+      }
     } finally {
       setBulkAddLoading(false);
     }
@@ -610,15 +668,19 @@ export const EventDetailPage: React.FC = () => {
 
   // handleSendNotification is now in notifications.handleSendNotification
 
-  const handleDeleteEvent = async (scope: 'single' | 'series') => {
+  const handleDeleteEvent = async (scope: EventDeleteScope) => {
     if (!eventId || !event) return;
 
     try {
       setSubmitting(true);
-      if (scope === 'series' && (event.is_recurring || event.recurrence_parent_id)) {
-        const parentId = event.recurrence_parent_id || eventId;
+      const inSeries = !!(event.is_recurring || event.recurrence_parent_id);
+      const parentId = event.recurrence_parent_id || eventId;
+      if (scope === 'series' && inSeries) {
         await eventService.deleteEventSeries(parentId);
         toast.success('All events in the series deleted');
+      } else if (scope === 'future' && inSeries) {
+        await eventService.deleteEventSeries(parentId, false, eventId);
+        toast.success('This and future events in the series deleted');
       } else {
         await eventService.deleteEvent(eventId);
         toast.success('Event deleted');
@@ -871,15 +933,29 @@ export const EventDetailPage: React.FC = () => {
   // scheduled end: a "window" event accepts check-ins for a while after it.
   // Payloads predating the field fall back to the event being over.
   const checkInClosed = event.check_in_closes_at ? new Date(event.check_in_closes_at) <= new Date() : isEventOver;
-  const showCheckInQrCode = !event.is_cancelled && !isAttendanceFinalized && !checkInClosed;
-  // Asking to be marked present opens where checking in closes. The member's
-  // own eligibility (the 30-day window, already present) is the server's call;
-  // the page only decides whether to ask.
-  const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
   // The organizer and alternate need not hold events.manage to decide their own
   // event's requests or hand it over. The server decides who that is
   // (CLAUDE.md #29), so the page reads its answer rather than comparing ids.
   const canManageOrganizers = Boolean(event.can_manage_organizers);
+  // The QR page is the code put on display at the event, for members to scan.
+  // A member shown it on their own phone has nothing to scan it with, so it
+  // goes to whoever runs the event; members get Check In below instead.
+  const showCheckInQrCode =
+    (canManage || canManageOrganizers) && !event.is_cancelled && !isAttendanceFinalized && !checkInClosed;
+  // The same window the list card reads, so the page offers Check In exactly
+  // when the "happening now" card does. A payload without the field never
+  // offers it rather than guessing at the window.
+  const checkInOpen =
+    Boolean(event.check_in_opens_at && new Date(event.check_in_opens_at) <= new Date()) &&
+    !checkInClosed &&
+    !event.is_cancelled &&
+    !event.is_draft &&
+    !isAttendanceFinalized;
+  const showSelfCheckIn = checkInOpen && !event.user_attended;
+  // Asking to be marked present opens where checking in closes. The member's
+  // own eligibility (the 30-day window, already present) is the server's call;
+  // the page only decides whether to ask.
+  const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
   const canReviewAttendancePetitions = canManageOrganizers;
 
   // RSVP deadline countdown
@@ -938,22 +1014,12 @@ export const EventDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
-
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            to="/events"
-            className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center text-sm"
-          >
-            <ChevronLeft className="mr-1 h-5 w-5" aria-hidden="true" />
-            Back to Events
-          </Link>
-
-          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
-            <div className="min-w-0">
-              <h1 className="text-theme-text-primary text-2xl font-bold wrap-break-word sm:text-3xl">{event.title}</h1>
-              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <EventsPageHeader
+          icon={Calendar}
+          title={event.title}
+          subtitle={
+            <>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <EventTypeBadge type={event.event_type} size="sm" />
                 {event.is_draft && (
                   <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-500/20 dark:text-gray-300">
@@ -991,10 +1057,13 @@ export const EventDetailPage: React.FC = () => {
                   timezone={tz}
                 />
               )}
-            </div>
-
-            {!event.is_cancelled && (
-              <div className="flex flex-wrap gap-2 sm:gap-3">
+            </>
+          }
+          actions={
+            event.is_cancelled ? undefined : (
+              // Capped so the actions wrap onto a second row rather than
+              // squeezing the event's name into a narrow column beside them.
+              <div className="flex flex-wrap gap-2 sm:max-w-xl sm:justify-end sm:gap-3">
                 {/* Primary actions — always visible */}
                 {event.is_draft && canManage && (
                   <button
@@ -1019,12 +1088,29 @@ export const EventDetailPage: React.FC = () => {
                     Publish
                   </button>
                 )}
+                {showSelfCheckIn && (
+                  <Link
+                    to={`/events/${eventId}/check-in`}
+                    className="btn-success inline-flex items-center rounded-md text-sm font-medium"
+                  >
+                    <QrCode className="mr-2 h-5 w-5" aria-hidden="true" />
+                    Check In
+                  </Link>
+                )}
+                {event.user_attended && (
+                  <span className="badge inline-flex items-center gap-1.5 bg-green-500/10 text-sm text-green-800 dark:text-green-300">
+                    <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                    You&apos;re checked in
+                  </span>
+                )}
                 {canRSVP && (
                   <button
                     onClick={rsvpForm.openModal}
                     className="btn-primary inline-flex items-center rounded-md text-sm font-medium"
                   >
-                    {event.user_rsvp_status ? 'Update RSVP' : event.requires_rsvp ? 'RSVP Now' : "I'm coming"}
+                    {/* "Going", the word the list card's button uses for the
+                        same action. */}
+                    {event.user_rsvp_status ? 'Update RSVP' : event.requires_rsvp ? 'RSVP Now' : 'Going'}
                   </button>
                 )}
                 {rsvpCountdown && !event.user_rsvp_status && (
@@ -1262,9 +1348,9 @@ export const EventDetailPage: React.FC = () => {
                   </>
                 )}
               </div>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Main Content */}
@@ -1327,6 +1413,20 @@ export const EventDetailPage: React.FC = () => {
                     <p className="text-theme-text-secondary text-sm">to {formatTime(event.end_datetime, tz)}</p>
                   </div>
                 </div>
+
+                {event.credited_hours != null && (
+                  <div className="flex items-start">
+                    <ClipboardCheck className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="text-theme-text-secondary text-sm font-medium">Credit</p>
+                      <p className="text-theme-text-secondary text-sm">
+                        Up to <span className="font-mono">{formatHoursExact(event.credited_hours)}</span>{' '}
+                        {event.hour_category_label ? `${event.hour_category_label} hours` : 'hours'}
+                      </p>
+                      <p className="text-theme-text-muted mt-1 text-xs">{CREDITED_HOURS_BASIS}</p>
+                    </div>
+                  </div>
+                )}
 
                 {(event.location_name || event.location) && (
                   <div className="flex items-start">
@@ -1457,7 +1557,10 @@ export const EventDetailPage: React.FC = () => {
                       {event.custom_fields.issues_certification && (
                         <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
-                            <CheckCircle className="mr-2 h-5 w-5 text-green-600" aria-hidden="true" />
+                            <CheckCircle
+                              className="mr-2 h-5 w-5 text-green-700 dark:text-green-600"
+                              aria-hidden="true"
+                            />
                             <span className="text-sm font-medium text-green-800 dark:text-green-400">
                               This training issues a certification upon completion
                             </span>
@@ -1603,7 +1706,7 @@ export const EventDetailPage: React.FC = () => {
                        spot would be a promise the server will never keep.
                        Arises when an organizer lowers the cap below a party
                        that had already queued. */
-                    <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+                    <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
                       Your party is larger than this event can hold, so it can&apos;t move off the waitlist. Reduce your
                       guest count or contact the event organizer.
                     </p>
@@ -1645,6 +1748,13 @@ export const EventDetailPage: React.FC = () => {
                 onPrintRoster={printRoster}
                 onExportCSV={exportAttendanceCSV}
                 attendanceFinalized={isAttendanceFinalized}
+              />
+            )}
+            {canManage && eventId && (
+              <EventCardTapsCard
+                eventId={eventId}
+                tz={tz}
+                cardsEnabled={isIntegrationConnected(NFC_ID_CARDS_INTEGRATION)}
               />
             )}
             {/* The member-facing counterpart. Managers are excluded rather
@@ -1692,7 +1802,7 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Going</span>
-                    <span className="text-sm font-medium text-green-600">{stats.going_count}</span>
+                    <span className="text-sm font-medium text-green-700 dark:text-green-600">{stats.going_count}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Not Going</span>
@@ -1700,7 +1810,9 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Maybe</span>
-                    <span className="text-sm font-medium text-yellow-600">{stats.maybe_count}</span>
+                    <span className="text-sm font-medium text-yellow-700 dark:text-yellow-600">
+                      {stats.maybe_count}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Checked In</span>

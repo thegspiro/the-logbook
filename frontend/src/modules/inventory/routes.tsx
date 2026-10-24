@@ -46,6 +46,7 @@ const InventoryNfcTagPage = lazyWithRetry(() => import('./pages/InventoryNfcTagP
 const InventoryPutAwayPage = lazyWithRetry(() => import('./pages/InventoryPutAwayPage'));
 const InventoryShelfAuditPage = lazyWithRetry(() => import('./pages/InventoryShelfAuditPage'));
 const InventoryNfcEnrollPage = lazyWithRetry(() => import('./pages/InventoryNfcEnrollPage'));
+const InventoryNfcRegisterPage = lazyWithRetry(() => import('./pages/InventoryNfcRegisterPage'));
 const InventoryNotSeenPage = lazyWithRetry(() => import('./pages/InventoryNotSeenPage'));
 const InventoryKioskPage = lazyWithRetry(() => import('./pages/InventoryKioskPage'));
 
@@ -466,6 +467,23 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryNfcEnrollPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* The quartermaster sees every tag (owner's decision, 2026-10-23); a
+          checklist manager sees compartment tags only (2026-10-24). The
+          server applies the same limit. */}
+      <Route
+        path="/inventory/admin/nfc/tags"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.manage', 'inventory.check_manage']}
+          >
+            <Suspense fallback={null}>
+              <InventoryNfcRegisterPage />
             </Suspense>
           </ProtectedRoute>
         }

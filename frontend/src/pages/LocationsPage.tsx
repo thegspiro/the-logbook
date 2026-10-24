@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronUp,
   QrCode,
+  Nfc,
   Building,
   HelpCircle,
   Monitor,
@@ -40,7 +41,8 @@ import type { Location, LocationCreate } from '../services/api';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { copyToClipboard } from '../utils/clipboard';
-import { getErrorDetail } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { formCoercions } from '../utils/formValues';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
 function groupLocations(locations: Location[]): { stations: Location[]; rooms: Map<string, Location[]> } {
@@ -69,6 +71,17 @@ function groupLocations(locations: Location[]): { stations: Location[]; rooms: M
   }
 
   return { stations, rooms };
+}
+
+/**
+ * LocationCreate.capacity is `ge=1`, so a 0 or a fraction is refused with a 422
+ * after the form has closed over the user's input. Blank means "not recorded".
+ */
+function capacityError(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isInteger(n) && n >= 1 ? null : 'Capacity must be a whole number of at least 1, or left blank';
 }
 
 type StationMode = 'single_station' | 'multi_station' | null;
@@ -101,6 +114,7 @@ interface WizardRoom {
   room_number: string;
   floor: string;
   capacity: string;
+  saved?: boolean; // true once the room is persisted
 }
 
 type WizardStep = 'mode' | 'stations' | 'rooms' | 'done';
@@ -194,29 +208,34 @@ function LocationSetupWizard({
         toast.error('Every station needs a name');
         return;
       }
+      // groupLocations treats a location as a station only when it has an
+      // address; one saved without would be filed under "Other Locations" and
+      // the rooms added to it next would have no card to appear under.
+      if (!s.address.trim()) {
+        toast.error('Every station needs a street address');
+        return;
+      }
     }
     setIsSaving(true);
     try {
-      const newStations = [...stations];
-      for (let i = 0; i < newStations.length; i++) {
-        const s = newStations[i];
-        if (!s) continue;
-        if (!s.saved) {
-          const created = await locationsService.createLocation({
-            name: s.name.trim(),
-            ...(s.address.trim() ? { address: s.address.trim() } : {}),
-            ...(s.city.trim() ? { city: s.city.trim() } : {}),
-            ...(s.state.trim() ? { state: s.state.trim() } : {}),
-            ...(s.zip.trim() ? { zip: s.zip.trim() } : {}),
-          });
-          newStations[i] = { ...s, saved: true, savedId: created.id };
-        }
+      for (let i = 0; i < stations.length; i++) {
+        const s = stations[i];
+        if (!s || s.saved) continue;
+        const created = await locationsService.createLocation({
+          name: s.name.trim(),
+          address: s.address.trim(),
+          ...(s.city.trim() ? { city: s.city.trim() } : {}),
+          ...(s.state.trim() ? { state: s.state.trim() } : {}),
+          ...(s.zip.trim() ? { zip: s.zip.trim() } : {}),
+        });
+        // Marked as each one lands, so a failure further down the list leaves
+        // the earlier stations saved and a retry does not post them twice.
+        setStations((prev) => prev.map((p, j) => (j === i ? { ...p, saved: true, savedId: created.id } : p)));
       }
-      setStations(newStations);
       setActiveStationIdx(0);
       setStep('rooms');
-    } catch {
-      toast.error('Failed to save station');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save station'));
     } finally {
       setIsSaving(false);
     }
@@ -228,6 +247,11 @@ function LocationSetupWizard({
   const addRoom = () => {
     if (!roomForm.name.trim()) {
       toast.error('Room name is required');
+      return;
+    }
+    const roomCapacityError = capacityError(roomForm.capacity);
+    if (roomCapacityError) {
+      toast.error(roomCapacityError);
       return;
     }
     const updated = new Map(roomsByStation);
@@ -265,20 +289,31 @@ function LocationSetupWizard({
       for (const [stationIdx, roomList] of roomsByStation.entries()) {
         const station = stations[stationIdx];
         if (!station) continue;
-        for (const room of roomList) {
+        for (let roomIdx = 0; roomIdx < roomList.length; roomIdx++) {
+          const room = roomList[roomIdx];
+          if (!room || room.saved) continue;
           await locationsService.createLocation({
             name: room.name.trim(),
             building: station.name.trim(),
             ...(room.room_number.trim() ? { room_number: room.room_number.trim() } : {}),
             ...(room.floor.trim() ? { floor: room.floor.trim() } : {}),
-            ...(room.capacity ? { capacity: Number(room.capacity) } : {}),
+            ...(room.capacity.trim() ? { capacity: Number(room.capacity) } : {}),
+          });
+          // Marked as each one lands, so a retry after a failure part-way
+          // through posts only the rooms that did not save.
+          setRoomsByStation((prev) => {
+            const next = new Map(prev);
+            next.set(
+              stationIdx,
+              (prev.get(stationIdx) || []).map((r, j) => (j === roomIdx ? { ...r, saved: true } : r))
+            );
+            return next;
           });
         }
       }
       setStep('done');
     } catch (err: unknown) {
-      const detail = getErrorDetail(err);
-      toast.error(detail || 'Failed to save rooms');
+      toast.error(getErrorMessage(err, 'Failed to save rooms'));
     } finally {
       setIsSaving(false);
     }
@@ -438,8 +473,11 @@ function LocationSetupWizard({
                     )}
                     <div className="space-y-3">
                       <div>
-                        <label className={labelCls}>Station Name / Number *</label>
+                        <label htmlFor={`wizard-station-${idx}-name`} className={labelCls}>
+                          Station Name / Number *
+                        </label>
                         <input
+                          id={`wizard-station-${idx}-name`}
                           type="text"
                           value={station.name}
                           onChange={(e) => updateStation(idx, 'name', e.target.value)}
@@ -449,8 +487,11 @@ function LocationSetupWizard({
                         />
                       </div>
                       <div>
-                        <label className={labelCls}>Street Address</label>
+                        <label htmlFor={`wizard-station-${idx}-address`} className={labelCls}>
+                          Street Address *
+                        </label>
                         <input
+                          id={`wizard-station-${idx}-address`}
                           type="text"
                           value={station.address}
                           onChange={(e) => updateStation(idx, 'address', e.target.value)}
@@ -461,8 +502,11 @@ function LocationSetupWizard({
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div>
-                          <label className={labelCls}>City</label>
+                          <label htmlFor={`wizard-station-${idx}-city`} className={labelCls}>
+                            City
+                          </label>
                           <input
+                            id={`wizard-station-${idx}-city`}
                             type="text"
                             value={station.city}
                             onChange={(e) => updateStation(idx, 'city', e.target.value)}
@@ -471,8 +515,11 @@ function LocationSetupWizard({
                           />
                         </div>
                         <div>
-                          <label className={labelCls}>State</label>
+                          <label htmlFor={`wizard-station-${idx}-state`} className={labelCls}>
+                            State
+                          </label>
                           <input
+                            id={`wizard-station-${idx}-state`}
                             type="text"
                             value={station.state}
                             onChange={(e) => updateStation(idx, 'state', e.target.value)}
@@ -481,8 +528,11 @@ function LocationSetupWizard({
                           />
                         </div>
                         <div>
-                          <label className={labelCls}>Zip</label>
+                          <label htmlFor={`wizard-station-${idx}-zip`} className={labelCls}>
+                            Zip
+                          </label>
                           <input
+                            id={`wizard-station-${idx}-zip`}
                             type="text"
                             inputMode="numeric"
                             autoComplete="postal-code"
@@ -587,13 +637,17 @@ function LocationSetupWizard({
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={() => removeRoom(idx)}
-                        aria-label="Remove room"
-                        className="text-theme-text-muted p-1 transition-colors hover:text-red-500"
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                      {room.saved ? (
+                        <span className="text-xs text-green-700 dark:text-green-400">Saved</span>
+                      ) : (
+                        <button
+                          onClick={() => removeRoom(idx)}
+                          aria-label="Remove room"
+                          className="text-theme-text-muted p-1 transition-colors hover:text-red-500"
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -657,6 +711,8 @@ function LocationSetupWizard({
                     <input
                       id="wizard-room-capacity"
                       type="number"
+                      min="1"
+                      step="1"
                       value={roomForm.capacity}
                       onChange={(e) => setRoomForm((p) => ({ ...p, capacity: e.target.value }))}
                       placeholder="25"
@@ -955,6 +1011,8 @@ export default function LocationsPage() {
   const { confirm } = useConfirm();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canExportQRCodes = checkPermission('locations.manage') || checkPermission('facilities.manage');
+  // Mirrors the Card Readers route: room managers and room-tag writers.
+  const canViewReaders = canExportQRCodes || checkPermission('locations.manage_nfc_tags');
   // The page is open to every member, since events and forms pick from these
   // locations, so each control mirrors the permission its endpoint enforces.
   // Offered to a plain member, they ended in a 403 and "Failed to save setting".
@@ -1093,15 +1151,26 @@ export default function LocationsPage() {
       toast.error('Station name is required');
       return;
     }
+    // groupLocations decides "station" by the presence of an address. A new
+    // station without one, or an existing one with it cleared, lands under
+    // "Other Locations" and every room filed under its name has no card to
+    // render under, so the page would appear to lose them.
+    if (!stationForm.address.trim()) {
+      toast.error('A station needs a street address');
+      return;
+    }
     setIsSavingStation(true);
     try {
+      // On edit, a cleared box is sent as null: the update endpoint treats an
+      // omitted key as "keep the stored value".
+      const { text } = formCoercions(Boolean(editingStation));
       const payload: LocationCreate = {
         name: stationForm.name.trim(),
-        ...(stationForm.address.trim() ? { address: stationForm.address.trim() } : {}),
-        ...(stationForm.city.trim() ? { city: stationForm.city.trim() } : {}),
-        ...(stationForm.state.trim() ? { state: stationForm.state.trim() } : {}),
-        ...(stationForm.zip.trim() ? { zip: stationForm.zip.trim() } : {}),
-        ...(stationForm.description.trim() ? { description: stationForm.description.trim() } : {}),
+        address: text(stationForm.address),
+        city: text(stationForm.city),
+        state: text(stationForm.state),
+        zip: text(stationForm.zip),
+        description: text(stationForm.description),
       };
       if (editingStation) {
         const oldName = editingStation.name;
@@ -1133,23 +1202,27 @@ export default function LocationsPage() {
     if (
       !(await confirm({
         title: 'Delete station',
-        message: `Delete "${station.name}" and every room in it? This cannot be undone.`,
+        message: `Delete "${station.name}" and every room in it? Any of them that events, event templates or apparatus still use is deactivated instead of deleted, so those records keep it. This cannot be undone.`,
         confirmLabel: 'Delete station',
         cancelLabel: 'Keep it',
       }))
     )
       return;
     try {
-      // Delete rooms first
+      // Rooms first, one request each. The server deactivates rather than
+      // deletes anything still referenced, so a failure here is unexpected —
+      // but the rooms already removed stay removed, which is why the list is
+      // reloaded either way.
       const stationRooms = rooms.get(station.name) || [];
       for (const room of stationRooms) {
         await locationsService.deleteLocation(room.id);
       }
       await locationsService.deleteLocation(station.id);
       toast.success('Station deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete station'));
+    } finally {
       void loadLocations();
-    } catch {
-      toast.error('Failed to delete station. It may have events associated with it.');
     }
   };
 
@@ -1179,15 +1252,23 @@ export default function LocationsPage() {
       toast.error('Room name is required');
       return;
     }
+    const roomCapacityError = capacityError(roomForm.capacity);
+    if (roomCapacityError) {
+      toast.error(roomCapacityError);
+      return;
+    }
     setIsSavingRoom(true);
     try {
+      // On edit, a cleared box is sent as null: the update endpoint treats an
+      // omitted key as "keep the stored value".
+      const { text, num } = formCoercions(Boolean(editingRoom));
       const payload: LocationCreate = {
         name: roomForm.name.trim(),
         ...(roomParentStation ? { building: roomParentStation } : {}),
-        ...(roomForm.room_number.trim() ? { room_number: roomForm.room_number.trim() } : {}),
-        ...(roomForm.floor.trim() ? { floor: roomForm.floor.trim() } : {}),
-        ...(roomForm.capacity ? { capacity: Number(roomForm.capacity) } : {}),
-        ...(roomForm.description.trim() ? { description: roomForm.description.trim() } : {}),
+        room_number: text(roomForm.room_number),
+        floor: text(roomForm.floor),
+        capacity: num(roomForm.capacity),
+        description: text(roomForm.description),
       };
       if (editingRoom) {
         await locationsService.updateLocation(editingRoom.id, payload);
@@ -1210,7 +1291,7 @@ export default function LocationsPage() {
     if (
       !(await confirm({
         title: 'Delete room',
-        message: `Delete "${room.name}"? This cannot be undone.`,
+        message: `Delete "${room.name}"? If events, event templates or apparatus still use it, it is deactivated instead of deleted, so those records keep it. This cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -1219,9 +1300,10 @@ export default function LocationsPage() {
     try {
       await locationsService.deleteLocation(room.id);
       toast.success('Room deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete room'));
+    } finally {
       void loadLocations();
-    } catch {
-      toast.error('Failed to delete room. It may have events associated with it.');
     }
   };
 
@@ -1351,6 +1433,14 @@ export default function LocationsPage() {
               className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
             >
               <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
+            </Link>
+          )}
+          {canViewReaders && (
+            <Link
+              to="/locations/card-readers"
+              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+            >
+              <Nfc className="h-4 w-4" aria-hidden="true" /> Card Readers
             </Link>
           )}
           {canCreate && (!isSingleStation || stations.length === 0) && (
@@ -1586,11 +1676,13 @@ export default function LocationsPage() {
               </div>
               <div>
                 <label htmlFor="station-address" className={labelCls}>
-                  Street Address
+                  Street Address *
                 </label>
                 <input
                   type="text"
                   id="station-address"
+                  required
+                  aria-required="true"
                   value={stationForm.address}
                   onChange={(e) => setStationForm((p) => ({ ...p, address: e.target.value }))}
                   placeholder="123 Main Street"
@@ -1747,6 +1839,8 @@ export default function LocationsPage() {
                 <input
                   id="room-form-capacity"
                   type="number"
+                  min="1"
+                  step="1"
                   value={roomForm.capacity}
                   onChange={(e) => setRoomForm((p) => ({ ...p, capacity: e.target.value }))}
                   placeholder="Maximum occupancy"

@@ -213,13 +213,9 @@ server's log. Once a mail server answers, a wrong password or an encryption
 mismatch is reported in detail. After setup, **Settings → Email → Test
 Connection** gives detailed messages.
 
-<!-- Screenshot needed:
-_[System Owner during setup at `/onboarding/it-team`: step 7 IT & Backup Contacts with its "Optional. Choose Skip for now if your department has no IT contact." line, one demo IT contact filled in, the Recovery contacts note, and both Continue to Email and Skip for now in frame. Demo names and example.org addresses only; no real phone numbers.]_
--->
+![Setup step IT & Backup Contacts: the line that the step is optional and Skip for now is the choice for a department with no IT contact, one made-up IT contact filled in as the primary, the Recovery contacts note, and Continue to Email with Skip for now below it](./images/08-116-onboarding-it-team.png)
 
-<!-- Screenshot needed:
-_[Anonymous on a fresh install, then the new System Owner (scripts/screenshots/wizard-walk.mjs), at `/onboarding/apparatus`: Engine 1 carrying Officer, Driver, Firefighter, Firefighter and EMT chips — two Firefighter seats visible — and the + EMT add chip. Crop to the unit card; the administrator password from the previous step must not be in frame.]_
--->
+![The apparatus setup step with Engine 1: riding positions Officer, Driver, Firefighter, Firefighter and EMT as chips with a remove button each, and the add chips below, + EMT among them](./images/08-117-onboarding-apparatus-seats.png)
 
 #### Run the wizard in one tab
 
@@ -263,6 +259,17 @@ department-wide settings.
 The screen has these sections: **General** (Profile, Contact, Addresses),
 **Modules**, **Email**, **Department Email**, **Storage**, **Label Printers**
 and **Authentication** (Sign-in, MFA Policy).
+
+> **MFA Policy is a floor, not the whole rule.** Members holding administration
+> or health-record permissions must use two-step sign-in even when the policy is
+> off for everyone else, with a 14-day grace period that starts the first time
+> the server sees them without it (`MFA_GRACE_DAYS`). Before upgrading, make sure
+> the IT manager has saved their recovery codes. Sensitive actions (log exports,
+> role and position changes, security and integration settings, administrator
+> resets, deleting a member) also ask for a fresh authenticator code, valid 10
+> minutes (`STEPUP_WINDOW_MINUTES`). Anything calling those endpoints directly
+> must `POST /auth/step-up` first or receives `403 LB-AUTH-013`. Details:
+> [`UPGRADING.md`](../UPGRADING.md) and the Security-Authentication wiki page.
 
 ### How settings screens are laid out
 
@@ -341,9 +348,7 @@ The year in order and request numbers (for example "ORD-2026-…") still follows
 UTC, so it can differ on the evening of December 31. See
 [Known Limitations](../KNOWN_LIMITATIONS.md#today-is-the-departments-date--what-still-reads-utc-2026-09-26).
 
-<!-- Screenshot needed:
-_[Settings → Organization → Profile at laptop width, with the **Timezone** select open on the department's zone, beside the department name — the one setting this section asks every administrator to check.]_
--->
+![Settings → Organization → Profile at laptop width: the department name beside the Timezone select, focused on the department's zone](./images/08-113-organization-timezone.png)
 
 ### Contact Info Visibility
 
@@ -389,9 +394,7 @@ Here you:
 - set the number format (a prefix and a number pattern);
 - see and manage the next number to be given out.
 
-<!-- Screenshot needed:
-_[Admin holding settings.edit at `/members/admin/settings/ids`: the Membership IDs section with numbering and auto-generation on, pattern `{YYYY}-{SEQ}`, Minimum digits 3, Restart the count each year on, The year follows set to Our fiscal year starting July — so the fiscal-year naming select and the "The next member will be numbered …" line are both visible.]_
--->
+![Membership ID Number settings: numbering and auto-generation on, the Year and number pattern {YYYY}-{SEQ} with three digits, the count restarting each year on a fiscal year starting in July, how that fiscal year is named, and the number the next member will receive](./images/08-88-membership-id-fiscal-year.png)
 
 ### The rest of Members Administration → Settings
 
@@ -420,6 +423,14 @@ the one they need.
 reorder it, remove ranks you do not have, add your own, and set which shift
 seats each rank may fill — including a seat your department invented.
 
+Renaming a custom rank's **code** moves every place that stored the old one:
+members, org-chart seats, a training requirement's required ranks and inventory
+impact-plan rank filters, in one step, with an audit entry naming both codes.
+Historical records (rank at completion, audit data) keep what was recorded. A
+**built-in** rank (Chief, Captain, Firefighter and the rest of the seeded
+ladder) keeps its code, because its default permissions are tied to it: the
+code field is read-only, and you rename it by changing its display name.
+
 > A rank says where someone sits and which seats they can fill. What they can
 > **do** comes from their position. A rank you add yourself is marked **No
 > default permissions** for that reason: those members need a position too.
@@ -433,9 +444,7 @@ editor first.
 
 ![The Operational Ranks section — the rank ladder with each rank's fillable shift seats](./images/08-79-members-settings-ranks.png)
 
-<!-- Screenshot needed:
-_[Admin at `/members/admin/settings/ranks`: the Delete rank confirmation over the Operational Ranks ladder for a rank nobody holds, showing its message and the Keep it / Delete buttons. Press Keep it afterwards; never confirm.]_
--->
+![The Delete rank confirmation for Probationary Firefighter, a rank nobody holds, over the Operational Ranks ladder: its warning that the rank's place and eligible positions go with it, and the Keep it and Delete buttons](./images/08-89-rank-delete-confirm.png)
 
 **Membership Tiers** is the progression ladder — the stages a member moves
 through and what each one gives:
@@ -609,12 +618,16 @@ and permissions, is on the **Role Management** screen.
 > are marked **Same name as another position**, with the internal name shown
 > underneath. Rename one of them.
 
+![Create New Role refused: the dialog's message says a position named captain already exists and asks for a name no other position uses](./images/08-111-role-duplicate-name.png)
+
 > **Changing the Member position asks first.** Every member holds the
 > **Member** position, so adding or removing one of its permissions changes what
 > the whole department can do at once. Saving such a change opens a
 > confirmation that names the permissions being added or removed and how many
 > members hold the position (**Apply to 42 members** / **Keep editing**).
 > Renaming it or changing its description does not ask.
+
+![Changing the Member position's permissions: the confirmation naming the permission being removed and how many members hold the position, with Apply to members and Keep editing](./images/08-110-member-position-confirm.png)
 
 > **Positions with "all of a module" access.** A position can hold access to
 > everything (the IT Manager), or everything in one module — the kind of grant
@@ -623,11 +636,7 @@ and permissions, is on the **Role Management** screen.
 > objected to. You still cannot give out, or edit a position holding, a
 > permission you do not hold yourself.
 
-<!-- Screenshot needed:
-_[Role Management → edit a position that holds `inventory.*`, change one
-permission and save, showing the success toast. Save as
-`08-04b-role-save-wildcard.png`.]_
--->
+![The Inventory Coordinator position, which holds all of Inventory (inventory.*), after a save in Role Management: its card now lists the events.view permission just added](./images/08-04b-role-save-wildcard.png)
 
 > **A permission means exactly what it says.** Permission to _manage_ something
 > does not include permission to _view_ it. A position gets exactly the
@@ -660,8 +669,8 @@ that area's full set.
 ### Assigning Positions to Members
 
 1. Open **Administration > Members > Member Management**.
-2. On the member's row, select **Manage Roles**.
-3. Tick or untick positions ("Select the roles to assign to this member").
+2. On the member's row, select **Manage Positions**.
+3. Tick or untick positions ("Select the positions to assign to this member").
 4. Select **Save Changes**.
 
 If a change is refused, the message gives the real reason — for example, that
@@ -670,6 +679,12 @@ the position carries more access than you hold.
 > **The Member position stays on.** Every current member holds **Member**. Its
 > box stays ticked and cannot be removed. It can only be removed from
 > an archived member.
+
+> **Ranks are not positions.** The list leaves out Chief, Captain,
+> Firefighter and the other ranks; a rank is set from the member's profile
+> and carries its own access. A member given one of those positions before
+> this version still sees it in the list, marked **Rank**, so it can be
+> unticked.
 
 > **What if a member's menus have not changed after you changed their
 > positions?** The Logbook applies new permissions at once, but the member's
@@ -737,9 +752,11 @@ land on each tab's heading.
 **Search finds hub sections.** Open the command palette and type: every
 Training, Events, Members and Store section you are allowed to see is offered.
 
-> **Screenshot needed:** each hub's card row on desktop; the chip row on a phone
-> with the edge cue visible; Training's area cards; **Needs attention** with the
-> new queues.
+![Training Administration on a laptop: the headline metrics, Needs attention with its queues, and the seven area cards](./images/08-90-training-admin-hub.png)
+
+![Members Administration on a phone: the sections as one sideways-scrolling row of chips, with the fade and arrow on the edge that has more, and the chosen section's description under it](./images/08-91-members-admin-hub-phone.png)
+
+![The command palette with Compliance typed: Training Administration's matching sections, among them Compliance Matrix, Annual Report and ISO Readiness, listed under Training Admin](./images/08-112-command-palette-hub-section.png)
 
 ### Who can see the Needs attention list
 
@@ -930,6 +947,10 @@ ran.
   - up to 25 email addresses.
 - **Delete** asks first, and stops the schedule.
 
+![Saved Reports: a monthly call-volume report and a quarterly apparatus report, each with its period, schedule and next email, and an unscheduled year-to-date training summary, with Run and Edit on each](./images/08-107-saved-reports.png)
+
+![Editing a saved report: its name, report and reporting period, with Email this report on a schedule ticked, Quarterly on day 5 and two recipients](./images/08-108-saved-report-schedule.png)
+
 **What the email contains:** a summary — the report's totals and figures and an
 **Open saved reports** link. It never contains a list of members. The full
 report opens in the app, where the reader's own access applies.
@@ -1031,7 +1052,9 @@ see, so saving a card you do not have access to shows you nothing new. If you
 hide every card, the section says "All cards are hidden. Choose Customize to
 show some."
 
-_[Screenshot needed: the Customize panel with two cards reordered and one retitled; and the empty "All cards are hidden" state.]_
+![Customize Department pulse open above the cards: Grant deadlines moved above Budget threshold and Dues retitled Member dues, with Save for me, Save as department default and Close](./images/08-105-pulse-customize.png)
+
+![Department pulse with every card hidden: All cards are hidden. Choose Customize to show some.](./images/08-106-pulse-all-hidden.png)
 
 ### Scheduling Operations tiles
 
@@ -1127,19 +1150,13 @@ created, and the fields turned on under Data Control.
 
 Only officers with **settings.manage** can change any of it.
 
-![Public Portal configuration page with the enable toggle and domain settings](./images/08-08-public-portal.png)
+![Public Portal page on the Configuration tab, with the Enable Portal button and the default rate limit](./images/08-08-public-portal.png)
 
-<!-- Screenshot needed:
-_[Administrator (settings.manage) at `/admin/public-portal`, API Keys tab → Create API Key: the dialog with "Department website" typed into Key Name and the other fields blank. Never submit it, and never capture the API Key Created dialog — it shows a live, full key.]_
--->
+![The Create API Key dialog with Department website typed as the key name and the rate limit and expiry left blank](./images/08-92-portal-create-api-key.png)
 
-<!-- Screenshot needed:
-_[Administrator at `/admin/public-portal`, Statistics tab: the full tab. An unseeded demo showing zeros, with Error Rate reading — / No requests in 24h, is acceptable. If access-log rows can be seeded, include a few 4xx and one 429 so Rate Limits Hit is non-zero; do not trigger the Attention Required banner with made-up data unless the caption says so.]_
--->
+![The Public Portal Statistics tab on a department whose portal has had no traffic: every count at zero and Error Rate reading No requests in 24h](./images/08-93-portal-statistics.png)
 
-<!-- Screenshot needed:
-_[Administrator at `/admin/public-portal`, Data Control tab on the demo department: the Events, Organization and Stats sections with every toggle off, the yellow PII badges on phone, email, mailing_address and physical_address, and the Sensitive (PII) card reading 0. Do not flip any toggle — a toggle saves immediately and publishes the field.]_
--->
+![The Public Portal Data Control tab: the Events, Organization and Stats fields all switched off, PII badges on phone, email and both addresses, and the Sensitive (PII) count at 0](./images/08-94-portal-data-control.png)
 
 ---
 
@@ -1228,17 +1245,11 @@ days.
 > Sessions** (Categories tab) closed it — so a disputed session can be looked
 > up.
 
-<!-- Screenshot needed:
-_[Admin holding admin_hours.manage at `/admin-hours/manage`, Categories tab: two categories, one with Require approval on and a 4h threshold, one with it off — one row showing "Approval: Required", "Auto-approved under 4h" and "Manual entries: always reviewed" side by side, and one showing "Approval: Not required" and "Manual entries: always reviewed" side by side.]_
--->
+![Admin Hours Categories: Administrative Work reading Approval: Required, Auto-approved under 4h and Manual entries: always reviewed, beside categories reading Approval: Not required and Manual entries: always reviewed](./images/08-95-admin-hours-categories.png)
 
-<!-- Screenshot needed:
-_[Member at `/admin-hours`, period This month: the My Hours list with one pending manual entry showing Edit and Withdraw, and one rejected entry showing its red "Rejected: <reason> — edit and resubmit it, or withdraw it." line and the Edit & resubmit button. Crop to the list, not the whole page.]_
--->
+![My Hours for this month: a pending manual entry with Edit and Withdraw, and a rejected one with its red Rejected line asking the member to edit and resubmit it or withdraw it, and its Edit & resubmit button](./images/08-96-my-hours-pending-rejected.png)
 
-<!-- Screenshot needed:
-_[Member at `/admin-hours`: the inline edit form open on a rejected entry, showing "Returned with: <reason>", the Category, Start Time, End Time and Description fields, and the Resubmit and Cancel buttons.]_
--->
+![The inline edit form open on a rejected entry: Returned with and the reason, the Category, Start Time, End Time and Description fields, and Resubmit and Cancel](./images/08-97-my-hours-resubmit-form.png)
 
 ### Admin Hours review rules
 
@@ -1260,6 +1271,8 @@ Two department-wide rules decide how approvals work:
 
 Only a settings administrator can change these, because the first rule relaxes
 a check on the very people who review admin hours.
+
+![Admin Hours Review Rules: Let an approver approve their own entries, off, and the percentage a corrected event entry may grow before it goes back for review, 25](./images/08-109-admin-hours-review-rules.png)
 
 > **What if a clock-in or entry is refused?**
 >
@@ -1313,9 +1326,7 @@ in the dashboard's **Needs you** panel with an **Acknowledge** button.
 
 ![The dashboard's My Updates feed — unread rows dotted amber, the unread count in the header, and Older Items linking to the full inbox](./images/08-60-dashboard-notification-cards.png)
 
-<!-- Screenshot needed:
-_[Admin at `/dashboard`: the My Updates card (section[aria-labelledby='my-updates-heading']) with one stacked row such as "3 attendance validations" and "Latest: …" among ordinary notification and message rows.]_
--->
+![My Updates with a stacked row, 2 attendance validations and the latest one under it, among ordinary notification and message rows](./images/08-98-my-updates-stacked-row.png)
 
 ### Department Messages
 
@@ -1326,7 +1337,7 @@ require acknowledgement with a report of who has not acknowledged, can be
 scheduled, and can be edited after posting.
 
 1. Open **Messages** and select **New message**.
-2. Enter the title and body, and set the priority and audience.
+2. Enter the title and body, and set the priority and audience. _(2026-10-18)_ An audience of **By status → Probationary** or **Retired** now matches a member on either their membership status or their account status, so a new member added as a probationary member is included without an admin changing the account status. Active, Leave and Inactive still match the account status only.
 3. Optionally tick **Keep in inbox after it is read** (persistent) or **Require
    acknowledgment**, or set a send time.
 4. Members see it in the app, and **every message is also emailed**. A member
@@ -1451,13 +1462,9 @@ explains how to change it on Docker, Unraid and AWS.
 | A saved address the server no longer serves    | Ignored. Links use the server's own address                          |
 | Any change                                     | Recorded in the audit log                                            |
 
-<!-- Screenshot needed:
-_[IT Manager (the demo's System Owner) at `/settings?tab=email`, clipped to section[aria-labelledby="email-link-domain-heading"], with GET /api/v1/organization/settings/email/link-domain route-mocked to a public https address (e.g. https://logbook.oakvillefd.example.org; source frontend_url, is_https true, is_loopback false, is_private_network false, allowed_hosts [that host]): the address with its copy button, "Set by the FRONTEND_URL setting.", the Change address field with Save, and the allowed-host hint. Captured from http://localhost:3000 the "You are viewing this site at…" warning and Use the address I'm on now also appear — keep them and say so in the caption, or capture from a matching origin. Never press Save; do not expose a real department hostname.]_
--->
+![The Email link address card for a department served at https://logbook.oakvillefd.example.org: the address with its copy button, Set by the FRONTEND_URL setting, and the Change address field with Save and the hosts it accepts. Opened from a different address, so the You are viewing this site at warning and Use the address I'm on now also show](./images/08-99-email-link-domain.png)
 
-<!-- Screenshot needed:
-_[IT Manager at `/settings?tab=email` with the same mock: a second allowed address typed into Change address and Save pressed, showing the "Change the email link address?" dialog with its consequence text ("Every email sent from now on — including password resets and ballots — will link to …") and the Change address / Keep current address buttons. Press Keep current address afterwards; nothing is saved.]_
--->
+![The Change the email link address? confirmation: every email from now on, including password resets and ballots, will link to the new address, with Change address and Keep current address](./images/08-100-email-link-domain-confirm.png)
 
 ### Choosing an email platform
 
@@ -1682,12 +1689,7 @@ The old header, colours and style are not brought back. A template created
 after the redesign has no panel. See
 [Upgrading](../UPGRADING.md#every-email-template-is-reset-to-the-new-design-2026-09-27).
 
-<!-- Screenshot needed:
-_[Communications → Email Templates → **Templates**, a template with a
-backup selected: the **Previous version (before the redesign)** panel above
-the editor with **Load this wording** and **Show the old wording**, and the
-solid-tab preview beside it.]_
--->
+![The Previous version (before the redesign) panel above the template editor, with Load this wording and the old wording shown, beside the solid-tab preview](./images/08-101-template-previous-version.png)
 
 ### Send Test Email
 
@@ -1722,11 +1724,9 @@ button reports the failure and the reason instead of claiming success.
 
 ![Send Test to Me, under the rendered preview it sends](./images/08-58-template-send-test.png)
 
-![The rendered preview: the white card on grey, its centred masthead and fact panel](./images/08-67-email-preview-design.png)
+![The rendered Shift Assignment preview: the accent tab naming the category with its right-hand note, the title on a tinted card, and the message card](./images/08-67-email-preview-design.png)
 
-<!-- Screenshot needed:
-_[Administrator with settings.manage at `/communications/email-templates`, with the backend's FRONTEND_URL set to a LAN address (e.g. http://192.168.1.50:7880) and EMAIL_ENABLED=true, then restarted: the yellow notice "Emails link to http://192.168.1.50:7880, which only works on your station's network…" with its Change the email link address link, and the Save bar beneath. Crop to the notice and the bar; no credentials in frame.]_
--->
+![The Email Templates notice for a LAN link address: Emails link to http://192.168.1.50:7880, which only works on your station's network, with its Change the email link address link and the Save bar beneath](./images/08-102-email-link-lan-notice.png)
 
 ### Email footers
 
@@ -2122,6 +2122,30 @@ members will meet. The operator's reference is
   list. If that list cannot be reached, the password change goes through —
   the other rules still apply.
 
+### The weekly security report
+
+Every department gets a weekly email of **counts**: security alerts by severity
+and type, application errors by type, and whether the audit log's tamper-check
+chain verified. It links to **Security Alerts** and the **Audit Log** and names
+no member, username or event. A quiet week sends a short all-clear, so a missing
+email means the scheduler or mail is broken, not that the week was calm.
+
+- **On by default, Monday 07:00** on the department's clock. Change the day and
+  hour, or turn it off, under **Organization Settings → Authentication →
+  Security Report**, then **Save**. A department that has never saved the page
+  still receives it.
+- **Who gets it:** active members who hold the **IT Manager** position. If no one
+  does, active full administrators receive it, and the page says so and shows how
+  many people it goes to and when it last went. It is a required email, so a
+  recipient cannot switch it off in their own preferences.
+- **It needs the scheduler.** A server that does not run scheduled tasks sends
+  nothing. After an upgrade the first report waits for the next scheduled day and
+  hour.
+
+![Settings → Authentication → Security Report with the weekday and hour pickers, the recipient line naming administrators, the notice that no one holds the IT Manager position, and Last sent](./images/08-114-security-report-fallback.png)
+
+![The same Security Report settings once a member holds the IT Manager position: the recipient line names them and the administrator notice is gone](./images/08-115-security-report-it-manager.png)
+
 ### Too many sign-in attempts
 
 Sign-in, registration, password reset and staying signed in are each limited to
@@ -2191,13 +2215,9 @@ server and apply to the whole installation.
 
 There is no menu entry for these pages. Ask your administrator for the link.
 
-<!-- Screenshot needed:
-_[Member at `/ip-security/my-requests`: My IP Exceptions with the New Request form open — IP address (203.0.113.x), Select a use case, Duration (days, 1–90) and details — plus the Show expired, rejected, and revoked requests checkbox. Do not submit.]_
--->
+![My IP Exceptions with the New Request form open: IP address 203.0.113.50, Select a use case, Duration (days, 1–90), Justification and Additional Details, and the Show expired, rejected, and revoked requests checkbox](./images/08-103-ip-exception-request-form.png)
 
-<!-- Screenshot needed:
-_[Administrator holding security.manage at `/ip-security`: the Pending Requests tab with its count badge and one pending request showing IP, use case, duration and the Approve / Reject actions. Seed the request with a documentation-range address (203.0.113.x); never capture a real client IP, and do not capture the Blocked Attempts tab with live addresses.]_
--->
+![IP Security on the Pending Requests tab with its count badge: one request from 203.0.113.24 for travel, five days, with its approve (tick) and reject (cross) actions](./images/08-104-ip-pending-requests.png)
 
 ---
 
@@ -2230,6 +2250,11 @@ every department on the installation, so starting one by hand is for the
 installation's owner only. A department controls what a task does for it
 through that feature's own settings — for example, the automatic tier
 advancement switch — not by turning the task off.
+
+One department's failure does not stop the others. A task that fails for one
+department (a database rollback, a bad integration) is recorded for that
+department and the task carries on with the rest, including Salesforce
+auto-sync, which now continues past the integration that failed.
 
 > **What if a task seems not to have run?** After the server restarts, a task
 > may take one cycle to run again. A failed run for your department appears on
@@ -2274,7 +2299,7 @@ included. The difference shows on the saved draft: its writer gets **Edit** and
 draft. Publishing asks first: "Everyone who visits (page) sees this text
 immediately. The version published now is archived, not deleted."
 
-![The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing](./images/08-77-legal-proposal-as-proposer.png)
+![The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish — beside the administrator's draft, which offers them nothing](./images/08-77-legal-proposal-as-proposer.png)
 
 ### What gets recorded
 
@@ -2598,7 +2623,7 @@ menu.
 shows results once at least one check has been submitted.
 
 Full instructions:
-[Inventory → Equipment Checklists](./05-inventory.md#equipment-checklists-moved-here-2026-08-31).
+[Inventory → Equipment Checklists](./05-inventory.md#equipment-checklists).
 
 ---
 

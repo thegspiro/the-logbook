@@ -2,8 +2,8 @@
  * What a check item is, and the one shared piece of the answering surface.
  *
  * The types are the contract every screen in the check works against: a check
- * stores exactly one of four things — a number, a pass/fail, a quantity, or a
- * date — and the type decides the control, the pass rule, and what the record
+ * stores exactly one of five things — a number, a pass/fail, a quantity, a
+ * date, or present/absent — and the type decides the control, the pass rule, and what the record
  * keeps. An admin picks what is being asked and the answer's shape follows,
  * rather than picking a layout and hoping the pass rule matches.
  *
@@ -12,10 +12,16 @@
  * them: `checkAnswers.ts` owns those and has its own tests, and the sweep's
  * layouts call into it. `FaultDetail` stayed because it is genuinely shared —
  * a note written on one screen and a note written on another are the same
- * field on the same record.
+ * field on the same record. `ReplacementDateFields` is shared for the same
+ * reason.
  */
 import { Camera } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
+
+import { daysUntil } from '@/modules/inventory/types/equipmentCheck';
+import { toLocalISODate } from '@/utils/dateFormatting';
+
+import { CLEARED_REPLACEMENT, replacementAnswer } from './checkAnswers';
 
 // ============================================================================
 // Shared shape
@@ -30,6 +36,13 @@ export interface CheckItemAnswer {
   levelReading?: number | undefined;
   /** Expiry type: the date on record was looked at and confirmed. */
   expiryConfirmed?: boolean | undefined;
+  /**
+   * Expiry type, on a line inventory does not track: the date printed on the
+   * replacement unit the crew put in. The server writes it onto the line.
+   */
+  expirationFound?: string | undefined;
+  /** The lot printed on that replacement unit, when the crew entered one. */
+  lotFound?: string | undefined;
   /** Function type: what went wrong, when it did. */
   notes?: string | undefined;
   photoFiles?: File[] | undefined;
@@ -55,7 +68,15 @@ export interface CheckItemSpec {
   lastLevelReading?: number | null | undefined;
 
   // Count
+  /** Par: what the position should hold. A shortfall is a restock line. */
   expectedQuantity?: number | null | undefined;
+  /**
+   * The count below which the line fails — Min to Pass, else Critical Min
+   * (`passFloor`). Absent means a count never fails on its number.
+   */
+  passFloor?: number | null | undefined;
+  /** What is counted: "each", "rolls", the catalog's unit. */
+  countUnit?: string | null | undefined;
   /**
    * What the last check recorded, or the truck's running count if that is
    * newer. The number the crew opens on — 12 found against a par of 10 stays
@@ -74,6 +95,11 @@ export interface CheckItemSpec {
    */
   inventoryItemId?: string | null | undefined;
   expirationWarningDays?: number | null | undefined;
+  /**
+   * The crew may date the replacement they put in, because nothing else
+   * tracks this line's units. See `canRecordReplacementDate`.
+   */
+  takesReplacementDate?: boolean | undefined;
 }
 
 interface ControlProps {
@@ -152,3 +178,101 @@ export const FaultDetail: React.FC<ControlProps> = ({ item, answer, onChange, di
     </p>
   </div>
 );
+
+/**
+ * The date and lot off a replacement unit, on a Date line nothing else tracks.
+ *
+ * A linked line has the swap, which moves the stock and the dates together. An
+ * untracked one had nothing: the crew put a new box in, the line stayed
+ * expired, and the next shift failed it again. The date entered here replaces
+ * the line's date on the record, logged against the member and the check.
+ *
+ * A past date is refused here as the server refuses it, rather than stored and
+ * bounced at submit, so the crew finds out while the box is still in hand.
+ */
+export const ReplacementDateFields: React.FC<ControlProps & { today: Date }> = ({
+  item,
+  answer,
+  onChange,
+  disabled,
+  today,
+}) => {
+  const [open, setOpen] = useState(Boolean(answer?.expirationFound));
+  const [date, setDate] = useState(answer?.expirationFound ?? '');
+  const [lot, setLot] = useState(answer?.lotFound ?? '');
+  const days = date ? daysUntil(date, today) : null;
+  const past = days !== null && days < 0;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        data-testid={`replacement-open-${item.id}`}
+        className="text-theme-accent-blue min-h-11 text-left text-sm font-medium hover:opacity-80 disabled:opacity-50"
+      >
+        Put in a replacement? Record its date
+      </button>
+    );
+  }
+
+  return (
+    <div className="border-theme-surface-border flex flex-col gap-2 rounded-lg border p-3">
+      <div className="flex flex-wrap gap-2">
+        <label className="flex min-w-[10rem] flex-1 flex-col gap-1">
+          <span className="form-label">Replacement expires</span>
+          <input
+            type="date"
+            className={`form-input ${past ? 'border-theme-alert-danger-icon' : ''}`}
+            data-testid={`replacement-date-${item.id}`}
+            aria-invalid={past}
+            min={toLocalISODate(today)}
+            disabled={disabled}
+            value={date}
+            onChange={(e) => {
+              const next = e.target.value;
+              setDate(next);
+              // A refused date clears an earlier accepted one rather than
+              // leaving it standing behind the box the crew just corrected.
+              onChange(replacementAnswer(next, lot, today) ?? CLEARED_REPLACEMENT);
+            }}
+          />
+        </label>
+        <label className="flex min-w-[8rem] flex-1 flex-col gap-1">
+          <span className="form-label">Lot (optional)</span>
+          <input
+            type="text"
+            className="form-input"
+            data-testid={`replacement-lot-${item.id}`}
+            maxLength={100}
+            disabled={disabled}
+            value={lot}
+            onChange={(e) => {
+              setLot(e.target.value);
+              if (answer?.expirationFound) onChange({ lotFound: e.target.value.trim() || undefined });
+            }}
+          />
+        </label>
+      </div>
+      {past && (
+        <p className="text-theme-alert-danger-title text-xs font-medium" role="alert">
+          That date has already passed. Enter the date printed on the unit you put in.
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          setOpen(false);
+          setDate('');
+          setLot('');
+          if (answer?.expirationFound) onChange(CLEARED_REPLACEMENT);
+        }}
+        className="text-theme-text-muted hover:text-theme-text-secondary min-h-11 w-fit text-sm"
+      >
+        No replacement
+      </button>
+    </div>
+  );
+};

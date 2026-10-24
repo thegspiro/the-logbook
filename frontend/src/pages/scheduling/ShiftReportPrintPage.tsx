@@ -12,7 +12,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { shiftCompletionService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
 import {
@@ -21,6 +21,7 @@ import {
   useCallTypeLabelsReady,
 } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
+import { attributionName } from '../../utils/memberName';
 
 /** Settle time for layout and webfonts before the print dialog opens. */
 const PRINT_DELAY_MS = 600;
@@ -101,11 +102,12 @@ const ShiftReportPrintPage: React.FC = () => {
     );
   }
 
-  const dateStr = formatDateCustom(
-    report.shift_date + 'T12:00:00',
-    { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' },
-    tz
-  );
+  const dateStr = formatCalendarDate(report.shift_date, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
   const hasEvaluation =
     report.performance_rating ||
@@ -258,7 +260,7 @@ const ShiftReportPrintPage: React.FC = () => {
           <section className="shift-report-print__signatures" aria-label="Signatures and review">
             <div className="shift-report-print__signature">
               <h2>Filing Officer</h2>
-              <p>{report.officer_name || '—'}</p>
+              <p>{attributionName(report.officer_name, report.officer_id, '—')}</p>
               <div className="shift-report-print__signature-line" />
               <span>Signature / Date</span>
             </div>

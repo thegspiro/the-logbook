@@ -145,7 +145,7 @@ export const NfcCardCapture: React.FC<NfcCardCaptureProps> = ({
       </p>
 
       {captured && (
-        <p className="inline-flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400" role="status">
+        <p className="inline-flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400" role="status">
           <Check className="h-3.5 w-3.5" aria-hidden="true" />
           {credentialType === NfcCredentialType.WRITTEN
             ? 'Code written to the card. Register it to finish.'

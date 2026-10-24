@@ -34,6 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy import select
@@ -42,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import MemberServicePeriod, Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
 from app.utils.org_timezone import (
+    local_date,
     resolve_org_today,
     resolve_scheduling_timezone,
     today_in,
@@ -121,6 +123,57 @@ def _days(start: Optional[date], end: Optional[date], today: date) -> int:
     if not start:
         return 0
     return max(0, ((end or today) - start).days)
+
+
+def _stint_closed_by(
+    periods: Sequence[MemberServicePeriod], separation_status: UserStatus
+) -> Optional[MemberServicePeriod]:
+    """The latest stint that ``separation_status`` closed, if it is the last word.
+
+    None while any stint is still open -- the history then says the member is
+    serving, whatever their status, and there is no separation to point at.
+    """
+    if any(p.end_date is None for p in periods):
+        return None
+    closed = [p for p in periods if p.separation_status == separation_status.value]
+    return closed[-1] if closed else None
+
+
+def effective_separation_at(
+    recorded_at: datetime,
+    periods: Sequence[MemberServicePeriod],
+    separation_status: UserStatus,
+    tz: ZoneInfo,
+) -> datetime:
+    """When a separation took effect, for the clocks that count from it.
+
+    ``recorded_at`` (``status_changed_at``) is when an officer entered the
+    drop; the stint the drop closed ends on its effective date, the day the
+    member actually left. A drop entered three weeks late is three weeks old,
+    so this is ``recorded_at`` moved back by the days it was back-dated,
+    counted on the department's calendar. It keeps the recording's time of
+    day, so a drop that was not back-dated keeps exactly the moment it always
+    had.
+
+    It is never later than the recording: the stint's end can be edited in
+    the service history afterwards, and moving it forward must not restart
+    the clocks -- the undo-drop window would turn into a backdating tool, and
+    a member mid-way to their 90-day property reminder would start again.
+    With no stint closed by this separation (history entered by hand, or rows
+    older than service history), the recording is all there is.
+
+    The undo-drop window and the property-return reminders both count from
+    this; keep them on the one definition so they cannot disagree.
+    """
+    if recorded_at.tzinfo is None:
+        recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+    stint = _stint_closed_by(periods, separation_status)
+    if stint is None or stint.end_date is None:
+        return recorded_at
+    backdated_days = (local_date(recorded_at, tz) - stint.end_date).days
+    if backdated_days <= 0:
+        return recorded_at
+    return recorded_at - timedelta(days=backdated_days)
 
 
 def implicit_separation_date(member: Any, today: date, tz: tzinfo) -> date:
@@ -296,11 +349,19 @@ class MemberServiceHistoryService:
         separation_status: UserStatus,
         on_date: date,
         created_by: Optional[str],
+        *,
+        officer_dated: bool = False,
     ) -> Optional[MemberServicePeriod]:
         """Close the member's current stint as of ``on_date``.
 
         Does not commit; the caller's status change and this write land
         together or not at all.
+
+        ``officer_dated`` means an officer typed ``on_date``. A date before the
+        stint began is then refused rather than clamped: the clamp exists for
+        the default of today against a hire date set in the future, and
+        silently moving a date somebody entered would record a separation they
+        never asked for. Raises ValueError for such a date.
 
         The caller must hold the member row's lock (Pitfall #27). The stints
         are read with a locking read as well: under REPEATABLE READ a plain
@@ -315,6 +376,11 @@ class MemberServiceHistoryService:
         if open_periods:
             current = open_periods[-1]
             start = current.start_date or member.hire_date
+            if officer_dated and start and on_date < start:
+                raise ValueError(
+                    f"The effective date cannot be before the member's current "
+                    f"service began ({start.isoformat()})."
+                )
             current.end_date = max(on_date, start) if start else on_date
             current.separation_status = separation_status.value
             return current
@@ -323,6 +389,11 @@ class MemberServiceHistoryService:
             # by hand. There is nothing open to close, and inventing a stint
             # would double-count time they already accounted for.
             return None
+        if officer_dated and member.hire_date and on_date < member.hire_date:
+            raise ValueError(
+                f"The effective date cannot be before the member's hire date "
+                f"({member.hire_date.isoformat()})."
+            )
         period = MemberServicePeriod(
             organization_id=str(member.organization_id),
             user_id=str(member.id),
@@ -353,12 +424,9 @@ class MemberServiceHistoryService:
         periods = await self.list_periods(
             member.organization_id, member.id, for_update=True
         )
-        if any(p.end_date is None for p in periods):
+        reopened = _stint_closed_by(periods, separation_status)
+        if reopened is None:
             return None
-        closed = [p for p in periods if p.separation_status == separation_status.value]
-        if not closed:
-            return None
-        reopened = closed[-1]
         reopened.end_date = None
         reopened.separation_status = None
         return reopened

@@ -819,6 +819,23 @@ export const memberStatusService = {
     return response.data;
   },
 
+  async getStatusChange(userId: string): Promise<import('../types/user').StatusChangeRecord> {
+    const response = await api.get<import('../types/user').StatusChangeRecord>(`/users/${userId}/status-change`);
+    return response.data;
+  },
+
+  /** Rewords the reason for the last status change; null clears it. Nothing else about the change moves. */
+  async updateStatusChangeReason(
+    userId: string,
+    reason: string | null
+  ): Promise<import('../types/user').StatusChangeRecord> {
+    const response = await api.patch<import('../types/user').StatusChangeRecord>(
+      `/users/${userId}/status-change-reason`,
+      { reason }
+    );
+    return response.data;
+  },
+
   async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
     const response = await api.get<{ members: import('../types/user').ArchivedMember[] }>('/users/archived');
     return response.data;
@@ -1284,6 +1301,11 @@ export interface TestConnectionResult {
   message: string;
 }
 
+export interface IcalFeedLink {
+  token: string;
+  feed_path: string;
+}
+
 export interface CalcomBooking {
   external_id: string;
   title: string;
@@ -1380,6 +1402,7 @@ export interface McpStatus {
   expose_finance: boolean;
   expose_medical_screening: boolean;
   expose_full_schedule: boolean;
+  expose_medical_supplies: boolean;
   active_key: McpServiceKey | null;
 }
 
@@ -1388,6 +1411,32 @@ export interface McpKeyCreateResult {
   plaintext: string;
   revoked: McpServiceKey[];
   endpoint_path: string;
+}
+
+/** A member's Google Workspace account that needs a person to act. */
+export interface GoogleWorkspaceAttentionItem {
+  user_id: string;
+  member_name: string;
+  primary_email: string;
+  issue: string;
+  /** The backend's wording of the issue, the same as the email uses. */
+  label: string;
+  detail: string | null;
+  since: string | null;
+  /** Waiting long enough that the daily alert email reports it. */
+  overdue: boolean;
+}
+
+/** What linking the existing roster to Google did, or (previewed) would do. */
+export interface GoogleWorkspaceLinkResult {
+  applied: boolean;
+  linked: number;
+  already_linked: number;
+  unfinished: number;
+  departed: number;
+  not_in_google: number;
+  off_domain: number;
+  account_in_use: number;
 }
 
 export const integrationsService = {
@@ -1426,6 +1475,18 @@ export const integrationsService = {
 
   async testConnection(integrationId: string): Promise<TestConnectionResult> {
     const response = await api.post<TestConnectionResult>(`/integrations/${integrationId}/test-connection`);
+    return response.data;
+  },
+
+  // The department events feed behind the iCalendar card. The path embeds the
+  // feed's bearer token; prepend window.location.origin to subscribe.
+  async getIcalFeed(integrationId: string): Promise<IcalFeedLink> {
+    const response = await api.get<IcalFeedLink>(`/integrations/${integrationId}/ical-feed`);
+    return response.data;
+  },
+
+  async rotateIcalFeed(integrationId: string): Promise<IcalFeedLink> {
+    const response = await api.post<IcalFeedLink>(`/integrations/${integrationId}/ical-feed/rotate`);
     return response.data;
   },
 
@@ -1469,6 +1530,20 @@ export const integrationsService = {
     return response.data;
   },
 
+  // Starts the Google Calendar sign-in and returns Google's consent URL for
+  // the browser to navigate to. A POST rather than a link: it records the
+  // attempt and sets its nonce cookie, so it carries the CSRF header.
+  async startGoogleCalendarConnect(): Promise<string> {
+    const response = await api.post<{ authorization_url: string }>('/integrations/google-calendar/oauth/start');
+    return response.data.authorization_url;
+  },
+
+  // The same for Outlook: returns Microsoft's sign-in URL.
+  async startOutlookCalendarConnect(): Promise<string> {
+    const response = await api.post<{ authorization_url: string }>('/integrations/outlook/oauth/start');
+    return response.data.authorization_url;
+  },
+
   // Full-page navigation target for the one-click OAuth connect flow. Not an
   // axios call — the browser navigates here and the backend 302s to Salesforce.
   getSalesforceOAuthUrl(): string {
@@ -1498,6 +1573,24 @@ export const integrationsService = {
   async revokeMcpKey(keyId: string): Promise<McpServiceKey> {
     const response = await api.delete<{ key: McpServiceKey }>(`/integrations/claude-mcp/keys/${keyId}`);
     return response.data.key;
+  },
+
+  async getGoogleWorkspaceAttention(): Promise<GoogleWorkspaceAttentionItem[]> {
+    const response = await api.get<{ items: GoogleWorkspaceAttentionItem[] }>(
+      '/integrations/google-workspace/attention'
+    );
+    return asArray(response.data.items);
+  },
+
+  // Google is only read. Called without `expected` it previews the counts;
+  // with the previewed count it links exactly those members, and refuses if
+  // the roster changed since. A linked account is suspended when its member leaves.
+  async linkExistingGoogleMembers(expected?: number): Promise<GoogleWorkspaceLinkResult> {
+    const params = expected === undefined ? { apply: false } : { apply: true, expected };
+    const response = await api.post<GoogleWorkspaceLinkResult>('/integrations/google-workspace/link-existing', null, {
+      params,
+    });
+    return response.data;
   },
 };
 

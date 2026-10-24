@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-import { gotoDashboard } from './helpers';
+import { gotoDashboard, openNavigation } from './helpers';
 
 /**
  * Authentication E2E Tests
@@ -191,7 +191,8 @@ test.describe('Authentication', () => {
       await gotoDashboard(page);
 
       // The navigation's logout control opens a confirmation dialog rather
-      // than signing out immediately.
+      // than signing out immediately. On a phone it lives in the More drawer.
+      await openNavigation(page);
       await page
         .getByRole('button', { name: /^logout$/i })
         .first()

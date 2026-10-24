@@ -7,9 +7,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useSubmitGuard } from '../hooks/useSubmitGuard';
-import { electionService, eventService, meetingsService, ranksService } from '../services/api';
+import { electionService, eventService, meetingsService, ranksService, roleService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { EventListItem } from '../types/event';
+import type { Role } from '../types/role';
 import type { ElectionListItem, ElectionCreate } from '../types/election';
 import type { VotingMethod, VictoryCondition } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
@@ -20,9 +21,20 @@ import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } fro
 import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
+import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
+import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
+import { Vote } from 'lucide-react';
+
+interface PositionSuggestion {
+  key: string;
+  name: string;
+  detail?: string | undefined;
+  code?: string | undefined;
+  kind: 'Position' | 'Rank';
+}
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -63,6 +75,7 @@ export const ElectionsPage: React.FC = () => {
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [upcomingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
   const [availableRanks, setAvailableRanks] = useState<OperationalRankResponse[]>([]);
+  const [availablePositions, setAvailablePositions] = useState<Role[]>([]);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
@@ -128,6 +141,7 @@ export const ElectionsPage: React.FC = () => {
     if (!canManage) return;
     void fetchMeetings();
     void fetchRanks();
+    void fetchPositions();
   }, [canManage, fetchMeetings]);
 
   useEffect(() => {
@@ -147,6 +161,31 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
+  // Officer and board seats (President, Treasurer, Board of Directors) are
+  // positions, not operational ranks, and elections fill both kinds. GET /roles
+  // needs positions.view, which every seeded elections.manage holder has; a
+  // custom role without it still gets the ranks and free text.
+  const fetchPositions = async () => {
+    try {
+      setAvailablePositions(await roleService.getRoles());
+    } catch {
+      // Non-critical — the ranks and free text remain
+    }
+  };
+
+  /**
+   * The election's dates from a linked meeting or event's window. Left as
+   * typed when the record has no start time or has already begun — a past
+   * start cannot be saved, and a date alone does not say when voting opens.
+   * With no end time the end falls back to end of day, as a typed start does.
+   */
+  const datesFromWindow = (win: MeetingWindow): Pick<typeof formData, 'start_date' | 'end_date'> => {
+    if (!win.start || new Date(localToUTC(win.start, tz)).getTime() <= Date.now()) {
+      return { start_date: formData.start_date, end_date: formData.end_date };
+    }
+    return { start_date: win.start, end_date: win.end ?? endOfDepartmentDay(win.start) };
+  };
+
   const handleMeetingChange = (value: string) => {
     if (!value) {
       setFormData({ ...formData, meeting_id: undefined, event_id: undefined });
@@ -159,6 +198,7 @@ export const ElectionsPage: React.FC = () => {
       if (meeting) {
         setFormData({
           ...formData,
+          ...datesFromWindow(meetingWindow(meeting)),
           meeting_id: id,
           event_id: undefined,
           meeting_date: meeting.meeting_date,
@@ -169,6 +209,7 @@ export const ElectionsPage: React.FC = () => {
       if (event) {
         setFormData({
           ...formData,
+          ...datesFromWindow(eventWindow(event, tz)),
           meeting_id: undefined,
           event_id: id,
           meeting_date: event.start_datetime,
@@ -275,14 +316,27 @@ export const ElectionsPage: React.FC = () => {
   };
 
   const addedPositions = formData.positions || [];
-  const positionSuggestions = availableRanks
-    .filter((r) => !addedPositions.includes(r.display_name))
-    .filter(
-      (r) =>
-        !positionInput.trim() ||
-        r.display_name.toLowerCase().includes(positionInput.toLowerCase()) ||
-        r.rank_code.toLowerCase().includes(positionInput.toLowerCase())
-    );
+  const positionQuery = positionInput.trim().toLowerCase();
+  const seenSuggestions = new Set(addedPositions.map((p) => p.toLowerCase()));
+  // Positions first, then ranks; a name in both (Chief, Captain) is offered once.
+  // `member` is the baseline position every member holds, not a seat to fill.
+  const positionSuggestions: PositionSuggestion[] = [
+    ...availablePositions
+      .filter((p) => p.slug !== 'member')
+      .map((p) => ({ key: `position-${p.id}`, name: p.name, detail: p.description, kind: 'Position' as const })),
+    ...availableRanks.map((r) => ({
+      key: `rank-${r.id}`,
+      name: r.display_name,
+      detail: r.description ?? undefined,
+      code: r.rank_code,
+      kind: 'Rank' as const,
+    })),
+  ].filter((suggestion: PositionSuggestion) => {
+    const name = suggestion.name.toLowerCase();
+    if (seenSuggestions.has(name)) return false;
+    seenSuggestions.add(name);
+    return !positionQuery || name.includes(positionQuery) || !!suggestion.code?.toLowerCase().includes(positionQuery);
+  });
   // The listbox is open only while there is a suggestion to show; it closes on
   // the input's blur rather than through a click-away scrim, which used to sit
   // over the Add button and eat the first tap (W50-63).
@@ -310,70 +364,72 @@ export const ElectionsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
-            <div className="text-theme-text-muted">Loading elections...</div>
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+          <div className="text-theme-text-muted">Loading elections...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Elections</h1>
-              <p className="text-theme-text-muted mt-1 text-sm">
-                {canManage ? 'Create elections, send ballots and publish results' : 'See elections and their results'}
-              </p>
-            </div>
-            <HelpLink
-              topic="elections"
-              tooltip="Create and manage department elections. Set up voting methods, add candidates, configure ballots, and track results. Supports ranked choice, plurality, and approval voting."
-            />
-          </div>
-          {canManage && (
-            <div className="flex items-center gap-2">
-              <Link
-                to="/elections/settings"
-                className="hover:bg-theme-surface-secondary text-theme-text-muted rounded-md p-2"
-                aria-label="Election settings"
-                title="Election Settings"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </Link>
-              <button onClick={() => setShowCreateModal(true)} className="btn-info inline-flex items-center rounded-md">
-                <svg
-                  className="mr-2 -ml-1 h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Create Election
-              </button>
-            </div>
-          )}
-        </div>
+    <div className="mx-auto max-w-7xl">
+      <div>
+        <GovernancePageHeader
+          icon={Vote}
+          title="Elections"
+          subtitle={
+            canManage ? 'Create elections, send ballots and publish results' : 'See elections and their results'
+          }
+          actions={
+            <>
+              <HelpLink
+                topic="elections"
+                tooltip="Create and manage department elections. Set up voting methods, add candidates, configure ballots, and track results. Supports ranked choice, plurality, and approval voting."
+              />
+              {canManage && (
+                <>
+                  <Link
+                    to="/elections/settings"
+                    className="hover:bg-theme-surface-secondary text-theme-text-muted rounded-md p-2"
+                    aria-label="Election settings"
+                    title="Election Settings"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                  </Link>
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="btn-primary inline-flex items-center rounded-md"
+                  >
+                    <svg
+                      className="mr-2 -ml-1 h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create Election
+                  </button>
+                </>
+              )}
+            </>
+          }
+        />
 
         {error && (
           <div
@@ -549,7 +605,7 @@ export const ElectionsPage: React.FC = () => {
 
                           <div className="flex shrink-0 flex-col items-end gap-1">
                             {timeRemaining && (
-                              <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-800 dark:text-green-400">
                                 <svg
                                   className="h-3 w-3"
                                   fill="none"
@@ -823,8 +879,8 @@ export const ElectionsPage: React.FC = () => {
                               role="listbox"
                               aria-label="Available positions"
                             >
-                              {positionSuggestions.map((rank) => (
-                                <li key={rank.id}>
+                              {positionSuggestions.map((suggestion) => (
+                                <li key={suggestion.key}>
                                   <button
                                     type="button"
                                     role="option"
@@ -833,17 +889,18 @@ export const ElectionsPage: React.FC = () => {
                                       e.preventDefault(); // Prevent input blur before click
                                       setPositionInput('');
                                       setShowPositionDropdown(false);
-                                      if (!addedPositions.includes(rank.display_name)) {
+                                      if (!addedPositions.includes(suggestion.name)) {
                                         setFormData({
                                           ...formData,
-                                          positions: [...addedPositions, rank.display_name],
+                                          positions: [...addedPositions, suggestion.name],
                                         });
                                       }
                                     }}
                                   >
-                                    <span className="font-medium">{rank.display_name}</span>
-                                    {rank.description && (
-                                      <span className="text-theme-text-muted ml-2 text-xs">— {rank.description}</span>
+                                    <span className="font-medium">{suggestion.name}</span>
+                                    <span className="text-theme-text-muted ml-2 text-xs">{suggestion.kind}</span>
+                                    {suggestion.detail && (
+                                      <span className="text-theme-text-muted ml-2 text-xs">— {suggestion.detail}</span>
                                     )}
                                   </button>
                                 </li>
@@ -864,7 +921,7 @@ export const ElectionsPage: React.FC = () => {
                       </div>
                     </div>
                     <p className="text-theme-text-muted mt-1 text-xs">
-                      Select from existing ranks or type a custom position name.
+                      Select a department position (President, Secretary…) or rank, or type a custom name.
                     </p>
                     {formData.positions && formData.positions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -1114,7 +1171,8 @@ export const ElectionsPage: React.FC = () => {
                       <span className="text-theme-text-primary ml-2 text-sm">Allow Write-in Candidates</span>
                     </label>
                     <p id="election-write-ins-help" className="text-theme-text-muted mb-2 ml-6 text-xs">
-                      Voters may type in someone who is not on the ballot.
+                      Voters may type in someone who is not on the ballot. Applies to candidate races only; Approve/Deny
+                      items never offer a write-in.
                     </p>
 
                     <label className="flex items-center">

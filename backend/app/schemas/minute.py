@@ -17,7 +17,8 @@ from pydantic import (
 )
 
 from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX
 from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
 from app.utils.redline import describe_change
 from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
@@ -65,10 +66,17 @@ def _clean_rich_text(value: str, what: str) -> str:
     return cleaned
 
 
+class SectionDocument(BaseModel):
+    """A Documents-library file linked from an agenda item."""
+
+    id: str = Field(..., min_length=1, max_length=36)
+    name: str = Field(default="", max_length=255)
+
+
 class SectionEntry(BaseModel):
     """A single content section within minutes or a template"""
 
-    order: int = Field(..., ge=0, description="Display order")
+    order: int = Field(..., ge=0, description="Display order", le=INT32_MAX)
     key: str = Field(
         ..., min_length=1, max_length=100, description="Unique key for the section"
     )
@@ -94,6 +102,29 @@ class SectionEntry(BaseModel):
         description="Copied from the outline; the wording the motion starts with",
     )
 
+    presenter: str = Field(
+        default="",
+        max_length=200,
+        description="Who reports on this item; set from the agenda item",
+    )
+    not_taken_up: bool = Field(
+        default=False,
+        description="The meeting never reached this item. It stays in the "
+        "record, marked so, rather than disappearing as an empty section",
+    )
+    agenda_key: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="The agenda item this section was made from. Server-set: "
+        "a value sent by a client is replaced from the stored section",
+    )
+    documents: List[SectionDocument] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Documents-library files linked from the agenda item. "
+        "Server-set, like agenda_key",
+    )
+
     @model_validator(mode="after")
     def _settle_rich_text(self):
         if self.format == "html":
@@ -104,7 +135,7 @@ class SectionEntry(BaseModel):
 class TemplateSectionEntry(BaseModel):
     """A section definition within a template"""
 
-    order: int = Field(..., ge=0)
+    order: int = Field(..., ge=0, le=INT32_MAX)
     key: str = Field(..., min_length=1, max_length=100)
     title: str = Field(..., min_length=1, max_length=200)
     default_content: str = Field(default="", description="Default content to pre-fill")
@@ -276,6 +307,19 @@ class TemplateListItem(UTCResponseBase):
 # ============================================
 
 
+class RollCallEntry(BaseModel):
+    """One member's vote in a roll call.
+
+    ``user_id`` is filled in by the server from the minutes' own roll and is
+    ignored on the way in: a vote belongs to the person the minutes record as
+    present, not to whoever the request names.
+    """
+
+    name: str = Field(..., min_length=1, max_length=200)
+    vote: Literal["yes", "no", "abstain", "recuse"]
+    user_id: Optional[str] = None
+
+
 class MotionBase(BaseModel):
     """Base motion schema"""
 
@@ -295,9 +339,27 @@ class MotionBase(BaseModel):
     status: str = Field(
         default="passed", description="Motion result: passed, failed, tabled, withdrawn"
     )
-    votes_for: Optional[int] = Field(None, ge=0)
-    votes_against: Optional[int] = Field(None, ge=0)
-    votes_abstain: Optional[int] = Field(None, ge=0)
+    acceptance: Optional[Literal["as_submitted", "as_revised"]] = Field(
+        None,
+        description="For the motion that accepts the previous minutes: accepted "
+        "as submitted or as revised",
+    )
+    votes_for: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_against: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_abstain: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_recused: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
+        Field(
+            None,
+            description="What the motion needed to carry; a majority of the votes "
+            "cast when unset",
+        )
+    )
+    roll_call: Optional[List[RollCallEntry]] = Field(
+        None,
+        description="Each member's vote. When given, the vote totals are "
+        "counted from it and any totals sent with it are ignored",
+    )
     election_id: Optional[str] = Field(
         None, max_length=36, description="The ballot that decided this motion"
     )
@@ -315,7 +377,9 @@ class MotionBase(BaseModel):
 class MotionCreate(MotionBase):
     """Schema for creating a motion"""
 
-    order: int = Field(default=0, ge=0, description="Display order within the minutes")
+    order: int = Field(
+        default=0, ge=0, description="Display order within the minutes", le=INT32_MAX
+    )
 
 
 class MotionUpdate(BaseModel):
@@ -327,10 +391,16 @@ class MotionUpdate(BaseModel):
     discussion_notes: Optional[str] = None
     section_key: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = None
-    votes_for: Optional[int] = Field(None, ge=0)
-    votes_against: Optional[int] = Field(None, ge=0)
-    votes_abstain: Optional[int] = Field(None, ge=0)
-    order: Optional[int] = Field(None, ge=0)
+    acceptance: Optional[Literal["as_submitted", "as_revised"]] = None
+    votes_for: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_against: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_abstain: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_recused: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
+        None
+    )
+    roll_call: Optional[List[RollCallEntry]] = None
+    order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     election_id: Optional[str] = Field(None, max_length=36)
     ballot_item_id: Optional[str] = Field(None, max_length=100)
 
@@ -342,6 +412,15 @@ class MotionResponse(MotionBase):
     minutes_id: str
     order: int
     election_title: Optional[str] = None
+    # The minutes this motion accepts, when it is the previous-minutes motion.
+    previous_minutes_id: Optional[str] = None
+    previous_minutes_title: Optional[str] = None
+    previous_minutes_status: Optional[str] = None
+    suggested_status: Optional[str] = Field(
+        None,
+        description="passed or failed when the counts and threshold decide it; "
+        "the recorded status is the secretary's",
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -497,16 +576,16 @@ class MinutesBase(BaseModel):
         description="Meeting type: business, special, committee, board, "
         "trustee, executive, annual, other",
     )
-    meeting_date: datetime = Field(..., description="Date and time of the meeting")
+    meeting_date: UTCDateTime = Field(..., description="Date and time of the meeting")
     location: Optional[str] = Field(None, max_length=300)
     called_by: Optional[str] = Field(
         None, max_length=200, description="Person who called the meeting"
     )
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
-    quorum_count: Optional[int] = Field(None, ge=0)
+    quorum_count: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     event_id: Optional[str] = Field(None, description="Optional link to an event")
 
 
@@ -548,15 +627,22 @@ class MinutesUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     meeting_type: Optional[str] = None
-    meeting_date: Optional[datetime] = None
+    meeting_date: Optional[UTCDateTime] = None
     location: Optional[str] = Field(None, max_length=300)
     called_by: Optional[str] = Field(None, max_length=200)
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
-    quorum_count: Optional[int] = Field(None, ge=0)
+    quorum_count: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     event_id: Optional[str] = None
+    attendance_listing: Optional[Literal["all", "present_excused", "present"]] = Field(
+        None,
+        description=(
+            "Which attendance statuses these minutes name; null follows "
+            "the department default"
+        ),
+    )
     sections: Optional[List[SectionEntry]] = Field(
         None, description="Full sections replacement"
     )
@@ -588,11 +674,15 @@ class MinutesResponse(UTCResponseBase):
     meeting_date: datetime
     location: Optional[str] = None
     called_by: Optional[str] = None
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
+    # This set's own choice (null = department default) and what is in force.
+    attendance_listing: Optional[str] = None
+    attendance_listing_effective: str = "all"
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = None
+    meeting_id: Optional[str] = None
     event_id: Optional[str] = None
     template_id: Optional[str] = None
     sections: List[SectionEntry] = []
@@ -644,10 +734,27 @@ class MinutesListItem(UTCResponseBase):
     model_config = _response_config
 
 
+class AdoptionProposal(BaseModel):
+    """The adoption a passed acceptance motion implies for these minutes.
+
+    Taken from the motion that accepted them at a later meeting, so the
+    adoption form opens already filled in. It is a proposal: the officer who
+    confirms it is still someone other than whoever circulated the minutes.
+    """
+
+    motion_id: str
+    adopted_on: datetime
+    adopting_minutes_id: str
+    adopting_minutes_title: str
+    as_amended: bool
+    moved_by: Optional[str] = None
+    seconded_by: Optional[str] = None
+
+
 class MinutesAdopt(BaseModel):
     """What the body did when it adopted the minutes"""
 
-    adopted_on: Optional[datetime] = Field(
+    adopted_on: Optional[UTCDateTime] = Field(
         None, description="When the body voted; defaults to now"
     )
     adopting_minutes_id: Optional[str] = Field(
@@ -677,6 +784,121 @@ class ApplyOutline(BaseModel):
     """Which outline to lay over draft minutes"""
 
     template_id: str = Field(..., min_length=1, max_length=36)
+
+
+class AgendaSyncField(BaseModel):
+    """One field an agenda item would change on its section."""
+
+    field: str
+    before: Any = None
+    after: Any = None
+
+
+class AgendaSyncChange(BaseModel):
+    """A difference between the meeting's agenda and the minutes' sections."""
+
+    id: str
+    type: Literal["add", "update", "remove", "reorder"]
+    key: str
+    title: str
+    has_content: bool = Field(
+        description="The section already holds text; a removal detaches it "
+        "instead of deleting it"
+    )
+    fields: List[AgendaSyncField] = []
+
+
+class AgendaSyncPreview(BaseModel):
+    meeting_id: str
+    changes: List[AgendaSyncChange]
+
+
+class AgendaSyncApply(BaseModel):
+    """The changes the secretary chose, by the ids the preview gave."""
+
+    accept: List[str] = Field(default_factory=list, max_length=200)
+
+
+class SignatureSlotResponse(BaseModel):
+    """A place on the adopted minutes for a signature."""
+
+    key: str
+    title: str
+    position_slug: Optional[str] = None
+
+
+class MinutesReminderSettingsResponse(BaseModel):
+    """The department's action item reminder settings, as the server resolves them.
+
+    Keys match the ``minutes`` section of ``PATCH /organization/settings``.
+    """
+
+    action_item_reminders: bool
+    reminder_days_before_due: int
+    overdue_repeat_days: int
+    open_items_digest: bool
+    signature_slots: List[SignatureSlotResponse] = []
+    public_posting: bool = False
+    executive_library_publishing: bool = False
+    executive_public_posting: bool = False
+    # What the switches add up to for an executive-session meeting, so the
+    # settings screen can say "executive minutes: library only" rather than
+    # work out the three-switch rule itself.
+    executive_effective_library: bool = False
+    executive_effective_public: bool = False
+    attendance_listing: Literal["all", "present_excused", "present"] = "all"
+    auto_file_election_results: bool = True
+
+
+class PublishingStatusResponse(BaseModel):
+    """Where one set of minutes stands: library copy, public copy, settings."""
+
+    library_allowed: bool
+    library_published: bool
+    library_version: Optional[int] = None
+    library_published_at: Optional[datetime] = None
+    public_allowed: bool
+    public_posted: bool
+    public_withdrawn: bool
+    public_version: Optional[int] = None
+    public_posted_at: Optional[datetime] = None
+    public_replaced_version: Optional[int] = None
+    public_under_correction: bool
+    public_copy_id: Optional[str] = None
+
+
+class SignatureResponse(BaseModel):
+    id: str
+    slot_key: str
+    slot_title: str
+    signed_name: str
+    signed_at: datetime
+    intact: bool = Field(
+        True,
+        description="The signature was given on the version now on file",
+    )
+
+    model_config = _response_config
+
+
+class SignatureStatusSlot(SignatureSlotResponse):
+    can_sign: bool = False
+    signature: Optional[SignatureResponse] = None
+
+
+class SignatureStatusResponse(BaseModel):
+    """Each slot and who has signed it, for the current adopted version."""
+
+    version: Optional[int] = None
+    slots: List[SignatureStatusSlot] = []
+
+
+class SignRequest(BaseModel):
+    """A signature: the slot, the signer's name as typed, and their password."""
+
+    slot_key: str = Field(..., min_length=1, max_length=50)
+    signed_name: str = Field(..., min_length=1, max_length=200)
+    password: str = Field(..., min_length=1, max_length=1000, repr=False)
 
 
 class MinutesReject(BaseModel):
@@ -710,6 +932,46 @@ class MinutesSearchResult(UTCResponseBase):
     match_field: str = Field(..., description="Which field matched")
 
     model_config = _response_config
+
+
+class ArchiveSnippetPart(BaseModel):
+    """A run of a snippet, marked when it is what the search found."""
+
+    text: str
+    hit: bool
+
+
+class ArchiveMatch(BaseModel):
+    """One place in a set of minutes where the search found its words."""
+
+    kind: str = Field(..., description="title, section, motion or action_item")
+    label: str = Field(..., description="Which section, motion or item")
+    parts: List[ArchiveSnippetPart]
+
+
+class ArchiveHit(UTCResponseBase):
+    """A set of minutes the search matched, with where it matched."""
+
+    id: str
+    title: str
+    meeting_type: str
+    meeting_date: datetime
+    status: str
+    match_count: int = Field(..., description="Places matched, including any not shown")
+    matches: List[ArchiveMatch]
+
+    model_config = _response_config
+
+
+class ArchiveSearchResponse(BaseModel):
+    """Archive search results, grouped by minutes, newest meeting first."""
+
+    terms: List[str] = Field(..., description="The words and phrases searched for")
+    hits: List[ArchiveHit]
+    searched: int = Field(..., description="Sets of minutes read")
+    truncated: bool = Field(
+        ..., description="True when older minutes were left out of the search"
+    )
 
 
 # ============================================
@@ -868,8 +1130,8 @@ class ClosedSessionParticipant(BaseModel):
 
     user_id: Optional[str] = Field(None, max_length=36)
     name: str = Field(..., min_length=1, max_length=200)
-    joined_at: Optional[datetime] = None
-    left_at: Optional[datetime] = None
+    joined_at: Optional[UTCDateTime] = None
+    left_at: Optional[UTCDateTime] = None
 
     @model_validator(mode="after")
     def _left_after_joined(self):
@@ -905,8 +1167,8 @@ def _validate_participants(
 class ClosedSessionBase(BaseModel):
     reason: str = Field(..., min_length=1, max_length=300)
     legal_basis: Optional[str] = Field(None, max_length=300)
-    started_at: datetime
-    ended_at: Optional[datetime] = None
+    started_at: UTCDateTime
+    ended_at: Optional[UTCDateTime] = None
     motion_id: Optional[str] = Field(
         None, max_length=36, description="The motion that moved into closed session"
     )
@@ -936,8 +1198,8 @@ class ClosedSessionUpdate(BaseModel):
 
     reason: Optional[str] = Field(None, min_length=1, max_length=300)
     legal_basis: Optional[str] = Field(None, max_length=300)
-    started_at: Optional[datetime] = None
-    ended_at: Optional[datetime] = None
+    started_at: Optional[UTCDateTime] = None
+    ended_at: Optional[UTCDateTime] = None
     motion_id: Optional[str] = Field(None, max_length=36)
     participants: Optional[List[ClosedSessionParticipant]] = Field(None, max_length=300)
     summary: Optional[str] = Field(None, max_length=4000)

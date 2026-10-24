@@ -62,9 +62,9 @@ export interface EmailConfig {
 }
 
 export interface FileStorageConfig {
-  // Google Drive
-  googleDriveClientId?: string;
-  googleDriveClientSecret?: string;
+  // Google Drive: a service account writing to a Shared Drive
+  googleDriveServiceAccountKey?: string;
+  googleDriveSharedDriveId?: string;
   googleDriveFolderId?: string;
 
   // OneDrive / SharePoint

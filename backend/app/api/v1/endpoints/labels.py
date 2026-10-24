@@ -36,6 +36,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.services.label_printer_service import LANGUAGE_ZPL, LabelPrinterService
 from app.services.label_service import (
     UNSET,
@@ -244,7 +245,7 @@ class LabelPrinterBody(BaseModel):
     host: str = Field(min_length=1, max_length=255)
     port: int = Field(9100, ge=1, le=65535)
     language: str = Field(LANGUAGE_ZPL, max_length=20)
-    dpi: int = Field(203)
+    dpi: int = Field(203, ge=INT32_MIN, le=INT32_MAX)
     label_format: Optional[str] = Field(None, max_length=50)
     location: Optional[str] = Field(None, max_length=200)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
@@ -261,7 +262,7 @@ class LabelPrinterUpdateBody(BaseModel):
     host: Optional[str] = Field(None, min_length=1, max_length=255)
     port: Optional[int] = Field(None, ge=1, le=65535)
     language: Optional[str] = Field(None, max_length=20)
-    dpi: Optional[int] = None
+    dpi: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     label_format: Optional[str] = Field(None, max_length=50)
     location: Optional[str] = Field(None, max_length=200)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)

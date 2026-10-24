@@ -38,6 +38,13 @@ def test_environment_file_is_loaded_without_execution() -> None:
     script = (ROOT / "scripts" / "backup.sh").read_text(encoding="utf-8")
 
     assert "export $(grep" not in script
-    assert "source " not in script.replace("# shellcheck source=", "")
+    # The only thing the script may source is its own encryption library.
+    sourced = [
+        line.strip()
+        for line in script.splitlines()
+        if line.strip().startswith("source ")
+    ]
+    assert sourced == ['source "$SCRIPT_DIR/backup_crypto.sh"']
+    assert "source .env" not in script
     assert ". $" not in script
     assert "env_file_get" in script

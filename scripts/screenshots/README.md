@@ -10,15 +10,18 @@ after a UI change refreshes the images rather than leaving stale ones behind.
 
 ## Pieces
 
-| File                    | Role                                                                                                                                                                                                                                                            |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bootstrap_demo.py`     | Runs the onboarding API end to end, creating the demo organization and its administrator                                                                                                                                                                        |
-| `seed_demo_data.py`     | Populates every module through the public API — members, stations, apparatus, shifts, events and RSVPs, training records and programs, skills tests, inventory, documents, forms, elections, prospects, grants, medical screening, storefront, finance and dues |
-| `manifest.mjs`          | Declares each screenshot: which placeholder it fills, which route to visit, and any interaction needed                                                                                                                                                          |
-| `capture.mjs`           | Logs in, walks the manifest, writes PNGs to `docs/training/images/`, and records the result in `capture-report.json`                                                                                                                                            |
-| `apply_placeholders.py` | Rewrites the placeholder blocks in `docs/training/*.md` into `![alt](./images/....png)`                                                                                                                                                                         |
-| `status_report.py`      | Regenerates `docs/training/SCREENSHOT_STATUS.md` (filled counts). Staleness of already-captured images is tracked by hand in `docs/training/SCREENSHOT_CURRENCY.md`                                                                                             |
-| `inventory-setup.mjs`   | Captures the inventory setup workflow without a database, from fixtures (see "Shots a seeded department cannot produce")                                                                                                                                        |
+| File                                         | Role                                                                                                                                                                                                                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bootstrap_demo.py`                          | Runs the onboarding API end to end, creating the demo organization and its administrator                                                                                                                                                                        |
+| `seed_demo_data.py`                          | Populates every module through the public API — members, stations, apparatus, shifts, events and RSVPs, training records and programs, skills tests, inventory, documents, forms, elections, prospects, grants, medical screening, storefront, finance and dues |
+| `manifest.mjs`                               | Declares each screenshot: which placeholder it fills, which route to visit, and any interaction needed                                                                                                                                                          |
+| `capture.mjs`                                | Logs in, walks the manifest, writes PNGs to `docs/training/images/`, and records the result in `capture-report.json`                                                                                                                                            |
+| `totp.mjs`                                   | Generates the administrator's authenticator codes for `capture.mjs` (see "The administrator's two-factor secret")                                                                                                                                               |
+| `apply_placeholders.py`                      | Rewrites the placeholder blocks in `docs/training/*.md` into `![alt](./images/....png)`                                                                                                                                                                         |
+| `status_report.py`                           | Regenerates `docs/training/SCREENSHOT_STATUS.md` (filled counts). Staleness of already-captured images is tracked by hand in `docs/training/SCREENSHOT_CURRENCY.md`                                                                                             |
+| `inventory-setup.mjs`                        | Captures the inventory setup workflow without a database, from fixtures (see "Shots a seeded department cannot produce")                                                                                                                                        |
+| `wizard-extra.mjs`                           | Photographs the IT contacts and apparatus steps of the setup wizard, which only serve on an empty database. Creates the organization and administrator first, so run it against a throwaway database and backend (`RATE_LIMIT_ENABLED=false`)                   |
+| `render_supply_email.py` + `email-shots.mjs` | The weekly Supplies to Replace email is built by a scheduled task, so no screen previews it. The first writes the message the demo would send to disk (nothing is mailed); the second photographs it at phone width                                             |
 
 ## Running it
 
@@ -26,6 +29,38 @@ Bring up a backend on `:3001` and the frontend dev server on `:3000` (see
 `docs/DEPLOYMENT.md`, or run MySQL/MariaDB + Redis locally and start
 `uvicorn main:app --port 3001` and `npm run dev`). The backend creates its own
 schema on first start, so an empty database is the expected starting point.
+
+`scripts/screenshots/dev_env.sh` does all of that in one command and waits
+until the stack answers. Two things it supplies when nothing else does:
+
+- **Encryption keys.** Onboarding refuses to finish without `ENCRYPTION_KEY`
+  and `ENCRYPTION_SALT`, and it fails _after_ creating the organization and
+  administrator, which leaves a database that cannot be onboarded again. When
+  neither the environment nor `.env` sets them, the script generates a pair
+  once into `${XDG_STATE_HOME:-~/.local/state}/logbook-screenshots/demo-keys.env`
+  (mode 600, outside the repository) and reuses it on every run, because data
+  written under one key is unreadable under another. Delete that file only
+  together with the database it seeded.
+- **Malware scanning.** Uploads fail closed when no ClamAV daemon answers, so
+  every seeded document and attachment would be refused with a 503. If
+  `clamd` and its signatures are installed, the script starts it on
+  `127.0.0.1:3310` and points the backend at it. Otherwise, when
+  `CLAMAV_ENABLED` is not set, the demo backend runs with scanning off and a
+  warning is printed.
+
+  **Do not commit admin screenshots captured with scanning off.** The backend
+  then shows administrators a non-dismissible "Uploaded files are not being
+  scanned for malware" banner on every page, and it appears in every shot. To
+  get scanning on, install ClamAV and fetch its signatures once:
+
+  ```bash
+  sudo apt-get install clamav-daemon   # or your platform's package
+  sudo freshclam                       # downloads ~110 MB of signatures
+  ```
+
+  Behind an HTTPS proxy, `freshclam` needs `HTTPProxyServer` / `HTTPProxyPort`
+  in its config, and a CA bundle readable by the `clamav` user, which it drops
+  to before downloading.
 
 ```bash
 # Use a unique password for this disposable environment. It is consumed by all
@@ -74,6 +109,48 @@ environment. For an intentionally isolated remote demo, pass `--allow-remote`
 to both scripts and keep `SCREENSHOT_ADMIN_PASSWORD` secret. The administrator
 username defaults to `chief`; `SCREENSHOT_ADMIN_USERNAME` can override it.
 
+### The administrator's two-factor secret
+
+The application requires members with administrative rights to use two-factor
+authentication, and asks them to confirm their identity again before sensitive
+actions such as granting a role. The pipeline signs in the way a real
+administrator does rather than working around either:
+
+- **Enrolment.** The first seeder run enrols the demo administrator in TOTP and
+  stores the secret in
+  `${XDG_STATE_HOME:-~/.local/state}/logbook-screenshots/admin-totp.env` (mode
+  600, outside the repository, beside the demo encryption keys). The file is
+  written before the enrolment is confirmed, so an interrupted run cannot leave
+  an enrolled account whose secret exists nowhere. Later runs find the account
+  enrolled and leave it alone.
+- **Signing in.** The seeder completes the authentication-code step with a code
+  generated from that secret, and `capture.mjs` types one into the login page's
+  code step for every administrator context. Member accounts sign in with a
+  password as before.
+- **Confirming identity.** When an action answers `403` with
+  `X-Stepup-Required` (`LB-AUTH-013`), the seeder re-verifies with a fresh code
+  and retries that request once. A confirmation lasts ten minutes by default
+  (`STEPUP_WINDOW_MINUTES`), so a long run does this several times.
+
+The server accepts each 30-second code once per account, so a sign-in and the
+confirmation straight after it cannot share one: the scripts wait for the next
+code rather than resubmit a spent one. A code refused because another run spent
+it moments earlier is retried once with the next.
+
+`SCREENSHOT_ADMIN_TOTP_SECRET` overrides the file, for a demo whose secret is
+managed elsewhere. The seeder will not enrol the administrator while it is set,
+because the server chooses the secret at enrolment and it could not be the one
+in the variable.
+
+The secret is a credential for a privileged account: never print it or commit
+it. Like `demo-keys.env`, it belongs to the database it was created against —
+delete it only together with that database. If the secret is lost or no longer
+matches, the seeder stops and says so. Recover by having another member with
+`members.manage` use **Reset MFA** on the administrator's row at
+`/members/admin` (administrators cannot reset their own there), then re-run the
+seeder, which enrols the account again and stores the new secret — or start
+over on a fresh database.
+
 ## Shots a seeded department cannot produce
 
 Some screens only exist for a department that has _not_ finished setting up.
@@ -84,7 +161,8 @@ picture — the state it describes is the absence of seed data.
 
 `inventory-setup.mjs` covers those by running the built frontend under
 `vite preview` and answering every `/api/v1` request from fixtures. It writes
-the same `05-7x-setup-*` ids at the same framing capture.mjs uses (1440x900
+`05-72-setup-prompt`, `05-73-setup-rooms` and `05-93-empty-items` (the
+items list of a department with no items) at the same framing capture.mjs uses (1440x900
 desktop, 414x896 phone, 1x, pngquant), so the outputs are interchangeable and
 `capture.mjs` remains the pipeline of record for everything it _can_ reach.
 
@@ -121,10 +199,10 @@ library, a member gets Available Tests and My Results. A placeholder describing
 what a member sees therefore cannot be filled from the administrator's session,
 and a shot that looks fine can quietly picture the wrong screen.
 
-| Field   | Values                                                             | Notes                                                                                                                                                                                  |
-| ------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`  | `admin` (default), `member`, `secretary`, `forwardee`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights. `secretary` reviews every seeded suggestion box. `forwardee` reviews none and has one suggestion forwarded to them |
-| `theme` | light (default), `dark`                                            | Drives the context's `colorScheme`; the app's theme follows system                                                                                                                     |
+| Field   | Values                                                                                                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`  | `admin` (default), `member`, `secretary`, `forwardee`, `treasurer`, `compliance`, `gearless`, `trainingofficer`, `second-member`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights. `secretary` reviews every seeded suggestion box. `forwardee` reviews none and has one suggestion forwarded to them. `treasurer` runs the approval chains and raised none of the seeded requests. `compliance` is the Compliance Officer, the only reviewer of the default Compliance box. `gearless` holds, borrows and has requested nothing. `trainingofficer` holds the Training Officer position, which new training submissions prompt. `second-member` is another ordinary member with no shift reports and nothing pending in Requests |
+| `theme` | light (default), `dark`                                                                                                                       | Drives the context's `colorScheme`; the app's theme follows system                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 Each `auth` + `theme` combination gets its own browser context, built on first
 use — cookies are per-context, so swapping users by clearing them mid-run would

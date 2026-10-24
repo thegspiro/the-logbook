@@ -109,6 +109,18 @@ export const ComplianceTaskType = {
 } as const;
 export type ComplianceTaskType = (typeof ComplianceTaskType)[keyof typeof ComplianceTaskType];
 
+/** Mirrors `GrantNoteTypeLiteral` on the backend, which refuses anything else. */
+export const GrantNoteType = {
+  GENERAL: 'general',
+  STATUS_CHANGE: 'status_change',
+  DOCUMENT_ADDED: 'document_added',
+  CONTACT_MADE: 'contact_made',
+  MILESTONE: 'milestone',
+  FINANCIAL: 'financial',
+  COMPLIANCE: 'compliance',
+} as const;
+export type GrantNoteType = (typeof GrantNoteType)[keyof typeof GrantNoteType];
+
 export const CampaignStatus = {
   DRAFT: 'draft',
   ACTIVE: 'active',
@@ -117,6 +129,53 @@ export const CampaignStatus = {
   CANCELLED: 'cancelled',
 } as const;
 export type CampaignStatus = (typeof CampaignStatus)[keyof typeof CampaignStatus];
+
+/** A grant budget line's category — the backend's `BudgetItemCategory`. */
+export const BudgetItemCategory = {
+  PERSONNEL: 'personnel',
+  EQUIPMENT: 'equipment',
+  SUPPLIES: 'supplies',
+  TRAVEL: 'travel',
+  TRAINING: 'training',
+  CONTRACTUAL: 'contractual',
+  CONSTRUCTION: 'construction',
+  INDIRECT: 'indirect',
+  OTHER: 'other',
+} as const;
+export type BudgetItemCategory = (typeof BudgetItemCategory)[keyof typeof BudgetItemCategory];
+
+export const BUDGET_ITEM_CATEGORY_LABELS: Record<BudgetItemCategory, string> = {
+  personnel: 'Personnel',
+  equipment: 'Equipment',
+  supplies: 'Supplies',
+  travel: 'Travel',
+  training: 'Training',
+  contractual: 'Contractual',
+  construction: 'Construction',
+  indirect: 'Indirect Costs',
+  other: 'Other',
+};
+
+/** An application's budget at a glance: an amount per budget category. */
+export interface GrantBudgetSummary {
+  personnel?: number | undefined;
+  equipment?: number | undefined;
+  supplies?: number | undefined;
+  travel?: number | undefined;
+  training?: number | undefined;
+  contractual?: number | undefined;
+  construction?: number | undefined;
+  indirect?: number | undefined;
+  other?: number | undefined;
+  notes?: string | null | undefined;
+}
+
+export interface GrantKeyContact {
+  name: string;
+  role?: string | null | undefined;
+  phone?: string | null | undefined;
+  email?: string | null | undefined;
+}
 
 export const CampaignType = {
   GENERAL: 'general',
@@ -190,7 +249,7 @@ export const APPLICATION_STATUS_COLORS: Record<string, string> = {
   under_review: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
   awarded: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   reporting: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   closed: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
@@ -214,7 +273,7 @@ export const COMPLIANCE_STATUS_COLORS: Record<string, string> = {
 export const PRIORITY_COLORS: Record<string, string> = {
   low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   critical: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
@@ -295,8 +354,8 @@ export interface GrantApplication {
   grantEndDate: string | null;
   projectDescription: string | null;
   narrativeSummary: string | null;
-  budgetSummary: string | null;
-  keyContacts: string | null;
+  budgetSummary: GrantBudgetSummary | null;
+  keyContacts: GrantKeyContact[] | null;
   federalAwardId: string | null;
   nfirsCompliant: boolean | null;
   performancePeriodMonths: number | null;
@@ -401,7 +460,7 @@ export interface GrantComplianceTask {
 export interface GrantNote {
   id: string;
   applicationId: string;
-  noteType: string;
+  noteType: GrantNoteType;
   content: string;
   metadata: Record<string, unknown> | null;
   createdBy: string | null;
@@ -469,6 +528,8 @@ export interface Donor {
   communicationPreferences: Record<string, unknown> | null;
   isAnonymous: boolean;
   active: boolean;
+  /** True when the caller may not see contact details (fundraising.manage), so a blank email is not missing data. */
+  contactHidden?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -555,6 +616,7 @@ export interface PledgeCreatePayload {
   pledgeDate: string;
   dueDate?: string | undefined;
   notes?: string | undefined;
+  reminderEnabled: boolean;
 }
 
 /** `PUT /grants/pledges/:id`. `null` clears a field. */
@@ -567,6 +629,7 @@ export interface PledgeUpdatePayload {
   fulfilledAmount: string;
   status: PledgeStatus;
   notes: string | null;
+  reminderEnabled: boolean;
 }
 
 // =============================================================================

@@ -593,7 +593,7 @@ const ErrorMonitoringPage: React.FC = () => {
                     <p className="text-sm font-medium text-red-700 dark:text-red-300">{error.errorType}</p>
                     <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error.userMessage}</p>
                   </div>
-                  <span className="text-xs text-red-600">{formatTime(error.timestamp, tz)}</span>
+                  <span className="text-xs text-red-700 dark:text-red-400">{formatTime(error.timestamp, tz)}</span>
                 </div>
               </div>
             ))}

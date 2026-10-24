@@ -1,9 +1,309 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), pass 9 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), pass 11 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 11 (2026-10-22, watchdog pickup) — 0 fixed, 0 new findings; all changed code already correct
+
+Watchdog pickup: no `claude/security-review-*` PR was open
+(`search_pull_requests`), and the dedicated `/loop 30m /security-review`
+session was not reachable (`ListAgents`). PR #3555 (Feature 00,
+Cross-cutting baseline, pass 11) had already merged clean, closing out
+rotation lap "pass 9" (every row ✅); the table was reset to ⬜ for pass 10
+and Feature 00 reviewed in that same iteration (see `PROGRESS.md` and
+`SEC-00-cross-cutting-baseline.md`'s own Pass 11 section). Rotation row 01
+was the next `⬜`.
+
+**Baseline:** `ccb4b805` (PR #3397's merge, pass 10). **Head:** current
+`main`. 611 commits between them (373 non-merge) — another shallow pass:
+`git diff --stat` across all twelve scoped files (nine backend, three
+frontend) is non-empty in exactly three — `auth_service.py` (+75/-31),
+`dependencies.py` (+7/-1) and `consent_service.py` (+2/-2). The other nine
+(`auth.py`, `mfa_service.py`, `oauth_service.py`, `security.py`,
+`suspicious_ip.py`, `schemas/auth.py`, `authStore.ts`, `apiClient.ts`,
+`authService.ts`) are byte-identical to pass 10.
+
+### The three changed files, reviewed
+
+- **`auth_service.py` — session idle timeout gains an absolute-lifetime
+  twin, and the logic moves into a shared helper.** `session_end_reason
+(session, now)` (module-level, new) returns `"idle"`, `"absolute"` or
+  `None`, reading `HIPAA_SESSION_TIMEOUT_MINUTES` and the new
+  `SESSION_ABSOLUTE_MAX_HOURS` (both 0-means-off, both measured from
+  server-written timestamps — `last_activity`/`created_at` — so a client
+  cannot lengthen either). It replaces the idle-only check that used to be
+  inlined in `get_user_from_token`, and is now also called from
+  `refresh_access_token`, which previously had **no** session-lifetime
+  check of its own — a session that aged out on the access-token path could
+  still be refreshed indefinitely as long as the refresh token kept getting
+  rotated before its own 7-day expiry. Traced both call sites for a
+  regression:
+  - `get_user_from_token`: on `ended`, the function now returns `None`
+    **without** deleting the session row (the prior idle-only code did
+    delete it). The docstring's own rationale checks out: the browser's
+    next move after a 401 is a refresh-token attempt, and
+    `refresh_access_token` requires the row to exist to answer "sign in
+    again" rather than "replay detected, revoke everything" — deleting the
+    row here would have made every idle timeout look like token theft to
+    the refresh path. Confirmed `refresh_access_token`'s "no session
+    found" branch (which does revoke every session) is a genuinely
+    different condition (refresh token not found at all, i.e. already
+    rotated/replayed) from "session found but ended" (handled separately,
+    just above it, by a plain delete + `(None, None)`) — the two can't be
+    confused by a real client, since a legitimate idle session still has
+    its row and its still-valid-shaped refresh token.
+  - `refresh_access_token`: on `ended`, deletes the session and commits,
+    same as the access-token path's old behavior — closing the gap
+    described above. Ordering confirmed correct: this check runs after the
+    session is found by refresh token (so it can't be reached by a
+    genuinely replayed/unknown token, which hits the revoke-all branch
+    first) and before the user/organization lookup, so an ended session
+    can't incidentally succeed a refresh by having an inactive organization
+    masked as "just refuse".
+  - `touch_activity` (the new parameter on `get_user_from_token`, default
+    `True`) only skips the `session.last_activity` **write** when `False`
+    — every other check (token decode, session lookup, `ended`, user
+    lookup) is unconditional before it, so a caller passing `False` can
+    only ever make its own session's idle clock run for real while
+    appearing to do nothing, never bypass or extend anything. (This is the
+    server half of `frontend/src/utils/backgroundRequest.ts`'s
+    `BACKGROUND_REQUEST_CONFIG`, wired in `dependencies.py` below — already
+    audited end-to-end during this same pass's sibling reviews, Feature 34
+    Frontend shared pass 10 and Feature 00 Cross-cutting baseline pass 11;
+    re-confirmed here by direct read rather than re-cited blindly, since
+    `dependencies.py` is this feature's own file.)
+  - `created_at` is now stamped in Python (`datetime.now(timezone.utc)`) at
+    session-creation time, matching the existing comment one line above it
+    for `last_activity`: MySQL's own `now()`/`func.now()` follows the DB
+    session's timezone, which pass 8 (Core infrastructure) already fixed
+    at the connection level (`init_command: SET time_zone = '+00:00'`) —
+    this is the same defensive belt-and-suspenders pattern as
+    `last_reset_user`'s reset in pass 10, not a sign the connection-level
+    fix is being second-guessed.
+- **`dependencies.py` — `get_current_user`** passes
+  `touch_activity=request.headers.get("x-background-request") != "1"` into
+  `get_user_from_token`. Covered above.
+- **`consent_service.py` — `get_consent_status_rollup`** (name approximate;
+  the audience-listing method for a staff consent view) now filters
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` instead of `User.status ==
+UserStatus.ACTIVE`, closing a CLAUDE.md Pitfall #32 instance: a
+  probationary member was previously dropped from this roster (and so
+  silently excluded from `include_inactive=False` consent-audience views)
+  despite being a current member who can hold a consent decision like
+  anyone else. Already landed by other engineering work (the repo-wide
+  Pitfall #32 sweep); re-verified by direct read rather than taken on the
+  commit message — confirmed no second, un-migrated literal `==
+UserStatus.ACTIVE` survives elsewhere in this file.
+
+### Route inventory — re-enumerated
+
+Still 28 routes, unchanged from pass 10 — confirmed by `grep -c
+"^@router\.\(get\|post\|put\|patch\|delete\)" auth.py` (28) and
+`check_route_permissions.py --strict` (273 routes repo-wide, 0 errors/0
+warnings). `auth.py` itself has 0 diff this pass, so no route's decorator
+or dependency could have changed.
+
+### Standing items — reconfirmed unchanged from pass 10
+
+AUTH-15, AUTH-17, AUTH-21 and AUTH-22 are all already closed (pass 8's and
+pass 10's fixes), and `docs/KNOWN_LIMITATIONS.md` carries no entry for any
+of them — reconfirmed by grep. No open AUTH finding exists to re-verify
+this pass.
+
+### No duplicate session-lifetime logic
+
+`grep -rn "HIPAA_SESSION_TIMEOUT_MINUTES\|SESSION_ABSOLUTE_MAX_HOURS"
+app/`: the only reader of either setting outside `core/config.py` is
+`session_end_reason` itself, plus one read-only report of
+`HIPAA_SESSION_TIMEOUT_MINUTES` in `auth.py` (a settings-echo endpoint the
+frontend uses to display the configured timeout, not to enforce it) — no
+second implementation of the idle/absolute decision exists to drift from
+this one (Pitfall #29).
+
+### Completion gate (pass 11)
+
+| Check                                                                                                                                                                                                                                                                  | Result                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                          | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                   | ✅ clean (2555 files)                                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                              | ✅ clean                                                                    |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                      | ✅ single head `e5f9bb066e07`, 639 revisions                                |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                                  | ✅ 273 routes, 0 errors/0 warnings                                          |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification"`)                                                                                                         | ✅ 1205 passed, 2 skipped (environment-only — `pywebpush`, Docker registry) |
+| standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`, `mfa_verification_consumes`, `auth_lockout_race`, `auth_gate_remediation_paths`, `auth_refresh_rotation`, `password_expiry_gate`, `sign_in_audit`) run directly | ✅ 118 passed                                                               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                     | ✅ 0 errors                                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                          | ✅ 0 errors, 0 warnings                                                     |
+
+No frontend source file is in this pass's diff.
+
+Rotation row 01 moves to `✅`.
+
+---
+
+## Pass 10 (2026-10-18, watchdog pickup) — 1 fixed, 0 new findings
+
+Watchdog pickup: no `claude/security-review-*` PR was open
+(`search_pull_requests`), and the dedicated `/loop 30m /security-review`
+session was not reachable (`ListAgents`). PR #3396 (Feature 00,
+Cross-cutting baseline, pass 10) had already merged clean. Rotation row 01
+was the next `⬜`.
+
+**Baseline:** `28850d09` (PR #3210's merge, pass 9, found via `git log
+--all --format='%H %s' | grep security-review-auth-session`). **Head:**
+current `main`. 631 commits between them (326 non-merge) — not a
+zero-delta pass, but a shallow one: `git diff --stat` across all twelve
+scoped files (nine backend, three frontend) is non-empty in exactly two —
+`auth.py` (+59/-2) and `auth_service.py` (+35/-6). The other ten
+(`mfa_service.py`, `oauth_service.py`, `consent_service.py`,
+`dependencies.py`, `security.py`, `suspicious_ip.py`, `schemas/auth.py`,
+`authStore.ts`, `apiClient.ts`, `authService.ts`) are byte-identical to
+pass 9.
+
+### The one changed commit, reviewed
+
+Both diffed files come from a single regular-engineering commit adding
+HIPAA §164.312(b) audit logging and a member-facing security notification
+(in-app + email) to `/auth/change-password` and `/auth/reset-password` —
+the same shape MFA enable/disable/recovery-code-regenerate already had.
+
+- **`auth.py` — `change_password`** now takes `request: Request` and
+  `background_tasks: BackgroundTasks`, and calls the existing
+  `_audit_sign_in` helper (already reviewed at prior passes for the login
+  path) on both the refusal and success branches, then
+  `notify_security_event` on success. On refusal it explicitly
+  `await db.commit()`s before raising the `HTTPException` — the same
+  "`get_db` rolls back on the exception, so commit here or lose the row"
+  pattern `_audit_refused_sign_in` already established; not a new pattern,
+  just a new caller of it. The audit payload (`member` dict) is built from
+  `current_user` — the already-authenticated caller, never a client-
+  supplied id — so there is no IDOR surface (dimension 3 n/a: nothing is
+  looked up by id).
+- **`auth.py` — `reset_password`**'s audit row now attributes a
+  **successful** reset to the member the token actually resolved to
+  (`AuthService.last_reset_user`, set server-side inside
+  `reset_password_with_token`), while a **refusal** still writes
+  platform-level with no user attribution. This is the correct split, not
+  an oversight: the submitted token may not resolve to any account, and a
+  guessed/malformed token must not let a caller write an attributable row
+  against someone else's account by supplying their id — the same
+  no-enumeration-via-audit-log property this file's AUTH-7 already
+  established for a different endpoint. Verified `last_reset_user` is
+  reset to `None` at the top of `reset_password_with_token` on every call
+  (`auth_service.py:1077`) so a stale value from an earlier request on the
+  same `AuthService` instance can't leak forward — though in practice a
+  fresh instance is constructed per request (`auth_service = AuthService(db)`
+  at the top of the endpoint), so this is a belt-and-suspenders reset, not
+  a fix for an observed cross-request reuse.
+- **`auth_service.py` — `change_password`** gains
+  `self.last_password_change_failure`, set to one of six new module-level
+  constants (e.g. `PASSWORD_CHANGE_FAILURE_INVALID_CURRENT`,
+  `PASSWORD_CHANGE_FAILURE_BREACHED`) at each refusal branch, read back by
+  the endpoint for the audit row's `reason` field. Confirmed this is purely
+  additive bookkeeping, not a behavior change: `current_hash = user.password_hash`
+  is read once and reused everywhere the old code re-read
+  `user.password_hash` (history check, same-as-current check, history
+  save), and `if not current_hash or not current_valid:` is logically
+  identical to the prior `if not current_valid:` — `current_valid` was
+  already `False` whenever `current_hash` was falsy, via the ternary above
+  it, so the added `or` clause changes no outcome, only makes the SSO-only
+  (no password hash) case explicit for the new failure constant. Confirmed
+  no response ever echoes the `reason` string back to an unauthenticated
+  caller — `change_password` requires `get_current_active_user`, so this
+  carries no enumeration risk the way a public-endpoint error detail would.
+
+### AUTH-22 (LOW, FIXED) — security-notification email escaped on the `BackgroundTasks` path, not on the inline fallback
+
+**File:** `backend/app/utils/security_notifications.py:148` (inline
+fallback branch of `notify_security_event`)
+
+`notify_security_event` has two paths to actually send the email:
+
+- With `background_tasks` supplied (every current `auth.py`/`users.py`
+  caller), `_send_security_email` builds the HTML with
+  `f"<p>{html_escape(message)}</p>"` (line 80).
+- Without it (`scheduled_tasks.py`'s password-expiry notifier, which runs
+  outside a request and has no `BackgroundTasks` to queue onto), the
+  inline fallback built the same HTML as `f"<p>{message}</p>"` — no
+  escaping.
+
+`wrap_email_body`'s own docstring (`app/services/email_service.py:329`)
+documents its `body_html` parameter as "Pre-escaped HTML for the content
+area" — the inline path violated that contract. **Failure scenario:** if a
+future caller ever passes user-influenced text into `message` through the
+inline path (the shape most likely for a new scheduled-task notifier,
+which is exactly the kind of caller that has no `background_tasks` to
+supply), an HTML/script payload in that text would render unescaped in the
+recipient's mail client — a stored-XSS-in-email vector. **Not
+exploitable today:** audited every current caller
+(`grep -rn "notify_security_event(" backend/app/`, five call sites) —
+`scheduled_tasks.py`'s is the only one that omits `background_tasks`, and
+its `message` is an f-string built only from `max_age_days` (an int from
+settings) and `when` (a `strftime`-formatted date), neither
+attacker-reachable.
+
+**Fix:** added the missing `html_escape(message)` call to the inline
+fallback, matching the background-task path exactly:
+
+```python
+html = wrap_email_body(org, subject, f"<p>{html_escape(message)}</p>")
+```
+
+**Guard test:** `test_inline_fallback_escapes_message_html` in
+`backend/tests/test_security_notifications.py`, patching
+`app.services.email_service.wrap_email_body` and `EmailService` to capture
+the HTML the inline path would send, calling `notify_security_event` with
+`background_tasks=None` and a `<script>alert(1)</script>` message, and
+asserting the captured HTML contains the escaped form and not the raw
+`<script>` tag.
+
+### Route inventory — re-enumerated
+
+Still 28 routes, unchanged from pass 9. Neither changed function is a
+route-gating change: `change_password`'s decorator
+(`@router.post("/change-password", dependencies=[rate_limit_password_change()])`)
+and `Depends(get_current_active_user)` are untouched; `reset_password`'s
+decorator (`@router.post("/reset-password", dependencies=[rate_limit_password_reset_token()])`)
+is likewise untouched — it was already public/token-scoped before this
+commit. `ALLOWLISTED_PUBLIC` in `tests/test_endpoint_auth_coverage.py`
+still lists the same 16 `auth.py` entries pass 9 confirmed.
+
+### Standing items — reconfirmed unchanged from pass 9
+
+AUTH-15, AUTH-17 and AUTH-21 were all already closed (pass 8's owner
+decisions D8/D4 and the `RefreshTokenSuperseded` fix, respectively), and
+`docs/KNOWN_LIMITATIONS.md` carries no entry for any of the three —
+reconfirmed by grep, nothing to re-add. AUTH-22 above needs no
+`KNOWN_LIMITATIONS.md` entry either: it is fixed outright, not an
+owner-decision item.
+
+### Completion gate (pass 10)
+
+| Check                                                                                                                                                                                                                                                                  | Result                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/`                                                                                                                                                                                                                            | ✅ 0 violations                                                             |
+| `python3.13 -m black --check app/ tests/ alembic/`                                                                                                                                                                                                                     | ✅ clean (after formatting the one new test file with `black`)              |
+| `python3.13 -m isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                | ✅ clean                                                                    |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                   | ✅ single head `1117b642643b`, 618 revisions                                |
+| `python3.13 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                               | ✅ 270 routes, 0 errors/0 warnings                                          |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification"`)                                                                                                         | ✅ 1198 passed, 2 skipped (environment-only — `pywebpush`, Docker registry) |
+| standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`, `mfa_verification_consumes`, `auth_lockout_race`, `auth_gate_remediation_paths`, `auth_refresh_rotation`, `password_expiry_gate`, `sign_in_audit`) run directly | ✅ 118 passed                                                               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                     | ✅ 0 errors (after `npm ci` from the repo root — see note below)            |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                          | ✅ 0 errors, 0 warnings                                                     |
+
+**Note on the frontend gate:** `npm run typecheck` initially failed with
+`TS2307: Cannot find module '@tiptap/react'`/`'@tiptap/starter-kit'` —
+both are declared in `frontend/package.json` but were missing from this
+sandbox's `node_modules`. This is a sandbox dependency-install gap, not a
+code defect: `npm ci` from the repo root (the repo's documented single-
+lockfile install path, not a lockfile-regenerating `npm install`) restored
+them, and the typecheck then passed with 0 errors. No frontend source file
+is in this pass's scope or diff.
+
+Rotation row 01 moves to `✅`.
 
 ---
 

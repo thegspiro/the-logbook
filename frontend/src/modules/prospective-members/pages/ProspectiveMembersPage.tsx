@@ -41,9 +41,16 @@ import { ApplicantDetailDialog } from '../components/ApplicantDetailDialog';
 import { ConversionModal } from '../components/ConversionModal';
 import TargetRolePicker from '../components/TargetRolePicker';
 import { applicantService, eventLinkService } from '../services/api';
-import type { ApplicantListItem, Applicant, ApplicantStatus, BulkActionResult, ProspectSourceEvent } from '../types';
+import type {
+  ApplicantListItem,
+  Applicant,
+  ApplicantStatus,
+  BulkActionResult,
+  ExistingRecordCheck,
+  ProspectSourceEvent,
+} from '../types';
 import { isValidEmail, getInitials, isConvertStage } from '../utils';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
@@ -409,28 +416,50 @@ export const ProspectiveMembersPage: React.FC = () => {
     }
     setIsCreating(true);
     try {
-      // Check for duplicate/existing members before creating
+      // Check for an existing applicant or member before creating. The check
+      // is advisory: if it fails, the create endpoint still refuses an email an
+      // active applicant holds, and that 409 is handled below.
+      let check: ExistingRecordCheck | null = null;
       try {
-        const check = await applicantService.checkExisting(
+        check = await applicantService.checkExisting(
           newApplicant.email.trim(),
           newApplicant.first_name.trim(),
           newApplicant.last_name.trim()
         );
-        if (check.has_matches) {
-          const proceed = await confirm({
-            title: 'This may be a duplicate',
-            message: `The email or name matches ${String(check.match_count)} existing ${check.match_count === 1 ? 'member' : 'members'}. Create this applicant anyway?`,
-            confirmLabel: 'Create anyway',
-            cancelLabel: 'Go back',
-            variant: 'warning',
-          });
-          if (!proceed) {
-            setIsCreating(false);
-            return;
-          }
-        }
       } catch {
-        // If the check fails, continue with creation anyway
+        check = null;
+      }
+
+      // Unlike a member match this is not a judgement call: the server will
+      // not add a second applicant with the same email, so there is no
+      // "Create anyway" to offer.
+      const existing = check?.existing_applicant;
+      if (existing) {
+        const where = existing.pipeline_name ? ` in the ${existing.pipeline_name} pipeline` : '';
+        const stage = existing.stage_name ? `, at the ${existing.stage_name} stage` : '';
+        const openExisting = await confirm({
+          title: 'Already an applicant',
+          message: `${existing.name} is already an active applicant with this email${where}${stage}. A second applicant can't be added with the same email.`,
+          confirmLabel: 'Open existing applicant',
+          cancelLabel: 'Go back',
+          variant: 'warning',
+        });
+        if (openExisting) {
+          setShowAddModal(false);
+          void fetchApplicant(existing.prospect_id);
+        }
+        return;
+      }
+
+      if (check?.has_matches) {
+        const proceed = await confirm({
+          title: 'This may be a duplicate',
+          message: `The email or name matches ${String(check.match_count)} existing ${check.match_count === 1 ? 'member' : 'members'}. Create this applicant anyway?`,
+          confirmLabel: 'Create anyway',
+          cancelLabel: 'Go back',
+          variant: 'warning',
+        });
+        if (!proceed) return;
       }
 
       await applicantService.createApplicant({
@@ -453,7 +482,13 @@ export const ProspectiveMembersPage: React.FC = () => {
       void refreshPipelineView();
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to create applicant');
-      toast.error(msg);
+      // 409: the applicant or member already exists. A warning rather than an
+      // error, and the modal stays open with the typing intact.
+      if (toAppError(err).status === 409) {
+        toast(msg, { icon: '⚠️', duration: 8000 });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -827,7 +862,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         type="checkbox"
                         checked={selectedApplicants.size === applicants.length}
                         onChange={toggleAllApplicants}
-                        className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                        className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                       />
                       {selectedApplicants.size} selected
                     </label>
@@ -994,7 +1029,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               </div>
             ) : inactiveApplicants.length === 0 ? (
               <div className="card bg-theme-input-bg border-dashed py-20 text-center">
-                <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
+                <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-700 dark:text-emerald-600" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
                 <p className="text-theme-text-muted text-sm">
                   Applications with no activity past the inactivity timeout appear here.
@@ -1017,7 +1052,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               setSelectedInactive(new Set());
                             }
                           }}
-                          className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                          className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                         />
                       </th>
                       <th
@@ -1073,7 +1108,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               }
                               setSelectedInactive(next);
                             }}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                            className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                           />
                         </td>
                         <td className="p-3">

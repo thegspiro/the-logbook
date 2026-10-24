@@ -2591,6 +2591,15 @@ class CheckTemplateCompartment(Base):
     is_sealed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
+    # A headingless group: items placed directly on the checklist rather than
+    # in a named place on the truck. It is still a row here, rather than items
+    # carrying the template id themselves, because every department-isolation
+    # query reaches an item through its compartment; a second path to the
+    # template would have to be scoped separately everywhere. It has no name,
+    # cannot be sealed, and is never nested or a parent.
+    is_inline: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -2712,6 +2721,12 @@ class CheckTemplateItem(Base):
     # what was stocked is the best available answer until a crew contradicts it,
     # and reading NULL as zero would report every untouched truck as empty.
     quantity_on_truck: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # What a count position counts — "each", "rolls", "boxes" — so "8 / 10"
+    # says which. A partial pack is counted in the smaller unit rather than
+    # as a fraction, which keeps every quantity (and every stock swap) whole.
+    # Ignored for an inventory-linked position: the catalog's unit of measure
+    # is what a swap moves, and counting in anything else would mix the two.
+    count_unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     min_level: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     level_unit: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True

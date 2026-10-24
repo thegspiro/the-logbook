@@ -6,9 +6,8 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams, Link } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import {
-  ArrowLeft,
   Plus,
   Trash2,
   GripVertical,
@@ -25,6 +24,7 @@ import { trainingProgramService, trainingModuleConfigService, roleService } from
 import type { TrainingRequirementEnhanced, TrainingModuleConfig as TMConfig } from '../types/training';
 import type { Role } from '../types/role';
 import { ConfirmDialog } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { blankToNull } from '../utils/formValues';
 import { CriterionScoreMode, SCORE_MODE_TYPES } from '../types/skillsTesting';
 import type {
@@ -198,7 +198,7 @@ const CriterionEditor: React.FC<{
                     nothing. Said here as well as in the save-time errors
                     because this is where the author can still fix it. */}
                 {(criterion.max_score == null || criterion.max_score <= 0) && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                     Without a maximum this step earns no points toward the score.
                   </p>
                 )}
@@ -441,9 +441,11 @@ const CriterionEditor: React.FC<{
 
         {/* Remove button */}
         <button
+          type="button"
           onClick={onRemove}
-          className="mt-6 rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
+          className="touch:min-h-11 touch:min-w-11 mt-6 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
           title="Remove criterion"
+          aria-label="Remove criterion"
         >
           <Trash2 className="h-4 w-4 text-red-500" />
         </button>
@@ -510,15 +512,20 @@ const SectionEditor: React.FC<{
         </div>
 
         <button
+          type="button"
           onClick={() => onChange({ ...section, collapsed: !section.collapsed })}
-          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          className="hover:bg-theme-surface-hover touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors"
+          aria-label={section.collapsed ? 'Expand section' : 'Collapse section'}
+          aria-expanded={!section.collapsed}
         >
           {section.collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </button>
         <button
+          type="button"
           onClick={onRemove}
-          className="rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
+          className="touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
           title="Remove section"
+          aria-label="Remove section"
         >
           <Trash2 className="h-4 w-4 text-red-500" />
         </button>
@@ -936,22 +943,16 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Link
-            to="/training/admin?page=skills-testing&tab=templates"
-            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
-          >
-            <ArrowLeft className="mr-2 h-5 w-5" />
-            Back to Templates
-          </Link>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-              <ClipboardCheck className="h-8 w-8 shrink-0 text-red-700" />
-              <span>{isEditing ? 'Edit Template' : 'New Template'}</span>
-            </h1>
-            <div className="flex gap-2">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Templates are kept on the hub's Skills Testing page, which is where
+            the old back link went; the crumb keeps that destination. */}
+        <TrainingPageHeader
+          icon={ClipboardCheck}
+          title={isEditing ? 'Edit Template' : 'New Template'}
+          underHub="/training/admin"
+          parentCrumbs={[{ label: 'Templates', path: '/training/admin?page=skills-testing&tab=templates' }]}
+          actions={
+            <>
               <button
                 onClick={() => void handleSave()}
                 disabled={isSaving}
@@ -966,9 +967,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                   Publish
                 </button>
               )}
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Validation Errors */}
         {validationErrors.length > 0 && (

@@ -527,7 +527,7 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 
 - Sign-in (success and failure), including OAuth
 - Sign-out
-- Password resets (a self-service password change is not audited)
+- Password resets, and self-service password changes (success and failure)
 - MFA enable/disable
 - Account lockouts and unlocks
 
@@ -876,7 +876,7 @@ the name) and election records (ballot integrity signatures).
 
 Optional processing is consent-gated: photo use, public roster listing, and
 SMS notifications (TCPA requires express consent for text messaging). Members
-manage these at **Settings → Security → Privacy Choices**. Current state lives
+manage these at **My Account → Privacy → Privacy Choices**. Current state lives
 in `user_consents`; every change is written to the tamper-evident audit log as
 `consent_updated`, which serves as the immutable consent ledger. **A member who
 was never asked is treated exactly like one who refused** — consumers of a

@@ -16,7 +16,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Calendar, ChevronLeft, ClipboardCheck, FileText, Printer, Timer, Trash2, User } from 'lucide-react';
+import { Calendar, ClipboardCheck, FileText, Printer, Timer, Trash2, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
@@ -30,7 +30,9 @@ import { useAuthStore } from '../stores/authStore';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { EmptyState } from '../components/ux/EmptyState';
+import { attributionName } from '../utils/memberName';
 
 export const MySkillTestResultPage: React.FC = () => {
   const navigate = useNavigate();
@@ -97,42 +99,36 @@ export const MySkillTestResultPage: React.FC = () => {
   const canDelete = isPractice && currentTest.candidate_id === user?.id;
 
   return (
-    <div className="space-y-4">
-      <Breadcrumbs />
-
-      <button
-        onClick={() => void navigate('/training/my-training')}
-        className="hover:bg-theme-surface-hover -ml-2 flex items-center gap-1 rounded-lg p-2 text-sm transition-colors"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back to My Training
-      </button>
-
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">{currentTest.template_name}</h1>
-          <p className="text-theme-text-muted text-sm">{isPractice ? 'Practice attempt' : 'Official skills test'}</p>
-        </div>
-        {/* Offered only once there is an outcome to print. A result still
-            awaiting sign-off has none — the API withholds it — and the print
-            page refuses one anyway, so surfacing the button would promise
-            something it cannot deliver. */}
-        {isComplete && (
-          <button
-            onClick={() =>
-              window.open(
-                `/training/skills-testing/print/scorecard?id=${encodeURIComponent(currentTest.id)}`,
-                '_blank',
-                'noopener'
-              )
-            }
-            className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 text-sm"
-          >
-            <Printer className="h-4 w-4" aria-hidden="true" />
-            Print
-          </button>
-        )}
-      </div>
+    <div className="mx-auto max-w-7xl space-y-4 px-4 py-8 sm:px-6 lg:px-8">
+      {/* A member's own result is part of My Training, which is where they
+          reach it from; the URL does not sit under that section. */}
+      <TrainingPageHeader
+        icon={ClipboardCheck}
+        title={currentTest.template_name}
+        subtitle={isPractice ? 'Practice attempt' : 'Official skills test'}
+        section="/training/my-training"
+        actions={
+          /* Offered only once there is an outcome to print. A result still
+             awaiting sign-off has none — the API withholds it — and the print
+             page refuses one anyway, so surfacing the button would promise
+             something it cannot deliver. */
+          isComplete ? (
+            <button
+              onClick={() =>
+                window.open(
+                  `/training/skills-testing/print/scorecard?id=${encodeURIComponent(currentTest.id)}`,
+                  '_blank',
+                  'noopener'
+                )
+              }
+              className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 text-sm"
+            >
+              <Printer className="h-4 w-4" aria-hidden="true" />
+              Print
+            </button>
+          ) : undefined
+        }
+      />
 
       {isPractice && (
         <div className="alert-info">
@@ -166,8 +162,8 @@ export const MySkillTestResultPage: React.FC = () => {
         <div className="alert-purple">
           <p className="text-sm font-medium">Awaiting validation</p>
           <p className="mt-1 text-sm">
-            {currentTest.examiner_name} has finished scoring this evaluation. A training officer reviews it before the
-            result counts — you&apos;ll see the outcome here once they do.
+            {attributionName(currentTest.examiner_name, currentTest.examiner_id)} has finished scoring this evaluation.
+            A training officer reviews it before the result counts — you&apos;ll see the outcome here once they do.
           </p>
         </div>
       ) : (
@@ -191,7 +187,9 @@ export const MySkillTestResultPage: React.FC = () => {
             <ClipboardCheck className="text-theme-text-muted h-3 w-3" />
             <p className="text-theme-text-muted text-xs">Examiner</p>
           </div>
-          <p className="text-theme-text-primary text-sm font-medium">{currentTest.examiner_name}</p>
+          <p className="text-theme-text-primary text-sm font-medium">
+            {attributionName(currentTest.examiner_name, currentTest.examiner_id)}
+          </p>
         </div>
         {currentTest.elapsed_seconds != null && (
           <div className="card">
@@ -207,7 +205,7 @@ export const MySkillTestResultPage: React.FC = () => {
                 approximate instead of shown as an ordinary stopwatch reading —
                 the same marking the printed scorecard carries. */}
             {currentTest.timing_verified === false && (
-              <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                 Not verified — the evaluation was resumed after an interruption, so this time is approximate.
               </p>
             )}

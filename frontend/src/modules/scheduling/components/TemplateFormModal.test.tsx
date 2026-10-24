@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -13,6 +13,31 @@ vi.mock('../../inventory/services/equipmentCheckApi', () => ({
     getEquipmentCheckTemplates: (...a: unknown[]) => mockGetEquipmentCheckTemplates(...a) as unknown,
   },
 }));
+
+const mockGetBasicApparatus = vi.fn();
+vi.mock('../services/api', async () => {
+  const actual = await vi.importActual<typeof import('../services/api')>('../services/api');
+  return {
+    ...actual,
+    schedulingService: {
+      getBasicApparatus: (...a: unknown[]) => mockGetBasicApparatus(...a) as unknown,
+    },
+  };
+});
+
+// The department settings are read through the real accessor unless a test
+// installs its own; the resource-defaults block below is the one that does.
+const mockCachedSettings = vi.hoisted(() => ({ override: null as Record<string, unknown> | null }));
+vi.mock('../services/shiftSettingsApi', async () => {
+  const actual = await vi.importActual<typeof import('../services/shiftSettingsApi')>('../services/shiftSettingsApi');
+  return {
+    ...actual,
+    getCachedShiftSettings: () =>
+      mockCachedSettings.override
+        ? { ...actual.getCachedShiftSettings(), ...mockCachedSettings.override }
+        : actual.getCachedShiftSettings(),
+  };
+});
 
 const mockIsModuleOn = vi.fn((_key: string) => true);
 vi.mock('../../../hooks/useEnabledModules', () => ({
@@ -38,6 +63,9 @@ beforeEach(() => {
   mockGetEquipmentCheckTemplates.mockResolvedValue(CHECKLISTS);
   mockIsModuleOn.mockReset();
   mockIsModuleOn.mockImplementation(() => true);
+  mockGetBasicApparatus.mockReset();
+  mockGetBasicApparatus.mockResolvedValue([]);
+  mockCachedSettings.override = null;
 });
 
 describe('TemplateFormModal equipment checklists', () => {
@@ -271,5 +299,198 @@ describe('TemplateFormModal field names', () => {
     expect(screen.getByRole('combobox', { name: 'Position 1' })).toHaveValue('officer');
     expect(screen.getByRole('combobox', { name: 'Position 2' })).toHaveValue('driver');
     expect(screen.getByRole('checkbox', { name: 'Administrative access, position 2' })).not.toBeChecked();
+  });
+});
+
+describe('TemplateFormModal clearing fields on edit', () => {
+  const vehicles = [
+    { id: 'app-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine', source: 'apparatus' as const },
+  ];
+  const stored = {
+    ...emptyTemplateForm,
+    name: 'Day Shift',
+    description: 'Station 1 day crew',
+    apparatus_type: 'engine',
+    apparatus_id: 'app-1',
+  };
+  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+  });
+
+  const renderEdit = () =>
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="Edit Template"
+        apparatusOptions={vehicles}
+        apparatusSource="apparatus"
+        initialData={stored}
+      />
+    );
+
+  it('sends null for a cleared description and vehicle, so the clear persists', async () => {
+    // The update endpoint reads exclude_unset: an omitted key keeps the stored
+    // value, so a template unlinked from its rig stayed linked after save.
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.clear(screen.getByLabelText('Description'));
+    await user.selectOptions(screen.getByLabelText(/^Vehicle/), '');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ description: null, apparatus_type: null, apparatus_id: null })
+    );
+  });
+
+  it('drops the vehicle id as well as the type when the category becomes Event', async () => {
+    // The event category hides the vehicle picker and used to blank only the
+    // type, leaving the event template bound to Engine 1 by id.
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.click(screen.getByRole('button', { name: /Event \/ Special/ }));
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ category: 'event', apparatus_type: null, apparatus_id: null })
+    );
+  });
+
+  it('omits blank optional fields when creating', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="Create Template"
+        apparatusOptions={vehicles}
+        apparatusSource="apparatus"
+      />
+    );
+
+    await user.type(screen.getByLabelText(/^Name/), 'Night Shift');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const payload = onSubmit.mock.calls[0]?.[0] ?? {};
+    expect(payload.description).toBeUndefined();
+    expect(payload.apparatus_type).toBeUndefined();
+    expect(payload.apparatus_id).toBeUndefined();
+  });
+});
+
+// A vehicle that templates or shifts still name is deactivated rather than
+// deleted, so it drops out of `apparatusOptions` (active vehicles only). The
+// select used to show a blank while the stale id went back on save.
+describe('TemplateFormModal with a deactivated vehicle', () => {
+  const active = [
+    { id: 'app-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine', source: 'basic' as const },
+  ];
+  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+    mockGetBasicApparatus.mockResolvedValue([
+      { id: 'app-old', unit_number: 'E9', name: 'Old Engine', apparatus_type: 'engine', is_active: false },
+    ]);
+  });
+
+  const renderWith = (apparatusId: string) =>
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="Edit Template"
+        apparatusOptions={active}
+        apparatusSource="basic"
+        initialData={{ ...emptyTemplateForm, name: 'Day Shift', apparatus_type: 'engine', apparatus_id: apparatusId }}
+      />
+    );
+
+  it('keeps the stored vehicle selected and named, and saves it unchanged', async () => {
+    const user = userEvent.setup();
+    renderWith('app-old');
+
+    expect(await screen.findByRole('option', { name: 'E9 — Old Engine (inactive)' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Vehicle/)).toHaveValue('app-old');
+    expect(mockGetBasicApparatus).toHaveBeenCalledWith({ is_active: false });
+
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ apparatus_id: 'app-old' }));
+  });
+
+  it('offers no inactive vehicle to a template that does not already name one', () => {
+    renderWith('app-1');
+
+    expect(screen.queryByRole('option', { name: /inactive/ })).not.toBeInTheDocument();
+    expect(mockGetBasicApparatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('TemplateFormModal event resource defaults', () => {
+  const renderEventForm = (onSubmit: (data: Record<string, unknown>) => Promise<void>) =>
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="New event template"
+        apparatusOptions={[]}
+        apparatusSource="default"
+        initialData={{ ...emptyTemplateForm, name: 'Fair day', category: 'event' }}
+      />
+    );
+
+  const submittedResourceSeats = (data: Record<string, unknown> | undefined): string[] => {
+    const positions = data?.positions as { resources?: { positions: (string | { position: string })[] }[] } | undefined;
+    return (positions?.resources?.[0]?.positions ?? []).map((p) => (typeof p === 'string' ? p : p.position));
+  };
+
+  it('staffs an added resource from the department’s Event Resource Defaults', async () => {
+    // The settings card promised this and nothing read it: the hardcoded crew
+    // was used whatever the department saved.
+    mockCachedSettings.override = {
+      resourceTypeDefaults: {
+        first_aid_station: { label: 'First Aid Station', positions: ['paramedic', 'ems', 'ems'] },
+      },
+    };
+    const user = userEvent.setup();
+    let submitted: Record<string, unknown> | undefined;
+    renderEventForm(async (data) => {
+      submitted = data;
+    });
+
+    await user.click(screen.getByRole('button', { name: 'First Aid Station' }));
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(submitted).toBeDefined());
+    expect(submittedResourceSeats(submitted)).toEqual(['paramedic', 'ems', 'ems']);
+  });
+
+  it('keeps the built-in crew for a type the defaults do not list', async () => {
+    mockCachedSettings.override = { resourceTypeDefaults: {} };
+    const user = userEvent.setup();
+    let submitted: Record<string, unknown> | undefined;
+    renderEventForm(async (data) => {
+      submitted = data;
+    });
+
+    await user.click(screen.getByRole('button', { name: 'First Aid Station' }));
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(submitted).toBeDefined());
+    expect(submittedResourceSeats(submitted)).toEqual(['ems', 'ems']);
   });
 });

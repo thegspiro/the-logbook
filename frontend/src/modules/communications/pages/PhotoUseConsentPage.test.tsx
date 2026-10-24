@@ -179,6 +179,17 @@ describe('PhotoUseConsentPage', () => {
     expect(screen.getByText('Dana Agreed')).toBeInTheDocument();
   });
 
+  it('points to where members actually make the choice', async () => {
+    renderWithRouter(<PhotoUseConsentPage />);
+    expect(await screen.findByText('Dana Agreed')).toBeInTheDocument();
+
+    // The choice lives on the Privacy tab of My Account; the Security tab is
+    // two-factor authentication and has no consent controls.
+    const link = screen.getByRole('link', { name: 'My Account → Privacy → Privacy Choices' });
+    expect(link).toHaveAttribute('href', '/account?tab=privacy');
+    expect(screen.queryByText(/Settings → Security/)).not.toBeInTheDocument();
+  });
+
   it('carries no contact fields for the search to match on', async () => {
     renderWithRouter(<PhotoUseConsentPage />);
     expect(await screen.findByText('Dana Agreed')).toBeInTheDocument();

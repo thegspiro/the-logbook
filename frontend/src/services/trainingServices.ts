@@ -46,8 +46,10 @@ import type {
   BulkEnrollmentResponse,
   BulkImportRequest,
   BulkImportResponse,
+  ImportMatchedResponse,
   BulkTrainingRecordCreate,
   BulkTrainingRecordResult,
+  CertAlertSettings,
   ComplianceSummary,
   ExternalCategoryMapping,
   ExternalCategoryMappingUpdate,
@@ -451,6 +453,16 @@ export const trainingService = {
     return asArray(response.data);
   },
 
+  async getCertAlertSettings(): Promise<CertAlertSettings> {
+    const response = await api.get<CertAlertSettings>('/training/certifications/alert-settings');
+    return response.data;
+  },
+
+  async updateCertAlertSettings(settings: CertAlertSettings): Promise<CertAlertSettings> {
+    const response = await api.put<CertAlertSettings>('/training/certifications/alert-settings', settings);
+    return response.data;
+  },
+
   // ==================== Historical Training Import ====================
 
   async parseHistoricalImport(
@@ -664,6 +676,7 @@ export const externalTrainingService = {
     providerId: string,
     params?: {
       status?: string;
+      sync_log_id?: string;
       limit?: number;
       offset?: number;
     }
@@ -696,6 +709,16 @@ export const externalTrainingService = {
     const response = await api.post<BulkImportResponse>(
       `/training/external/providers/${providerId}/imports/bulk`,
       request
+    );
+    return response.data;
+  },
+
+  /**
+   * Import every pending record whose member is already mapped
+   */
+  async importMatched(providerId: string): Promise<ImportMatchedResponse> {
+    const response = await api.post<ImportMatchedResponse>(
+      `/training/external/providers/${providerId}/imports/import-matched`
     );
     return response.data;
   },
@@ -754,7 +777,12 @@ export const trainingProgramService = {
   /**
    * Get all training programs
    */
-  async getPrograms(params?: { target_position?: string; is_template?: boolean }): Promise<TrainingProgram[]> {
+  async getPrograms(params?: {
+    target_position?: string;
+    is_template?: boolean;
+    /** Also return deactivated programs (`active: false`). */
+    include_inactive?: boolean;
+  }): Promise<TrainingProgram[]> {
     const response = await api.get<TrainingProgram[]>('/training/programs/programs', { params });
     return asArray(response.data);
   },
@@ -1060,6 +1088,19 @@ export const trainingProgramService = {
   },
 
   /**
+   * Officer marks a member's whole enrollment complete by hand (active or
+   * on-hold only). The reason is required and audited with the number of
+   * required items still unmet; completion runs the same notice and EVOC
+   * handling as an automatic one. Requires training.manage.
+   */
+  async completeEnrollment(enrollmentId: string, reason: string): Promise<ProgramEnrollment> {
+    const response = await api.post<ProgramEnrollment>(`/training/programs/enrollments/${enrollmentId}/complete`, {
+      reason,
+    });
+    return response.data;
+  },
+
+  /**
    * Advance an enrollment to the next phase of a phased program.
    * By default the current phase must be complete; pass force to override.
    */
@@ -1193,11 +1234,15 @@ export const trainingSessionService = {
   /**
    * The training session attached to an event, or null when the event has
    * none (a plain event, or one created before training sessions existed).
+   *
+   * The server answers `200` with a `null` body for "none". The 404 branch is
+   * for a backend that has not been updated yet, so a frontend deployed first
+   * keeps working through a rolling upgrade.
    */
   async getSessionByEvent(eventId: string): Promise<TrainingSessionResponse | null> {
     try {
-      const response = await api.get<TrainingSessionResponse>(`/training/sessions/by-event/${eventId}`);
-      return response.data;
+      const response = await api.get<TrainingSessionResponse | null>(`/training/sessions/by-event/${eventId}`);
+      return response.data ?? null;
     } catch (err: unknown) {
       if (toAppError(err).status === 404) return null;
       throw err;
@@ -1251,11 +1296,14 @@ export const trainingSessionService = {
   /**
    * Where the event's training approval stands, or null when it has none.
    * Carries the approval link's token only for a caller who may approve.
+   *
+   * The server answers `200` with a `null` body for "none"; the 404 branch is
+   * for a backend that has not been updated yet (see getSessionByEvent).
    */
   async getApprovalSummary(eventId: string): Promise<TrainingApprovalSummary | null> {
     try {
-      const response = await api.get<TrainingApprovalSummary>(`/training/sessions/by-event/${eventId}/approval`);
-      return response.data;
+      const response = await api.get<TrainingApprovalSummary | null>(`/training/sessions/by-event/${eventId}/approval`);
+      return response.data ?? null;
     } catch (err: unknown) {
       if (toAppError(err).status === 404) return null;
       throw err;
@@ -1542,7 +1590,17 @@ export interface IntegrationConfig {
   config: Record<string, unknown>;
   enabled: boolean;
   contains_phi?: boolean;
-  last_sync_at?: string;
+  last_sync_at?: string | null;
+  // Health of the integration's runs (syncs, connection tests, connects).
+  last_success_at?: string | null;
+  last_error?: string | null;
+  last_error_at?: string | null;
+  consecutive_error_count?: number;
+  /** Days until the stored credential expires (negative once it has), where
+   * one is recorded — today only Microsoft 365's client secret. */
+  credential_days_left?: number | null;
+  /** True from 30 days before that expiry: the same rule the morning email uses. */
+  credential_expiring?: boolean;
   created_at: string;
   updated_at: string;
 }

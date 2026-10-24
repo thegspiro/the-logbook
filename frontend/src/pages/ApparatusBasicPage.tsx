@@ -11,13 +11,28 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
-import { Truck, Plus, Search, Pencil, Trash2, Loader2, X, Save, Shield, Users, Wrench } from 'lucide-react';
+import {
+  Truck,
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
+  Loader2,
+  X,
+  Save,
+  Shield,
+  Users,
+  Wrench,
+  ArchiveRestore,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../utils/errorHandling';
 import { schedulingService } from '../modules/scheduling/services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
+import { OperationsPageHeader } from '../components/operations/OperationsPageHeader';
 interface BasicApparatus {
   id: string;
   organization_id?: string;
@@ -87,11 +102,20 @@ const DEFAULT_POSITIONS_BY_TYPE: Record<string, string[]> = {
   other: ['driver'],
 };
 
+// BasicApparatusCreate's bounds in backend/app/schemas/scheduling.py.
+const UNIT_NUMBER_MAX_LENGTH = 20;
+const NAME_MAX_LENGTH = 100;
+const MIN_STAFFING_MAX = 50;
+
 export default function ApparatusBasicPage() {
   const { confirm } = useConfirm();
   const [apparatusList, setApparatusList] = useState<BasicApparatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  // A vehicle in use is deactivated rather than deleted, which drops it from
+  // the list; this is the way back to it.
+  const [showInactive, setShowInactive] = useState(false);
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -100,7 +124,8 @@ export default function ApparatusBasicPage() {
     unit_number: '',
     name: '',
     apparatus_type: 'engine',
-    min_staffing: 4,
+    // Held as the box's text so a cleared field reads as blank, not as 0.
+    min_staffing: '4',
     positions: ['officer', 'driver', 'firefighter', 'firefighter'] as string[],
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -108,7 +133,16 @@ export default function ApparatusBasicPage() {
   const loadApparatus = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await schedulingService.getBasicApparatus();
+      // The list endpoint answers one state at a time, so inactive vehicles
+      // are a second request, listed after the active ones.
+      const data = showInactive
+        ? (
+            await Promise.all([
+              schedulingService.getBasicApparatus(),
+              schedulingService.getBasicApparatus({ is_active: false }),
+            ])
+          ).flat()
+        : await schedulingService.getBasicApparatus();
       // Map PositionSlot[] to flat string[] for the local form model
       setApparatusList(
         data.map((a) => ({
@@ -121,7 +155,7 @@ export default function ApparatusBasicPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [showInactive]);
 
   useEffect(() => {
     void loadApparatus();
@@ -140,7 +174,7 @@ export default function ApparatusBasicPage() {
       unit_number: '',
       name: '',
       apparatus_type: 'engine',
-      min_staffing: 4,
+      min_staffing: '4',
       positions: [...(DEFAULT_POSITIONS_BY_TYPE.engine ?? [])],
     });
     setShowModal(true);
@@ -152,7 +186,7 @@ export default function ApparatusBasicPage() {
       unit_number: apparatus.unit_number,
       name: apparatus.name,
       apparatus_type: apparatus.apparatus_type,
-      min_staffing: apparatus.min_staffing || 1,
+      min_staffing: String(apparatus.min_staffing || 1),
       positions: apparatus.positions || [],
     });
     setShowModal(true);
@@ -163,7 +197,7 @@ export default function ApparatusBasicPage() {
       ...prev,
       apparatus_type: type,
       positions: DEFAULT_POSITIONS_BY_TYPE[type] || ['driver'],
-      min_staffing: (DEFAULT_POSITIONS_BY_TYPE[type] || ['driver']).length,
+      min_staffing: String((DEFAULT_POSITIONS_BY_TYPE[type] || ['driver']).length),
     }));
   };
 
@@ -193,8 +227,24 @@ export default function ApparatusBasicPage() {
       toast.error('Unit number is required');
       return;
     }
+    // These mirror BasicApparatusCreate (unit_number max_length=20, name
+    // max_length=100, min_staffing ge=1 le=50), so the form names the problem
+    // instead of the save failing with a bare error.
+    if (form.unit_number.trim().length > UNIT_NUMBER_MAX_LENGTH) {
+      toast.error(`Unit number must be ${UNIT_NUMBER_MAX_LENGTH} characters or fewer`);
+      return;
+    }
     if (!form.name.trim()) {
       toast.error('Name is required');
+      return;
+    }
+    if (form.name.trim().length > NAME_MAX_LENGTH) {
+      toast.error(`Name must be ${NAME_MAX_LENGTH} characters or fewer`);
+      return;
+    }
+    const minStaffing = form.min_staffing.trim() === '' ? Number.NaN : Number(form.min_staffing);
+    if (!Number.isInteger(minStaffing) || minStaffing < 1 || minStaffing > MIN_STAFFING_MAX) {
+      toast.error(`Minimum staffing must be a whole number from 1 to ${MIN_STAFFING_MAX}`);
       return;
     }
     setIsSaving(true);
@@ -203,7 +253,7 @@ export default function ApparatusBasicPage() {
         unit_number: form.unit_number.trim(),
         name: form.name.trim(),
         apparatus_type: form.apparatus_type,
-        min_staffing: form.min_staffing,
+        min_staffing: minStaffing,
         positions: form.positions,
       };
       if (editing) {
@@ -215,8 +265,8 @@ export default function ApparatusBasicPage() {
       }
       setShowModal(false);
       void loadApparatus();
-    } catch {
-      toast.error('Failed to save apparatus');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save apparatus'));
     } finally {
       setIsSaving(false);
     }
@@ -226,18 +276,45 @@ export default function ApparatusBasicPage() {
     if (
       !(await confirm({
         title: 'Delete apparatus',
-        message: `Delete "${apparatus.name}" (${apparatus.unit_number})? This cannot be undone.`,
+        message: `Delete "${apparatus.name}" (${apparatus.unit_number})? If shift templates, shifts, equipment checks or call records name it, it is deactivated instead of deleted: those records keep it, and it is no longer offered for new templates. Otherwise it is deleted, which cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
     )
       return;
     try {
-      await schedulingService.deleteBasicApparatus(apparatus.id);
-      toast.success('Apparatus deleted');
+      const outcome = await schedulingService.deleteBasicApparatus(apparatus.id);
+      toast.success(
+        outcome === 'deactivated'
+          ? `${apparatus.name} is still named by templates, shifts or call records, so it was deactivated instead of deleted.`
+          : 'Apparatus deleted'
+      );
       void loadApparatus();
-    } catch {
-      toast.error('Failed to delete apparatus');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete apparatus'));
+    }
+  };
+
+  const handleReactivate = async (apparatus: BasicApparatus) => {
+    if (
+      !(await confirm({
+        title: 'Reactivate apparatus',
+        message: `Reactivate "${apparatus.name}" (${apparatus.unit_number})? It is offered again for new shift templates and shifts. Nothing is added back to any shift or template.`,
+        confirmLabel: 'Reactivate',
+        cancelLabel: 'Leave inactive',
+        variant: 'info',
+      }))
+    )
+      return;
+    setReactivatingId(apparatus.id);
+    try {
+      await schedulingService.reactivateBasicApparatus(apparatus.id);
+      toast.success(`${apparatus.name} reactivated`);
+      void loadApparatus();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reactivate apparatus'));
+    } finally {
+      setReactivatingId(null);
     }
   };
 
@@ -257,20 +334,18 @@ export default function ApparatusBasicPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Apparatus & Vehicles</h1>
-          <p className="text-theme-text-secondary mt-1">
-            Define your department's vehicles and crew positions for shift scheduling
-          </p>
-        </div>
-        {canManage && (
-          <button onClick={openCreate} className="btn-primary flex shrink-0 items-center gap-2 py-2.5">
-            <Plus className="h-4 w-4" /> Add Apparatus
-          </button>
-        )}
-      </div>
+      <OperationsPageHeader
+        icon={Truck}
+        title="Apparatus & Vehicles"
+        subtitle="Define your department's vehicles and crew positions for shift scheduling"
+        actions={
+          canManage && (
+            <button onClick={openCreate} className="btn-primary flex shrink-0 items-center gap-2 py-2.5">
+              <Plus className="h-4 w-4" /> Add Apparatus
+            </button>
+          )
+        }
+      />
 
       {/* Info Banner */}
       <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
@@ -285,16 +360,31 @@ export default function ApparatusBasicPage() {
       </div>
 
       {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          aria-label="Search apparatus..."
-          placeholder="Search apparatus..."
-          className="form-input placeholder-theme-text-muted py-2.5 pr-4 pl-10"
-        />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+        <div className="relative max-w-md flex-1">
+          <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search apparatus..."
+            placeholder="Search apparatus..."
+            className="form-input placeholder-theme-text-muted py-2.5 pr-4 pl-10"
+          />
+        </div>
+        {/* Only an officer can bring an inactive vehicle back, so only an
+            officer is offered the list of them. */}
+        {canManage && (
+          <label className="text-theme-text-secondary mobile-touch-target flex shrink-0 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+            />
+            Show inactive
+          </label>
+        )}
       </div>
 
       {/* Apparatus List */}
@@ -337,6 +427,11 @@ export default function ApparatusBasicPage() {
                       <p className="text-theme-text-secondary text-sm">{apparatus.unit_number}</p>
                     </div>
                   </div>
+                  {!apparatus.is_active && (
+                    <span className="badge bg-theme-surface-secondary text-theme-text-secondary shrink-0">
+                      Inactive
+                    </span>
+                  )}
                 </div>
 
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -349,7 +444,25 @@ export default function ApparatusBasicPage() {
                   {/* The actions share this short badge row rather than the title's:
                       hidden until hover with a mouse, they would still hold their
                       width beside a long name and wrap it a line early. */}
-                  {canManage && (
+                  {canManage && !apparatus.is_active && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleReactivate(apparatus);
+                      }}
+                      disabled={reactivatingId === apparatus.id}
+                      aria-label={`Reactivate ${apparatus.name}`}
+                      className="btn-secondary btn-sm ml-auto"
+                    >
+                      {reactivatingId === apparatus.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <ArchiveRestore className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                      Reactivate
+                    </button>
+                  )}
+                  {canManage && apparatus.is_active && (
                     <div className="ml-auto flex items-center gap-1 transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
                       <button
                         onClick={() => openEdit(apparatus)}
@@ -465,15 +578,18 @@ export default function ApparatusBasicPage() {
 
               <div>
                 <label htmlFor="apparatus-basic-min-staffing" className={labelCls}>
-                  Minimum Staffing
+                  Minimum Staffing *
                 </label>
                 <input
                   id="apparatus-basic-min-staffing"
                   type="number"
                   min={1}
-                  max={20}
+                  max={MIN_STAFFING_MAX}
+                  step={1}
+                  required
+                  aria-required="true"
                   value={form.min_staffing}
-                  onChange={(e) => setForm((p) => ({ ...p, min_staffing: Number(e.target.value) }))}
+                  onChange={(e) => setForm((p) => ({ ...p, min_staffing: e.target.value }))}
                   className={inputCls}
                 />
               </div>

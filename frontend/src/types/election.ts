@@ -10,6 +10,8 @@ import type {
   BallotChoice,
   RunoffType,
   QuorumType,
+  BallotSendJobStatus,
+  BallotSendJobKind,
 } from '../constants/enums';
 export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
@@ -95,6 +97,8 @@ export interface Election {
   /** Ballot links already sent were retired and not yet resent (W50-36 / W50-47). */
   ballots_must_be_resent?: boolean;
   ballots_resend_reason?: 'ballot_changed' | 'reopened' | null;
+  /** The latest nominations-open announcement; election managers only. */
+  nominations_announcement?: BallotSendJob | null;
   // Corrections to the result after close, oldest first (W50-9)
   results_revisions?: ResultsRevision[] | null;
   created_at: string;
@@ -445,6 +449,19 @@ export interface EmailBallotResponse {
   message: string;
 }
 
+/** A background send (ballots, reminder, package or nominations announcement); `result` is set once it completes, `error` once it fails. */
+export interface BallotSendJob {
+  id: string;
+  election_id: string;
+  kind: BallotSendJobKind;
+  status: BallotSendJobStatus;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  result: EmailBallotResponse | null;
+  error: string | null;
+}
+
 export interface ElectionDeleteResponse {
   success: boolean;
   message: string;
@@ -566,12 +583,6 @@ export interface PreMeetingPackageSend {
   recipient_emails: string[];
   message?: string | undefined;
   include_full_roster: boolean;
-}
-
-export interface PreMeetingPackageResponse {
-  success: boolean;
-  message: string;
-  sent_count: number;
 }
 
 // Vote receipt verification

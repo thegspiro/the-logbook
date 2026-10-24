@@ -18,6 +18,13 @@ export interface Role {
   updated_at: string;
   /** How many members hold the position; sent by `GET /roles` (`include_user_count`, default on). */
   user_count?: number | undefined;
+  /**
+   * True for the seeded position that duplicates an operational rank (Chief,
+   * Captain, Firefighter, ...). The server sends it on every role response;
+   * it is optional here only so a fixture built by hand stays valid. Member
+   * pickers and roster chips leave these out — see `utils/positions.ts`.
+   */
+  mirrors_rank?: boolean | undefined;
 }
 
 export interface Permission {

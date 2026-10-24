@@ -8,9 +8,8 @@
  * 1. **The prefix is not a route.** `/inventory/admin/checklists/templates/new`
  *    yields `/inventory/admin/checklists/templates`, which no `<Route>`
  *    declares — only `/new` and `/:templateId` beneath it. App.tsx's catch-all
- *    swallows the miss and drops the user on the dashboard, which is
- *    indistinguishable from a crumb that simply does not work. This is the same
- *    failure `routeIntegrity.test.ts` exists to catch, except a computed path
+ *    answers the miss with "Page not found", so the crumb is a dead end. This
+ *    is the same failure `routeIntegrity.test.ts` exists to catch, except a computed path
  *    has no `to="…"` literal for that scan to read.
  *
  * 2. **The prefix is a route the viewer cannot open.** Ancestry is not
@@ -152,6 +151,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/inventory/storage-areas': { label: 'Storage Areas', permissions: ['inventory.manage'] },
   '/onboarding/modules': {},
+  // An ancestor only because a posted set of minutes sits beneath the public
+  // list; no gate, since the page is open to anyone the department chose to show it to.
+  '/public/minutes': {},
   // A leaf, registered for its label: the segment is "closeout" and the page
   // calls itself "Shift Close-Out", so the fallback would give the trail and
   // the heading two different names for one screen.

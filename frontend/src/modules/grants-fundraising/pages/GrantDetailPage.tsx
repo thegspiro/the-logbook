@@ -38,7 +38,7 @@ import {
   X,
   ChevronRight,
 } from 'lucide-react';
-import type { ComplianceTaskType, ComplianceTaskStatus, GrantPriority } from '../types';
+import type { ComplianceTaskType, ComplianceTaskStatus, GrantNoteType, GrantPriority } from '../types';
 import {
   APPLICATION_STATUS_COLORS,
   PRIORITY_COLORS,
@@ -46,12 +46,14 @@ import {
   ComplianceTaskType as ComplianceTaskTypeEnum,
   ComplianceTaskStatus as ComplianceTaskStatusEnum,
   GrantPriority as GrantPriorityEnum,
+  GrantNoteType as GrantNoteTypeEnum,
+  BUDGET_ITEM_CATEGORY_LABELS,
 } from '../types';
+import { BUDGET_CATEGORY_ORDER, readBudgetSummary, readKeyContacts } from '../utils/applicationStructuredFields';
 import { useGrantsStore } from '../store/grantsStore';
-import { BUDGET_ITEM_CATEGORY_LABELS, budgetItemCategoryLabel } from '../utils/labels';
 import { useMemberNames } from '../hooks/useMemberNames';
-import { formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -103,15 +105,14 @@ const COMPLIANCE_STATUS_LABELS: Record<string, string> = {
   waived: 'Waived',
 };
 
-const NOTE_TYPE_ICONS: Record<string, React.ReactNode> = {
+const NOTE_TYPE_ICONS: Record<GrantNoteType, React.ReactNode> = {
+  general: <MessageSquare className="text-theme-text-secondary h-4 w-4" />,
   status_change: <ChevronRight className="h-4 w-4 text-blue-500" />,
-  document: <FileText className="h-4 w-4 text-indigo-500" />,
-  contact: <Users className="h-4 w-4 text-green-500" />,
+  document_added: <FileText className="h-4 w-4 text-indigo-500" />,
+  contact_made: <Users className="h-4 w-4 text-green-500" />,
   milestone: <Target className="h-4 w-4 text-amber-500" />,
-  comment: <MessageSquare className="text-theme-text-secondary h-4 w-4" />,
-  submission: <Send className="h-4 w-4 text-purple-500" />,
-  review: <Eye className="h-4 w-4 text-cyan-500" />,
   financial: <DollarSign className="h-4 w-4 text-emerald-500" />,
+  compliance: <ClipboardCheck className="h-4 w-4 text-purple-500" />,
 };
 
 const COMPLIANCE_TASK_TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -191,14 +192,18 @@ const getDueDateClasses = (dueDate: string): string => {
   const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) return 'text-red-600 font-semibold';
-  if (diffDays <= 7) return 'text-orange-600 font-semibold';
-  if (diffDays <= 30) return 'text-yellow-600';
+  if (diffDays <= 7) return 'text-orange-700 dark:text-orange-600 font-semibold';
+  if (diffDays <= 30) return 'text-yellow-700 dark:text-yellow-600';
   return 'text-theme-text-secondary';
 };
 
 // =============================================================================
 // Main Page Component
 // =============================================================================
+
+// Older rows may hold a free-typed category; show those as stored.
+const budgetCategoryLabel = (category: string): string =>
+  (BUDGET_ITEM_CATEGORY_LABELS as Record<string, string>)[category] ?? category;
 
 export const GrantDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -387,6 +392,10 @@ export const GrantDetailPage: React.FC = () => {
         // The service stamps completed_date with the department's today (W68:
         // the page sent a UTC instant, which a date field refuses).
         status: ComplianceTaskStatusEnum.COMPLETED,
+        // completed_date is a calendar `date` on the backend; a full ISO
+        // timestamp is rejected with a 422, and the UTC date can be a day off
+        // from the department's local date.
+        completedDate: getTodayLocalDate(tz),
       });
       toast.success('Task marked complete');
     } catch (err: unknown) {
@@ -409,8 +418,7 @@ export const GrantDetailPage: React.FC = () => {
     setIsSubmittingNote(true);
     try {
       await addGrantNote(id, {
-        // 'comment' is not a note type the API accepts (W68).
-        noteType: 'general',
+        noteType: GrantNoteTypeEnum.GENERAL,
         content: newNoteContent.trim(),
       });
       toast.success('Note added');
@@ -457,6 +465,19 @@ export const GrantDetailPage: React.FC = () => {
       </div>
     );
   }
+
+  // Read defensively: both are untyped JSON, and a row written straight
+  // through the API may hold a shape this page cannot render.
+  const storedBudget = readBudgetSummary(application.budgetSummary);
+  const budgetLines = BUDGET_CATEGORY_ORDER.filter((category) => storedBudget.amounts[category] !== '').map(
+    (category) => ({ category, amount: Number(storedBudget.amounts[category]) })
+  );
+  const budgetSummary = {
+    lines: budgetLines,
+    total: budgetLines.reduce((sum, line) => sum + line.amount, 0),
+    notes: storedBudget.notes,
+  };
+  const keyContacts = readKeyContacts(application.keyContacts);
 
   // ---------------------------------------------------------------------------
   // Tab definitions
@@ -550,7 +571,7 @@ export const GrantDetailPage: React.FC = () => {
                 <DollarSign className="h-4 w-4" />
                 Amount Awarded
               </div>
-              <p className="mt-1 text-xl font-bold text-emerald-600">
+              <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-600">
                 {formatCurrencyWhole(application.amountAwarded)}
               </p>
             </div>
@@ -651,12 +672,50 @@ export const GrantDetailPage: React.FC = () => {
               </div>
             )}
 
+            {/* Budget summary */}
+            {budgetSummary.lines.length > 0 || budgetSummary.notes ? (
+              <div className="card p-6">
+                <h3 className="text-theme-text-primary text-lg font-semibold">Budget Summary</h3>
+                {budgetSummary.lines.length > 0 && (
+                  <dl className="mt-3 space-y-1 text-sm">
+                    {budgetSummary.lines.map(({ category, amount }) => (
+                      <div key={category} className="flex justify-between gap-4">
+                        <dt className="text-theme-text-secondary">{BUDGET_ITEM_CATEGORY_LABELS[category]}</dt>
+                        <dd className="text-theme-text-primary font-medium">{formatCurrency(amount)}</dd>
+                      </div>
+                    ))}
+                    <div className="border-theme-surface-border flex justify-between gap-4 border-t pt-1">
+                      <dt className="text-theme-text-primary font-semibold">Total</dt>
+                      <dd className="text-theme-text-primary font-semibold">{formatCurrency(budgetSummary.total)}</dd>
+                    </div>
+                  </dl>
+                )}
+                {budgetSummary.notes && (
+                  <p className="text-theme-text-secondary mt-3 text-sm whitespace-pre-wrap">{budgetSummary.notes}</p>
+                )}
+              </div>
+            ) : null}
+
             {/* Key contacts */}
             <div className="card p-6">
               <h3 className="text-theme-text-primary text-lg font-semibold">Key Contacts</h3>
-              <p className="text-theme-text-secondary mt-2 text-sm whitespace-pre-wrap">
-                {application.keyContacts ?? 'No contacts recorded.'}
-              </p>
+              {keyContacts.length === 0 ? (
+                <p className="text-theme-text-secondary mt-2 text-sm">No contacts recorded.</p>
+              ) : (
+                <ul className="mt-2 space-y-2 text-sm">
+                  {keyContacts.map((contact, index) => (
+                    <li key={index}>
+                      <span className="text-theme-text-primary font-medium">{contact.name}</span>
+                      {contact.role && <span className="text-theme-text-secondary">, {contact.role}</span>}
+                      {(contact.phone || contact.email) && (
+                        <div className="text-theme-text-secondary">
+                          {[contact.phone, contact.email].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Key dates timeline */}
@@ -733,7 +792,9 @@ export const GrantDetailPage: React.FC = () => {
               </div>
               <div className="card p-4 text-center">
                 <p className="text-theme-text-secondary text-sm">Remaining</p>
-                <p className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p
+                  className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'}`}
+                >
                   {formatCurrency(remainingTotal)}
                 </p>
               </div>
@@ -814,7 +875,7 @@ export const GrantDetailPage: React.FC = () => {
                         return (
                           <tr key={item.id}>
                             <td className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap">
-                              {budgetItemCategoryLabel(item.category)}
+                              {budgetCategoryLabel(item.category)}
                             </td>
                             <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.description}</td>
                             <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
@@ -824,7 +885,7 @@ export const GrantDetailPage: React.FC = () => {
                               {formatCurrency(item.amountSpent)}
                             </td>
                             <td
-                              className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-600'}`}
+                              className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                             >
                               {formatCurrency(remaining)}
                             </td>
@@ -853,7 +914,7 @@ export const GrantDetailPage: React.FC = () => {
                           {formatCurrency(spentTotal)}
                         </td>
                         <td
-                          className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                          className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'}`}
                         >
                           {formatCurrency(remainingTotal)}
                         </td>
@@ -951,7 +1012,7 @@ export const GrantDetailPage: React.FC = () => {
                               {formatCurrency(exp.amount)}
                             </td>
                             <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                              {linkedBudgetItem ? budgetItemCategoryLabel(linkedBudgetItem.category) : '--'}
+                              {linkedBudgetItem ? budgetCategoryLabel(linkedBudgetItem.category) : '--'}
                             </td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">
                               {exp.receiptUrl && isSafeExternalUrl(exp.receiptUrl) ? (
@@ -1065,7 +1126,7 @@ export const GrantDetailPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => void handleMarkTaskComplete(task.id)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20"
+                                className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-800 transition-colors hover:bg-green-500/20"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                 Mark Complete
@@ -1185,9 +1246,10 @@ export const GrantDetailPage: React.FC = () => {
               className={selectClass}
             >
               <option value="">Select category...</option>
-              {Object.entries(BUDGET_ITEM_CATEGORY_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
+              {/* The values are the backend's category codes; it refuses the labels. */}
+              {BUDGET_CATEGORY_ORDER.map((category) => (
+                <option key={category} value={category}>
+                  {BUDGET_ITEM_CATEGORY_LABELS[category]}
                 </option>
               ))}
             </select>
@@ -1334,7 +1396,7 @@ export const GrantDetailPage: React.FC = () => {
               <option value="">None</option>
               {budgetItems.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {budgetItemCategoryLabel(item.category)} - {item.description}
+                  {budgetCategoryLabel(item.category)} - {item.description}
                 </option>
               ))}
             </select>

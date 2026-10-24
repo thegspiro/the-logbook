@@ -78,7 +78,17 @@ export interface ItemForm {
   isMultiSelect: boolean;
   /** null = no cap (approval method) */
   selectionCap: number | null;
+  allowsWriteIn: boolean;
 }
+
+/**
+ * A write-in names someone to fill a seat, so it belongs to candidate races
+ * only. An Approve/Deny item decides a question; a typed-in answer to a motion
+ * has no meaning, and the printed ballot already offers just the two boxes.
+ * Mirrors the server, which rejects a write-in on an approval item.
+ */
+export const itemAllowsWriteIn = (item: Pick<BallotItem, 'vote_type'>, allowWriteIns: boolean): boolean =>
+  allowWriteIns && item.vote_type !== VoteType.APPROVAL;
 
 export const itemForm = (item: BallotItem, settings: BallotSettings): ItemForm => {
   const isApprovalType = item.vote_type === VoteType.APPROVAL;
@@ -89,7 +99,8 @@ export const itemForm = (item: BallotItem, settings: BallotSettings): ItemForm =
   const isMultiSelect = !isApprovalType && !isRanked && (effectiveMethod === VotingMethod.APPROVAL || maxVotes > 1);
   // Approval-method items have no selection cap; multi-vote items do
   const selectionCap = effectiveMethod === VotingMethod.APPROVAL ? null : maxVotes;
-  return { isApprovalType, isRanked, isMultiSelect, selectionCap };
+  const allowsWriteIn = itemAllowsWriteIn(item, settings.allow_write_ins);
+  return { isApprovalType, isRanked, isMultiSelect, selectionCap, allowsWriteIn };
 };
 
 /** One item's selection as the wire form the server accepts. */

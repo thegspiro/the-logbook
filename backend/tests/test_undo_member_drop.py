@@ -192,3 +192,144 @@ async def test_another_organization_cannot_undo_it(db_session):
         )
 
     assert exc.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# The window counts from the drop's effective date, not the day it was entered
+# ---------------------------------------------------------------------------
+
+
+async def _dropped_on(db_session, org, *, recorded, effective):
+    """A drop recorded at ``recorded`` whose stint closed on ``effective``."""
+    member = await _user(
+        db_session,
+        org,
+        status=UserStatus.DROPPED_VOLUNTARY,
+        status_changed_at=recorded,
+    )
+    db_session.add(
+        MemberServicePeriod(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            user_id=member.id,
+            start_date=None,
+            end_date=effective,
+            separation_status=UserStatus.DROPPED_VOLUNTARY.value,
+            counts_toward_service=True,
+        )
+    )
+    await db_session.flush()
+    return member
+
+
+def _now():
+    # Whole seconds: the column keeps no fraction, so an exact comparison of
+    # available_until would otherwise depend on whether the row was re-read.
+    return datetime.now(timezone.utc).replace(microsecond=0)
+
+
+async def test_a_drop_not_back_dated_keeps_its_week(db_session):
+    org = await _org(db_session)
+    officer = await _user(db_session, org)
+    recorded = _now()
+    member = await _dropped_on(
+        db_session, org, recorded=recorded, effective=recorded.date()
+    )
+
+    availability = await get_undo_drop_availability(
+        user_id=uuid.UUID(member.id), db=db_session, current_user=officer
+    )
+
+    assert availability.available is True
+    assert availability.available_until == recorded + timedelta(
+        days=UNDO_DROP_WINDOW_DAYS
+    )
+
+
+async def test_a_back_dated_drop_has_only_what_is_left_of_its_week(db_session):
+    org = await _org(db_session)
+    officer = await _user(db_session, org)
+    recorded = _now()
+    member = await _dropped_on(
+        db_session,
+        org,
+        recorded=recorded,
+        effective=recorded.date() - timedelta(days=3),
+    )
+
+    availability = await get_undo_drop_availability(
+        user_id=uuid.UUID(member.id), db=db_session, current_user=officer
+    )
+
+    assert availability.available is True
+    assert availability.available_until == recorded + timedelta(
+        days=UNDO_DROP_WINDOW_DAYS - 3
+    )
+
+
+async def test_a_drop_back_dated_past_the_week_cannot_be_undone(db_session):
+    org = await _org(db_session)
+    officer = await _user(db_session, org)
+    recorded = _now()
+    member = await _dropped_on(
+        db_session,
+        org,
+        recorded=recorded,
+        effective=recorded.date() - timedelta(days=UNDO_DROP_WINDOW_DAYS + 3),
+    )
+
+    availability = await get_undo_drop_availability(
+        user_id=uuid.UUID(member.id), db=db_session, current_user=officer
+    )
+    assert availability.available is False
+    assert "change their status" in availability.detail
+
+    with pytest.raises(HTTPException) as exc:
+        await undo_member_drop(
+            user_id=uuid.UUID(member.id),
+            request=UndoDropRequest(),
+            db=db_session,
+            current_user=officer,
+        )
+    assert exc.value.status_code == 400
+    assert member.status == UserStatus.DROPPED_VOLUNTARY
+
+
+async def test_moving_the_end_date_later_does_not_reopen_the_window(db_session):
+    org = await _org(db_session)
+    officer = await _user(db_session, org)
+    recorded = _now() - timedelta(days=UNDO_DROP_WINDOW_DAYS + 1)
+    # An officer later moved the stint's end to today in the service history.
+    member = await _dropped_on(
+        db_session, org, recorded=recorded, effective=_now().date()
+    )
+
+    availability = await get_undo_drop_availability(
+        user_id=uuid.UUID(member.id), db=db_session, current_user=officer
+    )
+
+    assert availability.available is False
+
+
+async def test_the_effective_date_is_read_on_the_departments_calendar(db_session):
+    org = await _org(db_session)
+    org.timezone = "America/New_York"
+    await db_session.flush()
+    officer = await _user(db_session, org)
+    # 02:00 UTC is still the previous evening in New York, so a drop entered
+    # then with that evening's date is not back-dated by a day.
+    recorded = (_now() - timedelta(days=1)).replace(hour=2, minute=0, second=0)
+    member = await _dropped_on(
+        db_session,
+        org,
+        recorded=recorded,
+        effective=(recorded - timedelta(days=1)).date(),
+    )
+
+    availability = await get_undo_drop_availability(
+        user_id=uuid.UUID(member.id), db=db_session, current_user=officer
+    )
+
+    assert availability.available_until == recorded + timedelta(
+        days=UNDO_DROP_WINDOW_DAYS
+    )

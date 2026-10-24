@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
+  Settings,
   RefreshCw,
   Search,
   ChevronUp,
@@ -34,6 +34,7 @@ import {
   Truck,
   Pin,
   PinOff,
+  Pencil,
   GripVertical,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { EmptyState } from '../../../components/ux/EmptyState';
+import { PromptDialog } from '../../../components/ux/PromptDialog';
 import { Modal } from '../../../components/Modal';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
@@ -79,7 +81,7 @@ import { asArray } from '../../../utils/asArray';
 import { buildLabelFilterPath, MAX_LABEL_BATCH, MAX_LABEL_ITEMS_TOTAL } from '../utils/labelPrintQuery';
 import type { LabelFilterParams } from '../utils/labelPrintQuery';
 import { useConfirm } from '../../../contexts/ConfirmContext';
-import { Breadcrumbs } from '../../../components/ux';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 const PAGE_SIZE = 50;
 
@@ -301,6 +303,8 @@ interface VariantProductRowProps {
   showLocation: boolean;
   canManage: boolean;
   onToggle: () => void;
+  /** Absent where the table offers no product rename (the pinned list). */
+  onRename?: ((members: InventoryItem[]) => void) | undefined;
 }
 
 /**
@@ -328,6 +332,7 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
   showLocation,
   canManage,
   onToggle,
+  onRename,
 }) => {
   const lead = members[0];
   if (!lead) return null;
@@ -344,6 +349,9 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
   // the list rather than as four sizes in two colours.
   const sizes = [...new Set(members.map((m) => displaySize(m)).filter(Boolean))];
   const mixed = <span className="text-theme-text-muted italic">Mixed</span>;
+  // The rename goes through the variant group, which carries it onto every
+  // member's name, so a cluster without one has nothing to rename through.
+  const canRename = canManage && !!onRename && !!lead.variant_group_id;
 
   return (
     <tr className="hover:bg-theme-surface-hover bg-theme-surface-hover/25 transition-colors">
@@ -427,8 +435,30 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
           carrying NO data-label hidden, so rendering them empty put five blank
           labelled rows in every folded card. They are `hidden` on desktop, so
           leaving them out costs no column there. */}
-      <td className="px-3 py-3" />
-      {canManage && <td data-label="" className="hidden" />}
+      <td className="px-3 py-3">
+        {canRename && (
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => onRename(members)}
+              className="btn-icon-sm text-theme-text-muted hover:text-theme-text-primary"
+              aria-label={`Rename ${name}`}
+              title="Rename product"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </td>
+      {canManage && (
+        <td data-label="" className="hidden">
+          {canRename && (
+            <button type="button" onClick={() => onRename(members)} className="btn-secondary btn-sm">
+              Rename
+            </button>
+          )}
+        </td>
+      )}
     </tr>
   );
 };
@@ -472,6 +502,7 @@ interface ItemTableProps {
   /** Variant clusters the member has opened, keyed by `collapseKey`. */
   expandedVariants?: Set<string>;
   onToggleVariants?: (key: string) => void;
+  onRenameProduct?: (members: InventoryItem[]) => void;
   /** Renders the drag handle and the move arrows. Pinned section only. */
   pinnedMode?: boolean;
   onMovePin?: (itemId: string, toIndex: number) => void;
@@ -503,6 +534,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
   onToggleGroup,
   expandedVariants,
   onToggleVariants,
+  onRenameProduct,
   pinnedMode = false,
   onMovePin,
 }) => {
@@ -747,6 +779,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                         showLocation={!grouped('location')}
                         canManage={canManage}
                         onToggle={() => onToggleVariants?.(collapseKey(label, item.id))}
+                        onRename={onRenameProduct}
                       />
                     )}
                     {!isCollapsed && !foldedAway && (
@@ -900,7 +933,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                               onClick={() => onTogglePin(item)}
                               className={`btn-icon-sm ${
                                 item.pin_position != null
-                                  ? 'text-amber-600 dark:text-amber-400'
+                                  ? 'text-amber-700 dark:text-amber-400'
                                   : 'text-theme-text-muted hover:text-theme-text-primary'
                               }`}
                               aria-label={`${item.pin_position != null ? 'Unpin' : 'Pin'} ${getDisplayName(item)}`}
@@ -955,6 +988,10 @@ const InventoryItemsPage: React.FC = () => {
   // shareable link is the point.
   const [searchParams, setSearchParams] = useSearchParams();
   const vendorFilter = searchParams.get('vendor_id') ?? '';
+  // Arrived at from the low-stock alert email, so it lives in the URL like the
+  // vendor scope. Only the literal 'true' turns it on: anything else is an
+  // unrecognized value and degrades to the full list rather than an error.
+  const lowStockOnly = searchParams.get('low_stock') === 'true';
   // The type filter is URL-driven for the same reason vendor scoping is: the
   // inventory hub's supply-line cards link straight at one domain
   // (?item_type=uniform), and that only works if the list reads the URL.
@@ -1064,6 +1101,8 @@ const InventoryItemsPage: React.FC = () => {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ groupId: string; name: string } | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -1130,6 +1169,7 @@ const InventoryItemsPage: React.FC = () => {
       location_id: fLoc && fLoc !== UNASSIGNED_LOCATION ? fLoc : undefined,
       unassigned_location: fLoc === UNASSIGNED_LOCATION ? true : undefined,
       vendor_id: vendorFilter || undefined,
+      low_stock: lowStockOnly || undefined,
       size: fSize || undefined,
       color: fColor || undefined,
       style: fStyle || undefined,
@@ -1138,7 +1178,23 @@ const InventoryItemsPage: React.FC = () => {
       sort_order: sortOrd,
       group_by: groupBy || undefined,
     }),
-    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, fLabel, sortBy, sortOrd, groupBy]
+    [
+      search,
+      fCat,
+      fStatus,
+      fCond,
+      fType,
+      fLoc,
+      vendorFilter,
+      lowStockOnly,
+      fSize,
+      fColor,
+      fStyle,
+      fLabel,
+      sortBy,
+      sortOrd,
+      groupBy,
+    ]
   );
 
   const loadItems = useCallback(
@@ -1597,6 +1653,29 @@ const InventoryItemsPage: React.FC = () => {
     setEditItem(it);
     setModalOpen(true);
   };
+  const openRenameProduct = (members: InventoryItem[]) => {
+    const lead = members[0];
+    if (!lead?.variant_group_id) return;
+    setRenameTarget({ groupId: lead.variant_group_id, name: getDisplayName(lead) });
+  };
+  const renameProduct = async (newName: string) => {
+    if (!renameTarget) return;
+    if (newName === renameTarget.name) {
+      setRenameTarget(null);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await inventoryService.updateVariantGroup(renameTarget.groupId, { name: newName });
+      toast.success(`Renamed to ${newName}`);
+      setRenameTarget(null);
+      void loadItems(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to rename product'));
+    } finally {
+      setRenaming(false);
+    }
+  };
   const offerLabels = (ids: string[] | undefined, verb: 'added' | 'received') => {
     if (canManage && ids && ids.length > 0) setJustAdded({ ids, verb });
   };
@@ -1719,98 +1798,95 @@ const InventoryItemsPage: React.FC = () => {
   /* ================================================================ */
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-[44px] mb-6 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Inventory Items</h1>
-          {/* The counts, not just the object: a malformed summary rendered
+      <OperationsPageHeader
+        icon={Package}
+        title="Inventory Items"
+        subtitle={
+          <>
+            {/* The counts, not just the object: a malformed summary rendered
               "items · overdue · maint. due" with every figure blank. */}
-          {summary &&
-            typeof summary.non_medical_items === 'number' &&
-            typeof summary.overdue_checkouts === 'number' &&
-            typeof summary.maintenance_due_count === 'number' && (
-              <div className="text-theme-text-muted mt-2 flex flex-wrap gap-4 text-sm">
-                <span className="flex items-center gap-1.5">
-                  {/* non_medical_items, not total_items: the latter sums
+            {summary &&
+              typeof summary.non_medical_items === 'number' &&
+              typeof summary.overdue_checkouts === 'number' &&
+              typeof summary.maintenance_due_count === 'number' && (
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="flex items-center gap-1.5">
+                    {/* non_medical_items, not total_items: the latter sums
                     quantities across every domain including medical, while
                     the list below counts rows and excludes it. A header of 82
                     over a list of 6 reads as a bug in the list. */}
-                  <Package className="h-4 w-4" /> {summary.non_medical_items} items
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <AlertTriangle className="h-4 w-4" /> {summary.overdue_checkouts} overdue
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Wrench className="h-4 w-4" /> {summary.maintenance_due_count} maint. due
-                </span>
-                {summary.total_value > 0 && <span>${formatNumber(summary.total_value)}</span>}
-              </div>
-            )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={refresh} className="btn-secondary btn-icon-sm" title="Refresh">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={() => void exportCsv()}
-            // Until the first load lands there is no list to export, and a
-            // button that silently does nothing is worse than one that says so.
-            disabled={!loadedParams}
-            className="btn-secondary btn-md hidden items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex"
-          >
-            <Download className="h-4 w-4" /> Export
-          </button>
-          {canManage && (
-            <button
-              onClick={() => setMemberPickerOpen(true)}
-              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
-            >
-              <UserPlus className="h-4 w-4" /> Assign
-            </button>
-          )}
-          {canManage && (
-            <button
-              onClick={() => setReceiveOpen(true)}
-              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
-            >
-              <PackagePlus className="h-4 w-4" /> Receive Stock
-            </button>
-          )}
-          {canManage && (
-            <button
-              onClick={() => setBulkAddOpen(true)}
-              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
-              title="Paste a list of item names"
-            >
-              <ListPlus className="h-4 w-4" /> Add Several
-            </button>
-          )}
-          {canManage && (
-            <Link
-              to="/inventory/import"
-              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
-              title="Import items from a CSV file"
-            >
-              <Upload className="h-4 w-4" /> Import CSV
+                    <Package className="h-4 w-4" /> {summary.non_medical_items} items
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" /> {summary.overdue_checkouts} overdue
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Wrench className="h-4 w-4" /> {summary.maintenance_due_count} maint. due
+                  </span>
+                  {summary.total_value > 0 && <span>${formatNumber(summary.total_value)}</span>}
+                </div>
+              )}
+          </>
+        }
+        actions={
+          <>
+            <Link to="/inventory/admin" className="btn-secondary btn-md inline-flex items-center gap-2">
+              <Settings className="h-4 w-4" aria-hidden="true" /> Administration
             </Link>
-          )}
-          {canManage && (
-            <button onClick={openAdd} className="btn-info btn-md hidden items-center gap-2 sm:inline-flex">
-              <Plus className="h-4 w-4" /> Add Item
+            <button onClick={refresh} className="btn-secondary btn-icon-sm" title="Refresh">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-          )}
-        </div>
-      </div>
+            <button
+              onClick={() => void exportCsv()}
+              // Until the first load lands there is no list to export, and a
+              // button that silently does nothing is worse than one that says so.
+              disabled={!loadedParams}
+              className="btn-secondary btn-md hidden items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex"
+            >
+              <Download className="h-4 w-4" /> Export
+            </button>
+            {canManage && (
+              <button
+                onClick={() => setMemberPickerOpen(true)}
+                className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+              >
+                <UserPlus className="h-4 w-4" /> Assign
+              </button>
+            )}
+            {canManage && (
+              <button
+                onClick={() => setReceiveOpen(true)}
+                className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+              >
+                <PackagePlus className="h-4 w-4" /> Receive Stock
+              </button>
+            )}
+            {canManage && (
+              <button
+                onClick={() => setBulkAddOpen(true)}
+                className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+                title="Paste a list of item names"
+              >
+                <ListPlus className="h-4 w-4" /> Add Several
+              </button>
+            )}
+            {canManage && (
+              <Link
+                to="/inventory/import"
+                className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+                title="Import items from a CSV file"
+              >
+                <Upload className="h-4 w-4" /> Import CSV
+              </Link>
+            )}
+            {canManage && (
+              <button onClick={openAdd} className="btn-primary btn-md hidden items-center gap-2 sm:inline-flex">
+                <Plus className="h-4 w-4" /> Add Item
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Location summary */}
       {locSummary.length > 0 && (
@@ -1862,6 +1938,24 @@ const InventoryItemsPage: React.FC = () => {
             className="ml-auto text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
           >
             Clear vendor filter
+          </button>
+        </div>
+      )}
+
+      {/* Low-stock scope, arrived at from the alert email */}
+      {lowStockOnly && (
+        <div className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+          <span>Showing only items at or below their reorder point.</span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('low_stock');
+              setSearchParams(next, { replace: true });
+            }}
+            className="touch-target-phone font-medium underline"
+          >
+            Show all items
           </button>
         </div>
       )}
@@ -2143,6 +2237,23 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       )}
 
+      <PromptDialog
+        isOpen={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        onSubmit={(value) => void renameProduct(value)}
+        title="Rename product"
+        message={
+          <>
+            Renames <strong>{renameTarget?.name}</strong> on every size and variant. The size, colour and style part of
+            each name stays as it is.
+          </>
+        }
+        label="Product name"
+        defaultValue={renameTarget?.name ?? ''}
+        confirmLabel="Rename"
+        loading={renaming}
+      />
+
       {/* Bulk status modal */}
       <Modal
         isOpen={bulkStatusOpen}
@@ -2220,7 +2331,8 @@ const InventoryItemsPage: React.FC = () => {
           fColor ||
           fStyle ||
           fLabel ||
-          vendorFilter ? (
+          vendorFilter ||
+          lowStockOnly ? (
           <EmptyState
             icon={Package}
             title="No items found"
@@ -2284,8 +2396,11 @@ const InventoryItemsPage: React.FC = () => {
           when rows reflow into cards on mobile, so expose sorting here. */}
       {!loading && items.length > 0 && (
         <div className="mb-3 flex items-center gap-2 md:hidden">
-          <label className="text-theme-text-muted shrink-0 text-xs">Sort:</label>
+          <label htmlFor="inventory-mobile-sort" className="text-theme-text-muted shrink-0 text-xs">
+            Sort:
+          </label>
           <select
+            id="inventory-mobile-sort"
             className="form-input flex-1 py-1.5 text-xs"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortKey)}
@@ -2314,7 +2429,7 @@ const InventoryItemsPage: React.FC = () => {
               into maintenance is exactly what its owner needs to see. */}
           <ItemTable
             label="Pinned"
-            icon={<Pin className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+            icon={<Pin className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
             items={pinnedItems}
             categories={categories}
             locations={locations}
@@ -2335,7 +2450,7 @@ const InventoryItemsPage: React.FC = () => {
           />
           <ItemTable
             label="Available"
-            icon={<CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />}
+            icon={<CheckCircle2 className="h-4 w-4 text-green-700 dark:text-green-400" />}
             items={availableItems}
             categories={categories}
             locations={locations}
@@ -2359,6 +2474,7 @@ const InventoryItemsPage: React.FC = () => {
             onToggleGroup={toggleGroup}
             expandedVariants={expandedVariants}
             onToggleVariants={toggleVariants}
+            onRenameProduct={openRenameProduct}
           />
           <ItemTable
             label="Unavailable"
@@ -2386,6 +2502,7 @@ const InventoryItemsPage: React.FC = () => {
             onToggleGroup={toggleGroup}
             expandedVariants={expandedVariants}
             onToggleVariants={toggleVariants}
+            onRenameProduct={openRenameProduct}
           />
         </div>
       )}

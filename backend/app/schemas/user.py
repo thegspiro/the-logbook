@@ -389,6 +389,17 @@ class AdminUserCreate(MembershipClassificationFields):
     send_welcome_email: bool = Field(
         default=True, description="Send welcome email with password setup link"
     )
+    # Also create the member an account in the connected directory (Google
+    # Workspace or Microsoft 365). The member's Logbook email then becomes a
+    # generated department address -- the account's -- and the email given
+    # above is kept as their personal address, where passwords are sent.
+    create_directory_account: bool = Field(
+        default=False,
+        description=(
+            "Create an account in the connected Google Workspace or Microsoft "
+            "365 directory at a generated department address"
+        ),
+    )
 
 
 class UserUpdate(MembershipClassificationFields):
@@ -601,6 +612,11 @@ class RoleResponse(BaseModel):
     permissions: List[str] = []
     is_system: bool
     priority: int
+    # The seeded mirror of an operational rank (Chief, Captain, Firefighter,
+    # ...). Member pickers and roster chips leave these out; the Rank field
+    # is where a rank is set. Defaults False so a dict built without it is
+    # still a valid response.
+    mirrors_rank: bool = False
 
     @field_validator("permissions", mode="before")
     @classmethod
@@ -624,6 +640,23 @@ class UserWithRolesResponse(UserResponse):
     )
 
     model_config = _response_config
+
+
+class MemberDirectoryAccountSummary(BaseModel):
+    """The directory account outcome of adding a member, when one applied."""
+
+    provider: str
+    provider_name: str
+    status: str
+    email: str
+    credentials_sent: bool = False
+    last_error: Optional[str] = None
+
+
+class MemberCreateResponse(UserWithRolesResponse):
+    """A created member, with what happened in the connected directory."""
+
+    directory_account: Optional[MemberDirectoryAccountSummary] = None
 
 
 class MemberEmailChoice(BaseModel):
@@ -744,6 +777,14 @@ class MemberAuditLogEntry(UTCResponseBase):
     model_config = _response_config
 
 
+class DeletionImpactRecord(BaseModel):
+    """Rows in one table that a permanent delete removes with the member."""
+
+    table: str
+    label: str
+    count: int
+
+
 class DeletionImpactResponse(BaseModel):
     """Schema for member deletion impact assessment"""
 
@@ -752,6 +793,15 @@ class DeletionImpactResponse(BaseModel):
     display_name: Optional[str] = None
     status: str
     training_records: int = 0
+    # Individually assigned items plus open pool issuances the member holds.
+    # A permanent delete returns these to stock rather than destroying them.
     inventory_items: int = 0
+    # Items checked out to the member; checked back in on a permanent delete.
+    checked_out_items: int = 0
+    # Documents the member uploaded; kept, with the uploader cleared.
     documents: int = 0
+    # Every table whose rows are deleted with the member, derived from the
+    # models' ON DELETE CASCADE references, largest first.
+    removed_records: List[DeletionImpactRecord] = Field(default_factory=list)
+    # Rows a permanent delete removes outright: the sum of removed_records.
     total_records: int = 0

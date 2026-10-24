@@ -8,9 +8,11 @@
  * or campaign outside the department.
  *
  * A create omits blank optional fields; an edit sends every field the form
- * owns, a cleared one as null (pitfall #1). The stored reminder switch and
- * payment schedule are not offered: nothing sends pledge reminders or reads
- * the schedule (pitfall #19).
+ * owns, a cleared one as null (pitfall #1). The reminder switch is read by
+ * the daily `grant_reminders` task, which emails the department's
+ * fundraising managers — never the donor — 14 days and 1 day before the due
+ * date. The stored payment schedule is not offered: nothing reads it
+ * (pitfall #19).
  */
 
 import React, { useState } from 'react';
@@ -57,6 +59,7 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
   const [fulfilledAmount, setFulfilledAmount] = useState(pledge ? String(pledge.fulfilledAmount) : '0');
   const [status, setStatus] = useState<string>(pledge?.status ?? PledgeStatus.PENDING);
   const [notes, setNotes] = useState(pledge?.notes ?? '');
+  const [reminderEnabled, setReminderEnabled] = useState(pledge?.reminderEnabled ?? true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -93,6 +96,7 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
           fulfilledAmount: Number(fulfilledAmount || 0).toFixed(2),
           status: status as PledgeStatus,
           notes: blankToNull(notes),
+          reminderEnabled,
         };
         await fundraisingService.updatePledge(pledge.id, payload);
         toast.success('Pledge saved');
@@ -104,6 +108,7 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
           pledgeDate,
           dueDate: dueDate || undefined,
           notes: notes.trim() || undefined,
+          reminderEnabled,
         };
         await fundraisingService.createPledge(payload);
         toast.success('Pledge recorded');
@@ -282,6 +287,23 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
+        </div>
+
+        <div>
+          <label className="text-theme-text-primary flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox mt-0.5"
+              checked={reminderEnabled}
+              onChange={(e) => setReminderEnabled(e.target.checked)}
+              aria-describedby="pledge-reminder-help"
+            />
+            Send reminders
+          </label>
+          <p id="pledge-reminder-help" className="text-theme-text-secondary mt-1 text-xs">
+            Emails the department&apos;s fundraising managers 14 days and 1 day before the due date while money is still
+            owed. The donor is never emailed.
+          </p>
         </div>
       </div>
     </Modal>

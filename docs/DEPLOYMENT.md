@@ -164,7 +164,7 @@ Ubuntu, for example, from the deadsnakes PPA). The script checks before it
 installs anything and stops with this explanation if no suitable Python is
 found; it does not add package sources itself.
 
-**Also needs Node.js 22 or newer with npm 11 or newer** — the script builds the
+**Also needs Node.js 22.22.1 or newer with npm 10 or newer** — the script builds the
 frontend with `npm run build`, and `frontend/package.json` declares those
 engines. The script installs the distribution's `nodejs` and `npm` packages
 without checking their versions, and most distributions ship an older pair, so
@@ -775,7 +775,7 @@ For HIPAA, GDPR, and other compliance requirements, see [COMPLIANCE.md](./COMPLI
 
 - [ ] Complete [Security Checklist](#security-checklist)
 - [ ] Configure [Backups](./BACKUP.md)
-- [ ] Set up error monitoring (Sentry — `SENTRY_ENABLED` in `.env.example.full`) and an external uptime check
+- [ ] Set up an external uptime check. Sentry is optional and **off by default**; enable it (`SENTRY_ENABLED` in `.env.example.full`) only with a signed Business Associate Agreement (BAA) if the department handles PHI. The built-in Error Monitor page and the weekly security report cover errors without it
 - [ ] Review [Security Best Practices](../SECURITY.md) and [Compliance](./COMPLIANCE.md)
 - [ ] Train your team on platform usage
 

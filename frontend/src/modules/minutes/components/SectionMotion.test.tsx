@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockAddMotion = vi.fn();
+const mockUpdateMotion = vi.fn();
 
 vi.mock('../services/api', () => ({
-  minutesService: { addMotion: (...a: unknown[]) => mockAddMotion(...a) as unknown },
+  minutesService: {
+    addMotion: (...a: unknown[]) => mockAddMotion(...a) as unknown,
+    updateMotion: (...a: unknown[]) => mockUpdateMotion(...a) as unknown,
+  },
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
@@ -46,6 +50,8 @@ describe('SectionMotion', () => {
     vi.clearAllMocks();
     mockAddMotion.mockReset();
     mockAddMotion.mockResolvedValue(recorded);
+    mockUpdateMotion.mockReset();
+    mockUpdateMotion.mockResolvedValue(recorded);
     onRecorded.mockReset();
     onRecorded.mockResolvedValue(undefined);
   });
@@ -186,5 +192,60 @@ describe('SectionMotion', () => {
     show(adjourn, [unnamed]);
     expect(screen.getByText('Moved by: not recorded')).toBeInTheDocument();
     expect(screen.getByText('Seconded by: not recorded')).toBeInTheDocument();
+  });
+
+  describe('how the vote was taken', () => {
+    it('records a roll call with the threshold, and sends no totals of its own', async () => {
+      const user = userEvent.setup();
+      show();
+
+      await user.selectOptions(screen.getByLabelText('Needed to carry'), 'two_thirds');
+      await user.click(screen.getByRole('radio', { name: 'Roll call' }));
+      await user.click(
+        within(screen.getByRole('radiogroup', { name: "Pat Chief's vote" })).getByRole('radio', { name: 'Yes' })
+      );
+      await user.click(
+        within(screen.getByRole('radiogroup', { name: "Lee Treasurer's vote" })).getByRole('radio', { name: 'No' })
+      );
+      await user.click(screen.getByRole('button', { name: 'Record motion' }));
+
+      const sent = mockAddMotion.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(sent.threshold).toBe('two_thirds');
+      expect(sent.roll_call).toEqual([
+        { name: 'Pat Chief', vote: 'yes' },
+        { name: 'Lee Treasurer', vote: 'no' },
+      ]);
+      expect(sent.votes_for).toBeUndefined();
+    });
+
+    it('records totals typed in', async () => {
+      const user = userEvent.setup();
+      show();
+
+      await user.type(screen.getByLabelText('For'), '6');
+      await user.type(screen.getByLabelText('Against'), '1');
+      await user.click(screen.getByRole('button', { name: 'Record motion' }));
+
+      expect(mockAddMotion).toHaveBeenCalledWith(
+        'm1',
+        expect.objectContaining({ votes_for: 6, votes_against: 1, status: 'passed' })
+      );
+    });
+
+    it('shows the recorded vote and lets the secretary take the counts’ result', async () => {
+      const user = userEvent.setup();
+      show(adjourn, [{ ...recorded, votes_for: 1, votes_against: 3, suggested_status: 'failed' }]);
+
+      expect(screen.getByText('Vote: 1-3')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Change it to failed' }));
+
+      expect(mockUpdateMotion).toHaveBeenCalledWith('m1', 'mo1', { status: 'failed' });
+      expect(onRecorded).toHaveBeenCalled();
+    });
+
+    it('does not offer to change a result when it cannot be edited', () => {
+      show(adjourn, [{ ...recorded, votes_for: 1, votes_against: 3, suggested_status: 'failed' }], false);
+      expect(screen.queryByRole('button', { name: /Change it to/ })).toBeNull();
+    });
   });
 });

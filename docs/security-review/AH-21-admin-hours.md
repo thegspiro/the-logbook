@@ -1,6 +1,399 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), pass 7 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), pass 10 (this PR)
+
+## Pass 10 (2026-10-24) — 0 fixed by this pass, 0 new findings; AH-18 (pass 9's one open finding) is now fixed
+
+**Watchdog pickup for the security-review rotation** (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`list_pull_requests`, 0 results after PR #3631,
+Feature 20 Compliance pass 10, was merged by this same watchdog run), and
+the dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). Rotation row 21 (Admin hours) was confirmed the
+next `⬜` by reading `PROGRESS.md`'s table directly on a freshly fetched
+`main`.
+
+**Baseline `4a1eeed4`** (pass 9's merge, PR #3451). `git diff --stat` across
+every file this feature declares in scope (`endpoints/admin_hours.py`,
+`admin_hours_service.py`, `schemas/admin_hours.py`,
+`utils/admin_hours_settings.py`, `core/seed_admin_hours.py`, the
+`admin-hours` frontend module) shows movement in two backend files and
+eleven frontend files — `endpoints/admin_hours.py` itself is untouched, so
+the route surface is unchanged from pass 9 (re-enumerated by AST walk:
+still 30/30, same permission strings).
+
+- **`admin_hours_service.py` — AH-18 (pass 9's one open finding) is fixed,
+  by commit `9789684f` (merged via PR #3464, a dedicated security-sweep
+  branch, not this rotation).** Pass 9 flagged `_assert_name_free` as a
+  read-then-write race: two officers adding the same category name at once
+  could both read "free" and both insert. The fix is exactly CLAUDE.md
+  Pitfall #27's two-part pattern — `select(Organization.id).where(...).with_for_update()`
+  to lock the contended parent row first, then the name check itself
+  rewritten as a `.with_for_update()` locking read (necessary because under
+  REPEATABLE READ a plain `SELECT` answers from the transaction's first
+  snapshot, which predates the lock). Read the full diff: the lock is taken
+  before the check in both the create and rename paths, nothing else in
+  this file locks category rows, and no code holding this lock waits on
+  one, so there is no lock-order inversion introduced.
+  **Guard test:** `tests/test_admin_hours_category_names.py`'s
+  `TestTheNameCheckSerializesConcurrentWrites` spies on the exact SQL
+  `db_session.execute` emits (compiled for MySQL) and asserts the
+  `organizations ... FOR UPDATE` lock statement's index precedes the
+  `admin_hours_categories ... FOR UPDATE` check statement's index, for both
+  `create_category` and `update_category`; a third test asserts
+  deactivating a category takes no lock at all. This proves the mechanism
+  (lock-then-locking-read, in order) rather than asserting a race actually
+  interleaved — the test's own docstring says why a real two-connection
+  race can't be driven inside one rolled-back test transaction. Ran it
+  directly: 3/3 pass. AH-18 moves to ✅ FIXED below.
+- **`schemas/admin_hours.py` — app-review finding B15 fixed, by commit
+  `1f02bcd5` (merged via PR #3477, an app-review branch, not this
+  rotation).** `EventHourMappingUpdate.percentage`/`.is_active` previously
+  read an explicit JSON `null` the same as an omitted key, so a client
+  clearing either field on `PUT /admin-hours/event-mappings/{id}` got a 200
+  that silently changed nothing (CLAUDE.md Pitfall #1's "omit vs. explicit
+  null" rule, violated in the omit direction). A `field_validator` on both
+  fields now raises on an explicit `None`, and does **not** fire for an
+  omitted key (the fix's own commit message records this was verified
+  rather than assumed — a `Field(None, ...)` default does not re-run
+  validators against values pydantic itself supplies). The endpoint still
+  maps the resulting `ValidationError` to FastAPI's normal 422, and the
+  underlying `apply_updates` write path is untouched. Not itself a security
+  finding (data-integrity/correctness, dimension 7), but it is this
+  feature's scope, so it is recorded here rather than silently inherited.
+  New integration test file
+  `test_admin_hours_update_endpoints_integration.py` (263 lines) exercises
+  it against a real database — not re-run in full this pass since it's
+  pre-existing coverage of an already-landed fix, but included in the
+  `-k admin_hours` run below (170/170 pass, no new failures).
+- **Frontend (eleven files) — cosmetic only.** The repo-wide AAA→AA contrast
+  sweep (`text-*-600`/`text-*-700` → `-700`/`-800` pairings) and a layout
+  wrap fix on `CategoriesTab.tsx` (`min-w-0`/`flex-wrap` so a long category
+  name no longer pushes its action icons off-card on a narrow phone), an
+  `aria`/`title` alt-text addition to the clock-in QR code's `<QRCodeSVG>`,
+  and `adminHoursCategoryService.list()` gaining an optional second
+  `config` parameter so `CheckInStationPage.tsx` (one of the six genuine
+  consumers AH21-2 found) can pass an `AbortSignal` for cancellation on
+  unmount — it still calls `createApiClient()`'s shared instance, so CSRF
+  and auth are unaffected. Swept all eleven changed files for
+  `window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`,
+  `innerHTML`, a bare `fetch(`/`axios` import, `localStorage`/
+  `sessionStorage`, and the banned `.toLocale*`/`date-fns` imports: zero
+  hits.
+
+### Findings
+
+**AH-18 — ✅ FIXED (confirmed this pass; fix itself landed in PR #3464, before this pass began)** — see above.
+
+No new findings. Every standing item from passes 1–9 (the per-org SoD
+toggle, the resync-growth re-queue, AH-16, CRON2-31-13) was already closed
+by the owner decision recorded under pass 5/8; nothing in this window's
+delta touches any of them.
+
+### Re-verification (read at current lines)
+
+- **Route inventory, enumerated by AST: 30 routes, 30 authenticated, unchanged
+  from pass 9.** `endpoints/admin_hours.py` has no diff since pass 9's
+  baseline, so the permission strings (18 routes `require_permission("admin_hours.manage")`,
+  12 self/org-scoped on `get_current_user` alone) are unchanged by
+  construction, not merely re-asserted.
+- **`check_route_permissions.py --strict`:** 273 routes repo-wide, 0 errors,
+  0 warnings — same count as pass 9's `AH` section, confirming no route
+  drift from any other feature's PR in this window either.
+
+### Completion gate (pass 10)
+
+| Check                                                                                                                                                                                               | Result                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/api/v1/endpoints/admin_hours.py app/services/admin_hours_service.py app/schemas/admin_hours.py app/utils/admin_hours_settings.py app/core/seed_admin_hours.py` (flake8 7.4.1, CI's pin) | ✅ 0 violations                                           |
+| `black --check` (same files; black 26.10.1)                                                                                                                                                         | ✅ 3 files unchanged                                      |
+| `isort --check-only` (same files; isort 9.0.2)                                                                                                                                                      | ✅ clean                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                   | ✅ 649 revisions, single head `a0195b397bf3`              |
+| `pytest tests/ -q -k "admin_hours"`                                                                                                                                                                 | ✅ 170 passed, 1 pre-existing skip (`py_vapid`/pywebpush) |
+| `check_route_permissions.py --strict`                                                                                                                                                               | ✅ 273 routes, 0 errors, 0 warnings                       |
+
+No backend or frontend source file was modified by this pass itself — every
+change in this window's delta was already landed, correctly, by two other
+branches before this pass began; this pass's own contribution is verifying
+each against current code (including running AH-18's guard test directly)
+rather than trusting the commit message, and recording AH-18's closure here.
+`npm run typecheck`/`npm run lint` were not run: no frontend file in this
+window's delta needed re-verification beyond the source read above (cosmetic
+contrast/layout/alt-text changes, already covered by the repo-wide sweeps'
+own completion gates when they landed), and this PR's own diff touches only
+this markdown file and `docs/security-review/PROGRESS.md`.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
+
+## Pass 9 (2026-10-20) — 0 fixed, 1 new LOW flagged; one non-rotation commit (`1ae0d0ac`, W70) reviewed in full
+
+**Pickup.** `list_pull_requests` (state open) returned 0 PRs, so this was a
+review iteration, not a tend. PR #3449 (Feature 20, Compliance, pass 9) had
+merged, docs-only, so there was nothing to record. Row 21 was the first `⬜`.
+
+**Delta since pass 8** (baseline `f698cdc2`). `git diff --stat f698cdc2 HEAD`
+over the feature's scope files is not empty: one commit, `1ae0d0ac`
+(workflow-review W70), touched `admin_hours_service.py` (+36) and eleven
+frontend files. Nothing else under `endpoints/admin_hours.py`, `schemas/`,
+`models/`, `utils/admin_hours_settings.py` or `core/seed_admin_hours.py` moved.
+
+### `1ae0d0ac` reviewed against all seven dimensions
+
+- **Backend (`admin_hours_service.py:136-162`, `:170`, `:202-209`).** New
+  `_assert_name_free` refuses a second active category of the same name. The
+  query filters `AdminHoursCategory.organization_id == organization_id`, binds
+  the name as a parameter (`func.lower(func.trim(...)) == name.strip().lower()`),
+  and `exclude_id` is the already-org-scoped `category.id` fetched by
+  `update_category`, so there is no cross-tenant read and no injection.
+  Both endpoints map the new `ValueError` to 400 through `safe_error_detail`
+  (`admin_hours.py:123-124`, `:161-162`), not 500. The message echoes only the
+  caller's own input back to them in a JSON body. Both routes keep
+  `require_permission("admin_hours.manage")`. `update_category` still writes
+  through `apply_updates(..., skip={"organization_id", "id"})`.
+- **Frontend.** Eleven files: labels, aria names, status wording and a retired
+  marker in a filter. A scan of the non-test diff for `dangerouslySetInnerHTML`,
+  `innerHTML`, `localStorage`, `sessionStorage`, `fetch(`, `axios`, `window.`,
+  `href=` and `eval(` found nothing. No new request is issued.
+- **Tests.** `tests/test_admin_hours_category_names.py` is marked `integration`
+  (Pitfall #30b) and passes (8).
+
+### Findings
+
+**AH-18 — LOW — the duplicate-name check is a read-then-write with no lock — 🚩 FLAGGED**
+
+`_assert_name_free` reads, then the caller inserts or renames
+(`admin_hours_service.py:136-162`, called from `:170` and `:202`). Two
+officers submitting the same new name at the same moment both read zero rows
+and both insert, so two active categories share a name, which is the state W70
+set out to prevent. There is no unique constraint to backstop it, and one is
+not possible as written because the rule is case-insensitive and ignores
+inactive rows.
+
+Impact is cosmetic and bounded: it needs `admin_hours.manage`, and no
+tenancy, money or access decision depends on the name. Closing it would mean
+locking the organization row for the duration of a category write, which is a
+behavior and lock-order change in a file that already has a documented lock
+protocol, so it is flagged rather than applied.
+
+### Re-verification (read at current lines)
+
+- **Route inventory, enumerated by AST: 30 routes, 30 authenticated.** 18 carry
+  `require_permission("admin_hours.manage")`; 12 carry `get_current_user`
+  only. Each of those 12 is either self-scoped by a `current_user.id` filter
+  (`/clock-in`, `/clock-out*`, `/active`, `/entries/my*`, `POST /entries`) or
+  reads org-wide reference data filtered on `current_user.organization_id`
+  (`/categories`, `/event-mappings`, `/categories/{id}/qr-data`).
+- **Client-supplied user ids.** `GET /summary` (`admin_hours.py:965`) and
+  `GET /compliance/{user_id}` (`admin_hours.py:1160`) replace the supplied id
+  with `current_user.id` unless `user_has_permission()` grants
+  `admin_hours.manage` (or `compliance.view` for the latter).
+- **Org scoping in the service.** An AST pass over the current
+  `admin_hours_service.py` found 46 `select()` statements; 11 have no literal
+  `organization_id`, and each was read. Seven take the filter from
+  `base_where` / `base_filter` built from `AdminHoursEntry.organization_id`
+  (`:681`, `:699`, `:757`, `:779`, `:1192`, `:1207`, `:1221`). Three lock a
+  `User.id` row for Pitfall #27 using the caller's own id or an id read back
+  from an org-filtered entry query (`:296`, `:621`, `:1308`). One is the
+  deliberate all-tenant scheduled sweep, scoped by parameter when the manual
+  endpoint calls it (`auto_close_stale_sessions`, called with
+  `current_user.organization_id` at `admin_hours.py:947`).
+- **Shared files that moved in the window**, each read: `security_middleware.py`
+  (`9a23c165`) added two finance export paths and left
+  `/api/v1/admin-hours/entries/export` listed; `scheduled_tasks.py` edits left
+  `run_admin_hours_auto_close` (`:7089`) calling the sweep with no org, as
+  intended; `apiCache.ts` gained `/maintenance` and `/ical-feed` and still
+  lists `/admin-hours/` in `UNCACHEABLE_PREFIXES` (`:95`).
+
+### Completion gate (pass 9)
+
+Docs-only diff, so only the checks that can observe it were run:
+
+| Check                                                                                                     | Result                                                                        |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `pytest -k "admin_hours or org_scoping_ratchet or like_escaping or csv_writer_sweep or capacity_locking"` | 240 passed, 1 skipped (`py_vapid`, an optional dependency not installed here) |
+| `pytest tests/test_admin_hours_category_names.py`                                                         | 8 passed                                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                                         | VALIDATION PASSED                                                             |
+| `flake8` / `black` / `isort` / `tsc` / `npm run lint`                                                     | not run: no Python or TypeScript file is in this diff                         |
+
+---
+
+## Pass 8 (2026-10-16) — 0 fixed by this pass, 0 new findings; the feature's last open finding (AH-16) and a related scheduled-task gap (CRON2-31-13) are both now resolved
+
+**Watchdog pickup.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results at pickup time — the open PR was #3330 (Feature 20,
+Compliance, pass 8), merged immediately before this pass started
+(`5fabde43`). Row 20 was already ✅; row 21 (Admin hours) was the first `⬜`.
+
+**Not a zero-delta pass.** Pass 7 merged as `727a13e9a` (PR #2978,
+2026-10-07). Per-file `git log 727a13e9a..HEAD` against the five declared
+backend files finds six non-merge commits (confirmed full-depth history
+first: the starting clone was shallow, `git fetch --unshallow` brought in
+the rest, and `git merge-base --is-ancestor 727a13e9a HEAD` then reported
+`yes`):
+
+- **`e3f236d8b`** (2026-10-11) — **AH-16, this feature's one standing bug-class
+  finding since pass 2, is now ✅ FIXED.** Not a rotation commit — a
+  cross-cutting owner decision ("stream all three sibling exports — no row
+  cap, bounded memory") that also touched the storefront and training
+  exports. Verified directly rather than taken from the commit message:
+  `export_entries` (`admin_hours.py:909-926`) now hands `StreamingResponse`
+  the async generator from `AdminHoursService.stream_entries_csv`, which
+  still filters `AdminHoursEntry.organization_id == organization_id`
+  (`admin_hours_service.py:1398`, the caller-supplied, non-overridable
+  `current_user.organization_id` — no new by-id or client-suppliable
+  parameter) and still writes through `SafeCsvChunks` — a drained
+  `SafeCsvWriter`, so the formula-injection neutralization Pitfall #15
+  requires is unchanged. Memory is now bounded by
+  `app/utils/streamed_query.iter_row_batches` (a `db.stream(...
+execution_options(yield_per=500))` cursor, read 500 rows at a time) rather
+  than one `result.all()` holding the department's complete history. The
+  sort gained an `id` tiebreak on equal `clock_in_at` values, which changes
+  nothing security-relevant. `export_entries_csv` (the string-returning
+  form other callers use) is now a thin `collect_csv(stream_entries_csv(...))`
+  join — same output, same org-scoping. `KNOWN_LIMITATIONS.md`'s AH-16 row
+  already reads "✅ Resolved 2026-10-11" and matches the code; no edit
+  needed. Tests: `tests/test_streamed_exports.py` (already shipped with the
+  fix, re-run clean below).
+- **`12a430ce5`** (2026-10-11) — **CRON2-31-13, a gap this rotation's own
+  Feature 31 (Scheduled tasks) pass had left open, is now ✅ FIXED.** Also
+  not a rotation commit for this feature — it belongs to Feature 31's own
+  findings doc — but it changes `admin_hours_service.py` directly, so it was
+  read in full here too. `auto_close_stale_sessions` force-closed a
+  member's open session (a paid-hours state change) with no audit record;
+  it now calls `_audit_auto_closed`, which writes one
+  `admin_hours.session_auto_closed` event per closed session (not a batched
+  summary — a member disputing a capped session can find the record for
+  that session alone), carrying the entry, member, category, capped
+  clock-in/out, duration, the limit applied, and a `trigger` of
+  `"scheduled"` (the 30-minute task, no acting user) or `"manual"` (the
+  `POST /entries/close-stale` endpoint, the calling officer named via
+  `current_user.id`/`current_user.username` — never a client-suppliable
+  value). `organization_id` on the audit event is read from each closed
+  entry's own `organization_id`, not a request parameter. No secret, no
+  other member's data. `KNOWN_LIMITATIONS.md`'s CRON2-31-13 entry already
+  reads "✅ Resolved 2026-10-11" and matches the code.
+- **`d59c4cfdad`** (2026-10-12) — a defensive `if max_hours is None: continue`
+  guard in the same `auto_close_stale_sessions` loop (the query already
+  excludes a null `max_hours_per_session`; this satisfies mypy's narrower
+  view, not a behavior change) and a null-safe `clock_out_at` read in the
+  audit payload above. Both re-read directly; neither changes which
+  sessions close or what the audit event records for a session that does.
+- **`99a573420`**, **`c1b61de67`**, **`265a26be3`** (2026-10-09 → 2026-10-14)
+  — three mypy-remediation commits. The first two are purely mechanical
+  (`Optional[...]` type annotations on existing `scalar_one_or_none()`
+  assignments; `Column()` → `Mapped[]`/`mapped_column()` on every field of
+  all three admin-hours models) — confirmed by reading the full model diff
+  that both `ondelete="SET NULL"` columns (`source_event_id`,
+  `source_rsvp_id`) are still `nullable=True` (Pitfall #2) and every
+  `with_for_update()` call site, query shape, and relationship is
+  byte-identical in substance. The third (`265a26be3`) **does** change
+  behavior, by its own commit message's admission — three `int(x)` calls in
+  `get_summary` (`admin_hours_service.py:1178-1209`) now read `int(x or 0)`
+  so a `SUM()`/`COUNT()` over zero matching rows (a member or category with
+  no entries in range) returns `0` instead of raising `TypeError:
+int(None)`. This is a null-safety bug fix, not a security-relevant
+  behavior change — re-verified the three sites compute a total, not a
+  permission or scope decision.
+
+### Re-verification
+
+**Both of this doc's "Confirmed still open" product-decision items were
+already resolved by pass 7's own subject commit** (`a2d32fb41`,
+per-org self-approval toggle + resync re-queue threshold) — re-confirmed
+unchanged at their current lines, not re-derived. **With AH-16 now also
+fixed, this feature carries zero open or flagged findings as of this
+pass** — the first time since pass 2 that no item in this doc's "Confirmed
+still open" section is actually still open.
+
+**Route inventory re-enumerated from scratch**
+(`grep -c '^@router\.' admin_hours.py`, not trusted from pass 7's count):
+**30 routes, byte-identical to pass 7** — no route added, removed, or
+regated. `check_route_permissions.py --strict` — 270 application routes,
+0 errors/warnings, unchanged in kind (no new top-level page).
+
+### External callers, re-swept
+
+Grepped all 15 of pass 7's named external backend callers for
+`admin_hours`/`AdminHours` content changes (not filename) since
+`727a13e9a`, then diffed each hit by added/removed line rather than
+context: two real changes, both already reviewed and correct.
+
+- **`reports_service.py`** — `_generate_admin_hours`'s date-range filter
+  now calls `resolve_local_range_utc(db, organization_id, start_date,
+end_date)` instead of building a bare UTC `datetime.combine(...)` bound —
+  the same "a derived date is a value, not an assumption" correction pass
+  6 made to this feature's own compliance-year bounds, applied here by
+  Feature 29's own rotation. `organization_id` is the caller's own (the
+  report is already gated `admin_hours.manage` via `PII_REPORT_PERMISSIONS`
+  below); no client-suppliable date crosses a scope boundary. Not this
+  feature's fix to make — Feature 29 owns `reports_service.py` — but
+  verified correct since it touches an admin-hours query.
+- **`reports.py`** — `PII_REPORT_PERMISSIONS` (the map gating
+  `admin_hours` report generation at `admin_hours.manage`) moved into
+  `saved_report_schedule.py` and is now imported (`PII_REPORT_PERMISSIONS =
+_PII_REPORT_PERMISSIONS`) rather than redefined, so the scheduled sender
+  — which has no request to hang a `Depends` on — enforces the identical
+  gate instead of a second, hand-maintained copy (Pitfall #29). Confirmed
+  the relocated map still carries `"admin_hours": "admin_hours.manage"`
+  unchanged.
+
+The other 13 named callers (`training_session_service.py`,
+`event_service.py`, `nfc_tag_service.py`, `dashboard.py`,
+`compliance_officer_service.py`, `compliance_config_service.py`,
+`data_export_service.py`, `onboarding.py`, `security_middleware.py`,
+`permissions.py`, `scheduled_tasks.py`, `seed_admin_hours.py`,
+`org_template_registry.py`) either have zero diff since `727a13e9a` or
+their admin-hours-content grep hits are unchanged context lines outside
+the changed hunks, confirmed by `git diff` (not a context-insensitive
+grep).
+
+### Frontend, re-swept
+
+`git diff --stat 727a13e9a..HEAD` touches 16 frontend files. Inside the
+admin-hours module: `AllEntriesTab.tsx`, `PendingReviewTab.tsx`,
+`AdminHoursPage.tsx` and `types/index.ts` are PR #3070's entry-method label
+fix (`entry.entryMethod.replace('_', ' ')` → `entryMethodLabel(...)`,
+plus a fourth `AdminHoursEntryMethod` value the type union was missing) —
+display-only, no API/schema/behavior change, already reviewed (that PR
+cites no security surface and changes no write path).
+`exportCsv.behavior.test.ts` is a mock-signature cleanup paired with
+`e3f236d8b`'s own change, not new scope. Outside the module, nine files
+changed (`MemberProfilePage.tsx`, `ComplianceRequirementsConfigPage.tsx`,
+`Dashboard.tsx`, `CheckInStationPage.tsx`,
+`member-profile/{UndoDropControl,StatusChangeReason,StatusChangeReason.test}.tsx`,
+`events-settings/HourTrackingSection.test.tsx`) — grepped for
+`admin_hours`/`AdminHours` content and read by added/removed line:
+`MemberProfilePage.tsx`'s one hit (`showAdminHours`) is an unchanged
+context line shifted by an unrelated Google-Workspace-panel insertion
+above it; the other eight have zero hits. All nine are unrelated feature
+work (Google Workspace account panel, a member-separation effective-date
+field, member-profile edit-permission tightening), none touching
+admin-hours logic.
+
+## Completion gate (pass 8)
+
+| Check                                                                                                                                                                    | Result                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                                            | ✅ clean (flake8 7.3.0, CI's pin)                                                                                                                |
+| `black --check app/ tests/ alembic/`                                                                                                                                     | ✅ 2369 files unchanged (black 26.5.1, CI's pin)                                                                                                 |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                | ✅ clean (isort 9.0.1, CI's pin)                                                                                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                        | ✅ 608 revisions, single head `0bbf263a5ff0`                                                                                                     |
+| `pytest tests/ -q -k "admin_hours"`                                                                                                                                      | ✅ 144 passed, 1 pre-existing skip (up from 139)                                                                                                 |
+| `pytest tests/test_org_scoping_ratchet.py tests/test_admin_hours_endpoint_permission_scope.py tests/test_admin_hours_auto_close_audit.py tests/test_streamed_exports.py` | ✅ 36 passed                                                                                                                                     |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                    | ✅ 270 routes, 0 errors/warnings                                                                                                                 |
+| `cd frontend && npm run typecheck`                                                                                                                                       | ✅ 0 errors (after `npm ci` from the repo root — sandbox's `node_modules` predated a `@tiptap/*` dependency; environment fix, not a code defect) |
+| `cd frontend && npm run lint`                                                                                                                                            | ✅ 0 errors/warnings (`--max-warnings 10`)                                                                                                       |
+| `npx vitest run src/modules/admin-hours`                                                                                                                                 | ✅ 115/115 (12 files)                                                                                                                            |
+
+No source file was modified by this pass itself — both substantive fixes
+in the real delta (`e3f236d8b`, `12a430ce5`) already shipped with their own
+tests and completion gates before this session started; this pass's own
+gate is a re-verification against the current tree, not a check of new
+code this pass wrote.
+
+---
 
 ## Pass 7 (2026-10-07) — 0 fixed, 0 flagged; one substantial non-rotation commit reviewed in full, both long-standing "confirmed open" items are now resolved
 

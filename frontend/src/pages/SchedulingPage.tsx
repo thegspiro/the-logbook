@@ -27,7 +27,7 @@ import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
-import SchedulingHeader from './scheduling/SchedulingHeader';
+import { SchedulingPageHeader } from '../components/scheduling/SchedulingPageHeader';
 import ShiftBoard from './scheduling/board/ShiftBoard';
 
 // Lazy-loaded tab components
@@ -182,35 +182,38 @@ const SchedulingPage: React.FC = () => {
     handleTabChange('schedule');
   }, [visibleTabs, activeTab, handleTabChange]);
 
-  const handleTabKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLButtonElement>, currentTab: TabId) => {
-      const currentIndex = visibleTabs.findIndex((tab) => tab.id === currentTab);
-      let nextIndex: number | undefined;
-
-      if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % visibleTabs.length;
-      if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
-      if (event.key === 'Home') nextIndex = 0;
-      if (event.key === 'End') nextIndex = visibleTabs.length - 1;
-      if (nextIndex === undefined) return;
-
-      event.preventDefault();
-      const nextTab = visibleTabs[nextIndex];
-      if (!nextTab) return;
-      handleTabChange(nextTab.id);
-      requestAnimationFrame(() => document.getElementById(`scheduling-tab-${nextTab.id}`)?.focus());
-    },
-    [handleTabChange, visibleTabs]
-  );
-
-  // Sync tab state when the URL changes underneath us (deep link, back button).
-  // A missing ?tab= is not a request to reset — it is the Schedule default that
-  // handleTabChange writes, and re-asserting it here would fight local state.
+  // Sync tab state when the URL changes underneath us: a deep link, the back
+  // button, or the section strip, whose links are the only way between views.
+  // A missing ?tab= is the Schedule view — the strip's Schedule link is the
+  // bare /scheduling — so it selects Schedule rather than leaving the last view
+  // up. Every writer of ?tab= sets state to match, so this never fights it.
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (isTabId(tabParam)) {
-      setActiveTab(tabParam);
-    }
+    setActiveTab(isTabId(tabParam) ? tabParam : 'schedule');
   }, [searchParams]);
+
+  // The views as the section strip draws them. Each link carries the rest of
+  // the query (the calendar's date and view) as a tab click always has, so
+  // leaving the calendar and coming back lands on the same week. A `?shift=`
+  // deep link is not carried: it opens one shift's panel, once.
+  const tabSections = useMemo(() => {
+    const hrefFor = (tabId: TabId) => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('shift');
+      if (tabId === 'schedule') next.delete('tab');
+      else next.set('tab', tabId);
+      const query = next.toString();
+      return query ? `/scheduling?${query}` : '/scheduling';
+    };
+    return visibleTabs.map((tab) => ({
+      id: tab.id,
+      label: tab.label,
+      path: hrefFor(tab.id),
+      icon: tab.icon,
+      replace: true,
+    }));
+  }, [searchParams, visibleTabs]);
+  const activeSectionPath = tabSections.find((tab) => tab.id === activeTab)?.path;
 
   // Load shift reports feature flag. Failure here must not blank the page —
   // a single config-endpoint regression should leave the rest of scheduling
@@ -237,7 +240,9 @@ const SchedulingPage: React.FC = () => {
   // The calendar's own data lives in ShiftBoard: it fetches the visible range
   // with the roster attached and mutates it optimistically, so a second copy
   // up here could only ever be the stale one. `boardRefreshKey` is how this
-  // page asks it to re-read after creating a shift.
+  // page asks it to re-read after creating a shift. My Shifts and Open Shifts
+  // keep their own lists too, and read the same key: a change made in the
+  // shift panel must reach whichever tab the panel was opened from.
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -382,10 +387,16 @@ const SchedulingPage: React.FC = () => {
       const templatePositions = resolveTemplatePositions(template.positions);
       const shiftPositions = apparatusPositions?.length ? apparatusPositions : templatePositions;
 
+      // The fallback templates exist only in this file, so their ids name no
+      // row the backend could resolve; only a stored template carries the
+      // equipment checklists the shift should inherit.
+      const isStoredTemplate = backendTemplates.some((t) => t.id === template.id);
+
       await schedulingService.createShift({
         shift_date: shiftForm.startDate,
         start_time: startDateTime,
         end_time: endDateTime,
+        ...(isStoredTemplate ? { template_id: template.id } : {}),
         ...(shiftForm.notes ? { notes: shiftForm.notes } : {}),
         ...(shiftForm.apparatus_id ? { apparatus_id: shiftForm.apparatus_id } : {}),
         ...(shiftForm.shift_officer_id ? { shift_officer_id: shiftForm.shift_officer_id } : {}),
@@ -400,6 +411,10 @@ const SchedulingPage: React.FC = () => {
       // department totals above it.
       setBoardRefreshKey((key) => key + 1);
       void loadSummary();
+      // Show the officer the shift they just made. Left on the current range,
+      // a shift for next week vanished behind an unchanged empty board.
+      const createdOn = parseCalendarDate(shiftForm.startDate);
+      if (createdOn) setCurrentDate(createdOn);
 
       setShiftForm({
         shiftTemplate: defaultTemplate?.id || '',
@@ -480,12 +495,17 @@ const SchedulingPage: React.FC = () => {
             </button>
           </div>
         )}
-        <SchedulingHeader
+        <SchedulingPageHeader
+          icon={Clock}
+          title="Shift Scheduling"
+          subtitle="See the schedule, sign up for shifts, and request swaps and time off"
+          sections={tabSections}
+          section={activeSectionPath}
           actions={
             canManage && activeTab === 'schedule' ? (
               <button
                 onClick={() => setShowCreateShift(true)}
-                className="flex min-h-11 w-full items-center justify-center space-x-2 rounded-lg bg-violet-600 px-4 py-2 text-white transition-colors hover:bg-violet-700 sm:w-auto"
+                className="flex min-h-11 w-full items-center justify-center space-x-2 rounded-lg bg-violet-700 px-4 py-2 text-white transition-colors hover:bg-violet-800 sm:w-auto"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 <span>Create Shift</span>
@@ -493,45 +513,6 @@ const SchedulingPage: React.FC = () => {
             ) : undefined
           }
         />
-        {/* Tab Navigation */}
-        <div className="border-theme-surface-border relative -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
-          <div
-            className="flex scrollbar-thin space-x-1 overflow-x-auto scroll-smooth"
-            data-mobile-scroll-region
-            role="tablist"
-            aria-label="Scheduling views"
-            tabIndex={0}
-          >
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  id={`scheduling-tab-${tab.id}`}
-                  role="tab"
-                  aria-selected={isActive}
-                  tabIndex={isActive ? 0 : -1}
-                  onClick={() => handleTabChange(tab.id)}
-                  onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
-                  className={`focus-visible:ring-theme-focus-ring flex min-h-[44px] items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset sm:px-4 ${
-                    isActive
-                      ? 'border-violet-600 text-violet-600 dark:text-violet-400'
-                      : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          {/* Scroll fade hint on right edge (mobile) */}
-          <div
-            className="from-theme-bg pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-linear-to-l to-transparent sm:hidden"
-            aria-hidden="true"
-          />
-        </div>
 
         {/* Tab Content */}
         {activeTab === 'schedule' && (
@@ -588,7 +569,10 @@ const SchedulingPage: React.FC = () => {
                     className="btn-primary inline-flex items-center gap-2 rounded-lg"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
-                    <span>Create the first shift</span>
+                    {/* "First" only while it is true: an officer whose
+                        shifts sit outside this range is not starting from
+                        nothing, and the board says where the next one is. */}
+                    <span>{summary?.shifts_scheduled ? 'Create a shift' : 'Create the first shift'}</span>
                   </button>
                 ) : undefined
               }
@@ -599,8 +583,10 @@ const SchedulingPage: React.FC = () => {
         {/* Other Tabs */}
         {activeTab !== 'schedule' && (
           <Suspense fallback={<TabLoadingFallback />}>
-            {activeTab === 'my-shifts' && <MyShiftsTab onViewShift={handleShiftClick} />}
-            {activeTab === 'open-shifts' && <OpenShiftsTab onViewShift={handleShiftClick} />}
+            {activeTab === 'my-shifts' && <MyShiftsTab onViewShift={handleShiftClick} refreshKey={boardRefreshKey} />}
+            {activeTab === 'open-shifts' && (
+              <OpenShiftsTab onViewShift={handleShiftClick} refreshKey={boardRefreshKey} />
+            )}
             {activeTab === 'requests' && <RequestsTab />}
             {activeTab === 'shift-reports' && <ShiftReportsTab />}
           </Suspense>
@@ -767,7 +753,7 @@ const SchedulingPage: React.FC = () => {
                                   <span
                                     className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                                       tmpl.category === 'specialty'
-                                        ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
+                                        ? 'bg-orange-500/10 text-orange-800 dark:text-orange-400'
                                         : 'bg-purple-500/10 text-purple-700 dark:text-purple-400'
                                     }`}
                                   >
@@ -1110,8 +1096,8 @@ const SchedulingPage: React.FC = () => {
                     disabled={creating || !shiftForm.startDate}
                     className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors ${
                       creating || !shiftForm.startDate
-                        ? 'cursor-not-allowed bg-violet-600 text-white opacity-50'
-                        : 'bg-violet-600 text-white hover:bg-violet-700'
+                        ? 'cursor-not-allowed bg-violet-700 text-white opacity-50'
+                        : 'bg-violet-700 text-white hover:bg-violet-800'
                     }`}
                   >
                     {creating && <Loader2 className="h-4 w-4 animate-spin" />}

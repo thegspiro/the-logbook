@@ -60,9 +60,15 @@ const reactivateMember = vi.fn();
 const anonymizeMember = vi.fn();
 const getServiceHistory = vi.fn();
 const changeStatus = vi.fn();
+// No recorded change by default, so the reason control stays out of the way of
+// tests that are not about it.
+const getStatusChange = vi.fn<typeof memberStatusService.getStatusChange>(() =>
+  Promise.resolve({ user_id: TARGET_ID, status: 'active', status_changed_at: null, status_change_reason: null })
+);
 const getMemberLeaves = vi.fn<typeof memberStatusService.getMemberLeaves>(() => Promise.resolve([]));
 const updateContactInfo = vi.fn();
 const updateUserProfile = vi.fn();
+const deletePhoto = vi.fn();
 let nfcIdCardsConnected = false;
 
 vi.mock('../hooks/useConnectedIntegrations', () => ({
@@ -93,6 +99,7 @@ vi.mock('../services/api', () => ({
     setMyProfileVisibility: (...args: unknown[]) => setMyProfileVisibility(...args) as unknown,
     updateContactInfo: (...args: unknown[]) => updateContactInfo(...args) as unknown,
     updateUserProfile: (...args: unknown[]) => updateUserProfile(...args) as unknown,
+    deletePhoto: (...args: unknown[]) => deletePhoto(...args) as unknown,
   },
   organizationService: {
     getEnabledModules: () => getEnabledModules() as unknown,
@@ -110,6 +117,8 @@ vi.mock('../services/api', () => ({
     anonymizeMember: (...args: unknown[]) => anonymizeMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,
     changeStatus: (...args: unknown[]) => changeStatus(...args) as unknown,
+    getStatusChange: (...args: Parameters<typeof getStatusChange>) => getStatusChange(...args),
+    updateStatusChangeReason: () => Promise.reject(new Error('not used here')),
   },
 }));
 
@@ -195,6 +204,37 @@ describe('MemberProfilePage assigned inventory', () => {
     // sees zero calls. An item cannot appear until the response has landed.
     expect(await screen.findByText('Turnout Coat')).toBeInTheDocument();
     expect(getUserInventory).toHaveBeenCalledWith(VIEWER_ID);
+  });
+});
+
+describe('MemberProfilePage position badges', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getUserWithRoles.mockReset();
+  });
+
+  // The seeded Firefighter position is the rank's twin; the header already
+  // names the rank, so the badge said the same word a second time.
+  it('leaves out the position that mirrors a rank', async () => {
+    getUserWithRoles.mockResolvedValue({
+      ...targetUser,
+      roles: [
+        { id: 'role-member', name: 'Member', slug: 'member', is_system: true, mirrors_rank: false },
+        { id: 'role-firefighter', name: 'Firefighter', slug: 'firefighter', is_system: true, mirrors_rank: true },
+        { id: 'role-secretary', name: 'Secretary', slug: 'secretary', is_system: true, mirrors_rank: false },
+      ],
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'Jane Doe' });
+    expect(screen.getByText('Secretary')).toBeInTheDocument();
+    expect(screen.getByText('Member')).toBeInTheDocument();
+    expect(screen.queryByText('Firefighter')).not.toBeInTheDocument();
   });
 });
 
@@ -312,6 +352,35 @@ describe('MemberProfilePage membership and privacy', () => {
     getServiceHistory.mockResolvedValue(RETURNED_HISTORY);
     changeStatus.mockReset();
     changeStatus.mockResolvedValue({ user_id: TARGET_ID, previous_status: 'retired', new_status: 'active' });
+    getStatusChange.mockReset();
+    getStatusChange.mockResolvedValue({
+      user_id: TARGET_ID,
+      status: 'active',
+      status_changed_at: null,
+      status_change_reason: null,
+    });
+  });
+
+  it('shows a members-manager the reason for the last status change', async () => {
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.RETIRED });
+    getStatusChange.mockResolvedValue({
+      user_id: TARGET_ID,
+      status: 'retired',
+      status_changed_at: '2026-10-01T15:00:00Z',
+      status_change_reason: 'Moved out of the district',
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Moved out of the district')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit status change reason' })).toBeInTheDocument();
+  });
+
+  it('does not ask a colleague for the status change reason', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Captain · Life member')).toBeInTheDocument();
+    expect(getStatusChange).not.toHaveBeenCalled();
   });
 
   it('describes a colleague by rank and member type, not employment status', async () => {
@@ -442,6 +511,30 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.getByText('Visible to members')).toBeInTheDocument();
     expect(screen.getByText('Only you and leadership')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  // Members review B: the chip read a bare lowercase "active" with only a
+  // tooltip saying it was a control, and the dialog it opened was a styled
+  // div — no dialog role, no name, and Escape did nothing.
+  it('labels the status chip with the status and what pressing it does', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    const chip = await screen.findByRole('button', { name: 'Change status, currently Active' });
+    expect(chip).toHaveTextContent('Status: Active');
+    expect(chip).toHaveTextContent('Change');
+  });
+
+  it('opens the status change as a named dialog that Escape closes', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Change status, currently Active' }));
+    const dialog = screen.getByRole('dialog', { name: 'Change Member Status' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Change Member Status' })).not.toBeInTheDocument();
   });
 
   it('does not offer Archived as an ordinary status change', async () => {
@@ -605,6 +698,42 @@ describe('MemberProfilePage membership and privacy', () => {
     await waitFor(() =>
       expect(changeStatus).toHaveBeenCalledWith(TARGET_ID, { new_status: UserStatus.LEAVE, reason: undefined })
     );
+  });
+
+  it('asks when a current member left, and sends the date given', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    // A change within membership closes no stint, so no date is asked.
+    expect(screen.queryByLabelText('Effective date')).not.toBeInTheDocument();
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'New Status' }), UserStatus.RETIRED);
+    const effective = screen.getByLabelText('Effective date');
+    expect(effective).toHaveAttribute('min', '2019-03-02');
+    await user.clear(effective);
+    await user.type(effective, '2026-01-15');
+    await user.click(screen.getByRole('button', { name: 'Update Status' }));
+
+    await waitFor(() =>
+      expect(changeStatus).toHaveBeenCalledWith(TARGET_ID, {
+        new_status: UserStatus.RETIRED,
+        reason: undefined,
+        separation_date: '2026-01-15',
+      })
+    );
+  });
+
+  it('asks no effective date when a retired member is brought back', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.RETIRED });
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    await user.selectOptions(await screen.findByRole('combobox'), UserStatus.DROPPED_VOLUNTARY);
+    expect(screen.queryByLabelText('Effective date')).not.toBeInTheDocument();
   });
 
   it('names both fields of the status dialog and sends the reason typed', async () => {
@@ -868,5 +997,47 @@ describe('MemberProfilePage preferred name', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Jane Doe' })).toBeInTheDocument();
     expect(screen.queryByText(/Legal name:/)).not.toBeInTheDocument();
+  });
+});
+
+// Removing a profile photo was a single unconfirmed tap.
+describe('MemberProfilePage removing a profile photo', () => {
+  beforeEach(() => {
+    routeUserId = VIEWER_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue({ ...targetUser, id: VIEWER_ID, photo_url: 'https://example.test/me.jpg' });
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockReset();
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    deletePhoto.mockReset();
+    deletePhoto.mockResolvedValue(undefined);
+  });
+
+  it('asks first, and removes the photo only once confirmed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove photo' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Your photo is removed from your profile and the roster.');
+    expect(deletePhoto).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Remove photo' }));
+
+    await waitFor(() => expect(deletePhoto).toHaveBeenCalledWith(VIEWER_ID));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove photo' })).not.toBeInTheDocument());
+  });
+
+  it('does nothing when the member keeps it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove photo' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+
+    expect(deletePhoto).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Remove photo' })).toBeInTheDocument();
   });
 });

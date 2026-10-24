@@ -46,6 +46,7 @@ from app.schemas.finance import (
     DuesScheduleCreate,
     DuesScheduleUpdate,
     ExpenseLineItemCreate,
+    ExpenseLineItemUpdate,
     ExpenseReportCreate,
     ExpenseReportUpdate,
     ExportMappingCreate,
@@ -63,6 +64,8 @@ from app.schemas.finance import (
     MemberDuesWaive,
     PurchaseRequestCreate,
     PurchaseRequestUpdate,
+    ReimbursementCheckCreate,
+    ReimbursementReportCreate,
 )
 
 _STEP = {
@@ -254,6 +257,24 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "memo": "m",
         "purpose": "p",
         "notes": "n",
+    },
+    ReimbursementReportCreate: {
+        "amount": "185.25",
+        "date_incurred": "2026-04-01T00:00:00Z",
+        "merchant": "Fire Supply Co",
+    },
+    ReimbursementCheckCreate: {
+        "payee_address": "1 Main St",
+        "memo": "m",
+    },
+    ExpenseLineItemUpdate: {
+        "budget_id": "budget-1",
+        "fund_campaign_id": "fund-1",
+        "description": "Boots",
+        "amount": "120.00",
+        "date_incurred": "2026-04-01T00:00:00Z",
+        "expense_type": "general",
+        "merchant": "Shop",
     },
     CheckRequestUpdate: {
         "budget_id": "budget-1",

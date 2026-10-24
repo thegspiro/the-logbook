@@ -30,7 +30,7 @@ from decimal import Decimal
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -315,6 +315,32 @@ class FinanceReportService:
                 .group_by(ExpenseLineItem.budget_id)
             )
         )
+        # A report paid by a reimbursement check since voided was spent from
+        # the check's date until the void, as the check itself would have been.
+        add(
+            await self._sum_by_line(
+                select(ExpenseLineItem.budget_id, func.sum(ExpenseLineItem.amount))
+                .join(
+                    ExpenseReport,
+                    ExpenseReport.id == ExpenseLineItem.expense_report_id,
+                )
+                .join(
+                    CheckRequest,
+                    and_(
+                        CheckRequest.expense_report_id == ExpenseReport.id,
+                        CheckRequest.organization_id == org_id,
+                    ),
+                )
+                .where(
+                    ExpenseReport.organization_id == org_id,
+                    ExpenseLineItem.budget_id.in_(budget_ids),
+                    CheckRequest.status == CheckRequestStatus.VOIDED,
+                    CheckRequest.check_date < through,
+                    CheckRequest.voided_at >= through,
+                )
+                .group_by(ExpenseLineItem.budget_id)
+            )
+        )
         return spent
 
     # ------------------------------------------------------------------
@@ -492,7 +518,78 @@ class FinanceReportService:
                 ),
             )
         )
-        for cr in checks.scalars():
+        check_rows = list(checks.scalars())
+        reimbursed = await self._reports(
+            org_id, [cr.expense_report_id for cr in check_rows]
+        )
+        reimbursed_items = await self._line_items(list(reimbursed))
+        reimbursed_advances = await self._request_numbers(
+            org_id, [er.advance_id for er in reimbursed.values() if er.advance_applied]
+        )
+
+        def report_parts(er: ExpenseReport, items: list, advances: dict[str, str]):
+            """The register's description, budget lines and amount for a
+            report: what the member was paid beyond any cash advance."""
+            line_names = sorted(
+                {labels[i.budget_id] for i in items if i.budget_id in labels}
+            )
+            total = _money(sum((i.amount for i in items), ZERO))
+            description = er.title
+            # The cash advance this report accounts for went out when its
+            # check did; only what the member is paid beyond it moves now.
+            covered = _money(er.advance_applied) if er.advance_id else ZERO
+            if covered:
+                number = advances.get(er.advance_id or "", "")
+                description = f"{er.title} ({covered:,.2f} from advance {number})"
+            return description, ", ".join(line_names) or None, total - covered
+
+        for cr in check_rows:
+            report = reimbursed.get(cr.expense_report_id or "")
+            if report is not None:
+                description, lines, _owed = report_parts(
+                    report,
+                    reimbursed_items.get(report.id, []),
+                    reimbursed_advances,
+                )
+                if (
+                    cr.check_date is not None
+                    and window.start <= _aware(cr.check_date) < window.end
+                ):
+                    rows.append(
+                        {
+                            "paid_on": local_day(cr.check_date),
+                            "kind": "expense_report",
+                            "entity_id": report.id,
+                            "number": report.report_number,
+                            "payee": cr.payee_name,
+                            "description": description,
+                            "budget_line": lines,
+                            "check_number": cr.check_number,
+                            "amount": _money(cr.amount),
+                        }
+                    )
+                if (
+                    cr.status == CheckRequestStatus.VOIDED
+                    and cr.voided_at is not None
+                    and window.start <= _aware(cr.voided_at) < window.end
+                ):
+                    rows.append(
+                        {
+                            "paid_on": local_day(cr.voided_at),
+                            "kind": "check_void",
+                            "entity_id": cr.id,
+                            "number": cr.request_number,
+                            "payee": cr.payee_name,
+                            "description": (
+                                f"Reimbursement check for {report.report_number} "
+                                "voided"
+                            ),
+                            "budget_line": lines,
+                            "check_number": cr.check_number,
+                            "amount": -_money(cr.amount),
+                        }
+                    )
+                continue
             line = line_label(cr.budget_id)
             if (
                 cr.check_date is not None
@@ -551,6 +648,7 @@ class FinanceReportService:
                 ExpenseReport.status == ExpenseReportStatus.PAID,
                 ExpenseReport.paid_at >= window.start,
                 ExpenseReport.paid_at < window.end,
+                ~_paid_by_check(org_id),
             )
         )
         report_rows = reports.all()
@@ -561,18 +659,9 @@ class FinanceReportService:
         for er, first, last, preferred, username in report_rows:
             if er.paid_at is None:  # excluded by the query; narrows the type
                 continue
-            items = line_items.get(er.id, [])
-            line_names = sorted(
-                {labels[i.budget_id] for i in items if i.budget_id in labels}
+            description, lines, owed = report_parts(
+                er, line_items.get(er.id, []), advance_numbers
             )
-            total = _money(sum((i.amount for i in items), ZERO))
-            description = er.title
-            # The cash advance this report accounts for went out when its
-            # check did; only what the member is paid beyond it moves now.
-            covered = _money(er.advance_applied) if er.advance_id else ZERO
-            if covered:
-                number = advance_numbers.get(er.advance_id or "", "")
-                description = f"{er.title} ({covered:,.2f} from advance {number})"
             rows.append(
                 {
                     "paid_on": local_day(er.paid_at),
@@ -581,9 +670,9 @@ class FinanceReportService:
                     "number": er.report_number,
                     "payee": _name(first, last, preferred, username),
                     "description": description,
-                    "budget_line": ", ".join(line_names) or None,
+                    "budget_line": lines,
                     "check_number": None,
-                    "amount": total - covered,
+                    "amount": owed,
                 }
             )
 
@@ -803,8 +892,12 @@ class FinanceReportService:
                 ),
             )
         )
+        reimbursement_checks = []
         for cr in checks.scalars():
             if cr.is_advance:
+                continue
+            if cr.expense_report_id:
+                reimbursement_checks.append(cr)
                 continue
             if (
                 cr.check_date is not None
@@ -818,6 +911,32 @@ class FinanceReportService:
             ):
                 add(cr.functional_class, cr.budget_id, -_money(cr.amount))
 
+        # A report a reimbursement check paid is counted whole when the check
+        # is issued, and taken back when it is voided, as a check would be.
+        reimbursed = await self._reports(
+            org_id, [cr.expense_report_id for cr in reimbursement_checks]
+        )
+        reimbursed_items = await self._line_items(list(reimbursed))
+        for cr in reimbursement_checks:
+            if (cr.expense_report_id or "") not in reimbursed:
+                continue
+            sign = ZERO
+            if (
+                cr.check_date is not None
+                and window.start <= _aware(cr.check_date) < window.end
+            ):
+                sign += 1
+            if (
+                cr.status == CheckRequestStatus.VOIDED
+                and cr.voided_at is not None
+                and window.start <= _aware(cr.voided_at) < window.end
+            ):
+                sign -= 1
+            if not sign:
+                continue
+            for item in reimbursed_items.get(cr.expense_report_id or "", []):
+                add(item.functional_class, item.budget_id, sign * _money(item.amount))
+
         lines = await self.db.execute(
             select(
                 ExpenseLineItem.functional_class,
@@ -830,6 +949,7 @@ class FinanceReportService:
                 ExpenseReport.status == ExpenseReportStatus.PAID,
                 ExpenseReport.paid_at >= window.start,
                 ExpenseReport.paid_at < window.end,
+                ~_paid_by_check(org_id),
             )
         )
         for override, budget_id, amount in lines.all():
@@ -956,6 +1076,21 @@ class FinanceReportService:
         )
         return {cid: number for cid, number in result.all()}
 
+    async def _reports(
+        self, org_id: str, report_ids: list[Optional[str]]
+    ) -> dict[str, ExpenseReport]:
+        """The department's expense reports among these ids, by id."""
+        wanted = sorted({i for i in report_ids if i})
+        if not wanted:
+            return {}
+        result = await self.db.execute(
+            select(ExpenseReport).where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.id.in_(wanted),
+            )
+        )
+        return {er.id: er for er in result.scalars()}
+
     async def _line_items(self, report_ids: list[str]) -> dict[str, list]:
         if not report_ids:
             return {}
@@ -968,6 +1103,21 @@ class FinanceReportService:
         for item in result.scalars():
             items.setdefault(item.expense_report_id, []).append(item)
         return items
+
+
+def _paid_by_check(org_id: str):
+    """An expense report a reimbursement check has paid.
+
+    Such a report's payment is the check (app/services/finance_reimbursement.py):
+    the reports show it when the check was issued, and take it back when the
+    check is voided, rather than reading the report's own paid status, which a
+    void returns to approved and so would erase from earlier periods.
+    """
+    return exists().where(
+        CheckRequest.organization_id == org_id,
+        CheckRequest.expense_report_id == ExpenseReport.id,
+        CheckRequest.status == CheckRequestStatus.ISSUED,
+    )
 
 
 def _aware(value: datetime) -> datetime:

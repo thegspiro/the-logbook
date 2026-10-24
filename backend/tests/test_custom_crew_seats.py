@@ -33,6 +33,7 @@ from app.api.v1.endpoints import scheduling as scheduling_endpoint
 from app.core.error_codes import ErrorCode
 from app.models.operational_rank import OperationalRank
 from app.models.training import (
+    AssignmentStatus,
     ShiftAssignment,
     ShiftTemplate,
     StandingShiftClaim,
@@ -408,6 +409,44 @@ class TestSignup:
         )
 
         assert response["position"] == "firefighter"
+
+    async def test_a_members_own_signup_lands_confirmed(self, db_session, department):
+        """The tap is the commitment; My Shifts must not ask for it twice."""
+        org_id, m = department
+        svc = SchedulingService(db_session)
+        shift = await _shift(svc, org_id, m["manager"])
+
+        await scheduling_endpoint.signup_for_shift(
+            uuid.UUID(shift.id),
+            ShiftSignupRequest(position="firefighter"),
+            db=db_session,
+            current_user=await _user(db_session, m["firefighter"]),
+        )
+
+        row = (
+            await db_session.execute(
+                select(ShiftAssignment).where(
+                    ShiftAssignment.shift_id == str(shift.id),
+                    ShiftAssignment.user_id == str(m["firefighter"]),
+                )
+            )
+        ).scalar_one()
+        assert row.assignment_status == AssignmentStatus.CONFIRMED
+        assert row.confirmed_at is not None
+
+    async def test_an_officer_assignment_still_awaits_confirmation(
+        self, db_session, department
+    ):
+        org_id, m = department
+        svc = SchedulingService(db_session)
+        shift = await _shift(svc, org_id, m["manager"])
+
+        assignment = await _seat(
+            svc, org_id, shift.id, m["firefighter"], m["manager"], "firefighter"
+        )
+
+        assert assignment.assignment_status == AssignmentStatus.ASSIGNED
+        assert assignment.confirmed_at is None
 
     async def test_the_seat_cap_counts_a_custom_seat(self, db_session, department):
         org_id, m = department

@@ -51,18 +51,18 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
   approved: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
   ordered: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
-  partially_received: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
-  received: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  partially_received: 'bg-cyan-500/10 text-cyan-800 dark:text-cyan-400',
+  received: 'bg-green-500/10 text-green-800 dark:text-green-400',
   cancelled: 'bg-theme-surface-secondary text-theme-text-muted',
 };
 
 const URGENCY_COLORS: Record<string, string> = {
   low: 'bg-theme-surface-secondary text-theme-text-muted',
   normal: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  high: 'bg-orange-500/10 text-orange-800 dark:text-orange-400',
   critical: 'bg-red-500/10 text-red-700 dark:text-red-400',
 };
 
@@ -173,6 +173,8 @@ const ReorderFormModal: React.FC<{
           // Sent every save, null when unlinked (pitfall #1). The server keeps
           // it fixed once stock has arrived, and an unchanged id passes.
           item_id: f.item_id || null,
+          // Sent every save so a changed or cleared category persists.
+          category_id: f.category_id || null,
           item_name: f.item_name.trim(),
           quantity_requested: Number(f.quantity_requested),
           // Explicit nulls so clearing these persists: an omitted key means
@@ -249,7 +251,7 @@ const ReorderFormModal: React.FC<{
                 <button
                   key={alert.category_id}
                   type="button"
-                  className="touch:min-h-[44px] touch:min-w-[44px] rounded bg-yellow-500/20 px-2 py-1 text-xs text-yellow-700 hover:bg-yellow-500/30 dark:text-yellow-300"
+                  className="touch:min-h-[44px] touch:min-w-[44px] rounded bg-yellow-500/20 px-2 py-1 text-xs text-yellow-800 hover:bg-yellow-500/30 dark:text-yellow-300"
                   onClick={() => {
                     const firstItem = alert.items?.[0];
                     setF((p) => ({
@@ -826,7 +828,7 @@ export const ReorderRequestsPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">Total Requests</p>
           </div>
           <div className="card-secondary p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</p>
+            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.pending}</p>
             <p className="text-theme-text-muted text-xs">Pending</p>
           </div>
           <div className="card-secondary p-3 text-center">
@@ -845,7 +847,7 @@ export const ReorderRequestsPage: React.FC = () => {
         {/* Low stock banner */}
         {lowStockAlerts.length > 0 && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
+            <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-400" />
             <p className="text-xs text-yellow-700 dark:text-yellow-300">
               {lowStockAlerts.length} categor{lowStockAlerts.length === 1 ? 'y' : 'ies'} below stock threshold
             </p>
@@ -954,7 +956,7 @@ export const ReorderRequestsPage: React.FC = () => {
                     <td data-label="Qty" className="text-theme-text-primary px-4 py-3">
                       {req.quantity_requested}
                       {req.quantity_received != null && (
-                        <span className="ml-1 text-xs text-green-600 dark:text-green-400">
+                        <span className="ml-1 text-xs text-green-700 dark:text-green-400">
                           ({req.quantity_received} received)
                         </span>
                       )}

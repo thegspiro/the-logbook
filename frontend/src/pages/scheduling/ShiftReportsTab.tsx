@@ -36,7 +36,7 @@ import {
 import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
-import { organizationService, userService } from '../../services/api';
+import { organizationService } from '../../services/api';
 import { offersShiftSignoffs } from '../../stores/practicalSkillsStore';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
@@ -54,9 +54,14 @@ import type {
   TraineeShiftStats,
   OfficerShiftAnalytics,
 } from '../../types/training';
-import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import {
+  formatCalendarDate,
+  formatDateCustom,
+  formatTime,
+  getTodayLocalDate,
+  toLocalDateString,
+} from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import {
   DEFAULT_SKILLS,
@@ -81,6 +86,7 @@ import { isOwnedByCurrentMember } from '../../utils/offlineQueueOwner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
+import { attributionName } from '../../utils/memberName';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -92,6 +98,11 @@ export const ShiftReportsTab: React.FC = () => {
   // Department-wide totals are a leadership view. Every company officer holds
   // training.manage to file reports, so it cannot be what gates them.
   const canViewDepartment = canManage && checkPermission('training.view_analytics');
+  // Mirrors the backend's update_report: a draft is the filing officer's to
+  // complete. Managing training does not reach another officer's draft, only
+  // one whose officer's account is gone and so has nobody else to finish it.
+  const canCompleteDraft = (report: ShiftCompletionReport) =>
+    (!!userId && report.officer_id === userId) || (canManage && !report.officer_id);
   const isOnline = useOnlineStatus();
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -134,7 +145,6 @@ export const ShiftReportsTab: React.FC = () => {
   const [config, setConfig] = useState<TrainingModuleConfig | null>(null);
 
   // Create form state
-  const [members, setMembers] = useState<User[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [linkedShiftLabel, setLinkedShiftLabel] = useState<string | null>(null);
   const [shiftApparatusType, setShiftApparatusType] = useState<string | null>(null);
@@ -425,18 +435,6 @@ export const ShiftReportsTab: React.FC = () => {
         });
     }
   }, [viewMode, canManage, canViewDepartment]);
-
-  // Load members for draft edit forms
-  useEffect(() => {
-    if (viewMode === 'create' && members.length === 0) {
-      userService
-        .getUsers()
-        .then(setMembers)
-        .catch(() => {
-          /* members needed for draft edit */
-        });
-    }
-  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps -- only load once when entering create mode
 
   useEffect(() => {
     if (!canManage) return;
@@ -892,10 +890,10 @@ export const ShiftReportsTab: React.FC = () => {
     const label = ratingScaleLabels[String(rating)] || `Level ${rating}`;
     const colorMap: Record<number, string> = {
       1: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-      2: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
-      3: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+      2: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
+      3: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
       4: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-      5: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+      5: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
     };
 
     return (
@@ -929,7 +927,7 @@ export const ShiftReportsTab: React.FC = () => {
   }, [ratingScaleType, ratingScaleLabels]);
 
   // "2026-07" → "Jul". The charts labelled their columns "07", "08".
-  const monthLabel = (month: string) => formatDateCustom(`${month}-15T12:00:00`, { month: 'short' }, tz);
+  const monthLabel = (month: string) => formatCalendarDate(`${month}-15`, { month: 'short' });
 
   const renderTraineeDashboard = () => {
     if (!traineeStats || traineeStats.total_reports === 0) return null;
@@ -954,13 +952,13 @@ export const ShiftReportsTab: React.FC = () => {
           )}
           {traineeStats.total_calls != null && (
             <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{traineeStats.total_calls}</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{traineeStats.total_calls}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">Calls</p>
             </div>
           )}
           {traineeStats.avg_rating != null && (
             <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-center">
-              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{traineeStats.avg_rating}</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{traineeStats.avg_rating}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">Avg Rating</p>
             </div>
           )}
@@ -1034,7 +1032,7 @@ export const ShiftReportsTab: React.FC = () => {
             <p className="text-theme-text-muted mt-0.5 text-xs">Shift hours covered</p>
           </div>
           <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{officerAnalytics.total_calls}</p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-400">{officerAnalytics.total_calls}</p>
             <p className="text-theme-text-muted mt-0.5 text-xs">Calls covered</p>
           </div>
           {/* These two lead somewhere, so they are buttons and say where. As
@@ -1058,7 +1056,7 @@ export const ShiftReportsTab: React.FC = () => {
               className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-center transition-colors hover:bg-amber-500/10"
               onClick={() => setViewMode('pending-review')}
             >
-              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingCount}</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{pendingCount}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">
                 Awaiting review <span aria-hidden="true">→</span>
               </p>
@@ -1143,16 +1141,12 @@ export const ShiftReportsTab: React.FC = () => {
     const isExpanded = expandedId === report.id;
     const isMyReport = report.trainee_id === user?.id;
     const isReviewMode = viewMode === 'pending-review';
-    const dateStr = formatDateCustom(
-      report.shift_date + 'T12:00:00',
-      {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      },
-      tz
-    );
+    const dateStr = formatCalendarDate(report.shift_date, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
 
     const statusStyle = REVIEW_STATUS_STYLES[report.review_status] ?? {
       bg: 'bg-green-500/10',
@@ -1173,7 +1167,7 @@ export const ShiftReportsTab: React.FC = () => {
                   days >= 7
                     ? 'text-red-600 dark:text-red-400'
                     : days >= 3
-                      ? 'text-amber-600 dark:text-amber-400'
+                      ? 'text-amber-700 dark:text-amber-400'
                       : 'text-theme-text-muted'
                 }`}
               >
@@ -1194,7 +1188,7 @@ export const ShiftReportsTab: React.FC = () => {
           {statusStyle.label}
         </span>
         {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
-          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-400">
             Needs Acknowledgment
           </span>
         )}
@@ -1209,7 +1203,7 @@ export const ShiftReportsTab: React.FC = () => {
             </span>
           )}
         {report.trainee_acknowledged && (
-          <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+          <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:text-green-400">
             Acknowledged
           </span>
         )}
@@ -1267,9 +1261,9 @@ export const ShiftReportsTab: React.FC = () => {
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
                 {/* In "Written by me" every report's author is the viewer. */}
-                {report.officer_name && viewMode !== 'filed-by-me' && (
+                {(report.officer_name || !report.officer_id) && viewMode !== 'filed-by-me' && (
                   <span className="text-theme-text-muted flex items-center gap-1 text-xs">
-                    <UserIcon className="h-3 w-3" /> {report.officer_name}
+                    <UserIcon className="h-3 w-3" /> {attributionName(report.officer_name, report.officer_id)}
                   </span>
                 )}
                 {report.reviewer_name && (
@@ -1387,7 +1381,7 @@ export const ShiftReportsTab: React.FC = () => {
                     e.stopPropagation();
                     setReviewReportId(report.id);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
                 >
                   <ClipboardCheck className="h-4 w-4" /> Review Report
                 </button>
@@ -1414,7 +1408,7 @@ export const ShiftReportsTab: React.FC = () => {
                       e.stopPropagation();
                       setReviewReportId(report.id);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
                   >
                     <ClipboardCheck className="h-4 w-4" /> Re-Review Report
                   </button>
@@ -1430,7 +1424,7 @@ export const ShiftReportsTab: React.FC = () => {
                     e.stopPropagation();
                     setAckReportId(report.id);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
                 >
                   <Check className="h-4 w-4" /> Acknowledge Report
                 </button>
@@ -1440,7 +1434,7 @@ export const ShiftReportsTab: React.FC = () => {
             {/* Draft edit actions */}
             {viewMode === 'drafts' &&
               report.review_status === 'draft' &&
-              (canManage || report.officer_id === userId) &&
+              canCompleteDraft(report) &&
               editingDraftId !== report.id && (
                 <div className="pt-2">
                   <button
@@ -1448,7 +1442,7 @@ export const ShiftReportsTab: React.FC = () => {
                       e.stopPropagation();
                       handleEditDraft(report);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
                   >
                     <Pencil className="h-4 w-4" /> Complete Draft
                   </button>
@@ -1527,7 +1521,7 @@ export const ShiftReportsTab: React.FC = () => {
                             onClick={() => toggleSkill(setDraftForm, skill)}
                             className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
                               isSelected
-                                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                                 : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
                             }`}
                           >
@@ -1658,7 +1652,7 @@ export const ShiftReportsTab: React.FC = () => {
               onClick={() => setViewMode(mode)}
               className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === mode
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-violet-700 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
@@ -1681,7 +1675,7 @@ export const ShiftReportsTab: React.FC = () => {
               onClick={() => setViewMode('my-reports')}
               className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'my-reports'
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-violet-700 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
               title="Reports other people wrote about your shifts"
@@ -1695,7 +1689,7 @@ export const ShiftReportsTab: React.FC = () => {
               onClick={() => setViewMode('filed-by-me')}
               className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'filed-by-me'
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-violet-700 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
               title="Reports you wrote about your crew"
@@ -1707,7 +1701,7 @@ export const ShiftReportsTab: React.FC = () => {
                 onClick={() => setViewMode('department')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   viewMode === 'department'
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-violet-700 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
                 title="Every officer's reports, summed across the department"
@@ -1720,7 +1714,7 @@ export const ShiftReportsTab: React.FC = () => {
                 onClick={() => setViewMode('pending-review')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   viewMode === 'pending-review'
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-violet-700 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -1732,7 +1726,7 @@ export const ShiftReportsTab: React.FC = () => {
                 onClick={() => setViewMode('flagged')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   viewMode === 'flagged'
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-violet-700 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -1743,7 +1737,7 @@ export const ShiftReportsTab: React.FC = () => {
               onClick={() => setViewMode('drafts')}
               className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'drafts'
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-violet-700 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
@@ -1774,7 +1768,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Encryption notice for officers */}
       {canManage && viewMode === 'create' && (
-        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs text-green-700 dark:text-green-400">
+        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs text-green-800 dark:text-green-400">
           <Shield className="h-3.5 w-3.5 shrink-0" />
           Narratives and evaluations are encrypted at rest (AES-256).
         </div>
@@ -1782,7 +1776,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Offline indicator */}
       {!isOnline && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-400">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           You&apos;re offline. Reports are saved on this device and sent automatically when you&apos;re back online.
           {pendingOfflineCount > 0 && <span className="ml-1 font-medium">({pendingOfflineCount} pending)</span>}
@@ -2004,7 +1998,7 @@ export const ShiftReportsTab: React.FC = () => {
                             key={member.user_id}
                             className="bg-theme-surface-hover flex items-center gap-3 rounded-lg px-4 py-3 opacity-60"
                           >
-                            <Check className="h-4 w-4 shrink-0 text-green-600" />
+                            <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-600" />
                             <div className="min-w-0 flex-1">
                               <span className="text-theme-text-muted text-sm line-through">{member.user_name}</span>
                               <span className="text-theme-text-muted ml-2 text-xs">Already reported</span>
@@ -2229,7 +2223,7 @@ export const ShiftReportsTab: React.FC = () => {
                                           }}
                                           className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
                                             selected
-                                              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                              ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                                               : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
                                           }`}
                                         >
@@ -2274,7 +2268,7 @@ export const ShiftReportsTab: React.FC = () => {
                                                     }}
                                                     className={`h-5 w-5 rounded border text-xs font-medium transition-colors ${
                                                       selected.score === n
-                                                        ? 'border-violet-600 bg-violet-600 text-white'
+                                                        ? 'border-violet-600 bg-violet-700 text-white'
                                                         : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
                                                     }`}
                                                   >
@@ -2376,7 +2370,7 @@ export const ShiftReportsTab: React.FC = () => {
                     void handleBatchSubmit(false);
                   }}
                   disabled={submitting || savingDraft}
-                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                   Submit Report{selectedCrewIds.size > 1 ? `s (${selectedCrewIds.size})` : ''}
@@ -2414,7 +2408,7 @@ export const ShiftReportsTab: React.FC = () => {
                     }
                   })();
                 }}
-                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
               >
                 <Check className="h-4 w-4" />
                 Submit All Drafts
@@ -2498,7 +2492,7 @@ export const ShiftReportsTab: React.FC = () => {
                   let oldestDays = 0;
                   const now = Date.now();
                   for (const r of reports) {
-                    const name = r.officer_name || 'Unknown';
+                    const name = attributionName(r.officer_name, r.officer_id);
                     byOfficer.set(name, (byOfficer.get(name) ?? 0) + 1);
                     const age = Math.floor((now - new Date(r.created_at).getTime()) / 86400000);
                     if (age > oldestDays) oldestDays = age;
@@ -2517,7 +2511,7 @@ export const ShiftReportsTab: React.FC = () => {
                               oldestDays >= 7
                                 ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                                 : oldestDays >= 3
-                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                  ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
                                   : 'bg-theme-surface-hover text-theme-text-muted'
                             }`}
                           >
@@ -2683,7 +2677,7 @@ export const ShiftReportsTab: React.FC = () => {
                   void handleAcknowledge();
                 }}
                 disabled={acknowledging}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
               >
                 {acknowledging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                 Acknowledge
@@ -2723,20 +2717,16 @@ export const ShiftReportsTab: React.FC = () => {
                         </span>
                       )}
                       <span className="text-theme-text-muted">
-                        {formatDateCustom(
-                          reviewReport.shift_date + 'T12:00:00',
-                          {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          },
-                          tz
-                        )}
+                        {formatCalendarDate(reviewReport.shift_date, {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
                       </span>
-                      {reviewReport.officer_name && (
+                      {(reviewReport.officer_name || !reviewReport.officer_id) && (
                         <span className="text-theme-text-muted flex items-center gap-1">
-                          Filed by {reviewReport.officer_name}
+                          Filed by {attributionName(reviewReport.officer_name, reviewReport.officer_id)}
                         </span>
                       )}
                     </div>

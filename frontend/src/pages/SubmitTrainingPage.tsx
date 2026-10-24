@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Info, Paperclip, Pencil, Send, Trash2, Users, X } from 'lucide-react';
+import { ClipboardList, Info, Paperclip, Pencil, Send, Trash2, Users, X } from 'lucide-react';
 import { Breadcrumbs } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import {
   AttachmentField,
   Checklist,
@@ -107,6 +108,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 }) => {
   const navigate = useNavigate();
   const timezone = useTimezone();
+  const { confirm } = useConfirm();
   const isEdit = !!editSubmission;
 
   // Offered in the department's own order, so the type they listed first is
@@ -886,7 +888,20 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                       onClick={() => {
                         const submissionId = editSubmission.id;
                         const index = stored.index;
+                        const fileName = stored.file_name || `Attachment ${stored.index + 1}`;
                         void (async () => {
+                          // The file is deleted from the server immediately,
+                          // not when the form is saved, so cancelling the edit
+                          // afterwards does not bring it back.
+                          const agreed = await confirm({
+                            title: `Remove "${fileName}"?`,
+                            message:
+                              'The file is deleted from this submission right away, even if you cancel the rest of your edits.',
+                            confirmLabel: 'Remove file',
+                            cancelLabel: 'Keep it',
+                            variant: 'danger',
+                          });
+                          if (!agreed) return;
                           try {
                             await trainingSubmissionService.deleteAttachment(submissionId, index);
                             setStoredAttachments(await trainingSubmissionService.getAttachments(submissionId));
@@ -1049,7 +1064,6 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 // ==================== Main Page ====================
 
 const SubmitTrainingPage: React.FC = () => {
-  const navigate = useNavigate();
   const { confirm } = useConfirm();
   const [config, setConfig] = useState<SelfReportConfig | null>(null);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
@@ -1164,24 +1178,14 @@ const SubmitTrainingPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-4xl px-4 py-8 pb-40 sm:px-6 lg:px-8 lg:pb-8">
-        <Breadcrumbs />
-
-        <div className="mb-6 flex items-start gap-3.5">
-          <button
-            onClick={() => void navigate('/training')}
-            aria-label="Back to training"
-            className="touch:mobile-touch-target text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg p-2"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className="text-theme-text-primary text-2xl leading-8 font-bold">Submit External Training</h1>
-            <p className="text-theme-text-muted text-sm">Report training you completed outside the department.</p>
-          </div>
-        </div>
-
+    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 pb-40 sm:px-6 lg:px-8 lg:pb-8">
+      <TrainingPageHeader
+        icon={ClipboardList}
+        title="Submit External Training"
+        subtitle="Report training you completed outside the department."
+      />
+      {/* The form keeps its reading width under the full-width strip. */}
+      <div className="mx-auto max-w-4xl">
         {canRecordCrew && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
             <p className="text-sm text-blue-800 dark:text-blue-300">

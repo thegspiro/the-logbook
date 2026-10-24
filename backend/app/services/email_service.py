@@ -22,11 +22,11 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from loguru import logger
 
-from app.core import file_encryption
 from app.core.config import settings
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
+from app.services import file_storage_service as file_storage
 from app.services.branding_service import email_logo_src
 from app.services.email_template_service import EmailTemplateService
 from app.services.email_theme import (
@@ -293,6 +293,20 @@ def build_email_logo_block(organization: Optional[Organization]) -> str:
         email_logo_src(getattr(organization, "logo", None)),
         getattr(organization, "name", "Organization"),
     )
+
+
+def append_to_email_html(html_body: str, block: str) -> str:
+    """Stack *block* as a card above the footer, wherever the body allows.
+
+    Departments may have customized the welcome template, so the block cannot
+    rely on a template variable: it goes before the rendered footer when there
+    is one, else before ``</body>``, else at the end.
+    """
+    for marker in ('<div class="footer"', "</body>"):
+        index = html_body.rfind(marker)
+        if index != -1:
+            return f"{html_body[:index]}{block}\n    {html_body[index:]}"
+    return f"{html_body}\n{block}"
 
 
 def wrap_email_body(
@@ -883,7 +897,7 @@ class EmailService:
     _SMTP_ATTACHMENT_BUDGET = int(18 * 1024 * 1024)
 
     @classmethod
-    def _build_cloudflare_attachments(
+    async def _build_cloudflare_attachments(
         cls,
         attachment_paths: Optional[Sequence[AttachmentSpec]],
         budget_bytes: Optional[int] = None,
@@ -905,13 +919,13 @@ class EmailService:
         used = 0
         for spec in attachment_paths or []:
             resolved, display_name = _attachment_path_and_name(spec)
-            if not os.path.isfile(resolved):
+            if not await file_storage.exists(resolved):
                 logger.warning("Attachment not found, skipping")
                 continue
             # Stored attachments are encrypted at rest; the recipient gets
             # the plaintext.
             content_b64 = base64.b64encode(
-                file_encryption.read_plaintext(resolved)
+                await file_storage.read_bytes(resolved)
             ).decode("ascii")
             if used + len(content_b64) > budget:
                 logger.warning(
@@ -1388,7 +1402,9 @@ class EmailService:
         # --- Cloudflare Email Service path (REST API, no SMTP) ---
         if self._use_cloudflare:
             try:
-                cf_attachments = self._build_cloudflare_attachments(attachment_paths)
+                cf_attachments = await self._build_cloudflare_attachments(
+                    attachment_paths
+                )
                 results = await self._cloudflare_send(
                     to_emails=to_emails,
                     subject=subject,
@@ -1413,10 +1429,10 @@ class EmailService:
             attachment_bytes_used = 0
             for spec in attachment_paths or []:
                 resolved, display_name = _attachment_path_and_name(spec)
-                if not os.path.isfile(resolved):
+                if not await file_storage.exists(resolved):
                     logger.warning("Attachment not found, skipping")
                     continue
-                file_size = file_encryption.plaintext_size(resolved)
+                file_size = await file_storage.plaintext_size(resolved)
                 if attachment_bytes_used + file_size > self._SMTP_ATTACHMENT_BUDGET:
                     logger.warning(
                         "Attachment exceeds per-message size budget, skipping: {}",
@@ -1425,7 +1441,7 @@ class EmailService:
                     continue
                 attachment_bytes_used += file_size
                 part = MIMEBase("application", "octet-stream")
-                part.set_payload(file_encryption.read_plaintext(resolved))
+                part.set_payload(await file_storage.read_bytes(resolved))
                 encoders.encode_base64(part)
                 filename = _sanitize_header(display_name)
                 part.add_header("Content-Disposition", "attachment", filename=filename)
@@ -1969,9 +1985,15 @@ class EmailService:
         db: Any = None,
         organization_id: Optional[str] = None,
         attachment_paths: Optional[Sequence[AttachmentSpec]] = None,
+        appended_html: str = "",
+        appended_text: str = "",
     ) -> bool:
         """
         Send a welcome email to a newly created user.
+
+        ``appended_html``/``appended_text`` are system-rendered blocks (already
+        escaped) added after the department's template, so a customized
+        template carries them without being edited.
 
         Returns:
             True if sent successfully
@@ -2029,6 +2051,10 @@ class EmailService:
             default_html=DEFAULT_WELCOME_HTML,
             default_text=DEFAULT_WELCOME_TEXT,
         )
+        if appended_html:
+            html_body = append_to_email_html(html_body, appended_html)
+        if appended_text:
+            text_body = (text_body or "") + appended_text
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2256,6 +2282,54 @@ class EmailService:
             text_body=text_body,
             db=db,
             template_type=EmailTemplateType.EVENT_WAITLIST_PROMOTION.value,
+        )
+
+        return success_count > 0
+
+    async def send_event_cancellation_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        event_title: str,
+        event_start: datetime,
+        reason: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a member who was going, or might have gone, that an event is
+        cancelled."""
+        from app.services.email_template_service import (
+            DEFAULT_EVENT_CANCELLATION_HTML,
+            DEFAULT_EVENT_CANCELLATION_SUBJECT,
+            DEFAULT_EVENT_CANCELLATION_TEXT,
+        )
+
+        context = {
+            "recipient_name": recipient_name,
+            "event_title": event_title,
+            # Date only, matching the template's "Original date" and the
+            # sample a test email shows.
+            "event_date": self._format_local_dt(event_start, "%B %d, %Y"),
+            "reason": reason,
+        }
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.EVENT_CANCELLATION,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_EVENT_CANCELLATION_SUBJECT,
+            default_html=DEFAULT_EVENT_CANCELLATION_HTML,
+            default_text=DEFAULT_EVENT_CANCELLATION_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.EVENT_CANCELLATION.value,
         )
 
         return success_count > 0

@@ -42,6 +42,13 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
     if (!isOneTime && (!frequencyMonths || Number(frequencyMonths) < 1)) {
       newErrors.frequency = 'Frequency must be at least 1 month';
     }
+    // The column is NOT NULL, so a blank cannot be saved as "no grace period";
+    // it used to be replaced with 30 behind the user's back. Ask instead.
+    if (!gracePeriodDays.trim()) {
+      newErrors.gracePeriod = 'Grace period is required (enter 0 for none)';
+    } else if (!Number.isInteger(Number(gracePeriodDays)) || Number(gracePeriodDays) < 0) {
+      newErrors.gracePeriod = 'Grace period must be a whole number of days, 0 or more';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -68,7 +75,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
         frequency_months: isOneTime ? null : Number(frequencyMonths),
         applies_to_roles: roles.length > 0 ? roles : null,
         is_active: isActive,
-        grace_period_days: Number(gracePeriodDays) || 30,
+        grace_period_days: Number(gracePeriodDays),
       };
       await onSave(data);
     } else {
@@ -79,7 +86,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
         frequency_months: isOneTime ? undefined : Number(frequencyMonths),
         applies_to_roles: roles.length > 0 ? roles : undefined,
         is_active: isActive,
-        grace_period_days: Number(gracePeriodDays) || 30,
+        grace_period_days: Number(gracePeriodDays),
       };
       await onSave(data);
     }
@@ -189,29 +196,27 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
             )}
           </div>
 
-          {/* Applies to Roles: stored and shown next to the requirement's name,
-              but get_compliance_status (medical_screening_service.py) pulls every
-              active requirement for every subject regardless of role — nothing
-              reads this list to scope who a requirement applies to. Labelled
-              rather than silently wired, since wiring it changes who counts as
-              non-compliant on every installation that has set it. Delete this
-              notice in the change that makes compliance evaluation read it; see
-              tests/test_medical_screening_requirement_fields_are_unwired.py. */}
+          {/* Positions, by name or slug: the backend grades a member on this
+              requirement only if they hold one (medical_screening_service,
+              _applicable_requirements). The field is still stored as
+              `applies_to_roles`; renaming the column would be a breaking API
+              and schema change for no gain. */}
           <div>
             <label htmlFor="req-roles" className={labelClass}>
-              Applies to Roles (comma-separated)
+              Applies to Positions (comma-separated)
             </label>
             <input
               id="req-roles"
               type="text"
               value={appliesTo}
               onChange={(e) => setAppliesTo(e.target.value)}
-              placeholder="e.g., firefighter, emt, officer"
+              placeholder="e.g., Firefighter, Apparatus Manager"
+              aria-describedby="req-roles-note"
               className={inputClass}
             />
-            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
-              Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list
-              here.
+            <p id="req-roles-note" className="text-theme-text-muted mt-1 text-xs">
+              Leave blank to apply to every member. Otherwise only members who hold one of these positions are screened
+              for it. Applicants in the pipeline hold no positions and are always screened.
             </p>
           </div>
 
@@ -226,7 +231,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               see tests/test_medical_screening_requirement_fields_are_unwired.py. */}
           <div>
             <label htmlFor="req-grace" className={labelClass}>
-              Grace Period (days past expiration)
+              Grace Period (days past expiration) *
             </label>
             <input
               id="req-grace"
@@ -236,6 +241,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               onChange={(e) => setGracePeriodDays(e.target.value)}
               className={inputClass + ' w-32'}
             />
+            {errors.gracePeriod && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.gracePeriod}</p>}
             <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
               Not enforced yet — a screening is marked non-compliant the day after its expiration date; this value is
               saved but does not extend that deadline.

@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.utils import is_body_allowed_for_status_code
@@ -22,6 +22,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
+from starlette.routing import Route
 
 from app.api.public import responses as public_responses
 from app.api.public.branding import router as public_branding_router
@@ -32,6 +33,7 @@ from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.legal import router as public_legal_router
 from app.api.public.mcp_oauth import router as mcp_oauth_router
+from app.api.public.minutes import router as public_minutes_router
 from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
@@ -523,7 +525,7 @@ def _cleanup_duplicate_revisions(versions_dir, refuse_duplicates=False):
         return tuple(re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)))
 
     # Map revision ID -> list of (filepath, down_revision)
-    rev_to_files = {}
+    rev_to_files: dict[str, list[tuple[str, str, tuple[str, ...]]]] = {}
     for filename in os.listdir(versions_dir):
         if not filename.endswith(".py") or filename.startswith("__"):
             continue
@@ -543,7 +545,7 @@ def _cleanup_duplicate_revisions(versions_dir, refuse_duplicates=False):
 
     # Build set of down_revisions that other files depend on.
     # A file that is depended on by another file is part of the chain.
-    referenced_revisions = set()
+    referenced_revisions: set[str] = set()
     for rev_id, files in rev_to_files.items():
         for _, _, down_revs in files:
             referenced_revisions.update(down_revs)
@@ -690,6 +692,8 @@ def _run_migration_file(engine_or_conn, migration_path):
     from sqlalchemy.engine import Connection
 
     spec = importlib.util.spec_from_file_location("migration", migration_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load migration module from {migration_path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
@@ -1050,6 +1054,14 @@ def run_migrations():
                 "Database migrations will be skipped."
             )
             return
+    # get_current_head() returns None, without raising, when the versions
+    # directory holds no revisions; that must not reach command.upgrade().
+    if head_revision is None:
+        logger.error(
+            "No head revision found in the migration scripts. "
+            "Database migrations will be skipped."
+        )
+        return
     # NullPool avoids connection pool overhead during DDL-heavy initialization.
     # Matches Alembic's own env.py strategy (pool is discarded after migrations).
     # connect_args are the async engine's own: the timeout makes a hung MySQL
@@ -2031,14 +2043,19 @@ app = FastAPI(
 app.state.limiter = limiter
 
 
-def _rate_limit_handler_with_code(request: Request, exc: RateLimitExceeded):
+def _rate_limit_handler_with_code(request: Request, exc: Exception):
     """slowapi's stock handler, plus the support code and a `detail` body.
 
     The stock handler answers with ``{"error": ...}``, which the frontend's
     `toAppError()` does not read — members saw a bare status text. Using
     ``detail`` matches every other error response, and ``code`` gives IT a
     stable reference (LB-SYS-003).
+
+    Starlette types every handler as taking ``Exception``; it is registered for
+    ``RateLimitExceeded`` only, so anything else is re-raised untouched.
     """
+    if not isinstance(exc, RateLimitExceeded):
+        raise exc
     response = JSONResponse(
         {
             "detail": f"Rate limit exceeded: {exc.detail}",
@@ -2276,7 +2293,7 @@ app.add_middleware(
         "Accept",
         "Origin",
     ],
-    expose_headers=["X-Request-ID", "X-CSRF-Token"],
+    expose_headers=["X-Request-ID", "X-CSRF-Token", "X-Delete-Outcome"],
 )
 
 # Compression
@@ -2417,8 +2434,9 @@ app.include_router(
     responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
 )
 
-# Include public calendar ICS feed (no auth — token-protected per-user feed at
-# /api/public/v1/calendar/{token}.ics)
+# Include public calendar ICS feeds (no auth — token-protected: the per-member
+# shifts feed at /api/public/v1/calendar/{token}.ics and the department events
+# feed at /api/public/v1/calendar/org/{token}.ics)
 app.include_router(
     public_calendar_router, prefix="/api", responses=public_responses.TOKEN_ADDRESSED
 )
@@ -2460,6 +2478,14 @@ app.include_router(
     public_legal_router, prefix="/api", responses=public_responses.RATE_LIMITED
 )
 
+# Minutes the department chose to post publicly, behind the /public/minutes
+# page — /api/public/v1/minutes
+app.include_router(
+    public_minutes_router,
+    prefix="/api",
+    responses={**public_responses.RATE_LIMITED, **public_responses.NOT_FOUND},
+)
+
 # RFC 9116 vulnerability-disclosure pointer. Mounted at the root (no /api
 # prefix) because the spec fixes the path at /.well-known/security.txt;
 # nginx routes that exact path to the backend.
@@ -2481,8 +2507,15 @@ app.include_router(mcp_oauth_router, responses=public_responses.RATE_LIMITED)
 mcp_server = build_mcp_server()
 app.state.mcp_session_manager = None
 _mcp_endpoint = McpEndpoint()
-for _mcp_path in (MCP_MOUNT_PATH, MCP_MOUNT_PATH + "/"):
-    app.add_route(_mcp_path, _mcp_endpoint, include_in_schema=False)
+# McpEndpoint is an ASGI app, not a request handler, so add_route()'s signature
+# rejects it; Route accepts either, and include_router() registers it.
+_mcp_router = APIRouter(
+    routes=[
+        Route(_mcp_path, _mcp_endpoint, include_in_schema=False)
+        for _mcp_path in (MCP_MOUNT_PATH, MCP_MOUNT_PATH + "/")
+    ]
+)
+app.include_router(_mcp_router)
 
 
 # Health check endpoint
@@ -2493,7 +2526,8 @@ async def health_check():
 
     SEC: Returns only status and ready flag — no version, environment, or
     internal service state that could help attackers fingerprint the system.
-    Use /health/detailed (authenticated, non-production) for diagnostics.
+    Use /health/detailed (unauthenticated, ENVIRONMENT=development only) for
+    diagnostics.
     """
     from fastapi.responses import JSONResponse
 
@@ -2518,8 +2552,9 @@ async def health_check():
 
         from app.core.database import database_manager
 
-        if database_manager.is_connected:
-            async with database_manager.session_factory() as session:
+        session_factory = database_manager.session_factory
+        if database_manager.is_connected and session_factory is not None:
+            async with session_factory() as session:
                 await session.execute(sa_text("SELECT 1"))
         else:
             db_status = "disconnected"
@@ -2533,8 +2568,9 @@ async def health_check():
     try:
         from app.core.cache import cache_manager
 
-        if cache_manager.is_connected:
-            await cache_manager.redis.ping()
+        redis_client = cache_manager.redis
+        if cache_manager.is_connected and redis_client is not None:
+            await redis_client.ping()
         else:
             redis_status = "disconnected"
             if overall_status == "healthy":
@@ -2571,11 +2607,15 @@ async def health_check():
 @app.get("/health/detailed")
 async def health_check_detailed():
     """
-    Detailed health check with system information
-    Only available in non-production environments for security
+    Detailed health check with system information.
+
+    Served only when ENVIRONMENT is "development". It has no auth dependency and
+    reports configuration flags and host load, so staging, which is often
+    reachable from the internet, must not serve it either. Any other value
+    answers 404, the same response as a path that does not exist.
     """
-    if settings.ENVIRONMENT == "production":
-        return {"error": "Detailed health check not available in production"}
+    if settings.ENVIRONMENT != "development":
+        raise StarletteHTTPException(status_code=404)
 
     import psutil
 
@@ -2585,7 +2625,10 @@ async def health_check_detailed():
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "system": {
-            "cpu_percent": psutil.cpu_percent(interval=1),
+            # interval=1 sleeps inside the event loop, so each unauthenticated
+            # request stalled every other request for a second. interval=None
+            # reads usage since the previous call instead (0.0 on the first).
+            "cpu_percent": psutil.cpu_percent(interval=None),
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,
         },

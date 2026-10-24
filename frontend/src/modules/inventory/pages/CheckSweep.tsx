@@ -377,7 +377,9 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
       {/* Band 2 — the stop. The only band that scrolls. */}
       <div className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-3 overflow-y-auto p-3.5">
         <div className="flex flex-col gap-0.5">
-          <h2 className="text-theme-text-primary text-[20px] leading-7 font-bold">{stop.name}</h2>
+          {/* Items placed directly on the checklist have no heading on any
+              screen; the strip above still names where the crew is. */}
+          {!stop.isInline && <h2 className="text-theme-text-primary text-[20px] leading-7 font-bold">{stop.name}</h2>}
           <p className="text-theme-text-muted text-[13px]">
             {pockets.length > 0
               ? `${pockets.length} pockets, in the order you unzip them`
@@ -446,7 +448,7 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
           type="button"
           disabled={disabled || blockedByGauges}
           onClick={advance}
-          className={`flex min-h-14 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-[17px] font-bold ${
+          className={`flex min-h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-[17px] font-bold ${
             blockedByGauges
               ? // Grey, not a dimmed primary: a faded red still reads as the
                 // action to take, and this one cannot be taken yet.

@@ -44,7 +44,7 @@ export const MobileCheckoutCard: React.FC<MobileCheckoutCardProps> = ({
             Overdue
           </span>
         ) : (
-          <span className="inline-flex shrink-0 items-center rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-green-700 dark:bg-green-500/20 dark:text-green-400">
+          <span className="inline-flex shrink-0 items-center rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-green-800 dark:bg-green-500/20 dark:text-green-400">
             Active
           </span>
         )}

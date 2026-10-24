@@ -10,7 +10,7 @@ import { IPExceptionUseCase, IP_EXCEPTION_USE_CASE_LABELS } from '../../../const
 import type { IPExceptionRequestCreate } from '../types';
 
 interface IPExceptionRequestFormProps {
-  /** Resolves true when the request was filed; the form clears only then. */
+  /** Resolves true when the request was accepted; the form clears only then. */
   onSubmit: (data: IPExceptionRequestCreate) => Promise<boolean>;
   isSaving: boolean;
 }
@@ -28,16 +28,14 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({ 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedDescription = description.trim();
-    const filed = await onSubmit({
+    const accepted = await onSubmit({
       ipAddress: ipAddress.trim(),
       reason: reason.trim(),
       useCase: useCase.trim(),
       requestedDurationDays: durationDays,
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
     });
-    // W74: the page catches a refusal, so this resolved either way and a
-    // refused request wiped the justification the member had typed.
-    if (!filed) return;
+    if (!accepted) return;
     setIpAddress('');
     setReason('');
     setUseCase('');

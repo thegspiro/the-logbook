@@ -4,12 +4,13 @@ Analytics API Endpoints
 Endpoints for tracking and retrieving analytics data.
 """
 
+import json
 from datetime import date, datetime, time, timezone
 from typing import Optional
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +27,13 @@ from app.utils.org_timezone import resolve_reporting_timezone
 
 router = APIRouter()
 
+MAX_FAILURE_REASON_CHARS = 100
+
+# The client posts a handful of short keys (device, timestamp, an error type and
+# message). The request body limit is 60 MB, so without a bound of its own one
+# member could store a row that size, and /export returns up to 1000 rows.
+MAX_EVENT_METADATA_BYTES = 4096
+
 
 class AnalyticsEventCreate(BaseModel):
     event_type: str = Field(
@@ -35,6 +43,15 @@ class AnalyticsEventCreate(BaseModel):
         default=None, max_length=36, description="Reference to the tracked event"
     )
     metadata: Optional[dict] = Field(default_factory=dict)
+
+    @field_validator("metadata")
+    @classmethod
+    def _metadata_is_small(cls, value: Optional[dict]) -> Optional[dict]:
+        if value and len(json.dumps(value, default=str)) > MAX_EVENT_METADATA_BYTES:
+            raise ValueError(
+                f"metadata must be at most {MAX_EVENT_METADATA_BYTES} bytes"
+            )
+        return value
 
 
 def _device_type_from_metadata(metadata: Optional[dict]) -> Optional[str]:
@@ -48,6 +65,20 @@ def _device_type_from_metadata(metadata: Optional[dict]) -> Optional[str]:
     if not isinstance(value, str) or not value or len(value) > 20:
         return None
     return value
+
+
+def _failure_reason(metadata: dict) -> str:
+    """The reason a check-in failed, as a short string fit to key a counter.
+
+    *metadata* is whatever a client posted to ``/track`` and is read back for the
+    whole organization on every ``/metrics`` call. An unhashable reason (a dict or
+    list) would raise there, and an enormous one would be echoed 500 times into
+    the response, so anything that is not a plain string is counted as unknown.
+    """
+    reason = metadata.get("error_reason") or metadata.get("reason")
+    if not isinstance(reason, str) or not reason:
+        return "unknown"
+    return reason[:MAX_FAILURE_REASON_CHARS]
 
 
 @router.post("/track")
@@ -150,7 +181,7 @@ async def get_metrics(
     error_breakdown: dict[str, int] = {}
     for (metadata,) in error_events.all():
         if metadata and isinstance(metadata, dict):
-            reason = metadata.get("error_reason") or metadata.get("reason") or "unknown"
+            reason = _failure_reason(metadata)
             error_breakdown[reason] = error_breakdown.get(reason, 0) + 1
 
     # Avg time to check-in: compute from paired qr_scan→check_in_success

@@ -20,6 +20,7 @@ const mockUploadReport = vi.fn();
 const mockGetCourseMappings = vi.fn();
 const mockUpdateCourseMapping = vi.fn();
 const mockGetCourses = vi.fn();
+const mockImportMatched = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -37,6 +38,7 @@ vi.mock('../services/api', () => ({
     getImportedRecords: (...a: unknown[]) => mockGetImportedRecords(...a) as unknown,
     getCategoryMappings: (...a: unknown[]) => mockGetCategoryMappings(...a) as unknown,
     getUserMappings: (...a: unknown[]) => mockGetUserMappings(...a) as unknown,
+    importMatched: (...a: unknown[]) => mockImportMatched(...a) as unknown,
     updateCategoryMapping: (...a: unknown[]) => mockUpdateCategoryMapping(...a) as unknown,
     updateUserMapping: (...a: unknown[]) => mockUpdateUserMapping(...a) as unknown,
     deleteProvider: (...a: unknown[]) => mockDeleteProvider(...a) as unknown,
@@ -247,6 +249,48 @@ describe('ExternalTrainingPage — user mappings', () => {
     const select = await screen.findByLabelText('Member for Pat Rivera');
     expect(select).toHaveValue('user-gone');
     expect(screen.getByRole('option', { name: 'Sam Former' })).toBeInTheDocument();
+  });
+
+  // The API returns mappings in discovery order, so after the auto-mapper has
+  // matched most of a roster the handful still needing an officer sat at the
+  // bottom of a long list — the screen said "22 unmapped" and showed none.
+  it('lists the users still needing a member above the ones already mapped', async () => {
+    mockGetUserMappings.mockResolvedValue([
+      { ...unmappedUser, id: 'umap-done', external_name: 'Alex Mapped', is_mapped: true, internal_user_id: 'user-1' },
+      { ...unmappedUser, id: 'umap-todo', external_name: 'Casey Pending' },
+    ]);
+    await openUsersTab();
+
+    const labels = (await screen.findAllByRole('combobox', { name: /^Member for/ })).map((el) =>
+      el.getAttribute('aria-label')
+    );
+    expect(labels).toEqual(['Member for Casey Pending', 'Member for Alex Mapped']);
+  });
+
+  it('leaves a row where it was after the officer maps it, until the modal is reopened', async () => {
+    mockGetUserMappings.mockResolvedValue([
+      { ...unmappedUser, id: 'umap-todo', external_name: 'Casey Pending' },
+      { ...unmappedUser, id: 'umap-later', external_name: 'Drew Pending' },
+    ]);
+    mockUpdateUserMapping.mockImplementation((_p: string, mappingId: string) =>
+      Promise.resolve({
+        ...unmappedUser,
+        id: mappingId,
+        external_name: 'Casey Pending',
+        internal_user_id: 'user-1',
+        is_mapped: true,
+        internal_user_name: 'Pat Rivera',
+      })
+    );
+    await openUsersTab();
+
+    await userEvent.selectOptions(await screen.findByLabelText('Member for Casey Pending'), 'user-1');
+    await waitFor(() =>
+      expect(mockUpdateUserMapping).toHaveBeenCalledWith('prov-1', 'umap-todo', { internal_user_id: 'user-1' })
+    );
+
+    const labels = screen.getAllByRole('combobox', { name: /^Member for/ }).map((el) => el.getAttribute('aria-label'));
+    expect(labels).toEqual(['Member for Casey Pending', 'Member for Drew Pending']);
   });
 });
 
@@ -692,10 +736,92 @@ describe('ExternalTrainingPage — Import Queue tab', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Some imports for this provider could not be loaded');
   });
 
+  describe('importing matching pending records', () => {
+    beforeEach(() => {
+      mockImportMatched.mockReset();
+      mockImportMatched.mockResolvedValue({ imported: 12, failed: 0 });
+    });
+
+    it('imports for the provider, reports the count and reloads the queue', async () => {
+      await openQueue();
+      await screen.findByText('Course a');
+      mockGetImportedRecords.mockClear();
+
+      await userEvent.click(
+        screen.getByRole('button', { name: /Import matching pending records for Vector Solutions/ })
+      );
+
+      await waitFor(() => expect(mockImportMatched).toHaveBeenCalledWith('prov-1'));
+      expect(mockToastSuccess).toHaveBeenCalledWith('Imported 12 records');
+      await waitFor(() =>
+        expect(mockGetImportedRecords).toHaveBeenCalledWith('prov-1', { status: 'pending', limit: 200 })
+      );
+    });
+
+    it('flags failures instead of reporting plain success', async () => {
+      mockImportMatched.mockResolvedValue({ imported: 3, failed: 2 });
+      await openQueue();
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: /Import matching pending records for Vector Solutions/ })
+      );
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('2 failed')));
+      expect(mockToastSuccess).not.toHaveBeenCalled();
+    });
+
+    it('shows an error toast when the request fails', async () => {
+      mockImportMatched.mockRejectedValue(new Error('boom'));
+      await openQueue();
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: /Import matching pending records for Vector Solutions/ })
+      );
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('Import failed')));
+    });
+  });
+
   it('keeps the explanatory empty state when there are no providers', async () => {
     mockGetProviders.mockResolvedValue([]);
     await openQueue();
 
     expect(await screen.findByText(/pending imports will appear here/)).toBeInTheDocument();
+  });
+});
+
+describe('ExternalTrainingPage — deactivating an integration', () => {
+  beforeEach(() => {
+    mockDeleteProvider.mockReset();
+    mockDeleteProvider.mockResolvedValue(undefined);
+  });
+
+  it('says what deactivation does: syncing stops and imported records are kept', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate provider' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Deactivate Vector Solutions?' });
+    expect(dialog).toHaveTextContent('It stops syncing');
+    expect(dialog).toHaveTextContent('Training records already imported through it are kept');
+    expect(dialog).not.toHaveTextContent(/removed with it/i);
+    expect(screen.getByRole('button', { name: 'Deactivate integration' })).toBeInTheDocument();
+  });
+
+  it('does nothing when the officer keeps it active', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate provider' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Keep it active' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockDeleteProvider).not.toHaveBeenCalled();
+  });
+
+  it('deactivates the provider once confirmed', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate provider' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate integration' }));
+
+    await waitFor(() => expect(mockDeleteProvider).toHaveBeenCalledWith('prov-1'));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Integration deactivated'));
   });
 });

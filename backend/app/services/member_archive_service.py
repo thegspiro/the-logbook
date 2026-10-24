@@ -28,7 +28,7 @@ from app.models.inventory import (
     ItemAssignment,
     ItemIssuance,
 )
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
 from app.services.email_policy import (
     EmailKind,
@@ -36,6 +36,7 @@ from app.services.email_policy import (
     member_receives_email,
 )
 from app.services.member_service_history_service import MemberServiceHistoryService
+from app.services.nfc_card_status_sync import sync_cards_with_member_status
 from app.utils.org_timezone import resolve_org_today
 
 
@@ -136,6 +137,12 @@ async def check_and_auto_archive(
     member.archived_at = now
     member.status_changed_at = now
     member.status_change_reason = "Auto-archived: all department property returned"
+    await sync_cards_with_member_status(
+        db,
+        organization_id=organization_id,
+        user_id=str(member.id),
+        member_status=UserStatus.ARCHIVED,
+    )
     await db.commit()
 
     # Audit log
@@ -180,7 +187,7 @@ async def check_and_auto_archive(
             select(User)
             .where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.roles))
@@ -316,6 +323,13 @@ async def reactivate_member(
         # previous_membership_number as the record of what it was — wiping it
         # would permanently lose the member's history with nothing restored.
 
+    await sync_cards_with_member_status(
+        db,
+        organization_id=organization_id,
+        user_id=str(member.id),
+        member_status=UserStatus.ACTIVE,
+        performed_by_id=str(reactivated_by),
+    )
     await db.commit()
 
     # Audit log

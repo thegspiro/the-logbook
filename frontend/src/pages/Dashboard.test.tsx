@@ -53,7 +53,7 @@ const {
   mockGetEligiblePositions,
   mockGetEligiblePositionsBulk,
   mockGetMyCompliance,
-  mockGetSchedulingSummary,
+  mockGetMyHoursHistory,
   mockGetTrainingEnrollments,
   mockGetEnrollmentProgress,
   mockGetAdminHoursSummary,
@@ -80,7 +80,7 @@ const {
   mockGetEligiblePositions: vi.fn(),
   mockGetEligiblePositionsBulk: vi.fn(),
   mockGetMyCompliance: vi.fn(),
-  mockGetSchedulingSummary: vi.fn(),
+  mockGetMyHoursHistory: vi.fn(),
   mockGetTrainingEnrollments: vi.fn(),
   mockGetEnrollmentProgress: vi.fn(),
   mockMarkNotificationRead: vi.fn(),
@@ -92,7 +92,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getMyShifts: mockGetMyShifts,
     getOpenShifts: mockGetOpenShifts,
-    getSummary: mockGetSchedulingSummary,
+    getMyHoursHistory: mockGetMyHoursHistory,
     signupForShift: mockSignupForShift,
     getEligiblePositions: mockGetEligiblePositions,
     getEligiblePositionsBulk: mockGetEligiblePositionsBulk,
@@ -162,7 +162,7 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 // every caller the whole state object, so a consumer selecting one primitive
 // (`state.user?.id`) gets a fresh object each render and spins any effect keyed
 // on it — which is exactly what DashboardOrientation does.
-const authUser = vi.hoisted(() => ({ preferredName: null as string | null }));
+const authUser = vi.hoisted(() => ({ preferredName: null as string | null, membershipType: null as string | null }));
 vi.mock('../stores/authStore', () => {
   const state = () => ({
     checkPermission: mockCheckPermission,
@@ -171,6 +171,7 @@ vi.mock('../stores/authStore', () => {
       first_name: 'Test',
       last_name: 'User',
       preferred_name: authUser.preferredName,
+      membership_type: authUser.membershipType,
       organization_id: 'org-1',
     },
   });
@@ -248,7 +249,7 @@ const ALL_SERVICE_MOCKS = [
   mockGetEligiblePositions,
   mockGetEligiblePositionsBulk,
   mockGetMyCompliance,
-  mockGetSchedulingSummary,
+  mockGetMyHoursHistory,
   mockGetAdminHoursSummary,
   mockGetEnabledModules,
   mockGetTrainingEnrollments,
@@ -261,6 +262,7 @@ describe('Dashboard', () => {
   beforeEach(() => {
     registeredPullToRefresh = undefined;
     authUser.preferredName = null;
+    authUser.membershipType = null;
     // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
     // leaves implementations AND any unconsumed mockRejectedValueOnce still
     // queued, so a test that arms a one-shot rejection and then returns early
@@ -301,7 +303,7 @@ describe('Dashboard', () => {
       configured: true,
       enabled_modules: ['inventory', 'medical_screening', 'notifications', 'scheduling', 'training'],
     });
-    mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 0 });
+    mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
     mockGetTrainingEnrollments.mockResolvedValue([]);
     mockGetEnrollmentProgress.mockResolvedValue({});
     mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 0 });
@@ -341,7 +343,7 @@ describe('Dashboard', () => {
       mockGetMyNotifications.mockRejectedValue(new Error('offline'));
       mockGetTrainingEnrollments.mockRejectedValue(new Error('offline'));
       mockGetUserInventory.mockRejectedValue(new Error('offline'));
-      mockGetSchedulingSummary.mockRejectedValue(new Error('offline'));
+      mockGetMyHoursHistory.mockRejectedValue(new Error('offline'));
       mockGetMyTraining.mockRejectedValue(new Error('offline'));
       mockGetAdminHoursSummary.mockRejectedValue(new Error('offline'));
 
@@ -420,14 +422,14 @@ describe('Dashboard', () => {
       await waitFor(() => {
         expect(mockGetAdminHoursSummary).toHaveBeenCalledTimes(1);
       });
-      expect(mockGetSchedulingSummary).not.toHaveBeenCalled();
+      expect(mockGetMyHoursHistory).not.toHaveBeenCalled();
       expect(mockGetMyTraining).not.toHaveBeenCalled();
       expect(within(card).getAllByText('Unavailable')).toHaveLength(2);
       expect(within(card).getAllByText('0')).toHaveLength(2);
     });
 
     it('loads authorized sources independently when another source fails', async () => {
-      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 3 } });
       mockGetMyTraining.mockRejectedValue(new Error('training unavailable'));
       mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
 
@@ -442,12 +444,118 @@ describe('Dashboard', () => {
       expect(within(card).getByText('Unavailable')).toBeInTheDocument();
     });
 
+    it("reads Standby from the member's own hours, not the department-wide summary", async () => {
+      // A member with no shifts of their own must read 0 however much time the
+      // rest of the roster logged: /scheduling/summary sums every member.
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+      mockGetMyTraining.mockResolvedValue({
+        hours_summary: { total_hours: 0, hours_this_month: 0 },
+        certifications: [],
+      });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 8 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      expect(await within(card).findByText('Standby')).toBeInTheDocument();
+      expect(mockGetMyHoursHistory).toHaveBeenCalledWith();
+      // Administrative's 8 is also the month total, so only the row's own
+      // Standby figure and the absence of the department's are asserted.
+      expect(await within(card).findAllByText('8')).toHaveLength(2);
+      expect(within(card).queryByText('42.5')).not.toBeInTheDocument();
+    });
+
+    describe('a member the scheduling service excludes from every seat', () => {
+      beforeEach(() => {
+        mockGetEligiblePositions.mockReset();
+        mockGetMyHoursHistory.mockReset();
+        mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 8 });
+      });
+
+      it('is not offered Take a Shift or a Standby row', async () => {
+        mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+
+        renderWithRouter(<Dashboard />);
+
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        await waitFor(() => {
+          expect(screen.queryByRole('button', { name: /Take a Shift/ })).not.toBeInTheDocument();
+        });
+        expect(within(card).queryByText('Standby')).not.toBeInTheDocument();
+        expect(within(card).getByText('Administrative')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Log Training/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Clock In/ })).toBeInTheDocument();
+      });
+
+      it('still offers Take a Shift while a seat on one shift is open to them', async () => {
+        // The general answer says no seat, but a parade can open a single
+        // seat to administrative members. The open-shifts list is already
+        // limited to seats the member can claim, so a non-empty list wins.
+        mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+        mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'parade', shift_date: inWindow(4) })]);
+
+        renderWithRouter(<Dashboard />);
+
+        // The exclusion verdict has to land first: the tile is present on the
+        // initial render, so asserting it before then proves nothing. The
+        // Standby row going away is the visible sign that it has.
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        await waitFor(() => {
+          expect(within(card).queryByText('Standby')).not.toBeInTheDocument();
+        });
+        expect(screen.getByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
+      });
+
+      it('keeps Take a Shift for a scheduling manager, whose open list is the department gap view', async () => {
+        mockCheckPermission.mockImplementation((permission: string) =>
+          ['scheduling.view', 'scheduling.manage', 'training.view'].includes(permission)
+        );
+        mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+        mockGetOpenShifts.mockResolvedValue([]);
+
+        renderWithRouter(<Dashboard />);
+
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        await waitFor(() => {
+          expect(within(card).queryByText('Standby')).not.toBeInTheDocument();
+        });
+        expect(screen.getByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
+      });
+
+      it('keeps the Standby row when hours were credited to them anyway', async () => {
+        // A position changed after the shifts were worked: dropping the row
+        // would leave the month total larger than the figures beside it.
+        mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 6 } });
+
+        renderWithRouter(<Dashboard />);
+
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        expect(await within(card).findByText('Standby')).toBeInTheDocument();
+        expect(await within(card).findByText('6')).toBeInTheDocument();
+      });
+
+      it('leaves both in place for a member who can hold a seat', async () => {
+        mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+
+        renderWithRouter(<Dashboard />);
+
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        expect(await within(card).findByText('Standby')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
+      });
+    });
+
     it('does not present a partial sum as the month total', async () => {
       // 3 + 2 = 5 is arithmetic, not the member's month: training failed, so
       // its hours are missing from the sum. "5 total" is a precise wrong
       // number, and a precise number reads more trustworthy than a missing
       // one -- the error banner alongside it does not undo that.
-      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 3 } });
       mockGetMyTraining.mockRejectedValue(new Error('training unavailable'));
       mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
 
@@ -465,7 +573,7 @@ describe('Dashboard', () => {
         configured: true,
         enabled_modules: ['scheduling'],
       });
-      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 3 } });
       mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
 
       renderWithRouter(<Dashboard />);
@@ -492,7 +600,7 @@ describe('Dashboard', () => {
       await waitFor(() => {
         expect(within(card).getAllByText('2')).toHaveLength(2);
       });
-      expect(mockGetSchedulingSummary).not.toHaveBeenCalled();
+      expect(mockGetMyHoursHistory).not.toHaveBeenCalled();
       expect(mockGetMyTraining).not.toHaveBeenCalled();
       expect(screen.queryByText('Hours could not be fully verified.')).not.toBeInTheDocument();
     });
@@ -585,7 +693,7 @@ describe('Dashboard', () => {
       // The header carried a second copy of the same figure with none of the
       // split behind it, so a member reading "0 hrs in September" had no way
       // to see which source it came from.
-      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 3 } });
       mockGetMyTraining.mockResolvedValue({
         hours_summary: { total_hours: 4, hours_this_month: 4 },
         certifications: [],
@@ -601,7 +709,7 @@ describe('Dashboard', () => {
 
     it('does not call enabled sources without their view permissions', async () => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'scheduling.view');
-      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 4 });
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 4 } });
 
       renderWithRouter(<Dashboard />);
 
@@ -609,7 +717,7 @@ describe('Dashboard', () => {
       await waitFor(() => {
         expect(within(card).getAllByText('4')).toHaveLength(2);
       });
-      expect(mockGetSchedulingSummary).toHaveBeenCalledTimes(1);
+      expect(mockGetMyHoursHistory).toHaveBeenCalledTimes(1);
       expect(mockGetMyTraining).not.toHaveBeenCalled();
     });
   });
@@ -864,7 +972,7 @@ describe('Dashboard', () => {
       mockGetMyTraining
         .mockRejectedValueOnce(new Error('offline'))
         .mockResolvedValue({ hours_summary: { total_hours: 4, hours_this_month: 4 }, certifications: [] });
-      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 3 } });
       mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
 
       const user = userEvent.setup();
@@ -905,7 +1013,7 @@ describe('Dashboard', () => {
       // loadingHours, so clearing the flag up front would put the partial sum
       // back as an exact figure for as long as the retry takes.
       mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
-      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 3 } });
       mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
 
       const user = userEvent.setup();
@@ -928,8 +1036,8 @@ describe('Dashboard', () => {
       // one call means a retry that recovers scheduling while training
       // transiently fails wipes training's known figure -- recovery from one
       // outage manufacturing a second.
-      mockGetSchedulingSummary.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({
-        hours_worked_this_month: 3,
+      mockGetMyHoursHistory.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({
+        current_month: { hours: 3 },
       });
       mockGetMyTraining
         .mockResolvedValueOnce({ hours_summary: { total_hours: 4, hours_this_month: 4 }, certifications: [] })
@@ -1033,7 +1141,7 @@ describe('Dashboard', () => {
       // eager clear here would revert "Total unavailable" to an exact stale
       // partial total for as long as the refresh takes.
       mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
-      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 3 } });
       mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
 
       renderWithRouter(<Dashboard />);
@@ -1090,9 +1198,7 @@ describe('Dashboard', () => {
       // busy predicate naming every possible source lets a slow hours retry
       // block recovery of a source this button owns.
       mockGetEligiblePositions.mockRejectedValue(new Error('offline'));
-      mockGetSchedulingSummary
-        .mockRejectedValueOnce(new Error('offline'))
-        .mockImplementation(() => new Promise(() => {}));
+      mockGetMyHoursHistory.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
 
       const user = userEvent.setup();
       renderWithRouter(<Dashboard />);
@@ -2101,6 +2207,25 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+    });
+
+    // "Clear to respond" is a statement about riding. An administrative member
+    // holding a CPR card is not being cleared for anything, and an expired one
+    // is not "Not clear to respond"; the expiry still reaches them through the
+    // Needs you rows.
+    it('says nothing to an administrative member', async () => {
+      authUser.membershipType = 'administrative';
+      withCerts([
+        { id: 'c1', course_name: 'CPR', expiration_date: '2028-01-01', is_expired: false, days_until_expiry: 500 },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetMyTraining).toHaveBeenCalled();
+      });
+      expect(screen.queryByText('Clear to respond')).not.toBeInTheDocument();
+      expect(screen.queryByText('Not clear to respond')).not.toBeInTheDocument();
     });
 
     it('names the seats the member can hold', async () => {

@@ -15,7 +15,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router';
-import { ChevronRight, Home } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Home } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { BREADCRUMB_ROUTES, canLinkCrumb } from './breadcrumbRoutes';
 
@@ -70,6 +70,16 @@ interface BreadcrumbsProps {
    * caught there rather than by its silence.
    */
   underHub?: string;
+  /**
+   * Below 640px, show one "← parent" link instead of the trail.
+   *
+   * A five-crumb trail wraps to two lines on a phone and pushes the page's
+   * own content down a screen it does not have. The parent shown is the
+   * nearest crumb this viewer may open, so the permission filtering the trail
+   * already does decides it — a viewer who cannot open the immediate parent
+   * is sent to the closest ancestor they can.
+   */
+  compactOnPhone?: boolean;
 }
 
 const PATH_LABELS: Record<string, string> = {
@@ -186,6 +196,8 @@ const PATH_LABELS: Record<string, string> = {
   // Not title-cased from the segment: that yields "Check In Station", and the
   // page's own heading hyphenates it.
   'check-in-station': 'Check-In Station',
+  'card-readers': 'Card Readers',
+  'id-cards': 'ID Cards',
   history: 'History',
   'id-card': 'ID Card',
 };
@@ -303,9 +315,14 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   className = '',
   omitCurrentPage = false,
   underHub,
+  compactOnPhone = false,
 }) => {
   const location = useLocation();
-  const checkPermission = useAuthStore((state) => state.checkPermission);
+  // A stub that ignores the selector hands back the whole store object, which
+  // `??` lets through and the first crumb then calls; only a function counts.
+  const storePredicate: unknown = useAuthStore((state) => state.checkPermission);
+  const checkPermission =
+    typeof storePredicate === 'function' ? (storePredicate as (permission: string) => boolean) : undefined;
   const generated = generateBreadcrumbs(location.pathname, checkPermission);
 
   // Trimmed only when the trail was generated — see the prop.
@@ -344,8 +361,15 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   // min-width/min-height rather than the padding + negative-margin trick
   // form-checkbox uses: crumbs sit a few pixels apart, so padded hit areas
   // would overlap and a tap near a chevron would open the neighbouring crumb.
-  return (
-    <nav aria-label="Breadcrumb" className={`mb-4 ${className}`}>
+  const backTo = compactOnPhone
+    ? [...crumbs].reverse().find((crumb, reversedIndex) => {
+        const index = crumbs.length - 1 - reversedIndex;
+        return index !== currentIndex && Boolean(crumb.path);
+      })
+    : undefined;
+
+  const trail = (
+    <nav aria-label="Breadcrumb" className={`mb-4 ${backTo ? 'max-sm:hidden' : ''} ${className}`}>
       <ol className="flex flex-wrap items-center gap-1 text-sm">
         <li className="flex items-center">
           <Link
@@ -397,5 +421,19 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
         ))}
       </ol>
     </nav>
+  );
+
+  if (!backTo?.path) return trail;
+  return (
+    <>
+      <Link
+        to={backTo.path}
+        className={`text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] mb-2 inline-flex items-center gap-1.5 text-sm font-medium sm:hidden ${className}`}
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        {backTo.label}
+      </Link>
+      {trail}
+    </>
   );
 };

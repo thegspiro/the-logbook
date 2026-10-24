@@ -163,10 +163,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
-- **Any run touching the app shell, or a print page** — the app footer ("©
-  … Powered by The Logbook · End-to-end encrypted · Self-hosted ·
-  HIPAA-aware") prints under the apparatus check-in sheet and the shift
-  report (W37-3).
 - **A fresh install** — tap targets under 44px on the onboarding Modules,
   Ranks & Positions and Apparatus steps at 390px wide (W01-13); setup cannot
   be replayed on an installed department, so W79 could not drive it.

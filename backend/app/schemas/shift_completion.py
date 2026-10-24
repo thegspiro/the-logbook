@@ -10,6 +10,7 @@ from typing import Annotated, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX
 
 VALID_REVIEW_STATUSES = frozenset(
     {
@@ -56,7 +57,7 @@ class ShiftCompletionReportCreate(BaseModel):
     shift_date: date
     trainee_id: str
     hours_on_shift: float = Field(gt=0, le=48)
-    calls_responded: int = Field(ge=0, default=0)
+    calls_responded: int = Field(ge=0, default=0, le=INT32_MAX)
     call_types: Optional[List[str]] = Field(None, max_length=50)
 
     performance_rating: Optional[int] = Field(None, ge=1, le=5)
@@ -70,17 +71,10 @@ class ShiftCompletionReportCreate(BaseModel):
     enrollment_id: Optional[str] = None
     save_as_draft: bool = False
 
-    @field_validator("shift_date")
-    @classmethod
-    def shift_date_not_future(cls, v: date) -> date:
-        if v > date.today():
-            raise ValueError("Shift date cannot be in the future")
-        return v
-
 
 class ShiftCompletionReportUpdate(BaseModel):
     hours_on_shift: Optional[float] = Field(None, gt=0, le=48)
-    calls_responded: Optional[int] = Field(None, ge=0)
+    calls_responded: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     call_types: Optional[List[str]] = Field(None, max_length=50)
     performance_rating: Optional[int] = Field(None, ge=1, le=5)
     areas_of_strength: Optional[str] = None
@@ -165,7 +159,7 @@ class BatchShiftReportCreate(BaseModel):
     shift_id: Optional[str] = None
     shift_date: date
     hours_on_shift: float = Field(gt=0, le=48)
-    calls_responded: int = Field(ge=0, default=0)
+    calls_responded: int = Field(ge=0, default=0, le=INT32_MAX)
     call_types: Optional[List[str]] = Field(None, max_length=50)
     officer_narrative: Optional[str] = None
     crew_member_ids: List[str] = Field(..., min_length=1, max_length=200)
@@ -177,13 +171,6 @@ class BatchShiftReportCreate(BaseModel):
         Field(None, max_length=200)
     )
     save_as_draft: bool = False
-
-    @field_validator("shift_date")
-    @classmethod
-    def shift_date_not_future(cls, v: date) -> date:
-        if v > date.today():
-            raise ValueError("Shift date cannot be in the future")
-        return v
 
 
 class BatchShiftReportResponse(BaseModel):
@@ -198,7 +185,8 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     shift_id: Optional[str] = None
     shift_date: date
     trainee_id: str
-    officer_id: str
+    # None once the filing officer's account has been permanently deleted.
+    officer_id: Optional[str] = None
     trainee_name: Optional[str] = None
     officer_name: Optional[str] = None
     # Which shift the report covers: the apparatus, e.g. "B-5 — Brush 5", and

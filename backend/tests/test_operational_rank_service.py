@@ -52,6 +52,13 @@ def _rows(rows):
     return MagicMock(all=MagicMock(return_value=rows))
 
 
+def _rename_moves():
+    """What a rank-code rename executes after the duplicate check: the member
+    update, the org chart seat update, then the training requirements and
+    saved impact plans it scans for the old code."""
+    return [MagicMock(), MagicMock(), _scalars([]), _scalars([])]
+
+
 def _nested_transaction_cm():
     """A working `async with db.begin_nested():` stand-in (success path)."""
     cm = MagicMock()
@@ -182,7 +189,9 @@ class TestCrud:
         assert out.sort_order == 3
 
     async def test_update_rejects_duplicate_code(self):
-        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        rank = SimpleNamespace(
+            id="r1", rank_code="station_captain", display_name="Station Captain"
+        )
         # get_rank -> rank, then duplicate lookup -> a different rank
         db = _db([_one(rank), _one(SimpleNamespace(id="r2"))])
         with pytest.raises(ValueError, match="already exists"):
@@ -191,8 +200,12 @@ class TestCrud:
             )
 
     async def test_assigned_rank_code_rename_migrates_members(self):
-        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
-        db = _db([_one(rank), _one(None), MagicMock()])
+        # A custom rank: a built-in one's code cannot change (see
+        # test_built_in_rank_code_change_is_refused).
+        rank = SimpleNamespace(
+            id="r1", rank_code="station_captain", display_name="Station Captain"
+        )
+        db = _db([_one(rank), _one(None), *_rename_moves()])
 
         out = await OperationalRankService(db).update_rank(
             "r1", RankUpdate(rank_code="company_captain"), "org-1"
@@ -203,13 +216,15 @@ class TestCrud:
         sql = str(compiled)
         assert "UPDATE users SET rank='company_captain'" in sql
         assert "users.organization_id = 'org-1'" in sql
-        assert "users.rank = 'captain'" in sql
+        assert "users.rank = 'station_captain'" in sql
         assert out.rank_code == "company_captain"
         db.commit.assert_awaited_once()
 
     async def test_rank_rename_is_tenant_isolated(self):
-        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
-        db = _db([_one(rank), _one(None), MagicMock()])
+        rank = SimpleNamespace(
+            id="r1", rank_code="station_captain", display_name="Station Captain"
+        )
+        db = _db([_one(rank), _one(None), *_rename_moves()])
 
         await OperationalRankService(db).update_rank(
             "r1", RankUpdate(rank_code="commander"), "tenant-a"
@@ -220,8 +235,10 @@ class TestCrud:
         assert "users.organization_id = 'tenant-a'" in sql
 
     async def test_rank_rename_rolls_back_member_migration_on_commit_failure(self):
-        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
-        db = _db([_one(rank), _one(None), MagicMock()])
+        rank = SimpleNamespace(
+            id="r1", rank_code="station_captain", display_name="Station Captain"
+        )
+        db = _db([_one(rank), _one(None), *_rename_moves()])
         db.commit.side_effect = RuntimeError("database unavailable")
 
         with pytest.raises(RuntimeError, match="database unavailable"):
@@ -230,6 +247,19 @@ class TestCrud:
             )
 
         db.rollback.assert_awaited_once()
+
+    async def test_built_in_rank_code_change_is_refused(self):
+        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        db = _db([_one(rank)])
+
+        with pytest.raises(ValueError, match="built-in rank"):
+            await OperationalRankService(db).update_rank(
+                "r1", RankUpdate(rank_code="company_captain"), "org-1"
+            )
+
+        assert rank.rank_code == "captain"
+        assert db.execute.await_count == 1  # nothing moved
+        db.commit.assert_not_awaited()
 
     async def test_display_name_rename_preserves_permission_and_shift_keys(self):
         positions = ["captain", "officer"]
@@ -256,7 +286,8 @@ class TestCrud:
 
     async def test_delete_succeeds(self):
         rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
-        db = _db([_one(rank), _scalar(0)])
+        # The member count, then the org chart seats naming the rank.
+        db = _db([_one(rank), _scalar(0), _scalars([])])
         assert await OperationalRankService(db).delete_rank("r1", "org-1") is True
         db.delete.assert_awaited()
         db.commit.assert_awaited()
@@ -296,8 +327,8 @@ class TestCrud:
         rank = SimpleNamespace(
             id=str(rank_id),
             organization_id=str(org_id),
-            rank_code="captain",
-            display_name="Captain",
+            rank_code="station_captain",
+            display_name="Station Captain",
             description=None,
             sort_order=3,
             is_active=True,
@@ -305,13 +336,15 @@ class TestCrud:
             created_at=now,
             updated_at=now,
         )
-        db = _db([_one(rank), _one(rank), _one(None), MagicMock()])
+        db = _db([_one(rank), _one(rank), _one(None), *_rename_moves()])
         # A rename now clears the grant ceiling at both ends -- the rank being
         # renamed as well as the code it becomes -- so this caller needs the
         # authority for it. The wildcard short-circuits before any query, which
         # is why the `db` script above is unchanged. What is under test here is
         # the member migration, not the ceiling.
         user = SimpleNamespace(
+            id=str(uuid4()),
+            username="chief",
             organization_id=str(org_id),
             rank=None,
             positions=[SimpleNamespace(permissions=["*"])],

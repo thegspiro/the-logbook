@@ -43,6 +43,7 @@ import { VariantCapsules } from '../components/VariantCapsules';
 import { SizePreferencesModal } from '../components/SizePreferencesModal';
 import { RequestEquipmentModal } from '../components/RequestEquipmentModal';
 import toast from 'react-hot-toast';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 /* ---------- Open-ended holdings, as one list ----------
    A permanent assignment (one serialized unit, `item_assignments`) and a pool
@@ -279,30 +280,29 @@ const MyEquipmentPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-        {/* Header */}
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <div className="flex items-center gap-3">
-              <Package className="text-theme-text-primary h-6 w-6" />
-              <h1 className="text-theme-text-primary text-2xl font-bold">My Issued Gear</h1>
-              <span className="text-theme-text-muted text-sm">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <OperationsPageHeader
+          icon={Package}
+          title="My Issued Gear"
+          subtitle={
+            <>
+              The department equipment you are responsible for, and your requests for more.{' '}
+              <span className="whitespace-nowrap">
                 ({totalItems} {totalItems === 1 ? 'item' : 'items'})
               </span>
-            </div>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              The department equipment you are responsible for, and your requests for more.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadInventory()}
-            className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-[44px] inline-flex items-center gap-1.5 text-sm transition-colors"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-        </div>
+            </>
+          }
+          actions={
+            <button
+              type="button"
+              onClick={() => void loadInventory()}
+              className="btn-secondary inline-flex items-center gap-1.5"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+              Refresh
+            </button>
+          }
+        />
 
         {/* Quick stats */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

@@ -32,6 +32,7 @@ from app.api.dependencies import (
     _has_permission,
     get_current_user,
     require_permission,
+    require_stepup,
 )
 from app.core.audit import log_audit_event
 from app.core.config import settings
@@ -42,8 +43,9 @@ from app.core.permissions import get_rank_default_permissions
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
+from app.models.directory_account import DirectoryAccountStatus
 from app.models.document import Document
-from app.models.inventory import ItemAssignment, ItemIssuance
+from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Organization, Role, User, UserStatus, user_roles
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
@@ -52,8 +54,11 @@ from app.schemas.user import (
     AdminUserCreate,
     BottomNavigationPreference,
     ContactInfoUpdate,
+    DeletionImpactRecord,
     DeletionImpactResponse,
     MemberAuditLogEntry,
+    MemberCreateResponse,
+    MemberDirectoryAccountSummary,
     MemberDirectoryEntry,
     MemberEmailChoice,
     MemberEmailChoicesResponse,
@@ -70,6 +75,13 @@ from app.services.admin_continuity_service import (
     assert_not_last_administrator,
     assert_positions_retain_administrator,
 )
+from app.services.department_email import generate_department_email
+from app.services.directory_account_service import (
+    DirectoryAccountService,
+    credentials_html,
+    credentials_text,
+    provider_info,
+)
 from app.services.email_policy import (
     EMAIL_POLICIES,
     EmailAudience,
@@ -80,6 +92,9 @@ from app.services.email_policy import (
 )
 from app.services.email_service import welcome_email_can_send
 from app.services.member_service_history_service import MemberServiceHistoryService
+from app.services.member_shift_release_service import (
+    release_future_shift_commitments,
+)
 from app.services.operational_rank_service import (
     OperationalRankService,
     rank_not_configured_message,
@@ -88,8 +103,10 @@ from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.upload_scanning import reject_if_malicious
 from app.services.user_deletion_service import (
+    count_records_removed_with_member,
     find_hard_delete_blockers,
     release_user_references,
+    return_member_inventory,
 )
 from app.services.user_service import UserService
 from app.utils.membership import (
@@ -247,6 +264,49 @@ def _validated_phone_changes(user: User, sent: dict) -> dict:
     return changes
 
 
+async def _department_email_for_directory_account(
+    db: AsyncSession, user_data: AdminUserCreate, organization_id: str
+) -> Optional[str]:
+    """The department address a new member's directory account is created at,
+    or None when none was asked for. Refuses, before anything is written, a
+    request that could only produce a failed account."""
+    if not user_data.create_directory_account:
+        return None
+    info = await DirectoryAccountService(db).connected_provider(organization_id)
+    if info is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "No Google Workspace or Microsoft 365 integration is connected, "
+                "so there is no directory to create the account in."
+            ),
+        )
+    department_email = await generate_department_email(
+        db, organization_id, user_data.first_name, user_data.last_name
+    )
+    if department_email is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Department email addresses are not turned on (Organization "
+                "Settings → Department Email), so there is no address to create "
+                f"the {info.product} account at."
+            ),
+        )
+    typed_domain = user_data.email.rsplit("@", 1)[-1].lower()
+    if typed_domain == department_email.rsplit("@", 1)[-1].lower():
+        # The typed address becomes the personal one the passwords go to; on
+        # the department domain it is a mailbox that may not exist yet.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Enter the member's personal email address. Their department "
+                f"address and {info.product} account are created for them."
+            ),
+        )
+    return department_email
+
+
 WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
     "Email is not set up for this department, so a temporary password cannot "
     "be sent to the new member. Set an initial password for them instead."
@@ -254,7 +314,7 @@ WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
 
 
 @router.post(
-    "", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED
+    "", response_model=MemberCreateResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_member(
     user_data: AdminUserCreate,
@@ -268,6 +328,13 @@ async def create_member(
 
     Allows secretaries and admins to create new member accounts with initial roles.
     A temporary password will be generated and sent via email if send_welcome_email is True.
+
+    With ``create_directory_account``, the member also gets an account in the
+    connected Google Workspace or Microsoft 365 directory, at a generated
+    department address that becomes their Logbook email; the email given is
+    kept as their personal address, where the passwords are sent. Without it,
+    a member whose email is already a directory account's own address is
+    linked to that account, so leaving suspends it.
 
     **Authentication required**
 
@@ -337,6 +404,10 @@ async def create_member(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists"
         )
+
+    department_email = await _department_email_for_directory_account(
+        db, user_data, str(current_user.organization_id)
+    )
 
     # Use admin-provided password or generate a temporary one
     if user_data.password:
@@ -434,7 +505,10 @@ async def create_member(
         id=str(uuid4()),
         organization_id=current_user.organization_id,
         username=user_data.username,
-        email=user_data.email,
+        # A member getting a directory account signs in at its address; the
+        # address typed is theirs, and where the passwords are sent.
+        email=department_email or user_data.email,
+        personal_email=user_data.email if department_email else None,
         password_hash=password_hash,
         first_name=user_data.first_name,
         middle_name=user_data.middle_name,
@@ -525,6 +599,21 @@ async def create_member(
     # Capture assigned role IDs before commit expires the relationship
     assigned_role_ids = [str(r.id) for r in roles] if user_data.role_ids else []
 
+    # Staged in this transaction, before the directory is called, so a crash
+    # between the commit and the call leaves a record the profile can retry.
+    directory_provision_id: Optional[str] = None
+    if department_email:
+        staged = await DirectoryAccountService(db).stage_for_transfer(
+            organization_id=str(current_user.organization_id),
+            user_id=str(new_user.id),
+            department_email=department_email,
+            created_by=str(current_user.id),
+        )
+        if staged is not None:
+            await db.flush()
+            if staged.status == DirectoryAccountStatus.PENDING.value:
+                directory_provision_id = str(staged.id)
+
     await db.commit()
 
     # Re-query with eager loading so Pydantic can serialize roles without lazy loading
@@ -554,6 +643,31 @@ async def create_member(
         username=current_user.username,
     )
 
+    # Built now: the directory work below commits, which expires new_user.
+    response = MemberCreateResponse.model_validate(new_user)
+    new_user_id = str(new_user.id)
+    organization_id = str(current_user.organization_id)
+    personal_email = new_user.personal_email
+    member_email = str(new_user.email)
+
+    # The member is committed: nothing after this point may turn the response
+    # into an error. What fails is on the account record, where the member's
+    # profile offers a retry.
+    directory_service = DirectoryAccountService(db)
+    directory_password: Optional[str] = None
+    try:
+        if directory_provision_id is not None:
+            directory_password = await directory_service.provision(
+                directory_provision_id, organization_id
+            )
+        elif not department_email:
+            await directory_service.link_new_member(
+                new_user_id, organization_id, actor_id=str(current_user.id)
+            )
+    except Exception:
+        logger.exception(f"Directory account work failed for new member {new_user_id}")
+        await db.rollback()
+
     # Send welcome email with temporary password via background task
     if user_data.send_welcome_email:
         from app.models.user import Organization as OrgModel
@@ -578,12 +692,27 @@ async def create_member(
         # The background task runs after this request's DB session has closed, so
         # it must open its own session and reload the org rather than reuse the
         # request `db` or the detached `organization` ORM object.
-        welcome_email = new_user.email
+        # A mailbox being created now cannot receive the password that opens
+        # it: the welcome goes to the personal address instead.
+        welcome_email = (
+            personal_email
+            if directory_provision_id is not None and personal_email
+            else member_email
+        )
         # Greet the member by the name they go by.
-        welcome_first = new_user.preferred_name or new_user.first_name or ""
-        welcome_last = new_user.last_name or ""
-        welcome_username = new_user.username
-        welcome_org_id = str(current_user.organization_id)
+        welcome_first = response.preferred_name or response.first_name or ""
+        welcome_last = response.last_name or ""
+        welcome_username = response.username
+        welcome_org_id = organization_id
+        welcome_directory = (
+            (
+                directory_provision_id,
+                member_email,
+                directory_password,
+            )
+            if directory_password and directory_provision_id is not None
+            else None
+        )
 
         async def _send_welcome():
             try:
@@ -594,7 +723,20 @@ async def create_member(
                         )
                     ).scalar_one_or_none()
                     email_svc = EmailService(org)
-                    await email_svc.send_welcome_email(
+                    appended_html = appended_text = ""
+                    if welcome_directory is not None:
+                        account = await DirectoryAccountService(session).get_for_user(
+                            new_user_id, welcome_org_id
+                        )
+                        if account is not None:
+                            info = provider_info(account.provider)
+                            appended_html = credentials_html(
+                                info, welcome_directory[1], welcome_directory[2]
+                            )
+                            appended_text = credentials_text(
+                                info, welcome_directory[1], welcome_directory[2]
+                            )
+                    sent = await email_svc.send_welcome_email(
                         to_email=welcome_email,
                         first_name=welcome_first,
                         last_name=welcome_last,
@@ -604,15 +746,46 @@ async def create_member(
                         login_url=login_url,
                         db=session,
                         organization_id=welcome_org_id,
+                        appended_html=appended_html,
+                        appended_text=appended_text,
                     )
+                    if sent and appended_html and welcome_directory is not None:
+                        await DirectoryAccountService(session).mark_credentials_sent(
+                            welcome_directory[0], welcome_org_id
+                        )
             except Exception as e:
                 logger.error(f"Failed to send welcome email to {welcome_email}: {e}")
 
         background_tasks.add_task(_send_welcome)
+    elif directory_password and directory_provision_id is not None:
+        # No welcome email: the directory password goes on its own.
+        try:
+            await directory_service.send_credentials_email(
+                directory_provision_id, organization_id, directory_password
+            )
+        except Exception:
+            logger.exception(
+                f"Directory credentials email failed for new member {new_user_id}"
+            )
+            await db.rollback()
 
-    # Build response — temporary passwords are communicated only via the
-    # welcome email, never in API responses (prevents caching/logging leaks).
-    response = UserWithRolesResponse.model_validate(new_user)
+    try:
+        account = await directory_service.get_for_user(new_user_id, organization_id)
+        if account is not None:
+            response.directory_account = MemberDirectoryAccountSummary(
+                provider=account.provider,
+                provider_name=provider_info(account.provider).product,
+                status=account.status,
+                email=account.primary_email,
+                credentials_sent=bool(account.credentials_sent),
+                last_error=account.last_error,
+            )
+    except Exception:
+        logger.exception(f"Directory account summary failed for {new_user_id}")
+        await db.rollback()
+
+    # Temporary passwords are communicated only by email, never in API
+    # responses (prevents caching/logging leaks).
     return response
 
 
@@ -1087,23 +1260,25 @@ async def _enforce_account_reset_ceiling(
     current_user: User,
     target_user: User,
     db: AsyncSession,
+    *,
+    action: str = "account-reset",
+    detail: str = "You cannot reset the account of a user with privileges beyond your own.",
 ) -> None:
     """Prevent account resets from becoming a privilege-escalation path.
 
     Member managers may assist users whose effective permissions are within
     their own permission ceiling, but may not reset credentials or MFA for a
-    user who has permissions they do not possess.
+    user who has permissions they do not possess. Member deletion applies the
+    same ceiling: removing an account is no less a takeover of it than
+    resetting its password.
     """
     caller_perms = _collect_user_permissions(current_user)
     target_perms = _collect_user_permissions(target_user)
     if any(not _has_permission(perm, caller_perms) for perm in target_perms):
         await report_privilege_escalation_attempt(
-            db, str(current_user.id), f"account-reset:{target_user.id}", None
+            db, str(current_user.id), f"{action}:{target_user.id}", None
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You cannot reset the account of a user with privileges beyond your own.",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 BASE_POSITION_REMOVAL_REFUSED = (
@@ -1141,6 +1316,7 @@ async def assign_user_roles(
             "members.assign_roles",
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Assign roles to a user (replaces all existing roles)
@@ -1285,6 +1461,7 @@ async def add_role_to_user(
             "members.assign_roles",
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Add a single role to a user (keeps existing roles)
@@ -1393,6 +1570,7 @@ async def remove_role_from_user(
             "members.assign_roles",
         )
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Remove a role from a user
@@ -2016,11 +2194,24 @@ async def update_user_profile(
         "address_zip",
         "address_country",
     }
+    previous_status = (
+        user.status.value if isinstance(user.status, UserStatus) else user.status
+    )
     for field, value in update_data.items():
         if field in ALLOWED_PROFILE_FIELDS and hasattr(user, field):
             setattr(user, field, value)
 
     await db.commit()
+    # A class/status write may have moved the account status at flush (the
+    # membership-drives-status rule); the audit entry below names the move.
+    resulting_status = (
+        user.status.value if isinstance(user.status, UserStatus) else user.status
+    )
+    account_status_change = (
+        {"from": previous_status, "to": resulting_status}
+        if resulting_status != previous_status
+        else None
+    )
 
     # Re-query with eager loading to avoid MissingGreenlet on serialization.
     # The org filter is redundant — the user was resolved in-org above and 404s
@@ -2054,6 +2245,11 @@ async def update_user_profile(
                 if preferred_name_change
                 else {}
             ),
+            **(
+                {"account_status_change": account_status_change}
+                if account_status_change
+                else {}
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -2070,6 +2266,7 @@ async def delete_user(
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Delete a member. By default this is a soft-delete (sets deleted_at).
@@ -2086,9 +2283,13 @@ async def delete_user(
         )
 
     # For hard delete, include soft-deleted users too
-    query = select(User).where(
-        User.id == str(user_id),
-        User.organization_id == str(current_user.organization_id),
+    query = (
+        select(User)
+        .where(
+            User.id == str(user_id),
+            User.organization_id == str(current_user.organization_id),
+        )
+        .options(selectinload(User.positions))
     )
     if not hard:
         query = query.where(User.deleted_at.is_(None))
@@ -2101,6 +2302,16 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    # members.manage alone let a member manager delete the System Owner or
+    # any other account holding permissions the manager lacks.
+    await _enforce_account_reset_ceiling(
+        current_user,
+        user,
+        db,
+        action="member-delete",
+        detail="You cannot delete a member with privileges beyond your own.",
+    )
 
     # The self-delete check above stops an admin removing themselves, but not
     # one admin removing the other and only remaining one.
@@ -2135,6 +2346,16 @@ async def delete_user(
                     "information while keeping those records intact."
                 ),
             )
+
+        # Gear the member still holds goes back to stock in this transaction:
+        # the holding rows CASCADE with the member, and without this an item
+        # stayed "assigned" to nobody and pool counts stayed short for good.
+        returned = await return_member_inventory(
+            db,
+            str(user_id),
+            str(current_user.organization_id),
+            performed_by=str(current_user.id),
+        )
 
         await release_user_references(db, str(user_id))
 
@@ -2172,6 +2393,11 @@ async def delete_user(
                 "deleted_username": deleted_username,
                 "deleted_full_name": deleted_full_name,
                 "action": "permanent_deletion",
+                "inventory_returned": {
+                    "unassigned": returned.unassigned,
+                    "pool_returns": returned.pool_returns,
+                    "checked_in": returned.checked_in,
+                },
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -2199,6 +2425,17 @@ async def delete_user(
             username=current_user.username,
         )
 
+        # A deactivated member cannot work, so their seats on shifts that
+        # have not started go back to the roster (and standing claims end).
+        await release_future_shift_commitments(
+            db,
+            organization_id=str(current_user.organization_id),
+            user_id=str(user_id),
+            reason="soft_deleted",
+            performed_by_id=str(current_user.id),
+            performed_by_username=current_user.username,
+        )
+
 
 @router.post(
     "/{user_id}/reset-password",
@@ -2210,6 +2447,7 @@ async def admin_reset_password(
     reset_data: AdminPasswordReset,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Reset a user's password (IT Lead / Admin only)
@@ -2318,6 +2556,7 @@ async def admin_reset_mfa(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Reset (disable) a user's two-factor authentication (IT Lead / Admin only).
@@ -2503,11 +2742,16 @@ async def get_deletion_impact(
             detail="User not found",
         )
 
+    org_id = str(current_user.organization_id)
+
     # Count training records
     tr_result = await db.execute(
         select(func.count())
         .select_from(TrainingRecordModel)
-        .where(TrainingRecordModel.user_id == str(user_id))
+        .where(
+            TrainingRecordModel.user_id == str(user_id),
+            TrainingRecordModel.organization_id == org_id,
+        )
     )
     training_count = tr_result.scalar() or 0
 
@@ -2523,6 +2767,7 @@ async def get_deletion_impact(
         .select_from(ItemAssignment)
         .where(
             ItemAssignment.user_id == str(user_id),
+            ItemAssignment.organization_id == org_id,
             ItemAssignment.is_active.is_(True),
         )
     )
@@ -2531,6 +2776,7 @@ async def get_deletion_impact(
         .select_from(ItemIssuance)
         .where(
             ItemIssuance.user_id == str(user_id),
+            ItemIssuance.organization_id == org_id,
             ItemIssuance.returned_at.is_(None),
         )
     )
@@ -2538,15 +2784,34 @@ async def get_deletion_impact(
         issuance_result.scalar() or 0
     )
 
+    # Items out on a temporary checkout. A permanent delete checks them back
+    # in; the preview says so rather than leaving them out of the picture.
+    checkout_result = await db.execute(
+        select(func.count())
+        .select_from(CheckOutRecord)
+        .where(
+            CheckOutRecord.user_id == str(user_id),
+            CheckOutRecord.organization_id == org_id,
+            CheckOutRecord.is_returned.isnot(True),
+        )
+    )
+    checked_out_count = checkout_result.scalar() or 0
+
     # Count uploaded documents
     doc_result = await db.execute(
         select(func.count())
         .select_from(Document)
-        .where(Document.uploaded_by == str(user_id))
+        .where(
+            Document.uploaded_by == str(user_id),
+            Document.organization_id == org_id,
+        )
     )
     document_count = doc_result.scalar() or 0
 
-    total = training_count + inventory_count + document_count
+    # Everything a permanent delete removes outright, per table, read from
+    # the models' ON DELETE CASCADE references rather than a hand-kept list.
+    removed = await count_records_removed_with_member(db, str(user_id), org_id)
+    total = sum(r.count for r in removed)
 
     return DeletionImpactResponse(
         user_id=str(user_id),
@@ -2559,7 +2824,12 @@ async def get_deletion_impact(
         ),
         training_records=training_count,
         inventory_items=inventory_count,
+        checked_out_items=checked_out_count,
         documents=document_count,
+        removed_records=[
+            DeletionImpactRecord(table=r.table, label=r.label, count=r.count)
+            for r in removed
+        ],
         total_records=total,
     )
 
@@ -2989,6 +3259,7 @@ async def anonymize_member(
     request: Request,
     current_user: User = Depends(require_permission("members.manage")),
     db: AsyncSession = Depends(get_db),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Irreversibly scrub a departed member's PII while retaining their

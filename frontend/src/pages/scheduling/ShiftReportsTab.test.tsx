@@ -647,6 +647,48 @@ describe('ShiftReportsTab — an acting Shift Officer without training.manage', 
   });
 });
 
+describe("ShiftReportsTab — a training manager and another officer's draft", () => {
+  const draftBy = (officerId: string | null) => ({
+    id: 'd1',
+    organization_id: 'org-1',
+    shift_date: '2026-10-03',
+    trainee_id: 'u2',
+    officer_id: officerId,
+    trainee_name: 'Sam Ortiz',
+    hours_on_shift: 12,
+    calls_responded: 2,
+    review_status: 'draft',
+    trainee_acknowledged: false,
+    created_at: '2026-10-03T23:00:00Z',
+    updated_at: '2026-10-03T23:00:00Z',
+  });
+
+  const openDraft = async () => {
+    renderWithRouter(<ShiftReportsTab />);
+    await userEvent.click(await screen.findByRole('button', { name: /Drafts/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Sam Ortiz/ }));
+  };
+
+  beforeEach(() => {
+    canManage = true;
+    mockGetDraftReports.mockReset();
+  });
+
+  it("offers no Complete Draft on a live officer's draft, which the server refuses", async () => {
+    mockGetDraftReports.mockResolvedValue([draftBy('officer-2')]);
+    await openDraft();
+
+    expect(screen.queryByRole('button', { name: /Complete Draft/ })).not.toBeInTheDocument();
+  });
+
+  it('offers Complete Draft on a draft whose officer was deleted', async () => {
+    mockGetDraftReports.mockResolvedValue([draftBy(null)]);
+    await openDraft();
+
+    expect(screen.getByRole('button', { name: /Complete Draft/ })).toBeInTheDocument();
+  });
+});
+
 describe('ShiftReportsTab — flagged reports with review switched off', () => {
   // A flag survives an administrator turning review off, because the review
   // endpoint does not consult the setting. The Flagged view must follow the

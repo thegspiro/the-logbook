@@ -1,6 +1,16 @@
+import type React from 'react';
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RSVP } from '../types/event';
+
+const mockOverrideAttendance = vi.fn();
+vi.mock('../services/api', () => ({
+  eventService: {
+    overrideAttendance: (...args: unknown[]) => mockOverrideAttendance(...args) as unknown,
+  },
+}));
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+
 import { useOverrideAttendance } from './useOverrideAttendance';
 
 const rsvp = (times: Partial<RSVP> = {}): RSVP => ({
@@ -82,5 +92,55 @@ describe('useOverrideAttendance openModal', () => {
     );
 
     expect(result.current.overrideCheckIn).toBe('2030-04-15T18:00');
+  });
+});
+
+describe('useOverrideAttendance handleSubmit', () => {
+  beforeEach(() => {
+    mockOverrideAttendance.mockReset();
+    mockOverrideAttendance.mockResolvedValue(rsvp());
+  });
+
+  const submitEvent = { preventDefault: () => undefined } as React.FormEvent;
+
+  it('sends an emptied time as null so the stored override is cleared', async () => {
+    const { result } = renderHook(() =>
+      useOverrideAttendance({ eventId: 'event-1', timezone: 'UTC', onSuccess: vi.fn().mockResolvedValue(undefined) })
+    );
+
+    act(() =>
+      result.current.openModal(
+        rsvp({ override_check_in_at: '2030-04-15T18:10:00Z', override_check_out_at: '2030-04-15T19:25:00Z' })
+      )
+    );
+    act(() => result.current.setOverrideCheckOut(''));
+    await act(async () => {
+      await result.current.handleSubmit(submitEvent);
+    });
+
+    expect(mockOverrideAttendance).toHaveBeenCalledWith('event-1', 'user-1', {
+      override_check_in_at: '2030-04-15T18:10:00.000Z',
+      override_check_out_at: null,
+    });
+  });
+
+  it('sends both times when both are filled', async () => {
+    const { result } = renderHook(() =>
+      useOverrideAttendance({ eventId: 'event-1', timezone: 'UTC', onSuccess: vi.fn().mockResolvedValue(undefined) })
+    );
+
+    act(() => result.current.openModal(rsvp()));
+    act(() => {
+      result.current.setOverrideCheckIn('2030-04-15T18:00');
+      result.current.setOverrideCheckOut('2030-04-15T20:00');
+    });
+    await act(async () => {
+      await result.current.handleSubmit(submitEvent);
+    });
+
+    expect(mockOverrideAttendance).toHaveBeenCalledWith('event-1', 'user-1', {
+      override_check_in_at: '2030-04-15T18:00:00.000Z',
+      override_check_out_at: '2030-04-15T20:00:00.000Z',
+    });
   });
 });

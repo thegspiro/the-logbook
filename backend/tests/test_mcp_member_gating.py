@@ -213,3 +213,64 @@ class TestListAndCall:
         handler.assert_not_called()
         assert audit.await_args is not None
         assert audit.await_args.args[3] == "refused"
+
+
+class TestMedicalSuppliesForMembers:
+    """The medical supply switch rides on ``mcp:read`` for a member's
+    connection; the member's own inventory permission still decides."""
+
+    MEDICAL_TOOLS = {
+        "get_medical_supply_summary",
+        "list_medical_supply_items",
+        "list_low_stock_medical_supplies",
+        "list_expiring_medical_lots",
+    }
+
+    def _member(self, permissions: frozenset[str], shared: bool) -> McpPrincipal:
+        return McpPrincipal(
+            organization_id="org-a",
+            key_id="grant-1",
+            key_prefix="oauth",
+            issued_by_user_id="user-1",
+            access_mode="read_only",
+            expose_finance=False,
+            expose_medical_screening=False,
+            expose_medical_supplies=shared,
+            auth_method="oauth",
+            member_permissions=permissions,
+            enabled_modules=None,
+        )
+
+    async def test_member_needs_the_medical_inventory_permission(self):
+        server = build_server()
+        without = self._member(frozenset({"events.view"}), shared=True)
+        with bind_principal(without):
+            names = {t.name for t in await server.list_tools()}
+        assert not self.MEDICAL_TOOLS & names
+
+        holder = self._member(frozenset({"inventory.view_medical"}), shared=True)
+        with bind_principal(holder):
+            names = {t.name for t in await server.list_tools()}
+        assert self.MEDICAL_TOOLS <= names
+
+    async def test_switch_off_hides_them_even_from_a_quartermaster(self):
+        server = build_server()
+        holder = self._member(frozenset({"inventory.view"}), shared=False)
+        with bind_principal(holder):
+            names = {t.name for t in await server.list_tools()}
+        assert not self.MEDICAL_TOOLS & names
+
+    def test_consent_screen_counts_them_under_read(self):
+        from app.mcp.oauth import SCOPE_READ, scope_reach
+        from app.schemas.integration import ClaudeMcpConfig
+
+        permissions = frozenset({"inventory.view_medical"})
+        modules = frozenset({"medical_supplies"})
+        off = scope_reach(ClaudeMcpConfig(), modules, permissions, [SCOPE_READ])
+        on = scope_reach(
+            ClaudeMcpConfig(expose_medical_supplies=True),
+            modules,
+            permissions,
+            [SCOPE_READ],
+        )
+        assert on[SCOPE_READ] - off[SCOPE_READ] == len(self.MEDICAL_TOOLS)

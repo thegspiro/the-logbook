@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
+
 # ============================================
 # Report Request Schemas
 # ============================================
@@ -64,7 +66,7 @@ class SavedReportCreate(BaseModel):
     schedule_frequency: Optional[str] = Field(
         None, max_length=20
     )  # daily, weekly, monthly, quarterly
-    schedule_day: Optional[int] = None
+    schedule_day: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     # Addresses only; whether each may receive the report is the PII gate's
     # decision at save and at send (app/services/saved_report_schedule.py).
     email_recipients: Optional[List[EmailStr]] = None
@@ -78,7 +80,7 @@ class SavedReportUpdate(BaseModel):
     filters: Optional[Dict[str, Any]] = None
     is_scheduled: Optional[bool] = None
     schedule_frequency: Optional[str] = Field(None, max_length=20)
-    schedule_day: Optional[int] = None
+    schedule_day: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     email_recipients: Optional[List[EmailStr]] = None
 
 

@@ -133,7 +133,8 @@ export const CheckFinish: React.FC<CheckFinishProps> = ({
                   const par = e.item.expectedQuantity;
                   const found = answers[e.item.id]?.quantityFound;
                   const gap = typeof par === 'number' && found !== undefined ? par - found : null;
-                  return gap === null ? e.item.name : `${e.item.name} −${gap}`;
+                  const unit = e.item.countUnit ? ` ${e.item.countUnit}` : '';
+                  return gap === null ? e.item.name : `${e.item.name} −${gap}${unit}`;
                 })
                 .join(' · ')}
             </p>

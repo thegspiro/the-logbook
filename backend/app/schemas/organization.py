@@ -21,6 +21,7 @@ from pydantic import (
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.utils import membership_numbers
 
 
@@ -115,6 +116,7 @@ _LEGACY_EMAIL_OAUTH_FIELDS = frozenset(
 
 _FILE_STORAGE_SECRET_FIELDS = frozenset(
     {
+        "google_drive_service_account_key",
         "google_drive_client_secret",
         "onedrive_client_secret",
         "s3_secret_access_key",
@@ -411,15 +413,27 @@ class FileStorageSettings(BaseModel):
         default="local",
         description="File storage platform: googledrive, onedrive, s3, local, other",
     )
-    # Google Drive
-    google_drive_client_id: Optional[str] = Field(
-        None, description="Google Drive OAuth Client ID"
+    # Google Drive (decision 32): a service account writing to a Shared Drive.
+    google_drive_service_account_key: Optional[str] = Field(
+        None,
+        description=(
+            "The service account's JSON key, as Google downloads it; "
+            "encrypted at rest and never returned"
+        ),
     )
-    google_drive_client_secret: Optional[str] = Field(
-        None, description="Google Drive OAuth Client Secret"
+    google_drive_shared_drive_id: Optional[str] = Field(
+        None, description="The Shared Drive the service account was added to"
     )
     google_drive_folder_id: Optional[str] = Field(
-        None, description="Google Drive root folder ID"
+        None, description="A folder in that Shared Drive for new files (optional)"
+    )
+    # Read by nothing, and accepted only so a client written before the
+    # service-account change can still save the form.
+    google_drive_client_id: Optional[str] = Field(
+        None, description="Unused: Google Drive signs in with a service account"
+    )
+    google_drive_client_secret: Optional[str] = Field(
+        None, description="Unused: Google Drive signs in with a service account"
     )
     # OneDrive / SharePoint
     onedrive_tenant_id: Optional[str] = Field(
@@ -451,6 +465,9 @@ class FileStorageSettings(BaseModel):
         """Return a copy with secret fields replaced by redaction markers."""
         copied: FileStorageSettings = self.model_copy(
             update={
+                "google_drive_service_account_key": _redact(
+                    self.google_drive_service_account_key
+                ),
                 "google_drive_client_secret": _redact(self.google_drive_client_secret),
                 "onedrive_client_secret": _redact(self.onedrive_client_secret),
                 "s3_secret_access_key": _redact(self.s3_secret_access_key),
@@ -464,6 +481,7 @@ class FileStorageSettings(BaseModel):
             update=dict.fromkeys(
                 (
                     "google_drive_client_id",
+                    "google_drive_shared_drive_id",
                     "google_drive_folder_id",
                     "onedrive_tenant_id",
                     "onedrive_client_id",
@@ -478,6 +496,74 @@ class FileStorageSettings(BaseModel):
             )
         )
         return copied
+
+
+class FileStorageStatusResponse(BaseModel):
+    """Where a department's new files go, and why (decision 31)."""
+
+    platform: str = Field(description="The platform saved in File Storage settings")
+    platform_label: Optional[str] = Field(
+        None, description="How the screen names the saved platform, if it connects"
+    )
+    platform_short_label: Optional[str] = Field(
+        None, description='The shorter name buttons use ("S3")'
+    )
+    container_noun: Optional[str] = Field(
+        None, description='What one container is called on the platform ("bucket")'
+    )
+    container: Optional[str] = Field(
+        None,
+        description="The bucket or drive the last passed connection test used",
+    )
+    available_platforms: List[str] = Field(
+        default_factory=list,
+        description="The platforms this installation can switch files to, by label",
+    )
+    platform_connectable: bool = Field(
+        False,
+        description=(
+            "The saved platform is one this installation can switch files to; "
+            "otherwise files stay on the server whatever is saved"
+        ),
+    )
+    new_files_go_to: str = Field(
+        description=(
+            'Where an upload made now is stored: "local", or the remote '
+            'platform\'s setting value (such as "s3")'
+        )
+    )
+    location: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Where the last passed connection test sent files (bucket, "
+            "endpoint, region, drive…), never a secret"
+        ),
+    )
+    bucket: Optional[str] = Field(
+        None, description="The bucket the last passed S3 connection test used"
+    )
+    endpoint_url: Optional[str] = None
+    activated_at: Optional[str] = Field(
+        None, description="When the last connection test passed (UTC, ISO 8601)"
+    )
+    changed_since_test: bool = Field(
+        False,
+        description=(
+            "The storage settings were edited after the last passed test, so "
+            "new files go to local disk until it is run again"
+        ),
+    )
+    problem: Optional[str] = Field(
+        None,
+        description="Why the saved platform's settings cannot be used, if they cannot",
+    )
+    s3_problem: Optional[str] = Field(
+        None, description="Why the saved S3 settings cannot be used, if they cannot"
+    )
+    private_endpoints_allowed: bool = Field(
+        False,
+        description="The operator allows a private or plain-HTTP S3 endpoint",
+    )
 
 
 class SchedulingNotificationSettings(BaseModel):
@@ -690,6 +776,8 @@ class MembershipTier(BaseModel):
     sort_order: int = Field(
         default=0,
         description="Display and progression order (lower = earlier tier)",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     benefits: MembershipTierBenefits = Field(
         default_factory=MembershipTierBenefits,
@@ -1288,6 +1376,102 @@ class ApparatusSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class SignatureSlotSetting(BaseModel):
+    """One place on adopted minutes for a signature."""
+
+    key: str = Field(..., pattern=r"^[a-z][a-z0-9_]{0,49}$")
+    title: str = Field(..., min_length=1, max_length=100)
+    position_slug: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="The position whose holders may sign; anyone who manages "
+        "minutes may when unset",
+    )
+
+
+class MinutesSettingsUpdate(BaseModel):
+    """Meeting minutes settings; read by app/utils/minutes_settings.py."""
+
+    action_item_reminders: Optional[bool] = Field(
+        None,
+        description=(
+            "Email an assignee before an action item is due and while it is "
+            "overdue. Absent reads as on."
+        ),
+    )
+    reminder_days_before_due: Optional[int] = Field(
+        None,
+        ge=0,
+        le=30,
+        description=(
+            "Days ahead of the due date the first reminder goes out; 0 "
+            "reminds on the day it is due. 3 when unset."
+        ),
+    )
+    overdue_repeat_days: Optional[int] = Field(
+        None,
+        ge=0,
+        le=90,
+        description=(
+            "Days between repeat reminders on an overdue item; 0 sends the "
+            "first overdue reminder only. 7 when unset."
+        ),
+    )
+    open_items_digest: Optional[bool] = Field(
+        None,
+        description=(
+            "Send members who manage minutes a weekly list of open action "
+            "items. Absent reads as on."
+        ),
+    )
+    signature_slots: Optional[List[SignatureSlotSetting]] = Field(
+        None,
+        max_length=6,
+        description=(
+            "Who signs adopted minutes, in order. Unset reads as a recording "
+            "secretary and a presiding officer."
+        ),
+    )
+    public_posting: Optional[bool] = Field(
+        None,
+        description=(
+            "Also post published minutes on the department's public minutes "
+            "page. Absent reads as off."
+        ),
+    )
+    attendance_listing: Optional[Literal["all", "present_excused", "present"]] = Field(
+        None,
+        description=(
+            "Which attendance statuses the minutes name. The roll is always "
+            "recorded in full. Absent reads as all."
+        ),
+    )
+    auto_file_election_results: Optional[bool] = Field(
+        None,
+        description=(
+            "File a closed election's result with the minutes of the meeting "
+            "it was held at, without a manager importing it. Absent reads as on."
+        ),
+    )
+    executive_library_publishing: Optional[bool] = Field(
+        None,
+        description=(
+            "Allow executive-session minutes to be published to the library "
+            "(leadership-only folder). Absent reads as off."
+        ),
+    )
+    executive_public_posting: Optional[bool] = Field(
+        None,
+        description=(
+            "Allow executive-session minutes to be posted publicly. Needs "
+            "public posting and executive library publishing on as well. "
+            "Absent reads as off."
+        ),
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
 class AdminHoursSettingsUpdate(BaseModel):
     """Administrative hours review rules; read by app/utils/admin_hours_settings.py."""
 
@@ -1375,6 +1559,7 @@ class OrganizationSettingsUpdate(BaseModel):
     inventory: Optional[InventorySettingsUpdate] = None
     apparatus: Optional[ApparatusSettingsUpdate] = None
     admin_hours: Optional[AdminHoursSettingsUpdate] = None
+    minutes: Optional[MinutesSettingsUpdate] = None
     finance: Optional[FinanceSettingsUpdate] = None
 
     # Allow additional settings

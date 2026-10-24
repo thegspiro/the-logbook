@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.check_types import COUNT, PRESENCE, normalize_check_type
 from app.utils.member_names import format_display_name
 from app.utils.positions import position_label
 from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
@@ -283,14 +284,25 @@ async def build_shift_roster(
 def _item_expectation(item) -> Optional[str]:
     """The short right-hand note that says what "correct" looks like."""
     check_type = str(item.check_type or "")
-    if check_type == "quantity":
-        expected = item.required_quantity or item.expected_quantity
-        return f"qty {expected}" if expected else "qty"
+    # Normalized: stored rows say "count", so matching the legacy "quantity"
+    # alone printed nothing for every count position.
+    if normalize_check_type(check_type) == COUNT:
+        par = max(item.required_quantity or 0, item.expected_quantity or 0)
+        if not par:
+            return "qty"
+        note = f"par {par}"
+        if item.count_unit:
+            note += f" {item.count_unit}"
+        if item.required_quantity:
+            note += f", min {item.required_quantity}"
+        return note
     if check_type == "level":
         if item.min_level is not None:
             unit = item.level_unit or ""
             return f"min {item.min_level:g}{unit}".strip()
         return "level"
+    if normalize_check_type(check_type) == PRESENCE:
+        return "present / absent"
     if check_type in ("date_lot", "reading", "text", "present", "functional"):
         return check_type.replace("_", " ")
     return None
@@ -389,7 +401,12 @@ async def build_apparatus_check_sheet(
         rows: List[DocumentRow] = []
         walk(compartment, 0, rows)
         if rows:
-            sections.append(DocumentSection(heading=compartment.name, rows=rows))
+            # Items placed directly on the checklist print without a heading,
+            # in place among the locations, as the crew sees them.
+            heading = (
+                None if getattr(compartment, "is_inline", False) else compartment.name
+            )
+            sections.append(DocumentSection(heading=heading, rows=rows))
 
     if not sections:
         sections.append(

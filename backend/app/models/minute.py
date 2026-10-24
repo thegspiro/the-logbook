@@ -48,6 +48,10 @@ class MinutesStatus(str, Enum):
 class MotionStatus(str, Enum):
     """Motion vote result"""
 
+    # A motion the outline prepared that the meeting has not acted on yet:
+    # wording only, no mover, no vote. Never printed, published, posted or
+    # sealed into an adopted record, because nothing happened.
+    PENDING = "pending"
     PASSED = "passed"
     FAILED = "failed"
     TABLED = "tabled"
@@ -499,8 +503,11 @@ DEFAULT_ANNUAL_SECTIONS = [
 # Parliamentary procedure puts these two behind a motion and a second, so the
 # built-in outlines mark them and carry the usual wording. The wording is a
 # starting point the secretary edits on the section, not a fixed script.
+# The section whose motion accepts the previous meeting's minutes.
+PREVIOUS_MINUTES_SECTION = "approval_of_previous"
+
 DEFAULT_MOTION_SECTIONS = {
-    "approval_of_previous": "Motion to approve the minutes of the previous meeting.",
+    PREVIOUS_MINUTES_SECTION: "Motion to approve the minutes of the previous meeting.",
     "adjournment": "Motion to adjourn the meeting.",
 }
 
@@ -646,6 +653,14 @@ class MeetingMinutes(Base):
     published_document_id: Mapped[Optional[str]] = mapped_column(
         String(36), nullable=True
     )
+    # Which adopted version the library copy shows, and when it was filed, so a
+    # republish can say "replaces version N, published <date>".
+    published_revision_version: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Legacy content sections (kept for backward compat with existing data)
     agenda: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -699,6 +714,9 @@ class MeetingMinutes(Base):
     adoption_seconded_by: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
     )
+    # This set of minutes' own choice of which attendance statuses to name
+    # (all / present_excused / present); NULL follows the department default.
+    attendance_listing: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     adopting_minutes_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("meeting_minutes.id", ondelete="SET NULL"),
@@ -748,6 +766,7 @@ class MeetingMinutes(Base):
     motions: Mapped[list["Motion"]] = relationship(
         "Motion",
         back_populates="minutes",
+        foreign_keys="Motion.minutes_id",
         cascade="all, delete-orphan",
         order_by="Motion.order",
     )
@@ -836,6 +855,15 @@ class Motion(Base):
     # section is an entry inside the minutes' JSON, not a row.
     section_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    # For the motion that accepts the previous meeting's minutes: those
+    # minutes, found by the server (never taken from a client), and whether
+    # they were accepted as submitted or as revised. Passing the motion
+    # prefills the adoption of the previous minutes from it.
+    previous_minutes_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="SET NULL"), nullable=True
+    )
+    acceptance: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     # The ballot that decided this motion, when it went to a ballot rather
     # than a voice or hand vote. ``ballot_item_id`` is the item's id inside
     # that election's ``ballot_items``.
@@ -854,6 +882,16 @@ class Motion(Base):
     votes_for: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     votes_against: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     votes_abstain: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    votes_recused: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # What the vote needed to carry: see app/utils/motion_votes.py. NULL reads
+    # as the default, a majority of the votes cast.
+    threshold: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # Each member's vote, when the vote was taken by roll call:
+    # [{"user_id": str | None, "name": str, "vote": yes|no|abstain|recuse}].
+    # The totals above are derived from it when it is recorded.
+    roll_call: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(
@@ -868,7 +906,7 @@ class Motion(Base):
 
     # Relationships
     minutes: Mapped["MeetingMinutes"] = relationship(
-        "MeetingMinutes", back_populates="motions"
+        "MeetingMinutes", back_populates="motions", foreign_keys=[minutes_id]
     )
     # Loaded with the motion so a response can name the ballot. The id is
     # checked against the caller's organization when it is written, so this
@@ -936,6 +974,13 @@ class ActionItem(Base):
         nullable=True,
     )
     carried_forward_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # When the assignee was last emailed a reminder about this item. The daily
+    # reminder task reads it to send each reminder once, and to space repeat
+    # reminders on an overdue item.
+    last_reminded_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -1121,6 +1166,109 @@ class MinutesRevision(Base):
         UniqueConstraint("minutes_id", "version", name="uq_minutes_revisions_version"),
         Index("ix_minutes_revisions_minutes_id", "minutes_id"),
         Index("ix_minutes_revisions_organization_id", "organization_id"),
+    )
+
+
+class MinutesSignature(Base):
+    """A signature on adopted minutes: who attested to which version, and when.
+
+    Tied to the revision it was given on, and carrying that revision's content
+    hash, so the signature is evidence of one exact version. Reopening the
+    minutes supersedes the revision and the signatures stay with it, on file
+    against the text they were given for; the corrected version starts with
+    none.
+    """
+
+    __tablename__ = "minutes_signatures"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
+    revision_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("minutes_revisions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    # The department's slot at the time ("recording_secretary"); the title is
+    # kept so a later rename of the slot does not rewrite what was signed.
+    slot_key: Mapped[str] = mapped_column(String(50), nullable=False)
+    slot_title: Mapped[str] = mapped_column(String(100), nullable=False)
+    signer_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    signed_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("revision_id", "slot_key", name="uq_minutes_signatures_slot"),
+        Index("ix_minutes_signatures_minutes_id", "minutes_id"),
+        Index("ix_minutes_signatures_revision_id", "revision_id"),
+        Index("ix_minutes_signatures_organization_id", "organization_id"),
+    )
+
+
+class MinutesPublicCopy(Base):
+    """The copy of a set of minutes posted on the department's public page.
+
+    A snapshot taken when the minutes were published, not a live view: editing
+    or reopening the minutes later does not change what the public sees until
+    the corrected version is published over it. One row per set of minutes,
+    replaced in place, with a note of the version it replaced.
+
+    ``content`` holds only what the public page may show (see
+    ``app/utils/minutes_public.py``); the full record stays in the minutes.
+    """
+
+    __tablename__ = "minutes_public_copies"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    minutes_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("meeting_minutes.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    meeting_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    meeting_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    content: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    revision_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    posted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    posted_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The version this copy replaced, if any, shown on the page as a note.
+    replaced_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    replaced_posted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Set when the minutes are reopened for a correction; the page says so
+    # until the corrected version replaces this one.
+    under_correction_since: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # A withdrawn copy is not served; the row is kept as the record that it was
+    # posted and taken down.
+    withdrawn_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    withdrawn_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_minutes_public_copies_organization_id", "organization_id"),
+        Index("ix_minutes_public_copies_listing", "organization_id", "withdrawn_at"),
     )
 
 

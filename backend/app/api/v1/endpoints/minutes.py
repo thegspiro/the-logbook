@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -24,7 +25,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.document import DocumentType
-from app.models.minute import MinutesStatus
+from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import User
 from app.schemas.documents import PublishedDocumentResponse
 from app.schemas.minute import (
@@ -32,10 +33,13 @@ from app.schemas.minute import (
     ActionItemCreate,
     ActionItemResponse,
     ActionItemUpdate,
+    AdoptionProposal,
+    ArchiveSearchResponse,
     MinutesAdopt,
     MinutesCreate,
     MinutesListItem,
     MinutesReject,
+    MinutesReminderSettingsResponse,
     MinutesReopen,
     MinutesResponse,
     MinutesSearchResult,
@@ -43,16 +47,34 @@ from app.schemas.minute import (
     MotionCreate,
     MotionResponse,
     MotionUpdate,
+    PublishingStatusResponse,
     SectionEntry,
+    SignatureSlotResponse,
     TemplateCreate,
     TemplateListItem,
     TemplateResponse,
     TemplateSectionEntry,
     TemplateUpdate,
 )
-from app.services.document_service import DocumentService
+from app.services.agenda_document_access import narrow_documents
 from app.services.minute_service import MinuteService
+from app.services.minutes_print_data import adopting_title
+from app.services.minutes_publishing_service import MinutesPublishingService
 from app.services.template_service import TemplateService
+from app.utils.minutes_attendance import effective_listing
+from app.utils.minutes_search import parse_query
+from app.utils.minutes_settings import (
+    load_attendance_listing,
+    load_auto_file_election_results,
+    load_minutes_publishing_settings,
+    load_minutes_reminder_settings,
+    load_signature_slots,
+)
+from app.utils.motion_votes import (
+    members_present,
+    recorded_motions,
+    suggested_status,
+)
 from app.utils.rich_text import normalize_format
 
 router = APIRouter()
@@ -109,7 +131,7 @@ async def list_minutes(
             location=m.location,
             called_by=m.called_by,
             meeting_id=m.meeting_id,
-            motions_count=len(m.motions) if m.motions else 0,
+            motions_count=len(recorded_motions(m.motions)),
             action_items_count=len(m.action_items) if m.action_items else 0,
             open_action_items=sum(
                 1
@@ -144,6 +166,53 @@ async def get_minutes_stats(
     )
 
 
+@router.get("/settings", response_model=MinutesReminderSettingsResponse)
+async def get_minutes_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    The department's action item reminder settings, as the server applies them.
+
+    Written through `PATCH /organization/settings` (`minutes` section), which
+    needs `settings.manage`.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    resolved = await load_minutes_reminder_settings(
+        db, str(current_user.organization_id)
+    )
+    publishing = await load_minutes_publishing_settings(
+        db, str(current_user.organization_id)
+    )
+    return MinutesReminderSettingsResponse(
+        attendance_listing=await load_attendance_listing(
+            db, str(current_user.organization_id)
+        ),
+        auto_file_election_results=await load_auto_file_election_results(
+            db, str(current_user.organization_id)
+        ),
+        public_posting=publishing.public_posting,
+        executive_library_publishing=publishing.executive_library,
+        executive_public_posting=publishing.executive_public,
+        executive_effective_library=publishing.library_allowed(True),
+        executive_effective_public=publishing.public_allowed(True),
+        action_item_reminders=resolved.reminders_enabled,
+        reminder_days_before_due=resolved.days_before_due,
+        overdue_repeat_days=resolved.overdue_repeat_days,
+        open_items_digest=resolved.digest_enabled,
+        signature_slots=[
+            SignatureSlotResponse(
+                key=slot.key, title=slot.title, position_slug=slot.position_slug
+            )
+            for slot in await load_signature_slots(
+                db, str(current_user.organization_id)
+            )
+        ],
+    )
+
+
 @router.get("/search", response_model=list[MinutesSearchResult])
 async def search_minutes(
     q: str,
@@ -170,6 +239,42 @@ async def search_minutes(
     return await service.search_minutes(
         organization_id=current_user.organization_id,
         query=q.strip(),
+        limit=limit,
+        restricted=not can_manage,
+    )
+
+
+@router.get("/archive-search", response_model=ArchiveSearchResponse)
+async def search_archive(
+    q: str = Query(..., max_length=200),
+    meeting_type: str | None = None,
+    limit: int = Query(25, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Search the words of the minutes archive, grouped by minutes
+
+    Reads titles, every section, motions and action items. Callers without
+    ``minutes.manage`` search only circulated or adopted, non-executive minutes.
+
+    **Authentication required**
+    **Requires permission: minutes.view**
+    """
+    if not parse_query(q):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Enter at least one word of two or more characters",
+        )
+
+    can_manage = _has_permission(
+        "minutes.manage", _collect_user_permissions(current_user)
+    )
+    service = MinuteService(db)
+    return await service.search_archive(
+        organization_id=current_user.organization_id,
+        query=q,
+        meeting_type=meeting_type or None,
         limit=limit,
         restricted=not can_manage,
     )
@@ -250,7 +355,7 @@ async def get_minutes(
         "Meeting minutes",
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("", response_model=MinutesResponse, status_code=status.HTTP_201_CREATED)
@@ -288,7 +393,7 @@ async def create_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.put("/{minutes_id}", response_model=MinutesResponse)
@@ -323,7 +428,7 @@ async def update_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.delete("/{minutes_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -397,7 +502,33 @@ async def submit_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
+
+
+@router.get(
+    "/{minutes_id}/adoption-proposal", response_model=Optional[AdoptionProposal]
+)
+async def get_adoption_proposal(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    What a later meeting's motion decided about these minutes
+
+    When the body accepted these minutes as submitted or as revised, the
+    adoption form opens already filled in from that motion. Nothing is adopted
+    until an officer other than the one who circulated them confirms it.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    service = MinuteService(db)
+    minutes = await service.get_minutes(
+        minutes_id, current_user.organization_id, load_children=False
+    )
+    ensure_found(minutes, "Meeting minutes")
+    return await service.adoption_proposal(minutes_id, current_user.organization_id)
 
 
 @router.post("/{minutes_id}/approve", response_model=MinutesResponse)
@@ -441,7 +572,7 @@ async def approve_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/reject", response_model=MinutesResponse)
@@ -482,7 +613,7 @@ async def reject_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/reopen", response_model=MinutesResponse)
@@ -533,7 +664,7 @@ async def reopen_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 # ============================================
@@ -571,7 +702,7 @@ async def add_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(motion)
+    return await _motion_response(service, db, minutes_id, motion, current_user)
 
 
 @router.put("/{minutes_id}/motions/{motion_id}", response_model=MotionResponse)
@@ -609,7 +740,7 @@ async def update_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(motion)
+    return await _motion_response(service, db, minutes_id, motion, current_user)
 
 
 @router.delete(
@@ -786,11 +917,11 @@ async def publish_minutes(
         "Minutes",
     )
 
-    doc_service = DocumentService(db)
     async with handle_service_errors("Failed to publish minutes"):
-        doc = await doc_service.publish_minutes(
-            minutes, current_user.organization_id, current_user.id
+        outcome = await MinutesPublishingService(db).publish(
+            minutes, current_user.organization_id, current_user
         )
+    doc = outcome.document
 
     await log_audit_event(
         db=db,
@@ -801,6 +932,7 @@ async def publish_minutes(
             "minutes_id": minutes_id,
             "document_id": doc.id,
             "title": minutes.title,
+            "public_posted": outcome.public_copy is not None,
         },
         user_id=str(current_user.id),
     )
@@ -824,6 +956,66 @@ async def publish_minutes(
         created_by=doc.uploaded_by,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
+        public_allowed=outcome.public_allowed,
+        public_posted=outcome.public_copy is not None,
+    )
+
+
+@router.get("/{minutes_id}/publishing", response_model=PublishingStatusResponse)
+async def get_publishing_status(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Where these minutes stand: the library copy, the public copy, and whether the
+    department's settings allow each
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    minutes = ensure_found(
+        await MinuteService(db).get_minutes(
+            minutes_id, current_user.organization_id, load_children=False
+        ),
+        "Minutes",
+    )
+    return await MinutesPublishingService(db).status(
+        minutes, current_user.organization_id
+    )
+
+
+@router.delete("/{minutes_id}/public-posting", status_code=204)
+async def withdraw_public_posting(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Take the public copy of these minutes down. The library copy is untouched,
+    and publishing again posts a fresh public copy.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    ensure_found(
+        await MinuteService(db).get_minutes(
+            minutes_id, current_user.organization_id, load_children=False
+        ),
+        "Minutes",
+    )
+    async with handle_service_errors("Failed to withdraw the public copy"):
+        copy = await MinutesPublishingService(db).withdraw(
+            minutes_id, current_user.organization_id, current_user
+        )
+    ensure_found(copy, "Public copy")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_public_withdrawn",
+        event_category="meetings",
+        severity="warning",
+        event_data={"minutes_id": minutes_id},
+        user_id=str(current_user.id),
     )
 
 
@@ -980,6 +1172,10 @@ def _build_response(minutes) -> MinutesResponse:
             required=bool(s.get("required", False)),
             needs_motion=bool(s.get("needs_motion", False)),
             motion_text=s.get("motion_text") or "",
+            presenter=s.get("presenter") or "",
+            not_taken_up=bool(s.get("not_taken_up", False)),
+            agenda_key=s.get("agenda_key"),
+            documents=s.get("documents") or [],
         )
         for s in raw_sections
     ]
@@ -999,9 +1195,11 @@ def _build_response(minutes) -> MinutesResponse:
         called_to_order_at=minutes.called_to_order_at,
         adjourned_at=minutes.adjourned_at,
         attendees=minutes.attendees,
+        attendance_listing=minutes.attendance_listing,
         quorum_met=minutes.quorum_met,
         quorum_count=minutes.quorum_count,
         event_id=minutes.event_id,
+        meeting_id=minutes.meeting_id,
         template_id=minutes.template_id,
         sections=sections,
         header_config=(
@@ -1034,11 +1232,60 @@ def _build_response(minutes) -> MinutesResponse:
         created_by=minutes.created_by,
         created_at=minutes.created_at,
         updated_at=minutes.updated_at,
-        motions=[_build_motion_response(m) for m in (minutes.motions or [])],
+        motions=[
+            _build_motion_response(m, members_present(minutes.attendees))
+            for m in (minutes.motions or [])
+        ],
         action_items=[
             _build_action_item_response(a) for a in (minutes.action_items or [])
         ],
     )
+
+
+async def _name_previous_minutes(
+    db: AsyncSession, organization_id, motions: list[MotionResponse]
+) -> None:
+    """Say which minutes a previous-minutes motion accepts, and where they stand.
+
+    The ids were set by the server, but are still resolved inside the caller's
+    department so a stale or foreign id can never surface another department's
+    title.
+    """
+    ids = {m.previous_minutes_id for m in motions if m.previous_minutes_id}
+    if not ids:
+        return
+    found = await db.execute(
+        sa_select(MeetingMinutes.id, MeetingMinutes.title, MeetingMinutes.status).where(
+            MeetingMinutes.id.in_(ids),
+            MeetingMinutes.organization_id == str(organization_id),
+        )
+    )
+    known = {row.id: row for row in found}
+    for motion in motions:
+        row = known.get(motion.previous_minutes_id or "")
+        if row is None:
+            motion.previous_minutes_id = None
+            continue
+        motion.previous_minutes_title = row.title
+        motion.previous_minutes_status = (
+            row.status if isinstance(row.status, str) else row.status.value
+        )
+
+
+async def _respond(db: AsyncSession, user: User, minutes) -> MinutesResponse:
+    """The response, with linked documents narrowed to what *user* could open.
+
+    A section's linked-document names were copied from the library by someone
+    who could open them; this viewer may not be able to.
+    """
+    response = _build_response(minutes)
+    await _name_previous_minutes(db, user.organization_id, response.motions)
+    response.attendance_listing_effective = effective_listing(
+        minutes.attendance_listing,
+        await load_attendance_listing(db, str(user.organization_id)),
+    )
+    await narrow_documents(db, user.organization_id, user, response.sections)
+    return response
 
 
 def _loaded(obj, relationship: str, attribute: str):
@@ -1054,24 +1301,31 @@ def _loaded(obj, relationship: str, attribute: str):
     return getattr(related, attribute) if related is not None else None
 
 
-def _adopting_title(minutes) -> Optional[str]:
-    """The adopting meeting's title, unless it was a closed session: its title
-    can name the matter, and these minutes may be read by every member."""
-    if "adopting_minutes" in sa_inspect(minutes).unloaded:
-        return None
-    adopting = minutes.adopting_minutes
-    if adopting is None:
-        return None
-    kind = (
-        adopting.meeting_type
-        if isinstance(adopting.meeting_type, str)
-        else adopting.meeting_type.value
+_adopting_title = adopting_title
+
+
+async def _motion_response(
+    service, db, minutes_id: str, motion, user
+) -> MotionResponse:
+    response = _build_motion_response(
+        motion, await _present_count(service, minutes_id, user)
     )
-    return None if kind == "executive" else adopting.title
+    await _name_previous_minutes(db, user.organization_id, [response])
+    return response
 
 
-def _build_motion_response(motion) -> MotionResponse:
-    """Build a MotionResponse from a Motion model"""
+async def _present_count(service, minutes_id: str, user) -> int:
+    """Members the minutes record as in the room, for a motion's suggested result."""
+    minutes = await service.get_minutes(minutes_id, user.organization_id)
+    return members_present(minutes.attendees) if minutes else 0
+
+
+def _build_motion_response(motion, present: int = 0) -> MotionResponse:
+    """Build a MotionResponse from a Motion model
+
+    ``present`` is how many members the minutes record as in the room, which
+    the majority-of-those-present threshold counts against.
+    """
     return MotionResponse(
         id=motion.id,
         minutes_id=motion.minutes_id,
@@ -1082,9 +1336,17 @@ def _build_motion_response(motion) -> MotionResponse:
         section_key=motion.section_key,
         discussion_notes=motion.discussion_notes,
         status=motion.status if isinstance(motion.status, str) else motion.status.value,
+        acceptance=motion.acceptance,
+        previous_minutes_id=motion.previous_minutes_id,
         votes_for=motion.votes_for,
         votes_against=motion.votes_against,
         votes_abstain=motion.votes_abstain,
+        votes_recused=motion.votes_recused,
+        threshold=motion.threshold,
+        roll_call=motion.roll_call,
+        suggested_status=suggested_status(
+            motion.threshold, motion.votes_for, motion.votes_against, present
+        ),
         election_id=motion.election_id,
         ballot_item_id=motion.ballot_item_id,
         election_title=_loaded(motion, "election", "title"),
@@ -1162,10 +1424,6 @@ async def set_meeting_quorum_config(
 
     Requires `minutes.manage` permission.
     """
-    from sqlalchemy import select as sa_select
-
-    from app.models.minute import MeetingMinutes
-
     if quorum_type not in ("count", "percentage"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -97,15 +97,11 @@ pipeline never has to mark it.
 | **Public Application Status Page**     | "Let applicants check their application status through a public link". See [Public Application Status Page](#public-application-status-page)                                                                                                                                                                            |
 | **Show upcoming stages**               | Under the status-page switch. Untick it and applicants see only the visible stages they have completed — not the stage they are on, and not how many remain. On by default                                                                                                                                              |
 
-<!-- Screenshot needed:
-_[Membership Coordinator at /prospective-members/settings with a pipeline selected, clipped to the "Automatic Transfer to Membership" card with its tickbox "Make applicants members automatically when they complete the final stage".]_
--->
+![The Automatic Transfer to Membership card on Pipeline Settings, with its tickbox unticked](./images/15-20-auto-transfer-card.png)
 
 ---
 
-<!-- Screenshot needed:
-_[Membership Coordinator (prospective_members.manage) at /prospective-members/settings with a pipeline selected, clipped to the "When an Applicant Becomes a Member" card: Operational applicants → Operational / Probationary, Administrative applicants → Administrative / Regular, and the Save Conversion Settings button. Demo pipeline only.]_
--->
+![When an Applicant Becomes a Member: Operational applicants become Operational / Probationary, Administrative applicants Administrative / Regular, with Save Conversion Settings](./images/15-21-conversion-settings-card.png)
 
 ## Stage Types
 
@@ -299,7 +295,7 @@ address:
 - An **archived member** has it → a suggestion to reactivate them instead
 - Another **applicant** has it → a warning with the applicant's details
 
-![Create applicant form with contact fields and membership type](./images/15-03-create-applicant.png)
+![Add Applicant dialog with contact fields, membership type and the Target Role picker](./images/15-03-create-applicant.png)
 
 ### Edge Cases
 
@@ -347,9 +343,7 @@ are saved with the advance, for that applicant and stage, so refreshing the
 page does not lose them. Dragging the card on the board does not send the
 ticks, so advance a checklist stage from the drawer. **Skip** works as usual.
 
-<!-- Screenshot needed:
-_[Membership Coordinator at /prospective-members with a demo applicant on a Checklist stage that has two items: the drawer's Checklist block with one item ticked and "1 of 2 items done — tick every item to advance".]_
--->
+![The applicant drawer's Checklist block on a two-item stage, one item ticked: 1 of 2 items done — tick every item to advance](./images/15-22-checklist-stage-drawer.png)
 
 ### Moving Back (Regression)
 
@@ -405,9 +399,7 @@ This is for recovery only:
 
 ---
 
-<!-- Screenshot needed:
-_[Membership Coordinator (prospective_members.manage) at /prospective-members, Withdrawn tab, with at least two rows showing the Withdrawn Date and Reason columns filled — one of them withdrawn by the applicant from the status page. Crop to the tab strip and table; fictitious demo applicants only.]_
--->
+![The Withdrawn tab for the Reinstatement Pipeline: two applicants with their Withdrawn Date and Reason](./images/15-23-withdrawn-tab.png)
 
 ## The Kanban Board
 
@@ -494,11 +486,9 @@ The action bar stays at the bottom. Left to right: **Interview**, **Back**,
 is the one marked final in the pipeline, wherever it sits. A pipeline with no
 stage marked final treats its last stage as final.
 
-![Applicant detail drawer on its overview tab, with the stage indicator and tab row](./images/15-14-applicant-drawer-overview.png)
+![Applicant detail drawer with contact details, current stage, progress, stage history and the action bar](./images/15-14-applicant-drawer-overview.png)
 
-<!-- Screenshot needed:
-_[Membership Coordinator (prospective_members.manage) at /prospective-members, drawer of a demo applicant on a Multi-Signer Approval stage, clipped to the Approval Status section listing President — Approved and Chief — Pending. The demo seeder has no such stage today; seed one.]_
--->
+![The applicant drawer's Approval Status on a Chief and President approval stage: Chief pending, President approved](./images/15-24-approval-status-drawer.png)
 
 ---
 
@@ -674,21 +664,14 @@ coordinator's notes. It lists only stages that ask for a role you hold. With
 nothing waiting, it reads **Nothing is waiting on you**.
 
 In the applicant's drawer, **Approval Status** lists the stage's named signers
-and who has signed.
+and who has signed. A stage that needs several approvers names each by office
+(for example **Chief**, **EMS Supply Officer**), not by the raw role key.
 
-<!-- Screenshot needed:
-_[Sign-offs page as an officer holding the Chief position → one applicant card on a "Chief and President approval" stage, with the pills reading "Chief: waiting" and "President: signed", and the **Sign as Chief** button.]_
--->
+![Sign-offs for an officer in the Chief position: one applicant on the Chief and President approval stage, pills Chief: waiting and President: signed, and Sign as Chief](./images/15-25-sign-offs-chief.png)
 
 ---
 
-<!-- Screenshot needed:
-_[A member holding the Fire Chief position but no prospective_members permission, at /prospective-members/sign-offs. Seed a pipeline with a Required Multi-Signer Approval stage requiring chief and president and one demo applicant on it with the President's signature recorded. Capture the heading and subtitle, the applicant card with stage · pipeline, pills "President: signed" and "Chief: waiting", and the "Sign as Chief" button.]_
--->
-
-<!-- Screenshot needed:
-_[Same member and state with the "Sign as Chief" dialog open: the message naming the applicant and stage, the optional Note field, and the Sign / Not now buttons. Cancel with Not now so the seed survives.]_
--->
+![The Sign as Chief dialog naming the applicant and stage, with an optional Note and the Sign and Not now buttons](./images/15-26-sign-off-dialog.png)
 
 ## Converting to a Full Member
 
@@ -776,7 +759,7 @@ already been transferred_.
   linked to the new member.
 - The activity log records the conversion with the date and time.
 
-![Step 2 of the Convert to Member modal — membership type, rank, station and hire date](./images/15-09-convert-modal.png)
+![Step 2 of the Convert to Member modal — member class and starting status, rank, station, target role, hire date and how they get their password](./images/15-09-convert-modal.png)
 
 ### Edge Cases
 
@@ -948,9 +931,7 @@ happened.
 
 ---
 
-<!-- Screenshot needed:
-_[Membership Coordinator (prospective_members.manage) at /prospective-members, Inactive Applications tab with two demo rows selected and the Purge Applications dialog open ("This permanently deletes 2 inactive application(s)…", Cancel / Permanently Delete). Needs seeded inactive applicants; cancel rather than confirm so the seed survives.]_
--->
+![The Purge Applications confirmation over two selected inactive applications, with Cancel and Permanently Delete](./images/15-27-purge-dialog.png)
 
 ## Pipeline Statistics & Reports
 
@@ -1033,9 +1014,7 @@ Application**.
 - In any other state (approved, converted, rejected) there is no button. The
   applicant contacts the department instead.
 
-<!-- Screenshot needed:
-_[Public Application Status page for an active applicant → the "Withdraw your application?" dialog open over the "No longer interested?" card, Reason filled in, with **Withdraw Application** and **Keep My Application**.]_
--->
+![An applicant's public status page with the Withdraw your application? dialog open, a reason typed, and Withdraw Application and Keep My Application](./images/15-28-status-page-withdraw.png)
 
 > **You cannot look up an applicant's link inside The Logbook.** The link works
 > like a password: anyone holding it can read that applicant's progress, and
@@ -1067,14 +1046,12 @@ an open house. Officers who can view or manage prospective members can use it.
 Each badge carries a short code for the applicant, never their status-page
 link.
 
-See [Inventory > Cross-Module Barcode Label Printing](./05-inventory.md#cross-module-barcode-label-printing-2026-06-10)
+See [Inventory > Labels in other parts of The Logbook](./05-inventory.md#labels-in-other-parts-of-the-logbook)
 for label format options.
 
 ---
 
-<!-- Screenshot needed:
-_[Membership coordinator holding prospective_members.manage only, at /prospective-members/print-labels?ids=<two or three demo applicant ids>, reached from Print Badges: the label preview showing two or three demo applicants' labels with name and short-id barcode. Demo data only; no real applicant names or emails.]_
--->
+![Print Applicant Badges with three demo applicants' labels, each with the name and a short-id barcode](./images/15-29-print-labels.png)
 
 ## Realistic Example: New Firefighter Application
 

@@ -400,6 +400,15 @@ class IPSecurityService:
         await db.commit()
         await db.refresh(exception)
 
+        # The edge middleware memoizes "this address holds an exception" per
+        # worker; without this the revoked address keeps passing the country
+        # block until that entry's TTL runs out.
+        from app.core.geoip_sync import publish_ip_exception_invalidation
+        from app.core.security_middleware import invalidate_ip_exception_cache
+
+        invalidate_ip_exception_cache()
+        await publish_ip_exception_invalidation()
+
         # Log the revocation
         await self._log_audit_action(
             db=db,

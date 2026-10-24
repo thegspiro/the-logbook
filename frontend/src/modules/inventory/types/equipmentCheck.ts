@@ -10,14 +10,14 @@
 // ============================================================================
 
 /**
- * The four answer shapes a check item can have, plus the two structural rows.
+ * The answer shapes a check item can have, plus the two structural rows.
  *
- * A check stores exactly one of four things: a number, a pass/fail, a
- * quantity, or a date. The type decides the control, the pass rule, and what
- * the record keeps — so an admin building a checklist picks a type, not a
- * layout.
+ * A check stores one of five things: a number, a pass/fail, a quantity, a
+ * date, or present/absent. The type decides the control, the pass rule, and
+ * what the record keeps — so an admin building a checklist picks a type, not
+ * a layout.
  *
- * `HEADER` and `TEXT` are deliberately outside the four. They are not checks;
+ * `HEADER` and `TEXT` are deliberately outside the five. They are not checks;
  * they *are* the layout, which is the thing a type is no longer allowed to be.
  *
  * Mirrors `backend/app/utils/check_types.py`, which is the write-side
@@ -39,6 +39,11 @@ export const CheckType = {
   /** A date on record, confirmed rather than retyped. Medications, IV fluids,
    *  AED pads, extinguisher inspection. */
   EXPIRY: 'expiry',
+  /** Whether the thing is aboard at all. Stores present / absent, as pass /
+   *  fail. Spare SCBA bottle, wheel chocks, map book. Absent fails the line
+   *  without a note, the way a short count does. Not the legacy `present`,
+   *  which has always meant pass/fail and still normalizes to `function`. */
+  PRESENCE: 'presence',
   /** Structural: a section heading. Not a check. */
   HEADER: 'header',
   /** Structural: a statement the crew reads. Not a check. */
@@ -46,8 +51,14 @@ export const CheckType = {
 } as const;
 export type CheckType = (typeof CheckType)[keyof typeof CheckType];
 
-/** The four that actually store an answer, in walking order of the design. */
-export const CANONICAL_CHECK_TYPES = [CheckType.LEVEL, CheckType.FUNCTION, CheckType.COUNT, CheckType.EXPIRY] as const;
+/** The types that actually store an answer, in walking order of the design. */
+export const CANONICAL_CHECK_TYPES = [
+  CheckType.LEVEL,
+  CheckType.FUNCTION,
+  CheckType.COUNT,
+  CheckType.EXPIRY,
+  CheckType.PRESENCE,
+] as const;
 export type CanonicalCheckType = (typeof CANONICAL_CHECK_TYPES)[number];
 
 /** Rows that are layout rather than a question. */
@@ -118,21 +129,106 @@ export function soonestExpiration(item: CheckTemplateItem): string | undefined {
 }
 
 /**
- * What this position is supposed to hold, as `_target_quantity` resolves it.
+ * Whether a crew may date the replacement unit they put in on this line.
  *
- * `required_quantity or expected_quantity` on the server — Python's `or`, so a
- * `required_quantity` of **0** falls through to the expected count rather than
- * standing as the target. `??` does not: it only filters null and undefined,
- * so it would hand back a target of zero and report a position holding four of
- * an expected four as having no target at all. The same distinction CLAUDE.md
- * pitfall #1 draws for form values, on a number rather than a string.
+ * Only a Date line the inventory does not track. A linked line, or one with
+ * lots recorded aboard, has its dates owned by the lot swap, which also moves
+ * stock; a date typed on a check would bypass that and leave the record of
+ * what is aboard disagreeing with the line.
+ *
+ * Mirrors `EquipmentCheckService._takes_crew_replacement_date`, which drops
+ * the date on any other line, so offering it here would only lose the entry.
  */
-export function targetQuantity(item: CheckTemplateItem): number | null {
-  // `||` between the two operands and `??` after it. A third truthiness step
-  // would discard a target deliberately configured at 0 — `0 or 0` is 0 in
-  // Python, not None — and report a counted position as having no target.
+export function canRecordReplacementDate(
+  item: Pick<CheckTemplateItem, 'checkType' | 'inventoryItemId' | 'lotsAboard'>
+): boolean {
+  return (
+    normalizeCheckType(item.checkType) === CheckType.EXPIRY &&
+    !item.inventoryItemId &&
+    (item.lotsAboard ?? []).length === 0
+  );
+}
+
+/**
+ * Par: what this position should hold, as `_target_quantity` resolves it.
+ *
+ * Par is what a shortfall, a restock and a swap are measured against. It does
+ * not fail the line — `passFloor` decides that. Where both columns are set the
+ * larger wins, because restocking only up to a par below Min to Pass would
+ * leave the position failing after the restock, so a template with only Min
+ * to Pass has a par equal to it.
+ *
+ * When neither is positive this keeps the server's `required or expected`
+ * answer, so a position deliberately configured at 0 still reads as counted
+ * rather than as having no target.
+ */
+export function targetQuantity(item: Pick<CheckTemplateItem, 'requiredQuantity' | 'expectedQuantity'>): number | null {
+  const required = item.requiredQuantity ?? 0;
+  const expected = item.expectedQuantity ?? 0;
+  if (required > 0 || expected > 0) return Math.max(required, expected);
+  // `||` then `??`, mirroring Python's `or`: a required 0 falls through to the
+  // expected value, and an expected 0 survives as a target of 0.
   const target = item.requiredQuantity || item.expectedQuantity;
   return target ?? null;
+}
+
+/**
+ * The count below which a position fails, or null if nothing fails it.
+ *
+ * Min to Pass fails the line, and so does Critical Min even when Min to Pass
+ * is blank — a count low enough to alert leadership is never a pass. Par is
+ * deliberately absent: short of par is a restock line, not a failure.
+ *
+ * Mirrors `EquipmentCheckService._pass_floor`; keep the two in step, or the
+ * form will offer a pass the server refuses.
+ */
+export function passFloor(
+  requiredQuantity: number | null | undefined,
+  criticalMinimumQuantity: number | null | undefined
+): number | null {
+  const floors = [requiredQuantity, criticalMinimumQuantity].filter((v): v is number => v != null);
+  return floors.length > 0 ? Math.max(...floors) : null;
+}
+
+/**
+ * A filed count as a crew reads it: `"8 / 10 each, restock 2"`.
+ *
+ * Mirrors `describe_count` in `backend/app/utils/check_types.py`, which writes
+ * the same line into the PDFs. `par` is the result's par snapshot, or for a
+ * result filed before par was recorded, the single target it was judged by.
+ */
+export function describeCount(
+  found: number | null | undefined,
+  par: number | null | undefined,
+  unit?: string | null
+): string | null {
+  if (found == null) return null;
+  let label = par == null ? String(found) : `${found} / ${par}`;
+  if (unit) label = `${label} ${unit}`;
+  if (par != null && found < par) label = `${label}, restock ${par - found}`;
+  return label;
+}
+
+/**
+ * Whether a counted position is short enough to be critical.
+ *
+ * Strictly below the critical minimum: the minimum is the lowest acceptable
+ * count, so a truck holding exactly that many is at it, not below it. And
+ * never once the count meets the position's target — 2 of an expected 2 is a
+ * full position whatever the template's minimum says, and calling it critical
+ * contradicts the pass the same count earns.
+ *
+ * The server applies the same rule to the failure email
+ * (`EquipmentCheckService._is_below_critical_minimum`); keep the two in step.
+ */
+export function isBelowCriticalMinimum(
+  found: number,
+  criticalMinimum: number | null | undefined,
+  target: number | null
+): boolean {
+  if (criticalMinimum == null) return false;
+  if (target != null && found >= target) return false;
+  return found < criticalMinimum;
 }
 
 /**
@@ -191,6 +287,7 @@ export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
   function: 'Function',
   count: 'Count',
   expiry: 'Expiry',
+  presence: 'Present',
   text: 'Statement',
   header: 'Section Header',
 };
@@ -201,6 +298,7 @@ export const CHECK_TYPE_STORES: Record<CanonicalCheckType, string> = {
   function: 'stores pass / fail',
   count: 'stores a quantity',
   expiry: 'stores a date',
+  presence: 'stores present / absent',
 };
 
 export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
@@ -267,6 +365,8 @@ export interface CheckTemplateItem {
   requiredQuantity?: number;
   expectedQuantity?: number;
   criticalMinimumQuantity?: number;
+  /** The position's own unit as typed in the builder; ignored when linked. */
+  countUnit?: string;
   minLevel?: number;
   levelUnit?: string;
   serialNumber?: string;
@@ -276,7 +376,10 @@ export interface CheckTemplateItem {
   inventoryItemId?: string;
   /** The running on-truck count, including anything used since the last check. */
   quantityOnTruck?: number;
-  /** Projected from the linked catalog item — "Each", "Box", "Lot". */
+  /**
+   * What the crew counts in: the linked catalog item's unit ("Each", "Box"),
+   * else the position's own `countUnit`.
+   */
   unitOfMeasure?: string;
   /**
    * The lots physically aboard, soonest first.
@@ -380,6 +483,31 @@ export interface CrossTemplateLinkResult {
   skippedPositions: SkippedLinkPosition[];
 }
 
+/** One checklist name the automatic pass linked, and what to. */
+export interface AutoLinkedGroup {
+  name: string;
+  inventoryItemId: string;
+  inventoryItemName: string;
+  confidence: 'exact' | 'strong';
+  /** The "also called" name that produced the match, when it was not the item's own name. */
+  matchedAlias?: string | null;
+  positionCount: number;
+  /** The positions this pass wrote; ones linked by hand meanwhile are left out. */
+  positions: LinkReportPosition[];
+}
+
+/** What an undo cleared, and how many positions had been re-linked since. */
+export interface CrossTemplateUnlinkResult {
+  unlinked: number;
+  skipped: number;
+}
+
+export interface AutoLinkResult extends CrossTemplateLinkResult {
+  /** Positions left on the report: ties, weak matches and names with no match. */
+  leftForReview: number;
+  groups: AutoLinkedGroup[];
+}
+
 export interface CheckTemplateItemCreate {
   name: string;
   description?: string | undefined;
@@ -389,6 +517,7 @@ export interface CheckTemplateItemCreate {
   required_quantity?: number | undefined;
   expected_quantity?: number | undefined;
   critical_minimum_quantity?: number | undefined;
+  count_unit?: string | undefined;
   min_level?: number | undefined;
   level_unit?: string | undefined;
   serial_number?: string | undefined;
@@ -429,6 +558,7 @@ export interface CheckTemplateItemUpdate {
   required_quantity?: number | null | undefined;
   expected_quantity?: number | null | undefined;
   critical_minimum_quantity?: number | null | undefined;
+  count_unit?: string | null | undefined;
   min_level?: number | null | undefined;
   level_unit?: string | null | undefined;
   serial_number?: string | null | undefined;
@@ -463,6 +593,12 @@ export interface CheckTemplateCompartment {
    * move on their own while the bag sits shut.
    */
   isSealed?: boolean;
+  /**
+   * A headingless group: its items sit directly on the checklist, in place
+   * among the locations. It has no name, cannot be sealed, and holds no
+   * locations of its own.
+   */
+  isInline?: boolean;
   parentCompartmentId?: string;
   items: CheckTemplateItem[];
   createdAt?: string;
@@ -477,6 +613,7 @@ export interface CheckTemplateCompartmentCreate {
   is_header?: boolean | undefined;
   container_type?: string | undefined;
   is_sealed?: boolean | undefined;
+  is_inline?: boolean | undefined;
   parent_compartment_id?: string | undefined;
   items?: CheckTemplateItemCreate[] | undefined;
 }
@@ -490,6 +627,7 @@ export interface CheckTemplateCompartmentUpdate {
   // NOT NULL: no cleared state, so null is not offered.
   container_type?: string | undefined;
   is_sealed?: boolean | undefined;
+  is_inline?: boolean | undefined;
   parent_compartment_id?: string | null | undefined;
 }
 
@@ -567,6 +705,20 @@ export const CHECK_ITEM_STATUS_LABELS: Record<string, string> = {
   out_of_service: 'Out of service',
 };
 
+/**
+ * A filed status in the words the crew answered with. Pass and fail are what
+ * is stored, so every total keeps working off them, but a Present line was
+ * answered Present or Absent. Mirrors `describe_status` in
+ * `backend/app/utils/check_types.py`.
+ */
+export function checkItemStatusLabel(checkType: string | null | undefined, status: string): string {
+  if (normalizeCheckType(checkType) === CheckType.PRESENCE) {
+    if (status === 'pass') return 'Present';
+    if (status === 'fail') return 'Absent';
+  }
+  return CHECK_ITEM_STATUS_LABELS[status] ?? status;
+}
+
 export interface CheckItemResultSubmit {
   template_item_id: string;
   compartment_name: string;
@@ -582,7 +734,11 @@ export interface CheckItemResultSubmit {
   lot_number?: string | undefined;
   serial_found?: string | undefined;
   lot_found?: string | undefined;
-  /** Expiration read off a replacement unit; written back onto the template. */
+  /**
+   * Expiration read off a replacement unit the crew put in, on a Date line not
+   * linked to inventory. Written back onto the template line; a past date is
+   * refused. Ignored on a linked line, whose dates move only with a lot swap.
+   */
   expiration_found?: string | undefined;
   photo_urls?: string[] | undefined;
   is_expired?: boolean | undefined;
@@ -639,7 +795,12 @@ export interface ShiftEquipmentCheckItemRecord {
   checkType?: string;
   status: CheckItemStatus;
   quantityFound?: number;
+  /** Min to Pass at check time — or, on results filed before par was
+   *  recorded, the single target (min, else par) the line was judged by. */
   requiredQuantity?: number;
+  /** Par at check time; absent on results filed before it was recorded. */
+  expectedQuantity?: number;
+  countUnit?: string;
   criticalMinimumQuantity?: number;
   levelReading?: number;
   levelUnit?: string;
@@ -720,6 +881,8 @@ export interface CheckItemHistory {
   shiftId: string;
   shiftDate?: string;
   status: string;
+  /** The line's type when it was answered. Absent on a server before 2026-10-18. */
+  checkType?: string;
   quantityFound?: number;
   levelReading?: number;
   serialNumber?: string;
@@ -806,6 +969,10 @@ export interface FailureLogRecord {
   checkType?: string;
   status: string;
   notes?: string;
+  quantityFound?: number;
+  /** Par as filed, else the single target a pre-par result was judged by. */
+  targetQuantity?: number;
+  countUnit?: string;
   checkedByName?: string;
 }
 
@@ -958,6 +1125,8 @@ export interface ItemDeployment {
   templateItemId: string;
   itemName: string;
   compartmentName?: string;
+  /** The checklist's nesting, outermost first. */
+  compartmentPath?: string[];
   templateId?: string;
   templateName?: string;
   apparatusId?: string;
@@ -968,6 +1137,9 @@ export interface ItemDeployment {
   expirationDate?: string;
   daysUntilExpiration?: number;
   isExpired: boolean;
+  /** What the position should hold, and the last count aboard (null: never counted). */
+  targetQuantity?: number | null;
+  quantityOnTruck?: number | null;
 }
 
 /**

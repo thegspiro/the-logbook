@@ -77,6 +77,14 @@ from app.utils.reminder_conditions import (
     normalize_reminder_conditions,
 )
 
+# The one definition of which requirements carry a due date at all: an active
+# one. A deactivated requirement is not owed while inactive — pipeline
+# completion skips it (get_required_requirement_ids) — so it has no due or
+# overdue date on the progress read and earns no reminder from the sweep. Both
+# read it from here: the sweep as this SQL clause, the progress read through
+# ``LinkSettings.due_in_days``, which ``program_link_settings`` fills from it.
+REQUIREMENT_CARRIES_DEADLINE = TrainingRequirement.active.is_(True)
+
 # Satisfied states: none of them is ever "due".
 SATISFIED_STATUSES = frozenset(
     {
@@ -111,6 +119,14 @@ class LinkSettings:
     deadline_days: Optional[int] = None
     description: Optional[str] = None
     message: Optional[str] = None
+    # REQUIREMENT_CARRIES_DEADLINE, read for this requirement.
+    carries_deadline: bool = True
+
+    @property
+    def due_in_days(self) -> Optional[int]:
+        """The deadline to date the requirement by, or None when it has none
+        — no ``custom_deadline_days``, or the requirement is inactive."""
+        return self.deadline_days if self.carries_deadline else None
 
 
 async def program_link_settings(
@@ -123,14 +139,21 @@ async def program_link_settings(
     no organization column, so it is constrained through its parent (#14).
     """
     result = await db.execute(
-        select(ProgramRequirement)
+        select(ProgramRequirement, REQUIREMENT_CARRIES_DEADLINE)
+        .outerjoin(
+            TrainingRequirement,
+            TrainingRequirement.id == ProgramRequirement.requirement_id,
+        )
         .where(ProgramRequirement.program_id == str(program_id))
         .order_by(ProgramRequirement.sort_order, ProgramRequirement.created_at)
     )
     settings_by_requirement: Dict[str, LinkSettings] = {}
-    for link in result.scalars().all():
+    for link, carries_deadline in result.all():
         entry = settings_by_requirement.setdefault(
-            str(link.requirement_id), LinkSettings()
+            str(link.requirement_id),
+            # MySQL answers IS TRUE with 1/0, and NULL never: a missing
+            # requirement row reads as False through the outer join.
+            LinkSettings(carries_deadline=bool(carries_deadline)),
         )
         days = link.custom_deadline_days
         # Clone and import write this from JSON without the request bounds; a
@@ -178,6 +201,10 @@ async def annotate_progress_rows(
 ) -> None:
     """Set ``due_date``, ``is_overdue`` and ``program_specific_description``.
 
+    An inactive requirement gets no due date and is never overdue
+    (``REQUIREMENT_CARRIES_DEADLINE``): the page shows it as not currently
+    required, not as late.
+
     Plain instance attributes for the response, never persisted — the same
     shape as ``reads_compliance``. The page shows the server's verdict on the
     department's calendar rather than re-deriving it from the viewer's clock
@@ -189,7 +216,7 @@ async def annotate_progress_rows(
     links = await program_link_settings(db, enrollment.program_id)
     for row in rows:
         link = links.get(str(row.requirement_id))
-        due = requirement_due_date(enrollment, link.deadline_days if link else None, tz)
+        due = requirement_due_date(enrollment, link.due_in_days if link else None, tz)
         row.due_date = due
         row.is_overdue = is_overdue(due, row.status, today)
         row.program_specific_description = link.description if link else None
@@ -485,10 +512,17 @@ async def send_requirement_deadline_notices(
             ProgramEnrollment,
             RequirementProgress.enrollment_id == ProgramEnrollment.id,
         )
+        # A deactivated requirement earns no due-date warning or overdue
+        # notice (REQUIREMENT_CARRIES_DEADLINE).
+        .join(
+            TrainingRequirement,
+            TrainingRequirement.id == RequirementProgress.requirement_id,
+        )
         .where(
             ProgramEnrollment.organization_id == org_id,
             ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
             ProgramEnrollment.program_id.in_(program_ids),
+            REQUIREMENT_CARRIES_DEADLINE,
             or_(
                 RequirementProgress.status.is_(None),
                 RequirementProgress.status.notin_(list(SATISFIED_STATUSES)),
@@ -528,7 +562,7 @@ async def send_requirement_deadline_notices(
         for row in rows:
             link = links.get(str(row.requirement_id))
             due = requirement_due_date(
-                enrollment, link.deadline_days if link else None, tz
+                enrollment, link.due_in_days if link else None, tz
             )
             if due is None:
                 continue

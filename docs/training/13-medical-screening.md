@@ -117,20 +117,20 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 **Inactive**, the screening type, how often it repeats ("Every 12 months" or
 "One-time"), any roles you listed, and the description.
 
-![Medical screening requirements tab with frequency and grace period](./images/13-02-requirements-tab.png)
+![Medical screening Requirements tab listing each requirement with its screening type, frequency and description](./images/13-02-requirements-tab.png)
 
 ### Requirement Fields
 
-| Field                                    | What it means                                                                                  |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Name** (required)                      | A clear name, such as "Annual NFPA 1582 Physical"                                              |
-| **Screening Type**                       | One of the six types above                                                                     |
-| **Description**                          | Instructions or notes                                                                          |
-| **One-time requirement (not recurring)** | Tick for a screening needed only once. Leave unticked for a repeating one                      |
-| **Frequency (months)**                   | How often it repeats. Shown only for repeating requirements; must be at least 1                |
-| **Applies to Roles (comma-separated)**   | Saved and shown, but **not applied** — see [Role-Based Requirements](#role-based-requirements) |
-| **Grace Period (days past expiration)**  | Saved, but **not applied** — see [Grace Period](#grace-period)                                 |
-| **Active**                               | Only active requirements count toward compliance                                               |
+| Field                                      | What it means                                                                                                                 |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Name** (required)                        | A clear name, such as "Annual NFPA 1582 Physical"                                                                             |
+| **Screening Type**                         | One of the six types above                                                                                                    |
+| **Description**                            | Instructions or notes                                                                                                         |
+| **One-time requirement (not recurring)**   | Tick for a screening needed only once. Leave unticked for a repeating one                                                     |
+| **Frequency (months)**                     | How often it repeats. Shown only for repeating requirements; must be at least 1                                               |
+| **Applies to Positions (comma-separated)** | Members are graded on this only if they hold one of these positions — see [Role-Based Requirements](#role-based-requirements) |
+| **Grace Period (days past expiration)**    | Saved, but **not applied** — see [Grace Period](#grace-period)                                                                |
+| **Active**                                 | Only active requirements count toward compliance                                                                              |
 
 ### One-Time vs Recurring Requirements
 
@@ -153,14 +153,14 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 2. Select **Add Requirement**.
 3. Fill in the fields. For example:
 
-| Field                  | Example                                                                                              |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Name**               | Annual NFPA 1582 Physical                                                                            |
-| **Screening Type**     | Physical Exam                                                                                        |
-| **Description**        | Annual medical examination per NFPA 1582 standard. Includes cardiac stress test for members over 40. |
-| **Frequency (months)** | 12                                                                                                   |
-| **Applies to Roles**   | _(blank)_                                                                                            |
-| **Active**             | Ticked                                                                                               |
+| Field                    | Example                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **Name**                 | Annual NFPA 1582 Physical                                                                            |
+| **Screening Type**       | Physical Exam                                                                                        |
+| **Description**          | Annual medical examination per NFPA 1582 standard. Includes cardiac stress test for members over 40. |
+| **Frequency (months)**   | 12                                                                                                   |
+| **Applies to Positions** | _(blank)_                                                                                            |
+| **Active**               | Ticked                                                                                               |
 
 4. Select **Add Requirement**. When you edit an existing one, the button reads
    **Save Changes**.
@@ -178,26 +178,31 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 - The records stay in each member's screening history. To stop a requirement
   counting without losing it, untick **Active** instead.
 
-<!-- Screenshot needed:
-_[Admin with medical_screening.manage, /medical-screening, Requirements tab. Click the delete button on a seeded requirement that has records filed under it and capture the Delete Requirement confirmation, reading "Screening records filed under it are kept, but will no longer be linked to a requirement.", with both buttons visible. Never confirm. No member names or results in frame.]_
--->
+![The Delete Requirement confirmation for Annual NFPA 1582 Physical: screening records filed under it are kept but will no longer be linked to a requirement, and it cannot be undone, with Cancel and Delete Requirement](./images/13-08-delete-requirement-confirm.png)
 
 ### Role-Based Requirements
 
-> **Important — roles are not applied.** **Applies to Roles** is saved and
-> shown next to the requirement, but nothing uses it. Every active member and
-> prospect is graded against every active requirement, whatever roles you
-> list. The dialog says so under the field: _"Not enforced yet — this
-> requirement applies to every active member and prospect, whatever roles you
-> list here."_
+**Applies to Positions** limits a requirement to the members who hold one of
+the positions you list.
 
-What this means for you:
+- **Leave it blank** and the requirement applies to every member, as it always
+  has.
+- **List positions**, such as `Firefighter, Apparatus Manager`, and only members
+  who hold at least one of them are graded on it. Type a position's name or its
+  slug; capital letters, spaces, hyphens and underscores do not matter, so
+  `Safety Officer` and `safety_officer` are the same position.
+- A member the list leaves with **no** requirement that applies reads **Not
+  applicable** on the roster, not **Compliant**: nothing is being graded.
+- **Prospects** hold no positions, so they are always graded on every active
+  requirement.
+- If a list contains something unusable, the requirement is treated as not
+  limited and applies to everyone, so a mistyped list can never quietly drop a
+  screening.
 
-- A requirement meant only for drivers, such as a DOT physical, counts against
-  every member. Members who do not need it show as **Not compliant**.
-- If that is a problem, record a **Waived** result for members who do not need
-  it, or keep the requirement inactive until roles are applied.
-- Members with no role, and prospects, are graded the same as everyone else.
+Example: a respirator fit test listed for `Firefighter` is graded for members
+who hold the Firefighter position. An administrative member who holds only the
+default Member position is not graded on it, and still is on a requirement with
+a blank list, such as a CPR card.
 
 ### Grace Period
 
@@ -306,7 +311,7 @@ Things to know about the form:
 - **Linked Requirement** appears only when you add a record. Editing a record
   never changes who it belongs to or which requirement it is linked to.
 
-![The Add Screening Record dialog](./images/13-07-add-record-linkage-notice.png)
+![The Add Screening Record dialog with Record is for set to Member and a member chosen, above Linked Requirement and Screening Type](./images/13-07-add-record-linkage-notice.png)
 
 ### Self-Recorded Screenings
 
@@ -405,7 +410,10 @@ screenings.
 It shows **counts only**: how many screenings are overdue and how soon the next
 one runs out. It never shows a screening's name, type, date or result. The
 dashboard may be on a station tablet, where anyone walking past can read it.
-A member might see:
+Administrative members do not see this verdict (_2026-10-18_): it is a statement
+about riding, and they hold no riding role. Their certification expiries still
+appear under **Needs you** on the dashboard. An operational member with no
+qualifying seat yet still reads **Not clear**. A member might see:
 
 > **Not clear to respond** — 1 screening overdue
 
@@ -436,9 +444,9 @@ prospect:
    - Expiration date has passed: **not met**.
 3. **No qualifying record:** **not met**.
 
-Roles and the grace period play no part. See
-[Role-Based Requirements](#role-based-requirements) and
-[Grace Period](#grace-period).
+Which requirements apply to a member is set by
+[Role-Based Requirements](#role-based-requirements); the grace period plays no
+part. See [Grace Period](#grace-period).
 
 **What if …?**
 
@@ -575,14 +583,14 @@ Captain Alvarez opens the **Requirements** tab and adds two requirements.
 
 **Requirement 1: Annual Physical**
 
-| Field                  | Value                                                                                                                                                                 |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Name**               | Annual NFPA 1582 Physical Examination                                                                                                                                 |
-| **Screening Type**     | Physical Exam                                                                                                                                                         |
-| **Description**        | Annual medical examination per NFPA 1582. Includes cardiac stress test for members aged 40+. Must be performed by a department-approved occupational health provider. |
-| **Frequency (months)** | 12                                                                                                                                                                    |
-| **Applies to Roles**   | _(blank)_                                                                                                                                                             |
-| **Active**             | Ticked                                                                                                                                                                |
+| Field                    | Value                                                                                                                                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**                 | Annual NFPA 1582 Physical Examination                                                                                                                                 |
+| **Screening Type**       | Physical Exam                                                                                                                                                         |
+| **Description**          | Annual medical examination per NFPA 1582. Includes cardiac stress test for members aged 40+. Must be performed by a department-approved occupational health provider. |
+| **Frequency (months)**   | 12                                                                                                                                                                    |
+| **Applies to Positions** | _(blank)_                                                                                                                                                             |
+| **Active**               | Ticked                                                                                                                                                                |
 
 **Requirement 2: Pre-Employment Drug Screening**
 
@@ -592,7 +600,7 @@ Captain Alvarez opens the **Requirements** tab and adds two requirements.
 | **Screening Type**                       | Drug Screening                                                                         |
 | **Description**                          | 10-panel drug screening required before membership is finalized. One-time requirement. |
 | **One-time requirement (not recurring)** | Ticked                                                                                 |
-| **Applies to Roles**                     | _(blank)_                                                                              |
+| **Applies to Positions**                 | _(blank)_                                                                              |
 | **Active**                               | Ticked                                                                                 |
 
 No records exist yet, so the Compliance tab shows all 45 members as **Not
@@ -718,22 +726,22 @@ everyone expiring in September.
 
 ## Troubleshooting
 
-| Problem                                                  | What to do                                                                                                                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Medical Screening is not in the menu                     | An administrator must turn it on under **Organization Settings → Modules → Additional Modules**. Your role also needs to view member medical screenings       |
-| You get a permission message when viewing records        | Your role needs **View member medical screenings**. Ask your administrator                                                                                    |
-| You get a permission message when adding or editing      | Your role needs **Manage member medical screenings**. Ask your administrator                                                                                  |
-| A member shows not compliant but has a passing record    | Check the record's expiration date — it may have passed. Check the status is Passed, Completed or Waived, and that its screening type matches the requirement |
-| A member shows not compliant inside the grace period     | Expected. The grace period is saved but not applied. See [Grace Period](#grace-period)                                                                        |
-| A member is graded on a requirement for a role they lack | Expected. **Applies to Roles** is not applied. See [Role-Based Requirements](#role-based-requirements)                                                        |
-| The counts do not match your own count                   | Check which requirements are **Active**. Remember every current member and open prospect is graded against every active requirement                           |
-| The expiring list is empty                               | Nothing Passed or Completed expires in the next 60 days                                                                                                       |
-| A record still says Passed after it expired              | Expected. The status does not change by itself. Add a new record with the new result and expiration date                                                      |
-| A drug screening counts as compliant for ever            | Expected for a one-time requirement with no expiration date. To require re-testing, set a frequency and enter expiration dates                                |
-| A new member's prospect screenings do not count          | Expected. Prospect records do not move to the member. Record them again against the member                                                                    |
-| The Add Record button stays grey                         | Choose **Member** or **Prospect** and pick a person first                                                                                                     |
-| A row reads **Not linked to a member or prospect**       | Re-enter the record for the right person, then delete the unlinked one                                                                                        |
-| The data looks out of date                               | Compliance is worked out each time you open it. Refresh the page                                                                                              |
+| Problem                                               | What to do                                                                                                                                                                 |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Medical Screening is not in the menu                  | An administrator must turn it on under **Organization Settings → Modules → Additional Modules**. Your role also needs to view member medical screenings                    |
+| You get a permission message when viewing records     | Your role needs **View member medical screenings**. Ask your administrator                                                                                                 |
+| You get a permission message when adding or editing   | Your role needs **Manage member medical screenings**. Ask your administrator                                                                                               |
+| A member shows not compliant but has a passing record | Check the record's expiration date — it may have passed. Check the status is Passed, Completed or Waived, and that its screening type matches the requirement              |
+| A member shows not compliant inside the grace period  | Expected. The grace period is saved but not applied. See [Grace Period](#grace-period)                                                                                     |
+| A member is not graded on a requirement               | Check the requirement's **Applies to Positions**: it applies only to members who hold one of the positions listed. See [Role-Based Requirements](#role-based-requirements) |
+| The counts do not match your own count                | Check which requirements are **Active**. A member is graded only on the active requirements that apply to their positions; prospects are graded on all of them             |
+| The expiring list is empty                            | Nothing Passed or Completed expires in the next 60 days                                                                                                                    |
+| A record still says Passed after it expired           | Expected. The status does not change by itself. Add a new record with the new result and expiration date                                                                   |
+| A drug screening counts as compliant for ever         | Expected for a one-time requirement with no expiration date. To require re-testing, set a frequency and enter expiration dates                                             |
+| A new member's prospect screenings do not count       | Expected. Prospect records do not move to the member. Record them again against the member                                                                                 |
+| The Add Record button stays grey                      | Choose **Member** or **Prospect** and pick a person first                                                                                                                  |
+| A row reads **Not linked to a member or prospect**    | Re-enter the record for the right person, then delete the unlinked one                                                                                                     |
+| The data looks out of date                            | Compliance is worked out each time you open it. Refresh the page                                                                                                           |
 
 ---
 
@@ -752,7 +760,9 @@ If you are following older notes or an SOP, these things work differently.
 - **The grace period was described as working.** Older versions of this guide
   said a member stays compliant during the grace period. They do not; see
   [Grace Period](#grace-period).
-- **Applies to Roles was described as working.** It is not applied; see
+- **Applies to Roles was described as working, and now does.** It is renamed
+  **Applies to Positions** and limits a requirement to the members who hold one
+  of the positions listed; see
   [Role-Based Requirements](#role-based-requirements).
 - **Button names:** **Add Requirement**, **Add Record** and **Save Changes**
   (not Create and Update); the delete buttons read **Delete Requirement** and

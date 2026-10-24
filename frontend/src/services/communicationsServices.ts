@@ -2,6 +2,7 @@
  * communicationsServices — extracted from services/api.ts
  */
 
+import type { AxiosRequestConfig } from 'axios';
 import api from './apiClient';
 import type { NotificationLogScope, Standing } from '../constants/enums';
 import type {
@@ -119,8 +120,8 @@ export const notificationsService = {
     return response.data;
   },
 
-  async getMyUnreadCount(): Promise<{ unread_count: number }> {
-    const response = await api.get<{ unread_count: number }>('/notifications/my/unread-count');
+  async getMyUnreadCount(config?: AxiosRequestConfig): Promise<{ unread_count: number }> {
+    const response = await api.get<{ unread_count: number }>('/notifications/my/unread-count', config);
     return response.data;
   },
 
@@ -672,19 +673,24 @@ export interface Location {
   updated_at: string;
 }
 
+/**
+ * Also the update payload (`updateLocation` takes a `Partial` of it). Optional
+ * fields accept `null` because the backend dumps updates with `exclude_unset`:
+ * an omitted key keeps the stored value, so a clear has to be sent as `null`.
+ */
 export interface LocationCreate {
   name: string;
-  description?: string | undefined;
-  address?: string | undefined;
-  city?: string | undefined;
-  state?: string | undefined;
-  zip?: string | undefined;
-  latitude?: string | undefined;
-  longitude?: string | undefined;
-  building?: string | undefined;
-  floor?: string | undefined;
-  room_number?: string | undefined;
-  capacity?: number | undefined;
+  description?: string | null | undefined;
+  address?: string | null | undefined;
+  city?: string | null | undefined;
+  state?: string | null | undefined;
+  zip?: string | null | undefined;
+  latitude?: string | null | undefined;
+  longitude?: string | null | undefined;
+  building?: string | null | undefined;
+  floor?: string | null | undefined;
+  room_number?: string | null | undefined;
+  capacity?: number | null | undefined;
 }
 
 export const messagesService = {

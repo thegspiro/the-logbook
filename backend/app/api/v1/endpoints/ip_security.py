@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import get_current_user, require_permission, require_stepup
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
@@ -251,6 +251,7 @@ async def approve_exception(
     current_user: User = Depends(
         require_permission("security.manage", "settings.manage")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Approve a pending IP exception request.
@@ -345,6 +346,7 @@ async def revoke_exception(
     current_user: User = Depends(
         require_permission("security.manage", "settings.manage")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Revoke an active (approved) IP exception.
@@ -494,6 +496,7 @@ async def add_blocked_country(
     current_user: User = Depends(
         require_permission("security.manage", "settings.manage")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Add a country to the blocked list.
@@ -538,6 +541,7 @@ async def remove_blocked_country(
     current_user: User = Depends(
         require_permission("security.manage", "settings.manage")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Remove a country from the blocked list.

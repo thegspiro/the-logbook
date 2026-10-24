@@ -51,6 +51,7 @@ import type {
 } from '../types/training';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { Breadcrumbs } from '../components/ux';
+import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 
 // Shared form input classes
 const inputClass = 'form-input';
@@ -367,18 +368,19 @@ export default function ComplianceRequirementsConfigPage() {
     }
   };
 
-  const handleDeleteProfile = async (profileId: string) => {
+  const handleDeleteProfile = async (profile: ComplianceProfile) => {
     if (
       !(await confirm({
-        title: 'Delete compliance profile',
-        message: 'The profile and the requirements configured on it are removed. Records already filed are unaffected.',
-        confirmLabel: 'Delete',
+        title: `Delete compliance profile "${profile.name}"?`,
+        message:
+          'Members this profile grades fall back to the next profile that matches them, or to the organization-wide thresholds and requirements if none does. Training records already filed are unaffected.',
+        confirmLabel: 'Delete profile',
         cancelLabel: 'Keep it',
       }))
     )
       return;
     try {
-      await complianceConfigService.deleteProfile(profileId);
+      await complianceConfigService.deleteProfile(profile.id);
       toast.success('Profile deleted');
       await loadConfig();
     } catch {
@@ -497,20 +499,13 @@ export default function ComplianceRequirementsConfigPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <Breadcrumbs underHub="/training/admin" />
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Shield className="h-8 w-8 text-blue-600" />
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Compliance Requirements Configuration</h1>
-            <p className="text-theme-text-secondary text-sm">
-              Define what makes members compliant, configure profiles, and schedule reports
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={Shield}
+        title="Compliance Requirements Configuration"
+        subtitle="Define what makes members compliant, configure profiles, and schedule reports"
+        underHub="/training/admin"
+      />
 
       {/* Tabs */}
       {/* Scrolls sideways on a phone: four labelled tabs do not fit 320px. */}
@@ -764,7 +759,7 @@ export default function ComplianceRequirementsConfigPage() {
           {!config && (
             <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                <AlertTriangle className="h-5 w-5 text-yellow-700 dark:text-yellow-600" />
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                   Save the compliance thresholds first before creating profiles.
                 </p>
@@ -1084,7 +1079,7 @@ export default function ComplianceRequirementsConfigPage() {
                     <Settings className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => void handleDeleteProfile(profile.id)}
+                    onClick={() => void handleDeleteProfile(profile)}
                     className="btn-icon text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                     title="Delete"
                   >
@@ -1403,10 +1398,10 @@ export default function ComplianceRequirementsConfigPage() {
                       <div
                         className={`rounded-full p-2 ${
                           report.status === 'completed'
-                            ? 'bg-green-100 text-green-600 dark:bg-green-900/20'
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-600'
                             : report.status === 'failed'
                               ? 'bg-red-100 text-red-600 dark:bg-red-900/20'
-                              : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20'
+                              : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-600'
                         }`}
                       >
                         {report.status === 'completed' ? (

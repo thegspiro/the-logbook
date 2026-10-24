@@ -12,8 +12,22 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ConfirmProvider } from '../../contexts/ConfirmContext';
+
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: {
+    error: (...a: unknown[]): void => {
+      mockToastError(...a);
+    },
+    success: (...a: unknown[]): void => {
+      mockToastSuccess(...a);
+    },
+  },
+}));
 
 const mockGetShiftCalls = vi.fn();
 const mockCreateCall = vi.fn();
@@ -58,7 +72,9 @@ const call = {
 
 const renderSection = (props: { canManage?: boolean; canLog?: boolean } = {}) =>
   render(
-    <ShiftCallsSection shiftId="shift-1" canManage={props.canManage ?? true} canLog={props.canLog ?? true} tz="UTC" />
+    <ConfirmProvider>
+      <ShiftCallsSection shiftId="shift-1" canManage={props.canManage ?? true} canLog={props.canLog ?? true} tz="UTC" />
+    </ConfirmProvider>
   );
 
 describe('ShiftCallsSection', () => {
@@ -164,5 +180,122 @@ describe('ShiftCallsSection — the incident type comes from the department list
     await user.click(await screen.findByRole('button', { name: /edit call/i }));
 
     expect(screen.getByLabelText(/Incident Type/)).toHaveValue('structure fire');
+  });
+});
+
+describe('ShiftCallsSection — clearing a field on edit', () => {
+  const recorded = {
+    ...call,
+    incident_number: 'CAD-9',
+    dispatched_at: '2026-01-01T10:00:00Z',
+    cleared_at: '2026-01-01T11:00:00Z',
+    notes: 'Mutual aid from Station 4',
+  };
+
+  beforeEach(() => {
+    mockGetShiftCalls.mockReset();
+    mockGetShiftCalls.mockResolvedValue([recorded]);
+    mockCreateCall.mockReset();
+    mockCreateCall.mockResolvedValue(recorded);
+    mockUpdateCall.mockReset();
+    mockUpdateCall.mockResolvedValue(recorded);
+  });
+
+  it('sends null for every emptied optional field, so the clear persists', async () => {
+    // The update endpoint reads exclude_unset: an omitted key keeps the stored
+    // value, so an emptied incident number came back after a success toast.
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /edit call/i }));
+
+    await user.clear(screen.getByLabelText('Incident #'));
+    fireEvent.change(screen.getByLabelText('Dispatched'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Cleared'), { target: { value: '' } });
+    await user.clear(screen.getByLabelText('Notes'));
+    await user.click(screen.getByRole('button', { name: 'Update Call' }));
+
+    await waitFor(() => {
+      expect(mockUpdateCall).toHaveBeenCalledWith(
+        'call-1',
+        expect.objectContaining({ incident_number: null, dispatched_at: null, cleared_at: null, notes: null })
+      );
+    });
+  });
+
+  it('still omits blank fields when logging a new call', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /log call/i }));
+    await user.selectOptions(screen.getByLabelText(/Incident Type/), 'Fire');
+    await user.click(screen.getByRole('button', { name: 'Save Call' }));
+
+    await waitFor(() => expect(mockCreateCall).toHaveBeenCalled());
+    const payload = mockCreateCall.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.incident_number).toBeUndefined();
+    expect(payload.notes).toBeUndefined();
+    expect(payload.dispatched_at).toBeUndefined();
+    expect(payload.cleared_at).toBeUndefined();
+  });
+});
+
+describe('ShiftCallsSection — removing a call', () => {
+  // A one-tap delete took a logged incident off the shift's count with no way
+  // back. It now asks first, and a refusal (a finalized shift) says why.
+  beforeEach(() => {
+    mockGetShiftCalls.mockReset();
+    mockGetShiftCalls.mockResolvedValue([call]);
+    mockDeleteCall.mockReset();
+    mockDeleteCall.mockResolvedValue(undefined);
+    mockToastError.mockReset();
+    mockToastSuccess.mockReset();
+  });
+
+  it('asks first, naming the call', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /remove call/i }));
+
+    expect(await screen.findByText(/Remove the structure fire #CAD-9 call from this shift\?/)).toBeInTheDocument();
+    expect(mockDeleteCall).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the officer keeps it', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /remove call/i }));
+    await user.click(await screen.findByRole('button', { name: 'Keep it' }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument());
+    expect(mockDeleteCall).not.toHaveBeenCalled();
+    expect(screen.getByText('structure fire')).toBeInTheDocument();
+  });
+
+  it('removes it once confirmed', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /remove call/i }));
+    await user.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(mockDeleteCall).toHaveBeenCalledWith('call-1'));
+    expect(mockToastSuccess).toHaveBeenCalledWith('Call removed');
+  });
+
+  it("shows the server's reason when the removal is refused", async () => {
+    mockDeleteCall.mockRejectedValue({
+      response: {
+        status: 400,
+        data: { detail: 'Cannot remove a call from a finalized shift. Reopen the shift first.' },
+      },
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /remove call/i }));
+    await user.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Cannot remove a call from a finalized shift. Reopen the shift first.'
+      )
+    );
   });
 });

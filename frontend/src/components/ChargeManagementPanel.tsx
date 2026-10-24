@@ -10,7 +10,7 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import toast from 'react-hot-toast';
 
 const CHARGE_STATUS_BADGES: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
   charged: 'bg-red-500/10 text-red-700 dark:text-red-400',
   waived: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
 };
@@ -91,7 +91,7 @@ const ChargeManagementPanel: React.FC = () => {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
           <div className="mb-1 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+            <Clock className="h-4 w-4 text-yellow-700 dark:text-yellow-400" />
             <span className="text-sm font-medium text-yellow-700 dark:text-yellow-400">Pending</span>
           </div>
           <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">{formatCurrency(totals.pending)}</p>

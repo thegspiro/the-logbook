@@ -6,6 +6,7 @@ import {
   resetErrorReportingState,
   setupGlobalErrorHandlers,
   clearQueuedReports,
+  fitContextToLimit,
   pendingReportCount,
   sanitizePath,
   scrubSensitive,
@@ -559,5 +560,89 @@ describe('setupGlobalErrorHandlers', () => {
     window.dispatchEvent(new Event('pagehide'));
 
     expect(sentBody()['context']).toMatchObject({ occurrences: 3 });
+  });
+});
+
+/**
+ * `len(json.dumps(value))` as Python computes it, written independently of the
+ * module's own measure: Python escapes every non-ASCII character and puts a
+ * space after each "," and ":" separator.
+ */
+function pythonJsonDumps(value: unknown): string {
+  if (typeof value === 'string') {
+    return JSON.stringify(value).replace(
+      /[\u007f-\uffff]/g,
+      (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+    );
+  }
+  if (Array.isArray(value)) return `[${value.map(pythonJsonDumps).join(', ')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.entries(value)
+      .map(([k, v]) => `${pythonJsonDumps(k)}: ${pythonJsonDumps(v)}`)
+      .join(', ')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+describe('report size limits', () => {
+  const BACKEND_MAX_CONTEXT_SIZE = 4096;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    mockFetch.mockImplementation(ok);
+  });
+
+  it('measures a context the way the backend does', () => {
+    expect(pythonJsonDumps({ a: 'é', b: [1, 'x'] })).toBe('{"a": "\\u00e9", "b": [1, "x"]}');
+  });
+
+  it('truncates an oversized component stack and still sends the report', async () => {
+    const componentStack = '\n    at SomeComponent (http://localhost/src/Some.tsx:1:1)'.repeat(400);
+    reportError({ errorType: 'REACT_ERROR_BOUNDARY', errorMessage: 'boom', context: { componentStack } });
+    await settle();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const context = sentBody()['context'] as Record<string, unknown>;
+    expect(pythonJsonDumps(context).length).toBeLessThanOrEqual(BACKEND_MAX_CONTEXT_SIZE);
+    expect(context['source']).toBe('frontend');
+    expect(context['context_truncated']).toBe(true);
+    const sentStack = String(context['componentStack']);
+    expect(sentStack.endsWith('...[truncated]')).toBe(true);
+    expect(componentStack.startsWith(sentStack.slice(0, -'...[truncated]'.length))).toBe(true);
+  });
+
+  it('counts non-ASCII characters at their escaped width', async () => {
+    // 3000 characters, but 18000 once Python escapes them.
+    const detail = 'é'.repeat(3000);
+    reportError({ errorType: 'UNCAUGHT_EXCEPTION', errorMessage: 'boom', context: { detail } });
+    await settle();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const context = sentBody()['context'] as Record<string, unknown>;
+    expect(pythonJsonDumps(context).length).toBeLessThanOrEqual(BACKEND_MAX_CONTEXT_SIZE);
+    expect(String(context['detail']).startsWith('é')).toBe(true);
+  });
+
+  it('leaves a context that already fits untouched', () => {
+    const context = { source: 'frontend', page: '/events', componentStack: 'at A' };
+    expect(fitContextToLimit(context)).toStrictEqual(context);
+  });
+
+  it('falls back to the identifying keys when no string is long enough to shorten', () => {
+    const many: Record<string, unknown> = { source: 'frontend', page: '/events' };
+    for (let i = 0; i < 1000; i += 1) many[`k${i}`] = i;
+
+    const fitted = fitContextToLimit(many);
+
+    expect(pythonJsonDumps(fitted).length).toBeLessThanOrEqual(BACKEND_MAX_CONTEXT_SIZE);
+    expect(fitted).toStrictEqual({ context_truncated: true, source: 'frontend', page: '/events' });
+  });
+
+  it('caps the user message at the backend limit of 500 characters', async () => {
+    reportError({ errorType: 'UNCAUGHT_EXCEPTION', errorMessage: 'boom', userMessage: 'x'.repeat(800) });
+    await settle();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(String(sentBody()['user_message'])).toHaveLength(500);
   });
 });

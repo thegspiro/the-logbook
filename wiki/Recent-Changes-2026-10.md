@@ -5,6 +5,337 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 23 – 24, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
+
+- **Training officers can complete a pipeline by hand.** **Mark pipeline complete**
+  asks for a reason, records it, and a later recalculation will not undo it.
+- **A pipeline with no active requirements completes nobody.** Progress says
+  **No active requirements**. Deactivated requirements and prerequisite pipelines
+  stop being required, and deactivating a pipeline withdraws its members.
+- **Finance:** reimburse a purchase by check, correct or withdraw a draft, cancel
+  a report or check request, see the approver before submitting. New charges are
+  refused under a deactivated budget category or any category above it.
+- **Shift patterns** stop generating shifts while their template is deactivated.
+- **Renaming a variant product** renames every size.
+- **Google Workspace and Microsoft 365:** optional suspension on retirement,
+  removal from groups, name changes follow the member, a 90-day notice for old
+  suspended accounts, and a warning before the Microsoft client secret expires.
+- **Backups** can be encrypted to an offline certificate.
+- **Storage** can use a department's Google Shared Drive.
+- Screenshots to create or re-check are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Recent changes: October 22 – 23, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
+
+- **Administrators must use two-step sign-in.** Members with administration or
+  health-record permissions have 14 days after the upgrade to enroll, with an email
+  and a countdown banner. The IT manager should save recovery codes first.
+- **Sensitive actions ask for a code.** Log exports, role, position, security and
+  integration changes, administrator resets and deleting a member need a fresh
+  authenticator code (or password), good for 10 minutes.
+- **Low-stock gear email** now links to the Inventory Items list filtered to items
+  at or below their reorder point.
+- **Checklists** are marked overdue when their shift ends, so an overnight shift is
+  not overdue at midnight.
+- **Historical training import** refuses rows with no completion date.
+- Screenshots for the banner, the code box and the filtered list are queued in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Recent changes: October 23, 2026 (screenshots)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
+
+The training guides gained 45 screenshots: the setup guides for a department
+that has nothing configured yet, the Agenda and Sync from the agenda dialogs,
+publishing and signing of adopted minutes, the ranked-choice paper ballot
+dialog, the departure clearance row on the inventory hub, and the phone layouts
+for My Checklists, Apparatus Inventory and the Suggestions review. Opening a
+departure clearance no longer reports an error after it has saved. The last two
+of the guides' pictures, the Android NFC scanner with Tap NFC armed and the
+"Or tap their ID card" button in Scan Member ID, are in guide 05; no placeholder
+remains.
+
+## Recent changes: October 21 – 22, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+
+- **Delete no longer destroys history.** Deleting a training requirement or pipeline,
+  budget category, shift template, basic vehicle or form that is in use deactivates
+  or archives it instead, and the message says which. Pipelines and basic vehicles
+  can be brought back with **Show inactive** then **Reactivate**.
+- **Gear kits follow the member's size.** A kit line names a product and uses the
+  member's recorded size; issuing shows the sizes for review first.
+- **Recurring events.** Delete this and future events in a series; deleting the first
+  event no longer loses the series. An approved meeting cannot be deleted.
+- **Members.** Permanently deleting a member keeps other members' records (shown as
+  "Former member") and returns gear they held. Leaving the active statuses takes a
+  member off upcoming shifts. Probationary membership type now sets a Probationary
+  account status. Roster names link to profiles.
+- **Training.** Matching a Target Solutions user imports their waiting records.
+- **Screenshots.** Nothing was re-captured by this pass; see
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Recent changes: October 20 – 21, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
+
+- **Check in from the event page.** Members can check in on the event itself and see
+  "You're checked in". The display QR code is for whoever runs the event.
+- **My Training history.** Records with no completion date are grouped under
+  **No completion date**, not "Awaiting approval".
+- **Safer member management.** Deleting, archiving or changing the status of a member
+  is refused if that member holds permissions you do not.
+- **Ranked-choice paper ballots** are entered one ballot at a time and each is counted.
+- **Security.** Public API key changes are audited and revoking a key takes effect at
+  once; dependencies updated for published advisories.
+- **Screenshots.** Nothing was re-captured; see `docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Recent changes: October 19 – 20, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+
+- **Minutes settings are one screen.** The Reminders, Roll listing, Publishing and
+  Signers buttons on the Minutes page are replaced by **Settings**, which has
+  Attendance, Signatures, Reminders and Publishing sections. Anyone who manages
+  minutes can read them; changing one needs the settings permission.
+- **Search inside the minutes.** The Minutes search box also finds words in the
+  minutes themselves, within what the person may already read.
+- **Accepting the previous minutes.** The Approval of Previous Minutes motion is
+  prepared with the minutes, records whether they were accepted as submitted or as
+  revised, and fills in the adoption form.
+- **Screenshots.** Nothing was re-captured. The gap report is in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Also in this window:**
+
+- **Check your screening requirements.** If **Applies to Positions** has text in
+  it, that list now decides who is graded; blank means everyone, and a member with
+  nothing that applies reads **Not applicable**.
+- **The dashboard's overdue-dues number may drop.** Part-paid dues are Partial,
+  matching the dues page.
+- **iPad and iPhone:** date and time fields no longer overlap the field beside
+  them on Edit Member.
+
+## Recent changes: October 18 – 19, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
+Predecessor: [October 16 – 18](#recent-changes-october-16--18-2026).
+
+**The headline:** adopted minutes can be published to a public page, purchase
+requests save themselves as drafts, equipment checks gain Present / Absent lines,
+and finance timestamps are corrected to UTC.
+
+### Read this first
+
+**If you run the server:** upgrade runs a one-time conversion of finance
+timestamps (nothing happens on a UTC server). `main` briefly had two Alembic heads
+on 2026-10-19; PR #3437 rejoined them, so `alembic heads` should report one.
+
+**If you administer a department:**
+
+- **Public minutes** are off until you turn them on under **Minutes > Publishing
+  settings**. The public copy shows counts and officers present only.
+- **Expense reports and check requests** use only chains made for their own type.
+  Add one if you relied on a purchase chain catching them.
+- **Administrative members** no longer see the clear-to-respond verdict, My
+  Checklists or Apparatus Inventory unless a position grants them.
+
+### What changed, by area
+
+- **Minutes:** library and public publishing, executive-session switches,
+  republish in place, **Roll listing** default and per-minutes override.
+- **Elections:** package and nominations notice sent one message per member;
+  package send runs in the background and lists unreached addresses.
+- **Equipment checks:** Present / Absent lines, crew-dated replacements, items
+  placed between locations without a heading.
+- **Finance:** draft autosave on purchase requests, amount limits, approval chain
+  range checks, chains by request type, budget remaining hidden from members who
+  may not see it, past-due dues read Overdue.
+- **Scheduling:** Go to the next shift, own sign-up confirmed, ended shifts leave
+  Open Shifts, training session times stored as UTC.
+- **Messages:** Probationary and Retired audiences match membership status.
+- **Workflow review W55–W73:** about 70 fixes across communications, finance,
+  grants, reports and integrations; see the repository ledger.
+
+## Recent changes: October 16 – 18, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).
+Predecessor: [October 15 – 16](#recent-changes-october-15--16-2026).
+
+**The headline:** large elections no longer time out when ballots are emailed,
+minutes can be built from the meeting's agenda and signed in the app, Google
+Calendar and Outlook can publish the department's events, and a weekly security
+report now reaches the IT Manager.
+
+### Read this first
+
+**If you run the server:** twelve new migrations, all additive; `alembic heads`
+should report one head, `1117b642643b`. Calendar publishing stays off until you
+set `CALENDAR_SYNC_ENABLED`. The weekly security report starts on its own, so
+make sure the scheduler runs (otherwise nothing is sent). Ballot sends run inside
+the web process, so a restart mid-send leaves that send marked interrupted.
+
+**If you administer a department:**
+
+- **Security report.** Counts only, Monday 07:00 to whoever holds the IT Manager
+  position (administrators if no one does). Change or turn it off under
+  **Organization Settings > Authentication > Security Report**.
+- **Equipment checks.** **Min to Pass** now fails a count line and **par** only
+  sets how much to restock. Review any checklist that used par as its pass mark.
+- **Elections.** **Send Ballot Emails** and **Remind Non-Voters** run in the
+  background and show progress. Linking a meeting sets the voting window to it.
+  Printed ballots show your logo and follow each contest's own voting method.
+- **Minutes.** Give a meeting an **Agenda** and its minutes start laid out as
+  those items; **Sync from agenda** brings in later changes without touching what
+  you wrote. Adopted minutes are signed under **Minutes > Signers** slots.
+- **Integrations.** Connect Google Calendar or Outlook with a sign-in. A
+  department connects Google Workspace **or** Microsoft 365 for member accounts.
+- **Medical Supplies.** Stock on the trucks now counts toward Low stock and the
+  reorder; tick **Kept on apparatus only** for equipment with no shelf spare.
+- **Finance.** A chain or step that requests have used cannot be deleted; turn
+  the chain off instead.
+
+**If you are a member:** the dashboard's Standby row shows your own hours, and
+members who cannot hold a shift seat no longer see **Take a Shift**. Event
+cancellations and changes now reach you by email, and a password change sends you
+a notice.
+
+### What changed, by area
+
+| Area             | Change                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| Elections        | Background ballot and reminder sends; printed ballot logo, mark boxes and per-contest method       |
+| Elections        | Nominee bell notice; meeting-aligned voting window; no write-in on Approve/Deny                    |
+| Minutes          | Agenda items become the outline; Sync from agenda; Not taken up; adopted minutes signed in the app |
+| Integrations     | Google Calendar and Outlook connect; department events feed; Microsoft 365 account provisioning    |
+| Training         | Sync History tab; Import History renamed Import Past Training                                      |
+| Medical Supplies | Truck stock counted and expired; Kept on apparatus only; CSV carries the setting                   |
+| Equipment checks | Min to Pass fails a count; par sets the restock; count units                                       |
+| Operations       | One page header and section strip; phone layouts for one apparatus and the supply worklist         |
+| Security         | Weekly security report; password-change audit and notice; security-notice email escapes its text   |
+| Events, grants   | Cancellation and change emails; grant compliance and pledge reminders; Amount Awarded field        |
+| Forms            | Cleared fields save and failed creates keep their input in many create and edit forms              |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
+## Recent changes: October 15 – 16, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
+Predecessor: [October 14 – 15](#recent-changes-october-14--15-2026).
+
+**The headline:** **Medical Supplies** now say where each supply is kept, on the
+shelf and on which apparatus, and can be sorted, filtered and retired in bulk.
+Catalog Links can link obvious matches for you. Google accounts of departed
+members are suspended more reliably.
+
+### Read this first
+
+**If you run the server:** the Unraid and minimal compose files now require your
+database, Redis and app secrets instead of falling back to placeholders; set them
+before upgrading. Error reports no longer include local variables. Three new
+migrations; `alembic heads` should report one head.
+
+**If you administer a department:**
+
+- **Medical Supplies.** File each supply under a room and storage area. Existing
+  supplies are filed automatically when exactly one active area matches their old
+  text. Use the location filter, sort the table, and retire several at once.
+- **Catalog Links.** **Link matches automatically** links exact and strong
+  matches and skips ties. Each name has an **Undo**.
+- **Google Workspace.** On the Google card, **Link existing members** covers
+  people who joined before the integration, so their accounts are suspended when
+  they leave.
+- **Documents.** Full administrators get a weekly email listing folders only
+  administrators can open. A department can make it required.
+
+**If you are a member:** My Checklists is a compact list by day on a phone. A
+position at its critical minimum is no longer flagged critical; only a count
+below it is.
+
+### What changed, by area
+
+| Area             | Change                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| Medical Supplies | Storage room and area, apparatus places, location filter, Where it is dialog                            |
+| Medical Supplies | Sort, bulk retire, Lots dialog, clickable tiles, Size, Next expiry, unset reorder point shown as a dash |
+| Equipment checks | Automatic catalog linking with Undo; critical means strictly below the minimum; phone checklist layout  |
+| Google Workspace | Accounts tagged with the member; link existing members; suspension from one departure hook              |
+| Membership       | The undo window for a drop counts from its effective date                                               |
+| Documents        | Weekly administrator-only folder email                                                                  |
+| Security         | Reads of leave, service history and audit records are audited; incident-response policy added           |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
+## Recent changes: October 14 – 15, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Predecessor: [October 13 – 14](#recent-changes-october-13--14-2026).
+
+**The headline:** **Meeting Minutes** now follow how a department really adopts
+them: circulate, take members' suggestions, adopt. Roll call, closed sessions,
+attachments, outlines and formatted text came with it. Checklist items also
+find catalog items under other names.
+
+### Read this first
+
+**If you run the server:** rebuild the backend image (`docker compose build
+backend`), or run `pip install -r backend/requirements.txt` from source; the
+minutes editor needs a new package, and the backend will not start without it.
+Three new migrations; `alembic heads` should report `1d65720bce34`. Manual Docker
+backups taken before this change did not include uploaded files; take a new one.
+
+**If you administer a department:**
+
+- **Minutes.** Members can now read minutes that have been circulated, and are
+  emailed when you circulate them (each member can turn that email off). Drafts
+  and executive sessions are still hidden. Set up your standard order of business
+  under **Minutes > Outlines**.
+- **Inventory.** Give items other names under **Also called** ("BVM" for "Bag
+  Valve Mask"). A medical supply category can be deleted; its supplies move to
+  another category first.
+- **Finance.** **Start from last year** no longer copies lines on retired
+  categories.
+
+**If you are a member:** open circulated minutes and use **Suggest a change** on
+the section you want corrected. Only you and the secretary see your suggestion.
+
+### What changed, by area
+
+| Area         | Change                                                                                                                             |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Minutes      | Circulate for review, member suggestions, recall, adopt as presented or amended; circulation email; required sections              |
+| Minutes      | Roll call with six statuses and quorum; closed sessions; election results and addenda; attachments and signed copy; printable copy |
+| Minutes      | Outlines page; formatted text in sections; approved versions with a fingerprint; carry open action items forward                   |
+| Inventory    | Also called names, near-match search in checklist pickers, CSV column; delete a medical supply category                            |
+| Finance      | Start from last year skips retired categories                                                                                      |
+| Training     | Single enrollment enforces prerequisite programs                                                                                   |
+| Integrations | Claude connections made with member sign-in can now run tools                                                                      |
+| Appearance   | Opaque result lists in dark mode; every control's visible text is in its accessible name                                           |
+| Operations   | Docker backups include uploads; upgraded installations no longer 500 on medical categories                                         |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Recent changes: October 13 – 14, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

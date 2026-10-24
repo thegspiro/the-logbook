@@ -127,6 +127,52 @@ describe('when email can send', () => {
     expect(warning).toHaveTextContent(/reset password/i);
   });
 
+  it('reports a Google account created with its password delivered', async () => {
+    mockConvertToMember.mockResolvedValue({
+      applicant_id: 'p1',
+      user_id: 'u-new',
+      membership_type: 'regular',
+      message: 'done',
+      welcome_email_sent: true,
+      google_account: {
+        status: 'created',
+        email: 'devon.marsh@firedept.org',
+        credentials_sent: true,
+        last_error: null,
+      },
+    });
+    const user = userEvent.setup();
+    await openStepTwo(user);
+    await user.click(convert());
+
+    expect(await screen.findByText(/Google account devon\.marsh@firedept\.org was created/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('warns when the Google account was not created, without failing the conversion', async () => {
+    mockConvertToMember.mockResolvedValue({
+      applicant_id: 'p1',
+      user_id: 'u-new',
+      membership_type: 'regular',
+      message: 'done',
+      welcome_email_sent: true,
+      google_account: {
+        status: 'failed',
+        email: 'devon.marsh@firedept.org',
+        credentials_sent: false,
+        last_error: 'No licenses left.',
+      },
+    });
+    const user = userEvent.setup();
+    await openStepTwo(user);
+    await user.click(convert());
+
+    const warning = await screen.findByRole('alert');
+    expect(warning).toHaveTextContent(/was not created/);
+    expect(warning).toHaveTextContent('No licenses left.');
+    expect(screen.getByText('Conversion Complete')).toBeInTheDocument();
+  });
+
   it('shows the membership number the server assigned', async () => {
     const user = userEvent.setup();
     await openStepTwo(user);

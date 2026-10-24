@@ -12,6 +12,8 @@ export interface ItemSummarySource {
   lotNumber: string;
   hasExpiration: boolean;
   expirationDate: string;
+  /** A linked line's dates come from the lots aboard. */
+  inventoryItemId?: string | undefined;
 }
 
 export type ItemSummaryTone = 'neutral' | 'important' | 'problem';
@@ -45,14 +47,18 @@ export function formatItemSummary(item: ItemSummarySource): ItemSummaryLabel[] {
   if (item.checkType === CheckType.EXPIRY && !item.serialNumber.trim() && !item.lotNumber.trim()) {
     problems.push({ text: 'Needs serial or lot', tone: 'problem' });
   }
-  if (item.hasExpiration && !item.expirationDate.trim()) {
+  // A Date line needs its date to publish unless inventory supplies it.
+  const datedByType = item.checkType === CheckType.EXPIRY && !item.inventoryItemId;
+  if ((item.hasExpiration || datedByType) && !item.expirationDate.trim()) {
     problems.push({ text: 'Needs expiration date', tone: 'problem' });
   }
   if (
     item.checkType === CheckType.COUNT &&
     configuredNumber(item.criticalMinimumQuantity) &&
     configuredNumber(item.expectedQuantity) &&
-    Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
+    // Equal is a real setting — any shortfall is critical — since a count is
+    // critical only when strictly below the minimum. Above it can never apply.
+    Number(item.criticalMinimumQuantity) > Number(item.expectedQuantity)
   ) {
     problems.push({ text: 'Fix critical minimum', tone: 'problem' });
   }

@@ -163,6 +163,22 @@ describe('EquipmentCheckForm in sweep mode', () => {
     expect(await screen.findByTestId('tally-value-gauze')).toHaveTextContent('12');
   });
 
+  it('sizes the count controls to what they hold, and stacks them when the table is narrow', async () => {
+    // jsdom does no layout, so the container query itself cannot be exercised.
+    // What can regress silently is the bug it replaced: a fixed 132px column
+    // around controls that are 190px wide, which bled into the par column and
+    // the item name on every phone.
+    mockGetLastCheckResults.mockResolvedValue({ gauze: { status: 'pass', quantity_found: 12 } });
+    const user = userEvent.setup();
+    renderSweep();
+    await user.click(await screen.findByRole('button', { name: /^Next ·/ }));
+    const row = await screen.findByTestId('tally-row-gauze');
+    expect(row.className).toContain('@[26rem]:grid-cols-[minmax(0,1fr)_2.5rem_190px]');
+    expect(row.className).not.toContain('132px');
+    for (const table of screen.getAllByTestId('tally-table')) expect(table).toHaveClass('@container');
+    expect(screen.getByTestId('tally-value-gauze')).toHaveClass('shrink-0');
+  });
+
   it('submits through the same path the accordion uses', async () => {
     const user = userEvent.setup();
     renderSweep();
@@ -239,17 +255,11 @@ describe('replacing expiring stock from inside the sweep', () => {
     ],
   });
 
-  it('submits the same target it counted against', async () => {
-    // The sweep evaluates its shortfall against the resolved par, so the
-    // payload should not disagree with the screen that produced it.
-    //
-    // This asserts the request, not the record: `_snapshot_from_template`
-    // overwrites `required_quantity` with the template's raw column before
-    // `_compute_check_status` reads it, so today the persisted value is the
-    // unresolved one whatever the client sends. Sending the resolved target is
-    // still right — a request that contradicts its own screen is worse — but
-    // closing the gap end-to-end needs the server to snapshot
-    // `_target_quantity` rather than the raw column.
+  it('sends Min to Pass as the template states it, not par', async () => {
+    // `required_quantity` is Min to Pass now — the pass floor — and par is a
+    // separate number the server snapshots itself (`_snapshot_from_template`
+    // overwrites both). Sending par in this field would tell the server the
+    // line fails below par, the rule the department retired on 2026-10-16.
     const user = userEvent.setup();
     renderWithRouter(
       <EquipmentCheckForm
@@ -288,7 +298,7 @@ describe('replacing expiring stock from inside the sweep', () => {
     const payload = mockSubmitCheck.mock.calls[0]?.[1] as {
       items: { template_item_id: string; required_quantity?: number }[];
     };
-    expect(payload.items.find((i) => i.template_item_id === 'gauze')?.required_quantity).toBe(4);
+    expect(payload.items.find((i) => i.template_item_id === 'gauze')?.required_quantity).toBe(0);
   });
 
   it('does not offer a second submit once the check is filed', async () => {

@@ -18,8 +18,13 @@ const mockPinItem = vi.fn();
 const mockUnpinItem = vi.fn();
 const mockReorderItemPins = vi.fn();
 const mockExportItemsCsv = vi.fn();
+const mockUpdateVariantGroup = vi.fn();
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   inventoryService: {
     getItems: (...a: unknown[]) => mockGetItems(...a) as unknown,
     getSummary: (...a: unknown[]) => mockGetSummary(...a) as unknown,
@@ -33,6 +38,7 @@ vi.mock('../../../services/api', () => ({
     unpinItem: (...a: unknown[]) => mockUnpinItem(...a) as unknown,
     reorderItemPins: (...a: unknown[]) => mockReorderItemPins(...a) as unknown,
     exportItemsCsv: (...a: unknown[]) => mockExportItemsCsv(...a) as unknown,
+    updateVariantGroup: (...a: unknown[]) => mockUpdateVariantGroup(...a) as unknown,
   },
   locationsService: {
     getLocations: (...a: unknown[]) => mockGetLocations(...a) as unknown,
@@ -420,6 +426,35 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
     await screen.findByText(EMPTY_LIST);
 
     expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ item_type: undefined }));
+  });
+
+  it('filters the query to low stock when the URL says so, and says so on screen', async () => {
+    renderAt('/inventory/admin/items?low_stock=true');
+    await screen.findByText(EMPTY_LIST);
+
+    expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ low_stock: true }));
+    expect(screen.getByText('Showing only items at or below their reorder point.')).toBeInTheDocument();
+  });
+
+  it('sends no low-stock filter for any value but true', async () => {
+    renderAt('/inventory/admin/items?low_stock=banana');
+    await screen.findByText(EMPTY_LIST);
+
+    expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ low_stock: undefined }));
+    expect(screen.queryByText(/Showing only items at or below/)).not.toBeInTheDocument();
+  });
+
+  it('drops the low-stock filter, and reloads, from Show all items', async () => {
+    const user = userEvent.setup();
+    renderAt('/inventory/admin/items?low_stock=true');
+    await screen.findByText(EMPTY_LIST);
+
+    await user.click(screen.getByRole('button', { name: 'Show all items' }));
+
+    await waitFor(() => expect(window.location.search).toBe(''));
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ low_stock: undefined }))
+    );
   });
 
   it('writes the dropdown selection back to the URL', async () => {
@@ -1353,12 +1388,12 @@ describe('InventoryItemsPage — CSV export', () => {
       renderWithRouter(<InventoryItemsPage />);
 
       // One product row, not three item rows.
-      expect(await screen.findByRole('button', { name: /Duty Shirt/ })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /^Duty Shirt/ })).toBeInTheDocument();
       expect(screen.getByText('3 loaded')).toBeInTheDocument();
       // The individual sizes are not on screen until it is opened.
       expect(screen.queryByRole('link', { name: 'S' })).not.toBeInTheDocument();
 
-      await userEvent.click(screen.getByRole('button', { name: /Duty Shirt/ }));
+      await userEvent.click(screen.getByRole('button', { name: /^Duty Shirt/ }));
       expect(screen.getByRole('link', { name: 'S' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'M' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'L' })).toBeInTheDocument();
@@ -1387,8 +1422,8 @@ describe('InventoryItemsPage — CSV export', () => {
       });
       renderWithRouter(<InventoryItemsPage />);
 
-      await screen.findByRole('button', { name: /Duty Shirt/ });
-      expect(within(productRow(/Duty Shirt/)).getByText('10')).toBeInTheDocument();
+      await screen.findByRole('button', { name: /^Duty Shirt/ });
+      expect(within(productRow(/^Duty Shirt/)).getByText('10')).toBeInTheDocument();
     });
 
     it("says Mixed rather than picking one variant's value", async () => {
@@ -1400,8 +1435,8 @@ describe('InventoryItemsPage — CSV export', () => {
       });
       renderWithRouter(<InventoryItemsPage />);
 
-      await screen.findByRole('button', { name: /Duty Shirt/ });
-      const row = productRow(/Duty Shirt/);
+      await screen.findByRole('button', { name: /^Duty Shirt/ });
+      const row = productRow(/^Duty Shirt/);
       expect(within(row).getAllByText('Mixed').length).toBeGreaterThan(0);
       expect(within(row).queryByText('Bay 1')).not.toBeInTheDocument();
     });
@@ -1655,10 +1690,10 @@ describe('InventoryItemsPage — CSV export', () => {
       mockGetItems.mockResolvedValue({ items: [shirt('d-s', 'S'), shirt('d-m', 'M')], total: 2 });
 
       renderWithRouter(<InventoryItemsPage />);
-      await screen.findByRole('button', { name: /Duty Shirt/ });
+      await screen.findByRole('button', { name: /^Duty Shirt/ });
       const row = screen
         .getAllByRole('row')
-        .find((r) => within(r).queryByRole('button', { name: /Duty Shirt/ }) !== null);
+        .find((r) => within(r).queryByRole('button', { name: /^Duty Shirt/ }) !== null);
       expect(row).toBeDefined();
       const labels = within(row as HTMLElement)
         .getAllByRole('cell')
@@ -1687,10 +1722,10 @@ describe('InventoryItemsPage — CSV export', () => {
       mockGetItems.mockResolvedValue({ items: [bare('h-s', 'S'), bare('h-m', 'M')], total: 2 });
 
       renderWithRouter(<InventoryItemsPage />);
-      await screen.findByRole('button', { name: /Spare Hood/ });
+      await screen.findByRole('button', { name: /^Spare Hood/ });
       const row = screen
         .getAllByRole('row')
-        .find((r) => within(r).queryByRole('button', { name: /Spare Hood/ }) !== null);
+        .find((r) => within(r).queryByRole('button', { name: /^Spare Hood/ }) !== null);
       expect(row).toBeDefined();
       expect(within(row as HTMLElement).queryByText('Mixed')).not.toBeInTheDocument();
     });
@@ -2000,5 +2035,106 @@ describe('InventoryItemsPage — the header and filter bar on a phone', () => {
     await user.click(toggle);
     expect(screen.getByRole('button', { name: 'Hide filters (1 active)' })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByLabelText('Filter by category')).not.toHaveClass('max-sm:hidden');
+  });
+});
+
+describe('InventoryItemsPage — renaming a folded product', () => {
+  const shirt = (id: string, size: string): InventoryItem =>
+    makeItem({
+      id,
+      name: `Duty Shirt \u2014 ${size} \u2014 Navy`,
+      variant_group_id: 'vg-1',
+      standard_size: size.toLowerCase(),
+      tracking_type: 'pool',
+      quantity: 4,
+    });
+
+  // Every mock this block depends on is reset and given its default here, so
+  // nothing a neighbouring block queued can leak in (CLAUDE.md pitfall #28).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const mock of [
+      mockGetItems,
+      mockGetSummary,
+      mockGetSummaryByLocation,
+      mockGetCategories,
+      mockGetStorageAreas,
+      mockGetLocations,
+      mockGetItemColors,
+      mockCheckPermission,
+      mockUpdateVariantGroup,
+    ]) {
+      mock.mockReset();
+    }
+    mockGetItems.mockResolvedValue({ items: [shirt('v-s', 'S'), shirt('v-m', 'M')], total: 2 });
+    mockGetSummary.mockResolvedValue({
+      total_items: 2,
+      non_medical_items: 2,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+    mockUpdateVariantGroup.mockResolvedValue({ id: 'vg-1', name: 'Class B Shirt' });
+  });
+
+  it('renames the product through its variant group and reloads the list', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Rename Duty Shirt' }));
+    const field = screen.getByLabelText('Product name');
+    // Prefilled with the product segment only, not a member's full name.
+    expect(field).toHaveValue('Duty Shirt');
+
+    const loadsBefore = mockGetItems.mock.calls.length;
+    await user.clear(field);
+    await user.type(field, 'Class B Shirt');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Rename' }));
+
+    await waitFor(() => expect(mockUpdateVariantGroup).toHaveBeenCalledWith('vg-1', { name: 'Class B Shirt' }));
+    expect(mockToastSuccess).toHaveBeenCalledWith('Renamed to Class B Shirt');
+    await waitFor(() => expect(mockGetItems.mock.calls.length).toBeGreaterThan(loadsBefore));
+    expect(screen.queryByLabelText('Product name')).not.toBeInTheDocument();
+  });
+
+  it('does not call the API when the name is unchanged', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Rename Duty Shirt' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Rename' }));
+
+    expect(mockUpdateVariantGroup).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Product name')).not.toBeInTheDocument();
+  });
+
+  it('keeps the dialog open and reports the reason when the rename is refused', async () => {
+    mockUpdateVariantGroup.mockRejectedValue(new Error('Renaming would make it longer than 255 characters'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Rename Duty Shirt' }));
+    await user.type(screen.getByLabelText('Product name'), ' Extra');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Rename' }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith('Renaming would make it longer than 255 characters')
+    );
+    expect(screen.getByLabelText('Product name')).toBeInTheDocument();
+  });
+
+  it('offers no rename without inventory.manage', async () => {
+    mockCheckPermission.mockReturnValue(false);
+    renderWithRouter(<InventoryItemsPage />);
+
+    expect(await screen.findByText('2 loaded')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rename Duty Shirt' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument();
   });
 });

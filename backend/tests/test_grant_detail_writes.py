@@ -9,8 +9,9 @@ Workflow review W68, driven as the treasurer:
   opportunity, were 500s *after* the write: ``onupdate`` expired
   ``updated_at`` at the flush and the response model's lazy read raised
   MissingGreenlet.
-- The application form's Budget Summary and Key Contacts are free text, which
-  the schema refused, so any save with either filled was a 422.
+- The application form's Budget Summary and Key Contacts were free text, which
+  the schema refused, so any save with either filled was a 422. The form now
+  sends the structured shapes, and free text stays refused.
 - "Assigned To" was dropped on create, which had no such field.
 """
 
@@ -18,6 +19,7 @@ import uuid
 from datetime import date, datetime
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.grants import (
@@ -191,20 +193,27 @@ class TestUpdatesReturnASerializableRow:
 
 
 class TestApplicationFields:
-    def test_free_text_summary_and_contacts_are_accepted(self):
+    def test_free_text_summary_and_contacts_are_refused(self):
+        with pytest.raises(ValidationError):
+            GrantApplicationUpdate.model_validate(
+                {"budgetSummary": "Cameras $16,000; admin $500"}
+            )
+        with pytest.raises(ValidationError):
+            GrantApplicationUpdate.model_validate(
+                {"keyContacts": "Jane Doe, SFM grants officer"}
+            )
+
+    def test_structured_summary_and_contacts_are_accepted(self):
         update = GrantApplicationUpdate.model_validate(
             {
-                "budgetSummary": "Cameras $16,000; admin $500",
-                "keyContacts": "Jane Doe, SFM grants officer",
+                "keyContacts": [{"name": "Jane Doe", "role": "Grants officer"}],
+                "budgetSummary": {"equipment": 16000, "indirect": 500},
             }
         )
-        assert update.key_contacts == "Jane Doe, SFM grants officer"
-
-    def test_structured_contacts_are_still_accepted(self):
-        update = GrantApplicationUpdate.model_validate(
-            {"keyContacts": [{"name": "Jane Doe"}], "budgetSummary": {"total": 1}}
-        )
-        assert update.key_contacts == [{"name": "Jane Doe"}]
+        assert update.key_contacts is not None
+        assert update.key_contacts[0].name == "Jane Doe"
+        assert update.budget_summary is not None
+        assert update.budget_summary.equipment == 16000
 
     async def test_create_keeps_the_assignee(self, setup):
         data = GrantApplicationCreate.model_validate(

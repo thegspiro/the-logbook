@@ -15,6 +15,8 @@ Covers:
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import select, text
@@ -22,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.election import Candidate, Election, ElectionStatus, Vote
 from app.services.election_service import ElectionService
+from tests.queued_send_runner import capture_queued_sends
 
 pytestmark = [pytest.mark.integration]
 
@@ -386,6 +389,342 @@ class TestNominationPhase(TestNominationSetup):
         future = await self._get_election(db_session, control_id)
         assert past.status == ElectionStatus.DRAFT
         assert future.status == ElectionStatus.NOMINATIONS
+
+
+class TestNominationsAnnouncement(TestNominationSetup):
+    """The nominations-open announcement goes to each member separately,
+    after the open-nominations response rather than inside it."""
+
+    @staticmethod
+    def _accept_all():
+        async def send(**kwargs):
+            kwargs["results_out"].extend([True] * len(kwargs["to_emails"]))
+            return len(kwargs["to_emails"]), 0
+
+        return AsyncMock(side_effect=send)
+
+    async def test_each_member_gets_their_own_message(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+
+        send_email = self._accept_all()
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            await svc.announce_nominations_open(election_id, org_id, user1_id)
+
+        assert send_email.await_count == 1
+        kwargs = send_email.await_args.kwargs
+        # Every member is a To of their own message; nobody is BCC'd.
+        assert sorted(e.split("-")[0] for e in kwargs["to_emails"]) == ["nom1", "nom2"]
+        assert not kwargs.get("bcc_emails")
+        assert kwargs["subject"].startswith("Nominations Open:")
+
+    async def test_opening_nominations_does_not_send_inline(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+
+        send_email = self._accept_all()
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            opened, err = await ElectionService(db_session).open_nominations(
+                uuid.UUID(election_id), uuid.UUID(org_id)
+            )
+
+        assert err is None
+        assert opened is not None
+        assert send_email.await_count == 0
+
+    async def test_nothing_is_announced_once_nominations_have_closed(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+        await svc.close_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+
+        send_email = self._accept_all()
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            await svc.announce_nominations_open(election_id, org_id, user1_id)
+
+        assert send_email.await_count == 0
+
+    async def test_the_endpoint_queues_the_announcement_as_a_job(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        from app.api.v1.endpoints.elections import (
+            open_nominations as open_nominations_endpoint,
+        )
+        from app.services.ballot_send_jobs import NominationsAnnouncementSend
+
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+
+        send_email = self._accept_all()
+        async with capture_queued_sends(db_session) as queued:
+            with patch(
+                "app.services.email_service.EmailService.send_email", new=send_email
+            ):
+                response = await open_nominations_endpoint(
+                    election_id=uuid.UUID(election_id),
+                    db=db_session,
+                    current_user=SimpleNamespace(id=user1_id, organization_id=org_id),
+                )
+                # Nothing is mailed inside the request.
+                assert send_email.await_count == 0
+                assert response.nominations_announcement is not None
+                assert response.nominations_announcement.kind == "announcement"
+                assert response.nominations_announcement.status == "queued"
+                assert len(queued.queued) == 1
+                _job_id, _org, send = queued.queued[0]
+                assert send == NominationsAnnouncementSend(acting_user_id=user1_id)
+                assert await queued.drain() == 1
+
+        assert send_email.await_count == 1
+
+
+class TestNominationsAnnouncementJob(TestNominationSetup):
+    """The announcement runs as a job the election page reads, and a miss
+    reaches the managers."""
+
+    @staticmethod
+    def _send_email(refuse: int = 0, raises: bool = False):
+        async def send(**kwargs):
+            if raises:
+                raise RuntimeError("SMTP down")
+            outcomes = [i >= refuse for i in range(len(kwargs["to_emails"]))]
+            kwargs["results_out"].extend(outcomes)
+            return sum(outcomes), len(outcomes) - sum(outcomes)
+
+        return AsyncMock(side_effect=send)
+
+    async def _open_and_run(
+        self, db_session, org_id, user_id, election_id, send_email, *, close=False
+    ):
+        from app.api.v1.endpoints.elections import (
+            _build_election_response,
+        )
+        from app.api.v1.endpoints.elections import (
+            open_nominations as open_nominations_endpoint,
+        )
+
+        alert = AsyncMock(return_value=1)
+        async with capture_queued_sends(db_session) as queued:
+            with (
+                patch(
+                    "app.services.email_service.EmailService.send_email",
+                    new=send_email,
+                ),
+                patch.object(ElectionService, "_email_election_managers", new=alert),
+            ):
+                await open_nominations_endpoint(
+                    election_id=uuid.UUID(election_id),
+                    db=db_session,
+                    current_user=SimpleNamespace(id=user_id, organization_id=org_id),
+                )
+                if close:
+                    await ElectionService(db_session).close_nominations(
+                        uuid.UUID(election_id), uuid.UUID(org_id)
+                    )
+                await queued.drain()
+        election = await db_session.get(Election, election_id)
+        await db_session.refresh(election)
+        response = await _build_election_response(db_session, election)
+        return response.nominations_announcement, alert
+
+    async def _audit_events(self, db_session, event_type, election_id):
+        rows = await db_session.execute(
+            text(
+                "SELECT organization_id, event_data FROM audit_logs "
+                "WHERE event_type = :type "
+                "AND JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.election_id')) = :eid"
+            ),
+            {"type": event_type, "eid": election_id},
+        )
+        return rows.all()
+
+    async def test_a_complete_announcement_reports_who_was_told(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+
+        job, alert = await self._open_and_run(
+            db_session, org_id, user1_id, election_id, self._send_email()
+        )
+
+        assert job is not None
+        assert job.status == "completed"
+        assert job.result is not None
+        assert job.result.success
+        assert job.result.recipients_count == 2
+        assert job.result.message == "Nominations announcement emailed to 2 member(s)."
+        alert.assert_not_awaited()
+
+    async def test_a_missed_member_is_counted_audited_and_alerted(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+
+        job, alert = await self._open_and_run(
+            db_session, org_id, user1_id, election_id, self._send_email(refuse=1)
+        )
+
+        assert job is not None
+        assert job.status == "completed"
+        assert job.result is not None
+        assert not job.result.success
+        assert (job.result.recipients_count, job.result.failed_count) == (1, 1)
+        assert job.result.message == (
+            "Nominations announcement emailed to 1 member(s); 1 could not be "
+            "reached."
+        )
+        alert.assert_awaited_once()
+        assert "did not reach everyone" in alert.await_args.kwargs["subject"]
+        [(audit_org, data)] = await self._audit_events(
+            db_session, "nominations_announcement_failed", election_id
+        )
+        assert audit_org == org_id
+        assert '"unreached": 1' in data
+
+    async def test_a_send_that_fails_outright_fails_the_job_and_alerts(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+
+        job, alert = await self._open_and_run(
+            db_session, org_id, user1_id, election_id, self._send_email(raises=True)
+        )
+
+        assert job is not None
+        assert job.status == "failed"
+        assert job.error
+        alert.assert_awaited_once()
+        [(audit_org, data)] = await self._audit_events(
+            db_session, "nominations_announcement_failed", election_id
+        )
+        assert audit_org == org_id
+        assert '"raised": true' in data
+        # The phase stays open: the announcement never undoes the transition.
+        election = await db_session.get(Election, election_id)
+        assert election.status == ElectionStatus.NOMINATIONS
+
+    async def test_nominations_closed_before_it_ran_sends_nothing_quietly(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        send_email = self._send_email()
+
+        job, alert = await self._open_and_run(
+            db_session, org_id, user1_id, election_id, send_email, close=True
+        )
+
+        assert job is not None
+        assert job.status == "completed"
+        assert job.result is not None
+        assert job.result.message.startswith("Nominations closed before")
+        send_email.assert_not_awaited()
+        alert.assert_not_awaited()
+
+    async def test_a_second_opening_does_not_overlap_a_running_announcement(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        from app.api.v1.endpoints.elections import (
+            open_nominations as open_nominations_endpoint,
+        )
+
+        org_id, user1_id, _ = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        user = SimpleNamespace(id=user1_id, organization_id=org_id)
+        svc = ElectionService(db_session)
+
+        async with capture_queued_sends(db_session) as queued:
+            await open_nominations_endpoint(
+                election_id=uuid.UUID(election_id), db=db_session, current_user=user
+            )
+            await svc.close_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+            await open_nominations_endpoint(
+                election_id=uuid.UUID(election_id), db=db_session, current_user=user
+            )
+            assert len(queued.queued) == 1
+
+    async def test_members_without_manage_do_not_see_the_announcement(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        from app.api.v1.endpoints.elections import _build_election_response
+
+        org_id, user1_id, _ = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        await self._open_and_run(
+            db_session, org_id, user1_id, election_id, self._send_email()
+        )
+        election = await db_session.get(Election, election_id)
+        member = SimpleNamespace(
+            positions=[SimpleNamespace(permissions=["elections.view"])], rank=None
+        )
+        manager = SimpleNamespace(
+            positions=[SimpleNamespace(permissions=["elections.manage"])], rank=None
+        )
+
+        as_member = await _build_election_response(db_session, election, member)
+        as_manager = await _build_election_response(db_session, election, manager)
+
+        assert as_member.nominations_announcement is None
+        assert as_manager.nominations_announcement is not None
+
+    async def test_an_abandoned_announcement_reads_as_interrupted(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        from app.services.ballot_send_jobs import (
+            ANNOUNCEMENT_INTERRUPTED_ERROR,
+            STALE_JOB_AFTER,
+            latest_job,
+        )
+
+        org_id, user1_id, _ = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        async with capture_queued_sends(db_session):
+            from app.api.v1.endpoints.elections import (
+                open_nominations as open_nominations_endpoint,
+            )
+
+            await open_nominations_endpoint(
+                election_id=uuid.UUID(election_id),
+                db=db_session,
+                current_user=SimpleNamespace(id=user1_id, organization_id=org_id),
+            )
+        await db_session.execute(
+            text(
+                "UPDATE ballot_send_jobs SET created_at = :when "
+                "WHERE election_id = :eid"
+            ),
+            {
+                "when": datetime.now(timezone.utc)
+                - STALE_JOB_AFTER
+                - timedelta(minutes=1),
+                "eid": election_id,
+            },
+        )
+        db_session.expire_all()
+
+        job = await latest_job(db_session, election_id, org_id, kind="announcement")
+
+        assert job is not None
+        assert job.status == "failed"
+        assert job.error == ANNOUNCEMENT_INTERRUPTED_ERROR
 
 
 class TestManualBallots(TestNominationSetup):
@@ -1042,6 +1381,93 @@ class TestHardening(TestNominationSetup):
         assert len(to_emails) == 1
         assert to_emails[0].startswith("nom2-")
 
+    async def _nominate_user2(self, db_session, org_id, user1_id, user2_id):
+        from unittest.mock import AsyncMock, patch
+
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+        send_email = AsyncMock(return_value=(1, 0))
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            candidate, err = await svc.create_nomination(
+                election_id=uuid.UUID(election_id),
+                organization_id=uuid.UUID(org_id),
+                nominator_id=user1_id,
+                position="Chief",
+                nominee_user_id=user2_id,
+            )
+        assert err is None, err
+        return election_id, candidate, send_email
+
+    async def _bell_notices(self, db_session, recipient_id):
+        from app.models.notification import NotificationLog
+
+        result = await db_session.execute(
+            select(NotificationLog).where(
+                NotificationLog.recipient_id == recipient_id,
+                NotificationLog.category == "election_nomination",
+            )
+        )
+        return list(result.scalars().all())
+
+    async def test_nominee_gets_a_bell_notice_linking_to_the_nominations_tab(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, user2_id = setup_org_and_users
+        election_id, candidate, send_email = await self._nominate_user2(
+            db_session, org_id, user1_id, user2_id
+        )
+
+        (notice,) = await self._bell_notices(db_session, user2_id)
+        assert notice.channel.value == "in_app"
+        assert notice.action_url == f"/elections/{election_id}?tab=nominations"
+        assert "Chief" in notice.subject
+        assert notice.notification_metadata["candidate_id"] == str(candidate.id)
+        # The email carries the same destination as an absolute link.
+        html_body = send_email.await_args.kwargs["html_body"]
+        assert f"/elections/{election_id}?tab=nominations" in html_body
+
+    async def test_bell_notice_ignores_an_election_email_opt_out(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """Muting election email must not hide a request only the nominee
+        can answer."""
+        import json
+
+        org_id, user1_id, user2_id = setup_org_and_users
+        await db_session.execute(
+            text("UPDATE users SET notification_preferences = :p WHERE id = :id"),
+            {"p": json.dumps({"email_notifications": False}), "id": user2_id},
+        )
+        await db_session.flush()
+
+        _eid, _cand, send_email = await self._nominate_user2(
+            db_session, org_id, user1_id, user2_id
+        )
+
+        assert send_email.await_count == 0
+        assert len(await self._bell_notices(db_session, user2_id)) == 1
+
+    async def test_self_nomination_sends_no_bell_notice(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+
+        _candidate, err = await svc.create_nomination(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            nominator_id=user1_id,
+            position="Chief",
+        )
+
+        assert err is None, err
+        assert await self._bell_notices(db_session, user1_id) == []
+
     async def test_pending_nomination_cap(
         self, db_session: AsyncSession, setup_org_and_users
     ):
@@ -1504,3 +1930,92 @@ class TestAttestations(TestNominationSetup):
         if voided_at.tzinfo is None:
             voided_at = voided_at.replace(tzinfo=timezone.utc)
         assert voided_at >= before
+
+
+class TestNominationsOpenAnnouncement(TestNominationSetup):
+    """At department size the announcement is still one message per member,
+    so no message carries more recipients than a provider will accept."""
+
+    async def _add_members(self, db_session: AsyncSession, org_id: str, count: int):
+        for _ in range(count):
+            uid = _uid()
+            uname = f"bulk-{uid[:8]}"
+            await db_session.execute(
+                text(
+                    "INSERT INTO users "
+                    "(id, organization_id, username, first_name, last_name, "
+                    "email, password_hash, status) "
+                    "VALUES (:id, :org, :un, 'Bulk', 'Member', :em, 'hashed', "
+                    "'active')"
+                ),
+                {"id": uid, "org": org_id, "un": uname, "em": f"{uname}@test.com"},
+            )
+        await db_session.flush()
+
+    async def _member_emails(self, db_session: AsyncSession, org_id: str):
+        result = await db_session.execute(
+            text("SELECT email FROM users WHERE organization_id = :org"),
+            {"org": org_id},
+        )
+        return {row[0] for row in result.all()}
+
+    async def test_announcement_mails_every_member_once_with_no_bcc(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        await self._add_members(db_session, org_id, 58)
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        _, err = await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+        assert err is None, err
+
+        async def accept_all(**kwargs):
+            kwargs["results_out"].extend([True] * len(kwargs["to_emails"]))
+            return len(kwargs["to_emails"]), 0
+
+        send_email = AsyncMock(side_effect=accept_all)
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            outcome = await svc.announce_nominations_open(election_id, org_id, user1_id)
+
+        everyone = await self._member_emails(db_session, org_id)
+        assert send_email.await_count == 1
+        kwargs = send_email.await_args.kwargs
+        # send_email builds one message per To address.
+        assert not kwargs.get("bcc_emails")
+        assert len(kwargs["to_emails"]) == len(set(kwargs["to_emails"]))
+        assert set(kwargs["to_emails"]) == everyone
+        assert outcome == {"recipient_count": 60, "unreached_count": 0}
+
+    async def test_refused_addresses_are_counted_and_audited(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        await self._add_members(db_session, org_id, 108)
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        _, err = await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+        assert err is None, err
+
+        async def refuse_49(**kwargs):
+            outcomes = [index >= 49 for index in range(len(kwargs["to_emails"]))]
+            kwargs["results_out"].extend(outcomes)
+            return sum(outcomes), len(outcomes) - sum(outcomes)
+
+        send_email = AsyncMock(side_effect=refuse_49)
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            outcome = await svc.announce_nominations_open(election_id, org_id, user1_id)
+
+        assert outcome == {"recipient_count": 110, "unreached_count": 49}
+        audited = await db_session.execute(
+            text(
+                "SELECT COUNT(*) FROM audit_logs "
+                "WHERE event_type = 'nominations_announced' "
+                "AND JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.election_id')) = :eid"
+            ),
+            {"eid": election_id},
+        )
+        assert audited.scalar_one() == 1

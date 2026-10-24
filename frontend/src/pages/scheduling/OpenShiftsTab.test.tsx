@@ -21,18 +21,23 @@ vi.mock('../../modules/scheduling/services/api', () => ({
   },
 }));
 
+// Permissions the signed-in user holds; a member (none) unless a test says so.
+const mockPermissions = vi.hoisted(() => ({ granted: new Set<string>() }));
+
 vi.mock('../../stores/authStore', () => {
   // Callable and carrying getState, as the real store is: consumers that read
   // it outside React (the org-scoped scheduling settings cache) use the latter.
   const state = () => ({
-    checkPermission: () => false,
+    checkPermission: (permission: string) => mockPermissions.granted.has(permission),
     user: { id: 'user-1', first_name: 'Test', last_name: 'User' },
   });
   return { useAuthStore: Object.assign(() => state(), { getState: state }) };
 });
 
+// Mutable so one test can put the department far from the browser's UTC.
+const mockTimezone = vi.hoisted(() => ({ value: 'America/New_York' }));
 vi.mock('../../hooks/useTimezone', () => ({
-  useTimezone: () => 'America/New_York',
+  useTimezone: () => mockTimezone.value,
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -88,6 +93,8 @@ describe('OpenShiftsTab', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTimezone.value = 'America/New_York';
+    mockPermissions.granted = new Set();
     mockGetOpenShifts.mockResolvedValue(mockShifts);
     mockGetShifts.mockResolvedValue({ shifts: mockShifts, total: 2 });
     mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: false });
@@ -108,6 +115,38 @@ describe('OpenShiftsTab', () => {
     });
     // After loading, the Refresh button remains visible
     expect(screen.getByText('Refresh')).toBeInTheDocument();
+  });
+
+  it('re-reads the board when the page says a shift changed', async () => {
+    // A sign-up or a cancellation in the shift panel otherwise leaves the
+    // shift listed with a Sign Up button the server will refuse.
+    const { rerender } = renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} refreshKey={0} />);
+    await waitFor(() => expect(mockGetOpenShifts).toHaveBeenCalledTimes(1));
+
+    rerender(<OpenShiftsTab onViewShift={mockOnViewShift} refreshKey={1} />);
+
+    await waitFor(() => expect(mockGetOpenShifts).toHaveBeenCalledTimes(2));
+  });
+
+  it('heads a day with its own calendar date, whatever the department timezone', async () => {
+    // A shift_date is a calendar day, not an instant. Padded to noon in the
+    // browser's zone (UTC here) and then formatted in the department's, it
+    // read as the next day for a department at UTC+14 and as the previous day
+    // for one far enough west.
+    mockTimezone.value = 'Pacific/Kiritimati';
+    mockGetOpenShifts.mockResolvedValue([
+      {
+        ...mockShifts[0],
+        id: 'far',
+        shift_date: '2099-08-25',
+        start_time: '2099-08-24T17:00:00Z',
+        end_time: '2099-08-25T05:00:00Z',
+      },
+    ]);
+    renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+
+    expect(await screen.findByRole('heading', { name: 'Tuesday, August 25, 2099' })).toBeInTheDocument();
+    expect(screen.queryByText(/August 26, 2099/)).not.toBeInTheDocument();
   });
 
   it('should render empty state when no shifts available', async () => {
@@ -180,6 +219,41 @@ describe('OpenShiftsTab', () => {
 
     await waitFor(() => {
       expect(mockSignupForShift).toHaveBeenCalledWith('shift-2', { position: 'officer' });
+    });
+  });
+
+  // ==========================================================================
+  // A shift that has already run has no seat left to fill
+  // ==========================================================================
+  describe('a shift that has already ended', () => {
+    // A twelve-hour shift viewed two hours after it ended: the reported case,
+    // where a scheduling admin was offered a live Sign Up button.
+    const ended = {
+      ...mockShifts[0],
+      id: 'shift-ended',
+      start_time: new Date(Date.now() - 14 * 60 * 60 * 1000).toISOString(),
+      end_time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      apparatus_unit_number: 'L4',
+    };
+
+    beforeEach(() => {
+      mockGetOpenShifts.mockReset();
+      mockGetOpenShifts.mockResolvedValue([ended]);
+    });
+
+    it('offers a scheduling admin no Sign Up button', async () => {
+      mockPermissions.granted = new Set(['scheduling.manage']);
+      renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+
+      expect(await screen.findByText('This shift has already run.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Sign up for shift on / })).not.toBeInTheDocument();
+    });
+
+    it('offers a member no Sign Up button either', async () => {
+      renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+
+      expect(await screen.findByText('This shift has already run.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Sign up for shift on / })).not.toBeInTheDocument();
     });
   });
 

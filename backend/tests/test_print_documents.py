@@ -319,6 +319,7 @@ def _item(name="Hose", sort=0, check_type="pass_fail", required=False, **kwargs)
         "is_required": required,
         "required_quantity": None,
         "expected_quantity": None,
+        "count_unit": None,
         "min_level": None,
         "level_unit": None,
     }
@@ -453,7 +454,34 @@ class TestCheckSheet:
             doc = await build_apparatus_check_sheet(
                 MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
             )
-        assert next(_rows_of(doc, "Cab")).right == "qty 6"
+        assert next(_rows_of(doc, "Cab")).right == "par 6, min 6"
+
+    async def test_a_canonical_count_item_shows_par_unit_and_min(self):
+        # Stored rows say "count"; matching only the legacy "quantity" printed
+        # nothing for them.
+        with _check_sheet(
+            _template(
+                [
+                    _compartment(
+                        "c1",
+                        "Cab",
+                        items=[
+                            _item(
+                                "Gauze",
+                                check_type="count",
+                                expected_quantity=10,
+                                required_quantity=6,
+                                count_unit="each",
+                            )
+                        ],
+                    )
+                ]
+            )
+        ):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
+        assert next(_rows_of(doc, "Cab")).right == "par 10 each, min 6"
 
     async def test_a_level_item_shows_its_minimum(self):
         with _check_sheet(

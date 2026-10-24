@@ -69,8 +69,14 @@ def mock_db():
 
 @pytest.fixture
 def service(mock_db):
-    """Create a MinuteService with a mocked db."""
-    return MinuteService(mock_db)
+    """Create a MinuteService with a mocked db.
+
+    Preparing a section's motion queries the database; it has its own tests
+    against a real one, so here it is a double.
+    """
+    svc = MinuteService(mock_db)
+    svc.ensure_section_motions = AsyncMock()  # type: ignore[method-assign]
+    return svc
 
 
 @pytest.fixture(autouse=True)
@@ -96,6 +102,11 @@ def records(monkeypatch):
     monkeypatch.setattr(
         "app.services.minutes_notifications.notify_minutes_circulated",
         AsyncMock(return_value=0),
+    )
+    # Filing a closed election's result with new minutes queries elections and
+    # has its own tests against a real database.
+    monkeypatch.setattr(
+        "app.services.minute_service.file_waiting_elections", AsyncMock()
     )
     # No outline of the department's own: the built-in order of business.
     outlines = MagicMock()
@@ -580,6 +591,11 @@ class TestDeleteMinutes:
         """delete_minutes succeeds for draft minutes."""
         minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
         service.get_minutes = AsyncMock(return_value=minutes)
+        # Before deleting, the service reads the carried-forward items and the
+        # attachment paths; a draft with neither answers both with nothing.
+        empty = MagicMock()
+        empty.scalars.return_value.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=empty)
 
         result = await service.delete_minutes(minutes.id, org_id)
 
@@ -849,6 +865,9 @@ class TestReopenMinutes:
             submitted_at=approved_at,
         )
         service.get_minutes = AsyncMock(return_value=minutes)
+        no_public_copy = MagicMock()
+        no_public_copy.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = no_public_copy
 
         result = await service.reopen_minutes(minutes.id, org_id)
 

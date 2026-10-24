@@ -17,8 +17,9 @@ What is pinned here, over HTTP against the real router:
 * the finance office's actions (order, receive, pay, issue, void) stay
   ``finance.manage``;
 * the budget and fiscal-year option lists the forms use give a requester a
-  name and the remaining amount, org-scoped, and nobody without a finance
-  grant gets them.
+  name, org-scoped, and nobody without a finance grant gets them; the
+  remaining amount is added only for ``finance.view`` / ``finance.manage``
+  holders and for the owner of that line.
 """
 
 import json
@@ -488,7 +489,7 @@ class TestTheFinanceOfficeKeepsItsActions:
 
 
 class TestTheFormOptions:
-    async def test_a_member_sees_each_line_by_name_and_what_is_left(
+    async def test_a_member_sees_each_line_by_name_with_no_amounts(
         self, db_session, dept
     ):
         async with _client(db_session, dept["alice"]) as alice:
@@ -501,9 +502,14 @@ class TestTheFormOptions:
 
         training = by_id[budgets["training"]]
         assert training["label"] == "Training"
-        assert Decimal(training["amountRemaining"]) == Decimal("1250.00")
+        # The figure is withheld by the server, not merely hidden by the page.
+        assert training["amountRemaining"] is None
+        assert all(row["amountRemaining"] is None for row in by_id.values())
         # Nothing else about the line: no budgeted/spent figures, no notes.
-        assert set(training) == {"id", "label", "amountRemaining"}
+        # Whether its category is active is no figure; the form needs it to
+        # keep the line out of new choices.
+        assert set(training) == {"id", "label", "amountRemaining", "categoryActive"}
+        assert training["categoryActive"] is True
 
         assert by_id[budgets["apparatus_station"]]["label"] == "Apparatus (Station 2)"
         duplicates = {
@@ -511,6 +517,45 @@ class TestTheFormOptions:
             by_id[budgets["apparatus_b"]]["label"],
         }
         assert duplicates == {"Apparatus", "Apparatus #2"}
+
+    @pytest.mark.parametrize("who", ["viewer", "treasurer"])
+    async def test_leadership_sees_what_is_left_on_every_line(
+        self, db_session, dept, who
+    ):
+        async with _client(db_session, dept[who]) as client:
+            resp = await client.get(
+                f"/finance/budgets/options?fiscal_year_id={dept['fy_id']}"
+            )
+        assert resp.status_code == 200, resp.text
+        by_id = {row["id"]: row for row in resp.json()}
+        training = by_id[dept["budgets"]["training"]]
+        assert Decimal(training["amountRemaining"]) == Decimal("1250.00")
+        assert all(row["amountRemaining"] is not None for row in by_id.values())
+
+    async def test_a_line_owner_sees_what_is_left_on_their_own_line_only(
+        self, db_session, dept
+    ):
+        alice_position = (
+            await db_session.execute(
+                text("SELECT position_id FROM user_positions WHERE user_id = :u"),
+                {"u": dept["alice"].id},
+            )
+        ).scalar_one()
+        await db_session.execute(
+            text("UPDATE budgets SET owner_position_id = :p WHERE id = :b"),
+            {"p": alice_position, "b": dept["budgets"]["training"]},
+        )
+        await db_session.flush()
+
+        async with _client(db_session, dept["alice"]) as alice:
+            resp = await alice.get(
+                f"/finance/budgets/options?fiscal_year_id={dept['fy_id']}"
+            )
+        by_id = {row["id"]: row for row in resp.json()}
+        assert Decimal(
+            by_id[dept["budgets"]["training"]]["amountRemaining"]
+        ) == Decimal("1250.00")
+        assert by_id[dept["budgets"]["apparatus_a"]]["amountRemaining"] is None
 
     async def test_fiscal_years_offered_are_the_open_ones(self, db_session, dept):
         async with _client(db_session, dept["alice"]) as alice:

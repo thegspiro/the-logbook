@@ -45,12 +45,15 @@ import {
   PipelineSection,
   EmailSection,
   FormSection,
+  MIN_TEMPLATE_DAYS_BEFORE,
+  MAX_TEMPLATE_DAYS_BEFORE,
 } from './events-settings';
 import type { OrgMember, EventRequestFormSummary } from './events-settings';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 import { AdminMetricsSettings } from '../components/admin';
 import { asArray } from '../utils/asArray';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -89,6 +92,7 @@ interface EventsSettingsTabProps {
 
 const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved }) => {
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   const [activeSection, setActiveSection] = useState<SectionKey>('visibility');
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,6 +126,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
   const [newTemplateSubject, setNewTemplateSubject] = useState('');
   const [newTemplateBody, setNewTemplateBody] = useState('');
   const [newTemplateTrigger, setNewTemplateTrigger] = useState('');
+  const [newTemplateDaysBefore, setNewTemplateDaysBefore] = useState('');
 
   // Form generation
   const [generatingForm, setGeneratingForm] = useState(false);
@@ -482,6 +487,22 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
       return;
     }
 
+    // The reminder task matches a days_before_event template to its offset by
+    // trigger_days_before alone, so one saved without it is never sent.
+    const isDaysBefore = newTemplateTrigger === 'days_before_event';
+    const daysBefore = Number(newTemplateDaysBefore.trim());
+    if (
+      isDaysBefore &&
+      (!/^\d+$/.test(newTemplateDaysBefore.trim()) ||
+        daysBefore < MIN_TEMPLATE_DAYS_BEFORE ||
+        daysBefore > MAX_TEMPLATE_DAYS_BEFORE)
+    ) {
+      toast.error(
+        `Enter how many days before the event to send it, as a whole number from ${MIN_TEMPLATE_DAYS_BEFORE} to ${MAX_TEMPLATE_DAYS_BEFORE}.`
+      );
+      return;
+    }
+
     try {
       setSaving(true);
       const template = await eventRequestService.createEmailTemplate({
@@ -489,12 +510,14 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
         subject: newTemplateSubject.trim(),
         body_html: newTemplateBody.trim(),
         trigger: newTemplateTrigger || undefined,
+        trigger_days_before: isDaysBefore ? daysBefore : undefined,
       });
       setEmailTemplates((prev) => [...prev, template]);
       setNewTemplateName('');
       setNewTemplateSubject('');
       setNewTemplateBody('');
       setNewTemplateTrigger('');
+      setNewTemplateDaysBefore('');
       setShowTemplateForm(false);
       toast.success('Email template created.');
     } catch {
@@ -505,6 +528,16 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
+    const templateName = emailTemplates.find((t) => t.id === templateId)?.name || 'this template';
+    const agreed = await confirm({
+      title: `Delete email template "${templateName}"?`,
+      message:
+        'The template is removed permanently, and any automatic send that uses it stops. Emails already sent are unaffected.',
+      confirmLabel: 'Delete template',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!agreed) return;
     try {
       await eventRequestService.deleteEmailTemplate(templateId);
       setEmailTemplates((prev) => prev.filter((t) => t.id !== templateId));
@@ -647,6 +680,8 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             onNewTemplateBodyChange={setNewTemplateBody}
             newTemplateTrigger={newTemplateTrigger}
             onNewTemplateTriggerChange={setNewTemplateTrigger}
+            newTemplateDaysBefore={newTemplateDaysBefore}
+            onNewTemplateDaysBeforeChange={setNewTemplateDaysBefore}
           />
         );
       case 'metrics':

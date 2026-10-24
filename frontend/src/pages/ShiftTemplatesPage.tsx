@@ -15,6 +15,8 @@ import {
   Users,
   Truck,
   Filter,
+  Pause,
+  RotateCcw,
 } from 'lucide-react';
 import { normalizePositions, schedulingService } from '../modules/scheduling/services/api';
 import type { ApparatusOption } from '../modules/scheduling/services/api';
@@ -23,6 +25,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import TemplateFormModal from '../modules/scheduling/components/TemplateFormModal';
 import PatternFormModal from '../modules/scheduling/components/PatternFormModal';
+import PatternTemplateInactiveNotice from '../modules/scheduling/components/PatternTemplateInactiveNotice';
 import GenerateShiftsModal from '../modules/scheduling/components/GenerateShiftsModal';
 import type {
   ShiftTemplate,
@@ -64,6 +67,9 @@ export const ShiftTemplatesPage: React.FC = () => {
   const [editingPattern, setEditingPattern] = useState<ShiftPattern | null>(null);
   const [deletingPatternId, setDeletingPatternId] = useState<string | null>(null);
   const [generatingPattern, setGeneratingPattern] = useState<ShiftPattern | null>(null);
+  // The template or pattern whose active state is being changed, so its
+  // button can't be pressed twice while the request is in flight.
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [apparatusOptions, setApparatusOptions] = useState<ApparatusOption[]>([]);
   const [apparatusSource, setApparatusSource] = useState<'apparatus' | 'basic' | 'default'>('default');
@@ -128,7 +134,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     if (
       !(await confirm({
         title: 'Delete template',
-        message: `Delete "${template?.name ?? 'this template'}"? Shifts already created from it are kept. This cannot be undone.`,
+        message: `Delete "${template?.name ?? 'this template'}"? If any shift (past or future) or pattern uses it, it is deactivated instead of deleted: those shifts keep it and its equipment checklists, its patterns stop generating new shifts until it is reactivated or they are pointed at another template, and it is no longer offered for new shifts or patterns. Otherwise it is deleted, which cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -136,13 +142,47 @@ export const ShiftTemplatesPage: React.FC = () => {
       return;
     setDeletingTemplateId(id);
     try {
-      await schedulingService.deleteTemplate(id);
-      toast.success('Template deleted');
+      const outcome = await schedulingService.deleteTemplate(id);
+      toast.success(
+        outcome === 'deactivated'
+          ? `"${template?.name ?? 'The template'}" is still used by shifts or patterns, so it was deactivated instead of deleted. Patterns using it no longer generate shifts.`
+          : 'Template deleted'
+      );
       void loadTemplates();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete template'));
     } finally {
       setDeletingTemplateId(null);
+    }
+  };
+
+  const handleReactivateTemplate = async (template: ShiftTemplate) => {
+    setTogglingId(template.id);
+    try {
+      await schedulingService.updateTemplate(template.id, { is_active: true });
+      toast.success(`"${template.name}" is active again. Patterns using it generate shifts again.`);
+      // Patterns carry the inactive-template flag, so both lists change.
+      await Promise.all([loadTemplates(), loadPatterns()]);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to reactivate template'));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleTogglePattern = async (pattern: ShiftPattern) => {
+    const resume = !pattern.is_active;
+    setTogglingId(pattern.id);
+    try {
+      await schedulingService.updatePattern(pattern.id, { is_active: resume });
+      toast.success(
+        resume ? `"${pattern.name}" resumed` : `"${pattern.name}" paused — it generates no new shifts until resumed`
+      );
+      await loadPatterns();
+    } catch (err) {
+      toast.error(getErrorMessage(err, resume ? 'Failed to resume pattern' : 'Failed to pause pattern'));
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -529,6 +569,19 @@ export const ShiftTemplatesPage: React.FC = () => {
                         <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
                         Edit
                       </button>
+                      {!template.is_active && (
+                        <button
+                          onClick={() => {
+                            void handleReactivateTemplate(template);
+                          }}
+                          disabled={togglingId === template.id}
+                          className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                          aria-label={`Reactivate ${template.name}`}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                          Reactivate
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           void handleDeleteTemplate(template.id);
@@ -576,10 +629,16 @@ export const ShiftTemplatesPage: React.FC = () => {
                             : 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400'
                         }`}
                       >
-                        {pattern.is_active ? 'Active' : 'Inactive'}
+                        {pattern.is_active ? 'Active' : 'Paused'}
                       </span>
                     </div>
                   </div>
+
+                  {(pattern.inactive_templates?.length ?? 0) > 0 && (
+                    <div className="mb-3">
+                      <PatternTemplateInactiveNotice names={pattern.inactive_templates} />
+                    </div>
+                  )}
 
                   {pattern.description && <p className="text-theme-text-muted mb-3 text-sm">{pattern.description}</p>}
 
@@ -610,11 +669,29 @@ export const ShiftTemplatesPage: React.FC = () => {
                   <div className="border-theme-surface-border flex flex-wrap items-center gap-2 border-t pt-3">
                     <button
                       onClick={() => setGeneratingPattern(pattern)}
-                      className="btn-primary flex items-center gap-1 px-3 py-1.5 text-sm"
+                      // The server refuses a paused pattern or one held by an
+                      // inactive template (409); the notice above says why.
+                      disabled={!pattern.is_active || (pattern.inactive_templates?.length ?? 0) > 0}
+                      className="btn-primary flex items-center gap-1 px-3 py-1.5 text-sm disabled:opacity-50"
                       aria-label={`Generate shifts from ${pattern.name}`}
                     >
                       <Play className="h-3.5 w-3.5" aria-hidden="true" />
                       Generate
+                    </button>
+                    <button
+                      onClick={() => {
+                        void handleTogglePattern(pattern);
+                      }}
+                      disabled={togglingId === pattern.id}
+                      className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                      aria-label={`${pattern.is_active ? 'Pause' : 'Resume'} ${pattern.name}`}
+                    >
+                      {pattern.is_active ? (
+                        <Pause className="h-3.5 w-3.5" aria-hidden="true" />
+                      ) : (
+                        <Play className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                      {pattern.is_active ? 'Pause' : 'Resume'}
                     </button>
                     <button
                       onClick={() => setEditingPattern(pattern)}

@@ -17,6 +17,7 @@ const rank = (overrides: Partial<OperationalRankResponse> = {}): OperationalRank
   is_active: true,
   eligible_positions: ['ems'],
   default_permission_count: 17,
+  is_built_in: true,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   ...overrides,
@@ -106,7 +107,12 @@ describe('RanksSettingsSection — the grants-nothing warning', () => {
     // a custom rank grants nothing. That is the intended design; discovering
     // it from a member who cannot see anything is not.
     renderSection([
-      rank({ rank_code: 'battalion_chief', display_name: 'Battalion Chief', default_permission_count: 0 }),
+      rank({
+        rank_code: 'battalion_chief',
+        display_name: 'Battalion Chief',
+        default_permission_count: 0,
+        is_built_in: false,
+      }),
     ]);
 
     expect(screen.getByText(WARNING)).toBeInTheDocument();
@@ -128,6 +134,7 @@ describe('RanksSettingsSection — the grants-nothing warning', () => {
         rank_code: 'firefighter_ii',
         display_name: 'Firefighter II',
         default_permission_count: 0,
+        is_built_in: false,
       }),
     ]);
 
@@ -270,5 +277,54 @@ describe('RanksSettingsSection — deleting a rank (workflow review W12)', () =>
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
 
     expect(onDeleteRank).toHaveBeenCalledWith('rank-9');
+  });
+});
+
+// Owner decision 2026-10-22: a built-in rank keeps its code, because its
+// default permissions are keyed by it; the server refuses a change.
+describe('RanksSettingsSection — editing a rank code', () => {
+  const renderEditing = (editing: OperationalRankResponse) =>
+    render(
+      <RanksSettingsSection
+        ranks={[editing]}
+        ranksLoading={false}
+        canReorder
+        editingRank={editing}
+        addingRank={false}
+        rankForm={{ rank_code: editing.rank_code, display_name: editing.display_name }}
+        rankSaving={false}
+        deletingRankId={null}
+        editingPositionsRankId={null}
+        rankValidationIssues={[]}
+        seatOptions={SEATS}
+        onSetEditingRank={vi.fn()}
+        onSetAddingRank={vi.fn()}
+        onSetRankForm={vi.fn()}
+        onSetEditingPositionsRankId={vi.fn()}
+        onAddRank={vi.fn()}
+        onUpdateRank={vi.fn()}
+        onDeleteRank={vi.fn()}
+        onMoveRank={vi.fn()}
+        onToggleEligiblePosition={vi.fn()}
+      />,
+      { wrapper: ConfirmProvider }
+    );
+
+  it('makes a built-in rank code read-only and says why', () => {
+    renderEditing(rank({ rank_code: 'captain', display_name: 'Captain', is_built_in: true }));
+
+    const code = screen.getByLabelText('Code (internal identifier)');
+    expect(code).toHaveAttribute('readonly');
+    expect(code).toHaveAccessibleDescription(/Built-in rank: the code is fixed/);
+    // The display name stays editable.
+    expect(screen.getByLabelText('Display Name')).not.toHaveAttribute('readonly');
+  });
+
+  it('leaves a custom rank code editable', () => {
+    renderEditing(rank({ rank_code: 'battalion_chief', display_name: 'Battalion Chief', is_built_in: false }));
+
+    const code = screen.getByLabelText('Code (internal identifier)');
+    expect(code).not.toHaveAttribute('readonly');
+    expect(screen.queryByText(/Built-in rank: the code is fixed/)).not.toBeInTheDocument();
   });
 });

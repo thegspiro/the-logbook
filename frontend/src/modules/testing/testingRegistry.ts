@@ -123,6 +123,13 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/', label: 'Welcome / landing', isPublic: true },
       { path: '/privacy', label: 'Privacy Policy', isPublic: true },
       { path: '/terms', label: 'Terms of Service', isPublic: true },
+      {
+        path: '/public/minutes',
+        label: 'Public minutes',
+        note: 'Only after the department turns public posting on',
+        isPublic: true,
+      },
+      { path: '/public/minutes/:copyId', label: 'Public minutes (one set)', isPublic: true },
       { path: '/f/:slug', label: 'Public form submission', isPublic: true },
       { path: '/ballot', label: 'Ballot voting', note: 'Token-based; reached from a ballot email', isPublic: true },
       { path: '/application-status/:token', label: 'Application status', isPublic: true },
@@ -231,6 +238,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/members/admin/edit/:userId', label: 'Edit member (admin)', permission: 'members.manage' },
       { path: '/members/admin/history/:userId', label: 'Member audit history', permission: 'members.manage' },
       { path: '/members/admin/waivers', label: 'Waiver management', permission: 'members.manage' },
+      { path: '/members/admin/id-cards', label: 'Member ID cards', permission: 'members.manage_id_cards' },
       {
         path: '/members/admin/settings',
         label: 'Members settings — ?tab= redirect',
@@ -591,6 +599,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/admin/nfc/tags',
+        label: 'NFC tag register',
+        anyPermission: ['inventory.manage', 'inventory.check_manage'],
+        module: 'inventory',
+      },
+      {
         path: '/inventory/kiosk',
         label: 'Self-service checkout kiosk',
         permission: 'inventory.kiosk',
@@ -911,7 +925,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
           'locations.manage_nfc_tags',
           'apparatus.manage_nfc_tags',
         ],
-        module: 'facilities',
+      },
+      {
+        path: '/locations/card-readers',
+        label: 'Card readers',
+        anyPermission: ['locations.manage', 'facilities.manage', 'locations.manage_nfc_tags'],
       },
       { path: '/locations/:locationId/check-in', label: 'Room check-in (NFC tag landing)' },
     ],
@@ -943,6 +961,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/minutes/outlines',
         label: 'Meeting outlines',
+        permission: 'minutes.manage',
+        module: 'minutes',
+      },
+      {
+        path: '/minutes/settings',
+        label: 'Minutes settings',
         permission: 'minutes.manage',
         module: 'minutes',
       },
@@ -1233,8 +1257,8 @@ export const routeParams = (path: string): string[] =>
  * Substitute recorded sample values into a route pattern.
  *
  * Returns null while any parameter is still blank: a URL with a literal
- * `:id` in it resolves to no route, and the catch-all would land the tester
- * on the dashboard with nothing to say why.
+ * `:id` in it resolves to no route, and the tester would land on "Page not found"
+ * for a link the registry itself built.
  */
 export const buildTestUrl = (path: string, values: Record<string, string>): string | null => {
   const params = routeParams(path);

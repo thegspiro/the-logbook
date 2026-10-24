@@ -61,7 +61,8 @@ class _Session:
     """Answers the query sequence these paths issue, in order.
 
     ``open_positions_by_shift`` issues exactly one statement (the assignment
-    scan); ``_open_shift_candidates`` issues one before it. Anything further is
+    scan); ``_open_shift_candidates`` issues two before it (the organization,
+    for its open-ended cushion, then the shifts). Anything further is
     a change in the code under test and should fail loudly rather than be
     absorbed by a permissive stub.
     """
@@ -80,6 +81,12 @@ class _Session:
 def _assignments(*rows):
     """A result standing in for the (shift_id, user_id, position) scan."""
     return SimpleNamespace(all=lambda: list(rows))
+
+
+def _org_row(settings=None):
+    """The organization lookup ``_open_shift_candidates`` makes for its cushion."""
+    org = SimpleNamespace(settings=settings or {})
+    return SimpleNamespace(scalar_one_or_none=lambda: org)
 
 
 def _shift_rows(shifts):
@@ -224,7 +231,7 @@ class TestGetClaimableShifts:
 
     @staticmethod
     def _service(shifts, assignments, eligible, monkeypatch):
-        session = _Session(_shift_rows(shifts), _assignments(*assignments))
+        session = _Session(_org_row(), _shift_rows(shifts), _assignments(*assignments))
         monkeypatch.setattr(
             "app.services.shift_eligibility_service.ShiftEligibilityService"
             ".get_eligible_positions_bulk",
@@ -337,7 +344,7 @@ class TestGetClaimableShifts:
         assert await self._run(service) == []
 
     async def test_an_empty_window_asks_nothing_further(self, monkeypatch):
-        session = _Session(_shift_rows([]))
+        session = _Session(_org_row(), _shift_rows([]))
         bulk = AsyncMock(side_effect=AssertionError("eligibility must not run"))
         monkeypatch.setattr(
             "app.services.shift_eligibility_service.ShiftEligibilityService"
@@ -362,7 +369,7 @@ class TestOutreachSheetsKeepTheShiftLevelRule:
         self, monkeypatch
     ):
         shift = _shift("s1", [_seat("volunteer")], is_outreach=True)
-        session = _Session(_shift_rows([shift]))
+        session = _Session(_org_row(), _shift_rows([shift]))
         monkeypatch.setattr(
             "app.services.shift_eligibility_service.ShiftEligibilityService"
             ".get_eligible_positions_bulk",
@@ -389,7 +396,7 @@ class TestOutreachSheetsKeepTheShiftLevelRule:
 
     async def test_a_full_outreach_sheet_is_dropped(self, monkeypatch):
         shift = _shift("s1", [_seat("volunteer")], is_outreach=True)
-        session = _Session(_shift_rows([shift]))
+        session = _Session(_org_row(), _shift_rows([shift]))
         monkeypatch.setattr(
             "app.services.shift_eligibility_service.ShiftEligibilityService"
             ".get_eligible_positions_bulk",

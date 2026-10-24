@@ -29,6 +29,7 @@ import { formatNumber } from '../../../utils/dateFormatting';
 import { useAuthStore } from '../../../stores/authStore';
 import { NfpaDepartmentSwitch } from '../components/NfpaDepartmentSwitch';
 import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 export const ApparatusListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -116,36 +117,10 @@ export const ApparatusListPage: React.FC = () => {
   };
 
   return (
-    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br">
-      {/* Header */}
-      <header className="bg-theme-input-bg border-theme-surface-border border-b px-4 py-4 backdrop-blur-xs sm:px-6">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center space-x-3">
-              <div className="shrink-0 rounded-lg bg-red-800 p-2">
-                <Truck className="h-6 w-6 text-white" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-theme-text-primary text-lg leading-tight font-bold sm:text-xl">
-                  Apparatus Management
-                </h1>
-                <p className="text-theme-text-muted hidden text-sm sm:block">
-                  Manage your fleet vehicles and equipment
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => void navigate('/dashboard')}
-              className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-[44px] shrink-0 text-sm transition-colors max-md:inline-flex max-md:items-center"
-            >
-              <span className="hidden sm:inline">← Back to Dashboard</span>
-              <span className="sm:hidden">← Back</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <div>
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <OperationsPageHeader icon={Truck} title="Apparatus" subtitle="Manage your fleet vehicles and equipment" />
+
         {/* Error Display */}
         {error && (
           <div className="mb-6 flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 p-4">

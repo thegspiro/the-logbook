@@ -1,20 +1,31 @@
 # Inventory Management
 
-## Canonical quartermaster terms
+The Inventory module keeps track of the department's equipment, uniforms and
+supplies. It records who holds what, where things are stored, what needs
+inspecting, and what is running low. It also covers barcode and NFC tags,
+label printing, gear requests, and the equipment checklists crews run on the
+apparatus.
 
-| Term               | Meaning                                                                          |
-| ------------------ | -------------------------------------------------------------------------------- |
-| **Assignment**     | Serialized gear held on an ongoing basis.                                        |
-| **Temporary loan** | Serialized gear expected back by a date.                                         |
-| **Issuance**       | Quantity-tracked stock given to a member.                                        |
-| **Return**         | Physically receiving assigned or issued gear.                                    |
-| **Check-in**       | Closing a temporary loan.                                                        |
-| **Transfer**       | Moving serialized gear between holders.                                          |
-| **Distribution**   | The umbrella action for a mixed batch that may create several transaction types. |
+Most of this lesson is for quartermasters and the officers who help them. If
+you are a member who only wants to see your own gear or ask for something, read
+[My Issued Gear](#my-issued-gear) and [Gear Requests](#gear-requests).
 
-“Checkout” is retained only in legacy database fields and URLs for compatibility; it is not the name of either a temporary-loan record or a distribution operation in the user interface.
+## Words This Lesson Uses
 
-The Inventory module tracks department equipment, supplies, and gear. It supports permanent item assignments, temporary checkouts, pool issuances, maintenance scheduling, barcode/QR scanning, thermal label printing, low-stock alerts, batch operations, and departure clearance for departing members.
+The Logbook uses these words the same way on every inventory screen:
+
+| Word               | Meaning                                                            |
+| ------------------ | ------------------------------------------------------------------ |
+| **Assignment**     | A tracked item (one with its own serial number) a member keeps     |
+| **Temporary loan** | A tracked item lent to a member and due back by a date             |
+| **Issuance**       | A number of counted items (gloves, T-shirts) handed to a member    |
+| **Return**         | Taking assigned or issued gear back                                |
+| **Check-in**       | Closing a temporary loan when the item comes back                  |
+| **Transfer**       | Moving a tracked item from one holder to another                   |
+| **Distribution**   | Handing out a mixed batch, which can create all three of the above |
+
+A few screens still say "checkout" for a temporary loan. It means the same
+thing.
 
 ---
 
@@ -28,188 +39,197 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 6. [Variant Groups](#variant-groups)
 7. [Gear Kits](#gear-kits)
 8. [Member Size Preferences](#member-size-preferences)
-9. [Issuance Allowances](#issuance-allowances)
-10. [Equipment Request Fulfillment](#equipment-request-fulfillment)
-11. [Reorder Requests](#reorder-requests)
-12. [Item Detail Page](#item-detail-page)
-13. [Item Assignments](#item-assignments)
-14. [Checkout and Return](#checkout-and-return)
-15. [Item Distribution and Batch Return](#item-distribution-and-batch-return)
-16. [Barcode and QR Scanning](#barcode-and-qr-scanning)
-17. [NFC Tags](#nfc-tags-2026-09-24)
-18. [Label Printing](#label-printing)
-19. [Maintenance Tracking](#maintenance-tracking)
-20. [Low Stock Alerts](#low-stock-alerts)
-21. [Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving-2026-08-10)
-22. [Departure Clearance](#departure-clearance)
-23. [Members Inventory View (Admin)](#members-inventory-view-admin)
-24. [Inventory Admin Hub](#inventory-admin-hub)
-25. [Gear Kits Admin Page](#gear-kits-admin-page)
-26. [Variant Groups Admin Page](#variant-groups-admin-page)
-27. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
-28. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
-29. [Troubleshooting](#troubleshooting)
+9. [Item Detail Page](#item-detail-page)
+10. [Item Assignments](#item-assignments)
+11. [Item Distribution and Batch Return](#item-distribution-and-batch-return)
+12. [Temporary Loans and Returns](#temporary-loans-and-returns)
+13. [Members Inventory View (Admin)](#members-inventory-view-admin)
+14. [My Issued Gear](#my-issued-gear)
+15. [Gear Requests](#gear-requests)
+16. [Issuance Allowances](#issuance-allowances)
+17. [Reorder Requests](#reorder-requests)
+18. [Low Stock Alerts](#low-stock-alerts)
+19. [Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving)
+20. [CSV Import](#csv-import)
+21. [Storage Areas](#storage-areas)
+22. [Barcode and QR Scanning](#barcode-and-qr-scanning)
+23. [NFC Tags](#nfc-tags)
+24. [Label Printing](#label-printing)
+25. [Maintenance Tracking](#maintenance-tracking)
+26. [Write-Off Requests](#write-off-requests)
+27. [Departure Clearance](#departure-clearance)
+28. [NFPA 1851/1852 Compliance Tracking](#nfpa-18511852-compliance-tracking)
+29. [Impact Planner](#impact-planner)
+30. [Inventory Admin Hub](#inventory-admin-hub)
+31. [Equipment Checklists](#equipment-checklists)
+32. [Medical Supplies](#medical-supplies)
+33. [Realistic Example: Departure Clearance for a Departing Member](#realistic-example-departure-clearance-for-a-departing-member)
+34. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
+35. [Inventory System Edge Cases](#inventory-system-edge-cases)
+36. [Troubleshooting](#troubleshooting)
+37. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## Inventory Overview
 
-Navigate to **Inventory** in the sidebar. The inventory landing page shows all items with search, category filters, status filters, and location filters.
+Members and quartermasters use different screens:
 
-Key pages in the inventory module:
+| Screen                        | Who uses it                              | What it is for                                                                              |
+| ----------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **My Issued Gear**            | Every member                             | Your own gear, your temporary loans, your requests and your sizes                           |
+| **Inventory** (the item list) | Officers who can manage inventory        | Every item in the department, with search, filters and sorting                              |
+| **Item detail**               | Officers, and members opening their gear | One item's full record: barcode, history, inspections, NFPA data                            |
+| **Storage Areas**             | Officers who can manage inventory        | Racks, shelves and bins inside each room                                                    |
+| **Inventory Administration**  | Quartermasters and some other officers   | The hub that links to every inventory tool. See [Inventory Admin Hub](#inventory-admin-hub) |
 
-| Page                | URL                        | Description                                                                              |
-| ------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
-| **Items List**      | `/inventory`               | Browse all equipment and supplies with search, filters, and sorting (`inventory.manage`) |
-| **My Issued Gear**  | `/inventory/my-equipment`  | View your personally assigned items and active checkouts                                 |
-| **Item Detail**     | `/inventory/items/:id`     | Full item record with barcode, history, maintenance, and NFPA compliance                 |
-| **Storage Areas**   | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area) (`inventory.manage`)   |
-| **Admin Dashboard** | `/inventory/admin`         | Summary statistics, low-stock alerts, and navigation to admin sub-pages                  |
+The item list needs the **Manage gear, uniforms and equipment** permission.
+Members do not browse the whole list. They see their own gear and ask for more
+from **My Issued Gear**.
 
 ![Inventory Items list with search, category filter, and status pills](./images/05-01-inventory-items.png)
 
 ### Putting your own items first
 
-The list is alphabetical, which is a poor match for how a quartermaster
-actually works: the Class B polos and the duty boots carry nearly all the
-traffic and sit scattered between things touched once a year.
+The list is in alphabetical order. That is a poor match for how a quartermaster
+works: the gear you handle every day sits between things touched once a year.
 
-**Pin** an item — the pin at the right of its row — and it moves to a
-**Pinned** section above Available and Unavailable. Pins are yours alone: two
-quartermasters running different supply lines each front their own gear, and
-curating your list never reorders anybody else's page. Drag a pinned row, or
-use the arrows beside it, to set the order; the arrows are the ones that work
-on a phone, where dragging does not. You can pin up to 25 items.
+Select the **pin** at the right of a row to pin that item. It moves to a
+**Pinned** section above **Available** and **Unavailable**.
+
+- Pins are yours alone. Another quartermaster's pins never change your list.
+- Drag a pinned row, or use the arrows beside it, to set the order. On a phone,
+  use the arrows; dragging does not work there.
+- You can pin up to 25 items.
 
 ![The items list with a Pinned section above Available, each pinned row carrying a drag handle and up/down arrows](./images/05-02-items-pinned.png)
 
 ### Grouping the list
 
-**Group by** — beside the filters — reorganises the list by Category, Item
-type, Colour, Size, Condition, Style, Location or Vendor. Class A in one group,
-Class B in another, each with a heading you can collapse.
+**Group by**, beside the filters, sorts the list into groups by **Category**,
+**Item type**, **Color**, **Size**, **Condition**, **Style**, **Location** or
+**Vendor**. Each group has a heading you can collapse.
 
-Two things worth knowing:
+- **The count on a heading is the real total.** The list loads 50 rows at a
+  time, so a group can hold more than you can see. A collapsed group still
+  shows how many items are in it.
+- **The column you group by disappears from the rows**, because the heading
+  already says it. When you group by Category, a **Size** column takes its
+  place.
 
-- **The count on a heading is the real total**, not what has loaded. The list
-  pages 50 rows at a time, so a group can hold more than you can see; a
-  collapsed group still states how many are in it.
-- **Whatever you group by drops out of the rows.** Group by Category and the
-  Category column disappears — the heading already says it — and a **Size**
-  column takes its place, since size is what you are usually scanning for.
-
-**Export** follows what you are looking at: the file carries the current
+**Export** gives you a spreadsheet of what you are looking at: the current
 filters and grouping, not the whole catalog.
 
 ![The items list grouped by category, with collapsible group headings carrying whole-set counts and a Size column in place of the Category column](./images/05-03-items-grouped.png)
+
+### On a phone
+
+On a phone, the item list and the other inventory tables turn each row into a
+card, with the field name on the left and the value on the right. Some columns
+that are hidden on a desktop to save width (manufacturer, serial number, asset
+tag, barcode and cost) come back on the phone card, where there is room for
+them.
+
+![The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right](./images/05-70-inventory-table-mobile.png)
 
 ---
 
 ## First-Run Setup
 
-A new quartermaster meeting the inventory module for the first time hits an
-ordering problem the screens do not state: **an item depends on three other
-records that have to exist first.** A room holds storage areas, a storage area
-holds items, and a category decides which fields the item form even shows. Open
-the item form first and its Category, Room, and Storage Area dropdowns are all
-empty — and an item saved with all three blank is the one that later cannot be
-found on a shelf, never appears in a low-stock alert, and has no inspection
-cycle attached.
+A new quartermaster meets an ordering problem the screens do not explain: **an
+item depends on three other records that must exist first.**
 
-**Inventory → Admin → Setup Guide** (`/inventory/admin/setup`) puts those four
-in dependency order on one screen. While any of them is missing, the admin hub
-carries a prompt into it naming exactly what is left.
+- A **room** holds storage areas.
+- A **storage area** holds items.
+- A **category** decides which fields the item form shows.
 
-The items list points there too _(2026-09-29)_. A department with no items at
-all is told "Your department has no inventory items yet"; a quartermaster gets
-**Open the Setup Guide** beside **Add Item**, and a member is told items appear
-once a quartermaster adds them. A filter that matches nothing still reads "No
-items found", and a list that failed to load says "The items did not load" with
-**Retry**, rather than claiming the department is empty. The **Request
-Equipment** form makes the same distinction: an empty catalog reads "Your
-department has not listed any equipment yet", a failed load "The equipment list
-did not load", and only a search that found nothing says "Nothing matches that".
+If you open the item form first, its **Category**, **Room** and **Storage
+Area** lists are all empty. An item saved with all three blank cannot be found
+on a shelf, never appears in a low-stock alert, and has no inspection schedule.
+
+**Inventory Administration → Setup Guide** puts the four steps in the right
+order on one screen. Until all four are done, the administration page shows a
+**Finish inventory setup** prompt that names what is still missing.
+
+The item list helps too:
+
+| What you see                                 | What it means                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------ |
+| "Your department has no inventory items yet" | The catalog is empty. A quartermaster gets **Open the Setup Guide** and **Add Item** |
+| "No items found"                             | Your filters match nothing. Change them                                              |
+| "The items did not load", with **Retry**     | The list failed to load. It does not mean the department is empty                    |
+
+The **Request Equipment** form members use makes the same distinction. An
+empty catalog reads "Your department has not listed any equipment yet". A
+failed load reads "The equipment list did not load". Only a search that found
+nothing says "Nothing matches that".
 
 ![The inventory admin hub with the "Finish inventory setup" prompt naming what is still missing](./images/05-72-setup-prompt.png)
 
-<!-- Screenshot needed:
-_[Quartermaster (inventory.manage) on a department with no inventory items, at /inventory/admin/items: the empty state "Your department has no inventory items yet" with the Open the Setup Guide and Add Item buttons. Capture outside the seeded demo department, the way 05-72 is captured by scripts/screenshots/inventory-setup.mjs.]_
--->
+![The items list of a department with no items: Your department has no inventory items yet, with Open the Setup Guide and Add Item](./images/05-93-empty-items.png)
 
 ### The four steps
 
 | Step               | What it produces     | Why it comes here                                                                       |
 | ------------------ | -------------------- | --------------------------------------------------------------------------------------- |
-| **1. Rooms**       | A location record    | Storage areas hang off a room, so nothing else can be filed until one exists            |
+| **1. Rooms**       | A place              | Storage areas belong to a room, so nothing else can be filed until one exists           |
 | **2. Storage**     | Racks, shelves, bins | Turns "it's in the gear room somewhere" into a shelf someone can walk to                |
-| **3. Categories**  | Item classifications | Decides which fields an item asks for, and whether it gets inspection and NFPA tracking |
-| **4. First items** | Actual equipment     | The item form opens with steps 1–3 already filled in                                    |
+| **3. Categories**  | Item groups          | Decides which fields an item asks for, and whether it gets inspection and NFPA tracking |
+| **4. First items** | Actual equipment     | The item form opens with steps 1 to 3 already filled in                                 |
 
-Each step can be skipped — a department that already has rooms is not made to
-re-declare them — and each links to its own full admin page for doing the work
-at volume. The current step lives in the URL (`?step=2`), so the page can be
-bookmarked or reloaded without losing your place.
+You can skip any step. A department that already has rooms does not have to
+add them again. Each step also links to its own full page for doing the work
+in bulk. The page remembers which step you are on, so you can bookmark it or
+reload it without losing your place.
 
 ### Step 1 — Rooms
 
 A room is the place an item is kept: a station bay, a gear room, a supply
-closet. Name is the only required field; building and room number are optional
-and only help you tell two similar rooms apart later.
+closet. Only the name is required. The building and room number are optional;
+they help you tell two similar rooms apart.
 
-> **Adding a room needs a location permission** _(updated 2026-10-11)_. A room
-> is a location record, and creating one needs `locations.create` or
-> `locations.manage`. The seeded **Quartermaster** position now holds
-> `locations.create` — on departments onboarded before this change too, via a
-> migration that adds it to the stored Quartermaster position when that
-> position still manages inventory. It can add rooms but not edit or delete
-> them; that stays with whoever manages locations. A position without either
-> grant (for example, one an administrator removed it from) still sees no form
-> here; the step reads _"Adding a room needs permission to create locations,
-> which your position does not have. Use a room listed above, or ask someone
-> who manages locations to add the one you need."_
+> **Who can add a room?** Adding a room needs the **Create locations** or
+> **Manage all locations** permission. The standard **Quartermaster** position
+> has **Create locations**. It can add rooms but not edit or delete them; that
+> stays with whoever manages locations. A position without either permission
+> sees no form here. The step reads _"Adding a room needs permission to create
+> locations, which your position does not have. Use a room listed above, or ask
+> someone who manages locations to add the one you need."_
 
 ![Step 1 of the inventory setup workflow, with no rooms declared yet](./images/05-73-setup-rooms.png)
 
 ### Step 2 — Storage areas
 
-Pick the room, then add an area for each place gear actually sits. Areas can
-nest later on the full Storage Areas page (Rack → Shelf → Box); this step keeps
-to one level so the catalog can get started.
+Choose the room, then add an area for each place gear actually sits. On the
+full **Storage Areas** page you can nest areas inside each other later (rack,
+then shelf, then box). This step keeps to one level so you can get started.
 
 ![Step 2 of the setup workflow, adding storage areas to the selected room](./images/05-77-setup-storage.png)
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/storage-areas: the "Delete <area>?" dialog for an area that holds items and has a shelf nested inside it, showing both red reasons and the disabled Delete button. Do not delete.]_
--->
-
 ### Step 3 — Categories
 
-The step that saves the most time. Rather than inventing a classification
-scheme, pick from the standard fire-service categories — turnout gear, SCBA,
-helmets, station uniforms, hand tools, power equipment, ladders, radios, EMS
-supplies and the rest — each arriving with its serial-number, maintenance and
-NFPA switches already set correctly.
+This step saves the most time. Instead of inventing your own groups, pick from
+the standard fire-service categories: turnout gear, SCBA, helmets, station
+uniforms, hand tools, power equipment, ladders, radios, EMS supplies and more.
+Each one arrives with its serial-number, maintenance and NFPA switches already
+set.
 
-A category the department already has is shown as **already added** rather than
-offered again, so the step is safe to come back to: a second visit adds only
-what is missing. **Select all** ticks everything still available in one action.
-Everything created here is an ordinary category afterwards and can be edited or
-removed on the Categories page.
-
-**Continue saves what you ticked** _(2026-09-30)_. You do not have to press the
-add button first: **Continue** adds the ticked categories and then moves on. If
-saving them fails, the page stays on this step so nothing is silently lost.
-Before this fix, ticking categories and pressing Continue discarded the ticks,
-marked the step done, and left **First items** with an empty Category list.
+- A category your department already has is marked **already added**, so you
+  can come back to this step safely. A second visit adds only what is missing.
+- **Select all** ticks everything still available.
+- **Continue** saves what you ticked and moves on. You do not need to press the
+  add button first. If saving fails, the page stays on this step so nothing is
+  lost.
+- Everything created here is an ordinary category afterwards. You can edit or
+  remove it on the **Categories** page.
 
 ![Step 3 offering the standard fire-service starter categories, one of them already added](./images/05-74-setup-categories.png)
 
 ### Step 4 — First items
 
-Choose the room, storage area and category these first items belong to, and the
-**Add an item** form opens with all three already selected — the repetition that
-makes stocking a catalog feel like paperwork. For a catalog that already exists
-in a spreadsheet, **Import from CSV** is beside it.
+Choose the room, storage area and category for your first items. **Add an
+item** then opens the item form with all three already selected. If your
+catalog is already in a spreadsheet, use **Import from CSV** beside it.
 
 ![Step 4 of the setup workflow, with the room, storage area and category pickers](./images/05-78-setup-first-items.png)
 
@@ -217,24 +237,27 @@ in a spreadsheet, **Import from CSV** is beside it.
 
 ### Step 5 — What to set up next
 
-The closing step recaps what was created and points at the pieces most
-departments need next: issuance allowances, equipment kits, the impact planner,
-and barcode labels.
+The last step sums up what was created. It points to what most departments need
+next: issuance allowances, gear kits, the impact planner, and barcode labels.
 
 ![The closing step of the setup workflow recapping what was created](./images/05-76-setup-done.png)
 
 ### Edge Cases
 
-- The prompt on the admin hub disappears once rooms, storage areas, categories and items all exist. The **Setup Guide** card under Tools stays, so the workflow remains reachable afterwards.
-- Retired items do not count towards completion — a department that retired its way back to an empty catalog is offered the workflow again.
-- A category that was _deleted_ is deactivated rather than removed. Its preset becomes available again, so the workflow can re-create it.
+- The prompt on the administration page disappears once rooms, storage areas,
+  categories and items all exist. The **Setup Guide** card under **Setup &
+  Tools** stays, so you can always reach the steps again.
+- Retired items do not count. A department that has retired every item is
+  offered the setup steps again.
+- A deleted category is switched off rather than removed. Its starter category
+  becomes available again, so the setup steps can re-create it.
 
 ### On a phone
 
-The workflow works at phone width throughout. The step indicator collapses to a
-progress bar ("Step 3 of 5"), the preset grid stacks to one column, and the
-count-and-**Select all** control sits above the list so it is reachable without
-scrolling past every card.
+The setup steps work at phone width. The step bar becomes a progress bar
+("Step 3 of 5"). The category grid becomes one column, and the count with
+**Select all** sits above the list so you do not have to scroll past every
+card.
 
 ![The category step of the setup workflow on a phone](./images/05-81-setup-categories-mobile.png)
 
@@ -242,49 +265,82 @@ scrolling past every card.
 
 ## Browsing Items
 
-The **Items** tab lists all inventory items. You can:
+Officers who can manage inventory see every item on the **Inventory** list
+(also reached from **Inventory Administration → All Items**). You can:
 
-- **Search** by item name, serial number, or asset tag
-- **Filter** by category, status (available, assigned, checked out, in maintenance, lost, stolen, retired)
+- **Search** by item name, serial number or asset tag.
+- **Filter** by category, status, condition, item type, location, size,
+  colour, style, vendor and label status. The statuses are Available,
+  Assigned, Checked Out, In Maintenance, Lost, Stolen and Retired.
+- **Filter by location**, including a **no location at all** choice for items
+  that have not been put anywhere.
 
-Click on any item to open its edit form, where you can view and modify:
+The location cards above the list are links into the same list, and their
+counts match it. Medical supplies are not on this list; they have their own
+page (see [Medical Supplies](#medical-supplies)). A location that holds only
+medical stock gets no card here.
 
-- Full description
-- Serial number and asset tag
-- Current condition and status
-- Storage location
-- Purchase and warranty information
-- Notes
+![Items list filter bar with the size, colour and style dropdowns](./images/05-47-items-filter-bar.png)
 
-![Inventory item form with category, serial, condition and tracking fields](./images/05-05-item-form-modal.png)
+Items that come in sizes, colours or styles show small coloured tags called
+**variant capsules**: blue for size, purple for colour, amber for style. They
+appear on the item list, the item page, **My Issued Gear**, **Pool Items** and
+**Variant Groups**. An item that is not part of a variant group has none.
 
-**[SCREENSHOT — REPLACE `05-05-item-form-modal.png`.** The form gained a help line under **Tracking Type** that follows the choice ("Individual: one record per physical item, such as a radio or an SCBA pack, tracked on its own, usually by serial number." / "Pool: one record for a stock of identical items, such as gloves or T-shirts, counted by quantity and handed out a few at a time."). Re-shoot with an Individual item in a category that requires serial numbers and maintenance, so **Serial # \*** and **Inspection Interval (days) \*** carry their required markers.**]**
+![The inventory items list with size, colour and style capsules on the variant items](./images/05-53-items-variant-capsules.png)
 
-The form now says what the category demands _(2026-09-29)_. When the chosen
-category requires serial numbers, **Serial #** is marked required; when it
-requires maintenance, **Inspection Interval (days)** is required and must be at
-least 1. The server always refused such an item — the form now says so on the
-field instead of with an error after **Create**.
+Select an item's row to open its edit form. There you can see and change its
+description, serial number and asset tag, condition and status, storage place,
+purchase and warranty details, and notes.
+
+![The Add Item form for a Structural PPE item: Serial # and Inspection Interval (days) marked required by the category, and the line under Tracking Type describing Individual tracking](./images/05-05-item-form-modal.png)
+
+The form shows what the category requires:
+
+- If the category requires serial numbers, **Serial #** is marked required.
+- If the category requires maintenance, **Inspection Interval (days)** is
+  required and must be at least 1.
+- The line under **Tracking Type** explains the choice you made. See
+  [Individual vs Pool Items](#individual-vs-pool-items).
+
+### Editing an item's size
+
+The **Size** box in the edit form is a list of every standard size, grouped as
+**Garment**, **Boot / Glove** and **Waist**. A boot width or a chest
+measurement goes in through the **Custom** choice. Sizes show the same way on
+every screen, for example **One Size** and **3XL**.
+
+### Taking an item out of service
+
+Use **Retire**. The edit form does not let you switch an item off or set it to
+retired. **Retire** refuses an item that is assigned, on loan, or (for counted
+stock) still issued to someone, and it checks who holds the item at the moment
+you press it. Officers who manage medical supplies have their own **Retire**
+action for medical items.
 
 ---
 
 ## Categories
 
-The **Categories** tab organizes items into groups. Common categories include:
+The **Categories** page (**Inventory Administration → Categories**) sorts items
+into groups, such as personal protective equipment (PPE), radios, tools,
+uniforms and medical equipment.
 
-- Personal Protective Equipment (PPE)
-- Communications Equipment
-- Tools
-- Uniforms
-- Office Supplies
-- Medical Equipment
+To add a category:
 
-**Creating Categories (Admin):**
-
-1. Navigate to **Inventory Admin > Manage Inventory**.
-2. Click **Add Category**.
-3. Enter the category name and description.
+1. Go to **Inventory Administration → Categories**.
+2. Select **Add Category**.
+3. Enter the name and description, and set the switches you need:
+   - **Requires Serial Number**
+   - **Requires Maintenance** (items get an inspection schedule)
+   - **Requires Assignment**
+   - **NFPA Tracking Enabled** (see [NFPA 1851/1852 Compliance Tracking](#nfpa-18511852-compliance-tracking))
+   - **Allow self-checkout at the kiosk** and **Kiosk loan period (days)**
+     (see [Self-service kiosk](#self-service-kiosk))
 4. Save.
+
+Every category appears in every category picker and filter, however many your
+department has.
 
 ![Inventory categories page listing categories with item counts](./images/05-03-inventory-categories.png)
 
@@ -292,226 +348,804 @@ The **Categories** tab organizes items into groups. Common categories include:
 
 ## Individual vs Pool Items
 
-The inventory system supports two tracking modes:
+Every item is tracked one of two ways:
 
-| Tracking Type  | Description                                                                                  | Use Case                                               |
-| -------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **Individual** | One-to-one tracking with serial numbers. Each item is a unique, trackable unit.              | Radios, PPE, tools, uniforms                           |
-| **Pool**       | Quantity-based tracking. Items are issued and returned by quantity rather than individually. | Batteries, gloves, cleaning supplies, disposable items |
+| Tracking type  | How it works                                                               | Good for                                       |
+| -------------- | -------------------------------------------------------------------------- | ---------------------------------------------- |
+| **Individual** | One record per physical item, tracked on its own, usually by serial number | Radios, SCBA packs, turnout coats, tools       |
+| **Pool**       | One record for a stock of identical items, counted by quantity             | Gloves, T-shirts, batteries, cleaning supplies |
 
 ### Individual Items
 
-- Tracked by serial number, barcode, or asset tag
-- Assigned to one member at a time
-- Full assignment and checkout history
-- Condition tracked per unit
+- Tracked by serial number, barcode or asset tag.
+- Held by one member at a time.
+- Full history of every assignment and loan.
+- Condition is tracked for each item.
 
 ### Pool Items
 
-- Tracked by two separate counts: **Quantity**, the units on hand, and
-  **Issued**, the units currently out with members
-- Members receive issuances (e.g., "3 pairs of gloves")
-- Issuing moves units from one count to the other, and a return moves them
-  back — so the department's total is on-hand **plus** issued, and an item
-  with every unit out reads `0` on hand, never a negative number
-- Pool items must have a quantity of at least 1 when created
+- Members receive an **issuance**, for example "3 pairs of gloves".
+- A pool item has two counts: **on hand** (on the shelf) and **issued** (out
+  with members).
+- Issuing moves units from on hand to issued. A return moves them back.
+- A pool item must start with a quantity of at least 1.
 
-> **Hint:** Set the tracking type when creating an item. It determines whether the item appears in the assignment workflow (individual) or the issue/return workflow (pool). The line under **Tracking Type** on the item form describes whichever one is selected _(2026-09-30)_.
+> **Tip.** Choose the tracking type when you create the item. It decides
+> whether the item goes through assignment (individual) or issue and return
+> (pool). The line under **Tracking Type** on the item form describes the one
+> you picked.
+
+![The Firefighting Gloves pool card with Issuances open: its on-hand and issued counts, and three members holding pairs, each with the count, the date issued and a Return button](./images/05-94-pool-issuances.png)
+
+### Reading the stock numbers
+
+There is no single panel showing on hand, issued and available side by side.
+Read them like this:
+
+| Number                    | Where to find it                                                         | Example: Class B shirt |
+| ------------------------- | ------------------------------------------------------------------------ | ---------------------- |
+| On hand                   | The **Qty** column on the item list, left of the slash                   | 11                     |
+| Total the department owns | The same column, right of the slash                                      | 12                     |
+| Issued                    | The difference, and per member on **Inventory Administration → Members** | 1                      |
+
+**On hand and available are the same number.** Issuing lowers the on-hand
+count and a return raises it, so what is on the shelf is exactly what you can
+issue next. The total is on hand **plus** what is out. Do not subtract the
+issued count from the on-hand figure; that counts every issued unit twice. An
+item with every unit out reads `0` on hand, never a negative number.
+
+Items kept in dated batches work differently. See
+[Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving).
 
 ---
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/pool: one pool card with Issuances expanded, showing two or three holders by name, each reading "<member> N · issued <date>" with its Return button. Use demo members only.]_
--->
-
 ## Variant Groups
 
-Variant groups link related items that differ only in size or style — for example, a turnout coat available in sizes S, M, L, XL.
+A **variant group** links items that are the same product in different sizes,
+colours or styles. For example, a uniform polo in S, M, L and XL is one group
+of four items. Each item in the group keeps its own stock, serial numbers and
+holders.
 
-### Creating a Variant Group
+There are two ways to make one:
 
-**Required Permission:** `inventory.manage`
+- **Generate them all at once** from the item form (below). This is the usual
+  way for uniforms and PPE.
+- **Add a group by hand** on **Inventory Administration → Variant Groups**, then
+  put existing items into it.
 
-1. Navigate to **Inventory Admin > Items**.
-2. Click **Create Variant Group**.
-3. Enter the base product name (e.g., "Globe ATHLETIX Turnout Coat").
-4. Add variants with their sizes and styles:
-   - **Size**: XS, S, M, L, XL, 2XL, 3XL, 4XL, 5XL
-   - **Style**: Regular, Long, Short, Tall
-5. Each variant is created as an individual inventory item with its own stock, serial numbers, and assignments.
+In the item list, a product's size variants fold into one row that you expand
+to see each size. A coat in six sizes is one line until you open it.
 
-### How Variant Groups Work
+### Renaming a variant product
 
-- All variants share the same category, description, and base product name
-- Each variant tracks its own quantity and assignments independently
-- The variant group view shows aggregate stock across all sizes/styles
-- When issuing from a variant group, the system prompts for size selection based on the member's size preferences (if recorded)
+Rename a product once and every size follows. On **Inventory Administration →
+Variant Groups**, edit the group's name, or on the folded product row in the item
+list choose **Rename** (needs **Manage inventory**). The first part of each size's
+name, before the dash, becomes the new name; the size, colour and style after it
+stay. A size filed under a different name is left alone. If any new name would be
+over 255 characters, nothing changes. Generating more sizes afterward reuses the
+group by its new name.
+
+### Generating sizes and styles
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+1. Go to the item list and select **Add Item**.
+2. Fill in the base details: name, category and description.
+3. Switch on **Generate Sizes & Styles**. The switch appears only when you are
+   adding a **new** item. It is not offered while editing an existing one.
+4. Pick the **Sizes**. At least one is required. They come in three groups:
+   - **Garment**: XXS, XS, S, M, L, XL, XXL, 3XL, 4XL and One Size
+   - **Boot / Glove**: 6 to 15, including half sizes up to 12.5
+   - **Waist**: 28 to 46, in steps of 2
+5. Optionally pick **Styles**. They are grouped by what they describe:
+   - **Sleeve**: Short Sleeve, Long Sleeve
+   - **Fit**: Men's, Women's, Unisex
+   - **Neckline**: V-Neck, Crew Neck, Polo, Button Down
+   - **Closure**: Quarter Zip
+
+   One choice from each group describes **one** garment. Men's, Long Sleeve and
+   Polo together make one men's long-sleeve polo. Only two choices in the
+   **same** group multiply: Short Sleeve and Long Sleeve together make one item
+   for each.
+
+6. Optionally type **Colors** as a list separated by commas, for example
+   "Navy, White".
+7. Read the preview. It shows the total and how it was reached, for example
+   "16 items will be created" and "4 sizes × 2 sleeve options × 2 colors". The
+   button counts along with it: **Create 16 Items**.
+8. Under **Quantity Per Variant**, set **Starting Quantity (each)**. It applies
+   to each item, not to the whole batch. Then submit.
+
+Every combination is created as a pool item and grouped under one variant
+group.
+
+![The Generate Sizes & Styles block with sizes and styles picked and the resulting item count](./images/05-62-generate-variants.png)
+
+#### Example
+
+For a uniform polo with:
+
+- 4 sizes: S, M, L, XL
+- 2 sleeve lengths: Short Sleeve, Long Sleeve
+- 2 colours: Navy, White
+
+The Logbook creates 4 × 2 × 2 = 16 pool items, named like this:
+
+- Uniform Polo Shirt — S — Navy — Short Sleeve
+- Uniform Polo Shirt — S — White — Short Sleeve
+- Uniform Polo Shirt — S — Navy — Long Sleeve
+- … (16 in all)
+
+All 16 share one variant group, description and category.
+
+#### Generating: what if …?
+
+| What happens                                       | What it means                                                                                                                              |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| You pick no styles                                 | The items have no style. You get one item per size and colour                                                                              |
+| You type no colours                                | The items have no colour. You get one item per size and style                                                                              |
+| You generate again with the same name and category | The existing group is reused. Only combinations you do not already stock are added, so this is how you add 3XL to a polo you already carry |
+| You type a colour in different capitals ("navy")   | It is matched to the spelling you already use ("Navy")                                                                                     |
+| You change an item after it was created            | Edit it like any other item. It stays in its group                                                                                         |
+| You get far more items than expected               | The count is sizes × colours × styles. Remove sizes or styles you do not need; the preview shows the count before anything is created      |
+
+### Adding a group by hand
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+1. Go to **Inventory Administration → Variant Groups** and select **Add
+   Group**. The **Add Variant Group** dialog opens.
+2. Enter the group **Name** (the only required field), an optional
+   **Description**, and choose a **Category**.
+3. Set the **Base Price** and **Replacement Cost**.
+4. Type the **Unit of Measure**, such as "each", "pair" or "set". It is a text
+   box, not a list.
+5. Select **Create Group**. Opening an existing group shows the same dialog
+   with **Update Group**.
+
+![The variant group form with its name, category, pricing and unit-of-measure fields](./images/05-63-variant-group-modal.png)
+
+To put an item into a group, open it from the item list and choose the group in
+the **Variant Group** picker beside **Tracking Type**. Choose **— None —** to
+take an item out of its group. Only active groups are offered; an item already
+in a switched-off group shows it marked "(inactive)". The picker is hidden while
+**Generate Sizes & Styles** is on, because generating makes its own group. An
+empty group's detail view points you to this picker.
 
 ![Variant group creation form with the size and colour matrix](./images/05-04-variant-group-form.png)
 
-> **Edge case:** If a variant group has zero total stock across all sizes, it still appears in the inventory list but is marked as "Out of Stock." Individual variants with zero stock are dimmed but not hidden, so administrators can see which sizes need reordering.
+### Managing variant groups
+
+On the **Variant Groups** page:
+
+- Each group is a card with its name, category, price and number of variants.
+- Select a card to open its detail view, with every item in the group and a
+  **Stock Matrix**. Sizes run down the side and colours (or styles) across the
+  top. Each cell shows the number on hand: green when there is stock, red at
+  zero. Empty sizes stay visible so you can see what to reorder.
+- **Active/Inactive**: switching a group off does not change its items. They
+  stay linked for reporting, but the group is not offered for new items.
+- Changing a group's price does not change the cost recorded on existing
+  items.
+
+![Variant groups admin page with base products and per-size stock](./images/05-32-variant-groups.png)
+
+![Variant group stock matrix of quantities by size and colour](./images/05-49-variant-stock-matrix.png)
 
 ---
 
 ## Gear Kits
 
-Equipment kits bundle multiple inventory items into a named package for streamlined issuance — for example, a "New Recruit PPE Kit" containing a coat, pants, helmet, gloves, and boots.
+A **gear kit** bundles several items into one named package, so you can hand
+them out in one step. For example, a "New Recruit PPE Kit" with a coat, pants,
+helmet, gloves and boots.
+
+Kits live on **Inventory Administration → Gear Kits** and need the **Manage
+gear, uniforms and equipment** permission.
+
+![Equipment kits admin page listing kits with their component counts](./images/05-31-equipment-kits.png)
 
 ### Creating a Kit
 
-**Required Permission:** `inventory.manage`
+1. Select **Add Kit**.
+2. Enter a name and, if you like, a description.
+3. Select **Add Item** for each part of the kit:
+   - Choose the item.
+   - Set the quantity (for example 2 pairs of gloves).
+   - Tick **Size** to mark a part that comes in sizes.
+   - Tick **Optional** for a part the kit can go out without.
+4. Select **Create Kit**. Editing a kit shows **Update Kit** instead.
 
-1. Navigate to **Inventory Admin > Items**.
-2. Click **Create Equipment Kit**.
-3. Enter the kit name and description.
-4. Add component items by searching for existing inventory items.
-5. Set the quantity of each component (e.g., 1 coat, 1 pants, 2 pairs of gloves).
-6. Save the kit.
+A kit must have at least one item.
+
+![Equipment kit editor with its line items and quantities](./images/05-27-equipment-kit-modal.png)
 
 ### Issuing a Kit
 
-1. Open the kit from the inventory list.
-2. Click **Issue Kit to Member**.
-3. Select the member.
-4. For variant group components, the system prompts for size selection — pre-filled from the member's size preferences if available.
-5. Confirm the issuance.
-6. Each component item is individually assigned/issued to the member with its own tracking record.
+1. On the kit's card, select the issue button ("Issue _kit_ to a member").
+2. In **Issue "_kit_" — Select a Member**, choose the member.
+3. A review lists every line of the kit with the size The Logbook resolved for
+   that member from their size preferences. Change a line's size from its
+   list if the quartermaster knows better. Select **Issue to _member_**, or
+   **Don't issue** to back out.
+
+Each item in the kit is then given to the member on its own record: tracked
+items as assignments, counted items as issuances. The message says how many
+were issued.
+
+![The Issue New Recruit PPE Kit? confirmation after picking Rafael Duarte, naming how many items the kit hands out, with Don't issue and Issue to Rafael Duarte](./images/05-95-kit-issue-confirm.png)
 
 ![Equipment kit detail listing its component items](./images/05-50-equipment-kit-detail.png)
 
-> **Hint:** Issuing a kit creates individual assignment/issuance records for each component. Returning kit components is done individually — there is no "return entire kit" operation, since components may be returned at different times or in different conditions.
+> **Sizes follow the member, not the kit.** A kit line names a product, not one
+> size. When you add a sized product (a jacket, boots, gloves) the line
+> defaults to **Member's size**, and issuing resolves it from the size the
+> member recorded under **My Sizes**. Pin a line to one size only when every
+> member should get that size. The review shows the resolved size per line,
+> and the quartermaster can change it for this issue only. A member with no
+> size on file for a sized line is told so on the review rather than being
+> handed the size the kit was built with.
 
-> **Edge case:** If a kit component is out of stock when issuing, the system issues all available components and flags the unavailable ones. The admin receives a notification about the partial issuance.
+> **What if one part cannot be issued?** If a required part cannot be handed
+> out (for example none is on hand, or a tracked item is already assigned),
+> issuing stops and the message names the problem. Parts handed out before it
+> stay issued, so check the member's gear before trying again. A part marked
+> **Optional** is skipped instead.
+
+> **Tip.** Each part is returned on its own. There is no "return the whole kit"
+> action, because parts often come back at different times and in different
+> condition.
+
+### Managing Kits
+
+- Each kit is a card with its name, number of items, description and status.
+- **Show inactive** shows kits that are switched off.
+- Select a kit to see everything in it, with quantities.
+- The kit editor lists products with their sizes collapsed. A kit built
+  before this change keeps its pinned sizes.
+- **Deactivate** stops a kit being issued. Items already handed out are not
+  affected. **Activate** brings it back. Only active kits show the issue
+  button.
 
 ---
 
 ## Member Size Preferences
 
-Members can record their preferred uniform and PPE sizes, making equipment ordering and kit issuance faster and more accurate. Sizes are edited in the **Size Preferences** modal, which works in two modes:
+Members can record their uniform and PPE sizes. Quartermasters use them when
+planning orders, and the request form uses them to pick the right size.
 
-- **Self-service** — a member edits their own sizes from **My Issued Gear** (`/inventory/my/size-preferences`).
-- **Admin / quartermaster** — an admin edits any member's sizes from the **Members Inventory** page (`/inventory/members/{user_id}/size-preferences`, reading or editing another member's sizes requires `inventory.manage`).
+- **Members** edit their own sizes from **My Issued Gear** → **My Sizes**.
+- **Quartermasters** edit any member's sizes from **Inventory Administration →
+  Members** → **Sizes** on the member's row. Seeing or changing another
+  member's sizes needs the **Manage gear, uniforms and equipment** permission.
 
 ### Recording Size Preferences
 
-1. Open the **Size Preferences** modal (from My Issued Gear, or from a member's row on the Members Inventory page). The title reads "My Sizes" or "Sizes — {member name}".
-2. Fill in any of the nine fields (all optional):
-   - Shirt Size and Shirt Style
-   - Pant Waist and Pant Inseam
-   - Jacket Size
-   - Glove Size
-   - Boot Size and Boot Width
-   - Hat Size
-3. Click **Save Sizes**.
+1. Open the sizes window. Its title reads "My Sizes" or "Sizes — _member
+   name_".
+2. Fill in any of these fields. All are optional:
+   - **Shirt Size**, **Jacket Size**, **Pant Waist**, **Pant Inseam**,
+     **Boot Size**
+   - Under **Additional sizes (optional)**: **Fit** (such as Women's),
+     **Boot Width**, **Glove Size**, **Hat Size**
+3. Select **Save Sizes**.
 
-> **Note:** If a member has never saved sizes, the form simply opens blank (the API returns a 404, which is expected — not an error). Fields left empty are not stored.
+If a member has never saved sizes, the form simply opens blank. Fields you leave
+empty are not stored.
 
 ### How Size Preferences Are Used
 
-- **Kit issuance**: When issuing a kit with variant group components, the member's sizes are pre-selected in the variant picker
-- **Reorder requests**: Size preferences are included in reorder request details so quartermasters know what to order
-- **Reports**: Size distribution reports help with bulk ordering (e.g., "12 members need L coats, 8 need XL")
+- **Request Equipment** starts the size step from the member's sizes on file
+  and preselects their fit (see [Gear Requests](#gear-requests)).
+- The **Impact Planner** groups members by size so you know what to order, for
+  example "12 members need L coats, 8 need XL" (see
+  [Impact Planner](#impact-planner)).
 
-> **Privacy note:** Size preferences are body-measurement data. The size-preference endpoints (`/inventory/my/`, `/inventory/members/`) are excluded from client-side caching and are gated by permission (`inventory.view` to read another member's, `inventory.manage` to edit).
+> **Privacy.** Sizes are body measurements. Only the member and officers who
+> can manage gear can see them.
 
 ![Size preferences modal for one member](./images/05-46-size-preferences.png)
 
 ---
 
-## Auto-Generate Size & Style Variants (2026-03-14)
+## Item Detail Page
 
-When creating a new uniform or PPE item that comes in multiple sizes and styles, you can auto-generate all variants at once instead of creating each one individually.
+Each item has its own page. Open it from the item list, from a member's gear,
+or by scanning its label.
 
-### How to Use
+The top of the page shows cards:
 
-**Required Permission:** `inventory.manage`
+| Card           | What it shows                                                            |
+| -------------- | ------------------------------------------------------------------------ |
+| **Basic Info** | Name, category, status, **Barcode**, **Asset Tag** and **Label Printed** |
+| **Location**   | Where the item is kept                                                   |
+| **Identity**   | Serial number and manufacturer details                                   |
+| **Financial**  | Purchase and warranty details                                            |
+| **Physical**   | Size, colour and style                                                   |
+| **Stock**      | Counts for pool items. For dated stock, the current count from its lots  |
+| **Inspection** | Inspection dates, for categories that require maintenance                |
+| **Assignment** | Who holds a tracked item, with **Assign Item** or **Unassign**           |
 
-1. Navigate to **Inventory Admin > Items** and click **Add Item**
-2. Fill in the base item details (name, category, description)
-3. Switch on **Generate Sizes & Styles**. The switch appears only on a _new_
-   item whose category is a uniform, PPE, tool or equipment type — it is
-   hidden while editing an existing item, and disappears if you change the
-   category to one that does not support variants
-4. Pick **Sizes** from the chips. Eleven are offered: XXS, XS, S, M, L, XL,
-   XXL, 3XL, 4XL, One Size and Custom. At least one is required
-5. Optionally pick **Styles**. Ten are offered: Short Sleeve, Long Sleeve,
-   Men's, Women's, Unisex, V-Neck, Crew Neck, Polo, Button Down and Quarter Zip.
-   Sleeve, fit, neckline and closure are independent attributes, so a garment
-   records every one it has — picking Men's, Long Sleeve and Polo describes
-   **one** men's long-sleeve polo. Only two options on the **same** attribute
-   multiply: Short Sleeve and Long Sleeve together make one item for each. Each
-   size and colour combination then becomes one item
-6. Optionally enter **Colors** as a comma-separated list (e.g. "Navy, White")
-7. Read the preview panel, which shows the total and how it was reached —
-   "16 items will be created / 4 sizes × 2 styles × 2 colors". The submit
-   button counts along with it and reads **Create 16 Items**
-8. Set **Starting Quantity** under _Quantity Per Variant_ — it applies to each
-   generated item, not to the batch — then submit. The system creates every
-   combination as a pool item and groups them under a new `ItemVariantGroup`
+With NFC tags switched on, quartermasters also see **NFC Tags** and **Last
+Seen (NFC)** cards (see [NFC Tags](#nfc-tags)).
 
-> **Corrected 2026-08-10.** The size chips were listed as "XS, S, M, L, XL,
-> 2XL" (the label is **XXL**, and five more sizes exist), and the styles as
-> "Regular, Long, Short" — three cuts that have never been in the list. The
-> real styles are garment cuts, which is why the example below is a uniform
-> shirt rather than a turnout coat.
+Below the cards are tabs:
 
-![The Generate Sizes & Styles block with sizes and styles picked and the resulting item count](./images/05-62-generate-variants.png)
+| Tab                 | Shown when                        | What it holds                                                           |
+| ------------------- | --------------------------------- | ----------------------------------------------------------------------- |
+| **History**         | You can manage inventory          | Every status change, assignment, loan, return and confirmed label print |
+| **Stock Lots**      | Always                            | Dated lots on the shelf, and which apparatus carry the item             |
+| **NFPA Compliance** | The category has NFPA tracking    | Lifecycle dates, ensemble and SCBA details                              |
+| **Inspections**     | The category requires maintenance | Inspection and repair records                                           |
+| **Exposures**       | The category has NFPA tracking    | Hazardous exposures and cleaning                                        |
 
-### Example
+A member opening their own gear sees the page without the **History** tab, so
+it opens on **Stock Lots**.
 
-For a uniform polo shirt with:
+![Inventory item detail with its barcode, quick info, and history panels](./images/05-06-item-detail.png)
 
-- 4 sizes: S, M, L, XL
-- 2 styles: Short Sleeve, Long Sleeve
-- 2 colors: Navy, White
+### Barcode and asset tag
 
-The system creates `4 × 2 × 2 = 16` pool items:
+**Barcode** and **Asset Tag** are always shown in the **Basic Info** card. When
+there is no value, they show `--`. The same `--` is used on the other cards, so
+a missing size reads as blank rather than as a missing section.
 
-- Uniform Polo Shirt - S / Short Sleeve / Navy
-- Uniform Polo Shirt - S / Short Sleeve / White
-- Uniform Polo Shirt - S / Long Sleeve / Navy
-- ... (16 total)
+The page shows the barcode number, not a picture of the code. To print it,
+select **Print Barcode** at the top of the page.
 
-All 16 items are linked under a single variant group and share the base description and category.
+Every item gets a barcode number when it is created, numbered in order for your
+department: `INV-000001`, `INV-000002` and so on. The number is unique within
+your department.
 
-Each variant is its own row in the items list, with its size, style and colour
-shown as capsules in the **Variant** column — pictured under
-[Variant Capsules](#variant-capsules). To see the whole group at once, with a
-stock quantity per size and colour, open it on **Inventory Admin > Variant
-Groups**; that grid is pictured under
-[Stock Matrix on Variant Groups Page](#stock-matrix-on-variant-groups-page).
+![An item's barcode and asset tag on its detail page](./images/05-61-item-barcode-fields.png)
 
-**In the items list, a product's size variants fold into one row** that you
-expand to see each size — a coat in six sizes is one line until you open it.
-The Variant Groups admin page shows the same group as a grid instead.
+![An item with a barcode but no asset tag — the empty field showing its -- placeholder rather than being hidden](./images/05-67-empty-asset-tag.png)
 
-### Edge Cases
+![An item's Basic Info card, its sequential barcode value beside the asset tag](./images/05-56-item-barcode-value.png)
 
-| Scenario                         | Behavior                                                         |
-| -------------------------------- | ---------------------------------------------------------------- |
-| Empty styles list                | Defaults to `['regular']` — at least one variant per size/color  |
-| Empty colors list                | Defaults to `['default']` — at least one variant per size/style  |
-| Duplicate variant group name     | System prevents creation; choose a unique base item name         |
-| Changing variants after creation | Edit individual items normally; the variant group remains intact |
+---
+
+## Item Assignments
+
+Tracked items can be assigned to members. Assigned items appear on the member's
+profile and on their **My Issued Gear** page.
+
+### Assigning an Item
+
+Needs the **Manage gear, uniforms and equipment** permission. There are two ways
+in, depending on whether you start from the item or from the person.
+
+**From the item** (one item, one member):
+
+1. Open the item's page.
+2. In the **Assignment** card, select **Assign Item**. It appears only on
+   tracked items that are not already assigned. An assigned item shows
+   **Unassign** instead.
+3. Search for the member and choose them.
+4. Choose **Permanent** ("Theirs until they return it or leave, like
+   turnouts.") or **Temporary** ("Due back on a date you choose, such as gear
+   for an acting role."). **Temporary** asks for a **Return date**.
+5. Select **Assign to _member_**. The date is filled in for you. This path has
+   no notes or condition field.
+
+**From the member** (kitting somebody out with several items): see
+[Item Distribution](#item-distribution) below.
+
+### Viewing Your Assignments
+
+Your assigned items appear in two places:
+
+- **Your member profile**, under **Assigned Inventory**.
+- **My Issued Gear**, under **Issued to Me**.
+
+> **Who can see a member's gear?** The **Assigned Inventory** section on a
+> member profile is shown only to the member themselves and to officers who can
+> manage gear. Other members do not see what you have signed for.
+
+---
+
+## Item Distribution and Batch Return
+
+Use these when you hand out or take back several items at once, for example at
+a training night or an annual PPE handout. Both start from a **member**: you
+choose the person first, then work on their gear.
+
+### Item Distribution
+
+1. Go to **Inventory Administration → Members** and select **Assign** on the
+   member's row. Or select **Assign to Member** at the top of **Inventory
+   Administration** and pick the member there. The **Distribute Items** window
+   opens.
+2. Under **Intended duration**, choose one:
+   - **Ongoing assignment**: "Theirs until they return it or leave, like
+     turnouts."
+   - **Temporary assignment**: "Assigned to them until a return date you
+     choose, such as gear for an acting role."
+   - **Temporary loan**: "Lent for a set time and due back on a date you
+     choose."
+
+   Both temporary choices ask for an **Expected return** date. A temporary
+   assignment stays on the member's gear with a due date. A temporary loan is
+   checked in when it comes back, and is flagged overdue if it is late. Pool
+   items are issued from stock whichever you choose.
+
+3. Scan each item, or type its name, barcode, serial number or asset tag and
+   press **Enter**. Items stack up in a list, each with a quantity. An item
+   added twice is refused with a message, not counted twice.
+4. Select **Review _n_ Items**. Check the list; each line says what it will
+   become. Then select **Confirm** in the **Confirm Distribution** box.
+
+There is no default duration. Until you choose one, **Review _n_ Items** stays
+off and the line beside it reads _"Choose Ongoing assignment, Temporary
+assignment or Temporary loan above to continue."_ For a temporary choice with no
+date it reads _"Set the expected return date to continue."_ This stops anyone
+handing out turnouts as a loan by accident.
+
+Each item is handled on its own. If one fails (for example, it is already on
+loan), the others still go through, and the results list says what happened to
+each. If an item is held by someone else, you are asked to **Confirm custody
+transfer** before it moves. The transfer takes effect immediately, and the
+record notes who made it.
+
+![Distribute Items for a member: the intro about scanning or typing each item, two items staged, Ongoing assignment chosen under Intended duration with each option's one-line description, and Review 2 Items enabled](./images/05-57-assign-scan-modal.png)
+
+![The inventory admin hub with Assign to Member in the header above the navigation cards](./images/05-54-admin-hub-assign.png)
+
+![The member picker opened from Assign to Member, with its search field and roster](./images/05-55-member-picker.png)
+
+### Batch Return
+
+1. Go to **Inventory Administration → Members**.
+2. Select **Return** on the member's row. The **Return Items** window lists
+   everything they hold, all selected, with **Select All** and **Deselect All**
+   above.
+3. Set a return condition for each item: **Excellent**, **Good**, **Fair**,
+   **Poor** or **Damaged**. For pool items you can return fewer than were
+   issued.
+4. Select **Return _n_ Items**.
+
+![Returning several items at once, each with its own condition](./images/05-58-return-items-modal.png)
+
+> **What if the item was reassigned meanwhile?** Each item is checked on its
+> own. If an item is no longer held by this member (for example, someone else
+> changed it at the same time), that item's return fails with a clear message
+> and the rest succeed.
+
+---
+
+## Temporary Loans and Returns
+
+### Temporary loans
+
+A temporary loan is a tracked item lent to a member until a set date. You
+create one with **Temporary loan** in [Item Distribution](#item-distribution).
+
+**Inventory Administration → Temporary Loans** lists them, with **Active** and
+**Overdue** tabs and a search box.
+
+- **Check In** closes a loan when the item comes back.
+- **Extend** gives the member a new due date. The new date runs to the end of
+  the day you choose, in your department's time zone.
+- A loan is overdue once its current due date has passed. Changing a loan
+  keeps its due date.
+
+![Equipment checkout page with the item, member, and expected return date](./images/05-08-checkouts.png)
+
+![An item on temporary issue past its return date: the history entry naming the borrower, the reason, the return deadline in the department's timezone, and that it is overdue and not yet returned](./images/05-82-item-overdue-loan.png)
+
+### What happens to returned gear
+
+The condition you record decides what happens next:
+
+| Return condition      | What happens to the item                                    |
+| --------------------- | ----------------------------------------------------------- |
+| Excellent, Good, Fair | Goes back to **Available**                                  |
+| Poor, Damaged         | Goes to **In Maintenance**, so it is inspected before reuse |
+
+For a pool item, a partial return keeps the issuance open. It closes when every
+unit is back.
+
+### When a member says they are bringing gear back
+
+On **My Issued Gear**, a member can select **Notify quartermaster of return**.
+The member is told: "This tells the quartermaster you are bringing it back.
+Hand the item in as usual; it stays on your list until they confirm they have
+it."
+
+The notice appears on **Inventory Administration → Return Requests**, and as a
+"Pending return" row in **Needs attention**. When the gear arrives:
+
+1. Open the notice and receive it.
+2. Choose the condition you see.
+3. For a pool return, type the count. The quantity box starts empty and says
+   "Count what came back. It must match the _n_ the member reported."
+4. If the gear is poor, damaged or out of service, choose a **Safety
+   follow-up**:
+   - **Maintenance**
+   - **Charge review**
+   - **Write-off review** (tracked items only)
+   - **Automatic** lets The Logbook pick. For an out-of-service pool return it
+     picks Maintenance.
+
+Each review starts clean. A choice made on one notice is never carried to the
+next one. If two quartermasters act on the same notice at once, only one
+decision is recorded.
+
+Damaged units of a pool return are kept out of the stock you can issue. A
+write-off is not offered for a pool return, because a write-off covers the whole
+item and would end every other member's issuance.
+
+![Receive Item for Nadia Belhaj's return of two pairs of Firefighting Gloves: Good chosen as the observed condition, the quantity box empty with the hint that the count must match the 2 the member reported, and Receive disabled](./images/05-96-receive-pool-return.png)
+
+![The top of Inventory Administration: Needs attention with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one](./images/05-97-needs-attention-pending-return.png)
+
+> **What if the gear came back another way?** If you take the item back through
+> **Return** on the members page, a pool return or a loan check-in, the
+> member's open notice is marked **received**. It leaves the returns queue and
+> the member's **Pending requests**. Find it under **Status: Received another
+> way**, with the note "Received through a direct return, not through this
+> notice; not inspected here." A pool return of fewer units than the notice
+> announced leaves the notice open.
+>
+> To inspect such a notice afterwards, select **Inspect** on its row. Choose the
+> **Observed condition**, a **Safety follow-up** if the gear is poor, damaged or
+> out of service, and any notes, then select **Record inspection**. Nothing is
+> returned to stock again. A tracked item you find unsafe while it is on the
+> shelf is moved to maintenance.
+>
+> Receiving through the notice is still the better path when there is one,
+> because it records the inspection against the member's report.
+
+### Charges
+
+**Inventory Administration → Charges** recovers the cost of lost or damaged
+gear. **Apply Charge** needs an amount greater than $0. A charge is final.
+
+For a pool item, the cost is based on the item's replacement cost (or its
+purchase price if no replacement cost is set) on the day it was issued. Later
+price changes do not change the amount owed for gear already issued.
+
+---
+
+## Members Inventory View (Admin)
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+**Inventory Administration → Members** opens the **Member Equipment** page, a
+view of every member's gear. For each member it shows:
+
+- Counts of permanent assignments, active loans, issued items and anything
+  overdue.
+- A row you can expand to see each item. Loans are listed under **Active
+  Checkouts**.
+- **Assign**, **Return** and **Sizes** buttons. Each is named for the member
+  ("Assign items to _name_"), so a screen reader can tell them apart.
+
+Officers who can manage member profiles also see a **Former members still
+holding property** panel above the list. It shows each dropped member with
+items still out: when they were dropped, the number and value of items, and
+which reminders have gone. **Send due reminders** runs the daily reminder check
+straight away. See [Membership](./01-membership.md#member-status-management).
+
+![Members inventory tab listing each member and their assigned item count](./images/05-24-member-inventory.png)
+
+### Scanning a Member's ID Card
+
+Instead of searching by name, scan the member's ID card:
+
+1. Select **Scan Member ID** at the top of the page.
+2. Your camera opens.
+3. Point it at the QR code or barcode on the member's card.
+4. The member is selected and their gear loads.
+
+This is useful on a phone at a handout, when you have many members to process.
+
+> **Tip.** The scanner reads the member's **badge code**. The Logbook issues one
+> for every member, and only a card printed from the Member ID Card feature
+> carries it. A hand-made QR code selects nobody, and the scan only finds
+> members of your own department. Older cards that carry a membership number
+> still scan until an administrator turns off **Accept old badges** (see
+> [Badge Codes](./01-membership.md#badge-codes)). If a scan fails, search by
+> name.
+
+If your department uses NFC ID cards, the **Scan Member ID** window also offers
+**Or tap their ID card**. See
+[Identifying a member by their ID card](#identifying-a-member-by-their-id-card).
+
+---
+
+## My Issued Gear
+
+**My Issued Gear** is every member's own page. It says what it is for: "The
+department equipment you are responsible for, and your requests for more."
+
+At the top are three tiles:
+
+| Tile                 | What it counts                                                          |
+| -------------------- | ----------------------------------------------------------------------- |
+| **Issued to me**     | Gear you hold: assignments and issued stock                             |
+| **Temporary loans**  | Items lent to you with a due date                                       |
+| **Pending requests** | Your gear requests not yet decided, and return notices not yet received |
+
+Below them:
+
+- **Issued to Me** lists everything you hold, newest first. Each row shows
+  what its record carries: serial number, asset tag and condition for a tracked
+  item; quantity and size for issued stock. Each has **Notify quartermaster of
+  return**.
+- **Active Temporary Loans** is its own list, because a due date is something
+  you must act on. Overdue loans are marked.
+- **My Requests** shows your gear requests with their status: Awaiting review,
+  Approved, Declined or Issued. The quartermaster's note appears under a
+  request ("Quartermaster: …").
+- **Request Equipment** and **My Sizes** are at the top.
+
+Empty sections explain themselves. "Nothing has been issued to you yet." is
+followed by how gear arrives and a link to the Learning Center's **Your Issued
+Gear** walkthrough.
+
+The gear widget on your dashboard uses the same counts and words as this page.
+
+![My Issued Gear as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
+
+![My Issued Gear for a member who holds nothing: the subtitle, the Issued to me, Temporary loans and Pending requests tiles at 0, Nothing has been issued to you yet with the link to the Learning Center walkthrough, and the Active Temporary Loans explanation](./images/05-98-my-equipment-empty.png)
+
+---
+
+## Gear Requests
+
+Members ask for gear through **Request Equipment** on **My Issued Gear**.
+Quartermasters review the requests and hand the gear out.
+
+### Submitting a Request
+
+1. Go to **My Issued Gear** and select **Request Equipment**.
+2. Find the item. The form opens on your department's gear, with the real
+   category names as filters. Search also matches category and product-group
+   names, so typing "shirt" finds a garment filed as "Long Sleeve".
+   - Each product is one row, however many sizes it comes in. Ten radios read
+     as "Portable Radio — 7 on hand", not ten separate lines.
+   - Gear the department does not list at all can be described in your own
+     words in the free-text box.
+3. Choose a size. The size step starts from **your size on file** (marked "from
+   your profile"), and your fit preference (such as Women's) is preselected. Any
+   other size the department stocks is one tap away.
+4. For counted items, enter how many (1 to 99).
+5. Under **How long do you need it?**, choose **Temporary — I expect to return
+   it** or **Ongoing — I need it as regular assigned gear**. This is a guide;
+   the quartermaster decides how it is issued.
+6. Optionally fill in **Reason** (for example worn out, doesn't fit, new
+   member). It helps the quartermaster decide.
+7. Select **Submit Request**. You see "Request sent to the quartermaster for
+   review".
+
+Gear restricted to certain ranks or positions is not shown to members who
+cannot request it.
+
+![Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask](./images/05-86-gear-request-products.png)
+
+![The size step for Structural Coat with XXL selected: labelled none on hand, the size-on-file line (from your profile), and the notice that none are on hand in XXL right now but the request can still be submitted](./images/05-87-gear-request-size.png)
+
+#### When your size is not on the shelf
+
+You can still ask. Each size button tells you what to expect:
+
+| Situation                        | The size reads   | The notice says                                                                                                                                           |
+| -------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The department never stocks it   | **not stocked**  | "The department doesn't stock this item in _size_." The quartermaster "will review it and decide whether to order it, offer a different size, or decline" |
+| Stocked, but none left           | **none on hand** | "None in _size_ on hand right now." The quartermaster "will decide whether to reorder, offer a substitute, or decline"                                    |
+| Counted item, you asked for more | (number on hand) | "Only _n_ on hand in _size_." The quartermaster "will decide how many to issue and whether to order the rest"                                             |
+
+Your own size is offered even when nothing is stocked in it. The request keeps
+the size you asked for, so the quartermaster knows exactly what you wanted.
+
+![The size step for the Department Polo, for a member whose shirt size on file is XXL: XXL offered and selected, labelled not stocked, the (from your profile) line, and the notice that the department doesn't stock this item in XXL](./images/05-99-gear-request-not-stocked.png)
+
+### Reviewing Requests (Admin)
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+1. Go to **Inventory Administration → Gear Requests**. The page opens on
+   **Awaiting review**. Switch **Filter by status** to **All** to see every
+   request.
+2. Select **Review** on a request. The window shows **Member asked for:**, the
+   size (and says so if it is not a size you stock), how the item is tracked
+   ("Tracked individually" or "Issued from bulk stock") and how many are on
+   hand.
+3. Optionally type **Review Notes**. They are shown to the member on their
+   request, for example why it was declined or when to expect it.
+4. Choose one:
+   - **Decline**
+   - **Approve for later fulfillment**
+   - **Approve & fulfill now**. When it is greyed out, hovering it explains:
+     _"Nothing matching is on hand to issue right now — approve it and fulfil
+     later"_.
+
+Members and quartermasters see the same status words:
+
+| Status              | Meaning                            |
+| ------------------- | ---------------------------------- |
+| **Awaiting review** | Not yet decided                    |
+| **Approved**        | Approved, waiting to be handed out |
+| **Declined**        | Turned down                        |
+| **Issued**          | Handed out. This is final          |
+
+![Review: Department Polo, for Nadia Belhaj's request in XXL: Size requested XXL, not a size the department stocks for this item, so Tracking reads Determined when fulfilled and Availability has no catalog item to count; the Review Notes box, and Decline, Approve for later fulfillment and Approve & fulfill now](./images/05-100-request-review-unstocked.png)
+
+### Equipment Request Fulfillment
+
+Once a request is **Approved**, a quartermaster can **Fulfill** it. This turns
+the request into an actual issuance, loan or assignment in one step.
+
+1. Select **Fulfill** on the approved request.
+2. Choose how it goes out:
+   - **Checkout — returnable individual item** (a temporary loan)
+   - **Assignment — assigned individual gear**
+   - **Issuance — pool-tracked stock** (checked against the member's
+     allowance unless you override it)
+
+   For a pool item the window opens on **Issuance**.
+
+3. Choose the item to issue from. The list offers every item of the variant the
+   member asked for (same product, size, colour and style), so what you can
+   fulfil from matches what the member was shown. The list is worked out across
+   your whole catalog. When it is shortened for display, it says so.
+4. Confirm.
+
+The request then shows **Issued** and a line saying how and when, for example
+"Fulfilled via issuance on 8/11/2026". The line does not name who fulfilled it
+or link to the record created. To trace it, find the issuance or loan by member
+and date.
+
+Only **Approved** requests can be fulfilled, so the same request cannot be
+handed out twice by accident.
+
+![Gear Requests filtered to All: requests awaiting review, an approved one carrying Fulfill, an issued one, and a declined one, each with its status badge](./images/05-68-equipment-request-states.png)
+
+### What the member is told
+
+When you approve, decline or issue a request, the member gets:
+
+- A bell notice linking to **My Issued Gear**.
+- A web push, if push is set up.
+- An email titled "_Your equipment request was approved / declined / issued:
+  item_", including anything you typed in **Review Notes**.
+
+**Approve & fulfill now** sends one notice, when the item is issued. Text
+messages are never sent; this is an administrative notice.
+
+- A department can switch the notice off entirely (bell, push and email) with
+  an **Equipment Request Update** rule under **Notifications → Notification
+  Rules**. With no rule, it is on.
+- A member can turn off just the email under **My Account → Notifications**
+  (**Equipment and inventory updates**), unless the department has made that
+  email required. The bell notice still arrives.
+- The email's wording is the **Equipment Request Update** template, under
+  **Communications → Email Templates → Inventory & Property**.
+
+![My Requests on My Issued Gear: gear requests awaiting review, approved, issued and declined, the declined one with the quartermaster's note beneath it, and the open return notice for two pairs of gloves](./images/05-101-my-requests-states.png)
 
 ---
 
 ## Issuance Allowances
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-An **issuance allowance** caps how many units of a category a member may receive in a period — for example, "3 job shirts per year per firefighter." Allowances are configured on the **Allowances** admin page (`/inventory/admin/allowances`).
+An **issuance allowance** limits how many units of a category a member may
+receive in a period. For example, "3 job shirts per year per firefighter".
 
 ### Creating an Allowance
 
-1. Navigate to **Inventory Admin** and open **Issuance Allowances** (or go directly to `/inventory/admin/allowances`).
-2. Click **New Allowance**.
+1. Go to **Inventory Administration → Issuance Allowances**.
+2. Select **New Allowance**.
 3. Fill in the form:
-   - **Category** _(required)_ — the inventory category the cap applies to. (This field is locked when editing.)
-   - **Applies To** _(optional)_ — a specific role/position, or leave as **All members** to apply org-wide.
-   - **Max Quantity** _(required)_ — a non-negative whole number of units allowed per period.
-   - **Period Type** — **Annual** (resets each calendar year), **Career** (lifetime total), or **One-time**.
-4. Click **Create**. Use the pencil and trash icons on each row to edit or delete an allowance.
+   - **Category** (required). It cannot be changed when you edit the allowance.
+   - **Applies To**: a position, or **All members**.
+   - **Max Quantity** (required): a whole number, 0 or more.
+   - **Period**: **Per Year** (resets on 1 January), **Per Career** (lifetime
+     total) or **One Time**.
+4. Save. Use the pencil and bin icons on a row to edit or delete it.
 
 ![Issuance allowances with per-category limits and periods](./images/05-11-allowances.png)
 
@@ -519,537 +1153,536 @@ An **issuance allowance** caps how many units of a category a member may receive
 
 ### How Allowances Are Enforced
 
-When a quartermaster issues a **pool** item to a member, the system checks the member's remaining allowance for that category first. Only **pool-tracked** items in the category count toward the total.
+When you issue a **pool** item, The Logbook checks the member's remaining
+allowance for that category. Only pool items in the category count.
 
-- The member's **highest-priority position** determines which allowance applies (a role-specific allowance wins over the org-wide default).
-- **Annual** allowances count issuances since January 1 of the current year; **Career** and **One-time** count all-time issuances.
-- A category with **no** configured allowance is **unlimited**.
-- If an issuance would exceed the cap, it is blocked with a message stating how many remain versus how many were requested. The issue dialog checks the allowance as soon as you pick the member, so the warning and the **Override allowance** checkbox appear before you submit rather than after — check it to issue anyway for a documented exception. The checkbox only appears when the quantity you have entered would actually exceed the cap.
+- The member's **highest-ranking position** decides which allowance applies. A
+  position-specific allowance wins over the all-members one.
+- **Per Year** counts issuances since 1 January. **Per Career** and **One
+  Time** count everything ever issued.
+- A category with **no** allowance is unlimited. The issue window says "No
+  issuance allowance is set for this category."
+- The window checks the allowance as soon as you pick the member. If the
+  quantity would go over, it says so and shows the **Override allowance**
+  checkbox. **Issue** stays off until you lower the quantity or tick the box.
+- A quantity above what is on hand is refused ("Only _n_ on hand."). On a
+  return, a quantity above what the member holds is refused ("Only _n_
+  issued.").
+- The list of current issuances names each holder. A member who has left reads
+  "Former member".
 
 ![Pool item issue dialog warning that the quantity exceeds the member’s uniform allowance, with the "Override allowance" checkbox](./images/05-13-issue-allowance-exceeded.png)
 
-> **The pool dialog refuses what the server would refuse** _(2026-09-29)_.
-> **Issue** stays disabled while the quantity exceeds the allowance and
-> **Override allowance** is unticked — it used to send the request and show the
-> server's refusal. A quantity above what is on hand is reported ("Only _n_ on
-> hand.") and blocks the issue; on a return, above what the member holds
-> ("Only _n_ issued."). Both used to be silently lowered to the maximum, so a
-> quartermaster who typed 12 issued 8 without being told. A category with no
-> allowance now says "No issuance allowance is set for this category." instead
-> of "-1 of -1 used", and the list of current issuances names each holder
-> (a departed member reads "Former member").
+### Allowance Edge Cases
 
-### Edge Cases
-
-| Scenario                       | Behavior                                                                   |
-| ------------------------------ | -------------------------------------------------------------------------- |
-| Category has no allowance      | Unlimited — issuance is never blocked                                      |
-| Member holds several positions | The highest-priority position selects the applicable allowance             |
-| Allowance set to 0             | The member cannot receive that category without an override                |
-| Admin override                 | `Override allowance` bypasses the cap; the issuance still records normally |
-
----
-
-## Equipment Request Fulfillment
-
-**Required Permission:** `inventory.manage`
-
-Once an equipment request has been **approved**, a quartermaster can **fulfill** it — turning the request into an actual issuance, checkout, or assignment in one step. Open the request from **Gear Requests** and click **Fulfill**.
-
-- The page opens on **Awaiting review**, which is the review queue. Approved
-  and issued requests are behind the status filter — switch it to **All** to
-  see a request's whole life.
-- The system routes fulfillment by the item's tracking type: a **pool** item becomes a pool issuance (allowance-checked unless overridden); an **individual** item becomes a checkout (for checkout requests) or an assignment. For pool stock the **Fulfill** dialog opens on issuance, and picking a pool item moves the method there _(2026-09-29)_ — it used to offer a checkout, which the server always refuses for pool stock.
-- The request then shows a terminal **Issued** status and one line saying
-  which way it went and when — "Fulfilled via issuance on 8/11/2026".
-
-> **Corrected 2026-08-12.** That last line previously promised "who fulfilled
-> it, when, and a link to the created record". The card names neither the
-> fulfiller nor a link; the reference to the issuance or checkout is stored
-> (`fulfillment_reference_id`) but nothing renders it, so tracing a fulfilled
-> request to what it created means finding that record by member and date.
-
-### The quartermaster and the member use the same words _(2026-09-28)_
-
-The stored statuses are workflow terms, and "denied" in particular reads as a
-verdict on the member. Both sides now show one set of labels — the
-quartermaster's badges, the **Filter by status** list and the member's own
-request list:
-
-| Stored    | Shown as            |
-| --------- | ------------------- |
-| pending   | **Awaiting review** |
-| approved  | **Approved**        |
-| denied    | **Declined**        |
-| fulfilled | **Issued**          |
-
-In the review dialog the button is **Decline** (not "Deny"), next to **Approve
-for later fulfillment** and **Approve & fulfill now**. The dialog reads **Member
-asked for:** and describes tracking in words ("Tracked individually" / "Issued
-from bulk stock"). When **Approve & fulfill now** is greyed out, hovering it
-says why: _"Nothing matching is on hand to issue right now — approve it and
-fulfil later"_. Toasts use the member's words too — "Request declined",
-"Issued to _name_". Filter values sent to the API are unchanged.
-
-**Review Notes now reach the member.** The placeholder says so ("Shown to the
-member on their request, e.g. why it was declined or when to expect it"), and
-the member's request list on **My Issued Gear** shows the note under the
-request. Before this, the dialog promised the note was "for the requester" but
-nothing displayed it, so a decline arrived with no reason.
-
-### The member is told the outcome _(2026-09-28)_
-
-Approving, declining or issuing a request now sends the requester a notice: an
-in-app bell entry linking to **My Issued Gear**, a web push where push is set
-up, and an email from the new editable **Equipment Request Update** email
-template (on the Email Templates page), carrying your review note. **Never a text
-message** — this is an administrative notice.
-
-- **Approve & fulfill now** sends one notice, when the item is issued, not an
-  "approved" one followed by an "issued" one.
-- A department can switch the whole notice off with the **Equipment Request
-  Update** notification rule (Notifications → Rules), which is on by default.
-- The email is optional for the member: it falls under **Equipment and
-  inventory updates** in the email choices on their own account settings, on
-  by default. The bell entry
-  still arrives if they turn the email off.
-
-Migration `fb7da5b05833` widens the template-type and rule-trigger columns for
-the new value; it changes no data.
-
-> **Note:** Fulfillment is **not** reversible by re-running it — each fulfill action creates a new issuance/checkout/assignment. Only requests in the **Approved** state can be fulfilled, which prevents accidentally fulfilling the same request twice.
-
-![Gear Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge](./images/05-68-equipment-request-states.png)
-
-**[SCREENSHOT — REPLACE `05-68-equipment-request-states.png`.** The status badges and the filter now read **Awaiting review**, **Approved**, **Issued** and **Declined** (was Pending / Approved / Fulfilled / Denied), and the filter starts on **Awaiting review**. Re-shoot with **All** selected so one request in each of Awaiting review, Approved (carrying **Fulfill**) and Issued is in frame.**]**
-
----
-
-### What the member is told
-
-When you approve, decline or issue a request, the member gets a bell notice
-linking to **My Issued Gear**, a web push if push is set up, and an email titled
-"_Your equipment request was approved / declined / issued: <item>_". Anything
-you typed in the review box is included, and is also shown under the request
-on their **My Requests** list. **Approve & fulfill now** sends a single notice,
-when the item is issued. Texts are never sent.
-
-- A department can switch the notice off entirely (bell, push and email) with
-  an **Equipment Request Update** rule under **Notifications → Notification
-  Rules**. With no rule, it is on.
-- A member can turn off just the email under **My Account > Notifications**
-  (**Equipment and inventory updates**), unless the department has made that
-  email required.
-- The email's wording is the **Equipment Request Update** template, under
-  **Communications → Email Templates → Inventory & Property**.
-
-<!-- Screenshot needed:
-_[Member at /inventory/my-equipment: My Requests with seeded requests in Awaiting review, Issued and Declined, the declined one carrying "Quartermaster: <note>" beneath it.]_
--->
+| What happens                       | What it means                                               |
+| ---------------------------------- | ----------------------------------------------------------- |
+| The category has no allowance      | Unlimited. Issuing is never blocked                         |
+| The member holds several positions | The highest-ranking position decides                        |
+| The allowance is 0                 | The member cannot receive that category without an override |
+| You tick **Override allowance**    | The limit is skipped; the issuance is recorded normally     |
 
 ---
 
 ## Reorder Requests
 
-When stock falls below an item's reorder point, the system generates alerts and supports a formal reorder request workflow.
+When stock runs low, a reorder request tracks the purchase from request to
+delivery.
 
 ### Setting Reorder Points
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Open any pool item's edit form.
-2. Set the **Reorder Point** — the stock level at which a reorder alert triggers.
+1. Open a pool item's edit form.
+2. Set the **Reorder Point**: the stock level at which you want a warning.
 3. Save.
 
-When available stock drops to or below the reorder point, the item appears on the low-stock dashboard and in the daily low-stock email.
+When the stock drops to or below the reorder point, the item appears in
+**Needs attention** and in the daily low-stock email.
 
 ### Creating a Reorder Request
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Navigate to **Inventory Admin > Reorder** (`/inventory/admin/reorder`).
-2. Click **Create Reorder Request**.
+1. Go to **Inventory Administration → Reorder Requests**.
+2. Select **New Request**. The **New Reorder Request** window opens.
 3. Under **Inventory item**, search for and pick the item the order restocks.
-   The item name fills in from it if you have not typed one. A **Quick fill
-   from low stock** chip links the category's lowest item for you.
-4. Enter the requested quantity and any notes.
-5. Submit the request.
+   The item name fills in from it if you have not typed one. **Quick fill from
+   low stock** offers the items that are running low.
+4. Enter the quantity and any notes.
+5. Submit.
 
-**Link the item** _(2026-10-11)_: stock can only be received against a linked
-item. A request can still be saved without one; link it later with **Edit**
-while it is pending or approved, or when you receive it (below). Once stock has
-been received against a request, its linked item can no longer be changed.
-
-### Reorder Request Workflow
-
-| Status                 | Description                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| **Pending**            | Request submitted, awaiting approval                                                  |
-| **Approved**           | Approved by a supervisor                                                              |
-| **Ordered**            | Purchase order placed with vendor (vendor name, PO number, expected delivery tracked) |
-| **Partially received** | Some of the ordered quantity has been received                                        |
-| **Received**           | Items received and stock quantities reconciled                                        |
-| **Cancelled**          | Withdrawn before it was received                                                      |
-
-Each status transition is audit-logged with the user, timestamp, and any notes.
-The list, the status filter and the badges show these words _(2026-09-29)_ —
-they used to show the stored values (`partially_received`).
-
-> **Receiving an order that was never linked** _(2026-10-11, workflow review
-> W41-5)_. **Receive stock** on a request with no linked item now opens with an
-> **Inventory item** search first: pick the item the delivery goes onto, then
-> fill in the quantity, storage location and unit cost as usual. The request
-> stays linked to that item. Until an item is picked, the receive fields stay
-> hidden and the button stays disabled.
+**Link the item.** Stock can only be received against a linked item. You can
+save a request without one, and link it later with **Edit** while it is pending
+or approved, or when you receive it. Once stock has arrived against a request,
+its linked item cannot be changed.
 
 ![Reorder requests table with requested quantities and status](./images/05-14-reorder-requests.png)
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/reorder: an Ordered request with no linked item, with Receive stock open showing the Inventory item search and the note "This order isn't linked to an inventory item yet…", Receive stock disabled. Do not submit.]_
--->
+### Reorder Request Workflow
 
-> **Editing an order that has started arriving** _(2026-10-11)_: **Edit** can
-> still change the quantity, vendor details and notes after a partial receipt,
-> but it refuses a **Quantity requested** lower than what has already been
-> received ("Quantity requested cannot be lower than the 6 already received").
-> To stop waiting for the rest, cancel the remainder through the workflow
-> rather than shrinking the order. An edit and a receipt arriving at the same
-> moment are applied one after the other, never interleaved.
+| Status                 | Meaning                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| **Pending**            | Submitted, waiting for approval                                                      |
+| **Approved**           | Approved by a supervisor                                                             |
+| **Ordered**            | Ordered from the vendor (vendor, order reference and expected delivery are recorded) |
+| **Partially received** | Some of the order has arrived                                                        |
+| **Received**           | Everything has arrived and the stock count is updated                                |
+| **Cancelled**          | Withdrawn before it arrived                                                          |
 
-> **Edge case:** If an item's stock is replenished through a regular return or issuance reversal (not through the reorder workflow), the reorder request remains open. Admins should manually close or cancel outdated requests.
+Each change of status is recorded with who made it, when, and any notes.
 
-### Low Stock Alerts Are Email-Only
+**Receiving** a delivery adds the units to the item's stock straight away, so
+they can be issued at once.
 
-> **Corrected 2026-10-04.** This section used to describe SMS low-stock alerts
-> sent through Twilio, with recipients under "Settings > Notifications >
-> Inventory Alerts". No such text is sent: since 2026-08-16 SMS is limited to
-> the alerts in the `SmsAlert` allowlist (today, only urgent department
-> messages), and reordering is a business-hours decision made against an
-> itemised table a text cannot carry.
+- **An order that was never linked.** **Receive stock** on a request with no
+  linked item opens with an **Inventory item** search first. Pick the item the
+  delivery goes onto, then enter the quantity, storage place and unit cost as
+  usual. Until you pick an item, the other fields stay hidden and the button
+  stays off. The request stays linked to that item.
+- **Editing an order that has started arriving.** **Edit** can still change the
+  quantity, vendor details and notes. It refuses a **Quantity requested** lower
+  than what has already arrived ("Quantity requested cannot be lower than the 6
+  already received"). To stop waiting for the rest, cancel the remainder
+  instead.
+- **Restocked another way.** If stock comes back through a return rather than
+  the reorder, the request stays open. Close or cancel it yourself.
 
-Once a day (07:00 where an external scheduler runs it), each department's
-low-stock items are emailed as a table — item, category, current quantity and
-reorder point. For an item stocked in dated lots the quantity counts in-date
-lots and says so. Each recipient gets only the rows they may see: gear rows go
-to inventory managers, medical-supply rows to whoever manages medical supplies,
-and someone holding both gets one complete email. An officer who has turned
-off their quartermaster duty emails is left out.
-
-### What the alert emails say now _(2026-10-05)_
-
-Several alert emails were reworded because their subjects or text claimed
-something the list did not match:
-
-- **Low stock** says items are **at or below** the reorder point (the list has
-  always included items sitting exactly at it). The category now sits under the
-  item name so the table fits a phone.
-- **NFPA 1851 retirement** says items are **approaching or past** retirement,
-  and gives the past-due count when there is one (the **Past Due — Retire
-  Immediately** group was always listed). The serial number or asset tag sits
-  under the item name, and "N/A" is no longer printed when there is none.
-- **Property return reminder and member-dropped notice** are two columns, **Item**
-  and **Value**, with condition, serial number and asset tag as grey lines under
-  the item. A missing identifier is left out rather than printed as a dash.
-- **Weekly supplies alert** is titled **Supplies to Replace** and has a
-  **Status** column (see [Shifts & Scheduling](./03-scheduling.md#alerts)).
-- The **certification expiring** alert says **Expires Today** or **Expires
-  Tomorrow** instead of "Expiring in 0 Days" / "Expiring in 1 Days"; the email
-  body and the officers' in-app notice use the same wording.
-- The **election results report** email is three columns (Candidate / Votes /
-  Result) with each position as a heading row.
-
-<!-- Screenshot needed:
-_[A test send, at phone width (390px), of the Supplies to Replace email from the email template editor preview: the Status column with one expiring row, one "Restock reported" row and one "Short — 2 of 4 aboard" row.]_
--->
+![Receive stock on the ordered Rescue Rope, 150 ft request, which was never linked to an item: the Inventory item search and the note that the order isn't linked to an inventory item yet, with Receive stock disabled](./images/05-102-reorder-receive-unlinked.png)
 
 ---
 
-## Item Detail Page
+## Low Stock Alerts
 
-Each inventory item has a dedicated detail page at `/inventory/items/:id` with a two-column layout:
+Pool items with a reorder point warn you when stock is low.
 
-### Left Sidebar
+**On the administration page.** **Needs attention** on **Inventory
+Administration** lists each low-stock category with what is on hand and its
+reorder level. The **Reorder Requests** card shows how many there are. The same
+list also flags maintenance that is due or overdue, overdue loans and overdue
+deliveries.
 
-- **Barcode**: Visual barcode (Code128) with print button
-- **Label Printed** _(2026-09-23)_: in the **Basic Info** card — the date a label was confirmed printed, or **Needs a label**
-- **Quick Info**: Status, condition, category, tracking type, location
-- **Assignment/Issuance History**: Who has/had this item and when
+![Inventory dashboard with low-stock, maintenance, and assignment alert cards](./images/05-02-inventory-dashboard.png)
 
-### Main Content (Tabbed)
+### Low stock emails
 
-- **Overview**: Full item details, photos, purchase info, warranty
-- **History**: Chronological log of all status changes, assignments, checkouts, and returns — shown only to `inventory.manage` holders _(2026-09-29)_; a member opening their own gear used to get "Insufficient permissions" over an empty tab. Without it the page opens on **Stock Lots**
-- **Maintenance**: Maintenance records and upcoming scheduled maintenance
-- **NFPA Compliance**: (If NFPA tracking enabled) Lifecycle dates, ensemble info, exposures, inspections
+Once a day, each department's low-stock items are emailed as a table. The email
+says the items are **at or below** the reorder point. Each row shows the item
+with its category under it, the current quantity and the reorder point. For an
+item kept in dated lots, the quantity counts in-date lots only, and says so.
 
-![Inventory item detail with its barcode, quick info, and history panels](./images/05-06-item-detail.png)
+- Each person gets only the rows they may see. Gear rows go to officers who
+  manage gear; medical rows to those who manage medical supplies. Someone with
+  both gets one complete email.
+- An officer who has turned off their quartermaster duty emails is left out.
+- When the email lists gear or uniform rows it ends with **View low-stock gear
+  and uniforms**. The link opens **Inventory Items** already narrowed to items at
+  or below their reorder point, with a notice **Showing only items at or below
+  their reorder point** and a **Show all items** button to lift it. Medical rows
+  link to the **Low stock** tab of Medical Supplies instead, and an officer who
+  sees only one kind gets only that link.
+- Low-stock alerts are **email only**. No text message is sent, because
+  reordering is a business-hours decision made from an item table a text
+  cannot hold.
 
----
+### Other inventory alert emails
 
-## Item Assignments
+| Email                                                      | What it shows                                                                                                                                       |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **NFPA 1851 retirement** (weekly)                          | Items **approaching or past** their retirement date, with a past-due count when there is one. The serial number or asset tag is under the item name |
+| **Property return reminder** and **member dropped** notice | Two columns, **Item** and **Value**, with condition, serial number and asset tag as grey lines under the item. A missing value is left out          |
+| **Supplies to Replace** (weekly)                           | Supplies expiring on the apparatus, with a **Status** column. See [Shifts & Scheduling](./03-scheduling.md#alerts)                                  |
 
-Items can be permanently assigned to members. Assigned items appear on the member's profile page.
-
-### Assigning an Item
-
-**Required Permission:** `inventory.manage`
-
-There are two ways in, and which one you want depends on whether you are
-starting from the item or from the person.
-
-**From the item** — one item, one member:
-
-1. Open the item detail view.
-2. In the **Assignment** card, click **Assign Item**. (It appears only on
-   individually-tracked items that are not already assigned; an assigned one
-   offers **Unassign** instead.)
-3. Search for the member and pick them.
-4. Choose **Permanent** ("Theirs until they return it or leave, like
-   turnouts.") or **Temporary** ("Due back on a date you choose, such as gear
-   for an acting role."), which then asks for a **Return date**, and click
-   **Assign to _member_**. The assignment date is stamped for you, and there is
-   no notes or condition field on this path.
-
-**From the member** — kitting somebody out, several items at once:
-
-1. Go to **Inventory Admin > Members**.
-2. Click **Assign** on their row. The **Distribute Items** dialog opens.
-3. Under **Intended duration**, choose **Ongoing assignment** ("Theirs until
-   they return it or leave, like turnouts."), **Temporary assignment**
-   ("Assigned to them until a return date you choose, such as gear for an
-   acting role.") or **Temporary loan** ("Lent for a set time and due back on a
-   date you choose."). Both temporary choices then ask for an **Expected
-   return**. A temporary assignment stays on the member's assigned gear with a
-   due date; a temporary loan is checked in when it comes back and is flagged
-   overdue if it is late. Pool stock is issued from stock whichever you choose.
-4. Scan each item, or type a name, barcode, serial or asset tag and press
-   **Enter**. Items stack up in a list with a quantity each, and anything added
-   twice is refused with a notice rather than counted twice.
-5. Click **Review _n_ Items**, then **Confirm** in the **Confirm Distribution**
-   box. Each item is applied independently, so one failure does not lose the
-   rest — the result list says what happened to each.
-
-> **The review button says what it is waiting for** _(2026-09-30)_. With items
-> staged and no duration chosen, **Review _n_ Items** stays disabled and the
-> line beside it reads _"Choose Ongoing assignment, Temporary assignment or
-> Temporary loan above to continue."_; for a temporary choice with no date it reads _"Set the expected
-> return date to continue."_ There is still no default — choosing is deliberate,
-> so nobody hands out turnouts as a loan by accident. Before this the button
-> was disabled with no explanation.
-
-### Viewing Your Assignments
-
-Your assigned items appear in two places:
-
-- **Your Member Profile** - Under the "Assigned Inventory" section
-- **Inventory > Items** - Items assigned to you are marked with your name
-
-![Assigning items to a member by scanning or searching, with two items staged](./images/05-57-assign-scan-modal.png)
-
-**[SCREENSHOT — REPLACE `05-57-assign-scan-modal.png`.** The dialog's intro now reads "Hand gear to this member. Find each item by scanning its label or typing its name, serial number or barcode, then choose how long they keep it.", and each **Intended duration** option carries a one-line description under its name. Re-shoot **Distribute Items** with two items staged and **Ongoing assignment** chosen, so **Review 2 Items** is enabled; a second frame with no duration chosen would show the "Choose Ongoing assignment, Temporary assignment or Temporary loan above to continue." line.**]**
+![The weekly Supplies to Replace email at phone width: supplies on apparatus with replacement stock ready, the Status column showing a date with days left for an expiring supply, Restock reported with the crew's note, and Short with how many are aboard against the target, and the shelf lots expiring below](./images/05-136-supplies-to-replace-email-phone.png)
 
 ---
 
-## Checkout and Return
+## Dated Stock Lots and Receiving
 
-For items that are temporarily loaned (not permanently assigned), use the checkout system.
+Consumables such as gauze, saline, medications and batteries are not one flat
+count. They arrive in batches with expiration dates. Which batch a unit came
+from matters when something is recalled or about to expire.
 
-### Checking Out Items
+A **lot** is one dated batch: a lot number, an expiration date, a quantity and
+the date it was received.
 
-1. Navigate to the item or use **barcode scanning**.
-2. Click **Check Out**.
-3. Select the member borrowing the item.
-4. Set the expected return date.
-5. Confirm the checkout.
+### Where "on hand" comes from
 
-### Returning Items
+An item's on-hand figure comes from one of two places:
 
-1. Open the item or scan its barcode.
-2. Click **Return**.
-3. Set the return condition:
-   - **Excellent** — like new
-   - **Good** — normal wear
-   - **Fair** — noticeable wear but functional
-   - **Poor** — significant wear, may need repair
-   - **Damaged** — needs repair or replacement
-4. Confirm.
+| Item                  | On-hand figure                    |
+| --------------------- | --------------------------------- |
+| Has lots              | The total of its **in-date** lots |
+| Has no lots           | The item's own **Quantity**       |
+| Has lots, all expired | **Zero**                          |
 
-![Equipment checkout page with the item, member, and expected return date](./images/05-08-checkouts.png)
+**Expired stock counts as nothing.** An equipment-check swap refuses it anyway,
+so counting it would hide the shortage you most need to order for.
+
+The item list labels this figure **"in-date lots"** so it is not mistaken for a
+pool count. The spreadsheet export has it in its own **Ready Lot Stock** column.
+The low-stock email uses the same figure and says where it came from.
+
+For an item kept in lots, the item's own **Quantity** is not used: receiving a
+lot does not change it, and a swap takes stock from the lot only. That is why
+the two numbers can disagree. The lot figure is the one that counts.
+
+![Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure](./images/05-53-items-grid-lot-stock.png)
+
+### Receiving a delivery
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+1. Go to the item list.
+2. Select **Receive Stock**.
+3. Add one line per item in the delivery: **item**, **lot number**,
+   **expiration** and **quantity**.
+4. Set the **received date** once, for the whole delivery.
+5. Review and submit.
+
+![Receive Stock: four delivery lines, each its own item, lot and expiry, under one received date](./images/05-09-receive-stock-modal.png)
+
+**The whole delivery is saved, or none of it is.** If any line has a problem,
+nothing is saved and the errors are shown against those lines. A half-saved
+delivery would be worse: you could not tell which lines landed, and entering it
+again would count some twice.
+
+### Adding many catalog items at once
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+1. Go to the item list.
+2. Select **Add Several**.
+3. Paste or type one item per line. A name alone is enough. Add `| quantity |
+unit` after it to set those too.
+4. Choose a **category** and a **tracking** type for the whole list. They apply
+   to every line, so paste one kind of thing at a time. **Counted** suits
+   anything a checklist counts: a bracket holds four gauze, not gauze #7.
+5. Check the preview and submit.
+
+![Add Several: eight pasted lines and the parsed preview of name, quantity and unit](./images/05-10-bulk-add-items.png)
+
+The preview shows what each line was read as (name, quantity, unit), with a
+dash where a line gave none. It does **not** mark names you already have. Those
+are skipped, not refused, and named in the message after you submit. So you can
+paste a list again after it grows, and only the new lines are added. As with
+receiving, if any line has a problem, nothing is saved.
+
+**Import CSV**, beside these buttons, is the third way in. See
+[CSV Import](#csv-import).
+
+### Which trucks carry this item
+
+Open any item's **Stock Lots** tab. Below the lots on the shelf is **Deployed
+on apparatus**: the checklist positions this item fills, the apparatus and
+compartment of each, what that truck carries right now, and the soonest
+expiration aboard.
+
+![An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below](./images/05-07-item-stock-deployed.png)
+
+Use this to work a **recall**: you are holding the item and need to know which
+rigs to visit. For the opposite question ("what is expiring on my trucks?"), use
+**Inventory Administration → Expiring on Apparatus**. See
+[Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step).
+
+### Stock Lot Edge Cases
+
+| What happens                                               | What it means                                                                                                                                              |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A lot passes its expiration date                           | It stops counting toward on hand, is flagged in the list, and an equipment-check swap refuses it                                                           |
+| Every lot of an item has expired                           | On hand reads **zero**                                                                                                                                     |
+| An item has no lots                                        | Nothing changes. It reports its pool figures                                                                                                               |
+| A swap uses up a lot                                       | The lot is removed. What went onto the truck keeps its own copy of the lot number and expiration                                                           |
+| A lot is deleted while some of it is on an apparatus       | The truck's record keeps its lot number and expiration                                                                                                     |
+| One line of **Receive Stock** has a problem                | **Nothing is saved.** Fix the line and submit the whole delivery again                                                                                     |
+| An **Add Several** line names an item you already have     | It is skipped and named. The rest are created                                                                                                              |
+| A lot has no expiration date                               | It counts toward on hand and is used **last**                                                                                                              |
+| You open **On hand** or **Quantity** on a lot-stocked item | The box is replaced by the lot figure ("_N_ from stock lots — adjust by receiving a delivery or editing the item's lots"). Saving the form leaves it alone |
 
 ---
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/returns: the Receive Item dialog for a multi-unit pool return, with a condition chosen, the quantity box empty, the hint "Count what came back. It must match the 2 the member reported." visible, and Receive disabled. Do not submit.]_
--->
+## CSV Import
 
-## Item Distribution and Batch Return
+You can add many items at once from a spreadsheet saved as a CSV file.
 
-For events or training sessions where multiple items need to be processed at
-once, use these two screens.
+### Importing Items
 
-Both start from a **member**, not from a list of items — you pick the person on
-**Inventory Admin > Members** and the screen then works on their gear.
-There is no separate entry in the admin menu for either.
+Needs the **Manage gear, uniforms and equipment** permission.
 
-> **"Batch Checkout" is now "Item Distribution"** _(renamed 2026-08-26)_. The
-> module had several names for the same operations. The canonical set now lives
-> in one place, as a glossary and a request-type helper:
->
-> | Term               | Means                                                                      |
-> | ------------------ | -------------------------------------------------------------------------- |
-> | **Assignment**     | Serialized gear held on an ongoing basis                                   |
-> | **Temporary loan** | Serialized gear expected back by a date                                    |
-> | **Issuance**       | Quantity-tracked stock given to a member                                   |
-> | **Return**         | Physically receiving assigned or issued gear                               |
-> | **Check-in**       | Closing a temporary loan when the gear is received                         |
-> | **Transfer**       | Moving serialized gear between holders                                     |
-> | **Distribution**   | One mixed batch that may create assignments, temporary loans and issuances |
->
-> **The distribution rename has landed; the rest of the vocabulary is a target,
-> not a description of every screen.** You will still see **Active Checkouts**
-> on the expanded member-equipment view and **Checkout — returnable individual
-> item** in the equipment-request fulfilment selector. Nothing about your data
-> changed either way — these are labels.
+1. Go to **Inventory Administration → Import**, or select **Import CSV** on the
+   item list.
+2. Select **Download CSV Template** to see the expected columns, with example
+   rows.
+3. Fill in your items. Only **Name** is required. The template's other columns
+   are Category, Item Type, Serial Number, Asset Tag, Status, Condition,
+   Tracking Type, Quantity, Manufacturer, Model Number, Purchase Date, Purchase
+   Price, Purchase Order, Vendor, Warranty Expiration, Storage Location,
+   Station, Size, Color, Description, Notes and **Also Called** (other names
+   for the item, separated by semicolons or commas; see
+   [When the checklist and the catalog use different names](#when-the-checklist-and-the-catalog-use-different-names)).
+   The template's example rows include common medical supplies (no
+   medications).
+4. Select **Choose a CSV file** and pick your file. (The box does not take
+   dragged files.)
+5. Check the preview of the first rows.
+6. Select **Import**. The result says how many were imported, and lists any
+   rows that were skipped and why.
 
-### Item Distribution
+A value with a comma in it must be in quotes, for example
+`"Gauze Pads, 4x4 Sterile"`. It is then read as one value.
 
-1. Go to **Inventory Admin > Members**.
-2. Click **Assign** on the member's row, and choose the **Intended duration**.
-3. Scan each item, or type a name, barcode, serial or asset tag and press
-   **Enter**. Each addition appears in a staged list with its own quantity.
-4. Click **Review _n_ Items**, check the list (each line says whether it becomes
-   a permanent assignment, a temporary loan or a pool issuance), and confirm.
+### Validation
 
-Each item is processed individually — if one item fails (e.g., already checked out), the others still succeed. The results screen shows per-item success/failure status.
+| What happens                                                       | What it means                                                                                                                      |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| A row has no name                                                  | The row is skipped                                                                                                                 |
+| A serial number is already in your catalog or the file             | The row is skipped                                                                                                                 |
+| A pool item has no quantity                                        | The row is skipped                                                                                                                 |
+| Quantity or purchase price is negative                             | The row is skipped                                                                                                                 |
+| The category name does not match one you have                      | The item is imported **without a category**, and the result warns you                                                              |
+| An item is imported without a category                             | It is treated as gear, not as a medical supply                                                                                     |
+| **Also Called** has more than 10 names, or one over 100 characters | The row is skipped and reported. The names are not shortened                                                                       |
+| The **Vendor** names a supplier you do not have on file            | The item is imported with the name as plain text. The result lists such names so you can attach them later on the **Vendors** page |
+| One supplier is spelled several ways (`Gals`, `gals`)              | It is listed **once**                                                                                                              |
+| A row that was skipped named an unknown supplier                   | That name is **not** listed                                                                                                        |
+| The name matches a supplier you switched off                       | The item is linked to that supplier                                                                                                |
+| The file is very large                                             | It is refused. Split it into smaller files                                                                                         |
 
-### Batch Return
+> **Tip.** Start with a small test import (5 to 10 items) before a large one.
 
-1. Go to **Inventory Admin > Members**.
-2. Click **Return** on the member's row. Everything they hold is listed and
-   selected, with **Select All** / **Deselect All** above it.
-3. For each item, set the return condition (excellent, good, fair, poor, damaged).
-4. Invalid conditions are rejected — the system does not silently fall back to a default.
+---
 
-![Returning several items at once, each with its own condition](./images/05-58-return-items-modal.png)
+## Storage Areas
 
-> **Hint:** Batch operations validate each item independently. If an item is assigned to a different user than expected (e.g., due to a concurrent change), that item's return will fail with a clear error message while the rest succeed.
+Storage areas are the racks, shelves, bins and cabinets inside each room. Open
+them from **Inventory Administration → Storage Areas**. Areas can sit inside
+each other: a rack holds shelves, a shelf holds boxes.
+
+### Viewing items in a storage area
+
+Select an area to expand it. Its items appear in a panel with their name,
+serial number, status and condition. Select an item to open its page. An area
+with no items says "No items found in this area." Areas with nothing inside them
+have no expand toggle.
+
+![Storage areas page with an expanded area listing its items](./images/05-36-storage-areas.png)
+
+![Storage area expanded to show the items stored in it](./images/05-48-storage-area-items.png)
+
+### Deleting a storage area
+
+**Delete** waits until the area is empty. The dialog refuses while:
+
+- the area holds items ("Move them to another storage area first."), or
+- other areas sit inside it ("Move or delete those first.").
+
+This stops items being left with no place, and stops nested areas being cut
+off.
+
+![Delete Quartermaster Shelving? refused on both counts: it holds items, which must move to another storage area first, and it has an area nested inside it, with Delete greyed out](./images/05-104-storage-area-delete-blocked.png)
+
+### Finding a shelf by its label
+
+Storage areas carry barcodes too (`SA-000001` and so on). **Scan shelf label**
+reads a shelf's code from the camera or a handheld scanner and jumps to that
+area, opening the areas above it and its item list. The page address then
+points at that area, so you can bookmark or share it.
+
+Shelf codes are read here and by **Put away** and **Check contents** below. The
+assign and return scanner recognises them too: scanning a shelf label there adds
+nothing to the list. It says, for example, "SA-0007 is the label for the storage
+area Glove shelf, not an item". Officers who can manage inventory get **Open
+storage area**, which jumps to it here. Only an exact, whole label matches, so a
+partial code never pulls shelves into item results.
+
+### Putting items away by scanning
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+**Put away** on **Storage Areas** files a batch of items onto one shelf:
+
+1. Scan the shelf's label. Or open the shelf first, and it is already chosen.
+2. Scan each item going onto it. Each one is looked up and added to the list.
+   An unknown code or a repeat is refused with a reason.
+3. Select **File _N_ items on …**. Items assigned or lent to a member, or
+   recorded as lost, stolen or retired, stay where they are and are listed with
+   the reason.
+
+You cannot change the shelf while items are waiting to be filed. File or clear
+them first, so it is always clear which shelf they were scanned for.
+
+If you picked the shelf on screen rather than scanning it, the result offers
+**Print shelf label**, so next time you can start with a scan. A shelf with no
+barcode yet gets one when its label prints.
+
+![Put away on Storage Areas after scanning the Quartermaster Shelving label and two item barcodes: Filing onto Quartermaster Shelving (SA-000003), the two items listed with remove buttons, and File 2 items on Quartermaster Shelving](./images/05-105-put-away-panel.png)
+
+### Checking a bag, box or bin
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+A bag, box or bin is a storage area, so its label is a storage-area label.
+**Check contents** on **Storage Areas** compares what is inside with what the
+records say:
+
+1. Scan the container's label (or open it first). Everything filed on it, and
+   on areas inside it such as a bag's pockets, is loaded.
+2. Scan everything inside. The panel counts **_N_ of _M_ found** and lists what
+   has **not been scanned yet**, with the pocket each should be in.
+3. An item recorded somewhere else is listed under **Doesn't belong here**,
+   with where it is recorded. **File it here** moves it into this container,
+   with the same rules as **Put away**.
+
+Items assigned or lent to a member are not counted as missing. If one is
+scanned inside anyway, it is listed under **Here, but the record disagrees** so
+you can correct the record. Checking alone changes nothing.
+
+![Check contents on the Uniform Bins: one of its items found, the rest listed under Not scanned yet, and Firefighting Gloves under Doesn't belong here with the rack it is recorded on and File it here](./images/05-106-check-contents-panel.png)
+
+### Shelf, rack and bin labels
+
+Needs the **Manage gear, uniforms and equipment** permission.
+
+Labels for storage areas print from **Storage Areas**:
+
+- **Print _N_ labels** at the top prints a label for every area in view: the
+  chosen facility or room, or your search results.
+- The printer icon on a row prints just that one.
+
+The **Print Storage Area Labels** page works like the other label pages: PDF,
+**Print in browser**, a registered label printer, QR codes, and **Start at
+label** for a partly used sheet. Each label shows the area's name and where it
+is ("_Station 1 › Rack A_"), and carries its barcode. An area with no barcode
+yet gets one when it prints.
+
+![Print Storage Area Labels for four seeded areas with Settings closed: each preview carries the area's label code and name above its SA- barcode](./images/05-107-storage-area-labels.png)
 
 ---
 
 ## Barcode and QR Scanning
 
-Scanning is **inside the assign and return flows**, not a lookup screen of its
-own. You choose the person and what you are doing first, then scan; there is no
-"scan an item and pick an action afterwards" step.
+Scanning happens **inside** the assign and return windows. It is not a lookup
+screen of its own: you choose the person and what you are doing first, then
+scan.
 
-1. Go to **Inventory Admin > Members** (or **Assign Items** from the
-   items list, which asks who first).
-2. Click **Assign** or **Return** on the member's row.
-3. Click **Start Camera** and hold the barcode or QR code up to it. Each
-   successful read adds the item to the staged list.
+1. Go to **Inventory Administration → Members**, or select **Assign to Member**
+   at the top of **Inventory Administration**.
+2. Select **Assign** or **Return** for the member.
+3. Select **Start Camera** and hold the barcode or QR code up to it. Each
+   successful read adds the item to the list.
 4. Repeat for every item, then confirm the whole batch.
 
-If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
+If a code matches more than one item (for example, the same serial number in
+two categories), all matches are shown. The same code scanned again within 3
+seconds is ignored, so one item is not added twice.
 
-**Scanning a shelf label by mistake** _(2026-10-11)_: a storage area's `SA-…`
-label is not an item, so it is not added to the list. The scanner names the
-storage area instead and offers **Open storage area**, which jumps to it on
-**Storage Areas**. Only an exact, whole label matches, so a partial code never
-pulls shelves into the item results.
+> **Tip.** On a desktop, a USB barcode scanner types the code into the search
+> box, the same as typing a name, serial number or asset tag by hand. If
+> scanning fails, check that the barcode is clean and well lit. The message
+> tells you whether the item was not found or the network failed.
 
-> **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
+### When the camera does not work
 
-> **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field — as does typing a name, serial or asset tag by hand, which is the same path. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
+The scanner names the camera problem, because each one is fixed differently:
+
+| Problem                                  | What to do                                     |
+| ---------------------------------------- | ---------------------------------------------- |
+| Camera permission was refused            | Allow the camera in your browser settings      |
+| The device has no camera                 | Type the code or use a USB scanner             |
+| Another app is using the camera          | Close that app and try again                   |
+| The page is not on a secure (HTTPS) link | Ask your administrator; the camera needs HTTPS |
+
+- Camera messages stay on screen until you act on them.
+- **The typing box always works**, so a failed camera slows you down rather
+  than stopping you. To try again, select the same scan button.
+- On a desktop with only a front-facing webcam, the scanner uses that camera
+  when there is no rear one.
+
+The exact messages, and a picture of the refused-camera banner, are in
+[Mobile & PWA](./10-mobile-pwa.md).
 
 ---
 
-## NFC Tags _(2026-09-24)_
+## NFC Tags
 
-NFC tags are small stickers or fobs that a phone reads by touch. Linked to an
-item or a shelf, a tap finds exactly that item, with no camera, no lighting and
-no lining up a barcode. **They are off until an administrator turns them on.**
+NFC tags are small stickers or fobs that a phone reads by touch. When a tag is
+linked to an item or a shelf, a tap finds exactly that item: no camera, no
+lighting and no lining up a barcode. **NFC tags are off until an administrator
+turns them on.**
 
 The full setup guide covers which tags to buy, which phones can do what,
-tagging shelves, and troubleshooting:
+tagging shelves and troubleshooting:
 [Inventory NFC Tags](../../wiki/Inventory-NFC-Tags.md).
 
-> **Which phones:** linking tags and tapping inside the app need **Chrome on
-> Android**, with the site opened over **HTTPS**. An iPhone cannot read tags
-> inside the app, but tapping a tag that has a written link opens the item
-> straight from the home screen.
+> **Which phones?** Linking tags and tapping inside The Logbook need **Chrome on
+> Android**, with the site opened over **HTTPS** (a secure link). An iPhone
+> cannot read tags inside The Logbook, but tapping a tag that has a written link
+> opens the item straight from the home screen.
 
 ### Turning NFC tags on
 
-Needs the department-settings permission (`settings.manage` or
-`organization.update_settings`).
+Needs the **Full settings and admin management** or **Update organization
+settings** permission.
 
-1. Go to **Inventory Admin > NFC Tags**.
-2. Tick **Use NFC tags for inventory items**. It saves immediately.
+1. Go to **Inventory Administration → NFC Tags**.
+2. Tick **Use NFC tags for inventory items**. It saves straight away.
 
 Turning it off hides the NFC buttons and stops tags working, but keeps every
 link. Turning it back on restores them.
 
-<!-- Screenshot needed:
-_[Administrator at /inventory/admin/nfc: the NFC Tags page with "Use NFC tags for inventory items" ticked and the "What works on which phone" card below it. The harness line "This device cannot read or write NFC tags itself…" is accurate and can stay.]_
--->
+![Inventory Administration → NFC Tags with Use NFC tags for inventory items ticked, and the What works on which phone card below it, including the note that this computer cannot read or write tags itself](./images/05-108-nfc-settings.png)
 
 ### Linking a tag to an item
 
-1. Open the item. The **NFC Tags** card is on the item page, shown to
-   quartermasters (`inventory.manage`) while NFC is on.
+1. Open the item. The **NFC Tags** card is on the item page while NFC is on,
+   for officers who can manage inventory.
 2. Optionally type **where the tag is on the item** (for example "Inside left
    cuff").
-3. Tap **Write a link to a blank tag**, then hold a blank tag flat against the
-   back of the phone until it confirms.
-   - For a tag that cannot be written, tap **Read a tag's serial** instead.
+3. Select **Write a link to a blank tag**, then hold a blank tag flat against
+   the back of the phone until it confirms.
+   - For a tag that cannot be written, select **Read a tag's serial** instead.
    - At a desk, type the serial, or tap the tag on a USB reader with the cursor
-     in the box, then press **Link serial**.
+     in the box, then select **Link serial**.
 
-An item can carry several tags; a tag belongs to one item or shelf. **Mark
-lost** takes a missing tag out of service until you **Mark found**; **Unlink**
-frees a tag for reuse.
+An item can have several tags, but a tag belongs to one item or shelf. **Mark
+lost** takes a missing tag out of use until you select **Mark found**.
+**Unlink** frees a tag for reuse.
 
-> **Hint:** Prefer **Write a link**. A written tag works on any phone,
-> iPhones included, and stops working the moment you unlink it, because the
-> link names the tag, not the item.
+> **Tip.** Prefer **Write a link**. A written tag works on any phone, iPhones
+> included. It stops working the moment you unlink it, because the link names
+> the tag, not the item.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/items/:id with NFC switched on and two seeded tags: one labelled "Inside left cuff", linked by serial, and one marked Lost. Crop to the NFC Tags card. Headless capture shows only the typed serial box and Link serial, so the caption must say the Write and Read buttons appear only in Chrome on Android. Only the …last-4 preview may be visible, never a full serial.]_
--->
+![The NFC Tags card on Structural Coat — M: the Inside left cuff tag linked by serial with Mark lost and Unlink, the Collar tag marked lost with Mark found, and below them the box for where a new tag goes, the serial box and Link serial. On a desktop the card has no Write or Read buttons; those appear only in Chrome on Android](./images/05-109-item-nfc-tags.png)
 
 ### Tapping items in the scanner
 
-In **Distribute** or **Return** for a member, tap **Tap NFC** next to **Start
-Camera**, then tap each item's tag. Each tap adds that item to the list, the
-same as a scanned barcode. Tap **Stop NFC** when done; closing the dialog also
+In **Distribute** or **Return** for a member, select **Tap NFC** next to
+**Start Camera**, then tap each item's tag. Each tap adds that item to the list,
+like a scanned barcode. Select **Stop NFC** when done; closing the window also
 stops it.
 
-<!-- Screenshot needed:
-_[Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Assign for a demo member, NFC on: the scanner with Tap NFC armed (reading "Stop NFC") and one tapped item in the list. Web NFC does not exist in the capture harness, so this cannot be a manifest entry.]_
--->
+![The Assign items scanner on an Android phone with Tap NFC armed, the button reading Stop NFC, and the tapped Structural Coat — S added to the list](./images/05-138-scan-tap-nfc.png)
 
 ### Putting items away by tap
 
-Tag your shelves first: **Inventory > Storage Areas**, edit a shelf, and link
-a tag in its **NFC Tags** card, the same way as an item.
+Tag your shelves first: on **Storage Areas**, edit a shelf and link a tag in its
+**NFC Tags** card, the same way as an item.
 
-1. Go to **Inventory Admin > Put Away by NFC** (or **Put Away by NFC** on
-   Storage Areas) and tap **Start tapping tags**.
+1. Go to **Inventory Administration → Put Away by NFC** (or **Put Away by NFC**
+   on **Storage Areas**) and select **Start tapping tags**.
 2. Work in either order:
    - **Shelf first:** tap the shelf, then every item going onto it. The shelf
-     stays open until you tap another shelf or **Close shelf**.
-   - **Item first:** tap one item, then its shelf. That one item moves, and
-     the next item waits for its own shelf.
+     stays open until you tap another shelf or select **Close shelf**.
+   - **Item first:** tap one item, then its shelf. That one item moves. The
+     next item waits for its own shelf.
 3. Each move is listed under **Put away this session**.
 
-Put-away follows the same rules as the barcode **Put away** panel. An item
-that is assigned to a member, checked out, lost, stolen or retired is refused,
-and the message says why. Without an Android phone, choose the shelf from
-**Or pick a shelf** and enter item serials in the box.
+Put-away follows the same rules as scanning with **Put away**. An item that is
+assigned or lent to a member, lost, stolen or retired is refused, and the
+message says why. Without an Android phone, choose the shelf from **Or pick a
+shelf** and type item serials in the box.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/put-away with NFC on: choose a shelf from "Or pick a shelf" so the card reads "Items tapped now go on <shelf>", then enter two seeded item serials in the "Tag serial (or USB reader)" box, so "Put away this session" lists one "→ <shelf> (was <old shelf>)" and one "already on <shelf>". The unavailable-NFC line in place of Start tapping tags is acceptable in the harness.]_
--->
+![Put Away by NFC with Top Shelf picked from Or pick a shelf, so taps go on Top Shelf, and two typed tag serials under Put away this session: SCBA Spare Cylinder moved onto Top Shelf from the SCBA Cabinet, and Structural Coat — S already on Top Shelf](./images/05-110-nfc-put-away.png)
 
 ### Last Seen
 
@@ -1057,1049 +1690,790 @@ The item page lists the item's recent NFC taps under **Last Seen (NFC)**: who
 tapped it, and where it was put away. Only quartermaster taps are recorded. A
 member opening a tag from their own phone leaves no record.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/items/:id with NFC on: crop to the Last Seen (NFC) card showing a "Moved from … to …" row and a "Found on … during a shelf audit" row, each with a time and the quartermaster's name. Seed it by driving put-away and one audit with typed serials.]_
--->
+![Last Seen (NFC) on Structural Coat — M: moved from Turnout Gear Racks to Top Shelf, and found on Top Shelf during a shelf audit, each with its time and who tapped it](./images/05-111-item-last-seen.png)
 
 ### Auditing a shelf
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Go to **Inventory Admin > Shelf Audit** and tap **Start tapping tags**.
-2. Tap the shelf's tag (or choose it from **Or pick a shelf**).
+1. Go to **Inventory Administration → Shelf Audit** and select **Start tapping
+   tags**.
+2. Tap the shelf's tag, or choose it from **Or pick a shelf**.
 3. Tap every item on the shelf. Each appears in the list once, however many
-   times it is read. Remove one with its **×** if it was tapped by mistake.
-4. Tap **Finish audit**.
+   times it is read. Remove a mistaken one with its **×**.
+4. Select **Finish audit**.
 
 The result has three lists:
 
-- **Missing**: recorded on this shelf, not tapped. **Nothing is marked lost.**
-  Look for them, then update each item yourself if it really is gone.
-- **Unexpected**: tapped here, recorded somewhere else. Tick the ones that
-  belong here and tap **Move selected onto** the shelf. An item assigned to a
-  member or checked out is not moved, and the page says why.
+- **Missing**: recorded on this shelf but not tapped. **Nothing is marked
+  lost.** Look for them, then update each item yourself if it really is gone.
+- **Unexpected**: tapped here but recorded somewhere else. Tick the ones that
+  belong here and select **Move selected onto** the shelf. An item assigned or
+  lent to a member is not moved, and the page says why.
 - **Found**: recorded here and tapped.
 
-Items assigned to a member, checked out, lost, stolen or retired are not
-expected on a shelf, so they are never reported missing. **Recent audits**
-lists past audits; **View** opens one.
+Items assigned or lent to a member, lost, stolen or retired are not expected on
+a shelf, so they are never reported missing. **Recent audits** lists past
+audits; **View** opens one.
 
-> **Hint:** Audit one shelf or bin at a time. An audit covers exactly the
-> storage area you tapped, not the bins inside it.
+> **Tip.** Audit one shelf or bin at a time. An audit covers exactly the area you
+> tapped, not the bins inside it.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/shelf-audit with NFC on: pick a seeded shelf, enter the serial of one item recorded there and of one recorded elsewhere, then press Finish audit. Capture the result card "1 of 2 expected found · 1 missing · 1 unexpected", Missing with its "Nothing has been marked lost" note, and the unexpected line ticked with "Move 1 selected onto <shelf>" enabled. Do not press Move. Recent audits should show below.]_
--->
+![A finished shelf audit of Top Shelf: 1 of 2 expected found, 1 missing and 1 unexpected; Structural Coat — M under Missing with the note that nothing has been marked lost, SCBA Spare Cylinder under Unexpected with its box ticked and Move 1 selected onto Top Shelf, and Recent audits below](./images/05-112-shelf-audit-result.png)
 
 ### Scheduling shelf audits
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Go to **Inventory > Storage Areas** and edit the shelf, bin or cabinet.
+1. On **Storage Areas**, edit the shelf, bin or cabinet.
 2. Under **Shelf audit schedule**, choose **Weekly**, **Monthly**,
    **Quarterly** or **Yearly**. It saves straight away.
 
-**Shelf Audit** then lists the area under **Audit schedule**, showing when it
-was last audited and when it is next due. **Audit now** starts an audit of it.
-Each area is due one week, month, quarter or year after its last saved audit,
-or straight away if it has never been audited.
+**Shelf Audit** then lists the area under **Audit schedule**, with when it was
+last audited and when it is next due. **Audit now** starts an audit of it. Each
+area is due one week, month, quarter or year after its last saved audit, or
+straight away if it has never been audited.
 
-While any scheduled shelf is overdue, quartermasters get one reminder email a
+While any scheduled area is overdue, quartermasters get one reminder email a
 week listing them.
 
-<!-- Screenshot needed:
-_[Admin (inventory.manage) at /inventory/shelf-audit with NFC on: the "Audit schedule (N due)" card with at least one never-audited area reading "never audited · due now" with its Audit now button, and one current area reading "next due <date>". The tap button's unavailable line is expected in the harness.]_
--->
+![Shelf Audit with NFC on: the Audit schedule card counting what is due, Uniform Bins never audited and due now with Audit now, and Top Shelf last audited with its next due date](./images/05-113-audit-schedule.png)
 
 ### Tagging many items at once
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Go to **Inventory Admin > Tag Items in Bulk**. It lists items with no
-   working tag. Type in **Which items** and press **Find items** to narrow it.
+1. Go to **Inventory Administration → Tag Items in Bulk**. It lists items with
+   no working tag. Type in **Which items** and select **Find items** to narrow
+   the list.
 2. Choose **Write links** (a blank tag for each item) or **Read serials**.
-3. With **Write links**, tap **Write a tag for** the item shown and hold a blank
-   tag to the phone. With **Read serials**, tap **Start reading tags**, then
-   tap each item's tag in turn.
+3. With **Write links**, select **Write a tag for** the item shown and hold a
+   blank tag to the phone. With **Read serials**, select **Start reading
+   tags**, then tap each item's tag in turn.
 4. The page moves to the next item after each link. **Skip this item** passes
    one over.
 
-If inventory NFC is off, the page says an administrator can turn it on under
-**NFC Tags** — a quartermaster's `inventory.manage` does not open that setting.
+If NFC is off, the page says an administrator can turn it on under **NFC
+Tags**. Managing inventory alone does not open that setting.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/nfc/enroll with NFC on, after one typed serial has been linked: "1 tagged this session · N of M left", the current item's name and details, Read serials selected (Write links greyed out in the harness), the typed serial box and Skip this item. No full tag serial visible.]_
--->
+![Tag Items in Bulk after one typed serial was linked: 1 tagged this session and how many are left, the next item, Bunker Coat, with its serial number, asset tag, category and storage area, Read serials chosen with Write links greyed out on a desktop, the serial box and Skip this item](./images/05-114-nfc-enroll.png)
 
 ### Identifying a member by their ID card
 
-If your department issues NFC ID cards (Settings > Integrations > NFC ID
-Cards), the **Scan Member ID** window on the inventory screens also shows
-**Or tap their ID card**. Tap it and hold the member's card to the phone. A
+If your department issues NFC ID cards (**Settings → Integrations → NFC ID
+Cards**), the **Scan Member ID** window on the inventory screens also shows
+**Or tap their ID card**. Select it and hold the member's card to the phone. A
 card marked lost, or one belonging to an inactive member, is refused with the
 reason.
 
-<!-- Screenshot needed:
-_[Manual capture on a real Android phone over HTTPS, quartermaster at /inventory/admin/members → Scan Member ID, with inventory NFC and NFC ID Cards both on: the Scan Member ID window with "Or tap their ID card" below the camera controls. No card serial or member number may be visible. Not a manifest entry, because Web NFC is absent in the harness.]_
--->
+![The Scan Member ID window on an Android phone with the camera controls and, below them, Or tap their ID card](./images/05-139-scan-member-id-tap-card.png)
 
 ### Self-service kiosk
 
-**Required Permission:** `inventory.kiosk` to open it. Members need only their
-ID card.
+Opening the kiosk needs the **Open self-service checkout kiosk mode**
+permission. No position has it until your department gives it. Members need
+only their ID card.
 
-**For quartermasters:** edit each category of loaner gear in **Inventory >
-Categories**, turn on **Allow self-checkout at the kiosk**, and set a **Kiosk
-loan period (days)** if loans should be due back. Then open **Inventory Admin >
-Self-Service Kiosk** on a tablet and press **Start kiosk**.
+**For quartermasters:** edit each category of loaner gear on **Categories**,
+turn on **Allow self-checkout at the kiosk**, and set a **Kiosk loan period
+(days)** if loans should be due back. Then open **Inventory Administration →
+Self-Service Kiosk** on a tablet and select **Start kiosk**.
 
-<!-- Screenshot needed:
-_[Admin (inventory.manage) at /inventory/admin/categories: edit a loaner category (e.g. "Loaner Radios") with "Allow self-checkout at the kiosk" switched on and "Kiosk loan period (days)" set to 14, so its help text is visible. Close without saving.]_
--->
+![Editing the Portable Radios category with Allow self-checkout at the kiosk switched on and Kiosk loan period (days) set to 14, its help text saying kiosk loans fall due after that many days](./images/05-115-category-kiosk.png)
 
 **For members:**
 
 1. Tap your ID card on the tablet.
-2. Tap the item's tag, then **Borrow it**, or, if you are bringing it back,
-   answer whether it is damaged.
+2. Tap the item's tag, then **Borrow it**. If you are bringing it back, answer
+   whether it is damaged.
 3. Tap **Done** when you are finished.
 
-The kiosk says why it will not lend something (for example, "Ask a
-quartermaster" for restricted gear), in plain words without a support code. It
-forgets you after a minute without a tap — and since 2026-09-29 the next member
-can simply tap their own card while it is still greeting the last one; it used
-to answer "This tag is not linked to anything" until the first member pressed
-**Done**. A suspended card reads "This card is suspended. Ask an officer."
+The kiosk says in plain words why it will not lend something (for example, "Ask
+a quartermaster" for restricted gear). It forgets you after a minute without a
+tap. The next member can tap their own card while it is still greeting the last
+one. A suspended card reads "This card is suspended. Ask an officer."
 
 ### Tapping without signal
 
 Put-away and shelf audits keep working without signal. Open the screen first,
-then keep tapping. Put-away taps are sent in order when signal returns, and a
-message says what moved. After that, tap the shelf again. For a shelf audit, press **Finish audit** as usual;
-without signal it is kept on the phone and saved later. Finish an audit before
-closing the screen, because an unfinished one is not kept.
+then keep tapping.
 
-<!-- Screenshot needed:
-_[Admin (inventory.manage) at /inventory/put-away with NFC on, then the browser set offline: the amber "No signal: keep tapping" banner with "Taps are saved on this phone and applied when signal returns." No taps needed; the tap button's unavailable line is expected on desktop.]_
--->
+- **Put-away:** taps are sent in order when signal returns, and a message says
+  what moved. After that, tap the shelf again.
+- **Shelf audit:** select **Finish audit** as usual. Without signal it is kept
+  on the phone and saved later. Finish an audit before closing the screen; an
+  unfinished one is not kept.
+
+![Put Away by NFC with the browser offline: the amber "No signal: keep tapping" banner saying taps are saved on this phone and applied when signal returns](./images/05-116-put-away-offline.png)
 
 ### Apparatus compartment tags
 
-**Required Permission:** `inventory.check_manage` to tag compartments;
-`inventory.check_submit` to tap during a check.
+Tagging compartments needs the **Create and edit equipment check templates**
+permission. Tapping during a check needs **Submit equipment checks on shifts**.
 
 **To tag a truck:** open the checklist in the builder, choose **NFC tags** on a
 compartment's **⋯** menu, and link a tag. Stick it on that compartment. For an
 item to be answered by a tap, give the item its own tag and link its checklist
 row to the inventory item.
 
-<!-- Screenshot needed:
-_[Admin (inventory.check_manage) at /inventory/admin/checklists/templates/:templateId with inventory NFC on: the "NFC tags: <compartment>" dialog opened from a saved compartment's ⋯ menu, showing the serial box, Link serial and the compartment hint line. No write button is expected on desktop. Do not link or show a real tag serial; close without linking.]_
--->
+![The NFC tags: Cab dialog opened from the Cab compartment's ⋯ menu in the checklist builder, with the tag serial box, Link serial and the hint about sticking the tag on that compartment; no tag linked](./images/05-117-compartment-nfc-tags.png)
 
 **During a check** (Chrome on Android):
 
-1. Press **Tap NFC tags**.
+1. Select **Tap NFC tags**.
 2. Tap a compartment's tag to jump to it.
 3. Tap an item's tag. An unanswered pass/fail row is marked passed. A count,
-   reading or date is brought on screen to finish by hand. A tap never changes
-   an answer already given.
+   reading or date is brought on screen for you to finish by hand. A tap never
+   changes an answer already given.
 
 Loading a vehicle preset or importing a checklist replaces its compartments and
-deletes their tags; re-link them afterwards.
+deletes their tags. Link them again afterwards.
 
 ### Items not seen
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-**Inventory Admin > Items Not Seen** lists items nobody has handled in 30, 90,
-180 (the default) or 365 days. "Handled" means an NFC tap by a quartermaster,
-an assignment or return, a checkout or check-in, or an issuance or its return.
-Editing the item's record does not count. Items never handled at all are
-listed first as **Never** — including items created today, since being added is not being handled (an open owner decision, workflow review W44-2). Filter by **Category**, and use **Download CSV** for
-the full list.
+**Inventory Administration → Items Not Seen** lists items nobody has handled in
+30, 90, 180 (the default) or 365 days. "Handled" means an NFC tap by a
+quartermaster, an assignment or return, a loan or check-in, or an issuance or
+its return. Editing the item's record does not count.
+
+Items never handled at all are listed first as **Never**. That includes items
+added today, because being added is not being handled. Filter by **Category**,
+and use **Download CSV** for the full list.
 
 This report works whether or not NFC tags are turned on.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/not-seen: default 180 days, All categories, with at least one "Never" row and one dated row showing its source (e.g. "Returned · 212 days ago"), and Download CSV enabled. NFC may be off, which shows the report needs no tags.]_
--->
+![Items Not Seen at its default of 180 days and All categories: items never handled listed first as Never, then two items last seen on a date with Returned or Assigned and the days ago, and Download CSV enabled](./images/05-127-items-not-seen.png)
 
 ---
 
 ## Label Printing
 
-Generate barcode labels for inventory items to attach to equipment.
+Print barcode labels to stick on equipment.
 
 ### Generating Labels
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Reach the barcode print page one of four ways (see
-   [Choosing which items to label](#choosing-which-items-to-label-2026-09-23)
-   below):
-   - tick items on the inventory list and press **Print Labels** in the bar
-     that appears — or tick one, then **Select all N matching** to take every
-     item your filters match;
-   - open a single item and press **Print Barcode**;
-   - the **Barcode labels** card at the end of the inventory setup workflow;
-   - or open the print page with nothing selected and choose a category,
-     location or storage area.
-2. Click **Settings** and choose a **Label Size**:
-   - **Dymo 30252 / 30256 / 30334 / 30336** — the four common Dymo label stocks
-   - **Rollo 4×6** and **Rollo / Thermal 2×1** — roll-fed thermal printers
-   - **Zebra 2×1 / 3×1 / 4×2 / 4×6** — Zebra label stock (2×1 is the usual asset tag)
-   - **Thermal 1×1** — square asset tags
-   - **Letter Paper (Grid)** — Avery 5160, 30 labels per 8.5×11″ sheet
-   - **Custom size** — enter the exact **width** and **height** (in inches, 0.5–8″ wide × 0.5–11″ tall) for any other sticker printer or label stock
+1. Open the **Print Barcode Labels** page one of four ways (see
+   [Choosing which items to label](#choosing-which-items-to-label)):
+   - Tick items on the item list and select **Print Labels** in the bar that
+     appears. Or tick one, then **Select all _N_ matching** to take every item
+     your filters match.
+   - Open a single item and select **Print Barcode**.
+   - Use the **Barcode labels** card at the end of the setup steps.
+   - Open the print page with nothing selected and choose a category, location
+     or storage area.
+2. Select **Settings** and choose a **Label Size**. The sizes are cards, not a
+   list:
+   - **Dymo 30252**, **30256**, **30334** and **30336**: the four common Dymo
+     label rolls. Dymo 30252 is the default.
+   - **Rollo 4" x 6"** and **Rollo / Thermal 2" x 1"**: roll-fed thermal
+     printers.
+   - **Thermal 1" x 1"**: square asset tags.
+   - **Letter Paper (Grid)**: Avery 5160, 30 labels per 8.5 × 11 inch sheet.
+   - **Custom size**: type the exact width (0.5 to 8 inches) and height (0.5 to
+     11 inches) for any other sticker printer or label.
 3. Choose a **Barcode Style**:
-   - **Code 128** (default) — the linear barcode every existing label carries; scans with any handheld laser scanner.
-   - **QR code** — square, so it fits a long identifier on a small tag. On a 1″ square asset tag a Code 128 holding a full item id physically does not fit; a QR does. Scans with a phone camera as well as a 2D scanner.
-
-   Your choice is remembered per position and per module, exactly like the label size.
-
-4. Optionally set **Copies per item**, choose **What Prints on the Label**, and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below). The code always prints. The **Item name**, **Asset tag** and **Serial number** print unless you switch them off — leaving the name off gives a small tag's height to the code, and the asset tag or serial number is left off anyway when it repeats the code. **Location**, **Storage area** (the shelf's full path, e.g. `Supply Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print on one extra line in the order you pick them. The choice is remembered per position, like the label size.
+   - **Code 128** (the default): the striped barcode any handheld laser scanner
+     reads.
+   - **QR code**: square, so a long code fits on a small tag. On a 1-inch square
+     tag a striped barcode holding a full item code does not fit; a QR code
+     does. Phone cameras read it as well as 2D scanners. A QR code has no text
+     line of its own, so the value is printed under it.
+4. Optionally set **Copies per item** and choose **What Prints on the Label**.
+   - The code always prints.
+   - **Item name**, **Asset tag** and **Serial number** print unless you switch
+     them off. Leaving the name off gives a small tag's height to the code. The
+     asset tag or serial number is left off anyway when it repeats the code.
+   - **Location**, **Storage area** (the shelf's full path, such as `Supply
+Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print
+     on one extra line, in the order you pick them, space permitting.
+   - For thermal sizes, there is an **Auto-rotate for roll-fed** switch (see
+     [Connecting a Sticker / Label Printer](#connecting-a-sticker--label-printer)).
 5. Print one of three ways:
-   - **PDF** (recommended for sticker/thermal printers) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
-   - **Print Labels** — prints directly through the browser print dialog.
-   - **Print to _printer name_** — when your department has registered a network label printer (Settings → Label Printers), a **Label printer** picker and this button appear; the labels go straight to that printer with no print dialog. The page remembers the printer you last used on this browser. The button stays disabled, with the reason beside it, until the run can be sent: no printer chosen, a non-thermal size selected for a label printer, a size that does not match the printer's registered stock, or an item that has no stored barcode yet ("download the PDF once to assign them"). After a send the page reports how many labels went and any fault or warning the printer returned.
+   - **PDF** (best for sticker and thermal printers): downloads a PDF sized to
+     the exact label. Open it and print with your label printer selected.
+   - **Print Labels**: prints through your browser's print window.
+   - **Print to _printer name_**: appears when your department has registered a
+     network label printer. The labels go straight to it. See
+     [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer).
+6. Answer **Did the labels print correctly?** See
+   [Knowing which items still need a label](#knowing-which-items-still-need-a-label).
 
-   > **Corrected 2026-10-04.** A 2026-09-24 note here said the inventory page
-   > had no direct-printing button and printed by PDF or browser dialog only.
-   > That was written while the network-printing change (#2651) was still
-   > merging; the inventory page has offered **Print to _printer_** since that
-   > release. The section on
-   > [direct printing](#direct-printing-to-a-network-label-printer) below covers
-   > registering the printer and applies here too.
-
-6. **Answer "Did the labels print correctly?"** — see
-   [Knowing which items still need a label](#knowing-which-items-still-need-a-label-2026-09-23).
-
-Labels include the barcode (Code 128 with the required quiet-zone margins, or a QR), the item name, and the asset tag or serial number. A QR has no built-in human-readable line, so the value is printed underneath it.
-
-> **Saved setups for the department.** Above the printer controls, **Save setup…** stores the current label size, barcode style, what prints on the label, copies per item and network printer under a name — e.g. _Rollo 2×1, QR_. Pick it from **Saved setup** to apply all of it at once. Setups are saved for the whole department, so anyone who prints inventory labels sees the same list on any computer; up to 20, saving under an existing name replaces it, and **Delete setup** removes it for everyone.
-
-> **When an edit makes a label out of date.** Editing an item that has a confirmed label shows a banner on the item page with a **Print label** button. If the edit changed the code the label encodes, the old label no longer scans to the item and should be replaced — the item also goes back on the _needs a label_ list. If it changed only printed text (name, asset tag or serial number), the old label still scans but reads wrong.
-
-> **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** selected, a **Start at label** box (1–30) appears above the printer controls. Set it to the first label still on the sheet — counting left to right along each row — and the positions before it are left blank in the preview, the browser print and the PDF, so the sheet can go back in the printer instead of the bin. It applies to the sheet in the printer now: it goes back to 1 when you move to the next part of a large run. Roll printers have no positions, so the box is not shown for them. The same box is on the label pages for apparatus, facilities, members and storage areas.
+Your label size, barcode style and what prints are remembered for your position
+and for this part of The Logbook. See
+[Connecting a Sticker / Label Printer](#connecting-a-sticker--label-printer).
 
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
-<!-- Screenshot needed:
-_[Quartermaster (inventory.manage) at /inventory right after saving Add Item for one new item: the green line "1 item added. Label it now?" with Print label and Dismiss. Creates an item, so use a disposable demo item and delete it afterwards, or mark the shot as mutating seed data.]_
--->
+![The inventory label print page with Settings open: the saved-setup row, the label size choices, copies per item, What Prints on the Label, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
 
-### Putting items away by scanning
+![Inventory label printing page with format presets and preview](./images/05-33-label-printing.png)
 
-**Required Permission:** `inventory.manage`
+> **Saved setups for the department.** Above the printer controls, **Save
+> setup…** stores the current label size, barcode style, what prints, copies
+> per item and network printer under a name, for example _Rollo 2×1, QR_. Pick
+> it from **Saved setup** to apply all of it at once. Setups are shared across
+> the department, so anyone who prints inventory labels sees the same list on
+> any computer. You can save up to 20. Saving under an existing name replaces
+> it, and **Delete setup** removes it for everyone.
 
-On **Storage Areas**, **Put away** files a batch of items onto one shelf:
+> **When an edit makes a label out of date.** Editing an item that has a
+> confirmed label shows a banner on the item page with a **Print label**
+> button. If the edit changed the code the label carries, the old label no
+> longer scans to the item and should be replaced. The item also goes back on
+> the "needs a label" list. If the edit changed only printed text (name, asset
+> tag or serial number), the old label still scans but reads wrong.
 
-1. Scan the shelf's label (or open the shelf first, and it is already chosen).
-2. Scan each item going onto it. Each one is looked up and added to the list; an unknown code or a repeat is refused with a reason.
-3. Click **File N items on …**. Items assigned or checked out to a member, or recorded as lost, stolen or retired, are left where they are and listed with the reason.
+> **Reusing a partly used Avery sheet.** With **Letter Paper (Grid)** chosen, a
+> **Start at label** box (1 to 30) appears above the printer controls. Set it
+> to the first label still on the sheet, counting left to right along each row.
+> The places before it are left blank in the preview, the browser print and the
+> PDF, so the sheet can go back in the printer. It applies to the sheet in the
+> printer now: it goes back to 1 when you move to the next part of a large
+> print. Roll printers have no places, so the box is not shown for them. The
+> same box is on the label pages for apparatus, facilities, members and storage
+> areas.
 
-The shelf cannot be changed while items are waiting to be filed — file or clear them first, so it is never unclear which shelf they were scanned for.
+![The items list right after Add Item: the green line "1 item added. Label it now?" with Print label and Dismiss](./images/05-119-item-added-label-prompt.png)
 
-If the shelf was picked on screen rather than scanned, the result offers **Print shelf label**, so the next put-away can start with a scan. A shelf with no barcode yet is given one when its label prints.
+### Choosing which items to label
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/storage-areas: press Put away, type a seeded shelf's SA- code (e.g. SA-000003) and press Add, then two available item barcodes, so the panel reads "Filing onto <path> (SA-000003)", lists the two items and shows "File 2 items on <shelf>". Do not press File; no camera.]_
--->
-
-### Checking a bag, box or bin
-
-**Required Permission:** `inventory.manage`
-
-A bag, box or bin is a storage area, so its label is a storage-area label. **Check contents** on **Storage Areas** compares what is physically inside with what the records say:
-
-1. Scan the container's label (or open it first, and it is already chosen). Everything filed on it — and on areas nested inside it, such as a bag's pockets — is loaded.
-2. Scan everything inside. The panel counts **N of M found** and lists what has **not been scanned yet**, with the pocket each one should be in.
-3. An item that is recorded elsewhere is listed under **Doesn't belong here** with where it is recorded; **File it here** moves it into this container, with the same rules as Put away.
-
-Items assigned or checked out to a member, or otherwise recorded as away, are not counted as missing. If one is scanned inside the container anyway, it is listed under **Here, but the record disagrees** so the record can be corrected. Nothing is changed by checking alone.
-
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/storage-areas: press Check contents, type a seeded bin's SA- code (e.g. the Uniform Bins area), then one item filed in it and one filed elsewhere, so the panel shows "1 of N found", "Not scanned yet (N)" and "Doesn’t belong here (1)" with its recorded location and File it here. Do not press File it here.]_
--->
-
-### Shelf, rack and bin labels
-
-**Required Permission:** `inventory.manage`
-
-Storage areas carry barcodes too (`SA-000001` and so on), and they print from
-**Storage Areas**. **Print N labels** in the header prints a label for every
-area in view — the chosen facility or room, or your search results — and the
-printer icon on a row prints just that one. The **Print Storage Area Labels**
-page works like the other label pages: PDF, **Print in browser**, a registered
-label printer, QR, and **Start at label** for a partly used sheet. Each label
-shows the area's name and where it is ("_Station 1 › Rack A_") and encodes its
-barcode; an area that has no barcode yet is given one when it prints.
-
-**Scan shelf label** takes a shelf's code from the camera or a handheld scanner
-and jumps to that area, opening its parents and its item list. The address then
-ends in `?area=…`, so the view can be bookmarked or linked to. Shelf codes are
-read here and by **Put away** and **Check contents** on the same page. The assign
-and return scanner recognises them too _(2026-10-11)_: scanning a shelf label
-there adds nothing to the list and says "SA-0007 is the label for the storage
-area Glove shelf, not an item", with **Open storage area** (for anyone who
-manages inventory) jumping to it here.
-
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/storage-areas/print-labels?ids=<3–4 storage area ids>: the Print Storage Area Labels page with Settings closed, previews showing each area's name, its location/parent trail and its SA- barcode. Seeded areas only; if a printer is registered, show only an RFC 5737 documentation address.]_
--->
-
-### Choosing which items to label _(2026-09-23)_
-
-Labelling a whole category or a whole storage room used to mean paging through
-the list fifty rows at a time and ticking every one. Two things fix that.
-
-**Select every matching item from the list.** Filter the items list the way you
-want — a category, a location, **Needs a Label** — tick any one row, and the
-bar that appears offers **Select all N matching**. That takes every item the
-filters match, not just the rows loaded on screen, and the bar then reads
-**All N matching selected**. Press **Print Labels**. Unticking any row turns the
+**Select every matching item from the list.** Filter the item list the way you
+want (a category, a location, **Needs a Label**), tick any one row, and the bar
+that appears offers **Select all _N_ matching**. That takes every item the
+filters match, not just the rows loaded on screen. The bar then reads **All _N_
+matching selected**. Select **Print Labels**. Unticking any row turns the
 selection back into an ordinary hand-picked set.
 
-- **Selecting holds at most 500 items**, because the same selection also
-  drives bulk status changes. Above that the bar offers **Print labels for all
-  N matching** instead, which opens the print page by filter for up to 5,000
-  items and prints them in parts of 500 labels, one after another.
-- A selection made this way is carried to the print page **as the filters, not
-  as a list of item ids**, so the print page's address stays short and survives
-  a refresh.
+- **Selecting holds at most 500 items**, because the same selection also drives
+  bulk status changes. Above that, the bar offers **Print labels for all _N_
+  matching** instead. It opens the print page by filter for up to 5,000 items
+  and prints them in parts of 500 labels, one after another.
+- A selection made this way is carried to the print page as your filters, not
+  as a list of items, so the page survives a refresh.
 
 ![The inventory items list filtered to Structural PPE and Needs a Label, one row ticked, and the bulk bar reading All 11 matching selected beside the Print Labels button](./images/05-83-items-select-all-matching.png)
 
-**Or open the print page with nothing selected.** The **Barcode labels** card in
-the setup workflow, or a bookmark to the print page, used to land on "No items
-specified". It now opens **Print barcode labels**: pick a **Category**, a
-**Location** (including **Unassigned**) and a **Storage area**, optionally tick
-**Only items that still need a label**, and the page counts the match live —
-"_N items match._" — before you press **Prepare N labels**. Over 500 it says how
-many parts the run will print in; over 5,000 the button stays disabled until you
-narrow it.
+**Or open the print page with nothing selected.** It opens **Print barcode
+labels**:
+
+1. Pick a **Category**, a **Location** (including **Unassigned**) and a
+   **Storage area**.
+2. Optionally tick **Only items that still need a label**.
+3. The page counts the match as you go ("_N_ items match.").
+4. Select **Prepare _N_ labels**.
+
+Over 500 items, it says how many parts the run will print in. Over 5,000, the
+button stays off until you narrow it.
 
 ![The label print page opened with nothing selected: the Print barcode labels picker with Category set to Structural PPE, Location and Storage area left on All, Only items that still need a label ticked, the live count reading 11 items match, and the Prepare 11 labels button](./images/05-84-label-scope-picker.png)
 
-### Knowing which items still need a label _(2026-09-23)_
+### Knowing which items still need a label
 
-A quartermaster had no way to see which items had been labelled. Every item now
-records **when its label was printed**, and the list can filter on it.
+Every item records **when its label was printed**, and the list can filter on
+it.
 
-**How an item gets marked.** After you press **Print Labels** or download the
+**How an item gets marked.** After you select **Print Labels** or download the
 **PDF**, the page asks:
 
 > **Did the labels print correctly?** Confirming takes these items off the
 > "needs a label" list.
-> [ **Mark N items as labelled** ] [ **Not yet** ]
+> [ **Mark _N_ items as labelled** ] [ **Not yet** ]
 
-Nothing is recorded until you confirm — a print dialog you cancelled, a jam, or
-a PDF you never opened should not mark anything. **Not yet** just dismisses the
+Nothing is recorded until you confirm. A print window you cancelled, a jam, or
+a PDF you never opened should not mark anything. **Not yet** just closes the
 question. It is never asked after **Download Test Label**.
 
-**Where it shows.**
+![The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark the items as labelled, Scan labels to confirm and Not yet, above the label preview](./images/05-85-label-print-confirm.png)
+
+**Where it shows:**
 
 - The item's **Basic Info** card has a **Label Printed** line: the date the
-  label was confirmed and, for members who manage inventory, who confirmed it
-  ("_20 Sep 2026 by Jane Smith_") — or **Needs a label**. It shows the latest
-  confirmation.
-- The item's **History** tab lists every confirmed print — who confirmed it,
-  when, and the code that label carried — so a reprint after a barcode change
-  shows both labels.
-- The items list has a label-status filter: **Any Label Status**, **Needs a
-  Label**, **Label Printed**. The same filter carries into **Export**.
+  label was confirmed and, for officers who manage inventory, who confirmed it
+  ("_20 Sep 2026 by Jane Smith_"). Otherwise it reads **Needs a label**. It shows
+  the latest confirmation.
+- The item's **History** tab lists every confirmed print: who, when, and the
+  code that label carried. A reprint after a barcode change shows both labels.
+- The item list has a label filter: **Any Label Status**, **Needs a Label**,
+  **Label Printed**. The same filter carries into **Export**.
 - The print page's picker has **Only items that still need a label**.
-- Above the items list, a line counts them — "_14 items need a label._" — with
+- Above the item list, a line counts them ("_14 items need a label._") with
   **Show them** (applies the filter) and **Print their labels** (opens the print
-  page on that filter). **Not now** hides it until the page is reloaded; it is
-  gone on its own once every item is labelled.
+  page on that filter). **Not now** hides it until the page is reloaded. It
+  disappears on its own once every item is labelled.
 
-<!-- Screenshot needed:
-_[Quartermaster (inventory.manage) at /inventory with no filter applied: crop to the line "N items need a label." with Show them, Print their labels and Not now above the table. The line hides under the Needs a Label filter, so leave filters clear.]_
--->
+![The line above the items list counting the items that need a label, with Show them, Print their labels and Not now](./images/05-120-needs-label-line.png)
 
-**The mark clears itself when the label goes out of date.** A label encodes one
-value — the item's **barcode**, or its **asset tag** if it has no barcode, or
-its **serial number** if it has neither. When that value changes, by an edit,
-an import, or the barcode the PDF fills in for an item that had none, the item
-goes back to **Needs a label**. Changing a field the label does not carry (the
-asset tag on an item whose label shows its barcode) leaves the mark alone.
+**The mark clears itself when the label goes out of date.** A label carries one
+value: the item's **barcode**; or its **asset tag** if it has no barcode; or
+its **serial number** if it has neither. When that value changes (by an edit, an
+import, or the barcode the PDF fills in for an item that had none), the item
+goes back to **Needs a label**. Changing a value the label does not carry leaves
+the mark alone.
 
-**Every existing item starts as "Needs a label".** There is no record of which
-items were labelled before this, so none is assumed. If your stock is already
-labelled, you can catch the records up without wasting label stock: filter to
-**Needs a Label**, select all matching (or use the picker), press **Print
-Labels**, **cancel** the browser's print dialog, and answer **Mark N items as
-labelled**. The question is asked as soon as the print dialog opens, whether or
-not anything came out — which is also why you should only confirm it when the
-labels really are on the gear. Up to 500 items per pass.
+**Items labelled before this feature start as "Needs a label".** If your stock
+is already labelled, you can catch the records up without wasting labels:
 
-![The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview](./images/05-85-label-print-confirm.png)
+1. Filter to **Needs a Label** and select all matching (or use the picker).
+2. Select **Print Labels**.
+3. **Cancel** the browser's print window.
+4. Answer **Mark _N_ items as labelled**.
+
+The question appears as soon as the print window opens, whether or not anything
+printed. So only confirm it when the labels really are on the gear. You can do
+up to 500 items at a time.
+
+### Labels in other parts of The Logbook
+
+Label printing works the same way in other modules. Each has its own print
+page:
+
+| Module                  | What the label shows                    | Where to start                           |
+| ----------------------- | --------------------------------------- | ---------------------------------------- |
+| **Inventory**           | Item name, barcode, serial or asset tag | Select items → **Print Labels**          |
+| **Apparatus**           | Unit number, asset tag, apparatus type  | **Print Label** on a row                 |
+| **Facilities**          | Facility name and number                | **Print Labels** at the top              |
+| **Members**             | Member name and membership number       | **Print Badges** for selected members    |
+| **Prospective members** | Applicant name and a short record code  | **Print Badges** for selected applicants |
+
+An applicant label carries only a short code made from the applicant's record.
+It cannot open or withdraw their application.
+
+The shared label pages for these modules also offer four **Zebra** sizes
+(2" x 1", 3" x 1", 4" x 2" and 4" x 6"). Their print buttons read **PDF** and
+**Print in browser**, and the settings panel has **Download test label**.
 
 ### Connecting a Sticker / Label Printer
 
-Both paths produce **actual-size** barcodes — the key to making them scannable is to avoid any scaling:
+Both the PDF and the browser print make barcodes at **actual size**. The key to
+a barcode that scans is to avoid any scaling.
 
-1. Install your label printer's driver and load the label stock.
-2. Pick the matching preset, or choose **Custom size** and enter the label's real dimensions. **Your choice is remembered per position and per module** — it's saved to your highest-priority position (role) and scoped to the area of the app you're printing from, so whoever fills that role gets the same printer on any computer. Different teams that use different printers each keep their own (e.g., the Quartermaster keeps a Rollo for inventory, the apparatus team keeps a different printer, the outreach team another). The choice is also cached locally so it loads instantly.
-3. Click **Download Test Label** to get a single-label PDF and confirm alignment and orientation before printing the whole batch.
-4. When printing, select the label printer, set **Scale** to **100%** (disable "Fit to page" / "Shrink to fit"), set margins to **None**, and set the paper/media size to the label stock.
+1. Install your label printer's driver and load the labels.
+2. Pick the matching size, or choose **Custom size** and type the label's real
+   size. **Your choice is remembered for your position and for this part of
+   The Logbook.** It is saved to your highest-ranking position, so whoever holds
+   that role gets the same printer setting on any computer. Teams with
+   different printers each keep their own: the quartermaster's Rollo for
+   inventory, the apparatus team's printer, and so on. Until you have printed
+   once, the page starts on Dymo 30252.
+3. Select **Download Test Label**. It gives a one-label PDF so you can check
+   alignment and direction before printing a batch. It does not send anything
+   to a printer.
+4. When printing, choose the label printer, set **Scale** to **100%** (turn off
+   "Fit to page" or "Shrink to fit"), set margins to **None**, and set the
+   paper size to the label size.
 
-> **Rollo and other roll-fed printers:** Two Rollo presets are built in — **Rollo 4" × 6"** (portrait shipping labels) and **Rollo / Thermal 2" × 1"** (small asset labels) — and any other Rollo roll works via **Custom size**. The **PDF** path is recommended: it generates each label at the exact size, pre-rotated for the printer's feed direction.
+> **Rollo and other roll-fed printers.** Two Rollo sizes are built in: **Rollo
+> 4" x 6"** (portrait shipping labels) and **Rollo / Thermal 2" x 1"** (small
+> asset labels). Any other Rollo roll works through **Custom size**. Use the
+> **PDF**: it makes each label at the exact size, already turned for the
+> printer's feed direction.
 
-> **Auto-rotate (roll-fed printers):** Rollo, Brother, and generic thermal printers feed labels narrow-edge first. For landscape labels, leave **Auto-rotate for roll-fed** on so the PDF content is pre-rotated and reads correctly. Dymo drivers rotate on their own, so their presets default to auto-rotate **off**.
+> **Auto-rotate.** Rollo, Brother and other thermal printers feed labels
+> narrow edge first. For landscape labels, leave **Auto-rotate for roll-fed**
+> on so the PDF reads correctly. Dymo drivers turn labels themselves, so Dymo
+> sizes start with auto-rotate **off**.
 
-**Settings** at the top right opens the panel these steps refer to. **Label
-Size** is a grid of clickable cards — four Dymo sizes, two Rollo, four Zebra, a
-1" square thermal tag, Letter Paper (Grid) for Avery 5160 sheets, and **Custom
-size** — not a dropdown. Below them sit the label printer (when one is
-configured), copies per item, the extra details to print under the barcode, and
-the orientation block.
-
-> **Corrected 2026-08-10.** The button is **Download Test Label**, not "Print
-> Test Label"; it produces a single-label PDF rather than sending anything to
-> a printer.
+**Settings** at the top right opens the panel these steps refer to. Below the
+size cards are the label printer (when one is set up), copies per item, what
+prints on the label, and the direction settings.
 
 ![The label settings panel — size presets, auto-rotate, and the test-label download](./images/05-64-label-settings.png)
 
 ### Direct printing to a network label printer
 
-Every path above ends in a print dialog, and a print dialog is where barcodes
-go wrong: a scale setting left at "Fit to page" shrinks the bars a few percent,
-the label still _looks_ right, and the scanner refuses it. Direct printing
-removes that step. The server sends the label to the printer in the printer's
-own language (ZPL), with the dimensions already fixed in printer dots.
+Every path above ends in a print window, and a print window is where barcodes
+go wrong. A scale left at "Fit to page" shrinks the bars a little. The label
+still _looks_ right, and the scanner refuses it. Direct printing removes that
+step: The Logbook sends the label to the printer in the printer's own language,
+at the exact size.
 
-**Requires:** a label printer that accepts raw printing on port 9100, reachable
-from the server on the department network, at an address the server's operator
-has approved. Two printer languages are supported:
+**You need** a label printer on the department network that accepts direct
+("raw") printing, usually on port 9100. Two printer languages work:
 
-- **ZPL** — Zebra's language, and the one to pick for a Zebra. It is worth
-  knowing that **many non-Zebra printers speak it too**: TSC, Godex, Honeywell
-  (PC42/PC43), Citizen and SATO all ship a ZPL emulation mode. If your printer
-  has one, turn it on in the printer's own settings and register it here as
-  ZPL — no other change is needed, and you get the same exact-size output a
-  Zebra does.
-- **ESC/POS** — the language receipt printers speak: Epson TM series, Star, and
-  the generic 58mm/80mm units many stations already have at the watch desk.
-  Several models take **linerless label roll**, which turns one of those into a
-  perfectly good asset-tag printer.
+- **ZPL**: Zebra's language, and the one to pick for a Zebra. **Many other
+  printers speak it too**: TSC, Godex, Honeywell (PC42/PC43), Citizen and SATO
+  all have a ZPL mode. If yours does, turn it on in the printer's own settings
+  and register the printer here as ZPL.
+- **ESC/POS**: the language receipt printers speak, such as Epson TM, Star, and
+  the 58mm or 80mm printers many stations already have at the watch desk.
+  Several take **linerless label rolls**, which makes them good asset-tag
+  printers.
 
-Pick the language when registering the printer. It decides more than the bytes
-sent: the renderer, the label sizes the form offers (a receipt printer is
-offered paper widths instead), and the status query all follow it — which is
-why a printer running a ZPL emulation is registered as ZPL.
+The language you pick decides the sizes offered (a receipt printer is offered
+paper widths instead), how labels are drawn, and how status is checked. That is
+why a printer running a ZPL mode is registered as ZPL.
 
 ![Settings → Label Printers with two registrations: a ZPL watch-desk printer marked default and an ESC/POS printer in the supply room, each on a documentation address](./images/19-33-label-printers.png)
 
-> **The server opens the connection to the printer, not your browser.** A
-> printer you can reach from your laptop may be unreachable from the machine
-> running The Logbook, so when a printer answers from a desk and fails from the
-> app, test whether the **server** can reach it.
+> **Important: The Logbook's server talks to the printer, not your browser.** A
+> printer you can reach from your laptop may be out of reach from the computer
+> running The Logbook. If a printer answers from a desk but fails from The
+> Logbook, check that the **server** can reach it.
 >
-> **Direct printing also needs the operator to allow the address.** The server
-> opens a print socket only to an address inside
-> `LABEL_PRINTER_ALLOWED_NETWORKS`, a comma-separated list of IP addresses or
-> CIDR ranges in the server's environment. It is **empty by default, which
-> disables direct printing outright**. It is set by whoever runs the server, not
-> by a department administrator from this screen — deliberately, so that
-> registering a printer cannot be used to make the server connect to arbitrary
-> hosts. An address outside it is refused before any connection is attempted,
-> with _"… does not resolve to an operator-approved label-printer network."_
-> **Test connection**, **Check status**, test labels and every print are all
-> held to it; if each printer you register reports that message, the allowlist
-> is what needs changing, and that is a conversation with the server operator.
-> The port is held to the raw-print ports, 9100–9109 and 6101.
+> **The server's operator must also allow the printer's address.** Direct
+> printing is switched off until whoever runs the server lists the allowed
+> printer addresses in the server's settings. A department administrator cannot
+> do this from the screen; that is deliberate, so registering a printer cannot
+> make the server connect anywhere it likes. A printer outside the allowed list
+> is refused before any connection, with _"… does not resolve to an
+> operator-approved label-printer network."_ If every printer you register
+> reports that, talk to your server operator. The port must be one of the
+> direct-printing ports: 9100 to 9109, or 6101.
 
-**Setting one up** — _Organization Settings → Label Printers_, which needs the
-`settings.manage` permission:
+**Setting one up.** Go to **Organization Settings → Label Printers**. This
+needs the **Full settings and admin management** permission.
 
-1. Click **Add a printer** and give it a name people will recognise
+1. Select **Add a printer** and give it a name people will recognise
    ("Quartermaster Zebra"). The optional **Location** shows next to the name
-   when someone picks a destination.
-2. Enter the printer's **hostname or IP address**. Leave the **port** at 9100
-   unless the printer's own network settings say otherwise.
-3. Set the **resolution** to match the printer — 203 dpi on most desktop units,
-   300 dpi on high-resolution models. This one matters: the wrong value prints
-   the label at the wrong physical size. (Receipt printers do not ask: they
-   size their output from the paper width instead.)
+   when someone picks a printer.
+2. Enter the printer's **Hostname or IP address**. Leave the **Port** at 9100
+   unless the printer's own settings say otherwise.
+3. Set the **Resolution** to match the printer: 203 dpi on most desktop
+   printers, 300 dpi on high-resolution ones. This matters; the wrong value
+   prints labels at the wrong size. Receipt printers do not ask.
 4. Set **Label stock loaded** to the labels actually in the printer. For a
-   receipt printer this is **Paper width** instead — 58mm or 80mm — because
-   receipt stock feeds continuously and has no label length.
-5. Optionally set a **darkness adjustment** (−30 to 30). Leave it blank to keep
-   whatever the printer is already tuned to; raise it if bars print faint.
-6. Before saving, click **Test connection**. The printer is asked to identify
+   receipt printer this is **Paper width** instead (58mm or 80mm), because
+   receipt paper has no label length.
+5. Optionally set a **Darkness adjustment** (−30 to 30). Leave it blank to keep
+   the printer's own setting; raise it if bars print faint.
+6. Before saving, select **Test connection**. The printer is asked to identify
    itself, so you find out straight away whether that address really is a
-   label printer — and if it reports its own resolution, the **Resolution**
-   field is set from it rather than from a guess.
-7. Save, then click **Send test label**. A label carrying the printer's own
-   name and a scannable test barcode confirms all three things at once: the
-   server reached the printer, the stock size is right, and the code scans.
+   label printer. If it reports its resolution, **Resolution** is set from it.
+7. Save, then select **Send test label**. A label with the printer's name and a
+   test barcode confirms three things at once: The Logbook reached the printer,
+   the label size is right, and the code scans.
 
-The first printer you add becomes the default. With more than one, mark the one
-most people should get with **Make default**.
+The first printer you add becomes the default. With more than one, select
+**Make default** on the one most people should get.
 
-**Check status** on a saved printer asks it what it is and whether it can
-print. This matters more than it sounds: a network connection succeeds against
-a printer that is powered on but out of labels, and against whatever else has
-picked up that address — so "connected" alone is not good news. The status line
-reports the model, and any fault the printer names. Status is reported per
-printer, on the line under each one, so one printer failing to answer does not
-hide the others' answers. A healthy printer reads in green as model ·
-resolution · firmware — for example **"ZD421 · 203 dpi · V93.21.01Z"** — with
-any warnings appended after a dash. A printer that accepts the
-connection but answers nothing is called out as such rather than shown as fine.
+**Check status** asks a saved printer what it is and whether it can print. This
+matters: a network connection succeeds even when a printer is out of labels, or
+when something else has taken its address. So "connected" alone is not good
+news. Each printer's status shows on its own line. A healthy printer reads in
+green as model, resolution and firmware, for example **"ZD421 · 203 dpi ·
+V93.21.01Z"**, with any warnings after a dash. A printer that accepts the
+connection but answers nothing is called out as such.
 
-Faults are separated into **errors**, which mean the printer cannot print now,
-and **warnings**, which mean it can but somebody should do something soon:
+Faults are split into **errors** (the printer cannot print now) and
+**warnings** (it can, but someone should act soon):
 
-| Reported                                | Kind    | What to do                           |
-| --------------------------------------- | ------- | ------------------------------------ |
-| Out of labels / Out of paper            | Error   | Load stock                           |
-| Out of ribbon                           | Error   | Load ribbon                          |
-| Printhead open / Cover is open          | Error   | Close and latch it                   |
-| Cutter fault                            | Error   | Clear the cutter                     |
-| Printhead over temperature              | Error   | Let it cool; check for a stalled job |
-| Unrecoverable fault                     | Error   | Power cycle the printer              |
-| Labels nearly out / Paper is nearly out | Warning | Load a roll before the next shift    |
-| Media needs calibrating                 | Warning | Run the printer's calibration        |
-| Printhead needs cleaning / replacing    | Warning | Clean it; replace if lines persist   |
+| Reported                                | Kind    | What to do                         |
+| --------------------------------------- | ------- | ---------------------------------- |
+| Out of labels / Out of paper            | Error   | Load labels or paper               |
+| Out of ribbon                           | Error   | Load ribbon                        |
+| Printhead open / Cover is open          | Error   | Close and latch it                 |
+| Cutter fault                            | Error   | Clear the cutter                   |
+| Printhead over temperature              | Error   | Let it cool; check for a stuck job |
+| Unrecoverable fault                     | Error   | Turn the printer off and on        |
+| Labels nearly out / Paper is nearly out | Warning | Load a roll before the next shift  |
+| Media needs calibrating                 | Warning | Run the printer's calibration      |
+| Printhead needs cleaning / replacing    | Warning | Clean it; replace if lines persist |
 
-**"Labels nearly out" does not stop a print.** The printer will finish the
-label in front of it. It is reported so a roll gets loaded between shifts
-rather than in the middle of one.
+- **"Labels nearly out" does not stop a print.** It is reported so a roll gets
+  loaded between shifts, not in the middle of one.
+- A fault The Logbook has no name for is still shown, as "Printer reports an
+  error".
+- The same check runs after every direct print, so a job sent to a printer out
+  of labels reports **out of labels** instead of a success message.
+- Some older printers do not answer the status question. **Check status** says
+  fault reporting is not available. After a direct print to such a printer, the
+  page says "This printer does not report its status, so delivery could not be
+  confirmed. Check the labels."
 
-A fault a printer reports that the app has no name for is still shown — as
-"Printer reports an error" — rather than being dropped. A printer that is
-faulted never reads as healthy just because its particular model words the
-fault differently.
-
-The same check runs automatically after every direct print, so a job sent to a
-printer that is out of stock reports **out of labels** instead of a success
-message and an empty roll.
-
-Older printer firmware does not answer the status query at all. **Check
-status** says so — it reports the printer's identity and that fault reporting
-is unavailable, rather than claiming health. After a direct print, though,
-such a printer simply shows the ordinary success message: the job was
-accepted, which is true, but it is not the confirmation a status-capable
-printer gives. If your printer's **Check status** says fault reporting is
-unavailable, treat a successful print as "sent", not as "printed".
-
-**Printing to it:** any label page now shows **Print to _printer name_** (or
+**Printing to it.** Any label page shows **Print to _printer name_** (or
 **Print to network printer** before one is chosen) beside the PDF and print
-buttons. On the shared label pages those read **PDF**, **Print in browser** and,
-in the settings panel, **Download test label** _(renamed 2026-09-29 from
-"Browser print dialog" and "Print Test Label", since that one downloads a
-PDF)_. It sends the records currently listed, at the size selected
-on the page, honouring **Copies per record**. Sending to a _receipt_ printer
-ignores the size chosen on the page — its stock is whatever roll is loaded —
-and the settings panel says so when one is selected. If the page's label size differs
-from the stock the printer is registered with, the settings panel says so and
-offers **Match printer** — worth taking, since the printer cannot tell that the
-labels loaded in it are not the size you asked for.
+buttons. It sends the records listed, at the size chosen on the page, with the
+number of copies you set. After a send, the page says how many labels went and
+any fault or warning the printer reported.
 
-> **Why the size presets still matter here.** Direct printing does not rescale,
-> so an oversized layout is not shrunk to fit — it is simply printed past the
-> edge of the label. Matching the preset to the stock is what makes the output
-> correct, not a fallback.
+- **Print to _printer_** stays off, with the reason beside it, until the run
+  can be sent: no printer chosen, a size that is not a thermal size, a size that
+  does not match the printer's labels, or an item with no barcode yet ("download
+  the PDF once to assign them").
+- If the page's label size differs from the labels the printer is registered
+  with, the settings panel says so and offers **Match printer**. Take it: the
+  printer cannot tell that the labels in it are not the size you asked for.
+- Sending to a **receipt** printer ignores the size chosen on the page. Its
+  labels are whatever roll is loaded, and the settings panel says so.
 
-> **Sheet layouts are not offered.** _Letter Paper (Grid)_ is an Avery sheet of
-> 30 labels and has no meaning on a roll — selecting it disables **Send to
-> Printer** rather than feeding thirty labels off the roll.
+> **Why sizes still matter.** Direct printing does not shrink anything to fit.
+> An oversized layout simply prints past the edge of the label.
+
+> **Sheet sizes are not offered.** _Letter Paper (Grid)_ is an Avery sheet of 30
+> labels and means nothing on a roll. Choosing it turns off direct printing.
 
 > **Receipt printers and long barcodes.** 58mm paper holds about 12 characters
-> of Code 128 at a width a scanner can read, and 80mm about 21. That is genuinely
-> tight for a full item id, so on receipt stock — especially 58mm — choose **QR
-> code** as the barcode style. The page reports the problem rather than printing
-> an unreadable barcode, but QR is the answer to it.
+> of striped barcode at a width a scanner can read; 80mm holds about 21. That is
+> tight for a full item code, so on receipt paper (especially 58mm) choose **QR
+> code**. The page reports the problem rather than printing an unreadable
+> barcode.
 
-> **A receipt printer prints more than labels.** Once one is registered it also
-> prints the **shift roster** and **apparatus check sheets** — see
-> [Printing station documents](./03-scheduling.md#printing-station-documents).
+> **A receipt printer prints more than labels.** Once registered, it also
+> prints the **shift roster** and **apparatus check sheets**. See
+> [Printing Station Documents](./03-scheduling.md#printing-station-documents).
 
-> **If the label is rejected as too small:** a barcode has a minimum readable
-> width, and a long value on a small label can exceed it. The page reports this
-> rather than printing an unscannable code. Use a larger label, or drop the
-> extra info line.
+> **If the label is refused as too small.** A barcode has a minimum readable
+> width, and a long value on a small label can go below it. The page reports
+> this rather than printing a code nobody can scan. Use a larger label, or drop
+> the extra info line.
 
 ---
 
 ## Maintenance Tracking
 
-Track maintenance schedules and history for equipment:
+Keep track of inspections, repairs and other work on equipment.
 
 ### Viewing Maintenance Due
 
-Navigate to **Inventory Admin** and check the **Maintenance Due** section for items that need servicing.
+On **Inventory Administration**, the **Maintenance** card shows how many items
+are due. **Needs attention** lists each item whose maintenance is due or
+overdue, with **Open item**.
 
 ### Creating a Maintenance Record
 
-1. Open an item's detail view.
-2. Navigate to the maintenance section.
-3. Click **Add Maintenance Record**.
-4. Enter the maintenance type, date, description, and cost.
-5. Save.
+You can record work in two places:
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/maintenance (or an item's Inspections tab → + Add Record): the "Log Maintenance — <item>" dialog with Record inspection selected and Pass chosen, the completion date showing today, and the note "This records the inspection without changing the item's status." Do not save.]_
--->
+- **Inventory Administration → Maintenance**, for any item.
+- An item's **Inspections** tab, with **+ Add Record**.
+
+Both open the **Log Maintenance** window. Choose one of four actions. The line
+under the form says what the action does to the item's status:
+
+| Action                               | Effect on the item                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------------- |
+| **Schedule maintenance**             | "This will schedule work without changing the item status."                        |
+| **Open repair**                      | "This will mark the item out of service."                                          |
+| **Record inspection**, passed        | "This records the inspection without changing the item's status."                  |
+| **Record inspection**, failed        | "This will mark the item out of service."                                          |
+| **Record inspection**, no result yet | "Choose pass or fail. A failed inspection marks the item out of service."          |
+| **Complete work**                    | "The item will remain out of service until you deliberately return it to service." |
+
+The completion date starts at today's date in your department's time zone.
+Select **Save Record** to save.
+
+![Log Maintenance for an item with Record inspection chosen and Pass ticked, the completion date at today, and the note that this records the inspection without changing the item's status](./images/05-121-log-maintenance-inspection.png)
 
 ![Item inspections tab listing its service history](./images/05-52-item-maintenance.png)
 
-### The Maintenance page _(updated 2026-09-29)_
+### Complete work closes the open record
 
-**Inventory Admin > Maintenance** (`/inventory/admin/maintenance`) records work
-against an item with one of four actions — **Schedule maintenance**, **Open
-repair**, **Record inspection** or **Complete work** — and the line under the
-form says what the action does to the item's status:
+**Complete work** finishes a repair or scheduled job that is already open:
 
-| Action                         | Effect on status                                                                   |
-| ------------------------------ | ---------------------------------------------------------------------------------- |
-| Open repair, failed inspection | "This will mark the item out of service."                                          |
-| Passed inspection              | "This records the inspection without changing the item's status."                  |
-| Record inspection, no result   | "Choose pass or fail. A failed inspection marks the item out of service."          |
-| Complete work                  | "The item will remain out of service until you deliberately return it to service." |
-| Schedule maintenance           | "This will schedule work without changing the item status."                        |
-
-Two fixes from workflow review W42:
-
-- **A passed inspection was described wrongly.** It shared Complete work's
-  line, which told the officer an assigned coat inspected and passed would stay
-  out of service. A pass leaves the status where it was.
-- **The completion date defaults to today in the department's timezone.** It
-  defaulted to the UTC date, which from 7 PM Central onwards is tomorrow.
-
-### Complete work closes the open record _(2026-10-11)_
-
-**Complete work** used to log a new, completed record every time, so the repair
-or scheduled job it finished stayed open beside it forever — still counted as
-open maintenance on the item. It now closes the open record instead:
-
-- **One open record** — the form says "This completes the open repair (due …)"
-  and saving marks that record complete. Its task description is kept; what you
+- **One open record:** the form says "This completes the open repair (due …)".
+  Saving marks that record complete. Its task description is kept. What you
   type under **Performed Work** is added to its notes as "Work performed: …",
   with the technician, condition, cost and next due date you enter.
-- **Several open records** — an **Open record being completed** picker lists
-  them, with the earliest selected. Pick the one you actually finished; the
-  others stay open.
-- **No open records** — the work is logged as a new completed record, as before.
-
-Open **inspections** are never offered: Complete work records no pass or fail,
-and closing an inspection would move the item's inspection clock without a
-result. Record those with **Record inspection**. **Save Record** waits until the
-open records have loaded; if they cannot be loaded, close the form and try again
-rather than logging a duplicate. The item still stays out of service until you
-choose **Return to service**.
-
-### Record inspection closes the scheduled inspection _(2026-10-12)_
-
-**Record inspection** used to record a new inspection every time, so an
-inspection scheduled with **Schedule maintenance** stayed open forever beside
-the one that was actually done. It now closes the scheduled inspection, the
-same way Complete work closes open work:
-
-- **One scheduled inspection** — the form says "This closes the scheduled
-  inspection (due …)" and saving marks it complete with the pass or fail and
-  completion date you enter. Its task description is kept; what you type under
-  **Task Description** is added to its notes as "Inspection notes: …".
-- **Several scheduled inspections** — a **Scheduled inspection being recorded**
-  picker lists them, with the earliest selected. The others stay open.
-- **None scheduled** — a new, completed inspection is recorded, as before.
-
-Only open inspections are offered here; open repairs and other work are closed
-with **Complete work**. Closing a scheduled inspection does exactly what
-recording a new one does: the item's last inspection becomes the completion
-date and its next inspection due is worked out from the inspection interval,
-and a **Fail** marks the item out of service. As with Complete work, **Save
-Record** waits until the scheduled inspections have loaded.
-
-### Only an inspection moves the inspection clock _(2026-09-13)_
-
-An item on an inspection interval carries two dates: **last inspection** and
-**next inspection due**, the second calculated from the first. Marking a
-maintenance record complete used to write both — for any record, whatever its
-type.
-
-So a structural coat inspected in April and repaired in August had its annual
-NFPA 1851 inspection silently rescheduled from the following April to the
-following August. **The department read as compliant for four months longer than
-it was.** Nothing raised and nothing was logged; the only visible sign was the
-two dates on the item page disagreeing.
-
-Only a record whose type is an inspection — **routine**, **advanced** or
-**independent** — moves those dates now. A repair, a cleaning, a
-decontamination or a test records itself against the item's history and leaves
-the inspection schedule alone. The type is read after the record is saved, so
-completing a record and correcting its type in the same action is judged on what
-it ends up being.
-
-⚠️ **This does not go backward.** Gear whose inspection date already slid keeps
-the date it holds, because the application cannot tell a date that slid from one
-a quartermaster entered deliberately. **If your department tracks gear on an
-inspection interval and has been completing repairs against it, check the last
-inspection date on that gear against your paper records** before trusting the
-next-due figure.
-
----
-
-## Low Stock Alerts
-
-For consumable items with quantity tracking, the system alerts when stock falls below the minimum threshold.
-
-The **Inventory Summary** (available from the inventory dashboard) shows:
-
-- Items at or below minimum stock
-- Items with overdue maintenance
-- Items currently checked out and overdue for return
-
-![Inventory dashboard with low-stock, maintenance, and assignment alert cards](./images/05-02-inventory-dashboard.png)
-
----
-
-## Dated Stock Lots and Receiving _(2026-08-10)_
-
-Consumables — gauze, saline, medications, batteries — are not one flat count.
-They arrive in batches with expiration dates, and which batch a unit came from is
-the whole question when something is recalled or about to run out.
-
-A **lot** is one dated batch of a consumable: a lot number, an expiration date, a
-quantity, and the date it was received.
-
-### Where "on hand" comes from
-
-This is the part worth reading twice, because a number can now come from two
-different ledgers:
-
-| Item                  | On-hand figure                          |
-| --------------------- | --------------------------------------- |
-| Has lots              | The sum of its **in-date** lots         |
-| Has no lots           | The item's own **Quantity** field       |
-| Has lots, all expired | **Zero** — not the stale Quantity value |
-
-**Expired stock counts as nothing.** The equipment-check swap refuses it anyway,
-so counting it would hide the shortage most in need of ordering.
-
-The items grid labels the figure **"in-date lots"** so it is not mistaken for the
-pool count beside it, and the CSV export carries the same number in its own
-**Ready Lot Stock** column. The low-stock alert reads the same figure and says
-which ledger it came from, so a number that disagrees with the item's Quantity
-field reads as the count that matters rather than as a bug.
-
-![Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure](./images/05-53-items-grid-lot-stock.png)
-
-> **Why the two disagree.** For anything kept as dated stock, the item's
-> **Quantity** field is not maintained at all: receiving a lot does not touch it,
-> and an equipment-check swap decrements only the lot. Before this release the
-> grid showed Quantity, which meant it was reporting whatever the number happened
-> to be on the day the item was created.
-
-### Receiving a delivery
-
-**Required Permission:** `inventory.manage`
-
-Recording a delivery used to be a page at a time — open each item's detail page,
-add one lot, go back. That is a large part of why the stock a crew went looking
-for often did not exist.
-
-1. Go to **Inventory** (`/inventory`, or **Inventory → Manage Items** at
-   `/inventory/admin/items` — the same screen).
-2. Click **Receive Stock**.
-3. Add one line per item in the delivery: **item**, **lot number**,
-   **expiration**, **quantity**.
-4. Set the **received date** once, for the whole delivery.
-5. Review and submit.
-
-![Receive Stock: four delivery lines, each its own item, lot and expiry, under one received date](./images/05-09-receive-stock-modal.png)
-
-**The whole delivery lands, or none of it does.** A partly applied delivery is
-worse than a rejected one: you cannot tell which lines landed, and re-entering it
-would double-count whatever did. If any line fails validation, nothing is
-written and the errors are shown against the offending lines.
-
-### Adding many catalog items at once
-
-**Required Permission:** `inventory.manage`
-
-Stocking the catalog is list-shaped work, and it only ever had a
-one-item-at-a-time modal.
-
-1. Go to **Inventory**.
-2. Click **Add Several**.
-3. Paste or type one item per line. A name on its own is enough; add
-   `| quantity | unit` after it to set those too.
-4. Pick a **category** and a **tracking** type for the whole paste — they apply
-   to every line, so paste one kind of thing at a time. **Counted** is right for
-   anything a checklist counts: a bracket holds four gauze, not gauze #7.
-5. Review the parsed preview and submit.
-
-![Add Several: eight pasted lines and the parsed preview of name, quantity and unit](./images/05-10-bulk-add-items.png)
-
-The preview shows what each line **parsed to** — name, quantity, unit — with an
-em dash where a line gave none. It does **not** flag names the catalog already
-holds: that check runs on the server, and the ones it skipped are named back to
-you in the result message after you submit. Two of the eight lines above are
-already in this department's catalog, and nothing on this screen says so.
-
-**Names already in the catalog are skipped and reported, not rejected**, so you
-can re-paste a list after it grows and only the new lines are created. The
-preview does not mark them in advance — it shows every line you pasted, and the
-skipped ones are named in the confirmation after you submit. As with receiving,
-any validation failure writes nothing at all.
-
-The **Import CSV** button beside them is the third path. It goes to
-`/inventory/import`, which was built and routed but previously reachable only by
-typing the URL.
-
-> **CSV files are parsed properly now** _(2026-08-10)_. A supply catalog is
-> exactly the data that breaks a naive comma split: `"Gauze Pads, 4x4 Sterile"`
-> is **one** field. The old readers split on every comma, which shifted every
-> column after it — so the import preview disagreed with what the import would
-> actually do.
-
-### Which trucks carry this item
-
-Open any item's **Stock** tab. Below the ready lots you now see **Deployed on
-apparatus**: the checklist positions this item fills, which apparatus and
-compartment each one is, what that truck is carrying right now, and the soonest
-expiration aboard.
-
-![An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below](./images/05-07-item-stock-deployed.png)
-
-This is the direction a **recall** is worked from — you are holding the item and
-need to know which rigs to go to. The opposite direction ("what is expiring on my
-trucks") is the supply worklist at **Scheduling → Supply**; see
-[Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step).
-
-### Stock Lot Edge Cases
-
-| Scenario                                                      | Behavior                                                                                                                                                                                                                                                                  |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A lot passes its expiration date                              | It stops counting toward on hand, is flagged in the list, and the equipment-check swap **refuses** it                                                                                                                                                                     |
-| Every lot for an item has expired                             | On hand reads **zero**, not the item's stale Quantity value                                                                                                                                                                                                               |
-| An item has no lots at all                                    | Untouched — it keeps reporting its issued/total pool figure                                                                                                                                                                                                               |
-| A lot is drawn to zero by a swap                              | The lot row is removed. What went onto the truck keeps its own copy of the lot number and expiration                                                                                                                                                                      |
-| A lot is deleted while units from it are on an apparatus      | The truck's record survives; the deployed record's link to the shelf lot is cleared but its lot number and expiration are its own                                                                                                                                         |
-| One line of a Receive Stock batch fails validation            | **Nothing is written.** Fix the line and resubmit the whole delivery                                                                                                                                                                                                      |
-| An Add Several line names an item that already exists         | Skipped and reported. The rest of the list is still created                                                                                                                                                                                                               |
-| A CSV field contains a comma                                  | Quote it (`"Gauze Pads, 4x4 Sterile"`). It is parsed as one field                                                                                                                                                                                                         |
-| A lot has no expiration date                                  | It counts toward on hand, and it sorts **last** for consumption — an undated unit is never the one that needs using up                                                                                                                                                    |
-| Editing "On hand" on a **lot-stocked** item                   | _(2026-08-17)_ The field is no longer editable. It shows the lot figure and points you to **Receive delivery**, because the count comes from the lots — typing into the old box wrote a number nothing displayed, returned a success toast, and left the figure unchanged |
-| Editing **Quantity** on a lot-stocked item from **All Items** | _(2026-10-11)_ The general item form behaves the same way: for a lot-stocked item the Quantity box is replaced by "N from stock lots — adjust by receiving a delivery or editing the item's lots", and saving the form leaves the stored figure alone                     |
-
-### CSV Import: Supplier Names _(2026-08-17)_
-
-When a CSV's `Vendor` cell names a supplier that is not on file, the row still
-imports and the name is kept as free text. The import result now reports those
-names so you can attach them afterwards from the Vendors screen — with three
-corrections that change what you see:
-
-| Scenario                                                             | Behavior                                                                                                                                                                                                                                                                                        |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The CSV spells one supplier three ways (`Gals`, `gals`, `GALS`)      | Reported **once**, showing the first spelling seen. Attach handles all three in one pass, so listing them separately implied three pieces of work                                                                                                                                               |
-| A row fails to import (duplicate serial, pool item with no quantity) | Its supplier name is **not** reported. The name used to be banked before the row was written, so a failed import sent you to Attach for rows that never existed                                                                                                                                 |
-| The name matches a **deactivated** supplier                          | It **links to that supplier** rather than being reported as unmatched. Vendor creation rejects inactive duplicates, so the old advice was a dead end. Deactivating a supplier deliberately keeps every existing link — purchase history for equipment still in service is why the record exists |
-
----
-
-## Departure Clearance
-
-When a member departs the department (dropped, retired, etc.), a **Departure Clearance** is created to track the return of all assigned equipment.
-
-> **The clearance screen _(2026-10-11)_.** A clearance is worked at
-> **Inventory Admin > Needs attention > Unresolved departure clearance >
-> Review**, which opens `/inventory/admin/clearances/<id>`. Initiating one by
-> hand still has no button: dropping a member who holds property creates it.
-> The **property return report** generated when a member is dropped is a
-> different feature — see
-> [Membership > Property Return Process](./01-membership.md#member-status-management).
-
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin: crop to the Needs attention card showing an "Unresolved departure clearance · <demo member> · 1 outstanding · Due <date> · Review" row. Requires a demo member dropped while holding an item.]_
--->
-
-### Creating a Clearance
-
-**Required Permission:** `inventory.manage`
-
-1. Drop the member (or retire them) while they hold department property. The
-   clearance is created with one line per assignment, temporary loan and pool
-   issuance they hold.
-2. On **Inventory Admin**, the **Needs attention** list shows "Unresolved
-   departure clearance · _member_ · _n_ outstanding". Click **Review**.
-3. The clearance screen shows the totals (items, resolved, outstanding, value
-   outstanding) and every line with how it was held and its disposition.
-4. Click **Resolve** on a line and choose what happened to it:
-   - **Returned** — handed back in usable condition; choose the **Condition**
-   - **Returned damaged** — handed back damaged; the condition starts at Damaged
-   - **Written off** — lost or not coming back
-   - **Waived** — the department does not require it back
-
-   Add **Notes** if useful and click **Resolve**. A return is recorded on the
-   item itself (unassigned, checked in or returned to the pool) — do not also
-   return it on **Members**.
-
-5. When every line is resolved, add any **Closing notes** and click **Complete
-   clearance**. If leadership has decided the rest will not come back, click
-   **Close incomplete** instead; the confirmation says how many items and how
-   much value stay unresolved, and **Keep it open** backs out.
-
-### Clearance Lifecycle
-
-| Status                | Description                                                              |
-| --------------------- | ------------------------------------------------------------------------ |
-| **Initiated**         | Clearance created, items pending resolution                              |
-| **In Progress**       | Some items resolved, others still pending                                |
-| **Completed**         | All items resolved, clearance finalized                                  |
-| **Closed Incomplete** | Closed by an administrator with some items still outstanding (write-off) |
-
-> **Hint:** Departure clearances integrate with the Member Status workflow. When a member is dropped, a property return report is automatically generated. See [Membership > Property Return Process](./01-membership.md#member-status-management).
-
-> **Hint:** When an item is resolved, any pending notification for that item is automatically cancelled (notification netting). This prevents duplicate or stale notifications from being sent.
-
-### Where a clearance shows up today _(2026-09-28)_
-
-A member **dropped** while holding department property gets a clearance
-automatically, and since 2026-09-28 it appears on the **Inventory
-Administration** attention list as "Unresolved departure clearance", naming the
-member ("Jane Smith · 2 outstanding") and linking to their row on **Members**.
-It used to be missing until something had already been returned, because the
-hub asked only for clearances in progress, and the row printed the member's
-internal id.
-
-Since 2026-10-11 **Review** on that row opens the clearance itself rather than
-the member's row. Returning the items on **Members** gives the gear back but
-**does not resolve the clearance** — resolve each line on the clearance
-instead, which performs the return for you, then complete it.
-
-### Property return reminders now go out _(2026-09-24)_
-
-The 30- and 90-day reminder emails to a dropped member still holding property
-were built but **never sent**: nothing ran them. They now run **daily** as the
-`property_return_reminders` scheduled task (07:45 where an external scheduler
-drives it), for each department separately, emailing the member and copying
-the officers the department notifies.
-
-Each run sends a member **at most one** reminder — the latest threshold they
-have passed, if it has not already gone. An earlier one is superseded, never
-sent late, so a member dropped four months before this release gets a single
-90-day reminder, not a 30-day and a 90-day on the same morning.
-
-> **Upgrade note:** the first daily run after upgrading sends that one reminder
-> to **every** dropped member who still holds property and is past 30 days. If
-> some of them have already handed gear back without it being recorded, record
-> those returns first.
-
----
-
-## Gear Requests
-
-Members can request equipment checkouts, pool issuances, or new purchases through the equipment request workflow.
-
-### Submitting a Request
-
-1. Navigate to **Inventory**.
-2. Click **Request Equipment**.
-3. Fill in the request form:
-   - **Item Name** — the item you need
-   - **Request Type** — checkout, issuance, or purchase
-   - **Priority** — low, normal, high, or urgent
-   - **Reason** — why you need the item
-4. Submit the request.
-
-<!-- Screenshot needed:
-_[Member at /inventory/my-equipment: Request Equipment → pick a garment → select the member's size on file that the department does not stock, so the chip reads "not stocked" and the "(from your profile)" line and the blue notice "The department doesn't stock this item in <size>." are visible. Do not submit.]_
--->
-
-### Reviewing Requests (Admin)
-
-**Required Permission:** `inventory.manage`
-
-1. Go to **Inventory Administration → Gear Requests** (`/inventory/admin/requests`), which opens on **Awaiting review**.
-2. Press **Review** on a request to see the requester's name, item, size and reason.
-3. Click **Decline**, **Approve for later fulfillment** or **Approve & fulfill now**, optionally with a review note — the member sees the note and is notified of the outcome (see [Equipment Request Fulfillment](#equipment-request-fulfillment)).
-
-> **Hint:** Items with a minimum rank restriction will prevent lower-ranked members from submitting requests for those items.
-
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/requests: Review on an Awaiting review request whose size the department does not stock — the dialog with Member asked for, the "not a size the department stocks" line, Tracking in words, Availability "n on hand", the note placeholder, and Decline / Approve for later fulfillment / Approve & fulfill now. Never click a decision.]_
--->
+- **Several open records:** an **Open record being completed** list shows them,
+  with the earliest selected. Pick the one you actually finished; the others
+  stay open.
+- **No open records:** the work is saved as a new, completed record.
+
+Open **inspections** are never offered here, because **Complete work** records
+no pass or fail. Use **Record inspection** for those.
+
+The item stays out of service until you choose **Return to service**. If you
+recorded its condition as poor, damaged or out of service, it cannot be returned
+to service until a later inspection records a safe condition.
+
+### Record inspection closes the scheduled inspection
+
+**Record inspection** works the same way for inspections scheduled with
+**Schedule maintenance**:
+
+- **One scheduled inspection:** the form says "This closes the scheduled
+  inspection (due …)". Saving marks it complete with the pass or fail and the
+  date you enter. Its task description is kept. What you type under **Task
+  Description** is added to its notes as "Inspection notes: …".
+- **Several scheduled inspections:** a **Scheduled inspection being recorded**
+  list shows them, with the earliest selected. The others stay open.
+- **None scheduled:** a new, completed inspection is saved.
+
+Recording an inspection sets the item's **last inspection** to the completion
+date and works out **next inspection due** from the inspection interval. A
+**Fail** marks the item out of service.
+
+For both actions, **Save Record** waits until the open records have loaded. If
+they cannot load, close the form and try again, rather than saving a duplicate.
+
+### Only an inspection moves the inspection schedule
+
+An item with an inspection interval carries two dates: **last inspection** and
+**next inspection due**. Only an inspection record changes them, including the
+NFPA routine, advanced and independent inspections. A repair, cleaning,
+decontamination or test is added to the item's history and leaves the
+inspection schedule alone.
+
+So a coat inspected in April and repaired in August is still due for its next
+inspection in April, as the standard requires.
 
 ---
 
 ## Write-Off Requests
 
-When an item is lost, stolen, damaged beyond repair, or obsolete, a write-off request can be submitted for supervisor approval before the item is removed from active inventory.
+A write-off takes an item that is lost, stolen, damaged beyond repair or
+obsolete out of active inventory, after an officer approves it.
 
-### Submitting a Write-Off Request
+### Where write-off requests come from
 
-1. Navigate to the item in **Inventory**.
-2. Click **Request Write-Off**.
-3. Select a reason: lost, damaged beyond repair, obsolete, stolen, or other.
-4. Add a description explaining the circumstances.
-5. Submit the request.
+There is no write-off button on an item's page. A write-off request is raised
+when you receive returned gear and choose **Write-off review** as the safety
+follow-up (see
+[When a member says they are bringing gear back](#when-a-member-says-they-are-bringing-gear-back)).
+This is offered for tracked items only.
 
 ### Reviewing Write-Off Requests (Admin)
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Navigate to **Inventory** and open the **Write-Off Requests** panel.
-2. Review the request details including the item, reason, and description.
-3. Click **Approve** or **Deny** and optionally add review notes.
-4. On approval, the item is automatically marked as lost/stolen or retired depending on the reason.
+1. Go to **Inventory Administration → Write-Offs**. The page is headed
+   **Write-Off Requests**.
+2. Select a request to review it: the item, the reason and the description.
+3. Type review notes. **They are required** before either button works.
+4. If the item is still held by someone, or is worth more than your
+   department's review limit, tick the box that acknowledges this.
+5. Approve or select **Deny**. The approve button says what will happen:
+   **Approve and mark lost**, **Approve and mark stolen**, or **Approve and
+   retire item**.
+
+---
+
+## Departure Clearance
+
+When a member is **dropped** (voluntarily or not) while holding department
+property, The Logbook opens a **departure clearance**. It lists everything they
+hold so each item can be accounted for.
+
+The **property return report** created when a member is dropped is a separate
+document. See
+[Membership > Member Status Management](./01-membership.md#member-status-management).
+
+![The Needs attention card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button](./images/05-132-departure-clearance-needs-attention.png)
+
+### Creating a Clearance
+
+Needs the **Manage gear, uniforms and equipment** permission. There is no
+button to start a clearance by hand.
+
+1. Drop the member while they hold department property. The clearance is
+   created with one line for each assignment, temporary loan and pool issuance
+   they hold.
+2. On **Inventory Administration**, **Needs attention** shows "Unresolved
+   departure clearance · _member_ · _n_ outstanding". Select **Review**.
+3. The clearance shows the totals (items, resolved, **Outstanding**, **Value
+   outstanding**) and every line, with how it was held and what has happened to
+   it.
+4. Select **Resolve** on a line and choose what happened:
+   - **Returned**: handed back in usable condition. Choose the **Condition**.
+   - **Returned damaged**: handed back damaged. The condition starts at
+     Damaged.
+   - **Written off**: lost or not coming back.
+   - **Waived**: the department does not need it back.
+
+   Add notes if useful, and select **Resolve**. **Returned** and **Returned
+   damaged** record the return on the item for you (it is unassigned, checked
+   in or returned to stock). Do not also return it on **Members**.
+
+5. When every line is resolved, add any **Closing notes** and select
+   **Complete clearance**. If the department has decided the rest will not come
+   back, select **Close incomplete** instead. The confirmation says how many
+   items and how much value stay unresolved; **Keep it open** backs out.
+
+> **Important.** **Written off** and **Waived** close the line on the clearance
+> but do **not** change the item. It still shows as held by the former member,
+> who stays on the **Former members still holding property** list and keeps
+> getting return reminders. Update the item itself as well, for example by
+> unassigning it and setting its status to Lost.
+
+> **What if I return the gear on the Members page instead?** The gear goes back,
+> but the clearance line stays open. Resolve each line on the clearance instead;
+> it performs the return for you.
+
+> **What if the member retired?** A clearance starts only when a member is
+> dropped. Changing a member to **Retired** does not open one.
+
+### Clearance Lifecycle
+
+| Status                | Meaning                                       |
+| --------------------- | --------------------------------------------- |
+| **Open**              | Created; no lines resolved yet                |
+| **In progress**       | Some lines resolved, others still outstanding |
+| **Completed**         | Every line resolved                           |
+| **Closed incomplete** | Closed with some lines still outstanding      |
+
+### Property return reminders
+
+Every day, The Logbook checks each department for dropped members who still
+hold property. It emails the member, with a copy to the officers your
+department notifies, at **30** and **90** days after the drop.
+
+Each run sends a member **at most one** reminder: the latest one they are due,
+if it has not gone already. An earlier reminder that was missed is skipped, not
+sent late.
+
+The reminders are based on what the member still holds (assignments and loans),
+not on the clearance. A member stops getting them once no assigned or loaned
+item is left on their record.
 
 ---
 
 ## NFPA 1851/1852 Compliance Tracking
 
-Categories can be configured with **NFPA compliance tracking** enabled (e.g., PPE, SCBA). When enabled, items in that category gain lifecycle tracking, ensemble grouping, inspection assessments, and exposure logging as required by NFPA 1851 and 1852.
+A category can have **NFPA tracking** switched on (for example PPE or SCBA).
+Its items then get the lifecycle dates, ensemble grouping, inspection records
+and exposure log that NFPA 1851 and 1852 call for.
 
 ### Enabling NFPA Tracking
 
-**Required Permission:** `inventory.manage`
+Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Navigate to **Inventory > Categories**.
-2. Edit the category (e.g., "PPE" or "SCBA").
-3. Check **NFPA 1851/1852 compliance tracking**.
-4. Save the category.
+1. Go to **Inventory Administration → Categories**.
+2. Edit the category (for example "PPE" or "SCBA").
+3. Switch on **NFPA Tracking Enabled**.
+4. Save.
 
 ### Item Detail — NFPA Tabs
 
-When you click on an item in an NFPA-enabled category, the detail modal shows additional tabs:
+An item in an NFPA-tracked category has these extra tabs on its page:
 
-| Tab                 | Purpose                                                                                                          |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **General**         | Standard item info (name, serial, condition, etc.)                                                               |
-| **NFPA Compliance** | Manufacture date, first in-service date, expected retirement date, ensemble assignment, SCBA cylinder/test dates |
-| **Inspections**     | Maintenance and inspection history with pass/fail results                                                        |
-| **Exposures**       | Hazardous exposure log (fire, hazmat, bloodborne pathogen) with decontamination tracking                         |
+| Tab                 | What it holds                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| **NFPA Compliance** | Lifecycle dates, retirement details, ensemble and SCBA details, contamination          |
+| **Inspections**     | Inspection and repair history with pass or fail (if the category requires maintenance) |
+| **Exposures**       | Hazardous exposures (fire, hazmat, bloodborne pathogen) and cleaning                   |
 
 ### Lifecycle Dates (NFPA 1851 §10.1.2)
 
 NFPA 1851 requires tracking:
 
-- **Manufacture date** — the 10-year retirement clock starts here
-- **First in-service date** — when the item was placed in active use
-- **Expected retirement date** — automatically flags items approaching the 10-year limit
+- **Manufacture date**: the 10-year retirement clock starts here.
+- **First in-service date**: when the item was put into use.
+- **Expected Retirement**: the date the item must be retired. You enter it.
 
-Items within 180 days of retirement display a warning banner in the detail view.
+Officers who manage gear get a weekly email listing items within 180 days of
+their retirement date, and any already past it.
 
 ### Ensemble Tracking
 
-PPE components (coat, pants, helmet, gloves, boots, hood) can be grouped into ensembles using a shared **Ensemble ID** and **Role**. This allows tracking the complete protective ensemble per NFPA 1851.
+PPE parts (coat, pants, helmet, gloves, boots, hood) can be grouped into an
+**ensemble** with a shared ensemble ID and a role for each part. This tracks
+the complete protective ensemble, as NFPA 1851 requires.
 
 ### Exposure Logging (NFPA 1851 §6.2)
 
-After a fire, hazmat, or bloodborne pathogen event, log the exposure against affected PPE items. The system tracks:
+After a fire, hazmat or bloodborne pathogen event, log the exposure against each
+affected PPE item with **+ Add Exposure**. The Logbook records:
 
-- Exposure type and date
-- Incident number
-- Whether decontamination is required and completed
+- The exposure type and date
+- The incident number
+- Whether cleaning (decontamination) is needed, and whether it is done
 
 ### SCBA Fields (NFPA 1852)
 
-For SCBA items, additional fields track:
+For SCBA, extra fields track:
 
 - Cylinder manufacture and expiration dates
 - Hydrostatic test dates and due dates
@@ -2107,188 +2481,655 @@ For SCBA items, additional fields track:
 
 ---
 
-## Members Inventory View (Admin)
+## Impact Planner
 
-**Required Permission:** `inventory.manage`
+The **Impact Planner** (**Inventory Administration → Impact Planner**) helps
+you plan a new issue. It works out who needs the item, in which sizes, what you
+must buy, and what it will cost. Then it can create the orders and issue the
+stock for you.
 
-Navigate to **Inventory Admin > Members** to see a per-member view of all equipment assignments across the department. The page is headed **Member Equipment** (it read "Members Equipment" before 2026-09-29), and each row's actions are named for the member ("Assign items to _name_"), so a screen reader can tell twenty **Assign** buttons apart.
+Needs the **Manage gear, uniforms and equipment** permission.
 
-This view shows:
+### How to Use the Impact Planner
 
-- Each member with summary counts (permanent assignments, active checkouts, issued items, overdue count)
-- Expandable rows showing detailed inventory per member
-- **Assign**, **Return** and **Sizes** buttons per member
-- For holders of `members.manage`, a **Former members still holding property**
-  panel above the list: each dropped member with items still out, when they
-  were dropped, the item count and value, and which reminders have gone, with
-  **Send due reminders** to run the daily reminder check on demand _(2026-10-05;
-  see [Membership](./01-membership.md))_
+1. Go to **Inventory Administration → Impact Planner**.
+2. **Choose the members** with the filters: status, rank, station, membership
+   type and position.
+3. **Choose the item category**, for example "Job Shirts" or "Turnout Coats".
+4. **Choose a size field**: Shirt, Pant, Jacket, Boot, Glove or Hat.
+5. Optionally choose a stock category to subtract current stock, or leave it on
+   **— Don't subtract current stock —**.
+6. Select **Analyze**.
 
-### Scanning a Member's ID Card
+![Inventory impact planner with its filter panel and member analysis](./images/05-45-impact-planner.png)
 
-Instead of searching by name, you can scan a member's QR code or barcode ID card to quickly select them:
+### Reading the Analysis Results
 
-1. Click the **Scan Member ID** button in the toolbar.
-2. Your device camera activates.
-3. Point at the member's ID card QR code or barcode.
-4. The member is instantly selected and their inventory loads.
+- **Summary cards**: members analysed, members who already have the item,
+  members who need it, members needing a replacement, and members with no size
+  on file.
+- **Size breakdown**: for each size, the number of members, how many need the
+  item, the stock on hand (if you chose a stock category), the shortfall, and
+  the unit and estimated cost.
+- **Totals**: the number to buy and the estimated cost, shown as two badges
+  beside the panel heading.
+- **Member list**: each member's name, rank, station and size, and whether they
+  need the item, need a replacement, or are over their allowance.
 
-This is especially useful on mobile during equipment distribution events where you need to process many members quickly.
+![Impact planner results with its summary cards, size breakdown and cost estimate](./images/05-59-impact-planner-results.png)
 
-> **Hint:** Member ID scanning reads the member's **badge code**, which The Logbook issues for every member and which only a badge printed from the Member ID Card feature carries. The scanner asks the server, which answers only for members of your own department, so a hand-made QR code selects nobody. Cards printed before 2026-10-05 (membership number or short id) still scan until an administrator turns off **Accept old badges** (see [Badge codes](./01-membership.md#badge-codes)). If the scan fails, fall back to name search.
+### Taking Action from the Analysis
 
-### Assigning Items from the Members Tab
+You can take up to four actions from the results. Three of them appear only
+when the analysis gives them something to act on.
 
-1. Click the **Assign** button next to a member's name.
-2. In the modal, type a name, barcode, serial number, or asset tag into the search field.
-3. Matching items appear in a **live dropdown** as you type — click an item to add it.
-4. You can also scan barcodes with your device camera (if supported).
-5. Repeat for all items to assign.
-6. Click **Assign X Items** and confirm.
+#### Create Reorder Requests
 
-### Returning Items from the Members Tab
+**Create reorder requests** sits under the size breakdown. It appears only when
+you chose to subtract current stock **and** there is a shortfall.
 
-1. Click the **Return** button next to a member's name.
-2. The modal shows all items currently held by that member.
-3. Select items to return using the checkboxes.
-4. Set a return condition for each item.
-5. Click **Return Selected Items**.
+- It creates one reorder request for each size that is short.
+- Each request carries the vendor, urgency, unit cost and a note.
+- They all start as **Pending**, waiting for approval.
 
-![Members inventory tab listing each member and their assigned item count](./images/05-24-member-inventory.png)
+There is **no confirmation step**. The button creates the requests, then
+changes to "Created _N_ reorder requests" with a **Review reorders** link. The
+panel above it is your preview: each size with what is needed, what is on hand,
+what to buy and the cost.
+
+![The size breakdown with each size's shortfall and cost, and the Create reorder requests button beneath it](./images/05-65-reorder-shortfall.png)
+
+#### Issue On-Hand Stock
+
+**Issue on-hand stock** appears only when at least one needed size has stock on
+hand.
+
+- It issues one unit to each member from matching pool stock, by their size.
+- It skips members with no size on file, no matching stock, or over their
+  allowance.
+- It **does** ask you to confirm first, warning who will be skipped.
+- Afterwards the button changes to "Issued to _N_ members, _M_ skipped", with
+  the first five reasons for skipping.
+
+#### Request Sizes from Members
+
+**Request sizes** appears in a banner above the results, only when someone in
+the analysis has no size on file.
+
+- It sends those members an in-app notice asking them to add their sizes on
+  **My Issued Gear**.
+- Once they have, run the analysis again.
+- The banner then reads "Requested from _N_", so you can see it has been done.
+
+#### Export the Summary
+
+**CSV** and **PDF**, at the top of the member list, export the analysis.
+
+- The PDF includes your department name, the date, every filter you used, and
+  the size breakdown.
+- Email and phone columns are included only if your department's contact
+  settings allow it.
+- Useful for budget meetings and purchasing paperwork.
+
+### Saving Plans for Reuse
+
+1. Run an analysis with the filters you want.
+2. Select **Save current filters as a plan**, type a **Plan name**, and save.
+3. The plan appears under **Saved plans** next time.
+4. Load a saved plan to run the same analysis without setting the filters
+   again. You can update or delete plans from the same place.
+
+Good uses: an annual uniform refresh, a seasonal PPE cycle, new-recruit kits,
+or one station's handout.
+
+### Replacement-Aware Analysis
+
+Choose a related category under **Already has item in category**, then tick
+**Count worn or expired items as needing replacement**. With that on:
+
+1. Each member's items in that category are checked for condition and, for
+   NFPA gear, retirement date. Without NFPA tracking, condition alone is used.
+2. Members whose items are all worn out or expired are marked as needing a
+   replacement.
+3. The number to buy includes them.
+4. The **Existing** column shows one of three badges:
+
+| Badge          | Colour | Meaning                                                       |
+| -------------- | ------ | ------------------------------------------------------------- |
+| **Has item**   | Green  | Holds at least one usable item in the category                |
+| **Replace**    | Amber  | Holds items in the category, but every one is worn or expired |
+| **Needs item** | Purple | Holds nothing in the category                                 |
+
+Hovering **Has item** or **Replace** lists the items. A **"_N_ to replace"**
+chip appears beside the member list heading. Members needing a replacement count
+toward **Need the item** in the summary cards, not toward **Already have one**,
+because you must buy for them.
+
+![The Impact Planner's Impacted Members table with replacement-aware analysis on — each member badged Has item, Replace or Needs item against the chosen category](./images/05-71-impact-planner-replacement.png)
+
+### Allowance-Aware Warnings
+
+Once a size field and a stock category are chosen, you can tick **Warn when
+members are over their issuance allowance**. Then:
+
+1. The allowance for the chosen category is checked for each member.
+2. Members at or over their limit get an "over allowance" badge.
+3. **Issue on-hand stock** skips them.
+4. The summary shows how many are over their allowance.
+
+### Impact Planner Edge Cases
+
+| What happens                                  | What it means                                                              |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| A member has no size on file                  | Counted as "Unknown"; skipped by issuing and by reorder requests           |
+| Stock runs out while issuing                  | What is available is issued; the rest are skipped with "No matching stock" |
+| No size is short                              | No reorder requests are created                                            |
+| Contact details are hidden in your department | Email and phone are left out of the PDF                                    |
+| Sizes have different costs                    | The average unit cost is used for the estimate                             |
+| Two people issue from the same plan at once   | Stock is tracked per size, so nothing is issued twice                      |
 
 ---
 
 ## Inventory Admin Hub
 
-**Required Permission:** `inventory.manage`
+The **Inventory Administration** page links to every inventory tool. It is
+described as "Gear, uniforms and EMS supplies — stock, issuance, and what needs
+a decision today".
 
-The Inventory Admin hub (`/inventory/admin`) is the central navigation page for all inventory management functions. It has been redesigned with grouped sections for easier navigation.
+**Who can open it:** officers with the **Manage gear, uniforms and equipment**,
+**Create and edit equipment check templates** or **Manage the store catalog, order windows, orders, and payments**
+permission, in departments with the Inventory module on. Each card on the page
+checks its own permission, so you see only the cards you can open. If none are
+open to you, the page says "Nothing here for your role".
 
 ### Layout
 
-The hub is organized into three sections:
+From top to bottom:
 
-1. **Prominent Cards (top row)** — Three large cards for the most-used functions, each showing inline statistics:
-   - **Items** — Total item count, links to item management
-   - **Members** — Member inventory assignments
-   - **Checkouts** — Active checkout count and overdue count
+1. **The header.** **Assign to Member** opens a member picker and then the
+   **Distribute Items** window (see [Item Distribution](#item-distribution)).
+   **Refresh inventory counts** reloads the figures.
+2. **Four headline figures.** Three you can choose (the built-in ones are
+   **Items tracked**, **Issued to members** and **Out for repair**). The fourth
+   is always the number of items needing attention. Choosing the figures is
+   covered in [Administration & Reports](./08-admin-reports.md).
+3. **Needs attention** (officers who can manage inventory). One list of work
+   waiting on you, most urgent first: overdue deliveries, gear requests,
+   pending returns, pending write-offs, low-stock items, maintenance due,
+   overdue loans and unresolved departure clearances. Each row has an action,
+   such as **Review**, **Receive**, **Check in** or **Open item**. When it is
+   empty it reads "Nothing needs attention. All inventory work is up to date."
+4. **Finish inventory setup**, until rooms, storage areas, categories and items
+   all exist (see [First-Run Setup](#first-run-setup)).
+5. **Supply lines**: three large cards for the stock a department appoints
+   somebody to run.
+6. **The other cards, in groups.**
 
-2. **Grouped Navigation Cards** — Remaining admin functions organized by purpose:
-   - **Inventory Management** — Items, Pool Items, Categories, Maintenance, Gear Kits, Variant Groups
-   - **Requests & Workflows** — Gear Requests (with pending count badge), Return Requests, Write-Off Requests, Reorder Requests
-   - **Tools** — CSV Import, Label Printing, Storage Areas
+| Group                      | Cards                                                                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Supply lines**           | **PPE & Turnout Gear**, **Uniforms** (each opens the item list filtered to that type, with its item count), **EMS Supplies** (opens Medical Supplies, with the number expiring soon) |
+| **Catalog**                | All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors                                                                                                            |
+| **Issuance & Members**     | Members, Temporary Loans, Gear Kits, Issuance Allowances, Impact Planner                                                                                                             |
+| **Requests & Approvals**   | Gear Requests, Return Requests, Reorder Requests, Write-Offs, Charges                                                                                                                |
+| **Readiness & Compliance** | Maintenance, Equipment Checklists, Check Reports, Expiring on Apparatus, Items Not Seen                                                                                              |
+| **Department Store**       | Store Overview, Store Catalog, Store Orders, Store Payments                                                                                                                          |
+| **Setup & Tools**          | Setup Guide, Import, Put Away by NFC, Shelf Audit, Self-Service Kiosk, Tag Items in Bulk, NFC Tags                                                                                   |
 
-3. **Low Stock Alerts** — Banner showing items below reorder threshold with category breakdown
+A group with no cards you can open is not shown. Some cards carry a count:
+
+| Card                 | Count                                 |
+| -------------------- | ------------------------------------- |
+| **All Items**        | Items in the catalog (not medical)    |
+| **Temporary Loans**  | Overdue loans                         |
+| **Maintenance**      | Items due for maintenance             |
+| **Gear Requests**    | Requests awaiting review              |
+| **Return Requests**  | Return notices waiting to be received |
+| **Reorder Requests** | Items running low                     |
+
+Officers who can manage inventory also get a **Headline Metrics** tab, where
+they choose the three headline figures.
 
 ![Inventory admin hub with its grouped navigation cards](./images/05-25-admin-hub.png)
 
-### Edge Cases
+![The inventory admin hub with its cards grouped into sections](./images/05-60-admin-hub-groups.png)
 
-- If no items are in the system, the stats cards show zeros but remain navigable
-- Low stock alert section only appears when at least one item is below its reorder point
-- Badge counts on request cards (e.g., "3 pending") update in real-time via WebSocket
+### Who sees which cards
 
----
+A card appears only if you hold the permission the page behind it needs. Three
+cases surprise people:
 
-## Gear Kits Admin Page
-
-**Required Permission:** `inventory.manage`
-
-Navigate to **Inventory Admin > Gear Kits** (`/inventory/admin/kits`) to manage reusable kit templates — named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance.
-
-### Creating a Kit
-
-1. Click **Create Kit**.
-2. Enter a name and optional description.
-3. Add line items using the **Add Item** button:
-   - Select an item from the picker (searches across all inventory items)
-   - Set a category and quantity
-   - Toggle **Size Selectable** if the item has size variants (e.g., coat in S/M/L/XL)
-4. Repeat for all components in the kit.
-5. Click **Save Kit**.
-
-![Equipment kit editor with its line items and quantities](./images/05-27-equipment-kit-modal.png)
-
-### Managing Kits
-
-- **Card Grid** — All kits are displayed as cards showing the kit name, item count, description, and active/inactive status
-- **Active/Inactive Filter** — Toggle to show only active or inactive kits
-- **Detail View** — Click a kit card to see the full composition (all items with quantities)
-- **Activate/Deactivate** — Toggle a kit's active status. Deactivating prevents new issuances but does not affect items already issued from that kit
-- **Issue** _(2026-09-29)_ — The issue action on a kit card (named "Issue _kit_ to a member") opens **Issue "_kit_" — Select a Member**. Choosing a member no longer issues straight away: a confirmation names the kit, the item count and the member ("Issue 6 items from "New Recruit PPE Kit" to Jane Smith."), with **Issue to _member_** and **Don't issue**. A mis-tap on the wrong row used to hand out the whole kit.
-
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/kits: the "Issue <kit>?" confirmation after picking a demo member, reading 'Issue N items from "<kit>" to <member>.' with Don't issue and Issue to <member>. Do not confirm.]_
--->
+- **Managing inventory does not include the checklist permissions.** The
+  standard **Quartermaster** position can build checklists (**Create and edit
+  equipment check templates**), so it sees **Equipment Checklists**. It does
+  not see **Check Reports** unless you also give it **View equipment check
+  templates and results**.
+- **EMS Supplies** needs **View medical supplies** and the Medical Supplies
+  module.
+- **Department Store** cards need **Manage the store catalog, order windows, orders, and payments** and the Storefront
+  module. **NFC Tags** needs a department-settings permission. **Self-Service
+  Kiosk** needs its own kiosk permission.
 
 ### Edge Cases
 
-| Scenario                     | Behavior                                                                                                        |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Kit with no line items       | Can be saved as a draft but cannot be issued to a member                                                        |
-| Size-selectable items        | During issuance, the member's size preferences are used to auto-select the correct variant                      |
-| Deactivated kit              | Hidden from the issuance picker but still visible in admin for reactivation                                     |
-| Item in kit has been retired | The line item shows a warning indicator; issuance of that component will fail unless an alternative is selected |
+- With no items yet, the figures read zero but every card still works.
+- If one of the page's figures fails to load (for example, station Wi-Fi shows a
+  sign-in page instead), the page stays up. A banner names what did not
+  respond: "Some inventory services did not respond (…). This queue may be
+  incomplete."
 
 ---
 
-## Variant Groups Admin Page
+## Equipment Checklists
 
-**Required Permission:** `inventory.manage`
+Equipment checklists belong to **Inventory**. A checklist is a list of
+inventory items: each position points at an item in this catalog, and the stock
+aboard a truck comes from the same shelves.
 
-Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-groups`) to manage item variant groups — groupings that link related items differing by size, color, or style (e.g., "Structural Coat" available in sizes S through 4XL).
+Crews still start checks from the shift. **Check In** and the shift detail
+panel offer **Start checklist**, and closing out a shift still refuses while
+end-of-shift checks are outstanding. How a crew runs a check is described in
+[Shifts & Scheduling → Equipment Checks](./03-scheduling.md#equipment-checks).
+This section covers building checklists, the settings, and the fleet views.
 
-### Creating a Variant Group
+### One header across Operations
 
-1. Click **Add Group**. The **Add Variant Group** dialog opens.
-2. Enter the group **Name** (the only required field), an optional
-   **Description**, and pick a **Category**.
-3. Set pricing: **Base Price** and **Replacement Cost**.
-4. Type the **Unit of Measure** — it is a free-text field, not a list, so
-   "each", "pair", "set" or anything else your department uses is accepted.
-5. Click **Create Group**. (Opening an existing group shows the same dialog
-   with **Update Group** instead.)
+_(2026-10-18)_ **My Checklists** and **Apparatus Inventory** are crew pages. An
+administrative member no longer gets them in the side nav, top nav or section
+strip just because the default member position carries the inventory view and
+check-submit grants; they need a grant a position is given on purpose
+(`inventory.check_view`, `check_manage` or `manage` for My Checklists;
+`inventory.check_view` for Apparatus Inventory). An Apparatus Manager's access is
+unchanged.
 
-> **Corrected 2026-08-10.** The entry button is **Add Group**, not "Create
-> Group" — that is the submit button inside the dialog — the unit of measure
-> is typed rather than selected, and there is no "Save".
+Every Operations page (My Issued Gear, Inventory, Medical Supplies, My
+Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities) now
+opens with the same title row: icon, title, a one-line description and the page's
+actions on the right. Under it, a strip of **Operations sections** links to the
+other pages you may open. The strip is made of links, not tabs, so each section
+has its own address you can bookmark, and it shows only what your permissions
+allow. On a page below a section, such as one apparatus, the strip shows a trail
+in Operations' terms. The side and top navigation draw from the same list, so
+the three can no longer offer different sections.
 
-![The variant group form with its name, category, pricing and unit-of-measure fields](./images/05-63-variant-group-modal.png)
+![Fleet Readiness at laptop width: the Operations sections strip with Fleet Readiness marked as the current section, and under it the page title row with its description and actions](./images/05-128-operations-section-strip.png)
 
-### Managing Variant Groups
+### Phone layouts for the apparatus screens
 
-- **Card Grid** — Groups displayed as cards with name, category badge, pricing, and variant count
-- **Detail Modal** — Click to see all linked item variants with their sizes and stock levels
-- **Active/Inactive Toggle** — Deactivating a group does not affect existing items — linked items retain their group reference, but the group no longer appears in new-item creation flows
+- **One apparatus** on a phone: back arrow, unit name and readiness on one row,
+  the recent-check strip at full width, and four equal tabs pinned under the
+  header. Each recent check has an **In my checklists** link that opens your
+  checklists with that shift on top. A failing item appears once ("Found on 2
+  checks, last Oct 12 by J. Smith", with a 2× badge) instead of once per check.
+- **Expiring on Apparatus** (the supply worklist) on a phone: one **back** link
+  instead of a two-line trail, and the counts are filter chips: **All**, **Needs
+  restock**, **Used or short**, **Expired**. Tap the active chip to clear it. An
+  item shows its rig, compartment, expiry and lot, the ready count, and full-size
+  **Add** and **Manage** buttons; ready lots open behind a toggle. **By
+  apparatus** puts a heading per rig. **Add stock** opens a sheet with Quantity
+  and Lot side by side and the amount on the truck now above them.
 
-### Edge Cases
+![One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header](./images/05-129-apparatus-detail-phone.png)
 
-| Scenario               | Behavior                                                                                            |
-| ---------------------- | --------------------------------------------------------------------------------------------------- |
-| Group with no variants | Group exists but has no linked items; add one with the item form's **Variant Group** picker (below) |
-| Pricing changes        | Changes to group-level pricing do not retroactively update existing item costs                      |
-| Deactivated group      | Items retain their variant linkage for reporting but the group is hidden from new-item flows        |
+![The Expiring on Apparatus worklist on a phone with its count chips, each item showing its rig, compartment, expiry and lot, and full-size Add and Manage buttons](./images/05-130-supply-worklist-phone.png)
 
-> **Filling a group made here** _(2026-10-11, workflow review W40-7)_. The Add
-> Item and Edit Item forms on **All Items** have a **Variant Group** picker
-> beside Tracking Type. Choose the group to put the item in it, or **— None —**
-> to take an item out of its group. Only active groups are offered; an item
-> already in a deactivated group shows it marked "(inactive)". The picker is
-> hidden while **Generate Sizes & Styles** is on, because generating variants
-> still creates a new group of its own. An empty group's detail view now points
-> at the picker.
+![The Add stock sheet on a phone: the amount on the truck now above Quantity and Lot side by side](./images/05-131-add-stock-sheet-phone.png)
+
+### Where checklists live
+
+| Screen                    | Where to find it                                     | Who can open it                                                            |
+| ------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Fleet Readiness**       | Operations menu                                      | View equipment check results, or manage schedules                          |
+| **My Checklists**         | Operations menu                                      | Every member                                                               |
+| **Check log**             | From Fleet Readiness or My Checklists                | Submit checks, view check results, or manage schedules                     |
+| **One apparatus**         | Select a rig on Fleet Readiness                      | View equipment check results, or manage schedules                          |
+| **Apparatus Inventory**   | Operations menu                                      | Submit checks, view check results, or view gear                            |
+| **Checklist console**     | **Inventory Administration → Equipment Checklists**  | **Create and edit equipment check templates**                              |
+| **Template builder**      | From the checklist console                           | **Create and edit equipment check templates**                              |
+| **Catalog Links**         | From the checklist console                           | **Create and edit equipment check templates**                              |
+| **Check Reports**         | **Inventory Administration → Check Reports**         | **View equipment check templates and results**                             |
+| **Expiring on Apparatus** | **Inventory Administration → Expiring on Apparatus** | View equipment check results, or manage gear                               |
+| **Checklist settings**    | From the checklist console                           | **Full settings and admin management** or **Update organization settings** |
+
+The checklist console links to **Fleet readiness** and **Check log** too.
+
+Checklists need the Inventory module. If an administrator switches Inventory
+off, the checklist entries disappear rather than showing errors.
+
+### Checklist permissions
+
+| Permission (as shown on Role Management)       | What it allows                  |
+| ---------------------------------------------- | ------------------------------- |
+| **View equipment check templates and results** | Fleet views, check log, reports |
+| **Create and edit equipment check templates**  | Build and change checklists     |
+| **Submit equipment checks on shifts**          | Run a check                     |
+
+The standard **Quartermaster** position can build checklists, because it
+manages the stock they are made of. Reading results stays with **View equipment
+check templates and results**, which you can add to the Quartermaster if you
+want.
+
+> **Important: check any custom position with all inventory permissions.** A
+> position given every inventory permission at once (an "inventory, all"
+> grant) also gets all three checklist permissions, so it can build and submit
+> checklists. No standard position or rank has such a grant, so this only
+> affects positions your department built itself, usually a quartermaster. If
+> that is wider than you want, replace it with the specific inventory
+> permissions you mean.
+
+### Checklist Settings
+
+**Inventory Administration → Equipment Checklists → Checklist settings** holds
+four settings that decide when crews are prompted. It needs the **Full settings
+and admin management** or **Update organization settings** permission. Being
+able to build checklists does not open it.
+
+**When crews are prompted:**
+
+| Setting                       | Default | What it does                                                     |
+| ----------------------------- | ------- | ---------------------------------------------------------------- |
+| **Start-of-shift checklists** | On      | Members are prompted to run their checks when their shift begins |
+| **End-of-shift checklists**   | On      | Members are reminded to run their checks before their shift ends |
+
+Turning one off stops the prompt and its reminders. It deletes nothing:
+completed checks stay, and anyone can still open the checklists directly.
+
+**When members can check in:**
+
+| Setting                    | Default  | Range         | What it does                                |
+| -------------------------- | -------- | ------------- | ------------------------------------------- |
+| **Opens before the start** | 2 hours  | 0 to 24 hours | How early a member may check in for a shift |
+| **Closes after the end**   | 12 hours | 0 to 72 hours | How late a member may still check in        |
+
+Outside this window the **Check In** button is off and says why. Widen it if
+your crews are held over on long call-backs. A shift that has been closed out
+is always shut, whatever this says.
+
+Each control saves on its own, straight away: switches when you select them,
+number boxes when you click away or press Enter. There is no Save button.
+Clearing a number box and leaving it empty puts back the saved value. A number
+outside the range is changed to the nearest allowed value.
+
+### Building a checklist
+
+Build checklists in the **Template builder**, from the checklist console.
+
+- **Editing a published checklist takes it off every shift.** Saving changes
+  unpublishes it. A banner reads "**Crews can't see this checklist right
+  now.** Editing it took it off every shift it was on. Publish it to put it
+  back." with **Publish now**. Leaving while it is unpublished asks first:
+  **Leave this checklist unpublished?**, with **Stay here** and **Leave
+  unpublished**.
+- **It says which vehicles a checklist reaches**: "Used on …". When it reaches
+  none, it warns: "Not tied to a vehicle — crews will only see it on shifts
+  whose shift template names it." with **Choose a vehicle**. Publishing such a
+  checklist reads **Ready to publish · not tied to a vehicle**.
+- **The vehicle-type list** follows the apparatus types the Apparatus module
+  defines, plus your fleet's own custom types and any value already saved.
+- **Specific Apparatus** offers only units from the Apparatus module. A
+  department that set its units up only in the setup wizard should assign
+  checklists **by type**.
+- **Seat names are words**, such as "Driver/Operator" and "Paramedic".
+- **Item search covers gear and medical supplies together**, medical first with
+  a badge. Each half is shown only if you may read it and its module is on.
+- **Create in Medical Supplies** (with a category list) is offered to officers
+  who manage medical supplies or gear. It refuses a name already filed as gear,
+  and is not offered when part of the search failed.
+- **A position can create the item it links to.** Type a name with no match in
+  **Linked Inventory Item**, and officers who can manage inventory are offered
+  to add it to the catalog and link it in one step. The new item carries only
+  the name. The position's required quantity and minimum stay with that
+  position; they never become a department-wide reorder point, because one item
+  (gauze, say) is stocked in many places, each counted on its own.
+- After pasting a list into a saved location, the builder offers **Match to
+  catalog**.
+- **Clone checklist** (on the list, or **Tools → Clone checklist** in the
+  builder) asks **which apparatus to copy onto**. Only full Apparatus-module
+  units are offered. The copy is named "_apparatus_ - _template_" and starts
+  switched off, which the window says.
+
+![Linked Inventory Item in the checklist builder, searched for tourniquet: Tourniquet, CAT with its Medical badge, then Create in Medical Supplies and Create as equipment or gear](./images/05-123-builder-medical-picker.png)
+
+![Copy checklist to an apparatus, opened from Tools → Clone checklist: the note that the copy starts switched off so it can be reviewed first, and Copy onto set to B-5 — Brush 5](./images/05-124-clone-checklist-dialog.png)
+
+### Catalog Links
+
+**Where:** **Equipment Checklists → Catalog Links**. **Needs:** **Create and
+edit equipment check templates**.
+
+The per-checklist match tool asks "which catalog item is 4x4 gauze?" once per
+rig. **Catalog Links** asks it once for the whole department. It lists every
+unlinked checklist line across active and draft checklists, grouped by name,
+with catalog suggestions. Names with a likely match come first; the rest
+(usually tasks) come last.
+
+1. Exact matches are ticked for you. **Likely** ones wait for you to confirm.
+2. For any name, search the gear and medical catalog and pick the item.
+3. Select **Link _N_ positions**. Every position carrying that line is linked,
+   all or nothing, and each affected checklist's change log records it.
+
+**Link matches automatically** links every unlinked line, on every checklist,
+whose best catalog match is exact or strong and clearly better than the
+runner-up. Strong matches include "also called" names. A tie is skipped:
+"Oxygen Mask" scores the same against the adult and the pediatric mask, so
+either link would be a guess. Weak and unmatched names stay on the report.
+
+- The confirmation asks first; it only adds links.
+- Afterwards the page lists each linked name with the checklists it landed on.
+  Strong matches are marked **check this**.
+- **Undo** on a name clears those links, but only where the line still points at
+  the item the pass chose. A link you made by hand since is kept.
+
+![Catalog Links after Link matches automatically: the list of names it linked, each with its catalog item and the checklists it landed on, BVM marked check this because it matched an also-called name, an Undo on each, and the lines it skipped still listed below](./images/05-92-catalog-links-auto-linked.png)
+
+If someone else linked a line after you opened the page, your choice does not
+overwrite theirs. The page lists those lines (line, checklist, compartment,
+their item and yours) with a link into each checklist. The list stays until you
+dismiss it, even after a reload.
+
+![Catalog Links before anything is applied: unlinked checklist lines grouped by name under Likely matches, the exact matches already chosen in their pickers, the others left on Don't link for you to confirm, and Link 5 positions counting what is chosen](./images/05-125-catalog-links-matches.png)
+
+![After Link positions, the list of lines someone else had linked in the builder after the page loaded: the Portable radio line on Engine Daily Check, its compartment, the item it is linked to and the one chosen here, with a link into the checklist](./images/05-126-catalog-links-conflicts.png)
+
+### When the checklist and the catalog use different names
+
+A checklist is typed by hand, so "4 x 4 gauze" on the rig rarely matches "Gauze
+Pads, 4x4 Sterile" in the catalog, and "BVM" never matches "Bag Valve Mask". The
+item picker and **Catalog Links** allow for this:
+
+- **Near matches are shown after exact ones.** Plurals ("pad" and "pads"),
+  spacing ("4 x 4" and "4x4") and small spelling differences all count. Exact
+  matches stay at the top.
+- **Sizes and ages must match exactly.** A word with a number in it must be the
+  same ("4x4" never offers "4x8"; "Size 3" never offers "Size 4"), and Adult
+  never matches Pediatric.
+- **Only an exact match is ticked for you.** Anything less certain is offered
+  and waits for you to confirm it.
+- **Also called.** On the item form for gear and for medical supplies, **Also
+  called** takes up to 10 other names for the item, separated by commas ("BVM,
+  Ambu bag"). The picker and Catalog Links search these names too, and say when
+  a suggestion came from one. A match through another name is never ticked for
+  you, because two items can share a nickname.
+
+<!-- Screenshots needed: the item form with the Also called field; the picker showing a "matched through" suggestion (queued in SCREENSHOT_CURRENCY.md). -->
+
+### Doing a check
+
+- **A failed item needs a note.** A **Fail** or **Out of service** the member
+  chose (not one a count, reading or expiry date already explains) must say
+  what is wrong before **Submit**. The note button reads **Note required**, the
+  box asks "What's wrong with it? (required)", and submitting without it says
+  "Add a note to each failed item saying what's wrong." and moves to the note.
+  The same rule applies to checks sent any other way, such as an older offline
+  copy; they are refused with the items named.
+- **Only Submit is pinned** to the bottom of the screen.
+- **Pass and Fail are grouped under the item's name** and say which is chosen,
+  so the answer does not depend on colour. The count box is named, for example
+  "SCBA quantity found".
+- **A check already filed says so.** **My Checklists** shows **Submitted for
+  this shift** instead of **Open checklist**. One "Equipment check submitted"
+  message appears. With nothing due it reads "Nothing to check right now. When
+  one of your shifts has an equipment checklist, it will show up here. If you
+  expected one, ask your shift officer."
+- **A member's own check log links back to My checklists.**
+
+> **Swapping stock during a check.** A crew member without permission to manage
+> gear can swap stock onto the truck only within limits: the lot being replaced
+> must actually be on the item, and the quantity cannot exceed what it
+> replaces. Officers who manage gear are not limited.
+
+### Fleet views and reports
+
+- **Fleet Readiness and My Checklists agree** on whether a check is done.
+- A rig a published checklist applies to shows **No checks yet** until one is
+  filed.
+- **A check that took an item out of service counts** as both expected and
+  completed, in the log and the fleet rate.
+- **The failure log's total counts each failure once.**
+- **A new checklist is owed from when it was created.** A shift already over
+  when the checklist was created owes nothing. A shift still under way at that
+  moment does, because the crew can still do it. A shift with no recorded end
+  owes it from the checklist's creation day. Changing a checklist's apparatus or
+  type does not restart this.
+- **Check Reports counts what was expected.** Each unit under **Apparatus
+  Compliance** reads "_n_ of _m_ expected" and, when any were skipped,
+  **Missed: _n_**. The **Missed checks** tile totals them, and the CSV and PDF
+  carry both. An expected check is one per shift per checklist that applies to
+  the unit, the same count the fleet board and check log use. A day the rig was
+  out of service, or a check not yet due, is not expected.
+- **Per-truck reports work for units set up in onboarding** as well as units in
+  the Apparatus module. The report reads the unit from the check's shift.
+- **A check filed ahead of its shift shows at once.** A crew that checks the rig
+  the evening before a morning shift sees it on the fleet board and in the
+  check log straight away. A failed item puts the rig in **Needs attention**
+  that evening. The board shows it as a column after today. Only a shift with a
+  check already filed is pulled forward, up to a week ahead.
 
 ---
 
-## Realistic Example: Departure Clearance for a Retiring Member
+## Medical Supplies
 
-This walkthrough follows the departure clearance process from start to finish when a member retires and must return all assigned equipment.
+Medical supplies (EMS stock) have their own page, **Medical Supplies**, reached
+from the **EMS Supplies** card on **Inventory Administration**. They are kept
+off the main item list.
+
+- The **Below reorder point** figure at the top counts every active medical
+  item that has a reorder point and is at or below it, however large the
+  catalog. An item with no reorder point is never counted as low: the reorder
+  point is your department's own floor for that item.
+- Creating or editing a medical category or item, and retiring an item, are
+  recorded in the audit log, with who made the change.
+- Officers who manage medical supplies retire medical items from this page.
+
+### Stock on the apparatus counts too
+
+A medical supply's **ready stock is the shelf plus the trucks**. Units aboard an
+apparatus count from their in-date lots, else the last count, else the position's
+target (shown as uncounted). **Low stock**, the daily alert email and automatic
+reorder all read that one figure, so a supply that is plentiful on the rigs and
+empty on the shelf is no longer flagged, and a rig that runs short lowers the
+total. Gear is unchanged: it is still judged on the shelf alone.
+
+- On the list, **On hand** reads "+12 on trucks (1 uncounted position)". The low
+  flag comes from the server, so the page and the email agree.
+- **Next expiry** takes the soonest of the shelf and the trucks, expired units
+  included, and says where ("Medic 1 > Jump Bag", or the storage path).
+- The **Expiring** tab lists truck stock beside shelf lots, and the tiles split
+  them ("3 shelf · 2 on trucks").
+- Auto-reorder is also checked after a daily check, a **report used** and a
+  recount, because usage on a truck is what lowers the total.
+
+**Kept on apparatus only.** Some equipment has no spare in a stock room: a LUCAS
+device or a cardiac monitor lives on the ambulance. Tick **Kept on apparatus
+only** on the supply's form. Its shelf counts as zero, the list reads "N on M
+apparatus" in place of a shelf count, the **Where it is** dialog shows where it
+is carried with no stock-lot controls, and it is left out of **Receive delivery**.
+Old shelf lots left from before you ticked it are hidden from the Expiring list
+and tiles, not deleted; unticking brings them back. The CSV import and export
+carry the setting as a **Kept on Apparatus Only** column (Yes or No; any other
+value is refused rather than guessed).
+
+![Medical Supplies with a supply's shelf count followed by how many are on trucks, and a Next expiry that names the truck carrying the soonest-expiring lot](./images/05-133-medical-supplies-on-trucks.png)
+
+![The medical supply form with Kept on apparatus only ticked and its explanation, for a supply that never goes through the stock room](./images/05-134-medical-supply-apparatus-only.png)
+
+![The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 1 shelf and 1 on trucks, and the list carrying a shelf lot beside the tourniquet carried on Rescue 7](./images/05-137-medical-expiring-split.png)
+
+### Deleting a medical supply category
+
+Officers with **Manage medical supplies** can delete a category on the Medical
+Supplies categories page.
+
+- **If the category still holds supplies,** the dialog says how many, and asks
+  which other medical category should take them (retired supplies included)
+  before it deletes. Only medical categories are offered.
+- **A category with subcategories cannot be deleted.** Move or delete the
+  subcategories first.
+- **The supplies' low-stock levels follow their new category.**
+
+![Medical supply categories: each card reads Show and its number of supplies, and Airway & Oxygen is opened to list its supplies and their stock](./images/05-91-medical-categories.png)
+
+### Finding and tidying supplies
+
+- **Summary tiles are buttons.** **Low stock** opens the list filtered to the
+  supplies the tile counted. **Expiring** and **Expired** open the expiring tab.
+  **Supply items** clears the filter.
+- **Sort** the table by item name, category, on-hand stock or reorder point.
+  Sorting covers every page, not only the one on screen. Blank categories and
+  reorder points sort last.
+- **Next expiry** shows the soonest stocked lot's date, in colour only when it
+  is inside the expiring window.
+- **Size** (for example adult or pediatric) is a field on the supply form and
+  shows beside the name, so two masks no longer look like duplicates.
+- **Reorder at** and the low flag treat an empty reorder point as unset, not as
+  zero: the page shows a dash.
+- **Retire several at once.** Officers who manage medical supplies tick supplies
+  (on a phone, **Select all on this page**) and retire them together. One that
+  is checked out or assigned is reported and left ticked; the rest are retired.
+- **Lots.** The **Lots** button on a supply row opens its dated lots. Everyone
+  who can view medical supplies can read them; managers can add, edit and delete.
+- **A category's supplies.** Open a category on the categories page to list its
+  supplies and their stock. Cards say how many active supplies they hold.
+- **Import / export** is the button that was labelled for import alone.
+
+![Medical Supplies on the All supplies tab: the summary tiles, each supply with its size beside the name, its Where path, next expiry and reorder point, and two supplies ticked with the Retire selected bar above the table](./images/05-88-medical-supplies-list.png)
+
+### Where a supply is kept
+
+The supply form files a supply under a **room** and a **storage area** (from
+**Inventory → Storage Areas**). Picking an area sets its room; changing the room
+drops an area that belongs to another one. The old free text stays as a
+**storage note**. A supply in a retired area keeps it.
+
+- The **Where** column reads **Room > Cabinet > Shelf**, shows the note only when
+  it says something more, and shows the apparatus carrying the supply, read from
+  the checklists with their compartments (**Medic 1 > Main Compartment > Jump
+  Bag**). Two places show per row; **+N more** opens the supply's dialog.
+- **Location filter.** Choose a room (every area in it) or an area (every area
+  nested under it). The CSV export applies the same filter.
+- The supply dialog opens on **Where it is**: the storage path, and each
+  apparatus and compartment carrying it, with the count aboard against the
+  target and the soonest expiry.
+- On upgrade, each existing supply is filed under the one active storage area
+  whose name matches its old text. A supply with no single match is left alone.
+
+![The Lots dialog for Tourniquet, CAT: Where it is, with its storage room and the two apparatus and compartments carrying it with the count aboard, above Stock lots with the lot table, its edit controls and the Add lot form](./images/05-89-medical-supply-where-lots.png)
+
+![The medical supply form for Bag Valve Mask, with its also-called names, Size Adult, the Station 1 room and the EMS Supply Cabinet shelf as its storage area](./images/05-90-medical-supply-form.png)
+
+---
+
+## Realistic Example: Departure Clearance for a Departing Member
+
+This walkthrough follows a departure clearance from start to finish, when a
+member leaves and must return his equipment.
 
 ### Background
 
-**FF Tom Garcia** is retiring from **Hillside Fire Department** after 25 years of service. Quartermaster **Lt. Rachel Park** needs to account for all equipment assigned to him before his departure is finalized.
+**FF Tom Garcia** is leaving **Hillside Fire Department** after 25 years,
+because he is moving out of state. Quartermaster **Lt. Rachel Park** needs to
+account for everything assigned to him.
 
-FF Garcia currently has the following items assigned:
+FF Garcia holds:
 
 | Item                  | Type       | Serial / Asset Tag | Condition |
 | --------------------- | ---------- | ------------------ | --------- |
@@ -2302,176 +3143,172 @@ FF Garcia currently has the following items assigned:
 
 ---
 
-### Step 1: Initiating the Clearance
+### Step 1: The Clearance Opens
 
-When FF Garcia's status is changed to **Retired** by the membership officer, the system automatically generates a property return report. Lt. Park also manually creates the departure clearance:
-
-1. The status change creates the clearance, because FF Garcia still holds gear
-2. On **Inventory Admin**, Lt. Park clicks **Review** on "Unresolved departure clearance · Tom Garcia · 7 outstanding"
-3. The clearance lists all 7 items/issuances currently held by FF Garcia
-
-The clearance status is set to **Initiated**.
+1. The membership officer changes FF Garcia's status to **Dropped
+   (Voluntary)**. Because he still holds gear, The Logbook creates a property
+   return report and a departure clearance.
+2. On **Inventory Administration**, Lt. Park selects **Review** on
+   "Unresolved departure clearance · Tom Garcia · 7 outstanding".
+3. The clearance lists all 7 items he holds. Its status is **Open**.
 
 ---
 
 ### Step 2: Processing Returns
 
-FF Garcia comes to the station with his gear. Lt. Park opens the clearance and resolves each item:
+FF Garcia brings his gear to the station. Lt. Park resolves each line with
+**Resolve**:
 
-**Item 1 — Turnout Coat (PPE-2019-042):**
+**Turnout Coat (PPE-2019-042)** and **Turnout Pants (PPE-2019-043):**
 
-- FF Garcia hands over the coat
-- Lt. Park selects disposition: **Returned**
-- Condition on return: **Fair** (25 years of use)
-- The item is unassigned from FF Garcia and returned to inventory
+- **Returned**, condition **Fair** after years of use.
+- Each is unassigned from FF Garcia and goes back to stock.
 
-**Item 2 — Turnout Pants (PPE-2019-043):**
+**Portable Radio (RAD-0187):**
 
-- FF Garcia hands over the pants
-- Lt. Park selects disposition: **Returned**
-- Condition on return: **Fair**
+- **Returned**, condition **Good**. Ready to assign to someone else.
 
-**Item 3 — Portable Radio (RAD-0187):**
+**Leather Helmet (HLM-0092):**
 
-- FF Garcia returns the radio
-- Lt. Park selects disposition: **Returned**
-- Condition on return: **Good** — ready to reassign
+- **Returned damaged**: the face shield is cracked.
+- Note: "Face shield cracked, suspension worn. Needs inspection before
+  reissue."
+- The helmet goes back with condition **Damaged**, into maintenance.
 
-**Item 4 — Leather Helmet (HLM-0092):**
+**Pager (PGR-0341):**
 
-- FF Garcia returns the helmet
-- Lt. Park selects disposition: **Returned Damaged** — the face shield is cracked
-- She adds a note: "Face shield cracked, suspension worn. Needs inspection before reissue."
-- The item is returned to inventory with condition set to **Damaged**
+- FF Garcia says it was lost on a wildland deployment six months ago.
+- **Written off**, with the note: "Lost during Willow Creek deployment, August 2025. Incident report #WC-2025-087."
+- Written off does not change the pager's own record. Lt. Park opens the pager,
+  unassigns it, and sets its status to **Lost**.
 
-**Item 5 — Pager (PGR-0341):**
+**Station Boots:**
 
-- FF Garcia says the pager was lost during a wildland deployment 6 months ago
-- Lt. Park selects disposition: **Written Off**
-- Reason: Lost
-- She adds a note: "Lost during Willow Creek deployment, August 2025. Incident report #WC-2025-087."
-- The pager is marked as **Lost** in inventory
+- Worn out after 5 years.
+- **Written off**, with the note "Worn out, scheduled for disposal."
+- Written off leaves the boots assigned to FF Garcia, and **Retire** refuses an
+  assigned item. So Lt. Park opens the boots, selects **Unassign**, then
+  selects **Retire** on the boots' row in the item list.
 
-**Item 6 — Station Boots:**
+**Work Gloves (3 pairs, pool item):**
 
-- The boots are heavily worn after 5+ years
-- Lt. Park selects disposition: **Written Off**
-- Reason: Obsolete / worn beyond use
-- She adds a note: "Worn out, scheduled for disposal."
+- He returns 2 pairs; 1 pair was used up.
+- A clearance line takes one decision, so Lt. Park returns the 2 pairs on
+  **Inventory Administration → Members** first, then resolves the line as
+  **Waived**, with the note "2 of 3 pairs returned; 1 used up." The used-up
+  pair stays recorded as issued to him. Issued stock does not count toward
+  return reminders or the former-members list.
 
-**Item 7 — Work Gloves (3 pairs, pool item):**
-
-- FF Garcia returns 2 pairs; 1 pair was used up
-- Lt. Park resolves: **Returned** for 2 pairs (pool quantity increases by 2)
-- The remaining 1 pair is resolved as **Written Off** (consumed)
-
-The clearance status automatically moves to **In Progress** as items are resolved.
+As lines are resolved, the status moves to **In progress**.
 
 ---
 
 ### Step 3: Completing the Clearance
 
-All 7 line items are now resolved. Lt. Park reviews the summary:
+Every line is now resolved:
 
-| Item                 | Disposition            | Notes                               |
-| -------------------- | ---------------------- | ----------------------------------- |
-| Turnout Coat         | Returned (Fair)        |                                     |
-| Turnout Pants        | Returned (Fair)        |                                     |
-| Portable Radio       | Returned (Good)        |                                     |
-| Leather Helmet       | Returned Damaged       | Face shield cracked                 |
-| Pager                | Written Off (Lost)     | Lost during Willow Creek deployment |
-| Station Boots        | Written Off (Worn)     | Scheduled for disposal              |
-| Work Gloves (2 of 3) | Returned               |                                     |
-| Work Gloves (1 of 3) | Written Off (Consumed) |                                     |
+| Item           | Resolved as      | Notes                               |
+| -------------- | ---------------- | ----------------------------------- |
+| Turnout Coat   | Returned (Fair)  |                                     |
+| Turnout Pants  | Returned (Fair)  |                                     |
+| Portable Radio | Returned (Good)  |                                     |
+| Leather Helmet | Returned damaged | Face shield cracked                 |
+| Pager          | Written off      | Lost during Willow Creek deployment |
+| Station Boots  | Written off      | Scheduled for disposal              |
+| Work Gloves    | Waived           | 2 of 3 pairs returned; 1 used up    |
 
-Lt. Park clicks **Complete Clearance**. The clearance status changes to **Completed**.
+Lt. Park selects **Complete clearance**. The status changes to **Completed**,
+and the completion is recorded in the audit log.
 
-The system automatically:
+Because no assigned or loaned item is left on FF Garcia's record, he drops off
+the **Former
+members still holding property** panel at the top of **Member Equipment** (and
+on **Members Admin → Member Management**), and no more return reminders go to
+him.
 
-- Cancels any pending property return reminder notifications for FF Garcia
-- Clears FF Garcia from the overdue property-return list
-- Logs the clearance completion in the audit trail
-
-> **Note (updated 2026-10-08):** that overdue list is the **Former members
-> still holding property** panel at the top of **Member Equipment** (and on
-> Members Admin → **Member Management**), shown to holders of
-> `members.manage` since 2026-10-05; FF Garcia drops off it once nothing is
-> left outstanding. An earlier version of this note said the list was
-> reachable only through the API, and an earlier version of this walkthrough
-> said the count updates on a "Member Lifecycle page", which does not exist.
-> See
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
-
-> **Hint:** If Lt. Park needed to close the clearance with outstanding items (e.g., FF Garcia is unreachable and has items that will never be returned), she could use **Close Incomplete** instead. This requires administrator permission and logs which items were left unresolved.
+> **Tip.** If FF Garcia could not be reached and some items would never come
+> back, Lt. Park could select **Close incomplete** instead. The confirmation
+> says how many items and how much value stay unresolved, and the clearance
+> shows **Closed incomplete**.
 
 ---
 
 ## Realistic Example: NFPA 1851 PPE Lifecycle Tracking
 
-This walkthrough demonstrates how to track a set of turnout gear through its lifecycle using NFPA 1851 compliance features — from receipt through inspection, exposure logging, and eventual retirement.
+This walkthrough follows a set of turnout gear through its life with the NFPA
+1851 features: from arrival, through inspection and exposure, to retirement.
 
 ### Background
 
-**Westbrook Fire District** has enabled NFPA 1851/1852 compliance tracking on their "PPE" and "SCBA" inventory categories. Safety Officer **Capt. Elena Torres** manages the compliance program.
+**Westbrook Fire District** has NFPA tracking switched on for its "PPE" and
+"SCBA" categories. Safety Officer **Capt. Elena Torres** runs the compliance
+program.
 
-A new set of turnout gear arrives for **FF David Park**:
+New turnout gear arrives for **FF David Park**:
 
-- Globe ATHLETIX turnout coat (manufactured January 2026)
-- Globe ATHLETIX turnout pants (manufactured January 2026)
+- Globe ATHLETIX turnout coat (made January 2026)
+- Globe ATHLETIX turnout pants (made January 2026)
 
 ---
 
 ### Step 1: Adding Items with NFPA Data
 
-Capt. Torres navigates to **Inventory > Items** and clicks **Add Item** for each piece.
+Capt. Torres goes to the item list and selects **Add Item** for each piece.
 
 **Turnout Coat:**
 
-| Field             | Value                         |
-| ----------------- | ----------------------------- |
-| **Name**          | Turnout Coat — Globe ATHLETIX |
-| **Category**      | PPE (NFPA tracking enabled)   |
-| **Serial Number** | GA-2026-00451                 |
-| **Asset Tag**     | PPE-2026-101                  |
-| **Condition**     | Excellent                     |
+| Field                          | Value                         |
+| ------------------------------ | ----------------------------- |
+| **Name**                       | Turnout Coat — Globe ATHLETIX |
+| **Category**                   | PPE (NFPA tracking on)        |
+| **Serial Number**              | GA-2026-00451                 |
+| **Asset Tag**                  | PPE-2026-101                  |
+| **Condition**                  | Excellent                     |
+| **Inspection Interval (days)** | 365                           |
 
 On the **NFPA Compliance** tab:
 
-| Field                        | Value                                                      |
-| ---------------------------- | ---------------------------------------------------------- |
-| **Manufacture Date**         | January 15, 2026                                           |
-| **First In-Service Date**    | March 1, 2026                                              |
-| **Expected Retirement Date** | January 15, 2036 (auto-calculated: manufacture + 10 years) |
-| **Ensemble ID**              | ENS-PARK-001                                               |
-| **Ensemble Role**            | Coat                                                       |
+| Field                     | Value                                                     |
+| ------------------------- | --------------------------------------------------------- |
+| **Manufacture Date**      | January 15, 2026                                          |
+| **First In-Service Date** | March 1, 2026                                             |
+| **Expected Retirement**   | January 15, 2036 (she enters manufacture date + 10 years) |
+| **Ensemble ID**           | ENS-PARK-001                                              |
+| **Ensemble Role**         | Coat                                                      |
 
-She repeats for the pants with the same ensemble ID but role set to **Pants**.
+She does the same for the pants, with the same ensemble ID and the role
+**Pants**.
 
 ---
 
 ### Step 2: Routine Inspection (Year 1)
 
-Six months later, Capt. Torres conducts a routine advanced cleaning and inspection per NFPA 1851 §6.3.
+Six months later, Capt. Torres does an advanced cleaning and inspection, as
+NFPA 1851 §6.3 requires.
 
-She navigates to the coat's detail page, opens the **Inspections** tab, and clicks **Add Inspection**:
+She opens the coat's page, goes to the **Inspections** tab and selects **+ Add
+Record**. She chooses **Record inspection**:
 
-| Field               | Value                                                                                                                   |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Inspection Type** | Advanced Cleaning & Inspection                                                                                          |
-| **Date**            | September 15, 2026                                                                                                      |
-| **Result**          | Pass                                                                                                                    |
-| **Inspector**       | Capt. Elena Torres                                                                                                      |
-| **Findings**        | All seams intact. Moisture barrier tested — no leaks. Reflective trim in good condition. Thermal liner shows no damage. |
+| Field                   | Value                                                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Result**              | Pass                                                                                                                    |
+| **Completion date**     | September 15, 2026                                                                                                      |
+| **Technician / Vendor** | Capt. Elena Torres                                                                                                      |
+| **Task Description**    | All seams intact. Moisture barrier tested — no leaks. Reflective trim in good condition. Thermal liner shows no damage. |
 
-The inspection is recorded in the item's history. The next inspection due date is calculated based on department policy (typically annual).
+The inspection is added to the item's history. The next inspection due date is
+worked out from the coat's own **Inspection Interval (days)**: 365 days after
+the completion date. The interval is set on each item, not on the category.
 
 ---
 
 ### Step 3: Logging a Fire Exposure
 
-On November 3, FF Park responds to a structure fire. Afterward, his turnout gear must be documented for exposure per NFPA 1851 §6.2.
+On November 3, FF Park works a structure fire. His turnout gear must be
+recorded as exposed, as NFPA 1851 §6.2 requires.
 
-Capt. Torres navigates to the coat's **Exposures** tab and clicks **Add Exposure**:
+Capt. Torres opens the coat's **Exposures** tab and selects **+ Add
+Exposure**:
 
 | Field                         | Value             |
 | ----------------------------- | ----------------- |
@@ -2481,9 +3318,9 @@ Capt. Torres navigates to the coat's **Exposures** tab and clicks **Add Exposure
 | **Decontamination Required**  | Yes               |
 | **Decontamination Completed** | No (pending)      |
 
-She does the same for the pants. Both items now show a warning: "Decontamination pending."
+She does the same for the pants. Both now show that cleaning is pending.
 
-After the gear is professionally cleaned, she updates each exposure record:
+After the gear is professionally cleaned, she updates each exposure:
 
 | Field                         | Value                     |
 | ----------------------------- | ------------------------- |
@@ -2491,1573 +3328,191 @@ After the gear is professionally cleaned, she updates each exposure record:
 | **Decontamination Date**      | November 8, 2026          |
 | **Decontamination Method**    | Professional ISP cleaning |
 
-The warning clears.
+The pending warning clears.
 
 ---
 
 ### Step 4: Approaching Retirement (Year 9)
 
-In July 2035, the coat is within 180 days of its expected retirement date (January 15, 2036). The system automatically:
-
-- Displays a **warning banner** on the item detail page: "This item is approaching its 10-year retirement date (January 15, 2036). Plan for replacement."
-- Flags the item in the **Inventory Summary** under "Items Approaching Retirement"
-- Notifies Capt. Torres via her configured notification preferences
+In July 2035, the coat comes within 180 days of its retirement date (January
+15, 2036). From then on, the weekly NFPA retirement email to the officers who
+manage gear lists the coat, so Capt. Torres can plan its replacement.
 
 ### Lifecycle Summary
 
-Over the coat's 10-year life, the system tracked:
+Over the coat's 10-year life, The Logbook recorded:
 
-| Data Point             | Count                                                 |
+| Data point             | Count                                                 |
 | ---------------------- | ----------------------------------------------------- |
-| Routine inspections    | 10 (annual)                                           |
+| Routine inspections    | 10 (yearly)                                           |
 | Fire exposures         | 14                                                    |
 | Hazmat exposures       | 2                                                     |
 | Decontamination events | 16                                                    |
 | Repairs                | 3 (reflective trim replacement, zipper repair, patch) |
 | Condition changes      | Excellent → Good (Year 3) → Fair (Year 7)             |
 
-This complete history is available for audit, insurance claims, and NFPA compliance reporting — all in one place, replacing the paper logbook taped inside the locker.
-
----
-
-## CSV Import
-
-You can bulk import inventory items from a CSV file instead of adding them individually.
-
-### Importing Items
-
-**Required Permission:** `inventory.manage`
-
-1. Navigate to **Inventory**.
-2. Click **Import** in the toolbar (or navigate to `/inventory/import`).
-3. **Download the sample template** to see the expected CSV format.
-4. Prepare your CSV file with the required columns:
-   - **name** (required) — Item name
-   - **category** (required) — Must match an existing category name
-   - **description** — Item description
-   - **serial_number** — Must be unique within your organization
-   - **asset_tag** — Asset tag identifier
-   - **condition** — Item condition (excellent, good, fair, poor)
-   - **status** — Item status (available, assigned, in_maintenance, retired)
-   - **storage_location** — Where the item is stored
-   - Additional fields for purchase info, warranty, notes, etc.
-5. Upload the CSV file.
-6. Review the preview showing parsed items and any validation errors.
-7. Click **Import** to create all valid items.
-
-### Validation
-
-The import validates:
-
-- Required columns are present (`name`, `category`)
-- Category names match existing categories
-- Serial numbers are unique (no duplicates in file or existing inventory)
-- Data types are correct (numbers, dates, enum values)
-- **Quantity and purchase price are not negative** _(2026-09-29)_ — a negative value is a row error and the row is skipped
-
-Items that fail validation are skipped with error details. Successfully validated items are imported.
-
-> **Why negatives are refused now — and what to check** _(2026-09-29, workflow
-> review W43-1)_. A negative quantity or price used to be saved, after which
-> every item list that included the row failed with a server error, taking the
-> Items page and item search down. The import refuses them now, but an
-> installation that imported one before the fix still has it. Find such rows
-> with `SELECT id, name FROM inventory_items WHERE quantity < 0 OR
-purchase_price < 0` and correct them; the repair is open in
-> `docs/KNOWN_LIMITATIONS.md`.
-
-> **The file is chosen with the button, not dropped** _(2026-09-29)_. The
-> upload box no longer claims drag-and-drop, which it never supported. The file
-> input can now be reached and started from the keyboard.
-
-> **Hint:** Start with a small test import (5–10 items) to verify your CSV format before importing a large batch. The sample template includes all supported columns with example data.
+The whole history is in one place for audits, insurance claims and NFPA
+reporting, instead of a paper log taped inside the locker.
 
 ---
 
 ## Inventory System Edge Cases
 
-These edge cases cover automatic behaviors during item creation, assignment, return, and label generation.
+These are things The Logbook does automatically. They can surprise you if you
+do not know them.
 
 ### Item Creation & Updates
 
-| Scenario                             | Behavior                                                                                                                                                                                                       |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Item created without a barcode       | Auto-assigned the next per-organization sequential barcode (`<prefix><number>`, default `INV-000001`, `INV-000002`, …).                                                                                        |
-| Item created without `current_value` | Set equal to `purchase_price`. On updates, if `purchase_price` changes without an explicit `current_value`, the current value auto-syncs. Depreciated assets need explicit `current_value` entries to diverge. |
-| Item status set to `RETIRED`         | Condition is automatically forced to `RETIRED` regardless of the submitted condition value.                                                                                                                    |
-| Concurrent updates to the same item  | Row-level `SELECT FOR UPDATE` locks serialize assign, unassign, issue, and return operations. Long-running transactions can cause lock waits.                                                                  |
+| What happens                            | What it means                                                                                                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| You add an item without a barcode       | It gets the next barcode number for your department (`INV-000001`, `INV-000002`, …)                                                                                                                          |
+| You add an item without a current value | The current value is set to the purchase price. If you later change the purchase price without entering a current value, the current value follows it. Enter a current value yourself to record depreciation |
+| You set an item's status to retired     | Its condition is set to retired too                                                                                                                                                                          |
+| Two people change the same item at once | The changes are applied one after the other, never mixed                                                                                                                                                     |
 
 ### Returns & Unassignment
 
-| Scenario                                                | Behavior                                                                                                                                                                                                   |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Item returned in poor/damaged/out-of-service condition  | Status automatically set to `IN_MAINTENANCE` instead of `AVAILABLE`. The item enters the maintenance queue without manual intervention.                                                                    |
-| Partial pool return (less than issued quantity)         | Issuance record stays open. `quantity_issued` is decremented and a note is appended. The issuance closes only when all units are returned.                                                                 |
-| Pool item issuance cost snapshot                        | `replacement_cost` (falling back to `purchase_price`) is captured as `unit_cost_at_issuance` on the issuance record. Future price changes do not affect cost recovery calculations for existing issuances. |
-| Inventory return triggers membership auto-archive check | After both `unassign_item` and `return_to_pool`, the system checks if the member qualifies for auto-archiving. A notification queue failure during this check is non-fatal — the return still succeeds.    |
+| What happens                                     | What it means                                           |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| An item comes back poor or damaged               | Its status becomes **In Maintenance**, not Available    |
+| A member returns fewer pool units than they hold | The issuance stays open until every unit is back        |
+| A pool item's price changes after it was issued  | The cost recorded at issue is kept for any charge later |
 
 ### Label Generation
 
-| Scenario                                   | Behavior                                                                                                                                                          |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No valid items selected for labels         | Returns "No valid items found for label generation." Items must have a barcode or asset tag.                                                                      |
-| Non-ASCII characters in barcode values     | Silently stripped before Code128 encoding. Items imported with accented characters in serial numbers will have those characters removed on labels.                |
-| Extremely small custom label size          | Minimum bar width of 0.0075 inches is enforced for 203 DPI thermal printers. Labels below this threshold may produce barcodes that cannot be reliably scanned.    |
-| More than 500 items selected or matched    | Refused before anything renders: "N items match. A maximum of 500 inventory items can be printed in one batch — narrow the filters and try again." _(2026-09-23)_ |
-| Filters match no active items              | "No active items match these filters.", with a **Choose different items** link back to the picker _(2026-09-23)_                                                  |
-| Marked as labelled, then barcode edited    | The mark clears and the item reads **Needs a label** again — the label on the gear no longer matches the record _(2026-09-23)_                                    |
-| Marked as labelled, item has no identifier | Skipped: an item with no barcode, asset tag or serial number has no printable value, so it is never marked _(2026-09-23)_                                         |
+| What happens                                                              | What it means                                                                                                                     |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| None of the chosen items has a barcode, asset tag or serial number        | "No valid items found for label generation." An item needs one of these to have a label                                           |
+| A code contains accented letters                                          | Those letters are left out of the printed barcode                                                                                 |
+| A custom label is very small                                              | Bars below the minimum readable width may not scan. Use a larger label                                                            |
+| More than 500 items are picked one by one                                 | Refused before anything prints: "A maximum of 500 inventory items can be printed in one batch. Select fewer items and try again." |
+| More than 500 items match your filters                                    | The run prints in parts of at most 500 labels each. Print and confirm each part in turn                                           |
+| More than 5,000 items match your filters                                  | Refused before anything prints: "_N_ items match. One print run can hold up to 5,000 — narrow the filters and try again."         |
+| The filters match no active items                                         | "No active items match these filters.", with **Choose different items** back to the picker                                        |
+| An item marked as labelled has its barcode changed                        | It goes back to **Needs a label**; the label on the gear no longer matches                                                        |
+| An item with no barcode, asset tag or serial number is marked as labelled | It is skipped; it has nothing to print, so it is never marked                                                                     |
 
-### Notification Behavior
+### Notifications
 
-| Scenario                                              | Behavior                                                                                                                                                                    |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notification queue failure during inventory operation | All inventory state changes (assign, unassign, issue, return) catch notification failures silently. Inventory operations succeed even if notifications cannot be delivered. |
+| What happens                                                          | What it means                                       |
+| --------------------------------------------------------------------- | --------------------------------------------------- |
+| A notice about an assignment, issue or return fails to send           | The inventory change still goes through             |
+| Gear is issued and returned before the member's change email goes out | The two cancel out, and no email is sent about them |
 
 ---
 
 ## Troubleshooting
 
-| Issue                                                | Solution                                                                                                                                                                                                                                                                                                                                           |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CSV import fails                                     | Download the sample template and verify your CSV matches the format. Check that category names match existing categories. Serial numbers must be unique.                                                                                                                                                                                           |
-| Item not found when scanning                         | Verify the barcode/QR code matches the item's serial number or asset tag. The item must exist in the system. A "not found" message means no match; a "network error" message means connectivity issues.                                                                                                                                            |
-| Camera not showing in scan modal (Firefox/Safari)    | The inventory scanner now supports all modern browsers. If the camera button is missing, ensure browser camera permissions are granted. On desktop, the scanner falls back to the front-facing webcam if no rear camera is available.                                                                                                              |
-| Scan modal opening on desktop but camera failing     | Desktop computers typically only have a front-facing webcam. The scanner tries the rear camera first, then automatically falls back to the front-facing camera. If both fail, check that the camera is not in use by another application.                                                                                                          |
-| Duplicate scan detected                              | The scanner ignores the same barcode scanned within 3 seconds to prevent double-processing. Wait 3 seconds or scan a different item.                                                                                                                                                                                                               |
-| Cannot assign item - "already assigned"              | An item can only be assigned to one member at a time. Return or unassign it from the current member first.                                                                                                                                                                                                                                         |
-| Checkout button not available                        | The item may already be checked out or in maintenance status. Check the item's current status.                                                                                                                                                                                                                                                     |
-| Batch return fails for one item                      | Each item in a batch is processed independently. If one fails (e.g., "Item is not assigned to the expected user"), the others still succeed. Check if the item was concurrently reassigned.                                                                                                                                                        |
-| Departure clearance not generating items             | The member must have active assignments or checkouts. If all items were already returned, the clearance will be empty.                                                                                                                                                                                                                             |
-| Cannot resolve clearance line item                   | The line item must belong to the specified clearance. If it returns an error, verify you are resolving items within the correct clearance record.                                                                                                                                                                                                  |
-| Duplicate barcode error                              | Barcodes and asset tags must be unique within your organization. Different organizations can reuse the same codes.                                                                                                                                                                                                                                 |
-| Pool item quantity below zero                        | Pool item quantity cannot go below zero. If a return fails, check that the issuance record exists and hasn't already been returned.                                                                                                                                                                                                                |
-| Cannot see Inventory module                          | Inventory is a recommended module but can be disabled. Contact your administrator to enable it in Settings.                                                                                                                                                                                                                                        |
-| Label PDF not generating                             | Ensure the print page has items loaded — tick items on the list, use **Select all N matching**, or choose a category/location in the picker. Labels require the item to have a barcode or asset tag assigned.                                                                                                                                      |
-| Thermal label blank or no barcode                    | Use Chrome/Edge (Safari has limited iframe print support). Verify Dymo (2.25×1.25″) or Rollo (4×6″) paper size in printer dialog. Check that inline SVG is not blocked by your Content Security Policy. For the browser **Print Labels** path, very large batches can be slow to render — the **PDF** is more reliable for a full 500-label batch. |
-| Item still shows "Needs a label" after printing      | The print is only recorded when you answer **Mark N items as labelled**. If you pressed **Not yet** or left the page, open the items again and confirm. An edit to the barcode (or asset tag / serial, when that is what the label carries) also clears the mark on purpose.                                                                       |
-| Organization logo missing on labels                  | Logo is loaded from organization profile URL. If the URL returns 404 or CORS error, the label prints without logo silently. Verify the logo URL in Settings > Organization.                                                                                                                                                                        |
-| Form field cleared but value not resetting           | The nullish coalescing operator (`??`) treats empty strings as truthy. This was fixed; pull latest code. If you see this in custom code, use `\|\|` instead of `??` when empty string should fall back to a default.                                                                                                                               |
-| 422 error on item create/update                      | Optional fields (notes, description) must be omitted from the payload when empty, not sent as `""`. Pull latest frontend code.                                                                                                                                                                                                                     |
-| WebSocket 403 on inventory page                      | The WebSocket connection needs the auth cookie. Pull latest; `withCredentials` is now set on the WebSocket connection.                                                                                                                                                                                                                             |
-| Charges not appearing on returned items              | Verify `inventory.manage` permission. Charges are tied to return/write-off events. Quarantine items cannot have charges until inspection completes.                                                                                                                                                                                                |
-| Pool item cost recovery amount wrong                 | Check the item's `replacement_cost_per_unit` field. Cost recovery = (units not returned) × replacement cost per unit.                                                                                                                                                                                                                              |
-| Return request stuck in pending                      | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                                                                                                             |
-| Quarantine item cannot be re-issued                  | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection.                                                                                                                                                                                                             |
-| Size variant stock not matching total                | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal.                                                                                                                                                                                             |
-| Reorder request not triggering alerts                | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. The alert is email-only and requires `EMAIL_ENABLED=True`.                                                                                                                                                                                  |
-| Kit issuance partially failed                        | If some kit components are out of stock, available items are still issued. Check the issuance result for per-component success/failure status. Reorder the missing components.                                                                                                                                                                     |
-| Member size preferences not showing during issuance  | The member must have size preferences recorded in their profile. If blank, the variant picker shows all sizes without pre-selection.                                                                                                                                                                                                               |
-| Item detail page shows "Item not found"              | Verify the item ID in the URL. The item may have been retired or deleted. Check that you are in the correct organization context.                                                                                                                                                                                                                  |
-| Barcode not printing on labels                       | Ensure the item has a barcode, serial number, or asset tag assigned. SVG barcodes require a modern browser (Chrome/Edge recommended). Wait for the "Ready to print" indicator before printing.                                                                                                                                                     |
-| Location filter shows no results                     | Verify that storage areas are linked to facility rooms. The cascading filter requires Facility → Room → Storage Area hierarchy to be configured.                                                                                                                                                                                                   |
-| Size/style variant generation creates too many items | The count is `sizes × colors × styles`. Remove unnecessary sizes or styles before generating. Preview shows the exact count before creation.                                                                                                                                                                                                       |
-| Variant group not created after generation           | Verify that `create_variant_group` is enabled (toggled on by default). Check that at least one size and one style are selected.                                                                                                                                                                                                                    |
-| Admin hub layout changed                             | Fixed 2026-03-22 — admin hub redesigned with grouped card sections. Pull latest.                                                                                                                                                                                                                                                                   |
-| Barcode labels not ISO compliant                     | Fixed 2026-03-22 — labels now follow ISO/IEC 15417 with correct quiet zones and bar widths.                                                                                                                                                                                                                                                        |
-| Labels printing sideways on thermal printer          | Fixed 2026-03-22 — auto-rotation detects roll-fed printers and rotates labels to maximize print area.                                                                                                                                                                                                                                              |
-| Label format mismatch between preview and PDF        | Fixed 2026-03-22 — frontend and backend now share unified label format definitions.                                                                                                                                                                                                                                                                |
-| Non-admin sees all equipment on dashboard            | Fixed 2026-03-22 — non-admins now see only their own assigned equipment.                                                                                                                                                                                                                                                                           |
-| Mobile FAB shows Export CSV for non-admin            | Fixed 2026-03-22 — FAB now shows "Assign Items" for non-admin users.                                                                                                                                                                                                                                                                               |
-| Barcode scan not working on desktop                  | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers.                                                                                                                                                                                                                                                              |
+| Problem                                                               | What to do                                                                                                                                                                                                         |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| I cannot see Inventory                                                | The module can be switched off. Ask your administrator to turn it on under **Settings → Modules**. Members see **My Issued Gear**; the full item list needs the **Manage gear, uniforms and equipment** permission |
+| CSV import fails                                                      | Download the template and check your columns. Only **Name** is required. Serial numbers must be unique                                                                                                             |
+| Item not found when scanning                                          | Check that the code matches the item's barcode, serial number or asset tag. "Not found" means no match; a network message means a connection problem                                                               |
+| The camera button is missing or the camera fails                      | Allow the camera in your browser settings. Close other apps using it. On a desktop, the scanner uses the front webcam if there is no rear camera. You can always type the code                                     |
+| A scan is ignored                                                     | The same code scanned again within 3 seconds is ignored. Wait, or scan a different item                                                                                                                            |
+| "Already assigned" when assigning                                     | A tracked item can be held by one member at a time. Return or unassign it first, or confirm a custody transfer                                                                                                     |
+| One item fails in a batch return                                      | Each item is handled on its own; the others went through. The item may have been reassigned meanwhile                                                                                                              |
+| A departure clearance has no lines                                    | The member held nothing when they were dropped                                                                                                                                                                     |
+| A dropped member still gets reminders after the clearance is complete | Some items are still on their record. Lines resolved as **Written off** or **Waived** do not change the item; update the item itself                                                                               |
+| "Duplicate barcode"                                                   | Barcodes and asset tags must be unique within your department                                                                                                                                                      |
+| A pool return fails                                                   | Check that the issuance exists and has not already been returned. The count cannot go below zero                                                                                                                   |
+| The label PDF does not appear                                         | Make sure the print page has items: tick items, use **Select all _N_ matching**, or choose a category or location in the picker. Each item needs a barcode, asset tag or serial number                             |
+| A thermal label prints blank or without a barcode                     | Use Chrome or Edge. Check the paper size in the print window matches the label. For a large batch, the **PDF** is more reliable than **Print Labels**                                                              |
+| An item still says "Needs a label" after printing                     | The print is recorded only when you answer **Mark _N_ items as labelled**. Changing the code the label carries also clears the mark, on purpose                                                                    |
+| Low-stock email not arriving                                          | Check the item has a **Reorder Point** (pool items only) and that stock is at or below it. The alert is email only, and your administrator must have email set up                                                  |
+| A kit issue stopped part way                                          | A required part could not be issued. Parts before it were issued; check the member's gear, fix the problem, and issue the rest by hand                                                                             |
+| Sizes are not preselected on a request                                | The member has no sizes on file. They can add them under **My Sizes**                                                                                                                                              |
+| An item page says "Item not found"                                    | The item may have been deleted, or the link is wrong                                                                                                                                                               |
+| The location filter shows nothing                                     | Check that storage areas are set up in rooms. Items with no place are under **no location at all**                                                                                                                 |
+| A size variant's stock does not match the total                       | Each size keeps its own count. The total is the sum of all sizes. Check the **Stock Matrix** on **Variant Groups**                                                                                                 |
+| Labels print sideways on a thermal printer                            | Turn on **Auto-rotate for roll-fed**, and use the **PDF**                                                                                                                                                          |
 
 ---
 
-## Gear Admin Hub Redesign (2026-03-22)
-
-The inventory admin dashboard has been redesigned with **grouped card sections** and prominent navigation cards, replacing the previous flat list layout.
-
-### New Layout
-
-The hub opens with a low-stock banner (when anything is under its threshold),
-three headline cards — **Items**, **Members** and **Checkouts**, each carrying
-its own figure — and then the rest of the pages in three groups:
-
-| Group                    | Pages                                                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| **Inventory Management** | Pool Items, Categories, Gear Kits, Variant Groups, Issuance Allowances, Impact Planner, Maintenance, Storage Areas |
-| **Requests & Workflows** | Gear Requests, Return Requests, Charges, Write-Offs, Reorder Requests, Expiring on Apparatus                       |
-| **Tools**                | Import / Export, Department Store                                                                                  |
-
-Only the cards with something outstanding carry a count — Reorder Requests
-shows how many are pending, the rest are plain links.
-
-![The inventory admin hub with its cards grouped into sections](./images/05-60-admin-hub-groups.png)
-
-### New Admin Pages
-
-Two new dedicated admin pages have been added:
-
-**Gear Kits** (`/inventory/admin/kits`):
-
-- Create, edit, and delete equipment kits
-- View kit components and their quantities
-- Issue kits to members with size preference auto-selection
-
-![Equipment kits admin page listing kits with their component counts](./images/05-31-equipment-kits.png)
-
-**Variant Groups** (`/inventory/admin/variant-groups`):
-
-- View and manage variant groups with aggregate stock across all sizes
-- Edit individual variants within a group
-- Link to auto-generation for new variant groups
-
-![Variant groups admin page with base products and per-size stock](./images/05-32-variant-groups.png)
-
-### Barcode Label Printing Improvements
-
-Label generation has been significantly improved:
-
-- **ISO/IEC 15417 compliance**: Correct quiet zones, minimum bar widths, and aspect ratios for reliable scanner readability
-- **Auto-rotation for thermal printers**: Roll-fed labels auto-rotate to maximize print area
-- **Test print**: New "Test Print" button generates a sample label for verifying printer alignment
-- **Unified formats**: Frontend and backend share the same label format catalog, preventing size mismatches
-- **Batch limit**: Maximum batch size enforced to prevent browser memory issues
-
-![Inventory label printing page with format presets and preview](./images/05-33-label-printing.png)
-
-### Inventory Dashboard Scoping
-
-The **figures** on the inventory page are scoped to the member: the header counts
-their items, their overdue checkouts and the value of what they hold, not the
-department's. The low-stock alerts and the per-location breakdown of departmental
-stock are not shown to a non-admin at all.
-
-The **item list** (`/inventory`) is for quartermasters: the page needs
-`inventory.manage`. A member's business with the catalogue is their own kit and
-the requests they raise against it, both on **My Issued Gear** — the page to
-open to see what somebody actually holds: their permanent assignments,
-checkouts, issued consumables and pending requests, each with a return action.
-The request form there searches the catalogue on the member's `inventory.view`.
-
-> **Corrected 2026-10-04.** This paragraph used to say the item list was open
-> to anyone with `inventory.view` so members could browse it. The route is
-> gated on `inventory.manage`; members browse only through **Request
-> Equipment**.
-
-![My Issued Gear as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
-
-**[SCREENSHOT — REPLACE `05-66-my-equipment.png`.** The header now carries the line "The department equipment you are responsible for, and your requests for more.", and the third tile reads **Pending requests** (was **Pending**). Re-shoot as an ordinary member holding at least one item, with one open return notice so the tile is non-zero.**]**
-
-> **Edge case:** Users with `inventory.manage` (or `settings.manage`) see the department's figures rather than their own. The scoping applies only to users without those permissions.
-
-> **Fixed 2026-08-11.** The per-location panel was the one summary that never
-> checked. A member's page counted their own three items in its header and then
-> reported the department's entire stock and valuation in the panel directly
-> beneath it. Pull latest.
-
-### Desktop Camera Scanning
-
-Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop browsers:
-
-- **InventoryScanModal**: Barcode scanning for check-in/check-out works on all browsers via the shared `useHtml5Scanner` hook
-- **MemberIdScannerModal**: Member ID card scanning works on desktop with user-facing camera fallback
-- Both modals share the same camera initialization, resolution selection, and error handling logic
-
-> **No screenshot — the harness has no camera _(2026-08-12)_.** These shots need a live viewfinder with a code actually being recognised; the capture automation runs headless with no camera device, and a synthetic video stream produces a test pattern rather than a scannable code. The feature works — only the automated screenshot is impossible. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12).
-
-> **Edge case:** If no camera is available, the scanner shows an error message and the user can fall back to manual text entry (barcode/serial number input field).
-
----
-
-## Storage Areas, Barcode Backfill & Item Detail Improvements (2026-03-24)
-
-### Storage Area Items Display
-
-The Storage Areas page now shows the **actual inventory items** assigned to each storage area, not just item counts. Each storage area has an expandable panel that reveals:
-
-- Item name, serial number, status, and condition
-- Direct links to each item's detail page
-
-![Storage areas page with an expanded area listing its items](./images/05-36-storage-areas.png)
-
-> **Edge case:** Storage areas with no items show an empty state message. Items without serial numbers display the item name and barcode instead.
-
-**[SCREENSHOT — REPLACE `05-36-storage-areas.png`.** Since this was shot the page gained **Scan shelf label**, **Put away**, **Put Away by NFC** and **Print _N_ labels** in its toolbar and a print action on each row (2026-09-24), and its subtitle now reads "Racks, shelves, and bins inside each room. Nest one inside another as needed." Leaf areas no longer show an expand toggle. Re-shoot with one area expanded to its item list.**]**
-
-> **Deleting a storage area waits until it is empty** _(2026-09-29)_. The
-> **Delete** dialog now refuses while the area holds items ("Move them to
-> another storage area first.") or has areas nested inside it ("Move or delete
-> those first."). Deleting only ever deactivated the area, which left its items
-> with a location that read "--" everywhere and orphaned the areas inside it.
-> The nested-area check counts from the full list; the old dialog's nested
-> warning had never once been shown.
-
-### Barcode and Asset Tag Always Visible
-
-The item detail page now **always shows** the Barcode and Asset Tag fields — they sit in the **Basic Info** card alongside name, category and status — displaying `--` when no value is set. Previously they were hidden when empty, making it unclear whether the item had been assigned a barcode at all. The same `--` convention runs through the other cards, so an item with no recorded size or colour reads as blank rather than as missing sections.
-
-The barcode is printed rather than drawn here: **Print Barcode** in the page header opens the label page. The detail view shows the number, not an image of the code.
-
-![An item's barcode and asset tag on its detail page](./images/05-61-item-barcode-fields.png)
-
-### Barcode Numbering
-
-Every item is assigned a per-organization **sequential** barcode at creation time — `<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, and so on. The prefix and the running counter are stored on the organization, so the numbers continue in order across all items.
-
-> **Note:** Barcodes are assigned when the item is created (not lazily on view). Items that pre-date this feature were given sequential barcodes by a one-time migration. The barcode is unique within your organization.
-
-### Equipment Check Template Builder Fix
-
-The equipment check template builder no longer crashes when editing templates. The issue was caused by an incompatible browser navigation blocker. The "unsaved changes" warning still appears when you close or refresh the browser tab, but in-app navigation no longer triggers a crash.
-
-### Camera Error Handling
-
-The scanner names **which** camera problem you have, because the fix differs:
-a blocked permission sends you to browser settings, a device with no camera
-does not (there is nothing there to grant), a camera held by another app asks
-you to close it, and a page served over plain HTTP says so. The four messages
-are listed in `10-mobile-pwa.md`, which is where the scanner is documented in
-full.
-
-- **Errors stay visible** — camera error messages do not auto-dismiss, so there
-  is time to read and act on them
-- **The manual field is always there.** On any browser where the camera fails,
-  the barcode / serial-number input still works, so a failed camera slows the
-  job down rather than stopping it. There is no separate "Try Again" button:
-  the scan control stays where it was, and retrying is the same click
-
-The refused-camera state is pictured in `10-mobile-pwa.md`; it is the same
-banner in both scanners.
-
-### WebSocket Reliability
-
-Fixed an intermittent error where the real-time inventory updates WebSocket connection would fail with a "connection already accepted" error. This affected users who had the inventory page open for extended periods.
-
-### Edge Cases (2026-03-24)
-
-| Scenario                                    | Behavior                                                    |
-| ------------------------------------------- | ----------------------------------------------------------- |
-| Item created before barcode auto-generation | Barcode lazily generated on first fetch                     |
-| Storage area with no items                  | Shows empty state message                                   |
-| Item with no barcode or asset tag           | Fields display `--` placeholder (always visible)            |
-| Template builder back navigation            | No crash; `beforeunload` still fires on browser close       |
-| Camera permission denied                    | Specific error message; manual entry available              |
-| Storage area item link clicked              | Navigates to `/inventory/items/{id}` (fixed from dashboard) |
-
----
-
-## Storage Area Items & Barcode Improvements (2026-03-24)
-
-### Viewing Items in Storage Areas
-
-Storage areas now display the inventory items assigned to each area:
-
-1. Navigate to **Inventory > Storage Areas**
-2. Click on a storage area to expand it
-3. Items assigned to that area appear in an inline panel showing:
-   - Item name
-   - Serial number
-   - Status badge
-   - Condition indicator
-4. Click on any item to navigate directly to its detail page
-
-![Storage area expanded to show the items stored in it](./images/05-48-storage-area-items.png)
-
-### Always-Visible Barcode & Asset Tag
-
-Item detail pages now always display the barcode and asset tag fields, even when empty. Empty fields show a `--` placeholder instead of being hidden, making it clear which items have barcodes assigned and which don't.
-
-![An item with a barcode but no asset tag — the empty field showing its -- placeholder rather than being hidden](./images/05-67-empty-asset-tag.png)
-
-### Barcode Numbering
-
-Barcodes are assigned at item-creation time using a per-organization sequential number:
-
-- Format: `<prefix><zero-padded number>` (default `INV-000001`, `INV-000002`, …)
-- The prefix and running counter are stored on the organization; concurrent creates get distinct numbers (the org row is locked during the increment)
-- Unique within the organization; a one-time migration assigned sequential barcodes to any pre-existing items
-
-### Edge Cases
-
-| Scenario                                   | Behavior                                             |
-| ------------------------------------------ | ---------------------------------------------------- |
-| Storage area with no items                 | Shows empty state: "No items in this storage area"   |
-| Item with no barcode loaded for first time | Barcode auto-generated on first detail page access   |
-| Item with barcode and asset tag both empty | Both fields display `--` placeholder                 |
-| Clicking item in storage area panel        | Navigates to `/inventory/items/{id}` (not dashboard) |
-| Storage area name on item detail           | Displays resolved area name instead of raw UUID      |
-
----
-
-## Variant Capsules & Visual Improvements (2026-04-08)
-
-### Variant Capsules
-
-Inventory items that belong to a variant group now display compact **colored pill badges** showing their variant attributes:
-
-- **Blue capsule** — Size (e.g., "S", "M", "L", "XL")
-- **Purple capsule** — Color (e.g., "Navy", "White")
-- **Amber capsule** — Style (e.g., "Regular", "Long")
-
-These capsules appear on inventory item cards across all pages: Items List, Item Detail, My Issued Gear, Pool Items, and Variant Groups. They provide an at-a-glance understanding of which variant an item represents without opening the detail view.
-
-![The inventory items list with size, colour and style capsules on the variant items](./images/05-53-items-variant-capsules.png)
-
-### Stock Matrix on Variant Groups Page
-
-The Variant Groups page now displays a **stock matrix** showing all size × color × style combinations for each group:
-
-- Grid layout with sizes as columns and colors/styles as rows
-- Per-variant quantity displayed in each cell
-- Total stock aggregated across all variants shown in the group header
-- Low-stock indicators on individual variants below threshold (dimmed with warning icon)
-- Variants with zero stock are dimmed but remain visible for reorder visibility
-
-![Variant group stock matrix of quantities by size and colour](./images/05-49-variant-stock-matrix.png)
-
-### Size, Color & Style Filters
-
-The Items List page now includes three new filter dropdowns for variant-based filtering:
-
-| Filter    | Description                                     |
-| --------- | ----------------------------------------------- |
-| **Size**  | Filter items by size (e.g., "L", "XL", "2XL")   |
-| **Color** | Filter items by color (e.g., "Navy", "Black")   |
-| **Style** | Filter items by style (e.g., "Regular", "Long") |
-
-These filters work alongside existing category, status, condition, and location filters. Selecting a size filter, for example, shows only items with that size variant attribute — useful for quickly finding all "XL" items across all categories.
-
-![Items list filter bar with the size, colour and style dropdowns](./images/05-47-items-filter-bar.png)
-
-### Barcode Label Improvements
-
-- **Layout fixes**: Corrected content overflow on Dymo 30334 and Rollo 4×6 label formats. Fixed quiet zone spacing on Code128 barcodes
-- **Content customization**: The item name, its barcode and its asset tag always print. Under **Additional info on label** you can add up to three more — **Location**, **Category** and **Condition** — as toggles, so a small thermal label can carry only what fits
-- **Print preview**: A live preview shows the label layout before generating the final PDF, so you can verify the content fits your chosen label size
-
-The label size is chosen from a grid of presets rather than a dropdown, and
-**Custom size** at the end of it takes exact dimensions for any sticker printer.
-The page is pictured under [Label printing](#label-printing) above.
-
-### Edge Cases
-
-| Scenario                                | Behavior                                                       |
-| --------------------------------------- | -------------------------------------------------------------- |
-| Variant capsules on non-variant item    | No capsules displayed (component returns null)                 |
-| Stock matrix with all zeros             | Group shows "Out of Stock" banner; cells dimmed                |
-| Size/color/style filter with no matches | Empty results; filters remain applied                          |
-| Label preview with all fields unchecked | Minimum content: barcode image + item name always included     |
-| Custom label size smaller than content  | Content scaled to fit; warning shown if text will be truncated |
-
----
-
-## Quick-Assign from Admin Hub (2026-06-09)
-
-The Inventory Admin hub now includes a **quick "Assign to Member" action** for streamlined equipment distribution:
-
-1. Navigate to **Inventory Admin** (`/inventory/admin`)
-2. Click **Assign to Member** in the hub header
-3. **Select a member** — use the member picker modal (search by name or scan a member ID badge)
-4. **Scan or search for items** — the inventory scan modal opens in checkout mode. Scan barcodes with a camera or type item names/serials to find items
-5. Assign items to the selected member
-
-This workflow is designed for events like annual PPE distribution where you need to process many members quickly — scan their badge, then scan the items they're receiving.
-
-![The inventory admin hub with Assign to Member in the header above the navigation cards](./images/05-54-admin-hub-assign.png)
-
-![The member picker opened from Assign to Member, with its search field and roster](./images/05-55-member-picker.png)
-
-### Edge Cases
-
-| Scenario                                | Behavior                                    |
-| --------------------------------------- | ------------------------------------------- |
-| Badge scan fails                        | Falls back to name search in the picker     |
-| Item already assigned to another member | Error shown; item not reassigned            |
-| Member has no membership number         | Badge scan won't find them; use name search |
-
----
-
-## Cross-Module Barcode Label Printing (2026-06-10)
-
-Barcode label printing is now available across multiple modules — not just Inventory. Each module has its own "Print Labels" entry point that generates module-specific labels.
-
-### Modules Supporting Labels
-
-| Module         | Route                               |                    What's on the Label | Entry Point                  |
-| -------------- | ----------------------------------- | -------------------------------------: | ---------------------------- |
-| **Inventory**  | `/inventory/print-labels`           |   Item name, barcode, serial/asset tag | Select items → Print Labels  |
-| **Apparatus**  | `/apparatus/print-labels`           | Unit number, asset tag, apparatus type | Per-row "Print Label" action |
-| **Facilities** | `/facilities/print-labels`          |         Facility name, facility number | Header "Print Labels" button |
-| **Members**    | `/members/print-labels`             |         Member name, membership number | Bulk "Print Badges" button   |
-| **Prospects**  | `/prospective-members/print-labels` |  Applicant name, short record-id code¹ | Bulk "Print Badges" button   |
-
-¹ _(2026-09-28)_ An applicant label used to encode the applicant's status-page
-token, which opens and can withdraw their application without signing in. It
-now carries a short code made from the record id instead. Destroy applicant
-labels printed before then.
-
-### Remembered Printer Preference
-
-The system remembers your chosen **printer/size per position and per module**:
-
-- A Quartermaster's inventory printer can be different from the apparatus team's printer
-- The preference follows the **role position**, not the computer — whoever holds the role gets their predecessor's printer setting
-- Stored in `positions.settings["label_presets"][module]`
-- A local `localStorage` copy provides an instant/offline fallback
-
-### Label Formats
-
-Nine choices, picked as cards rather than from a dropdown. Dymo 30252 is the
-default.
-
-| Format              | Size         | Use Case                   |
-| ------------------- | ------------ | -------------------------- |
-| Dymo 30252          | 1.125×3.5"   | Standard address label     |
-| Dymo 30256          | 2.3125×4"    | Shipping label             |
-| Dymo 30334          | 2.25×1.25"   | Multi-purpose label        |
-| Dymo 30336          | 1×2.125"     | Small multipurpose label   |
-| Rollo 4×6           | 4×6"         | Shipping label             |
-| Rollo / Thermal 2×1 | 2×1"         | Small thermal label        |
-| Thermal 1×1         | 1×1"         | Square asset tag           |
-| Letter Paper (Grid) | 8.5×11"      | 30 per page (Avery 5160)   |
-| Custom size         | User-defined | 0.5-8" wide × 0.5-11" tall |
-
-> **Corrected 2026-08-12.** This table previously listed six formats and
-> described the letter sheet as a 2×5 grid. There are nine, and the letter
-> sheet is Avery 5160 at 30 labels per page.
-
-Choosing a **thermal** size (the Rollo and Thermal entries) also reveals a
-**Label Orientation** control and a **Download Test Label** button, for
-checking alignment on a roll-fed printer before committing a batch. Below the
-size you can set **copies per item** and tick which extra details to print
-under the barcode — Location, Category, Condition.
-
-![The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
-
-### Edge Cases
-
-| Scenario                                  | Behavior                                     |
-| ----------------------------------------- | -------------------------------------------- |
-| Record without existing barcode           | Auto-generated during label preview          |
-| Roll-fed thermal printer (Rollo/Brother)  | Labels auto-rotated for maximum print area   |
-| First time printing (no saved preference) | Defaults to Dymo 30334; saved on first print |
-| Different user fills same position        | Inherits the position's printer preference   |
-
----
-
-## Sequential Barcode Numbering (2026-06-10)
-
-Inventory barcodes now use a **per-organization sequential scheme** instead of random hex:
-
-- Format: `<prefix><zero-padded number>` (default: `INV-000001`, `INV-000002`, ...)
-- The prefix and counter live in `organizations.settings["barcode"]`
-- The org row is locked `FOR UPDATE` during the read-increment to ensure concurrent creates get distinct numbers
-- Barcodes are assigned at **item creation time** (no longer lazily on first read)
-- Migration `20260610_0001` reassigned existing items and seeded each org's counter
-
-![An item's Basic Info card, its sequential barcode value beside the asset tag](./images/05-56-item-barcode-value.png)
-
-### Edge Cases
-
-| Scenario                        | Behavior                                            |
-| ------------------------------- | --------------------------------------------------- |
-| Concurrent item creation        | Row-level locking ensures unique sequential numbers |
-| Existing items before migration | Reassigned sequential barcodes during migration     |
-| Custom barcode prefix           | Configurable per org via settings                   |
-
----
-
-## Responsive Tables (2026-06-10)
-
-Several inventory admin pages have been **collapsed from separate desktop and mobile renders** into a single responsive table using the `.rwd-table` CSS utility:
-
-- **Desktop (≥768px)**: Standard table layout
-- **Mobile (<768px)**: Each row becomes a stacked card with field labels on the left
-
-### Pages Updated
-
-| Page                     | Before                     | After                   |
-| ------------------------ | -------------------------- | ----------------------- |
-| InventoryItemsPage       | Separate table + card grid | Single responsive table |
-| InventoryMembersPage     | Separate table + card list | Single responsive table |
-| ReorderRequestsPage      | Separate renders           | Single responsive table |
-| InventoryMaintenancePage | Separate renders           | Single responsive table |
-
-Each `<td>` uses a `data-label` attribute to display the field name on mobile.
-A cell with **no** `data-label` at all is hidden in the stacked view.
-
-Two refinements are worth knowing, because both look like mistakes and are not
-_(clarified 2026-08-12)_:
-
-- **A cell can opt back in with an empty label.** The selection checkbox and
-  the Edit/Retire buttons carry `data-label=""`, so they still appear on a
-  phone — just without a field name against them. They are not hidden.
-- **Columns hidden on desktop can reappear on the phone.** Manufacturer, Serial
-  #, Asset Tag, Barcode and Cost are marked `hidden`, which keeps them out of
-  the desktop table where width is scarce; the stacked-card rules override that,
-  so they come back as rows on mobile where there is vertical room. This is why
-  the phone card below lists more fields than the desktop table shows, not
-  fewer.
-
-The desktop form of this table is pictured at the top of this guide under
-[Inventory Overview](#inventory-overview). Below is the same table on a phone.
-
-![The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right](./images/05-70-inventory-table-mobile.png)
-
----
-
-## Impact Planner — Demand Forecasting & Bulk Operations (2026-06-22)
-
-The **Impact Planner** at `/inventory/admin/impact-planner` allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations from a single analysis.
-
-### How to Use the Impact Planner
-
-**Required Permission:** `inventory.manage`
-
-1. Navigate to **Inventory Admin > Impact Planner**
-2. **Filter the roster**: Select which members to analyze using the filter panel:
-   - **Statuses**: Active, Inactive, etc.
-   - **Ranks**: Firefighter, Captain, etc.
-   - **Stations**: Station 1, Station 2, etc.
-   - **Membership types**: Regular, Reserve, etc.
-   - **Positions**: Specific role positions
-3. **Select the item category**: e.g., "Job Shirts", "Turnout Coats"
-4. **Choose a size field**: Shirt, Pant, Jacket, Boot, Glove, or Hat
-5. Click **Analyze**
-
-![Inventory impact planner with its filter panel and member analysis](./images/05-45-impact-planner.png)
-
-### Reading the Analysis Results
-
-The analysis shows:
-
-- **Summary cards**: Total members analyzed, members who already have the item, members who need it, members needing replacement, members missing sizes
-- **Size breakdown table**: Each size (S, M, L, XL, etc.) with columns for:
-  - Total members with that size
-  - Members who need the item
-  - On-hand stock (if stock category selected)
-  - Shortfall (needing minus on-hand)
-  - Unit cost (if available)
-  - Estimated cost (shortfall × unit cost)
-- **Totals**: the count to buy and the estimated cost, shown as two badges beside the panel heading rather than as a footer row
-- **Member list**: Expandable table showing each member's name, rank, station, size, and whether they need the item, need a replacement, or are over their allowance
-
-![Impact planner results with its summary cards, size breakdown and cost estimate](./images/05-59-impact-planner-results.png)
-
-### Taking Action from the Analysis
-
-After analyzing, you can take four actions directly from the results:
-
-Three of the four appear only when the analysis produces something for them to
-act on, so a results page will not always show all four.
-
-#### Create Reorder Requests
-
-**Create reorder requests** sits under the size breakdown, and appears only when
-you asked the analysis to subtract current stock _and_ it found a shortfall:
-
-- One `ReorderRequest` per size with shortfall > 0
-- Pre-fills vendor, urgency, unit cost, and a descriptive note
-- All requests land in PENDING status for approval
-- The cost estimate from the analysis carries onto each request
-
-There is **no confirmation step**. The button files the requests, then replaces
-itself with "Created N reorder requests" and a **Review reorders** link. The
-preview is the panel above it — each size with what is needed, what is on hand,
-what to buy, and the cost of buying it.
-
-![The size breakdown with each size's shortfall and cost, and the Create reorder requests button beneath it](./images/05-65-reorder-shortfall.png)
-
-#### Issue On-Hand Stock
-
-**Issue on-hand stock** appears only when at least one needed size actually has
-stock on hand — there is no point offering it against an empty shelf:
-
-- Issues one unit per member from matching pool stock
-- Matches by member's size preference
-- Skips members without a size, with no matching stock, or over their allowance
-- This one _does_ confirm first, warning that members with no size on file or no
-  matching stock will be skipped
-- Afterwards the button is replaced by "Issued to N members, M skipped", with
-  the first five skip reasons listed and a count of any beyond that
-
-#### Request Sizes from Members
-
-**Request sizes** appears in a banner above the results, and only when somebody
-in the analysis has no size on file:
-
-- Sends in-app notifications directing them to `/inventory/my-equipment`
-- After members add their sizes, re-run the analysis to see updated results
-- The banner then reads "Requested from N", so you can see it has been done
-
-#### Export the Summary
-
-**CSV** and **PDF**, at the head of the Impacted Members table, export the
-analysis:
-
-- The PDF includes org name, analysis date, all filter parameters, and the size
-  breakdown table
-- Contact columns (email, phone) included only if org visibility settings allow
-- Suitable for budget approval meetings or procurement documentation
-
-### Saving Plans for Reuse
-
-To save your filter configuration for future use:
-
-1. Run an analysis with your desired filters
-2. Click **Save Plan**
-3. Enter a name (e.g., "Annual Uniform Refresh") and optional description
-4. The plan appears in the **Saved Plans** dropdown on subsequent visits
-5. Load a saved plan to re-run the same analysis without re-entering filters
-6. Plans can be updated or deleted from the same dropdown
-
-Use cases: Annual uniform refresh, seasonal PPE cycle, new recruit onboarding kits, station-specific distributions.
-
-### Replacement-Aware Analysis
-
-Select a related category under **Already has item in category**, then tick
-**Count worn or expired items as needing replacement**. With that on:
-
-1. The system checks each member's held items in that category
-2. Items are assessed for serviceability (condition, NFPA retirement dates)
-3. Members with only worn-out or expired items are flagged "Needs replacement"
-4. The purchase count includes both members with no item AND those needing replacement
-5. The Existing column carries one of **three** badges, not two:
-
-| Badge          | Colour | Meaning                                                       |
-| -------------- | ------ | ------------------------------------------------------------- |
-| **Has item**   | Green  | Holds at least one serviceable item in the category           |
-| **Replace**    | Amber  | Holds items in the category, but every one is worn or expired |
-| **Needs item** | Purple | Holds nothing in the category                                 |
-
-Hovering **Has item** or **Replace** lists the items in question, and a
-**"N to replace"** chip appears beside the Impacted Members heading. Note that
-members needing a replacement count toward **Need the item** in the summary
-cards, not toward **Already have one** — they are people you must buy for.
-
-> **Corrected 2026-08-12.** This section previously described two badges and
-> called "Needs item" red; there are three and it is purple. The control is also
-> named "Count worn or expired items as needing replacement", not "Include
-> replacements", and it only appears once a category is chosen.
-
-![The Impact Planner's Impacted Members table with replacement-aware analysis on — each member badged Has item, Replace or Needs item against the chosen category](./images/05-71-impact-planner-replacement.png)
-
-### Allowance-Aware Warnings
-
-When you enable **Check allowances**:
-
-1. The system queries issuance allowance rules for the selected category
-2. Members at or over their allowance limit are flagged with an "Over allowance" badge
-3. Bulk-issue skips these members automatically
-4. The summary cards show a count of members over their allowance
-
-### Edge Cases
-
-| Scenario                                | Behavior                                                            |
-| --------------------------------------- | ------------------------------------------------------------------- |
-| Member with no size preference          | Bucketed as "Unknown"; skipped by bulk-issue and reorder generation |
-| Stock exhausted during bulk-issue       | Issues what's available; remaining skipped with "No matching stock" |
-| All shortfalls are zero                 | Reorder generates nothing; `created_count: 0`                       |
-| Contact visibility set to "hidden"      | Email/phone columns omitted from PDF                                |
-| Different cost per size variant         | Average unit cost used for estimation                               |
-| Replacement check without NFPA tracking | Falls back to item condition assessment                             |
-| Concurrent users running bulk-issue     | Per-size quantity tracking prevents double-issue                    |
+## If You Learned an Older Version
+
+If you are following older notes, an older recording or an SOP, these things
+have moved, been renamed or work differently.
+
+### Renamed or moved
+
+- **The area is called Inventory.** Older screens and notes said "Gear &
+  Uniforms", "Gear Admin" or "Gear & Uniforms Administration". The hub is
+  **Inventory Administration**. Gear screens keep the quartermaster's words: My
+  Issued Gear, Gear Requests, Gear Kits. No link or bookmark broke.
+- **The hub's cards are grouped differently.** The old three headline cards
+  (Items, Members, Checkouts) and the groups "Inventory Management", "Requests &
+  Workflows" and "Tools" are gone. The hub opens on three supply lines, then
+  Catalog, Issuance & Members, Requests & Approvals, Readiness & Compliance,
+  Department Store, and Setup & Tools. There is no "Import / Export" card: the
+  card is **Import**, and **Export** is a button on the item list. There is no
+  Label Printing card; print from the item list.
+- **The Department Store console is inside Inventory Administration.** Old
+  bookmarks to the store's admin page are forwarded there.
+- **Equipment checklists are part of Inventory**, not Shift Scheduling. Old
+  scheduling equipment-check addresses open the dashboard instead. See
+  [Shifts & Scheduling → Equipment Checks](./03-scheduling.md#equipment-checks).
+- **Checklist settings moved** from Scheduling settings to **Equipment
+  Checklists → Checklist settings**. The values carried over.
+- **Checklist permissions were renamed** from "equipment check" to inventory
+  check permissions. Every position kept exactly the authority it had.
+- **"Batch Checkout" is Item Distribution**, and "Checkouts" is **Temporary
+  Loans**. A few screens still say **Active Checkouts**.
+- **My Issued Gear is one list.** "Permanent Assignments" and "Issued Items"
+  are now one **Issued to Me** section, and the tiles read **Issued to me**,
+  **Temporary loans** and **Pending requests**. The dashboard widget uses the
+  same words.
+- **Gear request statuses** read **Awaiting review**, **Approved**,
+  **Declined** and **Issued** (they were Pending, Approved, Denied and
+  Fulfilled). The review button is **Decline**, not "Deny".
+- **The members page** is headed **Member Equipment**.
+- **The browser-print button on shared label pages** reads **Print in
+  browser**, and the test button reads **Download test label**.
+
+### Works differently
+
+- **Members do not browse the item list.** It needs the permission to manage
+  gear. Members see their own gear and ask for more on **My Issued Gear**.
+- **A member's assigned gear is private.** Only the member and gear officers see
+  it on a profile. The dashboard's department-wide inventory tiles are shown
+  only to officers who manage gear or settings. If those tiles "disappeared"
+  for most members, that is why.
+- **Gear requests have no request-type or priority fields.** Members choose an
+  item, a size and how long they need it.
+- **Review notes reach the member**, and members are notified of the outcome.
+- **Write-offs are not requested from an item page.** They come from receiving
+  returned gear with **Write-off review**.
+- **Retiring a member does not start a departure clearance.** Only dropping a
+  member does.
+- **Generating sizes and styles** works on any new item, and re-running it adds
+  only missing sizes to the existing group. Styles are garment details (sleeve,
+  fit, neckline, closure), not "Regular, Long, Short".
+- **Kits do not pick sizes** from size preferences.
+- **Only an inspection moves an item's inspection dates.** Older versions also
+  moved them when any repair was completed. Gear whose inspection date already
+  slid keeps the date it holds, because The Logbook cannot tell a slipped date
+  from one entered on purpose. If your department completed repairs against
+  gear on an inspection interval, check the last inspection dates against your
+  paper records.
+- **Receiving a reorder adds the stock straight away.** If you used to
+  re-count after every delivery, you can stop.
+- **Property return reminders are sent.** The 30- and 90-day reminder emails to
+  dropped members were once never sent. The first daily run after an upgrade
+  sends one reminder to every dropped member still holding property past 30
+  days. Record any gear already handed back first.
+- **Items labelled before label tracking existed** all start as **Needs a
+  label**. See [Knowing which items still need a label](#knowing-which-items-still-need-a-label)
+  to catch the records up.
+- **Barcode numbers** are in order (`INV-000001` …). Items created before this
+  were given new numbers once, so labels printed before then may no longer
+  scan.
+- **Applicant labels printed before the change** carried a code that opened the
+  applicant's status page. Destroy any such labels.
+- **Items with a negative quantity or price**, imported by an older version, had
+  those values set to 0 on upgrade. Check their counts.
+- **The "Transfer is immediate" checkbox is gone.** Transfers always took effect
+  immediately.
 
 ---
 
 **Previous:** [Events & Meetings](./04-events-meetings.md) | **Next:** [Apparatus & Facilities](./06-apparatus-facilities.md)
-
-## August 12–14, 2026 update
-
-Inventory now calculates overdue state from the current return deadline,
-preserves return dates for temporary issues, corrects available stock by
-excluding issued/deployed quantities, and uses the documented barcode/asset-tag
-fallback for labels. CSV imports enforce byte-size and content limits, while
-live inventory connections reject WebSocket origins outside the configured
-allowlist.
-
-**Edge cases:** changing a temporary issue must not erase its deadline; an item
-can have on-hand stock without having available stock; identifier fallback must
-not silently relabel an asset; oversized UTF-8 CSV input can exceed the byte
-limit before it exceeds the row limit; and a valid login does not make an
-unapproved WebSocket origin valid.
-
-![An item on temporary issue past its return date: the history entry naming the borrower, the reason, the return deadline in the department's timezone, and that it is overdue and not yet returned](./images/05-82-item-overdue-loan.png)
-
-**Where those three numbers actually live.** There is no single ledger panel
-showing on-hand, issued and available side by side, so do not go looking for
-one — they are read from two places, and the arithmetic is worth walking
-through once with a class:
-
-| Number                    | Where                                                           | For the Class B Uniform Shirt |
-| ------------------------- | --------------------------------------------------------------- | ----------------------------- |
-| On hand                   | the **Qty** column on the items list, left of the slash         | 11                            |
-| Total the department owns | the same column, right of the slash                             | 12                            |
-| Issued / deployed         | the difference, and per member on **Gear & Uniforms → Members** | 1                             |
-
-**On hand and available are the same number here**, which is the part that
-catches people out: issuing a unit _decrements_ the on-hand count and a return
-adds it back, so what is on the shelf is exactly what can be issued next. The
-total is on-hand **plus** what is currently out — never the other way round.
-Subtracting the issued count from the displayed figure counts every issued unit
-twice.
-
-Lots carried on an apparatus are a separate view again — the **Stock Lots** tab
-pictured earlier in this lesson, which is the one to work a recall from.
-
----
-
-## Who Can See a Member's Assigned Gear _(2026-08-24)_
-
-**The Assigned Inventory table used to render on every member profile, for
-every viewer.** It was gated on "is the inventory module enabled" and nothing
-else. Which turnout coat, radio or SCBA mask somebody signed for, and what
-condition it is in, is quartermaster business — a member profile is a
-directory card.
-
-The section and its Quick Stats line now require **`inventory.manage`**, or
-that the profile is the viewer's own.
-
-> **`inventory.view` could not have been the gate.** It is part of the baseline
-> Member position — every member holds it so they can browse the catalog and
-> their own kit — so checking for it says only "this person is a member". The
-> per-member endpoints checked exactly that, which is why the server did not
-> stop the page.
-
-**The same mistake was live on the dashboard.** The organization dashboard's
-inventory tiles — department-wide item counts, low-stock lines, overdue
-checkouts — were gated on `inventory.view`, so **every member** saw them. They
-now require `inventory.manage` or `settings.manage`.
-
-If a quartermaster reports that inventory numbers "disappeared" from the
-dashboard for most of the department, that is this fix and it is working.
-
-## Swapping Stock During an Equipment Check _(2026-08-24)_
-
-A crew member submitting a check, without `inventory.manage`, could move **any**
-quantity from ready stock onto the truck, and dispose of lots that were never
-aboard it.
-
-A submitter's swap is now bounded by what it replaces: the lot being replaced
-has to actually be on the item, and the quantity is capped at the deployed
-quantity it replaces. Quartermasters holding `inventory.manage` are unaffected.
-
-## The Inventory Administration Page Has a New Top _(2026-08-23)_
-
-The Inventory administration page now opens with the shared frame: a header,
-four headline metrics, a **Needs attention** queue, then its existing tabs.
-Its built-in three metrics are **Items tracked**, **Issued to members** and
-**Out for repair**; the fourth slot is always the count the queue is about, so
-it cannot be configured away. Access is `inventory.manage` plus the Inventory
-module enabled. Choosing the metrics, and who may see the queue, are covered in
-[Administration & Reports → Administration Hubs](./08-admin-reports.md#administration-hubs).
-
----
-
-<!-- Screenshot needed:
-_[Quartermaster (inventory.manage) at /inventory/admin: the Needs attention queue with at least one "Pending return" row (member · item, Review action) and the Return Requests card carrying its count badge, with no "Some inventory services did not respond" banner. Needs a seeded return request in status "requested".]_
--->
-
-## Receiving, Returns and Condition _(2026-08-28)_
-
-### Stock you received could not be issued
-
-**Receiving stock through the reorder workflow created a purchase record and
-never updated the item's on-hand count.** Newly received units could not be
-checked out or issued to anybody, so the shelf and the paperwork disagreed with
-no indication why.
-
-Fixed. If you have been quietly re-counting after every delivery, stop.
-
-### Damaged gear can no longer be returned to service
-
-Completing maintenance work and recording the item's condition as **poor,
-damaged or out of service** no longer allows that item to be returned to
-service. It stays out until a later inspection records a safe condition.
-
-### Two quartermasters, one return request
-
-One person denying a member's return request while another physically received
-it could overwrite each other's decision — whichever wrote last won, silently.
-Reviewing a return request is serialized now, so only one outcome is ever
-recorded.
-
-### The review screen no longer carries a choice forward
-
-A safety follow-up selected on one reviewed request — "send to write-off
-review", say — was applying itself to the **next** request reviewed, even when
-that item was in perfectly good condition. Each review starts clean.
-
-### Receiving a pool return asks for the count _(2026-09-29)_
-
-When a member returns pool stock (gloves, T-shirts) through **Notify
-quartermaster of return**, the receive dialog's quantity box now starts
-**empty** and says "Count what came back. It must match the _n_ the member
-reported." It used to start at 1, which the server refused on every multi-unit
-return, and which invited a receipt nobody had counted. Conditions read as words
-("Out of service", not `out of_service`).
-
-**A charge needs an amount above $0** _(2026-09-29)_. On **Inventory Admin >
-Charges** (`/inventory/admin/charges`), **Apply Charge** now requires an amount
-greater than zero. A charge is final, and a blank or $0 entry used to be
-recorded as "charged $0.00" against the member.
-
-Two open items from the same review, both in `docs/KNOWN_LIMITATIONS.md`:
-
-- ~~**Receiving gear back another way leaves the member's return notice open**
-  (W39-5).~~ **Resolved 2026-10-11:** taking the gear back through **Return**
-  on the members page, a pool return, or a loan check-in now marks the
-  member's open notice for that holding **received**. It leaves the returns
-  queue, the hub's attention list and the member's **Pending requests**; find
-  it under **Status: Received another way** in the returns panel, with the note
-  "Received through a direct return, not through this notice; not inspected
-  here." The condition you recorded on the return itself is the record of what
-  came back — the notice does not claim an inspection. A pool return of fewer
-  units than the notice announced leaves the notice open. Receiving through the
-  notice is still the better path when there is one, because it records the
-  inspection and any safety follow-up against the member's report.
-  **Since 2026-10-12** a received notice can also be inspected afterwards:
-  press **Inspect** on its row, choose the **Observed condition**, a **Safety
-  follow-up** if the gear is poor, damaged or out of service, and any notes,
-  then **Record inspection**. The notice is completed with your inspection
-  added under the original "Received through …" note. Nothing is returned to
-  stock again — there is no barcode or count to enter — but a serialized item
-  you find unsafe while it is still on the shelf is moved to maintenance.
-- ~~**A write-off raised for one returned pool unit retires the whole item**
-  (W41-6).~~ **Resolved 2026-10-11:** receiving a damaged pool return no
-  longer offers **Write-off review** as a safety follow-up — only
-  **Maintenance**, **Charge review** or **Automatic**, and Automatic picks
-  Maintenance for an out-of-service pool return where it used to raise a
-  write-off. The units that came back damaged are already kept out of issuable
-  stock by the receipt itself; a write-off request names the whole item, so
-  approving one retired the shelf and ended every other member's issuance.
-  Individual items still offer Write-off review.
-
-### The "Transfer is immediate" checkbox is gone
-
-Custody transfers have always taken effect immediately. The checkbox implied a
-deferred option that did not exist. **Custody-transfer audit entries now also
-record who performed the transfer.**
-
-> **[SCREENSHOT — REPLACE the item detail, return-request review and transfer
-> captures.** The vocabulary changed and the transfer screen lost a
-> checkbox.**]**
-
-## Checklist Settings Moved Here _(2026-08-31)_
-
-Equipment checklists are Inventory's now, and so are the settings that govern
-them. Go to **Inventory Admin > Equipment Checklists > Checklist settings**
-(`/inventory/admin/checklists/settings`). It needs the department-settings
-permission (`settings.manage` or `organization.update_settings`), because the
-four values are stored in the department's settings and written through that
-endpoint — building a checklist (`inventory.check_manage`) does not open it.
-
-> **Corrected 2026-10-04.** This used to say the page needed the same
-> permission as editing a checklist. It does not; a checklist author without
-> the settings grant is refused.
-
-There are four, in two groups.
-
-### When crews are prompted
-
-| Setting                   | Default | What it does                                                     |
-| ------------------------- | ------- | ---------------------------------------------------------------- |
-| Start-of-shift checklists | On      | Members are prompted to run their checks when their shift begins |
-| End-of-shift checklists   | On      | Members are reminded to run their checks before their shift ends |
-
-Turning one off stops the prompt and its reminders. It deletes nothing —
-completed checks stay, and the checklists themselves remain available to anyone
-who opens them directly.
-
-### When members can check in
-
-| Setting                | Default  | Range | What it does                                |
-| ---------------------- | -------- | ----- | ------------------------------------------- |
-| Opens before the start | 2 hours  | 0–24  | How early a member may check in for a shift |
-| Closes after the end   | 12 hours | 0–72  | How late a member may still check in        |
-
-Outside this window the Check In button is switched off and says why. Widen it
-if your crews are held over on long call-backs. A shift that has been closed
-out is always shut regardless of this setting.
-
-Every control here saves on its own, straight away — the toggles when you click
-them, the two number boxes when you click away or press Enter. There is no Save
-button to forget. Clearing a number box and leaving it empty restores the
-saved value rather than storing zero, and a number past the range is folded back
-to the nearest allowed value instead of being rejected.
-
-**Where these used to be.** They were at Scheduling > Settings > Shift Reports >
-Checklist Timing. The values carried over automatically; nothing needs
-re-entering. Four _other_ settings that used to sit at Scheduling > Settings >
-Equipment — a signature requirement, a shift-start block, an expiration warning
-default and an "enable equipment checks" switch — were removed rather than
-moved, because none of them was ever wired to anything.
-
-## Equipment Checklists _(moved here 2026-08-31)_
-
-Equipment checklists used to live in Shift Scheduling. They are part of
-**Inventory** now: a checklist is a list of inventory items — a checklist
-position already pointed at an item in this catalog, and the lots aboard a truck
-are drawn from the same stock.
-
-| Screen              | URL                                         | Permission                                                           |
-| ------------------- | ------------------------------------------- | -------------------------------------------------------------------- |
-| Fleet Readiness     | `/inventory/checklists`                     | `inventory.check_view`                                               |
-| My Checklists       | `/inventory/checklists/my`                  | `inventory.check_submit`                                             |
-| Check log           | `/inventory/checklists/log`                 | `inventory.check_view`                                               |
-| One apparatus       | `/inventory/checklists/apparatus/{id}`      | `inventory.check_view`                                               |
-| Apparatus Inventory | `/inventory/checklists/apparatus-inventory` | `inventory.check_submit`, `inventory.check_view` or `inventory.view` |
-| Checklist console   | `/inventory/admin/checklists`               | `inventory.check_manage`                                             |
-| Template builder    | `/inventory/admin/checklists/templates/…`   | `inventory.check_manage`                                             |
-| Check Reports       | `/inventory/admin/checklists/reports`       | `inventory.check_view`                                               |
-| Expiring supply     | `/inventory/admin/checklists/supply`        | `inventory.check_view`                                               |
-| Checklist settings  | `/inventory/admin/checklists/settings`      | `settings.manage` or `organization.update_settings`                  |
-
-**The old `/scheduling/equipment*` addresses no longer resolve** and land on the
-dashboard. The full before/after table is in
-[Scheduling → Equipment Checks](./03-scheduling.md#equipment-checks),
-and the workflow itself is documented there and is unchanged.
-
-**Crews are unaffected at the point of use.** Check-in and the shift detail panel
-still offer **Start checklist**, and shift finalization still refuses to close on
-outstanding end-of-shift checks. What moved is authoring, reporting and the fleet
-views.
-
-### Checklist changes of 2026-10-03
-
-- **A failed item needs a note.** A **Fail** or **Out of service** the member
-  chose — not one a count, reading or expiry already explains — must carry a
-  note before **Submit**. Focus moves to the note field.
-- **Overall Notes no longer sticks to the bottom of the screen.** It covered
-  about a third of a phone for the whole check; only **Submit** is pinned now.
-- **My Checklists shows one confirmation.** Online it used to toast twice;
-  offline it contradicted the form's _"saved offline"_. **Fleet Readiness** now
-  counts a check as filed by the same rule My Checklists uses, so the two agree.
-  The empty state no longer implies a member is off the schedule.
-- **Template builder.** The apparatus-type list now follows the vehicle types the
-  application actually has (quint, squad, command and others are added; tower and
-  chief, which no vehicle can carry, are gone), plus your custom types and any
-  value already saved. The readiness panel names the vehicles a checklist
-  reaches and **warns when it reaches none**.
-- **Editing a live checklist unpublishes it.** A banner now says crews have lost
-  it, with a **Publish now** action, and leaving the builder asks first.
-- **Check Log failure total** was inflated by a join across every item row (one
-  failed flashlight read as "4 total failures"); it now counts its own rows.
-
-> **Screenshots:** the template builder (readiness panel, unpublished banner) and
-> the failed-item note prompt need new shots — see
-> [`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md).
-
-### Permissions were renamed
-
-`equipment_check.view` / `.manage` / `.submit` became `inventory.check_view` /
-`.check_manage` / `.check_submit`. A migration renames the stored grants, so
-every position keeps exactly the authority it had.
-
-> **⚠️ Check any custom position holding `inventory.*`.** A module wildcard
-> covers everything in its module, so such a position now also grants all three
-> checklist permissions — it can author and submit equipment checklists. **No
-> seeded position or rank grants `inventory.*`**, so this only reaches positions
-> your department built for itself, typically a quartermaster. The behaviour is
-> deliberate; if it is wider than you intend, replace the wildcard with the
-> specific `inventory.` grants you want.
-
-### Catalog Links: link every unlinked checklist line at once _(2026-10-12)_
-
-**Where:** Equipment Checklists admin > **Catalog Links**
-(`/inventory/admin/checklists/catalog-links`). **Needs:** `inventory.check_manage`.
-
-The per-template match tool asks "which catalog item is 4x4 gauze?" once per rig.
-Catalog Links asks it once for the whole department: it lists every unlinked
-checklist line across active and draft templates, grouped by name, with catalog
-suggestions. Names with a plausible match come first; the rest (usually tasks)
-come last.
-
-1. Exact matches are ticked for you; **likely** ones wait for you to confirm.
-2. For any name, search the gear and medical catalog and pick the item.
-3. Press **Link N positions**. The links land on every position carrying that line, all or nothing, with
-   a change-log entry on each affected template.
-
-If someone linked a line themselves after the page loaded, your choice does not
-overwrite theirs. The page lists those lines (line, template, compartment, current
-item and the item you chose) with a link into each template, and keeps the list
-across the reload until you dismiss it.
-
-_[Screenshot needed: Catalog Links with a mix of ticked exact matches and unticked likely ones; and the "had been linked by someone else" list after an apply.]_
-
-### Checklists now require the Inventory module
-
-A department that had Inventory switched off but uses equipment checks has it
-switched back on automatically on upgrade — otherwise it would lose the
-crew-facing half that still lives on the shift screen. If Inventory is later
-switched off deliberately, the checklist entries disappear rather than erroring.
-
-### Checklist settings live here now
-
-**Inventory Admin > Equipment Checklists > Checklist settings** holds the four
-that decide when crews are prompted — start-of-shift and end-of-shift
-checklists, and how early or late a member may still check in. They were edited
-from the shift module's settings; the values carried over automatically, so
-nothing needs re-entering.
-
-> **Four settings were removed because they did nothing.** "Enable equipment
-> checks for shifts", "Require signature on completion", "Block shift start when
-> required items fail" and "Default expiration warning (days)" were stored,
-> reported as saved, and read by no code anywhere. There is no signature field
-> on the check form to require, the warning default was hardcoded at 30 days,
-> and a failed required item never blocked a shift start. Switching them made no
-> difference before and makes none now — the app just no longer claims
-> otherwise.
-
-### A checklist position can create the item it links to
-
-A checklist position's **Linked Inventory Item** field previously only searched,
-and nothing seeds the catalog — so on a new department the field always answered
-"No matching items." and offered nothing further, on the one control whose whole
-purpose is making that link.
-
-Typing a name with no match now offers to **add it to the catalog and link it in
-one step**, for anyone who can manage inventory.
-
-The new catalog entry carries the name and nothing else. One catalog item is
-stocked in many places — gauze in a jump bag, a cabinet and two rigs — each
-counted on its own, so the position's required quantity and minimum stay with
-that position and never become a department-wide reorder point.
-
-### The Quartermaster builds checklists now _(2026-09-30)_
-
-`inventory.check_manage` is seeded on the Quartermaster, so the person who
-manages the stock a checklist is made of can author it. Existing departments get
-it through migration `f73b449bdb8b` (see
-[the hub section](#cards-no-longer-promise-pages-you-cannot-open)). It does not
-include **Check Reports** or the fleet board, which stay with
-`inventory.check_view`.
-
-### Medical supplies and cloning in the builder _(2026-10-11)_
-
-- **Item search covers gear and medical supplies together**, medical first with a
-  badge, each half only when you may read it and the module is on. A rig's gauze
-  can now link to the Medical Supplies catalog instead of staying free text.
-- **Create in Medical Supplies** (in both builder pickers, with a category
-  dropdown) is offered to holders of `inventory.manage_medical` or
-  `inventory.manage`. It refuses when the name is already filed as gear, and no
-  create is offered when part of the catalog search failed.
-- After pasting a list into a saved location, the builder offers **Match to
-  catalog**.
-- **Clone checklist now works.** The list's Clone button and the builder's
-  Tools → Clone checklist ask **which apparatus to copy onto** (full Apparatus
-  records only). The copy is named "<apparatus> - <template>" and starts switched
-  off, which the dialog says.
-
-> **Screenshot needed:** a builder item picker showing a medical result with its
-> badge and **Create in Medical Supplies**; the clone dialog.
-
-### What changed in the builder _(2026-09-30 – 2026-10-04)_
-
-- **Editing a live checklist takes it off every shift, and the builder now says
-  so.** Saving changes unpublishes a checklist; a banner reads "**Crews can't
-  see this checklist right now.** Editing it took it off every shift it was on.
-  Publish it to put it back." with **Publish now**. Leaving with it unpublished
-  asks first — **Leave this checklist unpublished?**, with **Stay here** and
-  **Leave unpublished**. Before this, the checklist silently vanished from
-  crews' shifts until somebody noticed.
-- **It says which vehicles a checklist reaches** — "Used on …" — and warns when
-  it reaches none: "Not tied to a vehicle — crews will only see it on shifts
-  whose shift template names it." with **Choose a vehicle**. Publishing such a
-  checklist reads **Ready to publish · not tied to a vehicle**.
-- **The vehicle-type list is the real one.** It follows the apparatus types the
-  Apparatus module defines (quint, squad, command and others were missing) plus
-  your fleet's own custom types and any value already saved; "tower" and
-  "chief", which no vehicle could carry, are gone.
-- **Specific Apparatus offers only Apparatus-module units.** A checklist's unit
-  is stored against the Apparatus module's fleet, so a unit from the setup
-  wizard's basic apparatus list could not be saved (it failed as "Invalid
-  apparatus"); a department on basic apparatus assigns checklists **by type**,
-  which works. Pinning to one basic unit is an open item in
-  `docs/KNOWN_LIMITATIONS.md` (W46-20).
-- **Seat names are words** — the position filter on an item offers
-  "Driver/Operator", "Paramedic" and the rest, where it printed raw seat tokens
-  and left Paramedic out.
-
-### What changed for the crew doing the check _(2026-09-30 – 2026-10-04)_
-
-- **A failed item needs a note.** A **Fail** or **Out of service** the member
-  chose — not one a count, reading or expiry date already explains — must say
-  what is wrong before **Submit**: the note button reads **Note required**, the
-  box asks "What's wrong with it? (required)", and submitting without it says
-  "Add a note to each failed item saying what's wrong." and moves focus to the
-  note. (This closes W46-13.) Since 2026-10-12 the server applies the same
-  rule, so a check sent by any other route — an older offline copy, a script —
-  is refused with the same items named rather than filed without a reason.
-- **Only Submit is pinned** at the bottom of the screen. **Overall Notes** was
-  pinned with it and covered about a third of a phone screen for the whole check.
-- **Pass and Fail are grouped under the item's name** and announce which is
-  chosen, so the answer is not conveyed by colour alone; the count box is named
-  ("SCBA quantity found").
-- **A check already filed says so.** **My Checklists** shows **Submitted for
-  this shift** instead of **Open checklist**, which used to walk the crew
-  through every item to a refusal at Submit. One "Equipment check submitted"
-  message appears, not two — and offline, the form's "saved offline" is no
-  longer contradicted. With nothing due it reads "Nothing to check right now.
-  When one of your shifts has an equipment checklist, it will show up here. If
-  you expected one, ask your shift officer."
-- **A member's own check log links back to My checklists**, not to the fleet
-  board, which refuses them.
-
-### What changed in the fleet views and reports _(2026-09-30 – 2026-10-04)_
-
-- **Fleet Readiness agrees with My Checklists** on whether a check is done; it
-  used to count a filed check as "waiting" by date alone.
-- **A rig a published checklist applies to no longer reads "No check
-  templates configured"**; a rig with nothing filed yet shows **No checks yet**.
-- **A check that took an item out of service counts** as both expected and
-  completed in the log and the fleet rate; it used to count as neither.
-- **The checklist console carries Fleet readiness and Check log links**, as its
-  hub card promised.
-- **The failure log's total is right.** It counted every item row on the server
-  against the matching failures — one failed flashlight read as "4 total
-  failures".
-
-**A new checklist is owed from when it was created** _(2026-10-11)_. The
-fleet board, the check log and Check Reports used to count a brand-new
-checklist against every shift in their window, so one written at 9:54 PM made
-the day before a missed check and put the rig in **Needs attention** minutes
-later. Now a shift that was already over when the checklist was created owes
-nothing; a shift still under way at that moment does, because the crew can
-still do it. A shift with no recorded end time owes it from the checklist's
-creation day on your department's calendar. Changing an existing checklist's
-apparatus or type does not restart the clock — it counts from creation.
-
-**Check Reports counts what was expected** _(2026-10-11)_. Each unit under
-**Apparatus Compliance** reads "_n_ of _m_ expected" and, when any were
-skipped, **Missed: _n_**; the **Missed checks** tile totals them, and the CSV
-and PDF carry both columns. An expected check is one per shift per checklist
-that applies to the unit — the same count the fleet board and check log use —
-so the three screens agree. A day the rig was out of service, or a check not yet
-due, is not expected. These used to read zero.
-
-**Per-truck reports work on basic apparatus** _(2026-10-11)_. A department
-that set its units up in onboarding rather than the Apparatus module now sees
-each unit under **Apparatus Compliance** on Check Reports, and the failure log
-(and its CSV and PDF) names the unit, because the report reads the unit from
-the check's shift. Checks filed before this change are reported the same way;
-nothing had to be re-entered.
-
-**A check filed ahead of its shift shows at once** _(2026-10-11)_. A crew that
-checks the rig the evening before a morning shift now sees that check on the
-fleet board and in the check log straight away — a failed item puts the rig in
-**Needs attention** that evening, not when the date turns. The board shows it as
-a column after today. Only a shift with a check already filed is pulled forward,
-up to a week ahead; an upcoming shift nobody has checked yet is not shown as
-due.
-
-## Requesting gear: the form browses now _(2026-09-05)_
-
-The request form was a search box over an empty state, so a member who did not
-know what the department calls a thing had nowhere to start.
-
-- **It loads the department's gear when it opens**, with the real category names
-  as filters. Search matches category and product-group names as well as the
-  item's own — typing "shirt" now finds a garment the catalog files as "Long
-  Sleeve", which previously returned nothing.
-- **One row per product, not one per stocked size.** A shirt kept in seven sizes
-  and two colours was fourteen near-identical lines; it is one line now, with
-  sizes as their own step after the product is chosen. Serialized gear collapses
-  the same way — ten radios read as "Portable Radio — 7 on hand" rather than ten
-  indistinguishable rows.
-- **The size step starts from the sizes on file** for that member, matched
-  through the same alias table the impact planner uses — so "Large" on their
-  record selects the row you stored as "L". Any other size the department stocks
-  is one tap away.
-- **The member's fit preference preselects the variant** too — Women's or Long
-  Sleeve, say — alongside their boot width.
-
-![Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask](./images/05-86-gear-request-products.png)
-
-![The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable](./images/05-87-gear-request-size.png)
-
-**[SCREENSHOT — REPLACE `05-87-gear-request-size.png`.** The "Your size on file" line now ends "(from your profile).", and a size the department never carries reads **not stocked** rather than **none on hand**. Re-shoot the size step with **XXL** (stocked, none on hand) selected so the new notice box is in frame: "None in XXL on hand right now. — You can still submit the request. The quartermaster will decide whether to reorder, offer a substitute, or decline."**]**
-
-### "Not stocked" and "none on hand" are different now _(2026-09-28)_
-
-Both used to read "none on hand", which told a member whose size the
-department never carries that it had merely run out. The size buttons now say
-**not stocked** for a size the department does not carry and **none on hand**
-for a stocked size at zero, and choosing one shows a notice that says the
-request is still accepted and the quartermaster decides:
-
-| Situation                       | Notice                                                                                                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Size not stocked                | "The department doesn't stock this item in _size_." — the quartermaster "will review it and decide whether to order it, offer a different size, or decline" |
-| Stocked size, none on hand      | "None in _size_ on hand right now." — the quartermaster "will decide whether to reorder, offer a substitute, or decline"                                    |
-| Pool item, more asked than held | "Only _n_ on hand in _size_." — "The quartermaster will decide how many to issue and whether to order the rest"                                             |
-
-The old note promised the quartermaster "will order or substitute", which
-committed the department to something it may decline. The member's size on file
-is labelled as coming "from your profile", the **Reason** placeholder asks why
-("worn out, doesn't fit, new member") because it helps the quartermaster decide,
-and submitting says "Request sent to the quartermaster for review".
-
-### A member can ask for something you do not stock
-
-The form was pinned to items marked available, so the one need a quartermaster
-has no other way to learn about — a size, or an item the department does not
-hold at all — could not be recorded.
-
-Out-of-stock sizes stay selectable and are labelled as such, a member's own size
-is offered even when nothing is stocked in it, and a free-text line covers gear
-that is not in the catalog. **The request carries the size asked for as its own
-field**, so a request with no matching catalog row still tells you exactly what
-was wanted; the review screen says so explicitly.
-
-### Two fulfilment fixes
-
-- **"Nothing on hand is size L" now means it.** The warning was suppressed by
-  any item in the requested size, so a rack of size-L trousers silenced the
-  notice on a request for a size-L shirt — and the prompt to order the shirt was
-  lost. It is scoped to the product the member actually asked for.
-- **The fulfil picker no longer answers from one page of the catalog.** It judged
-  availability from the first 500 rows it had loaded, so on a larger catalog
-  "nothing on hand is that size" could mean "not on this page". The eligible
-  rows, their issuable counts and the size verdicts are decided by the server
-  now; when the list is capped for display it says so rather than reading as the
-  whole shelf.
-
-**Rank- and position-restricted gear is filtered by the server**, not by the
-browser after the fact. The old form listed restricted items, disclosed their
-existence to everyone, and let the member submit a request the API then refused.
-
-## My Issued Gear is one list _(2026-09-05)_
-
-"Permanent Assignments" and "Issued Items" are now one **Issued to Me** section,
-sorted by when the gear was received. The four quick-stat tiles collapse to
-three.
-
-The split was the stockroom's, not the member's: an assignment is one serialized
-unit out of `item_assignments`, an issuance is several units drawn from bulk
-stock in `item_issuances`, and a member holds both open-endedly with nothing to
-do differently about either. Each row still shows what its record type actually
-carries — serial, asset tag and condition for an assignment; quantity and size
-for an issuance.
-
-**Active Temporary Loans stays its own section**, because a due date is the one
-distinction a member has to act on, and folding it in would have buried the
-overdue badge.
-
-**Nothing changed on the wire.** The two record types remain separate tables with
-separate return endpoints, and "Notify quartermaster of return" still posts
-against the right reference id for each row type.
-
-The dashboard's gear widget now agrees with this page — **7 on the dashboard
-rail and 4 on the page, for one locker**, was the symptom, because the widget
-counted a pool issuance once per _unit_ while the page counted it once per
-_row_. The widget's labels match the page too: "Assigned items" → **Issued to
-me**, "Checked out" → **Temporary loans**.
-
-The quartermaster's member view (`/inventory/admin/members`) is untouched.
-
-### What the page now tells a member _(2026-09-28 – 2026-09-30)_
-
-- **It says what it is for**: "The department equipment you are responsible
-  for, and your requests for more."
-- **The third tile is Pending requests**, and it counts everything still
-  waiting on the quartermaster — gear requests not yet decided **and** return
-  notices for gear not yet received. It used to count gear requests only, so a
-  member who had pressed **Notify quartermaster of return** saw nothing pending.
-- **Empty sections explain themselves.** "Nothing has been issued to you yet."
-  is followed by how gear arrives and a link to the Learning Center's **Your
-  Issued Gear** walkthrough (`/learning/gear`); the temporary-loans section
-  says what a temporary loan is.
-- **My Requests shows the quartermaster's note** under each gear request
-  ("Quartermaster: …"), with the status in the same words the quartermaster
-  sees — Awaiting review, Approved, Declined, Issued.
-- **Notify quartermaster of return** says what happens next: "This tells the
-  quartermaster you are bringing it back. Hand the item in as usual; it stays on
-  your list until they confirm they have it."
-- **An extended temporary loan is due at the end of the day you chose**, in the
-  department's timezone — not at UTC midnight, which in the Americas fell on the
-  evening before.
-
-<!-- Screenshot needed:
-_[Member with no gear, loans or requests at /inventory/my-equipment: the header with its subtitle, the three tiles at 0 (Issued to me, Temporary loans, Pending requests), the empty Issued to Me text with the Learning Center link, and the Active Temporary Loans explanation.]_
--->
-
-## Editing an item's size _(2026-09-06)_
-
-The Edit Item dialog's Size field was a free-text box over the legacy `size`
-column, which holds a code — so a quartermaster editing a variant-generated
-shirt read `l` where every other screen says `L`.
-
-It is now a **picker over the whole standard-size vocabulary** (garment,
-boot/glove and waist), labelled the way the rest of the module labels sizes. A
-boot width or a chest measurement still goes in through a **Custom** option.
-
-> **Two columns hold a size** — the structured `standard_size` and the legacy
-> free-text `size` — and the form used to write only the second, so the detail
-> card, the variant capsules and the variant stock matrix kept reporting the
-> pre-edit size after a change. One control now writes both.
-
-The item detail card and the variant capsules also render `one_size` and `xxxl`
-as **One Size** and **3XL**, rather than upper-casing the stored code into
-ONE_SIZE and XXXL.
-
-## The hub is Inventory Administration _(2026-09-03)_
-
-The area had four different names depending on where you were standing — "Gear &
-Uniforms Administration" on the hub, "Gear Admin" in the navigation, "Gear &
-Uniforms" in the module registry, "Inventory" in the command palette. It is
-**Inventory** throughout now, administered from **Inventory Admin**.
-
-Screens that really are about gear keep the quartermaster's vocabulary: My
-Issued Gear, Gear Requests, Gear Kits.
-
-**Labels only — no route, permission key, module key or API value changed**, so
-no link, bookmark or integration breaks.
-
-The hub opens on the three supply lines a department staffs: **PPE & Turnout
-Gear** and **Uniforms** open the catalogue filtered to that item type, and **EMS
-Supplies** opens Medical Supplies, which the hub previously did not link to at
-all — despite gear, uniforms and EMS stock sharing one catalog partitioned by
-item type. Below them the cards are grouped by what the officer is doing:
-Catalog, Issuance & Members, Requests & Approvals, Readiness & Compliance,
-Department Store, Setup & Tools.
-
-**The Department Store console moved inside the hub**, at
-`/inventory/admin/store`; `/store/admin` redirects there for bookmarks. It also
-stopped being the one administration page outside the shared frame — it now
-renders the same header, metrics row and attention queue as Members, Training,
-Events and Inventory.
-
-### Cards no longer promise pages you cannot open
-
-Every card carries the gate of the route it targets, and a section with no
-visible cards is not rendered.
-
-> **`inventory.manage` implies neither `inventory.view_medical` nor
-> `inventory.check_*`.** Permission checking is exact match plus module
-> wildcard, which is why the seeded Quartermaster — who then held
-> `inventory.manage` and no check grant — was being shown Equipment Checklists
-> and Check Reports and refused by both.
->
-> **Since 2026-09-30 the Quartermaster builds the checklists.** The owner
-> decided the position that manages the stock a checklist is made of should
-> author it, so `inventory.check_manage` is seeded on the Quartermaster, and
-> migration `f73b449bdb8b` adds it to existing departments' system Quartermaster
-> rows that still hold `inventory.manage` and do not already cover checklist
-> management. **Authoring only:** reading results stays with
-> `inventory.check_view`, so a Quartermaster sees the **Equipment Checklists**
-> card but not **Check Reports**, unless you grant that too. A Quartermaster
-> position you have customised away from `inventory.manage` is left alone.
-
-The hub also admits **checklist officers and store managers**, whose consoles it
-links to. Previously it refused the very officers whose pages it advertised, and
-the checklist console had no navigation entry at all — the officer who held that
-grant and nothing else could reach their own console only by typing the address.
-
-A visit by one of those officers also used to report the page as broken: the hub
-asked for ten sets of inventory figures on every visit regardless of who was
-looking, and for anyone without the inventory grant every one was refused, so
-the page listed all ten as unavailable. The figures are now requested only for
-the people they describe, and a viewer no card is open to is told so rather than
-being shown a heading over blank space.
-
-### Three hub fixes _(2026-09-27 – 2026-10-02)_
-
-- **The hub no longer crashes on a garbled response.** Each of the ten figure
-  sets is now checked for the shape its card relies on. A reply that is not
-  what the server should send — a captive portal's sign-in page on station
-  Wi-Fi is the usual culprit — is counted as a failed source and named in the
-  existing "some services did not respond" banner, instead of taking the whole
-  page down to the error screen.
-- **Pending returns are counted again.** The attention list asked for return
-  notices in a status that does not exist, so open return notices never
-  appeared there.
-- **A freshly dropped member's departure clearance is listed.** A clearance
-  starts as _initiated_ and becomes _in progress_ only once something comes
-  back; the hub asked for _in progress_ alone, so new clearances were missing.
-  The row now names the member ("Jane Smith · 4 outstanding") rather than
-  printing their internal id.
-
-## The location panel and the list finally agree _(2026-09-06)_
-
-If you have ever tried to reconcile the location cards on `/inventory/admin/items`
-with the list beneath them and given up, this is why.
-
-**Five of the page's nine filters did nothing.** Location, size, colour, style
-and the vendor scope never made it into the code that decides when to reload, so
-picking one changed the request the page _would_ send and never sent it. The
-list stayed as it was until something unrelated triggered a reload — a websocket
-event, a bulk status change — at which point it applied a filter nobody had
-touched in a while.
-
-The location cards are links into that list, so they could not possibly agree
-with it.
-
-Three counting mismatches were fixed at the same time:
-
-- **The cards counted medical stock the list excludes.** EMS supplies have their
-  own page and their own permission, so the items list carves them out — but the
-  location summary counted every domain. A department running both saw a header
-  of "82 items" and an "Unassigned" card reading 52 units across 2 items, above
-  a list of 6 items totalling 30. **A location holding only medical stock now
-  gets no card at all**, rather than a card whose rows that page cannot show.
-- **The "Unassigned" card could not filter to the items it counted.** It sent
-  the empty value, which the page reads as _All Locations_ — so clicking it
-  cleared the filter it appeared to apply, and it looked selected whenever
-  nothing was. There is now a real "no location at all" filter behind it, with a
-  matching dropdown option.
-- **The header counted a different thing from the list.** It summed quantities
-  across every domain including medical, over a list that counts rows and
-  excludes it.
-
-## A request is fulfilled from the variant it named _(2026-09-06)_
-
-A follow-up to the request-form rebuild above, and a direct consequence of it.
-
-The request catalog collapses rows that share a product and a
-size/colour/style into one line and **adds up their availability** — that is
-what turns ten serialized radios into "Portable Radio — 7 available" instead of
-ten identical-looking rows.
-
-But the request stored one specific item row out of that line, and fulfilment
-narrowed to exactly that row. **So a member could ask for ten against a line
-advertising ten, and the quartermaster would open it to find one.**
-
-Fulfilment now resolves the request to the **variant** and offers all of its
-sibling rows, so what you can fulfil from matches the availability the member
-was shown when they asked. Rows outside that variant — a different size, colour,
-style or product — stay excluded, exactly as before.
-
-## Retiring is the only way to deactivate an item _(2026-09-06)_
-
-**A plain edit could take an item out of active inventory while a member still
-had it.**
-
-The **Retire** action has always had safeguards: it refuses to deactivate an
-item that is assigned, checked out, or — for pooled stock — has an unreturned
-issuance, and it keeps the item's other fields consistent with being retired.
-
-The ordinary edit form had none of them. Setting an item inactive, or setting
-its status and condition to retired, removed it from every active list and
-picker with no checks at all — and left it in a state where it could be handed
-out again straight afterwards.
-
-**Editing an item no longer offers either route.** If you need an item out of
-service, use **Retire**. It also now re-checks who holds the item at the moment
-you retire it, rather than when you opened the screen.
-
-Three related fixes:
-
-- **Medical-supplies managers can retire medical items again.** The retire
-  action used to live only on the general inventory permission, so closing the
-  gap above would have left a manager holding only the medical-supplies grant
-  with no way to retire anything. Medical supplies has its own retire action
-  now, under the permission that screen already uses.
-- **An item's detail page shows current stock for lot-tracked consumables.**
-  The list already worked this out from dated lots; the detail page did not, and
-  could show an older figure.
-- **Every category appears in the pickers.** A department with a long category
-  list could have categories past an internal cap silently missing from every
-  picker and filter.
-
-## Medical Supplies: the headline counts and the audit trail
-
-The **Below reorder point** tile at the top of **Medical Supplies**
-(`/medical-supplies`) covers every active medical item that has a reorder point
-set, however large the catalog. An item
-with no reorder point is never counted as low: the reorder point is the
-department's own floor for that item.
-
-Creating or **editing** a medical category or item, and retiring an item, are
-each recorded in the audit log, with who made the change.

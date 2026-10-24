@@ -18,6 +18,7 @@ import type {
   ApprovalChainCreatePayload,
   ApprovalChainStep,
   ApprovalChainStepCreatePayload,
+  ApprovalRoutePreview,
   ApprovalChainStepUpdatePayload,
   ApprovalChainUpdatePayload,
   ApprovalEntityType,
@@ -55,6 +56,7 @@ import type {
   DuesScheduleUpdatePayload,
   DuesSummary,
   ExpenseLineItem,
+  ExpenseLineItemUpdatePayload,
   ExpenseReport,
   FinanceDashboard,
   FiscalYear,
@@ -76,6 +78,8 @@ import type {
   PendingApproval,
   PurchaseRequest,
   MonetaryAmount,
+  ReimbursementCheckPayload,
+  ReimbursementReportPayload,
   StartFromLastYearResult,
   UnroutedApproval,
   FinanceSettings,
@@ -90,8 +94,10 @@ import type {
   ExportRunPayload,
   DuesDefaultAccountsPayload,
   DuesExportReadiness,
+  QuickBooksChart,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
+import { readDeleteOutcome, type DeleteOutcome } from '../../../utils/deleteOutcome';
 
 const api = createApiClient();
 
@@ -203,8 +209,10 @@ export const budgetCategoryService = {
     return response.data;
   },
 
-  async delete(id: string): Promise<void> {
-    await api.delete(`/finance/budget-categories/${id}`);
+  /** Deletes an unused category; one that lines, requests or approval chains use is deactivated instead. */
+  async delete(id: string): Promise<DeleteOutcome> {
+    const response = await api.delete(`/finance/budget-categories/${id}`);
+    return readDeleteOutcome(response);
   },
 
   /** The categories the caller may set a charge rule on (as owner or Treasurer). */
@@ -477,6 +485,22 @@ export const approvalChainService = {
   async getApproverCoverage(): Promise<ApproverCoverageRow[]> {
     const response = await api.get<ApproverCoverageRow[]>('/finance/approval-chains/approver-coverage');
     return asArray(response.data);
+  },
+
+  /** Who a request would wait on if submitted now, for the member raising it. */
+  async routePreview(params: {
+    entityType: ApprovalEntityType;
+    amount: MonetaryAmount;
+    budgetId?: string | undefined;
+  }): Promise<ApprovalRoutePreview> {
+    const response = await api.get<ApprovalRoutePreview>('/finance/approval-chains/route-preview', {
+      params: {
+        entity_type: params.entityType,
+        amount: params.amount,
+        budget_id: params.budgetId || undefined,
+      },
+    });
+    return response.data;
   },
 
   async preview(params: { entityType: string; amount: MonetaryAmount; categoryId?: string }): Promise<ApprovalChain> {
@@ -753,6 +777,12 @@ export const purchaseRequestService = {
   downloadReceipt(id: string): Promise<DownloadedFile> {
     return fetchFile(api, `/finance/purchase-requests/${id}/receipt`, 'receipt');
   },
+
+  /** Claim back an approved purchase the requester paid for: raises a draft expense report linked to it. */
+  async claimReimbursement(id: string, data: ReimbursementReportPayload): Promise<ExpenseReport> {
+    const response = await api.post<ExpenseReport>(`/finance/purchase-requests/${id}/reimbursement-report`, data);
+    return response.data;
+  },
 };
 
 // =============================================================================
@@ -785,6 +815,22 @@ export const expenseReportService = {
     return response.data;
   },
 
+  /** Edit a line on a draft report: omitted fields stay, null clears an optional one. */
+  async updateLineItem(id: string, itemId: string, data: ExpenseLineItemUpdatePayload): Promise<ExpenseLineItem> {
+    const response = await api.put<ExpenseLineItem>(`/finance/expense-reports/${id}/items/${itemId}`, data);
+    return response.data;
+  },
+
+  async deleteLineItem(id: string, itemId: string): Promise<void> {
+    await api.delete(`/finance/expense-reports/${id}/items/${itemId}`);
+  },
+
+  /** Withdraw a draft (the member) or cancel a report further along (the finance office). */
+  async cancel(id: string): Promise<ExpenseReport> {
+    const response = await api.post<ExpenseReport>(`/finance/expense-reports/${id}/cancel`);
+    return response.data;
+  },
+
   async uploadLineItemReceipt(reportId: string, itemId: string, file: File): Promise<ExpenseLineItem> {
     const response = await api.post<ExpenseLineItem>(
       `/finance/expense-reports/${reportId}/items/${itemId}/receipt`,
@@ -807,6 +853,12 @@ export const expenseReportService = {
     const response = await api.post<ExpenseReport>(`/finance/expense-reports/${id}/mark-paid`, undefined, {
       params: { payment_method: paymentMethod },
     });
+    return response.data;
+  },
+
+  /** Pay an approved report by check: raises the member's check request and submits it for approval. */
+  async payByCheck(id: string, data: ReimbursementCheckPayload): Promise<CheckRequest> {
+    const response = await api.post<CheckRequest>(`/finance/expense-reports/${id}/reimbursement-check`, data);
     return response.data;
   },
 };
@@ -875,6 +927,12 @@ export const checkRequestService = {
     const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/issue`, undefined, {
       params: { check_number: checkNumber },
     });
+    return response.data;
+  },
+
+  /** Withdraw a draft (the member) or cancel an unissued request (the finance office). */
+  async cancel(id: string): Promise<CheckRequest> {
+    const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/cancel`);
     return response.data;
   },
 
@@ -1006,6 +1064,36 @@ export const exportMappingService = {
   async setAdvanceAccounts(data: AdvanceAccountsPayload): Promise<AdvanceExportReadiness> {
     const response = await api.put<AdvanceExportReadiness>('/finance/export/advance-accounts', data);
     return response.data;
+  },
+
+  /** Record that an export's file was imported into QuickBooks. */
+  async confirmImported(logId: string): Promise<ExportLog> {
+    const response = await api.post<ExportLog>(`/finance/export/logs/${encodeURIComponent(logId)}/imported`);
+    return response.data;
+  },
+
+  /** Undo a confirmation made by mistake. */
+  async withdrawImported(logId: string): Promise<ExportLog> {
+    const response = await api.delete<ExportLog>(`/finance/export/logs/${encodeURIComponent(logId)}/imported`);
+    return response.data;
+  },
+
+  async chart(): Promise<QuickBooksChart> {
+    const response = await api.get<QuickBooksChart>('/finance/export/chart-of-accounts');
+    return response.data;
+  },
+
+  /** Replace the chart of accounts with QuickBooks' exported Account List report. */
+  async uploadChart(file: File): Promise<QuickBooksChart> {
+    const response = await api.post<QuickBooksChart>('/finance/export/chart-of-accounts', receiptForm(file), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /** Remove the uploaded chart, which stops the account name check. */
+  async clearChart(): Promise<void> {
+    await api.delete('/finance/export/chart-of-accounts');
   },
 
   /** Run the QuickBooks export for a period, as the file the server names. */

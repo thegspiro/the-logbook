@@ -1,6 +1,258 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), (this PR) (pass 11)
+
+---
+
+## Pass 11 (2026-10-23)
+
+**Watchdog pickup.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 open PRs and the dedicated `/loop 30m /security-review` session was
+not reachable (`ListAgents`). PR #3577 (Feature 09, Medical screening, pass 11)
+had already merged, docs-only — not independently recordable. Rotation row 10
+was the next `⬜`.
+
+**Baseline** `f3f0829d` (PR #3431's merge, pass 10). Delta by `git diff
+--numstat` against it, across the full declared scope plus backing services —
+only three files carry a real change; `station_documents.py`, `legal_documents.py`,
+`legal_service.py`, `models/legal.py`, `schemas/legal.py`, `models/document.py`,
+`schemas/documents.py` and `admin_only_folder_digest.py` are byte-identical to
+pass 10:
+
+| File                                   | +/−     | What changed                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `endpoints/documents.py`               | +4/−7   | `download_document`/`upload_document` moved from `os`/`asyncio.to_thread` + `stored_file_response` onto the shared async `file_storage_service` interface (the cross-cutting storage-backend abstraction, reviewed elsewhere per-feature; checked only at this feature's two call sites)                                                                                                   |
+| `services/documents_service.py`        | +94/−14 | New `_release_document_references`: a document delete now refuses (`ValueError` → 400) when it is the receipt on a non-draft purchase request or expense report, instead of silently `SET NULL`-ing the reference; still clears a minutes row's `published_document_id` unconditionally. Backing-file removal also moved onto `file_storage_service`                                       |
+| `services/document_service.py`         | +11/−9  | Minutes→document HTML rendering: motions now filtered through `recorded_motions()` (Minutes-owned; reviewed only for this library-facing render) and a new `acceptance_label` appended (escaped); an action item's `due_date` is now read as a stored calendar day (`stored_calendar_day`) rather than converted through the org timezone, for a due-by date that is a day, not an instant |
+| `frontend/src/pages/DocumentsPage.tsx` | +4/−4   | Delete-document failure now surfaces the backend's `detail` message (`getErrorDetail`) instead of a fixed string — this is what makes the new refusal above legible to the caller; one contrast-only amber shade bump                                                                                                                                                                      |
+
+No new/changed routes (still 24; `check_route_permissions.py --strict` — 273
+total, 0 errors, 0 warnings) and no new migration.
+
+### Reviewed in full
+
+- **File-storage-interface swap in `documents.py` (`download_document`,
+  `upload_document`).** `file_storage.exists`/`file_storage.file_response`/
+  `file_storage.delete_quietly` are called with the _same_ `resolved_path` the
+  pre-existing `file_storage.resolve(document.file_path, organization_id,
+StorageArea.DOCUMENTS)` confinement check already produced (DOC-24) — the
+  confinement check itself is untouched by this diff, so the path-traversal
+  guard still runs before any of the new calls. `file_response` is passed the
+  same `media_type`/`filename` arguments as the old `stored_file_response`
+  call. No behavior change; verified by reading `file_storage_service.py`'s
+  `exists`/`delete`/`delete_quietly`/`file_response` (lines 932–985), each a
+  thin `asyncio.to_thread` wrapper around the resolved backend, same as the
+  one-call-site version this replaces.
+- **`_release_document_references` (new).** Runs inside `delete_document` and
+  the folder-cascade `delete_folder`, in both cases on a `document_ids` set
+  already resolved against the caller's `organization_id` — the single-delete
+  path via `get_document_by_id(document_id, organization_id, for_update=True)`,
+  the cascade path via `_lock_subtree_documents(subtree_ids, organization_id)`
+  — so both of its own queries (`PurchaseRequest`/`ExpenseReport` lookups,
+  each additionally filtered on `organization_id` directly) are reachable only
+  for already-org-scoped ids (XC-3). It runs, and can raise, strictly before
+  `_delete_facility_document_references` and the row delete/commit — both
+  endpoints wrap the call in `handle_service_errors(...)` (`documents.py:404`,
+  `:823`), so the `ValueError` becomes a safe 400 via `safe_error_detail()`,
+  and nothing has been written when it raises. The `MeetingMinutes.
+published_document_id` clear is an unconditional `UPDATE ... WHERE
+organization_id == org_id`, also org-scoped.
+- **Minutes-rendering delta (`document_service.py`), library-facing part
+  only.** `recorded_motions()`/`acceptance_label()` are Feature 24's own
+  helpers; the output reaching this feature's published-document HTML is
+  still run through `escape()` before being appended (consistent with every
+  other field in this render — no new unescaped user text). `stored_calendar_day`
+  is a plain date read, not a security-relevant change.
+- **`getErrorDetail` usage (frontend).** Reads `response.data.detail`, which
+  for this call is exactly the `safe_error_detail()`-sanitized `ValueError`
+  message set above — not a new information-disclosure surface, since every
+  message `_release_document_references` raises is already written to name
+  only the request/report number (no PII, no path, no SQL).
+
+### DOC-31 — LOW — FLAGGED — `_release_document_references`'s refusal check is a read, not a locking read
+
+`_release_document_references` selects `PurchaseRequest`/`ExpenseReport` rows
+by status with a plain `SELECT`, not `.with_for_update()`. A purchase request
+sitting in `DRAFT` passes the check and the document delete proceeds; if
+another transaction concurrently submits that same request past `DRAFT`
+between this `SELECT` and the deleting transaction's commit, the request can
+still end up referencing a document that no longer exists — the exact silent
+loss this pass's fix exists to prevent, reached through a race instead of
+through the missing check. The window is narrow (one request/response's own
+transaction) and the outcome is never worse than the pre-pass-11 behavior
+(a `SET NULL`'d or dangling receipt reference), so this is not a regression,
+only an unclosed gap in the new guard.
+
+Not fixed here: a correct fix means locking `PurchaseRequest`/`ExpenseReport`
+rows for update inside a document-delete transaction, which introduces a new
+cross-feature lock-ordering question against Finance's own locking
+conventions (Pitfall #27) that this pass should not decide unilaterally.
+Mirrored to `KNOWN_LIMITATIONS.md`.
+
+**0 fixes applied this pass, 1 new finding flagged (DOC-31, LOW).** No standing
+OPEN finding carried from pass 10 (pass 10 closed with none).
+
+## Completion gate
+
+| Check                                                                                                 | Result                                                                                                  |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Code changes this pass                                                                                | none — review only; the reviewed delta had already landed from owner-direct work before this pass began |
+| `flake8 app/ tests/ alembic/` (pinned 7.3.0)                                                          | clean                                                                                                   |
+| `black --check app/ tests/ alembic/` (pinned 26.5.1)                                                  | clean, 2567 files unchanged                                                                             |
+| `isort --check-only app/ tests/ alembic/` (pinned 9.0.1)                                              | clean                                                                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                                     | 640 revisions, single head `cc8c16cb6d98`                                                               |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                     | 273 routes, 0 errors, 0 warnings                                                                        |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only"` | 642 passed, 1 pre-existing skip (`py_vapid`)                                                            |
+| `cd frontend && npm run typecheck`                                                                    | clean                                                                                                   |
+| `cd frontend && npm run lint`                                                                         | clean                                                                                                   |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/components/documents`                            | 51 passed (3 files)                                                                                     |
+
+## Next
+
+Feature 11 (Inventory).
+
+---
+
+## Pass 10 (2026-10-18)
+
+**Watchdog pickup.** No `claude/security-review-*` PR was open
+(`search_pull_requests`, `is:open head:claude/security-review`, 0 results) and
+the dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3427 (Feature 09, Medical screening, pass 10) had merged;
+not independently recordable (docs-only). Rotation row 10 was the next `⬜`.
+Separately, this watchdog's prior iteration found and fixed a 3-way forked
+Alembic chain blocking `alembic upgrade head` repo-wide, in its own
+standalone PR (#3426, merged) — unrelated to this feature, not repeated here.
+
+**Baseline** `f0599488a` (PR #3262's merge, pass 9). Delta by `git diff
+--numstat` against it, across the full declared scope plus backing services:
+
+| File                                                                                                    | +/−      | What changed                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoints/documents.py`                                                                                | +67/−0   | New `GET /folders/admin-only`, `POST /folders/{folder_id}/confirm-admin-only` (decision 30)                                                                                                              |
+| `models/document.py`                                                                                    | +12/−0   | `DocumentFolder.admin_only_confirmed_at`/`admin_only_confirmed_by`                                                                                                                                       |
+| `schemas/documents.py`                                                                                  | +5/−9    | Removed dead `DocumentCreate` (unused, app-review B8); `PublishedDocumentResponse.public_allowed`/`public_posted`                                                                                        |
+| `services/documents_service.py`                                                                         | +201/−32 | `admin_only_folders`, `confirm_admin_only`, `active_full_administrators`, `_members_besides_admins`, reworked `_someone_but_admins_opens`                                                                |
+| `services/document_service.py`                                                                          | +155/−16 | Executive-session minutes can now publish into a leadership-only folder; replacement-version note; attendance-listing filter (Minutes-owned, reviewed only for the documents-library surface it reaches) |
+| `services/print_document_service.py`                                                                    | +21/−4   | Checklist count/presence label formatting (Equipment/Inventory-owned; pure print-string change, no ACL surface)                                                                                          |
+| `services/admin_only_folder_digest.py`                                                                  | new      | Weekly digest email of admin-only folders to full administrators                                                                                                                                         |
+| `pages/DocumentsPage.tsx`                                                                               | +7/−0    | Mounts `AdminOnlyFoldersNotice` for full administrators                                                                                                                                                  |
+| migration `c903fc771081`                                                                                | new      | Adds the two nullable columns; table-existence-guarded, idempotent, reversible                                                                                                                           |
+| `station_documents.py`, `legal_documents.py`, `legal_service.py`, `models/legal.py`, `schemas/legal.py` | 0        | unchanged since pass 9                                                                                                                                                                                   |
+
+The `document_service.py` minutes-publishing delta and the
+`print_document_service.py` checklist-formatting delta belong to Feature 24
+(Meetings & minutes) and Feature 11/14 (Inventory/Equipment check)
+respectively; only the part that reaches the documents library (the new
+executive-minutes folder and the published-HTML change) is reviewed here, per
+this rotation's established practice for cross-cutting work landing in this
+feature's backing files.
+
+**Routes: 24, up from 22** (both additions are the decision-30 pair above;
+AST walk over all three endpoint files, not grepped). Both carry
+`Depends(require_permission("documents.manage"))` — not a baseline/rank
+grant, consistent with every other route in this feature.
+
+### New surface: decision 30 — reviewed in full
+
+**What it is.** A folder can come to admit no active member but a full
+administrator without anyone saving it — the last holder of its permission
+or position leaves, is archived, or changes rank. Decision 29 (pass 4) only
+catches this at save time; decision 30 adds a read-time check
+(`DocumentsService.admin_only_folders`), a way to confirm the folder is
+deliberately administrators-only (`confirm_admin_only`, dropped automatically
+once someone else can open the folder again), and a weekly digest email
+(`admin_only_folder_digest.py`) so an unattended change does not wait for an
+administrator to happen by.
+
+- **Tenant isolation intact.** `admin_only_folders` scopes its folder scan to
+  `DocumentFolder.organization_id == organization_id`; `confirm_admin_only`
+  resolves its target through `get_folder_by_id(folder_id, organization_id)`
+  (org-scoped) before acting — XC-3. `active_full_administrators` and
+  `_members_besides_admins` both filter on the same `organization_id`.
+- **Fails safe for non-administrators.** `admin_only_folders` returns `[]`
+  immediately when the viewer is not a full administrator
+  (`_is_full_admin(_get_user_permissions(viewer))`, the same `FULL_ADMIN_PERMISSION
+= "*"` check used everywhere else in this service) — a `documents.manage`
+  holder who is not a full administrator gets an empty list from the
+  backend regardless of what the frontend shows, and the frontend's own gate
+  (`checkPermission('*')`, `DocumentsPage.tsx`) matches the same predicate
+  rather than re-deriving it (pitfall #29).
+- **`confirm_admin_only` cannot mark a folder that isn't actually
+  shut.** It re-checks `_someone_but_admins_opens` itself and raises
+  `ValueError` if a non-administrator can in fact open the folder — the
+  confirmation can never be a claim nobody could verify.
+  `confirm_admin_only_folder` (the endpoint) additionally re-checks
+  `can_access_folder(..., require_write=True)` for the acting user before
+  calling the service, the same gate `update_folder` uses — confirming is
+  itself treated as a folder change.
+- **The digest is the same source as the page, not a re-derivation**
+  (pitfall #29 again): `send_admin_only_folder_digest` calls
+  `DocumentsService.admin_only_folders` directly; "any full administrator is
+  a valid viewer" holds because the function's output does not depend on
+  which specific admin is passed, only on `_is_full_admin` gating the whole
+  call. The digest is per-organization (`_for_each_org`, the established
+  shared scheduled-task helper), at most once every 7 days per org
+  (`_last_digest_day`/`_record_digest`, read from `organization.settings` via
+  `copy.deepcopy()` before mutating — pitfall #12 compliant), and recorded
+  only after at least one email actually sends, so a department whose mail
+  is failing is retried the next day rather than silently skipped for a week.
+  Recipients are filtered through `recipients_for(..., EmailKind.DOCUMENT_DUTIES,
+department_required_kinds(organization))` — the same shared opt-in/required
+  mechanism every other duty digest uses, correctly wired as a reader for a
+  new optional `EmailKind` (pitfall #19: the kind has a sender, not merely a
+  toggle).
+- **New migration correct.** `c903fc771081` adds
+  `admin_only_confirmed_at`/`admin_only_confirmed_by` to `document_folders`,
+  guards every step on the table/column/FK not already existing (pitfall
+  #26 — `document_folders` is a `create_all()`-only table on a fresh
+  database), `admin_only_confirmed_by` is `nullable=True` with
+  `ondelete="SET NULL"` (pitfall #2), and the downgrade drops both
+  columns and the FK.
+- **Executive-session minutes publishing (document_service.py, the part
+  reaching this feature).** `allow_executive` is never client-supplied — it
+  is derived server-side from `MinutesPublishingSettings.library_allowed(...)`
+  in `minutes_publishing_service.py` (Feature 24's own settings resolution),
+  not from request input. When allowed, `_executive_minutes_folder` files
+  the copy into a `FolderVisibility.LEADERSHIP` folder (an existing,
+  already-reviewed restricted tier — `documents.manage` holders only, not a
+  new access model) created under a locked `Organization` row (pitfall #27's
+  shape, preventing two concurrent first-publishes from creating duplicate
+  folders), and **refuses** to publish if that folder's visibility was since
+  widened away from `LEADERSHIP` — fails closed rather than filing
+  closed-session content where every member can read it.
+- **Test coverage matches the claims.** `test_folder_access_editor.py`
+  covers decision 29/30 together: a probationary holder still counts as
+  opening a folder (matching the documented `is_active` widening, not a
+  silent behavior change), a personal folder is left out, only the topmost
+  shut folder in a chain is listed, a confirmed folder is not re-listed, and
+  only a full administrator is shown the list at all.
+  `test_admin_only_folder_digest.py` (correctly `pytest.mark.integration`,
+  uses `db_session` — pitfall #30b) covers the weekly cadence, opt-out,
+  archived-administrator exclusion, a kept folder not being emailed, a
+  failed send being retried the next day, and the scheduled task running
+  per department.
+
+**0 new findings, 0 fixes needed.** No standing OPEN finding carried from
+pass 9 (pass 9 closed with none).
+
+## Completion gate
+
+| Check                                                                                                 | Result                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Code changes this pass                                                                                | none — review only; decision 30 and the executive-minutes publishing path were already landed by owner-direct work before this pass began |
+| `flake8 app/ tests/ alembic/`                                                                         | clean                                                                                                                                     |
+| `black --check app/ tests/ alembic/`                                                                  | clean                                                                                                                                     |
+| `isort --check-only app/ tests/ alembic/`                                                             | clean                                                                                                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                     | 1 head (after this watchdog's separate Alembic-fork fix, PR #3426)                                                                        |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                     | 0 errors, 0 warnings                                                                                                                      |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only"` | 628 passed, 1 skipped (pre-existing, `pywebpush`)                                                                                         |
+| `npm run typecheck` / `npm run lint` (frontend)                                                       | clean (both)                                                                                                                              |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/components/documents`                            | 51 passed (3 files)                                                                                                                       |
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 

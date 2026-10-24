@@ -27,9 +27,19 @@ revoked). Keep new endpoints on the correct side of this line.
 """
 
 from datetime import date
+from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -37,12 +47,14 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.api.v1.endpoints.documents import DOCUMENT_FILE_RULES
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.document import (
     FACILITY_DOCUMENTS_SUB_FOLDER,
     FACILITY_PHOTOS_SUB_FOLDER,
+    Document,
 )
 from app.models.user import User
 from app.schemas.documents import FoldersListResponse
@@ -124,8 +136,11 @@ from app.schemas.facilities import (  # Facility Type; Facility Status; Main Fac
     ShutoffTypeEnum,
     UtilityTypeEnum,
 )
+from app.services import module_documents
 from app.services.documents_service import DocumentsService
 from app.services.facilities_service import FacilitiesService
+from app.services.location_service import LocationInUseError
+from app.services.module_documents import IMAGE_FILE_RULES
 
 router = APIRouter()
 
@@ -293,6 +308,58 @@ async def _validate_shared_document_reference(
         # both this folder assignment and the reference insert are pending
         # in the same transaction.
         await db.flush()
+
+
+async def _store_facility_file(
+    db: AsyncSession,
+    current_user: User,
+    facility_id: str,
+    upload: UploadFile,
+    *,
+    sub_folder: str,
+    rules,
+    upload_kind: str,
+) -> Document:
+    """Store *upload* as a document in one of the facility's sub-folders.
+
+    The one-step counterpart of ``POST /documents/upload`` followed by a
+    link: a facilities manager holding ``facilities.edit`` but not
+    ``documents.manage`` was refused at the first of those two steps, so the
+    facility Files section was unusable to the very people it is for. The
+    caller is authorized by the facilities permission on its route; the bytes
+    land straight in the sub-folder whose rights match the record (FAC-13),
+    never in General Documents.
+
+    Folders are resolved and locked before the document exists, the canonical
+    order atop documents_service.py (FAC-35). Flushes, does not commit: the
+    caller inserts the facility record in the same transaction, and removes
+    the file with ``module_documents.discard_file`` if that fails.
+    """
+    organization_id = UUID(str(current_user.organization_id))
+    facility = await FacilitiesService(db).get_facility(
+        facility_id, str(organization_id), include_relations=False
+    )
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    documents = DocumentsService(db)
+    facility_folder = await documents.ensure_facility_folder(
+        organization_id, str(facility.id), facility.name
+    )
+    folder = await documents.ensure_facility_sub_folder(
+        organization_id, facility_folder, sub_folder
+    )
+    name = (upload.filename or "").strip() or "Facility file"
+    return await module_documents.store_as_document(
+        db,
+        upload,
+        user=current_user,
+        folder=folder,
+        name=name[:255],
+        rules=rules,
+        upload_kind=upload_kind,
+        source_type=upload_kind,
+        source_id=str(facility.id),
+    )
 
 
 def _facility_response_for(facility, current_user: User) -> FacilityResponse:
@@ -923,6 +990,78 @@ async def create_facility_photo(
     return photo
 
 
+@router.post(
+    "/{facility_id}/photos/upload",
+    response_model=FacilityPhotoResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Facility Photos"],
+)
+async def upload_facility_photo(
+    facility_id: str,
+    file: UploadFile = File(...),
+    caption: Optional[str] = Form(None, max_length=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.create", "facilities.edit", "facilities.manage")
+    ),
+):
+    """
+    Upload a photo of a facility in one step
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+
+    The image is malware-scanned and filed in the facility's Photos folder.
+    Needs no Documents permission, unlike uploading through
+    ``POST /documents/upload`` and then ``POST /facilities/photos``.
+    """
+    document = await _store_facility_file(
+        db,
+        current_user,
+        facility_id,
+        file,
+        sub_folder=FACILITY_PHOTOS_SUB_FOLDER,
+        rules=IMAGE_FILE_RULES,
+        upload_kind="facility_photo",
+    )
+    try:
+        photo = await FacilitiesService(db).create_photo(
+            photo_data=FacilityPhotoCreate(
+                facility_id=facility_id,
+                file_path=f"document:{document.id}",
+                file_name=(document.file_name or "photo")[:200],
+                mime_type=document.file_type,
+                caption=(caption or "").strip() or None,
+            ),
+            organization_id=current_user.organization_id,
+            uploaded_by=current_user.id,
+        )
+    except Exception as e:
+        await db.rollback()
+        await module_documents.discard_file(document)
+        if isinstance(e, ValueError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
+        raise
+
+    await log_audit_event(
+        db=db,
+        event_type="facility_photo_uploaded",
+        event_category="facilities",
+        severity="info",
+        event_data={
+            "facility_id": facility_id,
+            "document_id": str(document.id),
+            "file_type": document.file_type,
+            "file_size": document.file_size,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return photo
+
+
 @router.patch(
     "/photos/{photo_id}", response_model=FacilityPhotoResponse, tags=["Facility Photos"]
 )
@@ -1073,6 +1212,82 @@ async def create_facility_document(
         )
 
     return document
+
+
+@router.post(
+    "/{facility_id}/documents/upload",
+    response_model=FacilityDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Facility Documents"],
+)
+async def upload_facility_document(
+    facility_id: str,
+    file: UploadFile = File(...),
+    document_type: Optional[str] = Form(None, max_length=100),
+    description: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.create", "facilities.edit", "facilities.manage")
+    ),
+):
+    """
+    Upload a facility document in one step
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+
+    The file is malware-scanned and filed in the facility's restricted
+    Facility Documents folder. Needs no Documents permission, unlike
+    uploading through ``POST /documents/upload`` and then
+    ``POST /facilities/documents``.
+    """
+    document = await _store_facility_file(
+        db,
+        current_user,
+        facility_id,
+        file,
+        sub_folder=FACILITY_DOCUMENTS_SUB_FOLDER,
+        rules=DOCUMENT_FILE_RULES,
+        upload_kind="facility_document",
+    )
+    try:
+        record = await FacilitiesService(db).create_document(
+            document_data=FacilityDocumentCreate(
+                facility_id=facility_id,
+                file_path=f"document:{document.id}",
+                file_name=(document.file_name or "document")[:200],
+                mime_type=document.file_type,
+                document_type=(document_type or "").strip() or "facility_record",
+                description=(description or "").strip() or None,
+            ),
+            organization_id=current_user.organization_id,
+            uploaded_by=current_user.id,
+        )
+    except Exception as e:
+        await db.rollback()
+        await module_documents.discard_file(document)
+        if isinstance(e, ValueError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
+        raise
+
+    await log_audit_event(
+        db=db,
+        event_type="facility_document_uploaded",
+        event_category="facilities",
+        severity="info",
+        event_data={
+            "facility_id": facility_id,
+            "document_id": str(document.id),
+            "document_type": record.document_type,
+            "file_type": document.file_type,
+            "file_size": document.file_size,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return record
 
 
 @router.patch(
@@ -2634,15 +2849,23 @@ async def delete_facility_room(
     """
     Delete a facility room
 
+    Its linked location is deleted too, unless events, event templates or
+    apparatus still reference it; then it is deactivated and kept.
+
     **Authentication required**
     **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
-    deleted = await service.delete_room(
-        room_id=room_id,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        deleted = await service.delete_room(
+            room_id=room_id,
+            organization_id=current_user.organization_id,
+        )
+    except LocationInUseError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
 
     if not deleted:
         raise HTTPException(

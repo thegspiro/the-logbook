@@ -31,6 +31,10 @@ from app.schemas.organization import (
     decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
+from app.services.file_storage_service import (
+    ACTIVATION_KEY as FILE_STORAGE_ACTIVATION_KEY,
+)
+from app.services.file_storage_service import forget_org_storage
 from app.utils import membership_numbers
 from app.utils.email_providers import (
     EMAIL_SECRET_FIELDS,
@@ -436,9 +440,13 @@ class OrganizationService:
         # ballot links send people for the whole deployment, and has its own
         # endpoint behind system.manage_link_domain. The settings schemas allow
         # extra keys, so without this a settings.manage holder could write it
-        # here and skip that permission and its allowed-host check.
+        # here and skip that permission and its allowed-host check. The same
+        # holds for the record of a passed S3 connection test: only
+        # file_storage_service.activate_remote may write it, after the test.
         settings_update = {
-            k: v for k, v in settings_update.items() if k != "email_link_domain"
+            k: v
+            for k, v in settings_update.items()
+            if k not in ("email_link_domain", FILE_STORAGE_ACTIVATION_KEY)
         }
 
         # Deep copy to avoid mutating SQLAlchemy's committed state
@@ -532,6 +540,8 @@ class OrganizationService:
         org.settings = updated_settings
         await self.db.commit()
         await self.db.refresh(org)
+        # Where this department's new files go may have just changed.
+        forget_org_storage(organization_id)
 
         # Return updated settings
         return await self.get_organization_settings(organization_id)

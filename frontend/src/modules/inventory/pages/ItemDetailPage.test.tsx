@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import type { InventoryItem } from '../types';
@@ -15,6 +15,10 @@ const mockGetLocations = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   inventoryService: {
     getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
@@ -110,6 +114,20 @@ describe('ItemDetailPage', () => {
     renderPage();
     expect((await screen.findAllByText('Thermal Camera')).length).toBeGreaterThan(0);
     expect(mockGetItem).toHaveBeenCalledWith('it-1');
+  });
+
+  it('lets a long unbroken name wrap inside its column instead of running into the next one', async () => {
+    // A name with no spaces (a pasted URL, a part number) has no break point, so
+    // the grid track only shrinks if the cell can go below its content width.
+    const longName = 'n'.repeat(255);
+    mockGetItem.mockResolvedValue(makeItem({ name: longName }));
+    renderPage();
+
+    const field = (await screen.findAllByTestId('detail-field')).find((f) => within(f).queryByText(longName));
+
+    expect(field).toBeDefined();
+    expect(field).toHaveClass('min-w-0');
+    expect(within(field as HTMLElement).getByText(longName)).toHaveClass('break-words');
   });
 
   it('says whether a label has been printed for the item', async () => {
