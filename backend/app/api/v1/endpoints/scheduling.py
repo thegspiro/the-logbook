@@ -31,7 +31,12 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, CodedValueError
 from app.core.utils import ensure_found, safe_error_detail
-from app.models.call_tracking import MAX_CALL_TYPES, UNCLASSIFIED_CALL_TYPE
+from app.models.call_tracking import (
+    MAX_CALL_TYPES,
+    UNCLASSIFIED_CALL_TYPE,
+    CallTrackingMode,
+    OrgCallResponse,
+)
 from app.models.event_request import EventRequest
 from app.models.training import (
     AssignmentStatus,
@@ -384,6 +389,47 @@ def _outreach_role_slots(org, needed: list[dict], roster: list[dict]) -> list[di
     ]
 
 
+async def _shift_call_counts(
+    db: AsyncSession, organization_id, shifts: list
+) -> dict[str, int]:
+    """The call count each shift reports, by shift id.
+
+    A finalized shift reports the count finalize stored, which is the number
+    the department signed off on. An open shift counts live from wherever the
+    department's tracking mode records calls: ``ShiftCall`` rows in detailed
+    mode, ``OrgCallResponse`` rows in count-only mode. Counting ``ShiftCall``
+    unconditionally read 0 for every count-only shift, because that mode never
+    writes one — the same number finalize's own snapshot rule refuses to use.
+    """
+    counts: dict[str, int] = {}
+    live_ids = []
+    for s in shifts:
+        if s.is_finalized and s.call_count is not None:
+            counts[str(s.id)] = int(s.call_count)
+        else:
+            live_ids.append(str(s.id))
+    if not live_ids:
+        return counts
+
+    settings = await CallTrackingService(db).get_settings(str(organization_id))
+    if settings.get("mode") == CallTrackingMode.COUNT_ONLY:
+        query = (
+            select(OrgCallResponse.shift_id, func.count(OrgCallResponse.id))
+            .where(OrgCallResponse.shift_id.in_(live_ids))
+            .where(OrgCallResponse.organization_id == str(organization_id))
+            .group_by(OrgCallResponse.shift_id)
+        )
+    else:
+        query = (
+            select(ShiftCall.shift_id, func.count(ShiftCall.id))
+            .where(ShiftCall.shift_id.in_(live_ids))
+            .group_by(ShiftCall.shift_id)
+        )
+    for shift_id, n in (await db.execute(query)).all():
+        counts[str(shift_id)] = int(n or 0)
+    return counts
+
+
 async def _enrich_shifts(
     service: SchedulingService,
     organization_id,
@@ -471,16 +517,7 @@ async def _enrich_shifts(
                 }
             )
 
-        call_result = await service.db.execute(
-            select(
-                ShiftCall.shift_id,
-                func.count(ShiftCall.id),
-            )
-            .where(ShiftCall.shift_id.in_(shift_ids))
-            .group_by(ShiftCall.shift_id)
-        )
-        for row in call_result.all():
-            call_counts[str(row[0])] = row[1]
+        call_counts = await _shift_call_counts(service.db, organization_id, shifts)
 
         hours_result = await service.db.execute(
             select(
@@ -813,12 +850,22 @@ async def get_shift(
     d.pop("pass_down_notes", None)
     service._enrich_shift_dict(d, apparatus_map, user_name_map)
 
-    member_call_counts = await service.compute_member_call_counts(shift_id)
-
-    call_result = await service.db.execute(
-        select(func.count(ShiftCall.id)).where(ShiftCall.shift_id == str(shift_id))
-    )
-    call_count = call_result.scalar() or 0
+    call_count = (
+        await _shift_call_counts(service.db, current_user.organization_id, [shift])
+    ).get(str(shift.id), 0)
+    # Per-member credit follows the same rule. Once finalized, each attendance
+    # row carries the count finalize credited — in count-only mode that is the
+    # apparatus's number, adjusted for a late arrival, and no per-incident row
+    # exists to recount it from. Live counting from ShiftCall applies only to
+    # an open shift in detailed mode; an open count-only shift has no
+    # per-member figure until close-out, so the stored value is served as is.
+    member_call_counts = None
+    if not shift.is_finalized:
+        tracking = await CallTrackingService(service.db).get_settings(
+            str(current_user.organization_id)
+        )
+        if tracking.get("mode") != CallTrackingMode.COUNT_ONLY:
+            member_call_counts = await service.compute_member_call_counts(shift_id)
 
     total_min_result = await service.db.execute(
         select(func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0)).where(
@@ -4265,17 +4312,16 @@ async def _call_type_locked_for(db: AsyncSession, user: User) -> list[str]:
     )
 
 
-@router.get("/settings", response_model=SchedulingFeatureSettings)
-async def get_scheduling_feature_settings(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Department-wide scheduling feature toggles. Readable by any member so
-    the UI can gate platoon features."""
-    service = ShiftEligibilityService(db)
-    org = await service._get_org(current_user.organization_id)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+async def _feature_settings_response(
+    db: AsyncSession,
+    service: ShiftEligibilityService,
+    org: Organization,
+    current_user: User,
+) -> SchedulingFeatureSettings:
+    """The settings as stored, read through the same degrading readers for
+    GET and PUT. The PUT used to assemble its own response from the update's
+    return value and left ``pre_shift_work_enabled`` out, so the schema default
+    (True) came back and switching pre-shift work off redrew the toggle On."""
     overtime = service.get_overtime_settings(org)
     autogen = service.get_auto_generate_settings(org)
     lifecycle = service.get_lifecycle_settings(org)
@@ -4303,6 +4349,20 @@ async def get_scheduling_feature_settings(
     )
 
 
+@router.get("/settings", response_model=SchedulingFeatureSettings)
+async def get_scheduling_feature_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Department-wide scheduling feature toggles. Readable by any member so
+    the UI can gate platoon features."""
+    service = ShiftEligibilityService(db)
+    org = await service._get_org(current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return await _feature_settings_response(db, service, org, current_user)
+
+
 @router.put("/settings", response_model=SchedulingFeatureSettings)
 async def update_scheduling_feature_settings(
     data: SchedulingFeatureSettings,
@@ -4319,7 +4379,7 @@ async def update_scheduling_feature_settings(
             await _reject_deleting_a_used_call_type(
                 db, current_user.organization_id, data.call_tracking
             )
-        result = await service.update_scheduling_settings(
+        await service.update_scheduling_settings(
             organization_id=current_user.organization_id,
             # Guarded like every sibling field. Passed unconditionally, a
             # partial save from any single toggle (which sends only its own
@@ -4387,8 +4447,8 @@ async def update_scheduling_feature_settings(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    # Read the window back through the same degrading reader the GET path
-    # uses. A bare `int()` here raises *outside* the try above, so one
+    # Read the saved settings back through the same degrading readers the GET
+    # path uses. A bare `int()` here raises *outside* the try above, so one
     # hand-edited value like "tomorrow" turned an unrelated toggle's save into
     # a 500 — reported to the admin as a failure, with the write already
     # committed. It also mishandled a stored null, which `or 0` silently
@@ -4396,31 +4456,7 @@ async def update_scheduling_feature_settings(
     saved_org = ensure_found(
         await service._get_org(current_user.organization_id), "Organization"
     )
-    window = service.get_signup_window_settings(saved_org)
-    return SchedulingFeatureSettings(
-        platoons_enabled=bool(result.get("platoons_enabled", False)),
-        max_hours_per_window=result.get("max_hours_per_window"),
-        hours_window_days=int(result.get("hours_window_days", 7) or 7),
-        auto_generate_enabled=bool(result.get("auto_generate_enabled", False)),
-        auto_generate_weeks=int(result.get("auto_generate_weeks", 4) or 4),
-        require_end_of_shift_checks=bool(
-            result.get("require_end_of_shift_checks", False)
-        ),
-        restrict_checkin_to_assigned=bool(
-            result.get("restrict_checkin_to_assigned", False)
-        ),
-        signup_closes_minutes_before=window["signup_closes_minutes_before"],
-        late_signup_grace_minutes=window["late_signup_grace_minutes"],
-        open_ended_shift_cushion_hours=open_ended_cushion_hours(
-            saved_org.settings or {}
-        ),
-        enforce_evoc=bool(result.get("enforce_evoc", True)),
-        call_tracking=CallTrackingSettings(
-            **service.get_call_tracking_settings(saved_org)
-        ),
-        call_type_usage=await _call_type_usage_for(db, current_user),
-        call_type_locked=await _call_type_locked_for(db, current_user),
-    )
+    return await _feature_settings_response(db, service, saved_org, current_user)
 
 
 @router.get("/calendar-feed", response_model=CalendarFeedResponse)

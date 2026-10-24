@@ -8503,6 +8503,17 @@ class SchedulingService:
             .where(User.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
+            # The plan is the seats a member still holds on shifts that still
+            # run. A declined or cancelled seat, or any seat on a cancelled
+            # shift, was never planned work, and counting it inflated
+            # "scheduled" against "worked". A no-show stays: it was planned,
+            # and the gap to worked is exactly what this column exists to show.
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                )
+            )
+            .where(Shift.status != ShiftStatus.CANCELLED)
             .group_by(
                 ShiftAssignment.user_id,
                 User.email,
@@ -8877,12 +8888,15 @@ class SchedulingService:
         self, organization_id: UUID | str, start_date: date, end_date: date
     ) -> List[Dict]:
         """Get shift coverage report for each date in range"""
-        # Fetch all shifts in the range in one query
+        # Fetch all shifts in the range in one query. A cancelled shift is not
+        # coverage the department owes: cancel_shift cancels every seat on it,
+        # so counting it reported every cancellation as an understaffed shift.
         shift_result = await self.db.execute(
             select(Shift)
             .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
+            .where(Shift.status != ShiftStatus.CANCELLED)
             .order_by(Shift.shift_date.asc())
         )
         all_shifts = shift_result.scalars().all()
@@ -8979,11 +8993,16 @@ class SchedulingService:
                             unfilled += 1
                     is_understaffed = unfilled > 0
                 else:
-                    min_staff = (
-                        apparatus_min_staffing.get(shift.apparatus_id, 1)
-                        if shift.apparatus_id
-                        else 1
-                    )
+                    # The same headcount filter_shifts_with_open_positions uses
+                    # for the open-shifts list and the widget: the shift's own
+                    # minimum, then its apparatus's, then one. Reading the
+                    # apparatus first called a four-seat shift with one member
+                    # covered here while those screens showed three seats open.
+                    min_staff = shift.min_staffing
+                    if min_staff is None and shift.apparatus_id:
+                        min_staff = apparatus_min_staffing.get(shift.apparatus_id)
+                    if min_staff is None:
+                        min_staff = 1
                     is_understaffed = assigned_count < min_staff
                 if is_understaffed:
                     understaffed_shifts += 1
@@ -9238,6 +9257,13 @@ class SchedulingService:
         self, requirement, reference_date: date
     ) -> Tuple[date, date]:
         """Compute the start/end of the compliance period for a requirement."""
+
+        def _clamped(year: int, month: int, day: int) -> date:
+            # A configured 29 February (or any day past a month's end) falls on
+            # that month's last day in a year without it. Building the date
+            # outright raised ValueError and took down the whole report.
+            return date(year, month, min(day, calendar.monthrange(year, month)[1]))
+
         freq = requirement.frequency
         due_type = requirement.due_date_type
 
@@ -9302,12 +9328,14 @@ class SchedulingService:
                     end_day = calendar.monthrange(reference_date.year, end_month)[1]
                 if start_month > end_month:
                     # Cross-year window (e.g. Nov -> Jan)
-                    cycle_end_a = date(reference_date.year, end_month, end_day)
-                    cycle_start_a = date(
+                    cycle_end_a = _clamped(reference_date.year, end_month, end_day)
+                    cycle_start_a = _clamped(
                         reference_date.year - 1, start_month, start_day
                     )
-                    cycle_start_b = date(reference_date.year, start_month, start_day)
-                    cycle_end_b = date(reference_date.year + 1, end_month, end_day)
+                    cycle_start_b = _clamped(
+                        reference_date.year, start_month, start_day
+                    )
+                    cycle_end_b = _clamped(reference_date.year + 1, end_month, end_day)
                     if cycle_start_a <= reference_date <= cycle_end_a:
                         period_start = cycle_start_a
                         period_end = cycle_end_a
@@ -9321,8 +9349,8 @@ class SchedulingService:
                         period_end = cycle_start_b - timedelta(days=1)
                 else:
                     yr = reference_date.year
-                    period_start = date(yr, start_month, start_day)
-                    period_end = date(yr, end_month, end_day)
+                    period_start = _clamped(yr, start_month, start_day)
+                    period_end = _clamped(yr, end_month, end_day)
             else:
                 # Default annual period from start_month
                 if reference_date.month >= start_month:
@@ -9341,7 +9369,7 @@ class SchedulingService:
                 period_end = requirement.due_date
             else:
                 period_end = reference_date
-                period_start = date(
+                period_start = _clamped(
                     reference_date.year - 1, reference_date.month, reference_date.day
                 )
 
