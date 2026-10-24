@@ -1465,8 +1465,48 @@ class SchedulingService:
             str(organization_id),
             [str(shift.id) for shift in candidates],
         )
-        visible = [shift for shift in candidates if eligibility.get(str(shift.id), [])]
+        seated = await self.member_seated_shift_ids(
+            user.id, organization_id, [shift.id for shift in candidates]
+        )
+        visible = [
+            shift
+            for shift in candidates
+            if eligibility.get(str(shift.id), [])
+            or str(shift.id) in seated
+            or str(shift.shift_officer_id or "") == str(user.id)
+        ]
         return visible[skip : skip + limit], len(visible)
+
+    #: The statuses under which a member can open a shift's detail whatever
+    #: their eligibility — the same set ``_ensure_member_can_view_shift`` uses.
+    SEATED_ASSIGNMENT_STATUSES = (
+        AssignmentStatus.ASSIGNED,
+        AssignmentStatus.CONFIRMED,
+        AssignmentStatus.PENDING,
+    )
+
+    async def member_seated_shift_ids(
+        self, user_id: Any, organization_id: UUID | str, shift_ids: List[Any]
+    ) -> set[str]:
+        """Which of ``shift_ids`` the member holds a live seat on.
+
+        A member seated by pattern generation or an officer, or whose
+        qualification lapsed after they were seated, is not necessarily
+        eligible to *sign up* for the shift — but it is still theirs, and a
+        list filtered by eligibility alone dropped it from their own calendar
+        while its detail page stayed open to them.
+        """
+        if not shift_ids:
+            return set()
+        result = await self.db.execute(
+            select(ShiftAssignment.shift_id).where(
+                ShiftAssignment.shift_id.in_([str(value) for value in shift_ids]),
+                ShiftAssignment.organization_id == str(organization_id),
+                ShiftAssignment.user_id == str(user_id),
+                ShiftAssignment.assignment_status.in_(self.SEATED_ASSIGNMENT_STATUSES),
+            )
+        )
+        return {str(value) for value in result.scalars().all()}
 
     async def filter_shifts_with_open_positions(
         self,
@@ -2271,12 +2311,20 @@ class SchedulingService:
         if not has_officer_position:
             return
 
-        # Check if the officer already has an assignment on this shift
+        # Check if the officer already holds a live seat on this shift. A
+        # declined or cancelled row is not a seat: matching only "not
+        # declined" re-labelled a CANCELLED row as the officer seat and left
+        # the officer off the roster, and skipping a DECLINED one sent the
+        # insert below into uq_shift_assignment_shift_user.
         existing_result = await self.db.execute(
             select(ShiftAssignment)
             .where(ShiftAssignment.shift_id == str(shift.id))
             .where(ShiftAssignment.user_id == str(officer_id))
-            .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                )
+            )
         )
         existing_assignment = existing_result.scalar_one_or_none()
 
@@ -2285,6 +2333,7 @@ class SchedulingService:
             if existing_assignment.position != ShiftPosition.OFFICER:
                 existing_assignment.position = ShiftPosition.OFFICER
         else:
+            await self._clear_inactive_assignment(shift.id, officer_id, organization_id)
             # Create a new assignment for the officer
             new_assignment = ShiftAssignment(
                 organization_id=str(organization_id),
@@ -2302,7 +2351,11 @@ class SchedulingService:
             .where(ShiftAssignment.shift_id == str(shift.id))
             .where(ShiftAssignment.user_id != str(officer_id))
             .where(ShiftAssignment.position == ShiftPosition.OFFICER)
-            .where(ShiftAssignment.assignment_status != AssignmentStatus.DECLINED)
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                )
+            )
         )
         for displaced in displaced_result.scalars().all():
             displaced.position = ShiftPosition.FIREFIGHTER
@@ -2386,6 +2439,11 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
+            # Before anything reads the values: a null start_time otherwise
+            # fails on ``.tzinfo`` below, and a null shift_date at flush, and
+            # both reached the client as an unexplained error.
+            reject_null_for_required(shift, update_data, skip=self.PROTECTED_FIELDS)
+
             # ShiftUpdate can reject an inverted interval when both values are
             # present in the request, but a partial update must be compared
             # with the other value already stored on the shift. Only validate
@@ -2420,6 +2478,23 @@ class SchedulingService:
                 new_officer, organization_id
             ):
                 return None, "Shift officer not found"
+            # The officer is seated on the roster below, so they must be a
+            # current member (probationary included), as any seat requires.
+            if (
+                new_officer
+                and str(new_officer) != str(shift.shift_officer_id or "")
+                and (
+                    await self.db.execute(
+                        select(User.id).where(
+                            User.id == str(new_officer),
+                            User.organization_id == str(organization_id),
+                            User.is_active,
+                        )
+                    )
+                ).scalar_one_or_none()
+                is None
+            ):
+                return None, "Shift officer is not an active member"
 
             # SCH-6: validate a (re)set apparatus_id is in-org (see create_shift).
             new_apparatus = update_data.get("apparatus_id")
@@ -4839,12 +4914,13 @@ class SchedulingService:
             )
             if not eligible:
                 return "Member is no longer eligible for this shift"
-            if (
-                slots
-                and position_value
-                and str(position_value).lower()
-                not in {str(value).lower() for value in eligible}
-            ):
+            # Checked on a shift with no named seats too. There, any built-in
+            # seat resolves and the eligibility answer is the member's whole
+            # set, so testing only "eligible for something" let a firefighter
+            # take the officer seat by standing claim, officer assignment, offer
+            # or pickup — the self-signup endpoint was the one path that asked
+            # about the seat itself. Same rule as ``_seat_in``.
+            if position_value and not self._seat_in(eligible, position_value):
                 return f"Member is no longer eligible for the {position_value} position"
 
         await self._check_driver_qualification(
@@ -4929,7 +5005,11 @@ class SchedulingService:
                 shift=shift,
                 user_id=user_id,
                 position=assignment_data.get("position"),
-                require_mutable=self_signup,
+                # Only the records path may seat someone on a cancelled or
+                # finalized shift. The signup window lets both through on
+                # purpose, so this is the check a bounded assigner or a shift
+                # officer actually meets.
+                require_mutable=effective_actor != SignupActor.MANAGER,
                 reject_past=self_signup,
                 window_checked=effective_actor != SignupActor.MANAGER,
                 # Eligibility is enforced for officer-made assignments too
@@ -5236,6 +5316,21 @@ class SchedulingService:
                         seat_shift, update_data["position"]
                     )
 
+            reject_null_for_required(
+                assignment, update_data, skip=self.PROTECTED_FIELDS
+            )
+
+            # A seat change, or bringing a declined/cancelled row back onto the
+            # roster, places the member in a seat as surely as a new assignment
+            # does, so it is held to the same candidate check: eligibility for
+            # the seat, the named-seat cap, leave, time off and overlap. Only
+            # the driver rule used to be re-applied here, which left "assign as
+            # firefighter, PATCH to officer" open for every other rule, and a
+            # declined row revived while somebody else held its seat.
+            await self._validate_assignment_edit(
+                assignment, organization_id, update_data, actor
+            )
+
             # Re-check qualification when an edit moves someone into the
             # driver seat. Without this, an officer blocked at create time
             # could assign the member as a firefighter and PATCH the position
@@ -5301,6 +5396,51 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def _validate_assignment_edit(
+        self,
+        assignment: ShiftAssignment,
+        organization_id: UUID | str,
+        update_data: Dict[str, Any],
+        actor: SignupActor,
+    ) -> None:
+        """Run the candidate check for an edit that places the member in a seat.
+
+        Raises ValueError with the refusal, which ``update_assignment`` returns
+        as its error. An edit that leaves the row inactive, or changes only its
+        notes or training fields, places nobody and is not checked.
+        """
+        requested = update_data.get("assignment_status", assignment.assignment_status)
+        new_status = AssignmentStatus(getattr(requested, "value", requested))
+        if new_status in self.INACTIVE_ASSIGNMENT_STATUSES:
+            return
+        reactivated = assignment.assignment_status in self.INACTIVE_ASSIGNMENT_STATUSES
+        new_position = update_data.get("position")
+        seat_changed = bool(new_position) and (
+            str(new_position).lower() != str(assignment.position or "").lower()
+        )
+        if not (reactivated or seat_changed):
+            return
+        # Locked for the same reason create_assignment locks it: the named-seat
+        # count below is a read-then-write.
+        shift = await self.get_shift_by_id(
+            assignment.shift_id, organization_id, for_update=True
+        )
+        if shift is None:
+            raise ValueError("Shift not found")
+        error = await self._validate_assignment_candidate(
+            organization_id=organization_id,
+            shift=shift,
+            user_id=assignment.user_id,
+            position=new_position or assignment.position,
+            exclude_assignment_ids={str(assignment.id)},
+            # The records path keeps its freedom to correct a cancelled or
+            # finalized roster, as it has on create.
+            require_mutable=actor != SignupActor.MANAGER,
+            enforce_position_eligibility=True,
+        )
+        if error:
+            raise ValueError(error)
 
     async def delete_assignment(
         self,
@@ -5393,6 +5533,28 @@ class SchedulingService:
                 )
                 if locked:
                     return None, locked
+
+            # Confirming affirms a seat the member still holds. From a declined
+            # or cancelled row it would put them back on the roster past every
+            # check a new seat meets — the seat may have been refilled, the
+            # shift cancelled, or time off approved — so a stale Confirm tap is
+            # refused rather than honoured. Re-confirming is a no-op.
+            if assignment.assignment_status not in (
+                AssignmentStatus.ASSIGNED,
+                AssignmentStatus.PENDING,
+                AssignmentStatus.CONFIRMED,
+            ):
+                return None, "This assignment is no longer active to confirm"
+            confirm_shift = await self.get_shift_by_id(
+                assignment.shift_id, organization_id
+            )
+            if confirm_shift is not None:
+                if confirm_shift.status == ShiftStatus.CANCELLED:
+                    return None, "Shift was cancelled"
+                if confirm_shift.is_finalized:
+                    return None, "Shift was finalized"
+            if assignment.assignment_status == AssignmentStatus.CONFIRMED:
+                return assignment, None
 
             assignment.assignment_status = AssignmentStatus.CONFIRMED
             assignment.confirmed_at = datetime.now(timezone.utc)
@@ -5997,20 +6159,32 @@ class SchedulingService:
             if not offering_shift:
                 return None, "Offering shift not found"
 
-            own_assignment = await self.db.execute(
-                select(ShiftAssignment.id)
-                .where(ShiftAssignment.shift_id == str(offering_shift_id))
-                .where(ShiftAssignment.user_id == str(requesting_user_id))
-                .where(ShiftAssignment.organization_id == str(organization_id))
-            )
-            if own_assignment.scalar_one_or_none() is None:
+            # A declined or cancelled row is not a seat to offer.
+            if (
+                await self._active_assignment(
+                    organization_id, offering_shift_id, requesting_user_id
+                )
+                is None
+            ):
                 return None, "You are not assigned to the offering shift"
 
-            # Optional targets must also be in the caller's org.
-            if requesting_shift_id and not await self.get_shift_by_id(
-                requesting_shift_id, organization_id
-            ):
-                return None, "Requested shift not found"
+            # Optional targets must also be in the caller's org, and must be a
+            # seat the requester could actually move into: a cancelled shift
+            # will not run, and one they are already on cannot be swapped into.
+            # Both used to reach the officer's queue as a request no approval
+            # could carry out.
+            if requesting_shift_id:
+                requesting_shift = await self.get_shift_by_id(
+                    requesting_shift_id, organization_id
+                )
+                if not requesting_shift:
+                    return None, "Requested shift not found"
+                if requesting_shift.status == ShiftStatus.CANCELLED:
+                    return None, "The requested shift was cancelled"
+                if await self._active_assignment(
+                    organization_id, requesting_shift_id, requesting_user_id
+                ):
+                    return None, "You are already assigned to the requested shift"
 
             if target_user_id:
                 target_user = await self.db.execute(
@@ -8291,6 +8465,30 @@ class SchedulingService:
         )
         for uid in busy_result.scalars().all():
             candidates.pop(str(uid), None)
+        if not candidates:
+            return []
+
+        # The roster answers "who holds this position today, department-wide".
+        # Acceptance asks the shift itself — qualifications as of its date, the
+        # administrative-class rule, a case-insensitive seat match — so a
+        # member the roster lists can still be refused. Filtered here by the
+        # same per-shift rule acceptance applies, so the picker offers only
+        # members who could actually take the seat.
+        eligibility = ShiftEligibilityService(self.db)
+        user_rows = await self.db.execute(
+            select(User).where(
+                User.id.in_(list(candidates.keys())),
+                User.organization_id == str(organization_id),
+            )
+        )
+        cleared = set()
+        for candidate_user in user_rows.scalars().all():
+            eligible = await eligibility.get_eligible_positions(
+                candidate_user, str(organization_id), str(shift.id)
+            )
+            if self._seat_in(eligible, position):
+                cleared.add(str(candidate_user.id))
+        candidates = {uid: m for uid, m in candidates.items() if uid in cleared}
         if not candidates:
             return []
 
