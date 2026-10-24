@@ -433,6 +433,26 @@ class TestARunThatFails:
 
 
 @pytest.mark.integration
+class TestRecipientsAreUnique:
+    async def test_one_member_listed_in_two_cases_gets_one_copy(
+        self, db_session, mailer, fake_report, today
+    ):
+        dept = await _dept(db_session)
+        await _saved(
+            db_session,
+            dept,
+            email_recipients=[
+                dept.colleague.email,
+                dept.colleague.email.upper(),
+                f" {dept.owner.email} ",
+            ],
+        )
+
+        assert await schedule.send_due_saved_reports(db_session, dept.org) == 1
+        assert mailer.sends[0]["to"] == [dept.colleague.email, dept.owner.email]
+
+
+@pytest.mark.integration
 class TestTheSaveEndpoints:
     async def test_scheduling_a_pii_report_to_an_outsider_is_refused(self, db_session):
         from app.api.v1.endpoints import reports as endpoint

@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.utils import safe_error_detail
 from app.models.admin_hours import AdminHoursCategory
 from app.models.compliance_config import (
     ComplianceConfig,
@@ -27,7 +28,7 @@ from app.models.user import Organization, Position
 from app.services.compliance_officer_service import AnnualComplianceReportService
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_theme import ACCENT_AMBER, fact, facts
-from app.utils.external_recipients import audit_external_recipients
+from app.utils.external_recipients import audit_external_recipients, dedupe_addresses
 from app.utils.model_updates import apply_updates
 
 
@@ -228,6 +229,11 @@ class ComplianceReportService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # What the most recent _email_report did: "sent", "no_recipients" or
+        # "failed". generate_report returns the stored report, so a caller that
+        # must tell a delivered report from one that was only stored (the
+        # scheduled task) reads it here.
+        self.last_email_outcome: Optional[str] = None
 
     async def generate_report(
         self,
@@ -342,7 +348,20 @@ class ComplianceReportService:
         year: int,
         month: Optional[int] = None,
     ) -> bool:
-        """Whether the scheduled run already produced this period's report.
+        """Whether the scheduled run already produced this period's report."""
+        return (
+            await self.find_auto_report(organization_id, report_type, year, month)
+            is not None
+        )
+
+    async def find_auto_report(
+        self,
+        organization_id: str,
+        report_type: str,
+        year: int,
+        month: Optional[int] = None,
+    ) -> Optional[ComplianceReport]:
+        """The scheduled run's completed report for this period, if any.
 
         The scheduled task runs daily and again on any manual trigger, retry or
         second worker, and each run would otherwise store and email another
@@ -362,7 +381,7 @@ class ComplianceReportService:
             .with_for_update()
         )
         query = (
-            select(ComplianceReport.id)
+            select(ComplianceReport)
             .where(
                 ComplianceReport.organization_id == organization_id,
                 ComplianceReport.report_type == report_type,
@@ -377,7 +396,44 @@ class ComplianceReportService:
             query = query.where(ComplianceReport.period_month.is_(None))
         else:
             query = query.where(ComplianceReport.period_month == month)
-        return (await self.db.execute(query)).first() is not None
+        found: Optional[ComplianceReport] = (
+            (await self.db.execute(query)).scalars().first()
+        )
+        return found
+
+    async def record_failed_attempt(
+        self,
+        organization_id: str,
+        report_type: str,
+        year: int,
+        month: Optional[int],
+        error: BaseException,
+    ) -> None:
+        """Store a FAILED row for a scheduled generation that raised.
+
+        ``generate_report`` marks its row FAILED and re-raises, but the
+        scheduled task rolls the session back on that exception, which discards
+        the row along with everything else the attempt wrote. Without this the
+        only trace of a missed month is the error log; with it the failure is
+        on the compliance reports screen where staff look for the report.
+        ``auto_report_exists`` ignores FAILED rows, so the next run retries.
+        """
+        if report_type == "monthly" and month:
+            label = datetime(year, month, 1).strftime("%B %Y")
+        else:
+            label = str(year)
+        self.db.add(
+            ComplianceReport(
+                organization_id=organization_id,
+                report_type=report_type,
+                period_label=label,
+                period_year=year,
+                period_month=month if report_type == "monthly" else None,
+                status=ReportStatus.FAILED.value,
+                error_message=safe_error_detail(error),
+            )
+        )
+        await self.db.flush()
 
     async def _email_report(
         self,
@@ -385,8 +441,14 @@ class ComplianceReportService:
         organization_id: str,
         additional_recipients: Optional[List[str]] = None,
         sent_by: Optional[str] = None,
-    ) -> None:
-        """Email a completed report to configured recipients."""
+    ) -> str:
+        """Email a completed report to configured recipients.
+
+        Returns the outcome (also kept on ``last_email_outcome``): "sent" when
+        at least one recipient was reached, "no_recipients" when none are
+        configured, "failed" when there were recipients and nobody was reached.
+        """
+        self.last_email_outcome = None
         # Get organization for email service
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == organization_id)
@@ -407,12 +469,12 @@ class ComplianceReportService:
         if additional_recipients:
             recipients.extend(additional_recipients)
 
-        # Deduplicate
-        recipients = list(set(recipients))
+        recipients = dedupe_addresses(recipients)
 
         if not recipients:
             logger.info("No recipients configured for compliance report email")
-            return
+            self.last_email_outcome = "no_recipients"
+            return self.last_email_outcome
 
         # The report carries member-by-member compliance data; any recipient
         # outside the org's membership is an external send and must be audited
@@ -491,16 +553,23 @@ class ComplianceReportService:
                 subject=f"Compliance Report — {report.period_label}",
                 html_body=html_body,
                 text_body=text_body,
+                db=self.db,
+                template_type="compliance_report",
+                sent_by=sent_by or report.generated_by,
             )
             if success_count > 0:
                 report.emailed_to = recipients
                 report.emailed_at = datetime.now(timezone.utc)
                 await self.db.flush()
                 logger.info(
-                    f"Compliance report emailed to {len(recipients)} recipient(s)"
+                    "Compliance report emailed to {} recipient(s)", len(recipients)
                 )
+                self.last_email_outcome = "sent"
+                return self.last_email_outcome
         except Exception as e:
-            logger.error(f"Failed to email compliance report: {e}")
+            logger.error("Failed to email compliance report: {}", e)
+        self.last_email_outcome = "failed"
+        return self.last_email_outcome
 
     async def list_reports(
         self,
@@ -597,4 +666,15 @@ class ComplianceReportService:
         if report.status != ReportStatus.COMPLETED.value:
             raise ValueError("Cannot email a report that is not completed")
 
-        await self._email_report(report, organization_id, recipients, sent_by=sent_by)
+        outcome = await self._email_report(
+            report, organization_id, recipients, sent_by=sent_by
+        )
+        # The caller asked for this send, so telling them it went out when it
+        # did not is worse than the error.
+        if outcome == "no_recipients":
+            raise ValueError("There is no recipient to email this report to")
+        if outcome == "failed":
+            raise ValueError(
+                "The report could not be emailed. Check the email settings "
+                "and the recipient addresses."
+            )

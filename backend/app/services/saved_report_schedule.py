@@ -376,11 +376,14 @@ async def _send_one(
     """
     from app.services.email_service import EmailService
     from app.services.reports_service import ReportsService
-    from app.utils.external_recipients import audit_external_recipients
+    from app.utils.external_recipients import (
+        audit_external_recipients,
+        dedupe_addresses,
+    )
 
     org_id = str(org.id)
     frequency = str(saved.schedule_frequency)
-    recipients = [r for r in (saved.email_recipients or []) if isinstance(r, str)]
+    recipients = dedupe_addresses(saved.email_recipients)
     if not await _owner_may_run(db, saved):
         logger.warning(
             "Saved report {}: its owner can no longer run {}; not sent",
