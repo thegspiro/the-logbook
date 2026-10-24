@@ -335,6 +335,50 @@ class ComplianceReportService:
             logger.error(f"Report generation failed: {e}")
             raise
 
+    async def auto_report_exists(
+        self,
+        organization_id: str,
+        report_type: str,
+        year: int,
+        month: Optional[int] = None,
+    ) -> bool:
+        """Whether the scheduled run already produced this period's report.
+
+        The scheduled task runs daily and again on any manual trigger, retry or
+        second worker, and each run would otherwise store and email another
+        copy. Only reports with no ``generated_by`` count: a manual report for
+        the same period is a deliberate regeneration (and the endpoint allows
+        it), not a reason to withhold the scheduled one.
+
+        No unique key backs this, because manual regeneration of a period must
+        keep working. The organization's config row is locked to serialize two
+        runs, and the lookup is itself a locking read: under REPEATABLE READ a
+        plain SELECT answers from the snapshot taken before the lock was won
+        and would not see the other run's commit (CLAUDE.md pitfall #27).
+        """
+        await self.db.execute(
+            select(ComplianceConfig.id)
+            .where(ComplianceConfig.organization_id == organization_id)
+            .with_for_update()
+        )
+        query = (
+            select(ComplianceReport.id)
+            .where(
+                ComplianceReport.organization_id == organization_id,
+                ComplianceReport.report_type == report_type,
+                ComplianceReport.period_year == year,
+                ComplianceReport.generated_by.is_(None),
+                ComplianceReport.status == ReportStatus.COMPLETED.value,
+            )
+            .with_for_update()
+            .limit(1)
+        )
+        if month is None:
+            query = query.where(ComplianceReport.period_month.is_(None))
+        else:
+            query = query.where(ComplianceReport.period_month == month)
+        return (await self.db.execute(query)).first() is not None
+
     async def _email_report(
         self,
         report: ComplianceReport,
