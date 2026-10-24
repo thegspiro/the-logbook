@@ -36,7 +36,7 @@ import {
 import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
-import { organizationService, userService } from '../../services/api';
+import { organizationService } from '../../services/api';
 import { offersShiftSignoffs } from '../../stores/practicalSkillsStore';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
@@ -54,7 +54,6 @@ import type {
   TraineeShiftStats,
   OfficerShiftAnalytics,
 } from '../../types/training';
-import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
@@ -93,6 +92,11 @@ export const ShiftReportsTab: React.FC = () => {
   // Department-wide totals are a leadership view. Every company officer holds
   // training.manage to file reports, so it cannot be what gates them.
   const canViewDepartment = canManage && checkPermission('training.view_analytics');
+  // Mirrors the backend's update_report: a draft is the filing officer's to
+  // complete. Managing training does not reach another officer's draft, only
+  // one whose officer's account is gone and so has nobody else to finish it.
+  const canCompleteDraft = (report: ShiftCompletionReport) =>
+    (!!userId && report.officer_id === userId) || (canManage && !report.officer_id);
   const isOnline = useOnlineStatus();
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -135,7 +139,6 @@ export const ShiftReportsTab: React.FC = () => {
   const [config, setConfig] = useState<TrainingModuleConfig | null>(null);
 
   // Create form state
-  const [members, setMembers] = useState<User[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [linkedShiftLabel, setLinkedShiftLabel] = useState<string | null>(null);
   const [shiftApparatusType, setShiftApparatusType] = useState<string | null>(null);
@@ -426,18 +429,6 @@ export const ShiftReportsTab: React.FC = () => {
         });
     }
   }, [viewMode, canManage, canViewDepartment]);
-
-  // Load members for draft edit forms
-  useEffect(() => {
-    if (viewMode === 'create' && members.length === 0) {
-      userService
-        .getUsers()
-        .then(setMembers)
-        .catch(() => {
-          /* members needed for draft edit */
-        });
-    }
-  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps -- only load once when entering create mode
 
   useEffect(() => {
     if (!canManage) return;
@@ -1441,7 +1432,7 @@ export const ShiftReportsTab: React.FC = () => {
             {/* Draft edit actions */}
             {viewMode === 'drafts' &&
               report.review_status === 'draft' &&
-              (canManage || report.officer_id === userId) &&
+              canCompleteDraft(report) &&
               editingDraftId !== report.id && (
                 <div className="pt-2">
                   <button

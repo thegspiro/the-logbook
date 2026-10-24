@@ -71,13 +71,6 @@ class ShiftCompletionReportCreate(BaseModel):
     enrollment_id: Optional[str] = None
     save_as_draft: bool = False
 
-    @field_validator("shift_date")
-    @classmethod
-    def shift_date_not_future(cls, v: date) -> date:
-        if v > date.today():
-            raise ValueError("Shift date cannot be in the future")
-        return v
-
 
 class ShiftCompletionReportUpdate(BaseModel):
     hours_on_shift: Optional[float] = Field(None, gt=0, le=48)
@@ -178,13 +171,6 @@ class BatchShiftReportCreate(BaseModel):
         Field(None, max_length=200)
     )
     save_as_draft: bool = False
-
-    @field_validator("shift_date")
-    @classmethod
-    def shift_date_not_future(cls, v: date) -> date:
-        if v > date.today():
-            raise ValueError("Shift date cannot be in the future")
-        return v
 
 
 class BatchShiftReportResponse(BaseModel):
