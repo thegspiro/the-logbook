@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_None._ PR #3632 (Feature 21, Admin hours, pass 10) merged — docs-only (this
+file + `AH-21-admin-hours.md`), so not independently recordable per the
+rotation's own rule. Row 21 → ✅. Next is Feature 22 (Grants & fundraising),
+picked up by this same watchdog pass; see its **Pass 10** section in
+`docs/security-review/GF-22-grants-fundraising.md` for the writeup. This row
+will carry Feature 22's own PR once it is opened.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 10, PR #3632, merged, docs-only), preserved for history</summary>
+
 **PR [#3632](https://github.com/thegspiro/the-logbook/pull/3632)** (branch
 `claude/security-review-admin-hours-p10`) —
 Feature 21 (Admin hours), pass 10, a watchdog pickup. PR #3631 (Feature 20,
@@ -38,9 +48,7 @@ all cosmetic.
 Full writeup: `docs/security-review/AH-21-admin-hours.md`'s **Pass 10**
 section.
 
-Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
-fundraising) — re-check `list_pull_requests` fresh rather than trusting
-this note.
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 10, PR #3631, merged), preserved for history</summary>
@@ -21071,7 +21079,7 @@ this iteration's commit" rule.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
@@ -37353,3 +37361,52 @@ nfc or kiosk"`) — 1,907 passed, 1 pre-existing skip (`pywebpush`); frontend
 
 Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
 re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-24 — Feature 22 (Grants & fundraising, pass 10) — watchdog pickup, GF-9 fully resolved (owner decision), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results after this same
+run merged PR #3632, Feature 21, Admin hours, pass 10, which was docs-only),
+and the dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). Row 22 (Grants & fundraising) confirmed the next
+`⬜` by reading the rotation table directly on a freshly fetched `main`.
+
+Baseline `115afe67` (PR #3454's merge, pass 9). Six non-merge commits touch
+this feature's declared scope since then, all dated 2026-10-20/21, all
+non-rotation: PR #3533's two halves finally close **GF-9** — every money
+field on a grants/fundraising request now has an upper bound ($1M for a
+gift, $100M for an award/budget/goal; `$0` still valid where it means
+something), and a `fundraising.view`-only caller now reads a donor's name,
+type, company, totals and dates but not their contact details (email,
+phone, address, notes, linked account), which need `fundraising.manage` —
+re-verified by reading `donor_privacy.py` and the new
+`test_donor_contact_privacy.py` directly, including the compiled-SQL proof
+that a view-only donor search no longer matches on email. A
+governance/finance-deletes commit out of this feature's own scope
+(`f5ddf81b`) added campaign soft-delete enforcement to `get_campaign`
+(the `active` column already existed; only the by-id read path gained the
+filter) — confirmed this does not weaken GF-15's locking, since
+`_lock_campaign`/`_update_campaign_total` use their own unfiltered queries.
+Two UTC-normalization commits round out the window (`donation_date`/
+`event_date` typed `UTCDateTime`; the fundraising report's monthly grouping
+now buckets by the department's local month). Route surface re-enumerated
+from scratch: 45/45 unchanged, 273 routes repo-wide, 0 errors/warnings.
+
+**GF-9 has no open remainder** — both gaps pass 9 left open are now closed;
+`KNOWN_LIMITATIONS.md`'s GF-9 row already reflects the resolution.
+
+Full writeup: `docs/security-review/GF-22-grants-fundraising.md`'s
+**Pass 10** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 649
+revisions, single head `a0195b397bf3`; `check_route_permissions.py
+--strict` — 273 routes, 0 errors/warnings; scoped backend tests (`-k
+"grant or fundraising"`) — 1,239 passed, 1 pre-existing skip (`pywebpush`);
+frontend `npm run typecheck` clean; `npm run lint` clean; scoped frontend
+suite (`npx vitest run src/modules/grants-fundraising`) — 112 passed
+(23 files).
+
+Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
+supplies) — re-check `search_pull_requests` fresh rather than trusting this
+note.
