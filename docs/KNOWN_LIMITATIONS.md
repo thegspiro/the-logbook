@@ -504,11 +504,19 @@ guides can point at one place and an owner can decide it.
   name NFC tags and ID cards among what a changed or mismatched salt breaks.
 - **Probationary counts as active only where `User.is_active` is read**
   (#2886). Sign-in, scheduling, messaging recipients and the other
-  `is_active` callers now admit probationary and junior members. About forty
-  other places compare `status == ACTIVE` by hand — training compliance,
-  certification alerts, rosters, reports, meeting quorum, administrative
-  continuity — and still leave them out. Some (quorum, continuity) may be
-  right to, depending on bylaws. **Pending an owner decision per site.**
+  `is_active` callers already admitted probationary and junior members.
+  ✅ **Resolved 2026-10-20** (CLAUDE.md Pitfall #32): the owner decided
+  training compliance, the compliance officer views, certificate alerts,
+  the competency matrix, meeting quorum, administrative continuity, rosters,
+  reports/exports and the remaining `== ACTIVE` sites all count a
+  probationary member as current, with no bylaws exception for quorum or
+  continuity. Every such gate now filters
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (or the instance form); the one
+  deliberate holdout is the admin hub's `_members_active` tile, which keeps
+  the literal status because its Probationary tile sits beside it and the
+  two must add up. `tests/test_account_status_gates.py` sweeps `app/` for a
+  literal `== ACTIVE` comparison and fails on any site outside that single
+  allowlist entry.
 - **Another member's ID card is gated in the screens, not the API** (#2860).
   The profile's **ID Card** button and the card page now require
   `members.manage` or `members.manage_id_cards` for someone else's card, but
