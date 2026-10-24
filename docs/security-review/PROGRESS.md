@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**This PR** (branch `claude/security-review-medical-supplies-p16`) —
+Feature 23 (Medical supplies), pass 16, a watchdog run. PR #3633 (Feature
+22, Grants & fundraising, pass 10) had already merged — confirmed via
+`list_pull_requests` (state=open, empty) and `search_pull_requests`
+(`head:claude/security-review-`, empty) immediately before starting, and
+row 23 (Medical supplies) was the first ⬜ row. **0 fixed, 0 new
+findings** — the real delta since pass 15 (six commits: the lot recall
+lookup's `GET /lots/search`, truck-stock links, a Low stock tab, a
+next-expiry sort, truck lots in the lot export, and an uncounted-positions
+table on the weekly email) was read in full and found clean: org scoping,
+domain pinning, LIKE-pattern escaping and HTML escaping all intact. Route
+count re-enumerated by AST at 26 (up from 25), the one addition being
+`search_medical_lots`. MSUP-4/MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) re-confirmed open, owner-accepted,
+unchanged. Noted for the next pass: PR #3627 ("Medical supplies: record
+lot recalls") is open but not yet merged, and will add three new routes
+(`GET /recalls`, `POST /recalls`, `POST /recalls/{id}/lift`) this findings
+file has not reviewed.
+
+Full writeup: `docs/security-review/MSUP-23-medical-supplies.md`'s
+**Pass 16** section.
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 10, PR #3633, merged), preserved for history</summary>
+
 **PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633)** (branch
 `claude/security-review-grants-fundraising-p10`) —
 Feature 22 (Grants & fundraising), pass 10, a watchdog pickup. PR #3632
@@ -32,6 +61,8 @@ Full writeup: `docs/security-review/GF-22-grants-fundraising.md`'s
 Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
 supplies) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 10, PR #3632, merged, docs-only), preserved for history</summary>
@@ -21090,7 +21121,7 @@ this iteration's commit" rule.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -21109,6 +21140,47 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 23 (Medical supplies, pass 16) — watchdog run, 0 fixed, 0 new findings
+
+Watchdog run for the security-review rotation. PR #3633 (Feature 22,
+Grants & fundraising, pass 10) had already merged. No open PR's head
+branch starts with `claude/security-review-` (`list_pull_requests`
+state=open empty, and `search_pull_requests` `head:claude/security-review-`
+empty, both checked immediately before starting), and row 23 (Medical
+supplies) was confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `main` (head `dbf2d64b`).
+
+Routes re-enumerated by AST walk rather than trusted from the prior pass's
+count: **26**, up from pass 15's 25 — the one addition is `GET
+/lots/search` (`search_medical_lots`), the lot recall lookup added by
+commit `c75e0cea` after pass 15 closed. Real delta since pass 15's baseline
+(`dce89db1`) is six commits, all read in full: the lot recall lookup
+itself (shelf half through `InventoryService.find_lots_by_number`, truck
+half through a new `lot_number` filter on
+`EquipmentCheckService.apparatus_expiring_stock`), a truck-row link to
+Inventory's swap/restock pages, a Low stock tab, a next-expiry sort on the
+items list/export, truck lots added to the lot export, and a "Not yet
+counted on apparatus" table on the weekly low-stock email. All six verified
+clean: the new route's LIKE pattern goes through `like_pattern()` with
+`escape=LIKE_ESCAPE_CHAR` on both the shelf and truck sides (Pitfall #25),
+every query stays org- and domain-scoped (including a subquery that scopes
+itself independently rather than inheriting the outer query's filter), both
+CSV exports still use `SafeCsvWriter`, the email's new section runs free
+text through `html.escape()`, and `sort_by` stays allowlisted (unknown keys
+fall back to a name sort, no arbitrary-column exposure). MSUP-4
+(`get_expiring_lots`, no row cap) and MSUP-11 (`list_lots`, no row cap)
+re-confirmed open at their current line numbers, still owner-accepted
+(`docs/KNOWN_LIMITATIONS.md`, 2026-10-05) — not re-opened for a fix.
+
+Noted for the next pass, not reviewed here: PR #3627 ("Medical supplies:
+record lot recalls") is open against `main`, not yet merged
+(`mergeable_state: clean`), and will add a new `inventory_lot_recalls`
+table plus three new routes (`GET /recalls`, `POST /recalls`, `POST
+/recalls/{id}/lift`) once it lands.
+
+Full write-up: `docs/security-review/MSUP-23-medical-supplies.md`'s
+**Pass 16** section.
 
 ### 2026-10-24 — Feature 21 (Admin hours, pass 10) — watchdog pickup, 0 fixed by this pass, 0 new findings; AH-18 (pass 9's one open finding) confirmed fixed
 
