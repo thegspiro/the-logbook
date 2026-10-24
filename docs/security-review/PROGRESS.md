@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3647 (Feature 29, Reports & analytics, pass 11) merged clean
+(`14e95ce1`), docs-only (the findings file and `PROGRESS.md` itself — no app
+code), so nothing to record in the Log per the "docs-only PR is not a
+recordable event" rule. Row 29 is now `✅`. This iteration (a watchdog
+pickup — the dedicated loop session for this rotation was unreachable)
+re-confirmed via both `search_pull_requests` (`head:claude/security-review-`,
+state=open) and `list_pull_requests` (state=open) that no rotation PR is
+open, so it proceeds to Feature 30 (Onboarding), pass 9.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3647, Feature 29, Reports & analytics, pass 11, merged), preserved for history</summary>
+
 **PR [#3647](https://github.com/thegspiro/the-logbook/pull/3647)** (branch
 `claude/security-review-reports-analytics-p11`) —
 Feature 29 (Reports & analytics), pass 11 (rotation lap 2). PR #3645
@@ -44,6 +56,8 @@ Full writeup: `docs/security-review/RPT6-29-reports-analytics.md`'s
 
 Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
 re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3645, Feature 28, Security, audit & IP, pass 9, merged), preserved for history</summary>
@@ -21320,7 +21334,7 @@ this iteration's commit" rule.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -21332,6 +21346,58 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 30 (Onboarding, pass 9) — watchdog pickup, 0 fixed, 0 new findings, 1 documentation correction
+
+The dedicated loop session for this rotation (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was unreachable, so this is a watchdog pickup. PR #3647 (Feature 29, Reports &
+analytics, pass 11) had already merged, docs-only (findings file +
+`PROGRESS.md`), so nothing to record for it per the "docs-only PR is not a
+recordable event" rule — row 29 is `✅`. Re-confirmed via both
+`search_pull_requests` (`head:claude/security-review-`, state=open) and
+`list_pull_requests` (state=open), 0 results both times, that no rotation PR
+was open before starting. Row 30 (Onboarding) was the next `⬜` row on a
+freshly-pulled, fast-forwarded `main` (`1bce6940`).
+
+Baseline: pass 8's merge (PR #3517, tip commit `dbe57bf6` on this feature's
+files). `git log dbe57bf6..HEAD` scoped to the full file list pass 7/8
+defined (plus `schemas/organization.py`, newly in scope) found real changes
+in exactly two of this feature's own files: `onboarding.py` (8 lines — the
+Google Drive storage-config mapping switched from OAuth client id/secret to a
+service-account key + Shared Drive id, following a different rotation
+feature's storage-backend redesign) and `services/system_notices.py` (51 new
+lines — a `BACKUPS_NOT_ENCRYPTED` notice, reading a fixed local status file,
+fail-closed, gated unchanged on `settings.manage`, unreachable from any of
+onboarding's unauthenticated routes). Both read in full and traced end to
+end: the storage-config rename still runs through the same
+`encrypt_settings_secrets()` call onboarding's email config already used, so
+the service-account key is encrypted at rest exactly as `FileStorageSettings`'s
+docstring claims — no new mechanism, no regression. On the frontend, a new
+`OnboardingGate` component (plus `onboardingGateState.ts` and a `routes.tsx`
+restructuring to wrap existing routes with it) redirects a visitor to
+`/login` once setup is finished, deliberately failing open on an errored or
+rate-limited status check — confirmed this is UX only: every route it fronts
+already enforces `needs_onboarding()`/`_require_owner_authority` server-side,
+unchanged. Re-enumerated all 26 routes by AST (unchanged set and auth
+dependencies from pass 7/8's table). Re-verified all three standing OPEN
+items (the un-deduped `role.id` within one `/session/roles` payload still
+500s on commit; `/organization`'s narrower `except ValueError` vs. its twin's
+`except Exception`; `ITTeamMemberRequest.email` as `str` by design) unchanged
+at current line numbers — none is a data-exposure issue, confirmed the app
+has no `debug=True` and no global exception handler, so an uncaught
+`IntegrityError` still returns Starlette's generic, traceback-free 500.
+
+**One documentation correction, not a security finding:** the rotation
+table's row 30 and this feature's findings-file header both still said "24
+unauth bootstrap routes," unchanged since before pass 7 added the two
+key-custody routes (`/session/key-custody` GET/POST). Corrected to 26 in this
+PR. `SEC-00-cross-cutting-baseline.md` carries the same stale count in its
+own most recent pass's whole-codebase tallies — left alone, as that is
+Feature 00's own territory to refresh on its next rotation pass, not
+re-derived here.
+
+Full writeup: `docs/security-review/ONB5-30-onboarding.md`'s **Pass 9**
+section.
 
 ### 2026-10-24 — Feature 29 (Reports & analytics, pass 11) — 0 fixes, 0 new findings, 1 documentation correction
 
