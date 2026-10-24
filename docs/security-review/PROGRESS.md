@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3636](https://github.com/thegspiro/the-logbook/pull/3636)** (branch
+`claude/security-review-meetings-minutes-p9`) — Feature 24 (Meetings &
+minutes), pass 9, a watchdog pickup. **0 fixed, 0 new findings** — re-verified
+the real delta since pass 8 (approved-meeting delete refusal, carried-forward/
+attachment cleanup on minutes delete, automatic election-result filing,
+numeric bounds, UTC-instant timestamps, the probationary-account-status sweep
+— which fixed a real gap in this feature's quorum denominator and attendance
+roster — and the shared file-storage interface consolidation), all already
+correctly org-scoped. MM-19/MM-20 (pass 8's two flagged LOW find-or-create
+races) re-confirmed OPEN, unchanged.
+
+Full writeup: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 9**
+section.
+
+Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
+notifications) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3635's docs-only merge and #3634's closure as its duplicate, Feature 23, Medical supplies, pass 16), preserved for history</summary>
+
 **None.** Two watchdog sessions raced Feature 23 (Medical supplies, pass 16)
 concurrently: PR #3635 (`claude/security-review-medical-supplies-p16`) merged
 first — docs-only (`docs/security-review/MSUP-23-medical-supplies.md` and
@@ -28,8 +49,10 @@ its one genuinely new finding (MSUP-28, MED, a domain-check TOCTOU on
 actually-relevant target, the open sibling PR #3627 ("Medical supplies:
 record lot recalls"), rather than lost with the closed PR. Row 23 stays ✅.
 A docs-only merge is not independently recordable, so only this Open PR row
-needed clearing — which rides along in this pass's own commit (Feature 24,
+needed clearing — which rode along in this pass's own commit (Feature 24,
 Meetings & minutes, pass 9) rather than getting a PR of its own.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3634, closed as a duplicate of #3635; Feature 23, Medical supplies, pass 16), preserved for history</summary>
