@@ -493,6 +493,7 @@ const routes = ({
   ['**/api/v1/medical-supplies/lots/expiring**', () => []],
   ['**/api/v1/medical-supplies/categories**', () => []],
   ['**/api/v1/medical-supplies/items**', () => ({ items: [], total: 0, skip: 0, limit: 200 })],
+  ['**/api/v1/medical-supplies/recalls**', () => []],
 
   // The department store's admin page. Unmocked, the catch-all's `{}` reached
   // StoreSettingsTab as a settings object with no `notifyEmails`, which the

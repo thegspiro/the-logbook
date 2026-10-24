@@ -73,12 +73,20 @@ export const StockRowsTable: React.FC<StockRowsTableProps> = ({ rows, linkToAppa
               <td data-label="On hand" className="text-theme-text-primary px-4 py-3 text-right tabular-nums">
                 {formatNumber(lot.quantity)}
               </td>
-              <td
-                data-label="Status"
-                className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration ?? undefined)}`}
-              >
-                {expiryLabel(lot.days_until_expiration ?? undefined)}
-              </td>
+              {lot.recalled ? (
+                // Ahead of the date: a recalled unit is pulled now, however
+                // long it has left.
+                <td data-label="Status" className="px-4 py-3 font-semibold text-red-700 dark:text-red-400">
+                  Recalled
+                </td>
+              ) : (
+                <td
+                  data-label="Status"
+                  className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration ?? undefined)}`}
+                >
+                  {expiryLabel(lot.days_until_expiration ?? undefined)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

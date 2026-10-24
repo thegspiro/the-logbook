@@ -49,6 +49,7 @@ import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
 import { MedicalItemLotsModal } from '../components/MedicalItemLotsModal';
 import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
 import { LotRecallSearch } from '../components/LotRecallSearch';
+import { LotRecallsPanel } from '../components/LotRecallsPanel';
 import { StockRowsTable } from '../components/StockRowsTable';
 import { EXPIRY_WINDOW_DAYS, EXPIRY_WINDOW_OPTIONS, expiryLabel, expiryTone, storageNote, supplyLabel } from '../types';
 import type { MedicalExpiringStockRow, MedicalStorageOptions } from '../types';
@@ -605,6 +606,14 @@ const MedicalSuppliesPage: React.FC = () => {
   // success against old quantities and never raise the error it exists to find.
   const refresh = useCallback(() => loadSectionsRef.current(ALL_SECTIONS, { bypassCache: true }), []);
 
+  // A recall changes on-hand figures, Low stock and the Expiring list, so a
+  // recall recorded or lifted reloads them, and bumps the recalls panel.
+  const [recallVersion, setRecallVersion] = useState(0);
+  const handleRecallChanged = useCallback(() => {
+    setRecallVersion((v) => v + 1);
+    void refresh();
+  }, [refresh]);
+
   // Two effects, not one. `loadSections` closes over the filters, so a single
   // effect keyed on it reloaded all four sections on every keystroke -- and
   // since each section's newest request wins, those filter-driven requests
@@ -1018,7 +1027,14 @@ const MedicalSuppliesPage: React.FC = () => {
           <SkeletonCard />
         ) : tab === 'expiring' ? (
           <section aria-label="Expiring stock">
-            {!noSuppliesYet && <LotRecallSearch linkToApparatus={canOpenApparatusInventory} />}
+            {!noSuppliesYet && (
+              <LotRecallSearch
+                linkToApparatus={canOpenApparatusInventory}
+                canRecall={canManage}
+                onRecalled={handleRecallChanged}
+              />
+            )}
+            <LotRecallsPanel canManage={canManage} version={recallVersion} onChanged={handleRecallChanged} />
             <div className="mb-3 flex items-center gap-2">
               <label htmlFor="medical-expiry-window" className="text-theme-text-secondary text-sm">
                 Look ahead

@@ -1162,3 +1162,188 @@ class TestUncountedPositionsForTheEmail:
         )
 
         assert rows == []
+
+
+class TestLotRecalls:
+    """A recall reaches every unit carrying the number, shelf and truck."""
+
+    def _user(self, dept):
+        return SimpleNamespace(
+            id=dept.user_id, organization_id=dept.org_id, username="supply"
+        )
+
+    async def _recall(self, db_session, dept, number, item=None, reason=None):
+        from app.schemas.inventory import LotRecallCreate
+
+        with patch.object(ms, "log_audit_event", new=AsyncMock()):
+            return await ms.record_medical_lot_recall(
+                data=LotRecallCreate(
+                    inventory_item_id=item or dept.gauze,
+                    lot_number=number,
+                    reason=reason,
+                ),
+                db=db_session,
+                current_user=self._user(dept),
+            )
+
+    async def _lift(self, db_session, dept, recall_id, note="Entered in error"):
+        from app.schemas.inventory import LotRecallLift
+
+        with patch.object(ms, "log_audit_event", new=AsyncMock()):
+            return await ms.lift_medical_lot_recall(
+                recall_id=recall_id,
+                data=LotRecallLift(note=note),
+                db=db_session,
+                current_user=self._user(dept),
+            )
+
+    async def _parts(self, db_session, dept):
+        items = await _items(db_session, dept.gauze)
+        parts = await InventoryService(db_session).stock_breakdown(
+            dept.org_id, list(items.values())
+        )
+        return parts[dept.gauze]
+
+    async def _number_shelf_lot(self, db_session, dept, number, days=5):
+        await db_session.execute(
+            InventoryLot.__table__.update()
+            .where(InventoryLot.inventory_item_id == dept.gauze)
+            .values(
+                lot_number=number, expiration_date=dept.today + timedelta(days=days)
+            )
+        )
+        await db_session.commit()
+
+    async def test_a_recalled_truck_lot_stops_counting(self, db_session, dept):
+        # Medic 1's in-date 3 are lot L3; case and spaces do not matter.
+        await self._recall(db_session, dept, " l3 ")
+
+        parts = await self._parts(db_session, dept)
+
+        # 12 aboard before: 3 (L3) + 5 counted + 4 assumed full.
+        assert parts["apparatus"] == 9
+
+    async def test_a_recalled_position_lot_stops_counting(self, db_session, dept):
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.medic2)
+            .values(lot_number="M2-LOT")
+        )
+        await db_session.commit()
+        await self._recall(db_session, dept, "M2-LOT")
+
+        parts = await self._parts(db_session, dept)
+
+        assert parts["apparatus"] == 7
+
+    async def test_a_recalled_shelf_lot_stops_counting(self, db_session, dept):
+        await self._number_shelf_lot(db_session, dept, "GZ-1")
+        await self._recall(db_session, dept, "gz-1")
+        service = InventoryService(db_session)
+
+        parts = await self._parts(db_session, dept)
+        swappable = await service.get_lots_for_items(dept.org_id, [dept.gauze])
+
+        assert parts["shelf"] == 0
+        # Not offered as replacement stock, since the swap refuses it.
+        assert swappable == {}
+
+    async def test_it_lists_first_in_expiring_whatever_its_date(self, db_session, dept):
+        await self._number_shelf_lot(db_session, dept, "GZ-1", days=400)
+        await self._recall(db_session, dept, "GZ-1")
+
+        rows = await ms.list_expiring_medical_stock(
+            days_ahead=30, db=db_session, current_user=self._user(dept)
+        )
+
+        assert rows[0].lot_number == "GZ-1"
+        assert rows[0].recalled is True
+        assert all(not r.recalled for r in rows[1:])
+
+    async def test_the_list_says_what_is_left_to_pull(self, db_session, dept):
+        await self._number_shelf_lot(db_session, dept, "L3")
+        made = await self._recall(db_session, dept, "L3", reason="Sterility")
+
+        assert made.units_on_shelf == 2
+        assert made.units_aboard == 3
+        assert made.reason == "Sterility"
+        listed = await ms.list_medical_lot_recalls(
+            include_lifted=False, db=db_session, current_user=self._user(dept)
+        )
+        assert [r.id for r in listed] == [made.id]
+
+    async def test_lifting_restores_the_stock_and_keeps_the_record(
+        self, db_session, dept
+    ):
+        made = await self._recall(db_session, dept, "L3")
+
+        lifted = await self._lift(db_session, dept, made.id)
+        parts = await self._parts(db_session, dept)
+
+        assert parts["apparatus"] == 12
+        assert lifted.lift_note == "Entered in error"
+        assert lifted.units_aboard == 0
+        active = await ms.list_medical_lot_recalls(
+            include_lifted=False, db=db_session, current_user=self._user(dept)
+        )
+        everything = await ms.list_medical_lot_recalls(
+            include_lifted=True, db=db_session, current_user=self._user(dept)
+        )
+        assert active == []
+        assert [r.id for r in everything] == [made.id]
+
+    async def test_a_second_active_recall_of_the_lot_is_refused(self, db_session, dept):
+        await self._recall(db_session, dept, "L3")
+
+        with pytest.raises(HTTPException) as err:
+            await self._recall(db_session, dept, "l3")
+
+        assert err.value.status_code == 409
+
+    async def test_a_lifted_recall_cannot_be_lifted_again(self, db_session, dept):
+        made = await self._recall(db_session, dept, "L3")
+        await self._lift(db_session, dept, made.id)
+
+        with pytest.raises(HTTPException) as err:
+            await self._lift(db_session, dept, made.id)
+
+        assert err.value.status_code == 409
+
+    async def test_a_gear_supply_cannot_be_recalled_here(self, db_session, dept):
+        with pytest.raises(HTTPException) as err:
+            await self._recall(db_session, dept, "R-1", item=dept.rope)
+
+        assert err.value.status_code == 404
+
+    async def test_another_departments_recall_cannot_be_lifted(self, db_session, dept):
+        made = await self._recall(db_session, dept, "L3")
+        stranger = SimpleNamespace(id=_uid(), organization_id=_uid(), username="x")
+        from app.schemas.inventory import LotRecallLift
+
+        with pytest.raises(HTTPException) as err:
+            await ms.lift_medical_lot_recall(
+                recall_id=made.id,
+                data=LotRecallLift(note="Not ours"),
+                db=db_session,
+                current_user=stranger,
+            )
+
+        assert err.value.status_code == 404
+        assert (await self._parts(db_session, dept))["apparatus"] == 9
+
+    async def test_another_departments_recall_does_not_reach_us(self, db_session, dept):
+        service = InventoryService(db_session)
+
+        assert await service.recalled_lot_keys(_uid(), [dept.gauze]) == set()
+
+    async def test_the_lot_lookup_flags_it(self, db_session, dept):
+        # A different lot whose number merely contains the recalled one.
+        await self._number_shelf_lot(db_session, dept, "L30")
+        await self._recall(db_session, dept, "L3")
+
+        rows = await ms.search_medical_lots(
+            lot_number="L3", db=db_session, current_user=self._user(dept)
+        )
+
+        flags = {r.lot_number: r.recalled for r in rows}
+        assert flags == {"L3": True, "L30": False}

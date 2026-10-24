@@ -51,6 +51,7 @@ from app.models.inventory import (
     InventoryItem,
     ItemCondition,
     ItemStatus,
+    lot_key,
 )
 from app.models.user import User
 from app.schemas.equipment_check import ItemDeployment
@@ -73,6 +74,9 @@ from app.schemas.inventory import (
     ItemBulkRetireResult,
     ItemRetireRequest,
     ItemsListResponse,
+    LotRecallCreate,
+    LotRecallLift,
+    LotRecallResponse,
     MedicalExpiringStockRow,
     MedicalStorageAreaOption,
     MedicalStorageOptionsResponse,
@@ -2276,6 +2280,7 @@ async def _shelf_stock_rows(
     item_ids = {str(lot.inventory_item_id) for lot, _ in shelf}
     sizes = await service.item_sizes(org_id, item_ids)
     paths = await service.storage_paths_for(org_id, item_ids)
+    recalled = await service.recalled_lot_keys(org_id, item_ids)
     rows: List[MedicalExpiringStockRow] = []
     for lot, item_name in shelf:
         item_id = str(lot.inventory_item_id)
@@ -2295,6 +2300,7 @@ async def _shelf_stock_rows(
                 quantity=lot.quantity,
                 # A lot's own location note outranks the supply's filing.
                 where=lot.storage_location or paths.get(item_id),
+                recalled=(item_id, lot_key(lot.lot_number)) in recalled,
             )
         )
     return rows
@@ -2364,7 +2370,8 @@ async def list_expiring_medical_stock(
 
     One list for everything to pull: shelf lots (with their storage path) and
     units aboard the trucks (with the apparatus and compartment), soonest
-    first. ``/expiring-lots`` remains the shelf-only list.
+    first. Units under an active recall are listed too, whatever their date,
+    flagged ``recalled``. ``/expiring-lots`` remains the shelf-only list.
 
     **Authentication required**
     **Requires permission: inventory.view_medical or inventory.view**
@@ -2375,19 +2382,218 @@ async def list_expiring_medical_stock(
     shelf = await service.get_expiring_lots(
         org_id, days_ahead, item_types=MEDICAL_ITEM_TYPES, today=today
     )
+    # Recalled lots join whatever their date: they are pulled now.
+    listed = {lot.id for lot, _ in shelf}
+    shelf = list(shelf) + [
+        (lot, name)
+        for lot, name in await service.get_recalled_shelf_lots(
+            org_id, MEDICAL_ITEM_TYPES
+        )
+        if lot.id not in listed
+    ]
     rows = await _shelf_stock_rows(service, org_id, shelf, today)
     aboard = await EquipmentCheckService(db).apparatus_expiring_stock(
-        org_id, list(MEDICAL_ITEM_TYPES), days_ahead=days_ahead, today=today
+        org_id,
+        list(MEDICAL_ITEM_TYPES),
+        days_ahead=days_ahead,
+        today=today,
+        include_recalled=True,
     )
     rows.extend(MedicalExpiringStockRow(**row) for row in aboard)
+    # Recalled first: those are pulled today, whatever their date says.
     rows.sort(
         key=lambda r: (
+            not r.recalled,
             r.expiration_date or date.max,
             (r.item_name or "").lower(),
             r.location,
         )
     )
     return rows
+
+
+# ============================================
+# Recalls
+#
+# A recall names a supply and a lot number, and reaches every unit carrying
+# that number: shelf lots, units already on a truck, and later deliveries.
+# While active the units do not count as stock and cannot be swapped onto a
+# truck (InventoryService._usable_lot). Lifting one keeps the row as a record.
+# ============================================
+
+
+async def _recall_responses(
+    db: AsyncSession, service: InventoryService, org_id: str, include_lifted: bool
+) -> List[LotRecallResponse]:
+    rows = await service.list_lot_recalls(
+        org_id, MEDICAL_ITEM_TYPES, include_lifted=include_lifted
+    )
+    if not rows:
+        return []
+    today = await resolve_org_today(db, org_id)
+    aboard_rows = await EquipmentCheckService(db).apparatus_expiring_stock(
+        org_id,
+        list(MEDICAL_ITEM_TYPES),
+        days_ahead=None,
+        today=today,
+        item_ids={str(r[0].inventory_item_id) for r in rows},
+        include_recalled=True,
+    )
+    aboard: Dict[Tuple[str, str], int] = {}
+    for row in aboard_rows:
+        if row["recalled"]:
+            key = (row["inventory_item_id"], lot_key(row["lot_number"]))
+            aboard[key] = aboard.get(key, 0) + int(row["quantity"] or 0)
+    return [
+        LotRecallResponse(
+            id=str(recall.id),
+            inventory_item_id=str(recall.inventory_item_id),
+            item_name=name,
+            item_size=size,
+            lot_number=recall.lot_number,
+            reason=recall.reason,
+            recalled_at=recall.recalled_at,
+            lifted_at=recall.lifted_at,
+            lift_note=recall.lift_note,
+            units_on_shelf=on_shelf,
+            # A lifted recall no longer marks anything, so nothing aboard is
+            # counted against it.
+            units_aboard=(
+                0
+                if recall.lifted_at
+                else aboard.get(
+                    (str(recall.inventory_item_id), recall.lot_number_key), 0
+                )
+            ),
+        )
+        for recall, name, size, on_shelf in rows
+    ]
+
+
+@router.get("/recalls", response_model=list[LotRecallResponse])
+async def list_medical_lot_recalls(
+    include_lifted: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.view_medical", "inventory.view")
+    ),
+):
+    """
+    Recalled medical lots, active first, with what is left to pull
+
+    ``include_lifted=true`` adds the recalls that were lifted, as a record.
+
+    **Authentication required**
+    **Requires permission: inventory.view_medical or inventory.view**
+    """
+    org_id = str(current_user.organization_id)
+    return await _recall_responses(db, InventoryService(db), org_id, include_lifted)
+
+
+@router.post(
+    "/recalls",
+    response_model=LotRecallResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def record_medical_lot_recall(
+    data: LotRecallCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Record a recall of one lot number of a medical supply
+
+    The units carrying that number, on the shelves and on the apparatus, stop
+    counting as stock and cannot be swapped onto a truck until it is lifted.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    await _require_medical_item(service, data.inventory_item_id, org_id)
+    try:
+        recall = await service.record_lot_recall(
+            org_id,
+            data.inventory_item_id,
+            data.lot_number,
+            data.reason,
+            str(current_user.id),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
+    await log_audit_event(
+        db=db,
+        event_type="medical_lot_recalled",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "recall_id": str(recall.id),
+            "inventory_item_id": str(recall.inventory_item_id),
+            "lot_number": recall.lot_number,
+            "reason": recall.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    responses = await _recall_responses(db, service, org_id, include_lifted=False)
+    return next(r for r in responses if r.id == str(recall.id))
+
+
+@router.post("/recalls/{recall_id}/lift", response_model=LotRecallResponse)
+async def lift_medical_lot_recall(
+    recall_id: UUID,
+    data: LotRecallLift,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Lift a recall, saying why
+
+    The units carrying the number count as stock again. The recall stays on
+    record with the note.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    # Resolved through the medical list, so a gear recall reads as absent to
+    # a medical-only officer (404, not 403, as _require_medical_item says).
+    known = {
+        r.id: r
+        for r in await _recall_responses(db, service, org_id, include_lifted=True)
+    }
+    if str(recall_id) not in known:
+        raise HTTPException(status_code=404, detail="Recall not found")
+    try:
+        recall = await service.lift_lot_recall(
+            org_id, str(recall_id), data.note, str(current_user.id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
+    if recall is None:
+        raise HTTPException(status_code=404, detail="Recall not found")
+    await log_audit_event(
+        db=db,
+        event_type="medical_lot_recall_lifted",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "recall_id": str(recall.id),
+            "inventory_item_id": str(recall.inventory_item_id),
+            "lot_number": recall.lot_number,
+            "note": recall.lift_note,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    responses = await _recall_responses(db, service, org_id, include_lifted=True)
+    return next(r for r in responses if r.id == str(recall.id))
 
 
 # ============================================
