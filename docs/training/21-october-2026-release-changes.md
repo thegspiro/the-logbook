@@ -258,6 +258,26 @@ Screenshots to create or replace are in
 
 ---
 
+# October 23–24, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                                                                                          | Now in                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Mark pipeline complete; Completed by hand; officer-only progress actions                                                       | [02 — Training](./02-training.md) (Completing a Pipeline by Hand)         |
+| No active requirements; inactive requirements and prerequisites; deactivating a pipeline withdraws members; prerequisite email | [02 — Training](./02-training.md) (Inactive Requirements and Pipelines)   |
+| Finance: reimburse by check, withdraw a draft, approver preview, inactive category                                             | [11 — Finance](./11-finance.md)                                           |
+| Shift patterns skip an inactive template                                                                                       | [03 — Scheduling](./03-scheduling.md)                                     |
+| Rename a variant product                                                                                                       | [05 — Inventory](./05-inventory.md) (Renaming a variant product)          |
+| Directory accounts: retirement, groups, name changes, secret expiry                                                            | [16 — Integrations](./16-integrations.md)                                 |
+| Locked built-in rank codes                                                                                                     | [08 — Admin & Reports](./08-admin-reports.md)                             |
+| Backup encryption; Google Shared Drive storage                                                                                 | Operator-facing: `BACKUP.md`, `FILE_STORAGE_HARDENING.md`, `UPGRADING.md` |
+
+---
+
 # October 22–23, 2026 workflow updates
 
 Index for the latest window. Audit:

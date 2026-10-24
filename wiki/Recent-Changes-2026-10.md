@@ -5,6 +5,29 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 23 – 24, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
+
+- **Training officers can complete a pipeline by hand.** **Mark pipeline complete**
+  asks for a reason, records it, and a later recalculation will not undo it.
+- **A pipeline with no active requirements completes nobody.** Progress says
+  **No active requirements**. Deactivated requirements and prerequisite pipelines
+  stop being required, and deactivating a pipeline withdraws its members.
+- **Finance:** reimburse a purchase by check, correct or withdraw a draft, cancel
+  a report or check request, see the approver before submitting. New charges are
+  refused under a deactivated budget category or any category above it.
+- **Shift patterns** stop generating shifts while their template is deactivated.
+- **Renaming a variant product** renames every size.
+- **Google Workspace and Microsoft 365:** optional suspension on retirement,
+  removal from groups, name changes follow the member, a 90-day notice for old
+  suspended accounts, and a warning before the Microsoft client secret expires.
+- **Backups** can be encrypted to an offline certificate.
+- **Storage** can use a department's Google Shared Drive.
+- Screenshots to create or re-check are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 22 – 23, 2026
 
 The engineering audit is
