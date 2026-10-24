@@ -16,10 +16,13 @@ Permissions follow the barcode flow they sit beside: resolving a tag is
 carries, moving an item, and reading the tap log are ``inventory.manage``.
 
 Tags on equipment-check compartments belong to whoever builds checklists:
-listing and linking them is ``inventory.check_manage``, and relabelling or
-unlinking one through the shared ``/nfc-tags/{id}`` routes asks for
-``inventory.check_manage`` when the tag is on a compartment and
-``inventory.manage`` otherwise. Resolving a tap during a check
+listing and linking them is ``inventory.check_manage``. Relabelling, marking
+lost or found, moving or unlinking one through the shared ``/nfc-tags/{id}``
+routes asks for ``inventory.check_manage`` or ``inventory.manage`` when the tag
+is on a compartment, and ``inventory.manage`` otherwise: the quartermaster runs
+the department-wide tag register (``GET /nfc-tags``, its export and bulk
+lost/found), which covers every kind of tag, by the owner's decision
+(2026-10-23). Resolving a tap during a check
 (``/nfc/resolve-check``) is for whoever may perform that template's check —
 ``inventory.check_submit`` limited to their assigned templates, as the check
 form itself is, or ``inventory.check_manage``.
@@ -40,16 +43,18 @@ logging everyone would turn an equipment trail into a record of where each
 member was.
 """
 
-from typing import Optional
+import io
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission, user_has_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.models.inventory import InventoryNfcScanAction
+from app.models.inventory import InventoryNfcScanAction, InventoryNfcTagStatus
 from app.models.user import User
 from app.schemas.inventory import ScanLookupResponse
 from app.schemas.inventory_nfc import (
@@ -63,10 +68,12 @@ from app.schemas.inventory_nfc import (
     InventoryNfcAuditReplayRequest,
     InventoryNfcAuditReplayResponse,
     InventoryNfcMemberResponse,
+    InventoryNfcMoveTargetListResponse,
     InventoryNfcPutAwayReplayRequest,
     InventoryNfcPutAwayReplayResponse,
     InventoryNfcPutAwayRequest,
     InventoryNfcPutAwayResponse,
+    InventoryNfcRegisterListResponse,
     InventoryNfcResolveAnyRequest,
     InventoryNfcResolveAnyResponse,
     InventoryNfcResolveCheckRequest,
@@ -74,8 +81,11 @@ from app.schemas.inventory_nfc import (
     InventoryNfcResolveRequest,
     InventoryNfcScanListResponse,
     InventoryNfcSettingsResponse,
+    InventoryNfcTagBulkStatusRequest,
+    InventoryNfcTagBulkStatusResponse,
     InventoryNfcTagCreate,
     InventoryNfcTagListResponse,
+    InventoryNfcTagMove,
     InventoryNfcTagResponse,
     InventoryNfcTagUpdate,
     InventoryNfcUntaggedListResponse,
@@ -85,13 +95,19 @@ from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_audit_schedule_service import (
     InventoryAuditScheduleService,
 )
+from app.services.inventory_nfc_register_service import (
+    MAX_EXPORT_ROWS,
+    InventoryNfcRegisterService,
+)
 from app.services.inventory_nfc_service import (
     InventoryNfcService,
     InventoryNfcTagNotFound,
 )
 from app.services.nfc_tag_service import NfcTagService
+from app.utils.csv_export import SafeCsvWriter
 from app.utils.inventory_nfc import inventory_nfc_enabled, require_inventory_nfc
 from app.utils.nfc_integration import require_nfc_id_cards
+from app.utils.org_timezone import resolve_scheduling_timezone, to_local
 
 router = APIRouter()
 
@@ -105,15 +121,16 @@ def _require_tag_manager(user: User, tag: dict) -> None:
     """403 unless ``user`` may manage tags of this tag's kind.
 
     The ``/nfc-tags/{id}`` routes serve every kind of tag and admit either
-    permission, so the tag itself decides which one is needed: a checklist
-    builder should not relabel a quartermaster's item tags, nor the reverse.
+    permission, so the tag itself decides which is enough: a checklist builder
+    should not relabel a quartermaster's item tags, while the quartermaster,
+    who keeps the register of every tag, may manage compartment tags too.
     """
-    needed = (
-        "inventory.check_manage"
+    allowed = (
+        ("inventory.check_manage", "inventory.manage")
         if tag["check_compartment_id"] is not None
-        else "inventory.manage"
+        else ("inventory.manage",)
     )
-    if not user_has_permission(user, needed):
+    if not any(user_has_permission(user, needed) for needed in allowed):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to manage this tag.",
@@ -577,6 +594,223 @@ async def link_item_nfc_tag(
         username=current_user.username,
     )
     return tag
+
+
+_TagKind = Literal["item", "storage_area", "compartment"]
+
+_KIND_LABELS = {
+    "item": "Item",
+    "storage_area": "Storage area",
+    "compartment": "Compartment",
+}
+
+
+@router.get("/nfc-tags", response_model=InventoryNfcRegisterListResponse)
+async def list_inventory_nfc_register(
+    kind: Optional[_TagKind] = Query(None),
+    tag_status: Optional[InventoryNfcTagStatus] = Query(None, alias="status"),
+    search: Optional[str] = Query(None, max_length=100),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Every tag in the department — items, storage areas and compartments."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    items, total = await InventoryNfcRegisterService(db).list_tags(
+        org_id,
+        kind=kind,
+        status=tag_status,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    return {"items": items, "total": total}
+
+
+@router.get("/nfc-tags/export")
+async def export_inventory_nfc_register(
+    kind: Optional[_TagKind] = Query(None),
+    tag_status: Optional[InventoryNfcTagStatus] = Query(None, alias="status"),
+    search: Optional[str] = Query(None, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """The filtered register as a CSV, capped at ``MAX_EXPORT_ROWS``.
+
+    Built in memory: the cap bounds it to about a megabyte.
+    """
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    items, total = await InventoryNfcRegisterService(db).list_tags(
+        org_id,
+        kind=kind,
+        status=tag_status,
+        search=search,
+        limit=MAX_EXPORT_ROWS,
+    )
+
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
+
+    def _when(value) -> str:
+        return to_local(value, tz).strftime("%Y-%m-%d %H:%M %Z") if value else ""
+
+    output = io.StringIO()
+    writer = SafeCsvWriter(output)
+    writer.writerow(
+        [
+            "Kind",
+            "Tagged",
+            "Checklist",
+            "Label",
+            "Tag",
+            "Status",
+            "Linked by",
+            "Linked",
+            "Last tapped",
+        ]
+    )
+    for row in items:
+        writer.writerow(
+            [
+                _KIND_LABELS[row["kind"]],
+                row["target_name"] or "",
+                row["template_name"] or "",
+                row["label"] or "",
+                f"…{row['uid_preview']}",
+                "Lost" if row["status"] == InventoryNfcTagStatus.LOST else "Active",
+                row["linked_by_name"] or "",
+                _when(row["linked_at"]),
+                _when(row["last_scanned_at"]),
+            ]
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_nfc_tags_exported",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "rows": len(items),
+            "total": total,
+            "kind": kind,
+            "status": tag_status.value if tag_status else None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="inventory_nfc_tags.csv"'
+        },
+    )
+
+
+@router.get("/nfc-tags/move-targets", response_model=InventoryNfcMoveTargetListResponse)
+async def list_inventory_nfc_move_targets(
+    kind: _TagKind = Query(...),
+    search: Optional[str] = Query(None, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Items, storage areas or compartments a register tag could move to."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    items = await InventoryNfcRegisterService(db).move_targets(org_id, kind, search)
+    return {"items": items}
+
+
+@router.post("/nfc-tags/bulk-status", response_model=InventoryNfcTagBulkStatusResponse)
+async def bulk_update_inventory_nfc_tag_status(
+    data: InventoryNfcTagBulkStatusRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Mark several tags lost or found at once — after a bay clean-out turns up
+    a pile of peeled-off tags, or a shelf of them goes missing.
+
+    Ids that are not this department's come back under ``failed`` and the rest
+    still change.
+    """
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    updated, failed = await InventoryNfcRegisterService(db).bulk_update_status(
+        org_id, data.tag_ids, data.status
+    )
+    for tag in updated:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_nfc_tag_status_changed",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "tag_id": tag["id"],
+                "item_id": tag["item_id"],
+                "storage_area_id": tag["storage_area_id"],
+                "check_compartment_id": tag["check_compartment_id"],
+                "new_status": data.status.value,
+                "bulk": True,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return {"updated": updated, "failed": failed}
+
+
+@router.post("/nfc-tags/{tag_id}/move", response_model=InventoryNfcTagResponse)
+async def move_inventory_nfc_tag(
+    tag_id: str,
+    data: InventoryNfcTagMove,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage", "inventory.check_manage")
+    ),
+):
+    """Re-point a tag at another item, storage area or compartment of the same
+    kind, without the tag in hand — for one linked to the wrong thing."""
+    org_id = str(current_user.organization_id)
+    await require_inventory_nfc(db, org_id)
+    service = InventoryNfcService(db)
+    try:
+        _require_tag_manager(current_user, await service.get_tag(tag_id, org_id))
+        before, after = await InventoryNfcRegisterService(db).move_tag(
+            tag_id,
+            org_id,
+            item_id=data.item_id,
+            storage_area_id=data.storage_area_id,
+            check_compartment_id=data.check_compartment_id,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_nfc_tag_moved",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "tag_id": tag_id,
+            "uid_preview": after["uid_preview"],
+            "from": {
+                "item_id": before["item_id"],
+                "storage_area_id": before["storage_area_id"],
+                "check_compartment_id": before["check_compartment_id"],
+            },
+            "to": {
+                "item_id": after["item_id"],
+                "storage_area_id": after["storage_area_id"],
+                "check_compartment_id": after["check_compartment_id"],
+            },
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return after
 
 
 @router.patch("/nfc-tags/{tag_id}", response_model=InventoryNfcTagResponse)

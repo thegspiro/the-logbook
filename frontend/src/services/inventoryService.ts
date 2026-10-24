@@ -4,7 +4,7 @@
 
 import api from './apiClient';
 import type { Symbology } from './labelService';
-import type { InventoryAuditFrequency } from '../constants/enums';
+import type { InventoryAuditFrequency, InventoryNfcTagKind, InventoryNfcTagStatus } from '../constants/enums';
 import type { LabelSetup, LabelSetupSave } from '../modules/inventory/utils/labelSetups';
 import type {
   ClearanceLineItem,
@@ -107,18 +107,23 @@ import type {
   InventoryNfcAuditDetail,
   InventoryNfcAuditListResponse,
   InventoryNfcMember,
+  InventoryNfcMoveTarget,
   InventoryNfcPutAwayRequest,
   InventoryNfcPutAwayResponse,
   InventoryNfcResolveAnyRequest,
   InventoryNfcResolveAnyResponse,
   InventoryNfcResolveCheckRequest,
   InventoryNfcResolveCheckResponse,
+  InventoryNfcRegisterFilters,
+  InventoryNfcRegisterList,
   InventoryNfcResolveRequest,
   InventoryNfcScanListResponse,
   InventoryNfcSettings,
   InventoryNfcTag,
+  InventoryNfcTagBulkStatusResponse,
   InventoryNfcTagCreate,
   InventoryNfcTagListResponse,
+  InventoryNfcTagMove,
   InventoryNfcTagUpdate,
   InventoryNfcUntaggedListResponse,
   KioskActionResponse,
@@ -775,6 +780,53 @@ export const inventoryService = {
 
   async unlinkNfcTag(tagId: string): Promise<void> {
     await api.delete(`/inventory/nfc-tags/${tagId}`);
+  },
+
+  // The department-wide tag register. Items, storage areas and compartments.
+  async getNfcRegister(
+    filters: InventoryNfcRegisterFilters,
+    limit: number,
+    offset: number
+  ): Promise<InventoryNfcRegisterList> {
+    const response = await api.get<InventoryNfcRegisterList>('/inventory/nfc-tags', {
+      params: { ...filters, limit, offset },
+    });
+    // An empty register reads as "no tags", so a bad body fails instead.
+    return {
+      items: expectArray(response.data?.items, 'NFC tag register'),
+      total: typeof response.data?.total === 'number' ? response.data.total : 0,
+    };
+  },
+
+  async exportNfcRegister(filters: InventoryNfcRegisterFilters): Promise<Blob> {
+    const response = await api.get<Blob>('/inventory/nfc-tags/export', { params: filters, responseType: 'blob' });
+    return response.data;
+  },
+
+  async bulkUpdateNfcTagStatus(
+    tagIds: string[],
+    status: InventoryNfcTagStatus
+  ): Promise<InventoryNfcTagBulkStatusResponse> {
+    const response = await api.post<InventoryNfcTagBulkStatusResponse>('/inventory/nfc-tags/bulk-status', {
+      tag_ids: tagIds,
+      status,
+    });
+    return {
+      updated: expectArray(response.data?.updated, 'bulk tag update'),
+      failed: asArray(response.data?.failed),
+    };
+  },
+
+  async getNfcMoveTargets(kind: InventoryNfcTagKind, search: string): Promise<InventoryNfcMoveTarget[]> {
+    const response = await api.get<{ items: InventoryNfcMoveTarget[] }>('/inventory/nfc-tags/move-targets', {
+      params: { kind, search: search.trim() || undefined },
+    });
+    return asArray(response.data?.items);
+  },
+
+  async moveNfcTag(tagId: string, target: InventoryNfcTagMove): Promise<InventoryNfcTag> {
+    const response = await api.post<InventoryNfcTag>(`/inventory/nfc-tags/${tagId}/move`, target);
+    return response.data;
   },
 
   async createNfcAudit(data: InventoryNfcAuditCreate): Promise<InventoryNfcAuditDetail> {
