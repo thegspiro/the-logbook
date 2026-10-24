@@ -2436,6 +2436,12 @@ card in the department, in four tabs:
 Deleting old taps does not touch attendance. The check-in itself stays on the
 shift, event or admin-hours record.
 
+<!-- Screenshot needed: The Member ID Cards page on the Cards tab with two cards ticked and the Suspend, Reactivate, Report lost and Revoke bar above the list -->
+
+<!-- Screenshot needed: The Coverage tab of Member ID Cards: current members without a working card, cards held by former members, and active cards not used lately -->
+
+<!-- Screenshot needed: The Tap log tab of Member ID Cards with the drill's taps, including an unknown card and a card that is not active -->
+
 A tap from a card nobody has registered is logged as **Unknown card**, without
 the card's number.
 

@@ -604,6 +604,12 @@ is on. It shows whose card each tap was only to officers who can also issue ID
 cards. The full card list and tap log are on **Members Admin → Member ID
 cards** (see [Membership](./01-membership.md#the-member-id-cards-page)).
 
+<!-- Screenshot needed: The Card taps section on an event page, listing station taps with their outcomes and readers -->
+
+<!-- Screenshot needed: The Card Check-ins tab of Events Admin, with its outcome, reader and date filters above the taps -->
+
+<!-- Screenshot needed: The Card Readers page with the Volunteer Office reader on and its kiosk taps over the last 7 days -->
+
 ### Monitoring Check-Ins
 
 Officers can watch check-ins as they happen. On the event page, open **More →

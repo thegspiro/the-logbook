@@ -295,6 +295,8 @@ address:
 - An **archived member** has it → a suggestion to reactivate them instead
 - Another **applicant** has it → a warning with the applicant's details
 
+<!-- Screenshot needed: The Add Applicant dialog warning that the email belongs to an active applicant, naming their pipeline and stage -->
+
 ![Add Applicant dialog with contact fields, membership type and the Target Role picker](./images/15-03-create-applicant.png)
 
 ### Edge Cases

@@ -1864,6 +1864,10 @@ Moves and lost/found changes are recorded in the audit log.
 
 The page only appears while NFC tags are turned on.
 
+<!-- Screenshot needed: The NFC Tag Register as a quartermaster: item and shelf tags with their status and last tap, one tag marked Lost -->
+
+<!-- Screenshot needed: The Move tag dialog from the NFC Tag Register, searching for another item to move an item tag onto -->
+
 ### Items not seen
 
 Needs the **Manage gear, uniforms and equipment** permission.
@@ -3076,6 +3080,9 @@ total. Gear is unchanged: it is still judged on the shelf alone.
   target because nobody has counted it, each linked to that truck's inventory.
   The tab shows how many supplies wait on a count, and the list can be filtered
   to them.
+
+  <!-- Screenshot needed: The Not yet counted tab of Medical Supplies, each uncounted truck position linked to that truck's inventory -->
+
 - The list (and its CSV export) can be sorted by **Next expiry**, shelf and
   trucks together; supplies with no date sort last. The supply export adds
   On Apparatus, Uncounted Positions, Next Expiry and Next Expiry Where columns
@@ -3177,8 +3184,13 @@ delivery of the same lot.
 2. Under **Find a lot**, type the lot number from the recall notice and select
    **Find**. It searches the shelves and every apparatus checklist, in date or
    not.
+
+   <!-- Screenshot needed: Find a lot on the Medical Supplies Expiring tab, with a lot found on the shelf and its Recall lot button -->
+
 3. Select **Recall lot _number_ of _supply_**. Add a reason if you like (for
    example the manufacturer's notice number) and select **Recall lot**.
+
+   <!-- Screenshot needed: The Recall this lot dialog with a reason typed and the Recall lot button -->
 
 **While a lot is recalled:**
 
@@ -3197,6 +3209,8 @@ recall are both written to the audit log. The same lot cannot be recalled twice
 at once.
 
 A lot with no lot number cannot be recalled.
+
+<!-- Screenshot needed: The Recalled lots panel on the Expiring tab, with the recalled saline lot, how many are still to pull, and Lift recall -->
 
 ---
 

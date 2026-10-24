@@ -3130,10 +3130,15 @@ _(2026-10-24)_; patterns using it generate shifts again.
 **Pausing a pattern** _(2026-10-24)_. Each pattern has **Pause** and
 **Resume**. A paused pattern reads **Paused**, generates nothing on the nightly
 run, and its **Generate** button is disabled. Shifts it already made stay.
-**Generate** is also disabled while the pattern's template is inactive. On the basic apparatus list, anyone
-with scheduling manage rights can turn on **Show inactive** and select
-**Reactivate**; reactivating changes only the flag and re-adds nothing to
-shifts.
+**Generate** is also disabled while the pattern's template is inactive.
+
+<!-- Screenshot needed: The Templates tab with an inactive template and its Reactivate button -->
+
+<!-- Screenshot needed: The Patterns tab with a pattern reading Paused, its Resume button, and Generate disabled -->
+
+On the basic apparatus list, anyone with scheduling manage rights can turn on
+**Show inactive** and select **Reactivate**; reactivating changes only the flag
+and re-adds nothing to shifts.
 
 | Field                                                                | What it does                                                                                                                                             |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
