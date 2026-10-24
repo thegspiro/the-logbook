@@ -557,3 +557,107 @@ class TestSwapTargets:
 
         assert result is None
         assert err == "You are already assigned to the requested shift"
+
+
+class TestOpenToAllShiftWithNoNamedSeats:
+    """An open-to-all shift naming no seats offers the built-in seats.
+
+    The open-to-all bypass returned the shift's own seat list, which is empty
+    when it names none — read as "eligible for nothing", so nobody at all could
+    sign up for it.
+    """
+
+    async def test_a_member_can_sign_up_for_a_seat_outside_their_own_set(
+        self, db_session, dept
+    ):
+        org_id, users = dept
+        svc = SchedulingService(db_session)
+        shift = await _shift(svc, db_session, org_id, users["chief"], open_to_all=True)
+
+        result, err = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": users["alice"], "position": "officer"},
+            uuid.UUID(users["alice"]),
+            self_signup=True,
+        )
+
+        assert err is None, err
+        assert result.position == "officer"
+
+    async def test_the_single_and_bulk_answers_agree(self, db_session, dept):
+        from app.models.user import User
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+        from app.utils.positions import CANONICAL_POSITIONS
+
+        org_id, users = dept
+        svc = SchedulingService(db_session)
+        shift = await _shift(svc, db_session, org_id, users["chief"], open_to_all=True)
+        alice = await db_session.get(User, users["alice"])
+        eligibility = ShiftEligibilityService(db_session)
+
+        single = await eligibility.get_eligible_positions(alice, org_id, shift.id)
+        bulk = await eligibility.get_eligible_positions_bulk(alice, org_id, [shift.id])
+
+        assert single == sorted(CANONICAL_POSITIONS)
+        assert bulk == {shift.id: sorted(CANONICAL_POSITIONS)}
+
+
+class TestTradePickerSources:
+    async def test_an_open_to_all_shift_lists_members_the_roster_would_not(
+        self, db_session, dept
+    ):
+        org_id, users = dept
+        svc = SchedulingService(db_session)
+        shift = await _shift(
+            svc,
+            db_session,
+            org_id,
+            users["chief"],
+            positions=["officer"],
+            open_to_all=True,
+        )
+        _, err = await _assign(
+            svc,
+            org_id,
+            shift,
+            users["alice"],
+            "officer",
+            SignupActor.MANAGER,
+            users["chief"],
+        )
+        assert err is None, err
+
+        # Nobody holds "officer" by rank, qualification or the department's
+        # open positions, so the roster is empty; the shift is open to all.
+        result = await svc.get_trade_candidates(
+            uuid.UUID(org_id), uuid.UUID(shift.id), uuid.UUID(users["alice"]), "officer"
+        )
+
+        listed = {c["user_id"] for c in result}
+        assert users["bob"] in listed
+        assert users["chief"] in listed
+        assert users["alice"] not in listed
+        assert users["gone"] not in listed
+
+    async def test_the_roster_matches_a_seat_whatever_its_case(self, db_session, dept):
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        org_id, users = dept
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :id"),
+            {
+                "id": org_id,
+                "s": json.dumps({"scheduling": {"open_positions": ["rescue_tech"]}}),
+            },
+        )
+        await db_session.commit()
+
+        roster = await ShiftEligibilityService(db_session).get_position_roster(
+            org_id, "Rescue_Tech"
+        )
+
+        assert roster["is_open_position"] is True
+        assert {users["alice"], users["bob"], users["chief"]} <= {
+            m["user_id"] for m in roster["members"]
+        }

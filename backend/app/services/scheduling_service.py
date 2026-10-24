@@ -8428,10 +8428,22 @@ class SchedulingService:
         roster = await ShiftEligibilityService(self.db).get_position_roster(
             str(organization_id), position
         )
+        members = {str(m["user_id"]): m for m in roster.get("members", [])}
+        # An open-to-all shift is open to members the roster has no reason to
+        # list — that is what open to all means — so every current member is a
+        # candidate there, and the per-shift filter below decides.
+        if getattr(shift, "open_to_all_members", False):
+            members.update(
+                {
+                    uid: entry
+                    for uid, entry in (
+                        await self._current_member_entries(organization_id)
+                    ).items()
+                    if uid not in members
+                }
+            )
         candidates = {
-            str(m["user_id"]): m
-            for m in roster.get("members", [])
-            if str(m["user_id"]) != str(offering_user_id)
+            uid: m for uid, m in members.items() if uid != str(offering_user_id)
         }
         if not candidates:
             return []
@@ -8546,6 +8558,47 @@ class SchedulingService:
         # a name near the top is the one most likely to be picked.
         results.sort(key=lambda m: (m["shifts_this_month"], m["user_name"] or ""))
         return results
+
+    async def _current_member_entries(
+        self, organization_id: UUID | str
+    ) -> Dict[str, Dict[str, Any]]:
+        """Every current member, shaped like a position-roster entry."""
+        from app.models.operational_rank import OperationalRank
+
+        users = (
+            (
+                await self.db.execute(
+                    select(User).where(
+                        User.organization_id == str(organization_id),
+                        User.deleted_at.is_(None),
+                        User.is_active,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        rank_names = dict(
+            (
+                await self.db.execute(
+                    select(
+                        OperationalRank.rank_code, OperationalRank.display_name
+                    ).where(
+                        OperationalRank.organization_id == str(organization_id),
+                        OperationalRank.is_active.is_(True),
+                    )
+                )
+            ).all()
+        )
+        return {
+            str(user.id): {
+                "user_id": str(user.id),
+                "user_name": user.display_name,
+                "rank": user.rank,
+                "rank_display_name": rank_names.get(user.rank or ""),
+            }
+            for user in users
+        }
 
     # ============================================
     # Reporting
