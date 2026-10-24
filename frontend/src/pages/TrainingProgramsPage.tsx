@@ -363,7 +363,10 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
         )}
 
         {/* Tabs. Requirements and Templates are manager-only views, so a member
-            sees the Programs list on its own with no strip above it. */}
+            sees the Programs list on its own with no strip above it. Below sm
+            the icons drop and the labels and padding shrink: at full size, the three
+            labels ran ~60px past a 320px screen inside the admin hub, leaving
+            Templates off the edge of a scroll strip nothing points to. */}
         {canManage && (
           <div
             className="bg-theme-surface-secondary hscroll mb-6 flex space-x-1 rounded-lg p-1"
@@ -376,13 +379,13 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
               role="tab"
               aria-selected={visibleTab === 'programs'}
               aria-controls="tab-panel-programs"
-              className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+              className={`touch:min-h-11 flex-1 rounded-md px-2 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
                 visibleTab === 'programs'
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
-              <Target className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              <Target className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
               Programs
             </button>
             <button
@@ -390,13 +393,13 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
               role="tab"
               aria-selected={visibleTab === 'requirements'}
               aria-controls="tab-panel-requirements"
-              className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+              className={`touch:min-h-11 flex-1 rounded-md px-2 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
                 visibleTab === 'requirements'
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
-              <ListChecks className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              <ListChecks className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
               Requirements
             </button>
             <button
@@ -404,13 +407,13 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
               role="tab"
               aria-selected={visibleTab === 'templates'}
               aria-controls="tab-panel-templates"
-              className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+              className={`touch:min-h-11 flex-1 rounded-md px-2 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
                 visibleTab === 'templates'
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
-              <Award className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              <Award className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
               Templates
             </button>
           </div>
