@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3629](https://github.com/thegspiro/the-logbook/pull/3629)** (branch
+`claude/security-review-training-extended`) —
+Feature 18 (Training extended), pass 10, a watchdog pickup. PR #3628
+(Feature 17, Training core, pass 10) had already merged. No open PR's
+head branch starts with `claude/security-review-` (`search_pull_requests`,
+0 results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+18 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`. **0 fixed, 0 new findings** — real delta since
+pass 9's merge (`69f785be`): eight files touched. A `delete_training_program`
+deactivate-instead-of-delete path (shared with Feature 17's own file,
+already reviewed and merged by PR #3628); a new org-scoped
+`import-matched` retry endpoint for staged external-training completions;
+a column-bounds hardening sweep (`le=INT32_MAX`/`FLOAT32_MAX`); a
+file-storage call-site migration onto the already-reviewed shared
+`file_storage` interface, with the org/area confinement check confirmed
+still gating every call; and a migration relaxing
+`training_waivers.end_date` to nullable (Pitfall #35-compliant, no data
+loss). All traced safe. Every standing TRX finding re-verified unchanged
+at its current citation. See `TRX-18-training-extended.md`'s **Pass 10**
+section. Row 18 → ✅ (pending this PR's merge); next is Feature 19
+(Skills testing) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 10, PR #3628, merged), preserved for history</summary>
+
 **PR [#3628](https://github.com/thegspiro/the-logbook/pull/3628)** (branch
 `claude/security-review-training-core-p10`) —
 Feature 17 (Training core), pass 10, a watchdog pickup. PR #3625 (Feature
@@ -44,6 +71,8 @@ open PR already fixed it, so this PR carries a pure-join merge revision
 `TR-17-training-core.md`'s **Pass 10** section. Row 17 → ✅ (pending this
 PR's merge); next is Feature 18 (Training extended) — re-check
 `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 10, PR #3625, merged), preserved for history</summary>
