@@ -8395,6 +8395,17 @@ class SchedulingService:
             .where(User.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
+            # The plan is the seats a member still holds on shifts that still
+            # run. A declined or cancelled seat, or any seat on a cancelled
+            # shift, was never planned work, and counting it inflated
+            # "scheduled" against "worked". A no-show stays: it was planned,
+            # and the gap to worked is exactly what this column exists to show.
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                )
+            )
+            .where(Shift.status != ShiftStatus.CANCELLED)
             .group_by(
                 ShiftAssignment.user_id,
                 User.email,
@@ -8769,12 +8780,15 @@ class SchedulingService:
         self, organization_id: UUID | str, start_date: date, end_date: date
     ) -> List[Dict]:
         """Get shift coverage report for each date in range"""
-        # Fetch all shifts in the range in one query
+        # Fetch all shifts in the range in one query. A cancelled shift is not
+        # coverage the department owes: cancel_shift cancels every seat on it,
+        # so counting it reported every cancellation as an understaffed shift.
         shift_result = await self.db.execute(
             select(Shift)
             .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
+            .where(Shift.status != ShiftStatus.CANCELLED)
             .order_by(Shift.shift_date.asc())
         )
         all_shifts = shift_result.scalars().all()
@@ -8871,11 +8885,16 @@ class SchedulingService:
                             unfilled += 1
                     is_understaffed = unfilled > 0
                 else:
-                    min_staff = (
-                        apparatus_min_staffing.get(shift.apparatus_id, 1)
-                        if shift.apparatus_id
-                        else 1
-                    )
+                    # The same headcount filter_shifts_with_open_positions uses
+                    # for the open-shifts list and the widget: the shift's own
+                    # minimum, then its apparatus's, then one. Reading the
+                    # apparatus first called a four-seat shift with one member
+                    # covered here while those screens showed three seats open.
+                    min_staff = shift.min_staffing
+                    if min_staff is None and shift.apparatus_id:
+                        min_staff = apparatus_min_staffing.get(shift.apparatus_id)
+                    if min_staff is None:
+                        min_staff = 1
                     is_understaffed = assigned_count < min_staff
                 if is_understaffed:
                     understaffed_shifts += 1
@@ -9233,8 +9252,16 @@ class SchedulingService:
                 period_end = requirement.due_date
             else:
                 period_end = reference_date
+                # Clamped: a year before 29 February has no 29th, and building
+                # it raised ValueError and took down the whole report.
+                prior_year = reference_date.year - 1
                 period_start = date(
-                    reference_date.year - 1, reference_date.month, reference_date.day
+                    prior_year,
+                    reference_date.month,
+                    min(
+                        reference_date.day,
+                        calendar.monthrange(prior_year, reference_date.month)[1],
+                    ),
                 )
 
         return period_start, period_end

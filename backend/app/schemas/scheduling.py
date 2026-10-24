@@ -1705,6 +1705,12 @@ class MemberComplianceRecord(BaseModel):
     # another jurisdiction's apparatus.
     external_shift_count: int = 0
     external_hours: float = 0.0
+    # Set (an ISO date) when a member is short of the target but still inside
+    # the requirement's catch-up period. The service already leaves such a
+    # member out of total/compliant/non_compliant counts; without the field
+    # here the response model stripped it, and the list painted that member
+    # red under a header count that excluded them.
+    catch_up_deadline: Optional[str] = None
 
 
 class RequirementComplianceSummary(BaseModel):

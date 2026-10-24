@@ -33,8 +33,22 @@ _COUNTED = ExternalShiftHoursStatus.COUNTED.value
 _REJECTED = ExternalShiftHoursStatus.REJECTED.value
 
 
+def _whole_minutes(minutes: float) -> int:
+    """Minutes as stored, refused when they round to nothing.
+
+    The table's CHECK constraint requires at least one minute. The schema only
+    asks for hours above zero, so 0.005 hours, or a start and end a few seconds
+    apart, rounded to 0 and failed the constraint at commit — a 500 rather than
+    a refusal the member could act on.
+    """
+    rounded = int(round(minutes))
+    if rounded < 1:
+        raise ValueError("A shift must be at least one minute long")
+    return rounded
+
+
 def minutes_from_hours(hours: float) -> int:
-    return int(round(float(hours) * 60))
+    return _whole_minutes(float(hours) * 60)
 
 
 class ExternalShiftHoursService:
@@ -91,7 +105,9 @@ class ExternalShiftHoursService:
             "start_at": start_at,
             "end_at": end_at,
             "shift_date": start_at.astimezone(tz).date(),
-            "duration_minutes": int(round((end_at - start_at).total_seconds() / 60)),
+            "duration_minutes": _whole_minutes(
+                (end_at - start_at).total_seconds() / 60
+            ),
         }
 
     async def create(
