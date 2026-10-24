@@ -2393,3 +2393,221 @@ the feature's one external caller, since pass 8's reviewed baseline. Every
 standing fix from passes 1–8 re-confirmed present at identical line numbers.
 Route surface (29/29) and org-scoping sweep (87 endpoint-file call sites)
 unchanged. No open findings remain in this feature.
+
+---
+
+## Pass 10 (2026-10-24) — watchdog pickup
+
+**Prefix:** `SKT10` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results) and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`. PR #3629 (Feature 18, Training extended, pass 10) had just
+merged. Rotation row 19 (Skills testing) was confirmed the next `⬜` by
+reading `PROGRESS.md` directly.
+
+### Scope check — real delta since pass 9
+
+Pass 9 found the feature's four declared backend files byte-identical back to
+`cef8a679` (pass 8's reviewed baseline). This pass diffs against that same
+commit:
+
+```
+git diff cef8a679..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Real diff this time: 69 insertions / 19 deletions across the endpoint,
+schema, and model files (`skills_testing_service.py` unchanged). All of it
+read directly, not from a commit message.
+
+### Changes reviewed (all traced safe, 0 fixes needed)
+
+- **`SkillTest.examiner_id` relaxed to nullable, `ondelete` CASCADE → SET
+  NULL** (`models/skills_testing.py`) — part of a cross-cutting change
+  (commit `78a6a57e`, migration `cbe0de50f202`) keeping a candidate's test
+  record when the examiner who scored it is later permanently deleted.
+  Correctly Pitfall #2-compliant (nullable paired with SET NULL), and the
+  migration itself (`20261021_1421_cbe0de50f202_attribution_fks_set_null_on_member_.py`)
+  guards table existence (Pitfall #26), is idempotent, and only restores
+  `NOT NULL` on downgrade when no row actually holds a NULL. This feature's
+  own files were swept for every place that assumed a non-null
+  `examiner_id`/`examiner`:
+  - Every `select(User).where(User.id == test.examiner_id)` call site
+    (10 of them) already uses `scalar_one_or_none()`, which safely resolves
+    to `None` when `examiner_id` is `None` (no row matches `User.id ==
+NULL`) — no crash, no unhandled exception.
+  - `_build_test_response` already guarded `examiner_name=... if examiner
+else None`; `list_tests`' batch name-lookup and CSV export's `name_of()`
+    helper are typed `str | None` and return `""`/`None` rather than
+    indexing a dict with `None`.
+  - The four `assert_different_person` separation-of-duties checks (SKT-2,
+    SKT-3, and the two on create/validate) all compare against
+    `test.candidate_id`, never `examiner_id` — unaffected by the
+    nullability change.
+  - `resolve_result_view`'s examiner-FULL-disclosure branch
+    (`str(test.examiner_id) == uid`) and `add_test_viewer`'s SKT3-1
+    self-dealing guard (`str(viewer.id) == str(test.examiner_id)`) both
+    fail safe on `None` — `str(None)` is the literal string `"None"`, which
+    never equals a real UUID, so a test with a deleted examiner simply
+    grants no one that branch's privilege rather than mismatching open.
+  - `_authorize_test_write`'s examiner-self-service branch
+    (`test.examiner_id == str(user.id)`) also fails closed on `None`: once
+    an examiner is deleted, only `training.manage` can still write the test
+    (the officer short-circuit above it), which is a narrowing of access,
+    not a widening — correct fail-direction.
+  - `email_test_results` (the one call site this cross-cutting commit
+    itself touched inside this feature) renders "Former member" when
+    `test.examiner_id is None`, distinct from "Unknown" (examiner_id present
+    but the `User` row query somehow came back empty) — a real distinction,
+    not cosmetic.
+- **`search_candidates`'s `User.status == UserStatus.ACTIVE` →
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`** — the repo-wide Pitfall #32
+  sweep reaching this feature's one remaining literal-status comparison.
+  Correct: a probationary member is a current member and belongs in the
+  examiner/viewer-grant candidate search.
+- **New `_assert_skills_testing_offered` gate on `create_test`**
+  (`skills_testing.py`) — refuses `POST /tests` with a 409 when the
+  department's `practical_skills_method` (read via the already-reviewed,
+  org-scoped `get_practical_skills_method`, filtered on
+  `TrainingModuleConfig.organization_id`) is `"shift_signoffs"`. Not a
+  security control — a business-rule gate between two product workflows,
+  and its fail direction is the safe one (an unset/unrecognized method
+  reads as Skills Testing, i.e. the gate does _not_ fire, same as every
+  other reader of this column). Validating, releasing, voiding, returning
+  and every read path are deliberately left unguarded by this check per its
+  own docstring, so a test already open when a department switches methods
+  is never left stuck half-scored. No tenant-isolation or auth concern:
+  the check runs after the existing in-org visibility/create authorization,
+  purely narrows one more case to a 409.
+- **Column-bounds hardening** (`schemas/skills_testing.py`) —
+  `le=INT32_MAX`/`le=FLOAT32_MAX` added to `sort_order`, `passing_score`,
+  `time_limit_seconds`, `score`, and `elapsed_seconds` — defensive only,
+  same pattern as TRX-18's identical sweep on the sibling training schemas;
+  narrows a silent DB-level truncation into a clean 422.
+- **`list_tests`'s batch name lookup** — `{i for t, _ in page for i in
+(t.candidate_id, t.examiner_id) if i}` now filters falsy ids before the
+  batch `User` fetch, and the per-row examiner lookup is guarded
+  (`if t.examiner_id else None`) — both are the frontend-visible half of
+  the nullable-examiner change, not a new independent code path.
+
+**Frontend — 16 files changed, all consistent with the same backend
+change plus an AA/AAA contrast and touch-target sweep.** Traced each diff
+directly:
+
+- **`attributionName(name, id)`** (`utils/memberName.ts`, a shared,
+  already-existing helper — not new to this pass) renders a stored name,
+  else `"Former member"` when the id is `null`, else `"Unknown"` — the
+  frontend mirror of the backend's new None-examiner handling. Used at
+  every `examiner_name` display site this pass touched
+  (`MySkillTestsList.tsx`, `ActiveSkillTestPage.tsx`,
+  `MySkillTestResultPage.tsx`, `SkillsTestingPage.tsx`). Plain string
+  interpolation into JSX text content (React-escaped), not
+  `dangerouslySetInnerHTML` — no injection surface.
+- **`SkillsTestingRoute.tsx`** (gates the module's routes on
+  `practicalSkillsStore`) had its own doc comment corrected to say the
+  _server_ refuses opening a new test for a sign-offs department — this
+  route guard was already documented as "not an access control" and
+  remains exactly that; no behavior change, a comment-accuracy fix only.
+- **`practicalSkillsStore.ts`** reads `trainingModuleConfigService` from
+  the shared `services/api.ts` client (`withCredentials`, CSRF
+  interceptor) — not a bespoke per-module axios instance, so Pitfall #7
+  does not apply.
+- **Header/breadcrumb rollout** (`TrainingPageHeader` on
+  `MySkillTestResultPage.tsx`/`SkillTemplateBuilderPage.tsx`) and an
+  AA/AAA contrast shade bump (`green-600`→`green-700`,
+  `amber-600`→`amber-700`, `yellow-600`→`yellow-700` across
+  `ActiveSkillTestPage.tsx`/`SkillsTestingPage.tsx`) plus
+  `touch:min-h-11`/`aria-label`/`aria-expanded` additions on
+  `SkillTemplateBuilderPage.tsx`'s icon-only buttons — cosmetic/
+  accessibility, no new API call, input, or data-exposure surface.
+- **Standard banned-pattern sweep, all 16 changed files: zero hits** for
+  `window.confirm`/`alert`/`prompt` (two comment mentions found are
+  explanatory prose about _not_ using them), `dangerouslySetInnerHTML`,
+  banned `.toLocale*`/`date-fns`/`new Date().toISOString().slice`, a bare
+  `fetch(`, and `localStorage`/`sessionStorage`.
+
+### Re-verification of standing fixes
+
+Re-read directly against current line numbers (all moved slightly from
+pass 9's citations, consistent with the real diff above, not re-cited from
+any prior write-up):
+
+- **SKT-1** — `update_template` still routes through `apply_updates`.
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present on `create_test`, `validate_test`,
+  `void_test`, `return_test_for_correction`, each still checked against
+  `candidate_id` before any mutation.
+- **SKT-4** — `lock_attempt_capacity` still locks `TrainingRequirement`
+  with `.with_for_update()`; the capacity count still carries
+  `.with_for_update(of=SkillTest)`; `validate_test` still acquires the
+  capacity lock ahead of the per-test row lock.
+- **SKT2-1** — zero `is_practice ==` comparisons; `.is_(...)` throughout.
+- **SKT3-1/SKT3-2** — `add_test_viewer` still rejects naming both
+  candidate and examiner; `list_tests`' pagination/cap (SKT3-2's owner-
+  accepted fix) is unchanged.
+- **SKT4-1 through SKT4-7, SKT5-1** — all re-confirmed present (item caps,
+  officer-gated summary figures, `update_test`'s outcome-setting refusal,
+  the email disclosure guard, enum validators with bounds, voided-before-
+  validation redaction, `waive_reason` scrub).
+
+**Route surface.** Fresh AST walk (`ast.parse` over every
+`@router.get/post/put/patch/delete` decorator and its function's
+`Depends(...)` defaults): **29/29 routes**, 0 with no recognized auth
+dependency — identical count to passes 7–9.
+
+**Org-scoping.** Every `select(SkillTest)`/`select(SkillTemplate)`/
+`select(SkillTestViewer)`/`select(User)` call site touched by this pass's
+diff was checked by hand (not assumed from the "unchanged" files): all
+either filter `organization_id` directly or resolve through an
+already-org-scoped parent (`test`/`template` fetched org-scoped earlier in
+the same function). `search_candidates`'s widened status filter adds no new
+cross-tenant surface — it is still scoped to
+`User.organization_id == current_user.organization_id` on the same line.
+
+### Findings
+
+**0 new findings.** The cross-cutting attribution-FK change and the new
+practical-skills gate were both already implemented correctly and
+consistently across backend and frontend before this pass began; nothing
+needed fixing. No standing finding reopened.
+
+### Guard tests added
+
+None — no defect found to guard against. The cross-cutting migration
+(`cbe0de50f202`) and its own tests belong to the commit that introduced
+them, outside this feature's declared scope.
+
+### Completion gate (pass 10)
+
+| Check                                                             | Result                                                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.3.0`, CI's pin)         | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/` (`black==26.5.1`)            | ✅ 2606 files unchanged                                               |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`)        | ✅ clean                                                              |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 649 revisions, single head `a0195b397bf3`                          |
+| `python3 scripts/check_route_permissions.py --strict` (root)      | ✅ 273 routes, 0 errors, 0 warnings                                   |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13 -m pytest`) | ✅ 579 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `cd frontend && npm run typecheck`                                | ✅ 0 errors                                                           |
+| `cd frontend && npm run lint`                                     | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                         |
+
+**Environment note, not a finding:** this sandbox resolves plain `python3`/
+`pip`/`flake8`/`black`/`isort` to a mix of Python 3.11 and 3.13 installs
+with mismatched package sets (`python3 -m pytest` failed with
+`ModuleNotFoundError: sqlalchemy`; a bare `flake8` on `PATH` resolved to an
+unpinned 7.4.1 ahead of the correctly CI-pinned 7.3.0 at
+`/usr/local/bin/flake8`). The backend itself runs under 3.13
+(`python3.13`); every check above was re-run against the explicit
+3.13 interpreter/binary before being recorded. Noted so a future pass in
+the same sandbox doesn't misreport a phantom failure or trust an
+unpinned linter's silence.
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** Real
+delta since pass 9 (69/19 lines across endpoint/schema/model files, 16
+frontend files), all traced to a single, already-correct cross-cutting
+change plus independent cosmetic/defensive sweeps. No open findings
+remain in this feature.
