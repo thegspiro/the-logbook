@@ -372,6 +372,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                       icon: Nfc,
                       permission: 'members.check_in',
                     },
+                    {
+                      label: 'ID Cards',
+                      path: '/members/admin/id-cards',
+                      icon: CreditCard,
+                      permission: 'members.manage_id_cards',
+                    },
                   ]
                 : []),
               {

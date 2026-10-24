@@ -458,6 +458,12 @@ SCHEDULE = {
         "recommended_time": "07:30",
         "cron": "30 7 * * *",
     },
+    "nfc_card_tap_purge": {
+        "description": "Delete member ID card taps older than each department's retention period (24 months unless the department changed it on the ID Cards page)",
+        "frequency": "daily",
+        "recommended_time": "03:30",
+        "cron": "30 3 * * *",
+    },
     "inventory_audit_digest": {
         "description": "Email inventory managers a list of shelves overdue for an NFC shelf audit. Checked daily, sent at most once a week per department, and only when something is overdue",
         "frequency": "daily check, weekly send",
@@ -5216,6 +5222,28 @@ async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "inventory_audit_digest", process)
 
 
+async def run_nfc_card_tap_purge(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Delete ID card taps older than each organization's retention period.
+
+    Runs whether or not the department still has NFC ID cards switched on: a
+    department that turned cards off still holds taps from when they were on,
+    and the retention period it chose applies to those too.
+    """
+    from app.services.nfc_card_admin_service import NfcCardAdminService
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        deleted = await NfcCardAdminService(db_session).purge_expired_taps(org)
+        await db_session.commit()
+        if deleted:
+            logger.info(
+                f"nfc_card_tap_purge: deleted {deleted} tap(s) for org {org.id}"
+            )
+        return deleted
+
+    return await _for_each_org(db, "nfc_card_tap_purge", process)
+
+
 async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email alerts for overdue checkouts. Daily at 07:30.
@@ -7719,6 +7747,7 @@ TASK_RUNNERS = {
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "inventory_audit_digest": run_inventory_audit_digest,
+    "nfc_card_tap_purge": run_nfc_card_tap_purge,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
@@ -7805,6 +7834,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "inventory_overdue_alerts": 86400,
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
     "inventory_audit_digest": 86400,
+    "nfc_card_tap_purge": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "paypal_capture_backfill": 86400,

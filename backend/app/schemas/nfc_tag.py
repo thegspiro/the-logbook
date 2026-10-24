@@ -12,7 +12,14 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
-from app.models.nfc_tag import NfcCredentialType, NfcTagStatus
+from app.models.nfc_tag import (
+    NfcCheckInStatus,
+    NfcCheckInTarget,
+    NfcCredentialType,
+    NfcTagStatus,
+    NfcTapSource,
+)
+from app.models.user import UserStatus
 from app.schemas.base import UTCResponseBase
 
 _RESPONSE_CONFIG = ConfigDict(
@@ -28,14 +35,6 @@ _RESPONSE_CONFIG = ConfigDict(
 _UID_PATTERN = r"^[0-9A-Za-z:_\-\s]{4,128}$"
 
 
-class NfcCheckInTarget(str, Enum):
-    """What a station is checking members into."""
-
-    SHIFT = "shift"
-    EVENT = "event"
-    ADMIN_HOURS = "admin_hours"
-
-
 class NfcCheckInDirection(str, Enum):
     """Which way a tap moves the member.
 
@@ -47,19 +46,6 @@ class NfcCheckInDirection(str, Enum):
     AUTO = "auto"
     IN = "in"
     OUT = "out"
-
-
-class NfcCheckInStatus(str, Enum):
-    """Outcome of a tap, as the station screen must render it."""
-
-    CHECKED_IN = "checked_in"
-    CHECKED_OUT = "checked_out"
-    ALREADY_CHECKED_IN = "already_checked_in"
-    ALREADY_CHECKED_OUT = "already_checked_out"
-    UNKNOWN_CARD = "unknown_card"
-    CARD_INACTIVE = "card_inactive"
-    MEMBER_INACTIVE = "member_inactive"
-    REFUSED = "refused"
 
 
 class NfcTagCreate(BaseModel):
@@ -123,6 +109,9 @@ class NfcTagResponse(UTCResponseBase):
     issued_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # True while the card is suspended because its holder left; it comes back
+    # by itself if they return. An officer's own suspension reads False.
+    auto_suspended: bool = False
 
     # Enriched for list views so the card table can name people without the
     # client fetching the directory.
@@ -135,6 +124,136 @@ class NfcTagListResponse(UTCResponseBase):
 
     items: List[NfcTagResponse]
     total: int
+
+
+class NfcTagBulkStatusRequest(BaseModel):
+    """One status applied to many cards — retiring a batch, or a leaver's set.
+
+    The cap matches ``MAX_BULK_CARDS`` in ``nfc_card_admin_service``.
+    """
+
+    tag_ids: List[str] = Field(..., min_length=1, max_length=200)
+    status: NfcTagStatus
+    revoked_reason: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("tag_ids")
+    @classmethod
+    def _ids_are_ids(cls, value: List[str]) -> List[str]:
+        if any(not item or len(item) > 36 for item in value):
+            raise ValueError("Each card id must be 1 to 36 characters")
+        return value
+
+
+class NfcTagBulkFailure(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    detail: str
+
+
+class NfcTagBulkStatusResponse(UTCResponseBase):
+    """Which cards changed and which were refused, and why."""
+
+    model_config = _RESPONSE_CONFIG
+
+    updated: List[NfcTagResponse]
+    failed: List[NfcTagBulkFailure]
+
+
+class NfcCoverageMember(BaseModel):
+    """A current member with no working card."""
+
+    model_config = _RESPONSE_CONFIG
+
+    user_id: str
+    member_name: Optional[str] = None
+    membership_number: Optional[str] = None
+    member_status: Optional[UserStatus] = None
+
+
+class NfcCoverageCard(NfcTagResponse):
+    """A card on a coverage list, with its holder's membership status."""
+
+    member_status: Optional[UserStatus] = None
+
+
+class NfcCardCounts(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    active: int = 0
+    suspended: int = 0
+    lost: int = 0
+    revoked: int = 0
+
+
+class NfcCoverageResponse(UTCResponseBase):
+    """The three lists on the Coverage tab.
+
+    Each list is capped; its ``*_total`` is the real count, so a screen can
+    say "showing 1,000 of 1,240" rather than imply the list is complete.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    unused_days: int
+    current_member_count: int
+    card_counts: NfcCardCounts
+    members_without_card: List[NfcCoverageMember]
+    members_without_card_total: int
+    unused_cards: List[NfcCoverageCard]
+    unused_cards_total: int
+    former_member_cards: List[NfcCoverageCard]
+    former_member_cards_total: int
+
+
+class NfcCardTapResponse(UTCResponseBase):
+    """One tap on the log. Never carries a card serial.
+
+    ``unknown_card_key`` is the first characters of an unregistered card's
+    peppered hash: enough to see that the same stranger's card was tried five
+    times, useless for recovering the serial.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    tapped_at: datetime
+    outcome: NfcCheckInStatus
+    source: NfcTapSource
+    tag_id: Optional[str] = None
+    card_uid_preview: Optional[str] = None
+    card_label: Optional[str] = None
+    unknown_card_key: Optional[str] = None
+    user_id: Optional[str] = None
+    member_name: Optional[str] = None
+    location_id: Optional[str] = None
+    location_name: Optional[str] = None
+    operator_id: Optional[str] = None
+    operator_name: Optional[str] = None
+    target_type: Optional[NfcCheckInTarget] = None
+    target_id: Optional[str] = None
+    target_name: Optional[str] = None
+
+
+class NfcCardTapListResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    items: List[NfcCardTapResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class NfcIdCardSettingsResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    tap_retention_months: int
+
+
+class NfcIdCardSettingsUpdate(BaseModel):
+    """Bounds match ``MIN/MAX_TAP_RETENTION_MONTHS`` in the admin service."""
+
+    tap_retention_months: int = Field(..., ge=3, le=84)
 
 
 class NfcCheckInRequest(BaseModel):

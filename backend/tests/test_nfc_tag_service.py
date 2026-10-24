@@ -61,6 +61,7 @@ def _tag(status=NfcTagStatus.ACTIVE, user_id="u1"):
         last_used_at=None,
         revoked_at=None,
         revoked_reason=None,
+        auto_suspended=False,
         issued_by="admin-1",
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),

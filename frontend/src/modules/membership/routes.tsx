@@ -17,6 +17,7 @@
  *   /members/admin - Tabbed admin hub (manage, add, import)
  *   /members/admin/edit/:userId - Admin member edit page
  *   /members/admin/history/:userId - Member audit history
+ *   /members/admin/id-cards - Every NFC ID card, coverage, tap log (members.manage_id_cards)
  *
  * Legacy redirects:
  *   /admin/members → /members/admin
@@ -98,6 +99,7 @@ const MemberAuditHistoryPage = lazyWithRetry(() => import('../../pages/MemberAud
 const MemberIdCardPage = lazyWithRetry(() => import('../../pages/MemberIdCardPage'));
 const MemberScanPage = lazyWithRetry(() => import('../../pages/MemberScanPage'));
 const CheckInStationPage = lazyWithRetry(() => import('./pages/CheckInStationPage'));
+const MemberIdCardsAdminPage = lazyWithRetry(() => import('./pages/MemberIdCardsAdminPage'));
 const WaiverManagementPage = lazyWithRetry(() => import('../../pages/WaiverManagementPage'));
 const MemberLabelPrintPage = lazyWithRetry(() => import('../../pages/MemberLabelPrintPage'));
 const MemberIdCardPrintPage = lazyWithRetry(() => import('../../pages/MemberIdCardPrintPage'));
@@ -314,6 +316,20 @@ export const getMembershipRoutes = () => {
           <ProtectedRoute requiredPermission="members.manage">
             <Suspense fallback={null}>
               <WaiverManagementPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ID cards across the department. The card grant alone, not
+          members.manage: a clerk who issues cards need not edit the roster,
+          and every /nfc-tags endpoint behind the page asks for this one grant. */}
+      <Route
+        path="/members/admin/id-cards"
+        element={
+          <ProtectedRoute requiredPermission="members.manage_id_cards">
+            <Suspense fallback={null}>
+              <MemberIdCardsAdminPage />
             </Suspense>
           </ProtectedRoute>
         }

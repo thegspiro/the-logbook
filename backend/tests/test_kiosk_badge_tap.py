@@ -26,6 +26,7 @@ from starlette.requests import Request
 
 import app.api.public.display as display
 import app.services.nfc_tag_service as nfc_service_module
+from app.models.nfc_tag import NfcTapSource
 from app.models.user import UserStatus
 from app.schemas.nfc_tag import (
     KioskBadgeTapRequest,
@@ -89,12 +90,15 @@ class TestKioskCheckIn:
         _patch_events(monkeypatch, [])
         service = NfcTagService(MagicMock())
         service.check_in = AsyncMock()
+        service._record_kiosk_refusal = AsyncMock()
 
         result = await service.kiosk_check_in(location=_location(), tag_uid="04A2")
 
         assert result["status"] == NfcCheckInStatus.REFUSED
         assert "No event in this room" in result["message"]
         service.check_in.assert_not_called()
+        # Turned away by the room, but still logged for the ID-card screen.
+        service._record_kiosk_refusal.assert_awaited_once()
 
     async def test_one_open_event_toggles_in_or_out_on_it(self, monkeypatch):
         _patch_events(monkeypatch, [_event("evt-1")])
@@ -112,6 +116,8 @@ class TestKioskCheckIn:
             target_type=NfcCheckInTarget.EVENT,
             target_id="evt-1",
             direction=NfcCheckInDirection.AUTO,
+            source=NfcTapSource.KIOSK,
+            location_id=ROOM_ID,
         )
         assert result["status"] == NfcCheckInStatus.CHECKED_IN
         assert result["event_id"] == "evt-1"
@@ -123,12 +129,31 @@ class TestKioskCheckIn:
         service = NfcTagService(MagicMock())
         service.check_in = AsyncMock()
         service._only_event_checked_into = AsyncMock(return_value=None)
+        service._record_kiosk_refusal = AsyncMock()
 
         result = await service.kiosk_check_in(location=_location(), tag_uid="04A2")
 
         assert result["status"] == NfcCheckInStatus.REFUSED
         assert "More than one event" in result["message"]
         service.check_in.assert_not_called()
+        service._record_kiosk_refusal.assert_awaited_once()
+
+    async def test_a_room_refusal_is_logged_against_the_card_that_was_tapped(self):
+        service = NfcTagService(MagicMock())
+        tag = SimpleNamespace(id="tag-1", user_id="u-1")
+        member = SimpleNamespace(id="u-1")
+        service.resolve_tag = AsyncMock(return_value=(tag, member, None))
+        service._record_tap = AsyncMock()
+
+        await service._record_kiosk_refusal(_location(), "04A2", "LBC1-ABC")
+
+        service.resolve_tag.assert_awaited_once_with(ORG, ("LBC1-ABC", "04A2"))
+        kwargs = service._record_tap.await_args.kwargs
+        assert kwargs["tag"] is tag
+        assert kwargs["user"] is member
+        assert kwargs["outcome"] == NfcCheckInStatus.REFUSED
+        assert kwargs["source"] == NfcTapSource.KIOSK
+        assert kwargs["location_id"] == ROOM_ID
 
     async def test_overlap_checks_a_member_out_of_the_one_they_are_in(
         self, monkeypatch

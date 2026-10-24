@@ -545,6 +545,9 @@ class TestColumnConstraints:
             # minutes_public_copies: the row is the public posting, stamped
             # when first posted; a repost replaces it in place.
             "posted_at",
+            # nfc_card_taps: the row is the tap, stamped when it happened and
+            # never updated.
+            "tapped_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():

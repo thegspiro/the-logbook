@@ -123,6 +123,13 @@ export const NfcCheckInStatus = {
 } as const;
 export type NfcCheckInStatus = (typeof NfcCheckInStatus)[keyof typeof NfcCheckInStatus];
 
+/** Which kind of reader a card tap came through: a staffed station or a room's public kiosk. */
+export const NfcTapSource = {
+  STATION: 'station',
+  KIOSK: 'kiosk',
+} as const;
+export type NfcTapSource = (typeof NfcTapSource)[keyof typeof NfcTapSource];
+
 /** Badge classes per card status, matching the status-colour maps below. */
 export const NFC_CARD_STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',

@@ -551,6 +551,31 @@ nulls. A script or integration that does should leave the field out instead.
 The downgrade does nothing on purpose: upgraded installations always had these
 constraints.
 
+### Former members' ID cards show as Suspended, and card taps are logged (2026-10-23)
+
+Only affects departments that have turned on **NFC ID Cards** under
+Settings → Integrations.
+
+- **The migration suspends cards held by former members.** Any card still
+  marked Active whose holder is inactive, suspended, dropped, archived or
+  deleted becomes **Suspended**, with the reason "Suspended automatically: the
+  card holder is no longer an active member". Those cards were already refused
+  at every reader, so nobody loses a working card; the card's status simply
+  stops reading Active. Retired and on-leave members keep working cards.
+- **From now on this happens on every status change.** A member who leaves
+  has their active cards suspended; if they return to active or probationary,
+  only the cards the system suspended come back. A card an officer suspended
+  by hand, or a lost or revoked card, stays as it is.
+- **Every tap at a check-in station or room kiosk is recorded**, refused taps
+  included, for the new **Member ID Cards** page (`/members/admin/id-cards`,
+  needs `members.manage_id_cards`). History starts at the upgrade; nothing
+  earlier was recorded. Taps are deleted after **24 months** by a nightly task
+  (`nfc_card_tap_purge`). A department can change that on the page's Settings
+  tab, from 3 to 84 months.
+
+Rolling back with `alembic downgrade a0195b397bf3` returns every automatically suspended card to Active — their
+taps are still refused by the member-status check — and drops the tap log.
+
 ### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
 
 Nothing runs on upgrade. Three operator commands, all inside the backend

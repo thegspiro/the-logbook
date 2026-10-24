@@ -14,9 +14,15 @@
 import api from '../../../services/apiClient';
 import type {
   NfcCard,
+  NfcCardBulkStatusPayload,
+  NfcCardBulkStatusResult,
   NfcCardCreatePayload,
   NfcCardListResponse,
+  NfcCardTapFilters,
+  NfcCardTapList,
   NfcCardUpdatePayload,
+  NfcCoverage,
+  NfcIdCardSettings,
   NfcStationCheckInPayload,
   NfcStationCheckInResult,
 } from '../types/idCard';
@@ -48,6 +54,45 @@ export const nfcCardService = {
     await api.delete(`/nfc-tags/${cardId}`);
   },
 
+  /** Suspend, reactivate, report lost or revoke several cards at once. */
+  async bulkUpdateStatus(payload: NfcCardBulkStatusPayload): Promise<NfcCardBulkStatusResult> {
+    const response = await api.post<NfcCardBulkStatusResult>('/nfc-tags/bulk-status', payload);
+    return response.data;
+  },
+
+  /** Members with no working card, unused cards, and cards held by leavers. */
+  async coverage(unusedDays: number): Promise<NfcCoverage> {
+    const response = await api.get<NfcCoverage>('/nfc-tags/coverage', { params: { unused_days: unusedDays } });
+    return response.data;
+  },
+
+  async listTaps(filters: NfcCardTapFilters, limit: number, offset: number): Promise<NfcCardTapList> {
+    const response = await api.get<NfcCardTapList>('/nfc-tags/taps', {
+      params: { ...tapParams(filters), limit, offset },
+    });
+    return response.data;
+  },
+
+  async exportTaps(filters: NfcCardTapFilters): Promise<Blob> {
+    const response = await api.get<Blob>('/nfc-tags/taps/export', {
+      params: tapParams(filters),
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  async getSettings(): Promise<NfcIdCardSettings> {
+    const response = await api.get<NfcIdCardSettings>('/nfc-tags/settings');
+    return response.data;
+  },
+
+  async updateSettings(tapRetentionMonths: number): Promise<NfcIdCardSettings> {
+    const response = await api.put<NfcIdCardSettings>('/nfc-tags/settings', {
+      tap_retention_months: tapRetentionMonths,
+    });
+    return response.data;
+  },
+
   /**
    * Record a tap at a station.
    *
@@ -59,3 +104,15 @@ export const nfcCardService = {
     return response.data;
   },
 };
+
+/** Query parameters are snake_case; an unset filter is omitted, never sent as "". */
+function tapParams(filters: NfcCardTapFilters): Record<string, string | undefined> {
+  return {
+    tag_id: filters.tagId || undefined,
+    user_id: filters.userId || undefined,
+    outcome: filters.outcome || undefined,
+    source: filters.source || undefined,
+    since: filters.since || undefined,
+    until: filters.until || undefined,
+  };
+}
