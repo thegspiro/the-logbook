@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3640](https://github.com/thegspiro/the-logbook/pull/3640)** (branch
+`claude/security-review-forms`) —
+Feature 26 (Forms), pass 9, a watchdog pickup. PR #3638 (Feature 25,
+Messaging & notifications, pass 9) had already merged with no open
+rotation PR behind it — confirmed via `list_pull_requests` (state=open)
+and `search_pull_requests` (`head:claude/security-review-`, both empty)
+immediately before starting — and row 26 (Forms) was confirmed the next
+`⬜` row. **0 fixed, 0 new findings** — the real delta since pass 8 (a
+numeric-bounds tightening on form-field schemas, `delete_form` archiving
+instead of hard-deleting a form with existing submissions, and the
+repo-wide probationary-account-status sweep applied to the member-lookup
+search) was read in full and found clean: org scoping on the archive
+decision, the `PUBLISHED`-only submission gate holding on both the
+authenticated and public paths, and no change to `LIKE`-escaping. Two
+frontend commits (an a11y contrast fix, and a `useConfirm()` step added
+before a submission delete) are correctness/UX only.
+
+Full writeup: `docs/security-review/FORM-26-forms.md`'s **Pass 9** section.
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3638, Feature 25, Messaging & notifications, pass 9, merged), preserved for history</summary>
+
 **PR [#3638](https://github.com/thegspiro/the-logbook/pull/3638)** (branch
 `claude/security-review-messaging-notifications`) —
 Feature 25 (Messaging & notifications), pass 9, a watchdog pickup. PR #3636
@@ -39,6 +64,8 @@ Full writeup: `docs/security-review/MSG-25-messaging-notifications.md`'s
 
 Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
 re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3636, Feature 24, Meetings & minutes, pass 9, merged), preserved for history</summary>
@@ -21186,7 +21213,7 @@ this iteration's commit" rule.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
@@ -21202,6 +21229,50 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 26 (Forms, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`
+returned no other running session). PR #3638 (Feature 25, Messaging &
+notifications, pass 9) had already merged; a fresh `search_pull_requests`
+(`head:claude/security-review-`, state=open) and `list_pull_requests`
+(state=open) both returned no rotation PR, and row 26 (Forms) was
+confirmed the next `⬜` row in the rotation table on a freshly fetched
+`main`.
+
+Baseline `322c41fb` (PR #3458's merge, pass 8). Three non-merge commits
+touch this feature's declared backend scope since then, all read in full
+against every `CHECKLIST.md` dimension: a numeric-bounds tightening on
+`FormFieldBase`/`FormFieldUpdate` (`min_length`/`max_length`/`min_value`/
+`max_value`/`sort_order` now capped at `INT32_MIN`/`INT32_MAX`, closing a
+class of unbounded input that previously reached MySQL as a raw 500 —
+strengthens abuse resistance, no new exposure); `delete_form` now archives
+a form that already has submissions instead of hard-deleting it (verified
+the archive-vs-delete decision is itself org-scoped, that `FormStatus.ARCHIVED`
+already existed before this change, and that both the authenticated and
+public submission paths still refuse an archived form — `form.status ==
+PUBLISHED` and `get_form_by_slug`'s own `PUBLISHED` filter both hold); and
+the repo-wide probationary-account-status sweep (Pitfall #32) applied to
+this module's `search_members` lookup, with no change to its
+`organization_id` filter or `LIKE`-escaping. Two frontend commits in the
+window: an accessibility-contrast fix (cosmetic) and a `useConfirm()`
+confirmation step added before a submission delete (closing a Pitfall #16
+gap this one control had — there was previously no confirmation at all).
+**0 new findings** — all of pass 8's "Verified good" items re-checked and
+unaffected; route count re-enumerated at 22, unchanged.
+
+Full writeup: `docs/security-review/FORM-26-forms.md`'s **Pass 9** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (isort
+pinned to CI's 9.0.1) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 650 revisions, single head
+`a8c3b50b6d9b`; `pytest tests/ -q -k form` — 850 passed, 1 pre-existing
+skip (`pywebpush`); frontend `npm run typecheck` clean; `npm run lint`
+clean (exit 0).
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-24 — Feature 25 (Messaging & notifications, pass 9) — watchdog pickup, 0 fixed, 0 new findings
 
