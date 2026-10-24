@@ -364,7 +364,7 @@ down carry their own dispositions.
 | `03-117-reporting-summary`, `03-118-report-card-phone` | **CURRENT** 2026-10-17 | New: Your reporting summary with the per-month chart; a report card at 390px |
 | `03-119-pattern-generate-nothing-new` | **CURRENT** 2026-10-17 | New: a pattern re-run over the seeded platoon window, creating nothing |
 | `03-120-history-import-list`, `03-121-history-import-members` | **CURRENT** 2026-10-17 | New: the import list with one draft, and the draft's Members tab |
-| My Checklists on a phone (03 placeholder), `03-126-my-checklists-phone` | **CURRENT** 2026-10-23 (re-shot) | Was NOT POSSIBLE, left open; see the October 15 – 16 queue below. Re-shot after overdue moved to the server's end-of-shift rule, as the demo member (`auth: "member"`, so no two-factor grace banner): her unfiled checks on Mon Oct 19 (ended 23:00 UTC) and the overnight Wed Oct 21 shift (ended 11:00 UTC the next morning) carry `isOverdue`; the ⋯ menu holds only Apparatus inventory, since Manage templates needs `inventory.check_manage` |
+| My Checklists on a phone (03 placeholder), `03-126-my-checklists-phone` | **CURRENT** 2026-10-23 (re-shot) | Was NOT POSSIBLE, left open; see the October 15 – 16 queue below. Re-shot after overdue moved to the server's end-of-shift rule, as the demo member (`auth: "member"`, so no two-factor grace banner): the member's unfiled checks on Mon Oct 19 (ended 23:00 UTC) and the overnight Wed Oct 21 shift (ended 11:00 UTC the next morning) carry `isOverdue`; the ⋯ menu holds only Apparatus inventory, since Manage templates needs `inventory.check_manage` |
 | Scheduling setup guide card (03 placeholder) | **NOT POSSIBLE** in the seeded demo | Renders only while a department has no templates |
 
 ## Guide 01 re-shot or added 2026-10-17
@@ -5489,7 +5489,9 @@ this entry once said they must not be manifest entries. That was too strong:
 session flag (`webNfcStub` in `manifest.mjs`), so the app renders the Android
 UI and a tapped tag is resolved against the real database. Only the radio is a
 stand-in. The camera-viewfinder shots recorded under the 2026-08-12 entry below
-remain manual.
+remain manual. `05-139` was re-shot 2026-10-24: the first capture, taken before
+the demo administrator was enrolled in two-factor, carried the grace-period
+banner across the top.
 
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 

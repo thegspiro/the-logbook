@@ -236,6 +236,36 @@ class TotpVectorTest(unittest.TestCase):
         assert json.loads(proc.stdout) == list(RFC_VECTORS.values())
 
 
+class CodeStepVerdictTest(unittest.TestCase):
+    """capture.mjs waits out a throttled code step instead of blaming the secret."""
+
+    def test_statuses_map_to_ok_throttled_and_refused(self) -> None:
+        node = shutil.which("node")
+        if node is None:  # pragma: no cover - CI images all ship node
+            raise unittest.SkipTest("node is required to run totp.mjs")
+        module = json.dumps(str(SCREENSHOTS / "totp.mjs"))
+        statuses = [200, 204, 429, 401, 400, 403, 500]
+        script = (
+            f"import {{ codeStepVerdict }} from {module};"
+            f"console.log(JSON.stringify({json.dumps(statuses)}.map(codeStepVerdict)));"
+        )
+        proc = subprocess.run(
+            [node, "--input-type=module", "-e", script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert json.loads(proc.stdout) == [
+            "ok",
+            "ok",
+            "throttled",
+            "refused",
+            "refused",
+            "refused",
+            "refused",
+        ]
+
+
 class SecretFileTest(StateDirTestCase):
     def test_written_mode_600_under_the_state_directory(self) -> None:
         path = seed.write_admin_totp_secret(SECRET)
