@@ -1201,6 +1201,12 @@ class EquipmentCheckService:
                 )
             await self._advance_content_revision(str(compartment.template_id))
             await self.db.commit()
+            # created_at/updated_at are server defaults. MySQL has no INSERT ...
+            # RETURNING, so they stay unloaded after the flush and reading them
+            # while building the response raises MissingGreenlet. Only the
+            # replay path re-selected the rows, which is why a retry worked.
+            for item in created:
+                await self.db.refresh(item)
             return created, False
         except IntegrityError:
             # A concurrent request with this key may have won the unique ledger
