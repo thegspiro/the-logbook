@@ -89,6 +89,11 @@ ARCHIVE_ENCRYPTED=false
 
 # shellcheck source=backup_crypto.sh
 source "$SCRIPT_DIR/backup_crypto.sh"
+# shellcheck source=db_tls.sh
+source "$SCRIPT_DIR/db_tls.sh"
+# A remote DB_HOST is reached over TLS when scripts/tls-setup.sh has written
+# tls/backup; the bundled database is reached through its container socket.
+export DB_TLS_DIR="${DB_TLS_DIR:-$PROJECT_DIR/tls/backup}"
 
 # Colors
 RED='\033[0;31m'
@@ -171,9 +176,11 @@ backup_database() {
             --lock-tables=false \
             > "/tmp/$BACKUP_NAME/database.sql"
     else
+        db_tls_args || exit 1
         MYSQL_PWD="${DB_PASSWORD}" mysqldump \
             -h"${DB_HOST:-localhost}" \
             -u"${DB_USER}" \
+            ${DB_TLS_ARGS[@]+"${DB_TLS_ARGS[@]}"} \
             "${DB_NAME}" \
             --single-transaction \
             --quick \
@@ -512,9 +519,11 @@ restore_backup() {
                 -u"${DB_USER}" \
                 "${DB_NAME}"
         else
+            db_tls_args || exit 1
             gunzip -c "$BACKUP_EXTRACT_DIR/database.sql.gz" | MYSQL_PWD="${DB_PASSWORD}" mysql \
                 -h"${DB_HOST:-localhost}" \
                 -u"${DB_USER}" \
+                ${DB_TLS_ARGS[@]+"${DB_TLS_ARGS[@]}"} \
                 "${DB_NAME}"
         fi
         print_success "Database restored"

@@ -141,6 +141,11 @@ class Settings(BaseSettings):
     # Path to CA certificate for verifying MySQL server identity over TLS.
     # Required when DB_SSL=True for full MITM protection.
     DB_SSL_CA: str = ""
+    # Client certificate and key presented to MySQL (mutual TLS). Needed once
+    # the server requires X.509 accounts; harmless before, so a deployment can
+    # roll the certificate out ahead of the switch. Both or neither.
+    DB_SSL_CERT: str = ""
+    DB_SSL_KEY: str = ""
     DB_POOL_MAX: int = 10
     DB_ECHO: bool = False  # SQL logging
     DB_CHARSET: str = "utf8mb4"  # Use utf8mb4 for full Unicode support
@@ -211,6 +216,8 @@ class Settings(BaseSettings):
                 # For full MITM protection, set DB_SSL_CA.
                 ssl_ctx.check_hostname = False
                 ssl_ctx.verify_mode = ssl.CERT_NONE
+            if self.DB_SSL_CERT:
+                ssl_ctx.load_cert_chain(self.DB_SSL_CERT, self.DB_SSL_KEY or None)
             args["ssl"] = ssl_ctx
         return args
 
@@ -223,6 +230,9 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     REDIS_SSL: bool = False  # Use TLS for Redis connections (rediss:// scheme)
     REDIS_SSL_CA: str = ""  # Path to CA cert for Redis TLS verification
+    # Client certificate and key presented to Redis (mutual TLS); both or neither.
+    REDIS_SSL_CERT: str = ""
+    REDIS_SSL_KEY: str = ""
     REDIS_TTL: int = 3600  # Default cache TTL in seconds
     REDIS_CONNECT_TIMEOUT: int = 5  # Connection timeout in seconds
     REDIS_CONNECT_RETRIES: int = 3  # Number of connection retry attempts
@@ -537,6 +547,19 @@ class Settings(BaseSettings):
                 f"{self.ALGORITHM!r}. Only 'HS256' is supported — tokens "
                 "signed with any other value are rejected at verification."
             )
+
+        # A client certificate without its key (or the reverse) cannot be
+        # presented: ssl raises at connect time, which reads as a database or
+        # cache outage instead of the mistyped setting it is.
+        for cert_attr, key_attr in (
+            ("DB_SSL_CERT", "DB_SSL_KEY"),
+            ("REDIS_SSL_CERT", "REDIS_SSL_KEY"),
+        ):
+            if bool(getattr(self, cert_attr)) != bool(getattr(self, key_attr)):
+                warnings.append(
+                    f"CRITICAL: {cert_attr} and {key_attr} must be set together "
+                    "(client certificate and its private key)"
+                )
 
         # SEC: an overly broad TRUSTED_PROXY_IPS range trusts X-Forwarded-For
         # from far more than the actual reverse proxy — a direct-connecting

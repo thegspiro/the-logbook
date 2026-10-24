@@ -21,6 +21,9 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
       TZ: ${TZ:-UTC}
+    # TLS: with certificates in ./tls/mysql (scripts/tls-setup.sh) the wrapper
+    # adds the --ssl-* flags; without them the server starts exactly as before.
+    entrypoint: ["sh", "/tls-entrypoint.sh"]
     # Note: host_cache_size is set via initialization script (database/schemas/00-init-settings.sql)
     # instead of command-line flag to follow MySQL 8.0+ recommendations
     command: >
@@ -43,6 +46,8 @@ services:
       - mysql_data:/var/lib/mysql
       - ./database/schemas:/docker-entrypoint-initdb.d
       - ./database/healthcheck.sh:/healthcheck.sh:ro
+      - ./database/tls-entrypoint.sh:/tls-entrypoint.sh:ro
+      - ${TLS_DIR:-./tls}/mysql:/etc/mysql/tls:ro
     healthcheck:
       test: ["CMD", "sh", "/healthcheck.sh"]
       interval: 10s
@@ -75,6 +80,9 @@ services:
     # mount infrastructure/redis/redis.conf and switch to:
     #   command: redis-server /usr/local/etc/redis/redis.conf
     # Then set REDIS_APP_PASSWORD and REDIS_CELERY_PASSWORD in .env.
+    # TLS: with certificates in ./tls/redis (scripts/tls-setup.sh) the wrapper
+    # also listens for TLS on 6380; without them Redis starts exactly as before.
+    entrypoint: ["sh", "/tls-entrypoint.sh"]
     command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env} --rename-command FLUSHALL "" --rename-command FLUSHDB "" --rename-command DEBUG ""
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
@@ -87,6 +95,8 @@ services:
     #   - "${REDIS_HOST_PORT:-6375}:6379"
     volumes:
       - redis_data:/data
+      - ./infrastructure/redis/tls-entrypoint.sh:/tls-entrypoint.sh:ro
+      - ${TLS_DIR:-./tls}/redis:/etc/redis/tls:ro
     healthcheck:
       test:
         [
@@ -138,7 +148,8 @@ services:
 
       # Redis
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      # 6379 is plaintext, 6380 is TLS (scripts/tls-setup.sh --print-env).
+      REDIS_PORT: ${BACKEND_REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
 
       # Security
@@ -177,8 +188,12 @@ services:
       SECURITY_ALLOW_UNVERIFIED_TLS: ${SECURITY_ALLOW_UNVERIFIED_TLS:-false}
       DB_SSL: ${DB_SSL:-false}
       DB_SSL_CA: ${DB_SSL_CA:-}
+      DB_SSL_CERT: ${DB_SSL_CERT:-}
+      DB_SSL_KEY: ${DB_SSL_KEY:-}
       REDIS_SSL: ${REDIS_SSL:-false}
       REDIS_SSL_CA: ${REDIS_SSL_CA:-}
+      REDIS_SSL_CERT: ${REDIS_SSL_CERT:-}
+      REDIS_SSL_KEY: ${REDIS_SSL_KEY:-}
       # Warns rather than blocks, but was unreachable for the same reason.
       VOTE_SIGNING_KEY: ${VOTE_SIGNING_KEY:-}
       # The setting the SECURITY_ENFORCE_HTTPS message directs operators to,
@@ -417,6 +432,9 @@ services:
       # Drop the PEM in ./infrastructure/certs and point the setting at the
       # container path, e.g. DB_SSL_CA=/etc/ssl/logbook/mysql-ca.pem.
       - ${SSL_CERTS_DIR:-./infrastructure/certs}:/etc/ssl/logbook:ro
+      # CA and client certificate from scripts/tls-setup.sh, for DB_SSL_CA /
+      # DB_SSL_CERT / DB_SSL_KEY and the REDIS_SSL_* equivalents.
+      - ${TLS_DIR:-./tls}/backend:/etc/ssl/logbook-tls:ro
     depends_on:
       mysql:
         condition: service_healthy

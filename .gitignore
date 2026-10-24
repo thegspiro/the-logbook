@@ -61,6 +61,8 @@ postgres_data/
 uploads/
 backups/
 backup-keys/
+/tls/
+/tls-ca-private/
 logs/
 *.log
 

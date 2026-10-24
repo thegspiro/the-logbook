@@ -42,6 +42,8 @@ fi
 export BACKUP_KEYS_DIR="${BACKUP_KEYS_DIR:-/keys}"
 # shellcheck source=backup_crypto.sh
 source "$SCRIPT_DIR/backup_crypto.sh"
+# shellcheck source=db_tls.sh
+source "$SCRIPT_DIR/db_tls.sh"
 
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-3306}"
@@ -50,7 +52,10 @@ VERIFY_PASSWORD="${DB_VERIFY_PASSWORD:-${MYSQL_ROOT_PASSWORD:-}}"
 # Suffix guards against two drills colliding on the same server.
 VERIFY_DB="restore_verify_$(date +%s)_$$"
 
-MYSQL=(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$VERIFY_USER")
+# Verified TLS and a client certificate when DB_TLS_DIR holds them; a partial
+# directory aborts instead of falling back to plaintext.
+db_tls_args || exit 1
+MYSQL=(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$VERIFY_USER" ${DB_TLS_ARGS[@]+"${DB_TLS_ARGS[@]}"})
 if [[ -n "$VERIFY_PASSWORD" ]]; then
     MYSQL+=("-p$VERIFY_PASSWORD")
 fi

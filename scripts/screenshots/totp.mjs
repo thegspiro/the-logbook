@@ -84,3 +84,18 @@ export function readAdminTotpSecret(env = process.env) {
   }
   return null;
 }
+
+/**
+ * What a `POST /auth/mfa/login` status says about the code that was sent.
+ *
+ * Both sign-in limiters (the per-address login allowance and the
+ * suspicious-network throttle) answer 429 before the code is ever checked, and
+ * the seeder spends that same allowance moments before a capture. Reading a
+ * 429 as a wrong code blames the stored secret for a wait, so it is kept apart:
+ * `throttled` is waited out, `refused` is a code the server actually rejected.
+ */
+export function codeStepVerdict(status) {
+  if (status >= 200 && status < 300) return "ok";
+  if (status === 429) return "throttled";
+  return "refused";
+}
