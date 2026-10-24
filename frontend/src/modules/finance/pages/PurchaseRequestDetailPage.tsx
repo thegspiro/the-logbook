@@ -31,6 +31,7 @@ import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNo
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
 import { ReimbursementClaimDialog } from '../components/ReimbursementClaimDialog';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -615,6 +616,15 @@ const PurchaseRequestDetailPage: React.FC = () => {
           onDecided={() => void fetchPurchaseRequest(pr.id)}
         />
         <ApprovalTimeline isDraft={pr.status === PurchaseRequestStatus.DRAFT} steps={pr.approvalSteps} />
+        {isDraft && (
+          <div className="mt-4">
+            <ApprovalRoutePreview
+              entityType={ApprovalEntityType.PURCHASE_REQUEST}
+              amount={Number(pr.estimatedAmount)}
+              budgetId={pr.budgetId ?? undefined}
+            />
+          </div>
+        )}
       </div>
 
       {claiming && (

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../../test/utils';
 
@@ -12,6 +12,12 @@ vi.mock('./StaffingGapsSection', () => ({ default: () => <div>section:gaps</div>
 vi.mock('./PlanningSettingsSummary', () => ({ default: () => <div>settings summary</div> }));
 vi.mock('../../../ShiftTemplatesPage', () => ({ default: () => <div>section:templates</div> }));
 vi.mock('../../PatternsTab', () => ({ default: () => <div>section:patterns</div> }));
+// The officer the page is for: the trail's hub crumb is gated on the same
+// grant as the hub.
+vi.mock('../../../../stores/authStore', () => ({
+  useAuthStore: (selector: (state: unknown) => unknown) =>
+    selector({ checkPermission: (permission: string) => permission === 'scheduling.manage' }),
+}));
 
 import SchedulingPlanningPage from './SchedulingPlanningPage';
 
@@ -64,7 +70,8 @@ describe('SchedulingPlanningPage', () => {
   it('offers a way back to the administration hub', () => {
     renderWithRouter(<SchedulingPlanningPage section="gaps" />);
 
-    expect(screen.getByRole('link', { name: 'Back to scheduling administration' })).toHaveAttribute(
+    const trail = screen.getByRole('navigation', { name: /breadcrumb/i });
+    expect(within(trail).getByRole('link', { name: 'Scheduling Administration' })).toHaveAttribute(
       'href',
       '/scheduling/admin'
     );

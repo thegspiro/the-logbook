@@ -507,7 +507,13 @@ const VariantGroupsPage: React.FC = () => {
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
               className={inputClass}
               placeholder="e.g. Class A Dress Uniform"
+              {...(editingGroup ? { 'aria-describedby': 'vg-name-hint' } : {})}
             />
+            {editingGroup && (
+              <p id="vg-name-hint" className="text-theme-text-muted mt-1 text-xs">
+                Renaming also renames every item in this group. Each item keeps its size, colour and style.
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="vg-desc" className={labelClass}>

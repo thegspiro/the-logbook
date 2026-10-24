@@ -504,6 +504,31 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### An explicit `null` for an on/off or count setting is refused with a 400 (2026-10-23)
+
+Migration `6dce1364ff7e` makes 99 columns `NOT NULL` with defaults. They are
+mostly on/off settings, counts, statuses and timestamps, across 36 tables,
+including training module configuration, inventory items and categories,
+shift templates and users. Which databases it touches:
+
+- **An installation that has been upgraded through the migrations** already had
+  these constraints. The migration finds nothing to change and finishes at once.
+- **An installation first set up from the models** (a fresh install) is
+  changed. Any stored `NULL` in one of these columns is set to the column's
+  default, and each affected table is rebuilt once to add the constraint. On a
+  large `inventory_items` or `checkout_records` table the rebuild takes longer
+  and the backend starts after it finishes. Back up first, as for every
+  upgrade.
+
+What you will notice afterwards: an API request that sends `null` for one of
+these fields gets a **400** naming the field ("Field 'quantity' cannot be
+cleared"). Before, an upgraded installation failed the same request with a 500
+and a fresh install stored the NULL. The app's own screens do not send these
+nulls. A script or integration that does should leave the field out instead.
+
+The downgrade does nothing on purpose: upgraded installations always had these
+constraints.
+
 ### Former members' ID cards show as Suspended, and card taps are logged (2026-10-23)
 
 Only affects departments that have turned on **NFC ID Cards** under
@@ -526,7 +551,7 @@ Settings → Integrations.
   (`nfc_card_tap_purge`). A department can change that on the page's Settings
   tab, from 3 to 84 months.
 
-Rolling back with `alembic downgrade 4250eb8b8378` returns every automatically suspended card to Active — their
+Rolling back with `alembic downgrade 2538fbf21c61` returns every automatically suspended card to Active — their
 taps are still refused by the member-status check — and drops the tap log.
 
 ### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
@@ -589,6 +614,45 @@ What an operator needs to know:
   the volume that time is truncated to noon of the day so an anonymous
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
+
+### Backups can be encrypted (2026-10-23)
+
+Backups were plaintext. They can now be encrypted, and **nothing changes until
+you create a key**: with no key the nightly backup runs as before, logs a
+warning every run, and administrators see a critical "Backups are not
+encrypted" notice. No migration; no restart is needed to keep working.
+
+To turn it on, on the host in the install directory:
+
+1. `./scripts/backup-keygen.sh`. It writes `backup-keys/` (Unraid:
+   `/mnt/user/appdata/the-logbook/backup-keys`), prints a private key **once**
+   and asks you to confirm you stored it away from the server. **Store the
+   private key and a copy of `backup-keys/backup-drill.key` somewhere other
+   than this server and its backups. With both lost, encrypted backups cannot
+   be recovered.**
+2. Production compose only: `docker compose ... up -d backup backend` so the
+   sidecar mounts `./backup-keys` and the backend can read the sidecar's status
+   (the backend now mounts the `backups` volume read-only). Unraid users
+   re-apply the compose file (the key directory and `BACKUP_ENCRYPT_EXISTING`
+   are new).
+3. The next nightly run writes `.tar.gz.enc` + `.enc.key` + `.sha256` instead
+   of `.tar.gz`, and then **encrypts the plaintext archives already in the
+   backups directory and deletes the plaintext** after decrypting each copy and
+   comparing it with the original. Set `BACKUP_ENCRYPT_EXISTING=false` to keep
+   them.
+
+Things that change once a key exists:
+
+- **Backup files are three files, not one.** Anything that copies the backups
+  directory offsite must copy the `.enc`, `.enc.key` and `.sha256`.
+- **`backup.sh --destination s3|azure|gcs` now refuses to upload an
+  unencrypted archive** (before, it uploaded whatever it made). Create a key
+  first, or the offsite step fails.
+- Restoring an encrypted archive needs the drill key or the offline private key
+  (`backup.sh --restore FILE.enc [--drill-key F | --private-key F]`). Plaintext
+  archives restore as before.
+
+Full details: [BACKUP.md](./BACKUP.md#encrypted-backups).
 
 ### Administrators must use two-factor authentication, and sensitive actions ask you to confirm (2026-10-23)
 

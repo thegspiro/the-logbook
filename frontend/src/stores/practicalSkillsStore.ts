@@ -73,7 +73,11 @@ export const usePracticalSkillsStore = create<PracticalSkillsState>((set, get) =
  * Null while unknown; see the store for why that shows both systems.
  */
 export function usePracticalSkillsMethod(): PracticalSkillsMethod | null {
-  const organizationId = useAuthStore((state) => state.user?.organization_id ?? null);
+  // Read as unknown: a suite that stubs the store without honouring the
+  // selector hands back its whole stub — a new object each render, which as an
+  // id would reload on every render without end. Only a string is an id.
+  const storeOrganizationId: unknown = useAuthStore((state) => state.user?.organization_id ?? null);
+  const organizationId = typeof storeOrganizationId === 'string' ? storeOrganizationId : null;
   const method = usePracticalSkillsStore((state) => state.method);
   const loadedFor = usePracticalSkillsStore((state) => state.organizationId);
   const load = usePracticalSkillsStore((state) => state.load);

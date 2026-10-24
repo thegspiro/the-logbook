@@ -798,8 +798,17 @@ step takes exactly one address.
 
 ### Previewing Chain Resolution
 
-There is no preview tool on the Approval Chains page. To check which chain a
-request would get, submit a test request and read its approval timeline.
+Members see it for themselves: the purchase request, expense report and check
+request forms show **Who will approve this** as the amount and budget line are
+filled in, and a draft shows it again beside **Submit for Approval**. It lists
+the chain that will apply, who each step waits on, which steps the amount
+approves automatically, and whether a second approver is needed. When no chain
+applies it says a finance approver decides by hand.
+
+There is no preview tool on the Approval Chains page itself. To check how a
+chain you are configuring will route, start a request with the amount and
+budget line in question and read the panel; nothing is sent until it is
+submitted.
 
 > **Hint:** Set up at least one default chain for each request type (Purchase Request, Expense Report, Check Request) before members begin submitting requests. Without a matching chain, a request waits in Pending Approval with no approval steps, and an approver has to decide it from its detail page.
 

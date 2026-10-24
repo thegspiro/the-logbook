@@ -27,7 +27,7 @@ import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
-import SchedulingHeader from './scheduling/SchedulingHeader';
+import { SchedulingPageHeader } from '../components/scheduling/SchedulingPageHeader';
 import ShiftBoard from './scheduling/board/ShiftBoard';
 
 // Lazy-loaded tab components
@@ -182,35 +182,38 @@ const SchedulingPage: React.FC = () => {
     handleTabChange('schedule');
   }, [visibleTabs, activeTab, handleTabChange]);
 
-  const handleTabKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLButtonElement>, currentTab: TabId) => {
-      const currentIndex = visibleTabs.findIndex((tab) => tab.id === currentTab);
-      let nextIndex: number | undefined;
-
-      if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % visibleTabs.length;
-      if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
-      if (event.key === 'Home') nextIndex = 0;
-      if (event.key === 'End') nextIndex = visibleTabs.length - 1;
-      if (nextIndex === undefined) return;
-
-      event.preventDefault();
-      const nextTab = visibleTabs[nextIndex];
-      if (!nextTab) return;
-      handleTabChange(nextTab.id);
-      requestAnimationFrame(() => document.getElementById(`scheduling-tab-${nextTab.id}`)?.focus());
-    },
-    [handleTabChange, visibleTabs]
-  );
-
-  // Sync tab state when the URL changes underneath us (deep link, back button).
-  // A missing ?tab= is not a request to reset — it is the Schedule default that
-  // handleTabChange writes, and re-asserting it here would fight local state.
+  // Sync tab state when the URL changes underneath us: a deep link, the back
+  // button, or the section strip, whose links are the only way between views.
+  // A missing ?tab= is the Schedule view — the strip's Schedule link is the
+  // bare /scheduling — so it selects Schedule rather than leaving the last view
+  // up. Every writer of ?tab= sets state to match, so this never fights it.
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (isTabId(tabParam)) {
-      setActiveTab(tabParam);
-    }
+    setActiveTab(isTabId(tabParam) ? tabParam : 'schedule');
   }, [searchParams]);
+
+  // The views as the section strip draws them. Each link carries the rest of
+  // the query (the calendar's date and view) as a tab click always has, so
+  // leaving the calendar and coming back lands on the same week. A `?shift=`
+  // deep link is not carried: it opens one shift's panel, once.
+  const tabSections = useMemo(() => {
+    const hrefFor = (tabId: TabId) => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('shift');
+      if (tabId === 'schedule') next.delete('tab');
+      else next.set('tab', tabId);
+      const query = next.toString();
+      return query ? `/scheduling?${query}` : '/scheduling';
+    };
+    return visibleTabs.map((tab) => ({
+      id: tab.id,
+      label: tab.label,
+      path: hrefFor(tab.id),
+      icon: tab.icon,
+      replace: true,
+    }));
+  }, [searchParams, visibleTabs]);
+  const activeSectionPath = tabSections.find((tab) => tab.id === activeTab)?.path;
 
   // Load shift reports feature flag. Failure here must not blank the page —
   // a single config-endpoint regression should leave the rest of scheduling
@@ -490,7 +493,12 @@ const SchedulingPage: React.FC = () => {
             </button>
           </div>
         )}
-        <SchedulingHeader
+        <SchedulingPageHeader
+          icon={Clock}
+          title="Shift Scheduling"
+          subtitle="See the schedule, sign up for shifts, and request swaps and time off"
+          sections={tabSections}
+          section={activeSectionPath}
           actions={
             canManage && activeTab === 'schedule' ? (
               <button
@@ -503,45 +511,6 @@ const SchedulingPage: React.FC = () => {
             ) : undefined
           }
         />
-        {/* Tab Navigation */}
-        <div className="border-theme-surface-border relative -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
-          <div
-            className="flex scrollbar-thin space-x-1 overflow-x-auto scroll-smooth"
-            data-mobile-scroll-region
-            role="tablist"
-            aria-label="Scheduling views"
-            tabIndex={0}
-          >
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  id={`scheduling-tab-${tab.id}`}
-                  role="tab"
-                  aria-selected={isActive}
-                  tabIndex={isActive ? 0 : -1}
-                  onClick={() => handleTabChange(tab.id)}
-                  onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
-                  className={`focus-visible:ring-theme-focus-ring flex min-h-[44px] items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset sm:px-4 ${
-                    isActive
-                      ? 'border-violet-600 text-violet-600 dark:text-violet-400'
-                      : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          {/* Scroll fade hint on right edge (mobile) */}
-          <div
-            className="from-theme-bg pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-linear-to-l to-transparent sm:hidden"
-            aria-hidden="true"
-          />
-        </div>
 
         {/* Tab Content */}
         {activeTab === 'schedule' && (

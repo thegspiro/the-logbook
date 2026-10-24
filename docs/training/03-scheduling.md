@@ -2364,7 +2364,8 @@ shift ends. A missed check stays on your list for seven days; after that it
 drops off your list, though the fleet board and compliance report still count
 it. **Unscheduled checklist** sits beside
 the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
-**Manage Templates** fold into a **⋯** menu. Completed checklists are grouped
+**Manage Templates** (shown only to those who manage checklists) fold into a
+**⋯** menu. Completed checklists are grouped
 by the day checked. The **All / Start / End** filter is gone; every row carries
 its own **Start** or **End** badge. On a laptop the cards below are unchanged.
 

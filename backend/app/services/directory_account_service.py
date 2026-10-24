@@ -37,6 +37,7 @@ from app.models.directory_account import (
 from app.models.directory_account_departure import (
     SUSPENDABLE_STATUSES,
     has_departed,
+    suspends_retired,
 )
 from app.models.integration import Integration
 from app.models.user import Organization, User
@@ -94,6 +95,10 @@ STALE_PENDING_AFTER = timedelta(hours=1)
 # How long an item may wait before the daily alert reports it. The sweep has
 # retried a failed suspension dozens of times by then.
 ATTENTION_OVERDUE_AFTER = timedelta(hours=24)
+# A departed member's account still in the directory this long after its
+# suspension is listed for an administrator to delete or unlicense: it keeps
+# its license until then (owner decision, 2026-10-23: list, never remove).
+LONG_SUSPENSION_AFTER = timedelta(days=90)
 
 
 class AttentionIssue:
@@ -101,16 +106,24 @@ class AttentionIssue:
     NOT_UNSUSPENDED = "not_unsuspended"
     NOT_CREATED = "not_created"
     SETUP_UNFINISHED = "setup_unfinished"
+    GROUPS_NOT_LEFT = "groups_not_left"
+    LONG_SUSPENDED = "long_suspended"
 
 
 # The one wording of each issue: the list's response carries it, and the
-# email reads it from there, so the screen and the email cannot disagree.
+# email reads it from there, so the screen and the email cannot disagree. The
+# order here is the list's order, most urgent first.
 ATTENTION_LABELS = {
     AttentionIssue.NOT_SUSPENDED: "Left, but the account is not suspended",
     AttentionIssue.NOT_UNSUSPENDED: "Returned, but the account is still suspended",
     AttentionIssue.NOT_CREATED: "Account not created",
     AttentionIssue.SETUP_UNFINISHED: "Account setup unfinished",
+    AttentionIssue.GROUPS_NOT_LEFT: "Left, but still in a group",
+    AttentionIssue.LONG_SUSPENDED: "Suspended over 90 days, still in the directory",
 }
+# Listed for information, never overdue: an account can stay suspended for
+# good, and the morning email names each one once, when it is first found.
+NEVER_OVERDUE = frozenset({AttentionIssue.LONG_SUSPENDED})
 
 
 def unanswered_creation_message(info: DirectoryProviderInfo) -> str:
@@ -154,8 +167,13 @@ def suspendable_address(row: Optional[DirectoryAccountProvision]) -> Optional[st
     return _account_key(row)
 
 
-def member_has_departed(user: User) -> bool:
-    return has_departed(user.status, user.deleted_at)
+def member_has_departed(user: User, suspend_retired: bool) -> bool:
+    """Whether *user* has left, as their directory account sees it.
+
+    *suspend_retired* is the department's ``suspend_on_retirement`` switch
+    (:func:`suspends_retired` on the integration's config).
+    """
+    return has_departed(user.status, user.deleted_at, suspend_retired)
 
 
 class ProvisionRetryError(Exception):
@@ -245,6 +263,13 @@ def _is_duplicate_key(exc: IntegrityError) -> bool:
     return len(args) > 0 and args[0] == 1062
 
 
+def _configured_groups(
+    integration: Integration, info: DirectoryProviderInfo
+) -> list[str]:
+    groups = (integration.config or {}).get(info.groups_key) or []
+    return [str(g) for g in groups if g]
+
+
 def _account_key(row: DirectoryAccountProvision) -> str:
     """The directory's immutable user id when known. An address can be renamed
     or re-pointed as an alias to someone else; the id cannot."""
@@ -283,6 +308,12 @@ class DirectoryAccountService:
         if integration.status != "connected":
             return None
         return integration
+
+    async def active_integration(
+        self, organization_id: str, info: DirectoryProviderInfo
+    ) -> Optional[Integration]:
+        """The department's connected, enabled integration for *info*."""
+        return await self._active_integration(organization_id, info)
 
     async def stage_for_transfer(
         self,
@@ -664,6 +695,10 @@ class DirectoryAccountService:
                 f"Directory account suspension sync crashed for user {user_id}"
             )
             await self.db.rollback()
+            return
+        # A rename made while the member was away was held back; a return
+        # (sync_name checks it is one) sends it now.
+        await self.sync_name(user_id, organization_id)
 
     async def _reconcile_suspension(
         self,
@@ -716,6 +751,9 @@ class DirectoryAccountService:
             row.suspension_settled = True
             row.suspension_error = None
             row.managed_on_premises = False
+            if outcome in ("suspended", "unsuspended") or not wanted:
+                row.long_suspended_since = None
+            await self._follow_groups(row, integration, info, directory, outcome)
         except DirectoryAccountNotFoundError as exc:
             # Deleted in the directory: nothing left to suspend or restore.
             row.suspended_by_logbook = False
@@ -750,6 +788,166 @@ class DirectoryAccountService:
         )
         await self.db.commit()
         logger.info(f"{info.product} suspension for user {row.user_id}: {outcome}")
+
+    async def _follow_groups(
+        self,
+        row: DirectoryAccountProvision,
+        integration: Integration,
+        info: DirectoryProviderInfo,
+        directory: DirectoryClient,
+        outcome: str,
+    ) -> None:
+        """Take a departed member's account out of the configured groups, and
+        put a returning member's back.
+
+        Only an account The Logbook created: a linked existing account is only
+        ever suspended or unsuspended, and the groups were never ours to give.
+        The groups are the integration's as configured now -- the record does
+        not keep which ones the account joined at creation. Group failures
+        never unsettle the suspension; they stay on the record for the sweep.
+        """
+        if row.status != DirectoryAccountStatus.CREATED.value:
+            return
+        if row.suspension_wanted:
+            if outcome in ("suspended", "already_suspended"):
+                row.pending_group_removals = (
+                    _configured_groups(integration, info) or None
+                )
+            await self._leave_groups(row, directory)
+            return
+        row.pending_group_removals = None
+        rejoin = _configured_groups(integration, info)
+        if rejoin:
+            row.pending_groups = rejoin
+            await self._finish_setup(row, integration)
+
+    async def _leave_groups(
+        self, row: DirectoryAccountProvision, directory: DirectoryClient
+    ) -> None:
+        remaining: list[str] = []
+        for group in list(row.pending_group_removals or []):
+            try:
+                removed = await directory.remove_from_group(
+                    str(group), _account_key(row)
+                )
+            except DirectoryError:
+                remaining.append(str(group))
+                continue
+            if not removed:
+                logger.info(f"Left user {row.user_id} in a group that assigns licenses")
+        row.pending_group_removals = remaining or None
+
+    async def sync_name(self, user_id: str, organization_id: str) -> None:
+        """Give an account The Logbook created its member's current name.
+
+        Never raises. A failure leaves ``name_pending`` set for the sweep; an
+        account gone from the directory, or one only Active Directory can
+        change, is let go, since no retry from here can rename it. While the
+        member is away the rename waits: a departed member's suspended
+        account keeps the name an administrator knows it by (anonymizing a
+        former member renames them), and a return sends it.
+        """
+        from app.core.audit import log_audit_event
+
+        try:
+            row = await self._load(organization_id, user_id=user_id, lock=True)
+            if row is None or not row.name_pending or row.suspension_wanted:
+                await self.db.commit()
+                return
+            info = provider_info(row.provider)
+            integration = await self._active_integration(organization_id, info)
+            member = await self._load_member(user_id, organization_id)
+            if integration is None or member is None:
+                await self.db.commit()
+                return
+            given = (member.first_name or "").strip() or "Member"
+            family = (member.last_name or "").strip() or "Member"
+            outcome = "renamed"
+            try:
+                await directory_for(integration).update_name(
+                    _account_key(row), given, family
+                )
+                row.name_pending = False
+            except DirectoryAccountNotFoundError:
+                row.name_pending = False
+                outcome = "missing"
+            except DirectoryAccountManagedElsewhereError:
+                row.name_pending = False
+                outcome = "managed_on_premises"
+            except DirectoryError:
+                outcome = "failed"
+            await self.db.commit()
+            await log_audit_event(
+                self.db,
+                f"{info.audit_prefix}.account_rename",
+                "integrations",
+                "warning" if outcome == "failed" else "info",
+                {"target_user_id": user_id, "outcome": outcome},
+                organization_id=str(organization_id),
+            )
+            await self.db.commit()
+        except Exception:
+            logger.exception(f"Directory account rename crashed for user {user_id}")
+            await self.db.rollback()
+
+    async def sync_pending_names(self) -> int:
+        """Retry every rename a name change left unsent. Returns the records
+        attempted."""
+        rows = (
+            await self.db.execute(
+                select(
+                    DirectoryAccountProvision.user_id,
+                    DirectoryAccountProvision.organization_id,
+                ).where(
+                    DirectoryAccountProvision.name_pending.is_(True),
+                    DirectoryAccountProvision.suspension_wanted.is_(False),
+                )
+            )
+        ).all()
+        for user_id, organization_id in rows:
+            await self.sync_name(user_id, organization_id)
+        return len(rows)
+
+    async def retry_group_removals(self) -> int:
+        """Retry the group removals departures left unfinished. Returns the
+        records attempted."""
+        candidates = (
+            await self.db.execute(
+                select(
+                    DirectoryAccountProvision.user_id,
+                    DirectoryAccountProvision.organization_id,
+                    DirectoryAccountProvision.pending_group_removals,
+                ).where(
+                    DirectoryAccountProvision.status
+                    == DirectoryAccountStatus.CREATED.value,
+                    DirectoryAccountProvision.suspension_wanted.is_(True),
+                    DirectoryAccountProvision.suspension_settled.is_(True),
+                )
+            )
+        ).all()
+        # Filtered here rather than in SQL: an emptied JSON column can hold a
+        # JSON null, which IS NULL does not match.
+        waiting = [(u, o) for u, o, groups in candidates if groups]
+        for user_id, organization_id in waiting:
+            await self._retry_group_removal(user_id, organization_id)
+        return len(waiting)
+
+    async def _retry_group_removal(self, user_id: str, organization_id: str) -> None:
+        try:
+            row = await self._load(organization_id, user_id=user_id, lock=True)
+            if row is None or not row.pending_group_removals:
+                await self.db.commit()
+                return
+            info = provider_info(row.provider)
+            integration = await self._active_integration(organization_id, info)
+            if integration is None:
+                await self.db.commit()
+                return
+            await self._leave_groups(row, directory_for(integration))
+            await self.db.commit()
+        except Exception:
+            logger.exception(f"Directory group removal crashed for user {user_id}")
+            await self.db.rollback()
 
     async def link_existing_members(
         self,
@@ -814,6 +1012,7 @@ class DirectoryAccountService:
             for r in records
             if r.external_user_id and r.provider == info.provider
         }
+        retirement_suspends = suspends_retired(integration.config)
         member_query = select(User).where(User.organization_id == str(organization_id))
         if apply:
             # A locking read, so a member dropped while this runs is either
@@ -854,7 +1053,7 @@ class DirectoryAccountService:
             if match is None:
                 counts["not_in_google"] += 1
                 continue
-            if member_has_departed(member):
+            if member_has_departed(member, retirement_suspends):
                 counts["departed"] += 1
                 continue
             candidates.append((member, address, match))
@@ -934,7 +1133,9 @@ class DirectoryAccountService:
             return None
         integration = await self._active_integration(organization_id, info)
         member = await self._load_member(user_id, organization_id)
-        if integration is None or member is None or member_has_departed(member):
+        if integration is None or member is None:
+            return None
+        if member_has_departed(member, suspends_retired(integration.config)):
             return None
         if await self._load(organization_id, user_id=user_id) is not None:
             return None
@@ -1030,7 +1231,12 @@ class DirectoryAccountService:
                 )
             )
         ).all()
-        departed = [row for row, member in rows if member_has_departed(member)]
+        retirement_suspends = suspends_retired(integration.config)
+        departed = [
+            row
+            for row, member in rows
+            if member_has_departed(member, retirement_suspends)
+        ]
         if not departed:
             return []  # nothing to compare: no listing call
         domain = str((integration.config or {}).get("domain", "")).lower()
@@ -1048,6 +1254,7 @@ class DirectoryAccountService:
         }
         now = datetime.now(timezone.utc)
         found: list[str] = []
+        marked = False
         for row in departed:
             # A record that knows its account's id is matched by the id alone:
             # the address may since belong to a different, newer account.
@@ -1056,7 +1263,24 @@ class DirectoryAccountService:
                 if row.external_user_id
                 else by_address.get((row.primary_email or "").lower())
             )
-            if account is None or account.suspended:
+            if account is None:
+                # Deleted in the directory, so no longer holding a license. Only
+                # an id says so for certain; a missing address may be a rename.
+                if row.external_user_id and row.long_suspended_since is not None:
+                    row.long_suspended_since = None
+                    marked = True
+                continue
+            if account.suspended:
+                suspended_since = _aware(
+                    row.suspended_at or row.suspension_requested_at
+                )
+                if (
+                    row.long_suspended_since is None
+                    and suspended_since is not None
+                    and now - suspended_since >= LONG_SUSPENSION_AFTER
+                ):
+                    row.long_suspended_since = now
+                    marked = True
                 continue
             # Staged exactly as a departure stages it, with the suspension no
             # longer counted as ours: the reconcile below then asks the
@@ -1066,8 +1290,11 @@ class DirectoryAccountService:
             row.suspension_settled = False
             row.suspension_requested_at = now
             row.suspension_error = active_after_departure_message(info)
+            row.long_suspended_since = None
             found.append(str(row.user_id))
         if not found:
+            if marked:
+                await self.db.commit()
             return []
         await self.db.commit()
         from app.core.audit import log_audit_event
@@ -1101,6 +1328,13 @@ class DirectoryAccountService:
         is the risk this list exists to surface.
         """
         now = now or datetime.now(timezone.utc)
+        info = await self.connected_provider(organization_id)
+        integration = (
+            await self._active_integration(organization_id, info) if info else None
+        )
+        retirement_suspends = suspends_retired(
+            integration.config if integration is not None else None
+        )
         rows = (
             await self.db.execute(
                 select(DirectoryAccountProvision, User)
@@ -1113,7 +1347,7 @@ class DirectoryAccountService:
         ).all()
         items: list[AttentionItem] = []
         for row, member in rows:
-            found = _attention_issue(row, member, now)
+            found = _attention_issue(row, member, now, retirement_suspends)
             if found is None:
                 continue
             issue, detail, since = found
@@ -1127,16 +1361,12 @@ class DirectoryAccountService:
                     label=ATTENTION_LABELS[issue],
                     detail=detail,
                     since=since,
-                    overdue=since is not None
+                    overdue=issue not in NEVER_OVERDUE
+                    and since is not None
                     and now - since >= ATTENTION_OVERDUE_AFTER,
                 )
             )
-        order = [
-            AttentionIssue.NOT_SUSPENDED,
-            AttentionIssue.NOT_UNSUSPENDED,
-            AttentionIssue.NOT_CREATED,
-            AttentionIssue.SETUP_UNFINISHED,
-        ]
+        order = list(ATTENTION_LABELS)
         oldest = datetime.min.replace(tzinfo=timezone.utc)
         items.sort(key=lambda i: (order.index(i.issue), i.since or oldest))
         return items
@@ -1275,6 +1505,12 @@ class DirectoryAccountService:
             await self.reconcile_suspension(user_id, organization_id, stamp=False)
             return await self._reloaded(row.id, organization_id)
 
+        if row.suspension_wanted and row.pending_group_removals:
+            await self._begin_attempt(row)
+            await self._leave_groups(row, directory_for(integration))
+            await self.db.commit()
+            return await self._reloaded(row.id, organization_id)
+
         if row.status == DirectoryAccountStatus.LINKED_EXISTING.value:
             raise ProvisionRetryError(linked_existing_message(info))
         nothing_to_do = (
@@ -1291,7 +1527,9 @@ class DirectoryAccountService:
         # all hand something to the member; none of it is for someone who has
         # left. Only the suspension, settled above, still applies to them.
         member = await self._load_member(row.user_id, organization_id)
-        if member is None or member_has_departed(member):
+        if member is None or member_has_departed(
+            member, suspends_retired(integration.config)
+        ):
             raise ProvisionRetryError(
                 f"This member has left the department, so their {info.vendor} "
                 "account is not set up any further."
@@ -1344,7 +1582,10 @@ def _aware(moment: Optional[datetime]) -> Optional[datetime]:
 
 
 def _attention_issue(
-    row: DirectoryAccountProvision, member: User, now: datetime
+    row: DirectoryAccountProvision,
+    member: User,
+    now: datetime,
+    suspend_retired: bool,
 ) -> Optional[tuple[str, Optional[str], Optional[datetime]]]:
     """(issue, detail, waiting since) for one record, or None if it is fine."""
     if not row.suspension_settled and row.status in _SUSPENDABLE:
@@ -1358,13 +1599,32 @@ def _attention_issue(
             row.suspension_error,
             row.suspension_requested_at or row.updated_at,
         )
+    if row.suspension_wanted and row.pending_group_removals:
+        groups = ", ".join(str(g) for g in row.pending_group_removals)
+        return (
+            AttentionIssue.GROUPS_NOT_LEFT,
+            f"The account is suspended, but it could not be removed from: {groups}",
+            row.suspended_at or row.suspension_requested_at or row.updated_at,
+        )
+    if row.suspension_wanted and row.long_suspended_since is not None:
+        info = provider_info(row.provider)
+        since = _aware(row.suspended_at or row.suspension_requested_at)
+        days = (now - since).days if since is not None else None
+        held = f"Suspended {days} days ago" if days is not None else "Suspended"
+        return (
+            AttentionIssue.LONG_SUSPENDED,
+            f"{held} and still in {info.product}. A suspended account keeps its "
+            "license until the license is removed or the account is deleted in "
+            f"{info.admin_console}.",
+            since,
+        )
     # Waiting is measured from the record's creation, never from the latest
     # attempt: a Retry that fails again must not restart the clock.
     if row.status == DirectoryAccountStatus.PENDING.value:
         attempted = _aware(row.last_attempt_at or row.created_at)
         if attempted is None or now - attempted < STALE_PENDING_AFTER:
             return None  # still in flight
-        if member_has_departed(member):
+        if member_has_departed(member, suspend_retired):
             # The create call may have reached the directory with its answer
             # lost: the departure hook cannot suspend what it has no record of.
             return (
@@ -1373,7 +1633,7 @@ def _attention_issue(
                 row.created_at,
             )
         return AttentionIssue.NOT_CREATED, row.last_error, row.created_at
-    if member_has_departed(member):
+    if member_has_departed(member, suspend_retired):
         return None
     if row.status == DirectoryAccountStatus.FAILED.value:
         return AttentionIssue.NOT_CREATED, row.last_error, row.created_at

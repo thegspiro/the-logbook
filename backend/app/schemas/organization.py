@@ -485,11 +485,41 @@ class FileStorageStatusResponse(BaseModel):
     """Where a department's new files go, and why (decision 31)."""
 
     platform: str = Field(description="The platform saved in File Storage settings")
-    new_files_go_to: Literal["local", "s3"] = Field(
-        description="Where an upload made now is stored"
+    platform_label: Optional[str] = Field(
+        None, description="How the screen names the saved platform, if it connects"
+    )
+    platform_short_label: Optional[str] = Field(
+        None, description='The shorter name buttons use ("S3")'
+    )
+    container_noun: Optional[str] = Field(
+        None, description='What one container is called on the platform ("bucket")'
+    )
+    container: Optional[str] = Field(
+        None,
+        description="The bucket or drive the last passed connection test used",
+    )
+    platform_connectable: bool = Field(
+        False,
+        description=(
+            "The saved platform is one this installation can switch files to; "
+            "otherwise files stay on the server whatever is saved"
+        ),
+    )
+    new_files_go_to: str = Field(
+        description=(
+            'Where an upload made now is stored: "local", or the remote '
+            'platform\'s setting value (such as "s3")'
+        )
+    )
+    location: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Where the last passed connection test sent files (bucket, "
+            "endpoint, region, drive…), never a secret"
+        ),
     )
     bucket: Optional[str] = Field(
-        None, description="The bucket the last passed connection test used"
+        None, description="The bucket the last passed S3 connection test used"
     )
     endpoint_url: Optional[str] = None
     activated_at: Optional[str] = Field(
@@ -498,9 +528,13 @@ class FileStorageStatusResponse(BaseModel):
     changed_since_test: bool = Field(
         False,
         description=(
-            "The S3 settings were edited after the last passed test, so new "
-            "files go to local disk until it is run again"
+            "The storage settings were edited after the last passed test, so "
+            "new files go to local disk until it is run again"
         ),
+    )
+    problem: Optional[str] = Field(
+        None,
+        description="Why the saved platform's settings cannot be used, if they cannot",
     )
     s3_problem: Optional[str] = Field(
         None, description="Why the saved S3 settings cannot be used, if they cannot"
