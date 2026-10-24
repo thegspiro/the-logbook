@@ -2,14 +2,16 @@
 
 **Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
-(pass 9) · **PR:**
+(pass 9), 2026-10-23 (pass 10) · **PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
 [#2972](https://github.com/thegspiro/the-logbook/pull/2972) (pass 7, 0
 fixed, EV-26 confirmed fixed),
 [#3294](https://github.com/thegspiro/the-logbook/pull/3294) (pass 8, 0
 fixed),
-pass 9 PR (0 fixes needed this pass — see below)
+[#3438](https://github.com/thegspiro/the-logbook/pull/3438) (pass 9, 0
+fixed),
+pass 10 PR (0 fixes needed this pass — see below)
 
 **Backend:** `api/v1/endpoints/events.py` (58 routes, unchanged),
 `api/v1/endpoints/event_requests.py` (23 routes — includes the
@@ -38,6 +40,139 @@ into 409 `phase_gate` with an `occurrences` list. `useRSVPForm`'s series
 branch confirms against the list and retries with `override=true`. Tests:
 `test_event_rsvp_waitlist.py::TestRsvpToSeries`,
 `test_series_rsvp_phase_gate_endpoint.py`, `hooks/useRSVPForm.test.ts`.
+
+---
+
+## Pass 10 (2026-10-23) — near-zero delta (7 of 379 commits in scope), 0 fixes needed, 0 new findings
+
+**Watchdog pickup.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results, checked after
+PR #3617 — Feature 15, Scheduling, pass 10 — merged), and the dedicated loop
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`,
+checked twice). Rotation row 16 (Events & requests) was confirmed the next
+`⬜` by reading the rotation table directly on a freshly fetched `main`.
+
+### Scope
+
+Baseline `8da1eb88` (PR #3438's merge, pass 9). **379 non-merge commits**
+landed repo-wide in the window; only **7** touch this feature's declared
+files — confirmed via `git log 8da1eb88..HEAD --no-merges -- <declared
+files>`. `event_organizer_service.py`, `event_request_service.py`,
+`event_attendance_petition_service.py`, `event_attendance_petitions.py`,
+`models/event.py`, `models/event_request.py`, and the frontend
+`modules/events` tree have zero diff since pass 9 — confirmed by the same
+command against each path.
+
+### Commits reviewed
+
+- **`efd6eb83`** ("app-review B17 — a null on a required field answered 500
+  in four update paths") — `update_event`, `update_template`,
+  `update_email_template`, and `update_external_attendee` moved from a bare
+  `setattr` loop to `apply_updates`/`reject_null_for_required`. This is the
+  exact Pitfall #1 mirror-image correction CLAUDE.md asks for: an explicit
+  `null` against a `NOT NULL` column now gets a 400 instead of a 500 or a
+  stored JSON `null`; nullable fields still clear. No tenancy/auth surface —
+  every touched row was already resolved through its existing org-scoped
+  lookup before this commit, unchanged here.
+- **`b92da7f3`** ("Storage: route every stored-file read, check and delete
+  through one interface") — `events.py`'s attachment download/delete moved
+  from a hand-rolled `is_path_in_org` + `os.path.realpath`/`os.remove` check
+  to the shared `file_storage.resolve(file_path, organization_id,
+StorageArea.EVENT_ATTACHMENTS)` / `.exists()` / `.file_response()` /
+  `.delete_quietly()`. Read `resolve()` in full
+  (`app/services/file_storage_service.py:200`): it fails closed on a
+  non-string path, a missing org, and anything whose real path does not sit
+  under `<UPLOADS_ROOT>/<org>/event-attachments/` (or the area's legacy
+  root) — `..` and symlinks included, since the comparison is on
+  `os.path.realpath`. Confirmed `delete_quietly(None)` is a no-op
+  (`file_storage_service.py:1004`), so the delete path's unconditional call
+  with a possibly-`None` resolve result cannot touch an unintended file. Same
+  security boundary as before, now centralized instead of
+  module-local — a hardening, not a regression.
+- **`619d5e46`** ("Make check-out work on the event check-in page") — the QR
+  check-in data endpoint now also returns the **scanning member's own**
+  check-in/check-out times, read via `EventRSVP` filtered on `event_id`,
+  `user_id == current_user.id`, and `organization_id` — self-scoped per
+  checklist item 2, not a client-supplied id. The endpoint itself is
+  authenticated (`current_user` dependency), not token-scoped public.
+- **`82c82bda`** ("Pass a series on when its first occurrence is deleted;
+  add 'this and future' delete") — the largest commit in scope. New
+  `_lock_series()` row-locks the parent and every occurrence
+  (`organization_id`-filtered, `with_for_update()`, Pitfall #27 shape) before
+  any series mutation. The new `from_event_id` parameter on
+  `DELETE /events/{id}/series` is validated as XC-1 requires: it's looked up
+  only inside the already org-scoped `series` list
+  (`next((e for e in series if str(e.id) == str(from_event_id)), None)`), so
+  a cross-org or nonexistent id raises `ValueError("That occurrence is not
+part of this series")` rather than being trusted. Attendance-finalization
+  locking is preserved — only occurrences actually being deleted are checked,
+  matching the existing "refuse the whole batch" discipline this file's
+  pass-8/9 history already established.
+- **`af733a1e`** ("check in from the event page, and keep the display QR
+  code for whoever runs the event") — `_may_view_attendees()` is now one
+  helper shared by `get_event`'s `can_view_attendees` field and
+  `list_event_attendees`'s own 403 gate, closing the drift risk the two
+  independent checks previously carried. "View QR Code" is now
+  frontend-gated to `canManage || canManageOrganizers`
+  (`EventDetailPage.tsx`) — cosmetic, not a new security boundary, since the
+  underlying `GET /{event_id}/qr-check-in-data` (reviewed in pass 9) already
+  returns only event metadata, never PII or a credential.
+- **`8a57d069`** (repo-wide Pitfall #32 sweep) — `get_eligible_members`'s
+  `User.status == UserStatus.ACTIVE` became
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`; the existing
+  `organization_id`/`deleted_at` filters are unchanged. Matches the
+  established, test-enforced (`test_account_status_gates.py`) pattern.
+- **`7a439ddb`** ("Shift series RSVP deadlines per occurrence") — pure
+  date/timezone arithmetic (`rsvp_deadline_lead`/`rsvp_deadline_at`), no new
+  query, no auth/tenancy surface. The schema changes in this commit
+  (`schemas/inventory.py`, `schemas/training_enhancements.py`) are outside
+  this feature's declared scope.
+
+### Route inventory
+
+**Unchanged: `events.py` 58, `event_requests.py` 23,
+`event_attendance_petitions.py` 7** — confirmed via `grep -c '^@router\.'`
+on each file; none of this window's 7 in-scope commits adds a route
+decorator.
+
+### Re-verified standing items
+
+- EV-26, EV-23, the 256-bit `check_request_status` token, and the
+  `ondelete="SET NULL"` nullability sweep — zero diff on the files each
+  depends on this window; same conclusion as pass 9.
+- EV-11's `create_recurring_event` `template_id` org-check — zero diff,
+  unchanged.
+
+### Verified good ✅ (pass 10)
+
+- No new unbounded query, no new CSV export, no new `.like()`/`.ilike()`
+  usage, no new JSON-column shallow-copy mutation, no new unauthenticated
+  route, no new client-supplied FK accepted without an in-org check (the one
+  new client-supplied id this window, `from_event_id`, is validated as
+  described above).
+- The storage-layer refactor (`b92da7f3`) preserves the exact same
+  org/area confinement this file relied on before, now shared with 18 other
+  modules instead of duplicated.
+
+### Completion gate
+
+| Check                                                    | Result                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (pinned 7.3.0)             | ✅ 0 violations                                                                                                                                                                                                                                                                                                                                                                            |
+| `black --check app/ tests/ alembic/` (pinned 26.5.1)     | ✅ clean, 2584 files unchanged                                                                                                                                                                                                                                                                                                                                                             |
+| `isort --check-only app/ tests/ alembic/` (pinned 9.0.1) | ✅ clean                                                                                                                                                                                                                                                                                                                                                                                   |
+| `python3 scripts/validate_migrations.py --strict`        | ✅ single head `4250eb8b8378`, 643 revisions                                                                                                                                                                                                                                                                                                                                               |
+| `python3 scripts/check_route_permissions.py --strict`    | ✅ 273 routes, 0 errors, 0 warnings                                                                                                                                                                                                                                                                                                                                                        |
+| `pytest tests/ -k "event"`                               | ⚠️ not run — this sandbox's Python dependencies were not pre-installed and a full `pip install -r requirements.txt` exceeded a reasonable turnaround; **no application code was changed this pass** (review-only), and every reviewed commit individually passed full CI (including this suite) before merging to `main`, which this pass's own baseline fetch confirmed is at a green tip |
+| `npm run typecheck` / `npm run lint` / `npx vitest`      | ⚠️ not run — same reason (frontend `node_modules` not installed in this sandbox); no frontend file in this feature's declared scope changed this window                                                                                                                                                                                                                                    |
+
+Static analysis (flake8/black/isort/migrations/route-permissions) is the
+part of the gate independent of a pre-built environment and ran clean; the
+test-runner gates could not be executed here. Flagging this explicitly per
+the skill's own rule rather than reporting a gate not run.
+
+Rotation row 16 → ✅ (pending this PR's merge). Next: Feature 17 (Training
+core).
 
 ---
 
