@@ -2889,5 +2889,228 @@ finding re-verified unchanged (none are OPEN or FLAGGED as of pass 8).
 | `python3 scripts/validate_migrations.py --strict`                                                                         | ✅ 631 revisions, single head `ca0c2111466f`                           |
 | `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or crew"` | ✅ 2050 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
 | `python3 scripts/check_route_permissions.py --strict` (repo root)                                                         | ✅ 272 routes, 0 errors, 0 warnings                                    |
+| `cd frontend && npm run typecheck` (pass 9)                                                                               | ✅ 0 errors                                                            |
+| `cd frontend && npm run lint` (pass 9)                                                                                    | ✅ 0 errors, 0 warnings                                                |
+
+---
+
+## Pass 10 (2026-10-24) — watchdog pickup, real delta, 0 new findings
+
+**Prefix:** `TRX10` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** No open PR's head branch starts with `claude/security-review-`
+(`search_pull_requests`, 0 results); PR #3628 (Feature 17, Training core, pass 10) had just merged. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via `ListAgents`.
+Rotation row 18 (Training extended) was confirmed the next pending feature by
+reading the rotation table directly on a freshly fetched `main`.
+
+### Scope check — real delta since pass 9
+
+Baseline: `69f785be` (PR #3444's merge, pass 9). `git diff --stat` across the
+twelve declared files plus the two established out-of-list artifacts
+(`training_program_service.py`, `schemas/training.py`) returns eight files
+touched (359 insertions, 106 deletions); a broader name-based glob
+(`api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
+`services/*training*`, `services/course_*`, `schemas/*training*`) additionally
+returns `training.py`, `training_module_config.py`, `training_programs.py`,
+`training_sessions.py`, `training_compliance.py`, `training_course_names.py`
+(new file), `training_requirement_removal.py` (new file),
+`schemas/training_program.py`, `schemas/training_session.py`,
+`schemas/training_submission.py` — all ten are Feature 17's (Training core)
+own files, matched only because the glob is name-based; confirmed by name
+against this feature's twelve-file list (none match) and independently
+confirmed already reviewed: PR #3628's own body describes the
+deactivate-instead-of-delete / reactivate / course-name-resolver changes these
+ten files carry.
+
+Also touched, not training-extended's own but worth tracing because the
+change lands inside two of this feature's tracked files:
+
+- `backend/app/models/training.py` — seven `created_at`/`updated_at` columns
+  tightened `Optional[datetime]` → `datetime` (`nullable=False` plus the
+  server default), part of the repo-wide "Make 99 columns NOT NULL" sweep
+  (`609e04d2`, PR #3612, merged — the same PR whose forked Alembic head pass
+  9's sibling, training-core pass 10, resolved via `7dba2d6d2dbb`). Its own
+  migration (`6dce1364ff7e`) backfills stored NULLs before tightening
+  (Pitfall #35-compliant: read directly, not assumed) and skips absent
+  tables. No `TrainingSubmission`/`TrainingWaiver`/`CourseCohort`/`CourseClass`/
+  `ExternalTrainingProvider`/`RecertificationPathway` column changed. Not
+  this feature's to re-review — already covered by the PR that introduced it.
+- `backend/app/services/file_storage_service.py` and the new
+  `backend/app/utils/*` S3/MinIO/Google-Drive storage backends it wraps
+  (`0cbddbb3`, `b51300c7`, `b92da7f3`) — a new remote-storage capability,
+  already in this feature's declared files' call sites (see below) but whose
+  own security surface belongs to Core infrastructure (feature 33), where
+  `docs/security-review/CI2-33-core-infra.md`/`CI6-33-core-infra.md` already
+  cover it. Confirmed by `grep -rl` that both files mention
+  `file_storage_service`.
+
+A new migration, `f938324f8081` ("Let a training waiver have no end date, as
+the model already does"), closes a schema gap: `training_waivers.end_date`
+was created `NOT NULL` but the model was relaxed to nullable (permanent
+waiver) in an earlier, already-reviewed pass with no migration following —
+every upgraded database 500'd on a permanent-waiver write while a fresh
+`create_all` install silently accepted it. Read directly: guards table
+existence (Pitfall #26), the upgrade only relaxes (no data loss, a database
+already nullable is left alone), and the downgrade restores `NOT NULL` only
+when no row holds a NULL — Pitfall #35-compliant. No application code in this
+feature's files changed alongside it (the waiver service/endpoint are
+byte-identical to pass 9), so this is a documentation-only migration-safety
+note, not a new finding.
+
+### What changed in this feature's own eight files
+
+- **`training_program_service.py` (+137/-?, shared with Feature 17)** —
+  `delete_training_program` now deactivates (`active=False`, live enrollments
+  withdrawn) instead of permanently deleting a program with any COMPLETED
+  enrollment, keeping graduates' history; `get_training_programs` gained an
+  `include_inactive` flag; `active: null` on update is now refused (400)
+  rather than silently hiding the program; `remove_phase_from_program`'s
+  requirement-progress-preservation logic was extended to also garbage-collect
+  an orphaned program-owned requirement once its last phase link is removed,
+  and to correctly treat a phase-less sibling link (`phase_id IS NULL`) as
+  still-linked via an explicit `or_()` rather than a bare `!=` (which SQL's
+  three-valued NULL logic would silently drop); the recert-reset paths now
+  skip a deactivated program. **This is the same change PR #3628 (training-core
+  pass 10, merged) already reviewed and merged** — `delete_training_program`
+  is called only from `training_programs.py` (Feature 17's own endpoint file),
+  which that PR's own description explicitly covers ("Reactivate action...
+  Deactivate-instead-of-delete... `active: null` is now refused"). Re-read the
+  org-scoping directly rather than trusting that description: `get_program_by_id`
+  (the lookup `delete_training_program` starts from) still filters
+  `organization_id`, so the deactivate-vs-delete branch cannot cross a tenant
+  boundary — confirmed, not merely cited. No re-finding needed.
+- **`external_training.py` / `external_training_service.py` (new route +
+  service method)** — a new `POST
+/training/external/providers/{provider_id}/imports/import-matched` endpoint
+  and `ExternalTrainingSyncService.import_pending_for_matched_members`, which
+  retroactively imports staged completions whose member was mapped after the
+  original sync ran (previously those stayed pending forever). Traced the
+  full org-scoping chain directly: the endpoint resolves `provider_id` through
+  an org-filtered query before calling the service (XC-3); the service's own
+  query additionally joins `User` and filters both
+  `ExternalTrainingImport.organization_id` and `User.organization_id` to the
+  caller's org, plus `User.deleted_at.is_(None)` (a departed member's staged
+  record is never silently credited into their old account). The second call
+  site — `update_user_mapping`'s auto-import-on-map — passes
+  `str(current_user.organization_id)` as the org and the already-org-validated
+  `internal_user_id`'s member check happens before it, so no path reaches the
+  service with an unvalidated org. No LIKE pattern, no new CSV export, no new
+  cache-relevant GET (this is a `POST`). **No finding** — a correctly
+  org-scoped new capability, not a gap.
+- **Column-bounds hardening** (`schemas/training.py`,
+  `schemas/training_enhancements.py`) — `le=INT32_MAX`/`le=FLOAT32_MAX` (and
+  `ge=INT32_MIN`/`ge=-FLOAT32_MAX` where negative) added to every previously
+  unbounded numeric field across `TrainingCategory`, `TrainingCourse`,
+  `TrainingRecord`, `TrainingRequirement`, `RecertificationPathway`,
+  `MultiAgencyTraining`, and the historical-import row schema — a repo-wide
+  defensive sweep (matches the pattern already landed elsewhere in this
+  rotation), not a vulnerability: it narrows what was previously accepted and
+  silently truncated or rejected at the database layer into a clean 422.
+  `MultiAgencyTrainingBase.participating_organizations` relaxed from
+  `min_length=1` to `default_factory=list` — a product change (logging an
+  exercise before other agencies are confirmed), not security-relevant; the
+  field still goes through no validation gap since it's typed, not a raw
+  dict. Also included: the `CertAlertSettings`/`CertAlertSettingsUpdate`
+  schemas (`GET`/`PUT /training/certifications/alert-settings`) — **already
+  reviewed by PR #3628** (training-core pass 10), whose endpoint lives in
+  `training.py` (Feature 17's file); the schema itself sits in the shared
+  `schemas/training.py` this feature also tracks. Re-read directly: the
+  `_no_null_switches` validator correctly refuses an explicit `null` on any
+  of the three boolean switches (no "cleared" state exists for a toggle),
+  matching `apply_updates`'s own null-handling discipline without needing
+  `apply_updates` itself (plain booleans, no FK, no enum). No re-finding.
+- **File-storage call-site migration** (`training_submissions.py`,
+  `training_enhancements.py`) — `os.remove`/`os.path.isfile`/
+  `asyncio.to_thread(...)`/the bespoke `stored_file_response` helper replaced
+  by `file_storage.delete_quietly` / `file_storage.exists` /
+  `file_storage.file_response`, the same centralization EV-16 (pass 10)
+  and DOC-10 already noted for their own files. Confirmed the call order is
+  unchanged at every site: `_confined_path` (this feature's own
+  org/area-containment check, now implemented via `file_storage.resolve`)
+  still runs **before** `file_storage.exists`/`file_storage.file_response`
+  are called — the refactor swaps the storage primitive, not the
+  confinement check that gates it. The storage backend's own security
+  surface (S3/MinIO credentials, path construction inside `resolve`) is Core
+  infrastructure's to review, per the "Also touched" note above. No finding.
+
+### Route re-enumeration
+
+AST-walked every `@router.get/post/put/patch/delete` across all six endpoint
+files directly (not regex, and not trusting pass 9's count): **100 routes**
+(22 + 5 + 30 + 20 + 17 + 6), up from pass 9's 99 — the one new route is
+`import_matched_records`. Every one of the 100 carries a `Depends(...)` whose
+callable is `get_current_user`, `require_permission`, or
+`require_all_permissions` (0 missing). `python3 scripts/check_route_permissions.py
+--strict` (repo root): **273 total application routes, 0 errors, 0
+warnings** — up from pass 9's 272 from features elsewhere in the rotation
+merging in the interim, confirming no new top-level page from this feature
+(Pitfall #30a n/a).
+
+### Frontend surface
+
+All twelve established frontend files (ten pages/components plus
+`apiCache.ts`/`apiCache.test.ts`) diffed against `69f785be`: eleven changed.
+`apiCache.ts`'s two-line addition (`/organization/settings/file-storage/status`,
+`/issue-plan`) is unrelated to this feature (confirmed by prefix name — a
+storage-settings status check and an inventory kit-issue PII substring,
+neither a training-extended path); re-confirmed all eleven training-extended
+`UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` entries from prior passes are
+still present, unmoved. The other ten are a shared `TrainingPageHeader`
+component rollout (breadcrumb/heading consolidation), an AA/AAA contrast-shade
+sweep (`-700`/`-600` → `-800`/`-700` on status badges, matching the documented
+palette convention), and — in `SubmitTrainingPage.tsx` — a genuine hardening:
+deleting a stored attachment now goes through `useConfirm()` with an explicit
+warning ("deleted right away, even if you cancel the rest of your edits")
+rather than deleting unconfirmed, closing a silent-data-loss gap this file
+previously had. Grep-swept all ten (plus the newly-touched
+`ImportQueuePanel`/`MappingsModal` sections of `ExternalTrainingPage.tsx`) for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, a `date-fns` import, and direct `fetch(` — zero hits (one
+grep hit is a code comment explaining why `window.confirm` is deliberately
+not used). No finding.
+
+### Standing findings re-verified at their current citation
+
+TRX-1 through TRX-10, TRX3-1, TRX4-1/TRX4-2 (and the later-pass corrections
+to each), and TRX7-1 all re-read directly at their current file/line rather
+than re-cited: `training_program_service.py`'s batch `User` lookup in the
+prerequisite-gate error path still filters `organization_id` (TRX-1);
+`update_provider`, `CourseCohortService.update_cohort`,
+`CourseSyllabusService.update_class` still route through `apply_updates`
+(TRX-2/5/5b); `get_effectiveness_evaluations` still confines non-officers via
+`can_view_officer_training_data` (TRX-3); `_get_cohort_class` still takes
+`cohort_id` before any write (TRX-4); `training_waivers.py` still calls
+`assert_all_in_org` (TRX-6); `training_submission_service.py` still calls
+`assert_in_org` on `category_id` (TRX-7); the `_validate_references` methods
+on `RecertificationService`/`MultiAgencyService` are unchanged (TRX-8/9);
+`XAPIService`'s `_provider_validated` flag and batch-once validation are
+unchanged (TRX-10); the SSRF-pinned transport (TRX3-1) and the
+instructor-qualification permission gate (TRX4-2) are both unchanged (neither
+file in this pass's diff). No OPEN or FLAGGED item exists as of pass 9
+(confirmed by grep before starting this pass); none is reopened by this
+pass's eight-file diff.
+
+### Findings
+
+**0 new findings.** A real, eight-file delta since pass 9 — a new org-scoped
+import-retry endpoint, a deactivate-instead-of-delete program path (shared
+with and already reviewed by Feature 17's own pass 10), a column-bounds
+hardening sweep, a file-storage call-site migration onto an
+already-reviewed shared interface, and a migration closing a nullability gap
+on a column this feature's own earlier pass already made nullable at the
+model layer — none introduce a new tenancy, authorization, injection, or
+data-exposure gap. Every standing TRX finding re-verified unchanged.
+
+## Completion gate (pass 10)
+
+| Check                                                                                                                     | Result                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                             | ✅ 0 violations                                                        |
+| `black --check app/ tests/ alembic/`                                                                                      | ✅ 2596 files unchanged                                                |
+| `isort --check-only app/ tests/ alembic/`                                                                                 | ✅ clean                                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                         | ✅ 648 revisions, single head `7dba2d6d2dbb`                           |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or crew"` | ✅ 2173 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                         | ✅ 273 routes, 0 errors, 0 warnings                                    |
 | `cd frontend && npm run typecheck`                                                                                        | ✅ 0 errors                                                            |
 | `cd frontend && npm run lint`                                                                                             | ✅ 0 errors, 0 warnings                                                |
