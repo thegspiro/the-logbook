@@ -171,6 +171,7 @@ class TestFinalizeShiftArchivesPrompt:
         shift = SimpleNamespace(
             id="shift-1",
             is_finalized=False,
+            status="scheduled",
             start_time=now - timedelta(hours=10),
             end_time=now - timedelta(hours=1),
             apparatus_id=None,
