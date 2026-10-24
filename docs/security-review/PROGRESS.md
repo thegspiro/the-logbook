@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** (branch `claude/security-review-integrations`) — Feature 27
+**PR [#3641](https://github.com/thegspiro/the-logbook/pull/3641)** (branch
+`claude/security-review-integrations`) — Feature 27
 (Integrations), pass 9, a watchdog pickup. PR #3640 (Feature 26, Forms, pass 9) had already merged with no open rotation PR behind it — confirmed via
 `list_pull_requests` (state=open) and `search_pull_requests`
 (`head:claude/security-review-`, both empty) immediately before starting —
