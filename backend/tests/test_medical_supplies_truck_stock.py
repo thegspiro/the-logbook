@@ -1127,6 +1127,43 @@ class TestEveryLotAboardForTheExport:
         ]
 
 
+class TestUncountedPositionsForTheEmail:
+    async def test_names_each_position_and_its_supply(self, db_session, dept):
+        rows = await EquipmentCheckService(db_session).uncounted_supply_positions(
+            dept.org_id, list(MEDICAL_ITEM_TYPES)
+        )
+
+        assert rows == [
+            {
+                "item_name": "Gauze",
+                "item_size": None,
+                "apparatus_id": dept.medic3_rig,
+                "where": "Medic 3 › Main Compartment › Jump Bag",
+            }
+        ]
+
+    async def test_none_once_counted(self, db_session, dept):
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.medic3)
+            .values(quantity_on_truck=4)
+        )
+        await db_session.commit()
+
+        rows = await EquipmentCheckService(db_session).uncounted_supply_positions(
+            dept.org_id, list(MEDICAL_ITEM_TYPES)
+        )
+
+        assert rows == []
+
+    async def test_ignores_another_departments_trucks(self, db_session, dept):
+        rows = await EquipmentCheckService(db_session).uncounted_supply_positions(
+            _uid(), list(MEDICAL_ITEM_TYPES)
+        )
+
+        assert rows == []
+
+
 class TestLotRecalls:
     """A recall reaches every unit carrying the number, shelf and truck."""
 

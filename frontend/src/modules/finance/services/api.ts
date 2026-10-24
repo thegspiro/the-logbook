@@ -56,6 +56,7 @@ import type {
   DuesScheduleUpdatePayload,
   DuesSummary,
   ExpenseLineItem,
+  ExpenseLineItemUpdatePayload,
   ExpenseReport,
   FinanceDashboard,
   FiscalYear,
@@ -814,6 +815,22 @@ export const expenseReportService = {
     return response.data;
   },
 
+  /** Edit a line on a draft report: omitted fields stay, null clears an optional one. */
+  async updateLineItem(id: string, itemId: string, data: ExpenseLineItemUpdatePayload): Promise<ExpenseLineItem> {
+    const response = await api.put<ExpenseLineItem>(`/finance/expense-reports/${id}/items/${itemId}`, data);
+    return response.data;
+  },
+
+  async deleteLineItem(id: string, itemId: string): Promise<void> {
+    await api.delete(`/finance/expense-reports/${id}/items/${itemId}`);
+  },
+
+  /** Withdraw a draft (the member) or cancel a report further along (the finance office). */
+  async cancel(id: string): Promise<ExpenseReport> {
+    const response = await api.post<ExpenseReport>(`/finance/expense-reports/${id}/cancel`);
+    return response.data;
+  },
+
   async uploadLineItemReceipt(reportId: string, itemId: string, file: File): Promise<ExpenseLineItem> {
     const response = await api.post<ExpenseLineItem>(
       `/finance/expense-reports/${reportId}/items/${itemId}/receipt`,
@@ -910,6 +927,12 @@ export const checkRequestService = {
     const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/issue`, undefined, {
       params: { check_number: checkNumber },
     });
+    return response.data;
+  },
+
+  /** Withdraw a draft (the member) or cancel an unissued request (the finance office). */
+  async cancel(id: string): Promise<CheckRequest> {
+    const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/cancel`);
     return response.data;
   },
 

@@ -326,15 +326,19 @@ async def completion_counts(
     return {str(course_id): int(count) for course_id, count in rows.all()}
 
 
-async def _training_officers(db: AsyncSession, organization_id: str) -> List[User]:
-    """Live members of the org who hold ``training.manage``."""
+async def training_officers(db: AsyncSession, organization_id: str) -> List[User]:
+    """Live members of the org who hold ``training.manage``, with an email.
+
+    Also the recipients of the automatic-enrollment-skipped notice
+    (``TrainingProgramService.notify_officers_enrollment_skipped``).
+    """
     from app.core.permissions import permission_matches_any
 
     result = await db.execute(
         select(User)
         .where(User.organization_id == organization_id)
         .where(User.deleted_at.is_(None))
-        .where(User.is_active == True)  # noqa: E712
+        .where(User.is_active.is_(True))
         .where(User.email.isnot(None))
         .options(selectinload(User.roles))
     )
@@ -427,7 +431,7 @@ async def notify_new_course_matches(
         )
     ).scalar_one_or_none()
     officers = recipients_for(
-        await _training_officers(db, provider.organization_id),
+        await training_officers(db, provider.organization_id),
         EmailKind.TRAINING_DUTIES,
         department_required_kinds(org),
     )

@@ -2153,6 +2153,20 @@ async def delete_template(
 # ============================================
 
 
+async def _pattern_responses(
+    service: SchedulingService, patterns: list, organization_id
+) -> list[ShiftPatternResponse]:
+    """Patterns as responses, each flagged with the inactive templates that
+    stop it generating (one query for the whole list)."""
+    held = await service.inactive_templates_by_pattern(patterns, organization_id)
+    responses = []
+    for pattern in patterns:
+        response = ShiftPatternResponse.model_validate(pattern)
+        response.inactive_templates = held.get(str(pattern.id), [])
+        responses.append(response)
+    return responses
+
+
 @router.get("/patterns", response_model=list[ShiftPatternResponse])
 async def list_patterns(
     active_only: bool = Query(True),
@@ -2169,7 +2183,7 @@ async def list_patterns(
     patterns = await service.get_patterns(
         current_user.organization_id, active_only=active_only
     )
-    return patterns
+    return await _pattern_responses(service, patterns, current_user.organization_id)
 
 
 @router.post(
@@ -2192,7 +2206,10 @@ async def create_pattern(
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create pattern.", error)
         )
-    return result
+    (response,) = await _pattern_responses(
+        service, [result], current_user.organization_id
+    )
+    return response
 
 
 @router.get("/patterns/{pattern_id}", response_model=ShiftPatternResponse)
@@ -2212,7 +2229,10 @@ async def get_pattern(
         await service.get_pattern_by_id(pattern_id, current_user.organization_id),
         "Pattern",
     )
-    return pattern
+    (response,) = await _pattern_responses(
+        service, [pattern], current_user.organization_id
+    )
+    return response
 
 
 @router.patch("/patterns/{pattern_id}", response_model=ShiftPatternResponse)
@@ -2232,7 +2252,10 @@ async def update_pattern(
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update pattern.", error)
         )
-    return result
+    (response,) = await _pattern_responses(
+        service, [result], current_user.organization_id
+    )
+    return response
 
 
 @router.delete("/patterns/{pattern_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -2274,6 +2297,18 @@ async def generate_shifts_from_pattern(
             ),
         )
     service = SchedulingService(db)
+    # A pattern held by an inactive template is a state the officer has to
+    # change, not a bad request: 409, with what to do about it.
+    pattern = await service.get_pattern_by_id(pattern_id, current_user.organization_id)
+    if pattern is not None:
+        held = await service.inactive_templates_by_pattern(
+            [pattern], current_user.organization_id
+        )
+        if held:
+            raise HTTPException(
+                status_code=409,
+                detail=service.inactive_template_message(held[str(pattern.id)]),
+            )
     result, error = await service.generate_shifts_from_pattern(
         pattern_id,
         current_user.organization_id,

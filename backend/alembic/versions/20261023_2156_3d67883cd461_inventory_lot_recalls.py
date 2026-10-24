@@ -1,7 +1,7 @@
 """Record manufacturer recalls of a supply's lot number.
 
 Revision ID: 3d67883cd461
-Revises: 4250eb8b8378
+Revises: a0195b397bf3
 Create Date: 2026-10-23 21:56:00.000000
 
 A recall names a lot number. The Medical Supplies lot lookup already finds
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "3d67883cd461"
-down_revision: Union[str, None] = "4250eb8b8378"
+down_revision: Union[str, None] = "a0195b397bf3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

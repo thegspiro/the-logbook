@@ -1088,6 +1088,19 @@ export const trainingProgramService = {
   },
 
   /**
+   * Officer marks a member's whole enrollment complete by hand (active or
+   * on-hold only). The reason is required and audited with the number of
+   * required items still unmet; completion runs the same notice and EVOC
+   * handling as an automatic one. Requires training.manage.
+   */
+  async completeEnrollment(enrollmentId: string, reason: string): Promise<ProgramEnrollment> {
+    const response = await api.post<ProgramEnrollment>(`/training/programs/enrollments/${enrollmentId}/complete`, {
+      reason,
+    });
+    return response.data;
+  },
+
+  /**
    * Advance an enrollment to the next phase of a phased program.
    * By default the current phase must be complete; pass force to override.
    */
@@ -1583,6 +1596,11 @@ export interface IntegrationConfig {
   last_error?: string | null;
   last_error_at?: string | null;
   consecutive_error_count?: number;
+  /** Days until the stored credential expires (negative once it has), where
+   * one is recorded — today only Microsoft 365's client secret. */
+  credential_days_left?: number | null;
+  /** True from 30 days before that expiry: the same rule the morning email uses. */
+  credential_expiring?: boolean;
   created_at: string;
   updated_at: string;
 }

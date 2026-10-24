@@ -423,10 +423,13 @@ the one they need.
 reorder it, remove ranks you do not have, add your own, and set which shift
 seats each rank may fill — including a seat your department invented.
 
-Renaming a rank's **code** moves every place that stored the old one: members,
-org-chart seats, a training requirement's required ranks and inventory
+Renaming a custom rank's **code** moves every place that stored the old one:
+members, org-chart seats, a training requirement's required ranks and inventory
 impact-plan rank filters, in one step, with an audit entry naming both codes.
-Historical records (rank at completion, audit data) keep what was recorded.
+Historical records (rank at completion, audit data) keep what was recorded. A
+**built-in** rank (Chief, Captain, Firefighter and the rest of the seeded
+ladder) keeps its code, because its default permissions are tied to it: the
+code field is read-only, and you rename it by changing its display name.
 
 > A rank says where someone sits and which seats they can fill. What they can
 > **do** comes from their position. A rank you add yourself is marked **No

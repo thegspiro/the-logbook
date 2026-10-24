@@ -56,6 +56,7 @@ const rank = (over: Record<string, unknown> = {}) => ({
   is_active: true,
   eligible_positions: ['officer'],
   default_permission_count: 12,
+  is_built_in: true,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   ...over,

@@ -4704,6 +4704,59 @@ class EquipmentCheckService:
             }
         return found
 
+    async def uncounted_supply_positions(
+        self, organization_id: str, item_types: Sequence[Any]
+    ) -> List[Dict[str, Any]]:
+        """Every position no crew has counted, for supplies of ``item_types``.
+
+        ``[{"item_name", "item_size", "apparatus_id", "where"}]``, by place
+        then supply. "Uncounted" is ``InventoryService._ready_positions``'s
+        rule — the positions the Medical Supplies page lists under Not yet
+        counted — so the email and the page name the same positions.
+        """
+        inventory = InventoryService(self.db)
+        item_ids = await inventory.item_ids_with_uncounted_positions(
+            organization_id, item_types
+        )
+        if not item_ids:
+            return []
+        unseen = await inventory.uncounted_positions(organization_id, item_ids)
+        places = await self.position_places(
+            organization_id, [p for ids in unseen.values() for p in ids]
+        )
+        labels = {
+            str(item_id): (name, size)
+            for item_id, name, size in (
+                await self.db.execute(
+                    select(
+                        InventoryItem.id, InventoryItem.name, InventoryItem.size
+                    ).where(
+                        InventoryItem.id.in_(list(unseen)),
+                        InventoryItem.organization_id == organization_id,
+                    )
+                )
+            ).all()
+        }
+        rows: List[Dict[str, Any]] = []
+        for item_id, positions in unseen.items():
+            name, size = labels.get(item_id, (None, None))
+            for position in positions:
+                place = places.get(position)
+                if place is None:
+                    continue
+                rows.append(
+                    {
+                        "item_name": name,
+                        "item_size": size,
+                        "apparatus_id": place["apparatus_id"],
+                        "where": place["where"],
+                    }
+                )
+        rows.sort(
+            key=lambda r: (str(r["where"]).lower(), str(r["item_name"] or "").lower())
+        )
+        return rows
+
     async def swap_item_lot(
         self,
         template_item_id: str,

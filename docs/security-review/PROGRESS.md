@@ -16,6 +16,70 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3628](https://github.com/thegspiro/the-logbook/pull/3628)** (branch
+`claude/security-review-training-core-p10`) —
+Feature 17 (Training core), pass 10, a watchdog pickup. PR #3625 (Feature
+16, Events & requests, pass 10) had already merged. No open PR's head
+branch starts with `claude/security-review-` (`search_pull_requests`, 0
+results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+17 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`. **0 fixed, 0 new findings on this feature** — real
+delta since pass 9's merge (`74dfaf58`): 9 of 395 repo-wide commits touch
+this feature's declared files. Two new routes (certification
+alert-settings GET/PUT, `training.manage`-gated, org-scoped,
+deep-copy-safe JSON write); a reactivate-via-`active:true` path audited
+after an org-scoped read; a deactivate-instead-of-delete path for
+in-use requirements/pipelines modeled on the already-reviewed
+`LocationService.remove_location`; two 404→200/null response changes with
+no new org-scoping gap (each commit's own text confirms the lookup is
+unchanged); a member-facing course-name resolver with an explicit XC-1
+org-scoped fallback; the repo-wide probationary-account sweep. All traced
+safe. **Also found and fixed, outside this feature's scope:** `main`'s
+Alembic chain was forked at two heads (PR #3612 and PR #3613, both already
+merged, neither touching training-core) — `validate_migrations.py
+--strict` caught it while running this pass's own completion gate. No
+open PR already fixed it, so this PR carries a pure-join merge revision
+(`7dba2d6d2dbb`), verified against a real database end to end. See
+`TR-17-training-core.md`'s **Pass 10** section. Row 17 → ✅ (pending this
+PR's merge); next is Feature 18 (Training extended) — re-check
+`search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 10, PR #3625, merged), preserved for history</summary>
+
+**PR [#3625](https://github.com/thegspiro/the-logbook/pull/3625)** (branch
+`claude/security-review-events-requests-p10`) —
+Feature 16 (Events & requests), pass 10, a watchdog pickup. PR #3617
+(Feature 15, Scheduling, pass 10) had already merged. No open PR's head
+branch starts with `claude/security-review-` (`search_pull_requests`, 0
+results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+16 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`. **0 fixed, 0 new findings** — near-zero delta since
+pass 9's merge (`8da1eb88`): 7 of 379 repo-wide commits touch this
+feature's declared files. A Pitfall #1 correction converts a null-on-a-
+required-field 500 to a 400 in four update paths; the attachment
+download/delete path moved onto the shared `file_storage` interface with
+the same org/area confinement, now centralized; a "this and future"
+series-delete option validates its new client-supplied `from_event_id`
+against the already org-scoped, row-locked series list (XC-1 safe); the QR
+check-in data endpoint's new per-caller check-in/check-out fields are
+self-scoped (`user_id == current_user.id`); the attendee-visibility check
+used by the detail response and the attendees endpoint is now one shared
+helper; the repo-wide probationary-account sweep and a per-occurrence RSVP
+deadline fix carry no new tenancy surface. No new route (58 + 23 + 7,
+unchanged from pass 9). SCH-— not applicable here; EV-11/EV-23/EV-26
+re-confirmed unchanged. See `EV-16-events-requests.md`'s **Pass 10**
+section. Row 16 → ✅ (pending this PR's merge); next is Feature 17
+(Training core) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 10, PR #3617, merged), preserved for history</summary>
+
 **PR [#3617](https://github.com/thegspiro/the-logbook/pull/3617)** (branch
 `claude/security-review-scheduling-p10` — **note:** pass 9's own branch,
 `claude/security-review-scheduling`, had already merged (PR #3436), so
@@ -45,6 +109,8 @@ reactivate endpoint (`check_route_permissions.py --strict` — 273 routes,
 `SCH-15-scheduling.md`'s **Pass 10** section. Row 15 → ✅ (pending this
 PR's merge); next is Feature 16 (Events & requests) — re-check
 `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 11, PR #3602, merged), preserved for history</summary>
@@ -20878,8 +20944,8 @@ this iteration's commit" rule.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
@@ -20904,6 +20970,95 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 17 (Training core, pass 10) — watchdog pickup, real delta (9 of 395 commits), 0 fixed, 0 new findings; repo-wide Alembic fork found and merged
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): PR #3625 (Feature 16, Events & requests, pass 10) had
+already merged. No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). Row 17 (Training core) was confirmed the next
+`⬜` by reading the rotation table directly on a freshly fetched `main`.
+
+Baseline `74dfaf58` (PR #3440's merge, pass 9). Of 395 non-merge commits
+repo-wide in the window, 9 touch this feature's declared files (a tenth,
+`653ace20`, excluded — its only in-scope-path change is a comment-only
+docstring update describing enforcement that actually lives in a
+different feature's endpoint). Two new `training.manage`-gated,
+org-scoped routes for certification alert settings (JSON write
+deep-copies per Pitfall #12); a reactivate-via-`active:true` path audited
+after an org-scoped read, with `active:null` now refused instead of
+silently hiding the record; a deactivate-instead-of-delete path for
+in-use requirements/pipelines modeled on the already-reviewed
+`LocationService.remove_location`, with its FK-count helper's
+org-unfiltered reasoning traced and confirmed sound; a phase-delete fix
+that stops wiping a sibling phase's requirement progress; an undated-row
+refusal in the historical import; two 404→200/null response changes,
+each confirmed not to newly distinguish a foreign-org id from "nothing
+there"; a member-facing course-name resolver with an explicit, org-scoped
+XC-1 fallback; and the repo-wide probationary-account sweep. No new
+finding; TR7-1 re-confirmed unchanged and still OPEN/FLAGGED. No new route
+beyond the two alert-settings endpoints (`check_route_permissions.py
+--strict` — 273 routes, 0 errors).
+
+**Also found and fixed, outside this feature's declared scope:** running
+this pass's own `validate_migrations.py --strict` found `main`'s Alembic
+chain forked at two heads, `6dce1364ff7e` (PR #3612) and `c561cf7730ce`
+(PR #3613) — both already merged to `main`, neither touching a
+training-core file, both revising the same parent independently. An
+unresolved fork fails the Migration Chain CI job on every PR, and no open
+PR already carried a fix, so — per CLAUDE.md's "no acceptable pre-existing
+errors" and the same `alembic merge` convention used for earlier forks
+(PRs #3437, #3546) — this PR adds a pure-join merge revision,
+`7dba2d6d2dbb`, verified by running `alembic upgrade head` against a real,
+freshly migrated MariaDB end to end (both branches, then the merge, all
+logged success) and by `test_alembic_migrations.py`/
+`test_migration_create_all_tables.py` (80 passed).
+
+Completion gate: `flake8`/`black`/`isort` clean; `validate_migrations.py
+--strict` single head `7dba2d6d2dbb`, 648 revisions;
+`check_route_permissions.py --strict` 273 routes, 0 errors; scoped
+`pytest -k "training or compliance"` 2024 passed, 1 pre-existing skip;
+`npm run typecheck`/`npm run lint` both clean (this sandbox's frontend
+`node_modules` needed the same `npm ci` pass 8 already documented hitting
+— no lockfile change, confirmed with `git status`). See
+`TR-17-training-core.md`'s **Pass 10** section. Row 17 → ✅ (pending PR
+merge). Next: Feature 18 (Training extended).
+
+### 2026-10-23 — Feature 16 (Events & requests, pass 10) — watchdog pickup, near-zero delta (7 of 379 commits), 0 fixed, 0 new findings
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): PR #3617 (Feature 15, Scheduling, pass 10) had already
+merged. No open PR's head branch starts with `claude/security-review-`
+(`search_pull_requests`, 0 results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`). Row
+16 (Events & requests) was confirmed the next `⬜` by reading the rotation
+table directly on a freshly fetched `main`.
+
+Baseline `8da1eb88` (PR #3438's merge, pass 9). Of 379 non-merge commits
+repo-wide in the window, 7 touch this feature's declared files, all read
+in full via `git show`: a Pitfall #1 correction (null-on-required-field
+500 → 400) across four update paths; the attachment download/delete path
+moving onto the shared `file_storage.resolve`/`exists`/`file_response`/
+`delete_quietly` interface with the identical org/area confinement,
+verified to fail closed and to no-op cleanly on `None`; a "this and
+future" series-delete option whose new client-supplied `from_event_id` is
+validated only against the already org-scoped, row-locked series list
+(XC-1 safe); a check-out flow whose new per-caller fields are scoped to
+`current_user.id`, not a client-supplied id; `get_event`'s
+`can_view_attendees` and `list_event_attendees`'s 403 gate unified into one
+helper; the repo-wide Pitfall #32 probationary-account sweep; and a
+per-occurrence RSVP-deadline date-arithmetic fix. No new route (58 + 23 +
+7, unchanged from pass 9; `check_route_permissions.py --strict` — 273
+routes, 0 errors). EV-11/EV-23/EV-26 re-confirmed unchanged. Static
+analysis (flake8/black/isort/migrations/route-permissions) ran clean;
+`pytest`/`npm typecheck`/`npm lint`/`vitest` could not be run in this
+sandbox (dependencies not pre-installed) — no application code changed
+this pass, and every reviewed commit already passed full CI individually
+before merging to the fetched `main` tip. See
+`EV-16-events-requests.md`'s **Pass 10** section. Row 16 → ✅ (pending PR
+merge). Next: Feature 17 (Training core).
 
 ### 2026-10-23 — Feature 15 (Scheduling, pass 10) — watchdog pickup, real delta (8 commits), 1 new route, 0 fixed, 0 new findings
 

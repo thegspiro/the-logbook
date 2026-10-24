@@ -1270,10 +1270,13 @@ class ExpenseReport(Base):
     approver: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[approved_by]
     )
+    # Ordered so a report's lines keep their places on screen as one is
+    # edited or removed; unordered, the database returned them in any order.
     line_items: Mapped[list["ExpenseLineItem"]] = relationship(
         "ExpenseLineItem",
         back_populates="expense_report",
         cascade="all, delete-orphan",
+        order_by="(ExpenseLineItem.created_at, ExpenseLineItem.id)",
     )
 
     __table_args__ = (

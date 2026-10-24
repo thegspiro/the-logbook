@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.audit import log_audit_event
-from app.core.permissions import is_seeded_for, label_for
+from app.core.permissions import is_built_in_rank_code, is_seeded_for, label_for
 from app.models.inventory import InventoryImpactPlan
 from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode
@@ -94,6 +94,26 @@ DEFAULT_RANKS = [
 #: Note it spans every agency type on purpose, unlike ``default_ranks_for``
 #: below: what a department may *hold* is broader than what it is seeded.
 DEFAULT_RANK_CODES = frozenset(code for code, _l, _o, _p in DEFAULT_RANKS)
+
+
+def assert_rank_code_may_change(old_code: str, new_code: Optional[str]) -> None:
+    """Refuse a change to a built-in rank's code (owner decision 2026-10-22).
+
+    The registry that gives a built-in rank its default permissions is keyed
+    by code, so renaming ``captain`` turns every captain into a rank the
+    registry has never heard of and they lose those permissions. The display
+    name is what a department changes to call the rank something else.
+    Custom ranks are not in the registry, and keep moving their references
+    on a rename (``_move_rank_references``).
+    """
+    if new_code is None or new_code == old_code:
+        return
+    if is_built_in_rank_code(old_code):
+        raise ValueError(
+            f"'{old_code}' is a built-in rank, and its code cannot change: the "
+            "rank's default permissions are tied to it. Change its display "
+            "name instead."
+        )
 
 
 def rank_not_configured_message(rank: str) -> str:
@@ -336,6 +356,7 @@ class OperationalRankService:
         renaming = new_rank_code is not None and new_rank_code != old_rank_code
 
         if renaming:
+            assert_rank_code_may_change(old_rank_code, new_rank_code)
             dup = await self.db.execute(
                 select(OperationalRank).where(
                     OperationalRank.organization_id == organization_id,

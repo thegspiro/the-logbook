@@ -1081,8 +1081,12 @@ async def _persist_session_data_to_org(
             # Map camelCase onboarding keys to snake_case org settings keys
             storage_settings = {
                 "platform": storage_data["platform"],
-                "google_drive_client_id": raw_config.get("googleDriveClientId"),
-                "google_drive_client_secret": raw_config.get("googleDriveClientSecret"),
+                "google_drive_service_account_key": raw_config.get(
+                    "googleDriveServiceAccountKey"
+                ),
+                "google_drive_shared_drive_id": raw_config.get(
+                    "googleDriveSharedDriveId"
+                ),
                 "google_drive_folder_id": raw_config.get("googleDriveFolderId"),
                 "onedrive_tenant_id": raw_config.get("oneDriveTenantId"),
                 "onedrive_client_id": raw_config.get("oneDriveClientId"),

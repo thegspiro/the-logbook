@@ -107,4 +107,10 @@ export interface ShiftPattern {
   end_date?: string;
   assigned_members?: Array<{ user_id: string; position: string; platoon?: string }>;
   is_active: boolean;
+  /**
+   * Names of the inactive templates this pattern names (its own, or the
+   * day/night ones in `schedule_config`). Non-empty means the server is not
+   * generating shifts from it, scheduled or manual, until that changes.
+   */
+  inactive_templates?: string[];
 }

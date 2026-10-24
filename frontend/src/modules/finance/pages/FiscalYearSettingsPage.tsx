@@ -940,14 +940,23 @@ const FiscalYearSettingsPage: React.FC = () => {
   }, [fetchFiscalYears, fetchBudgetCategories]);
 
   const deletingCategory = budgetCategories.find((c) => c.id === deletingCategoryId);
+  const hasSubCategories = (id: string | null) => !!id && budgetCategories.some((c) => c.parentCategoryId === id);
+  // A deactivated parent closes everything beneath it to new charges
+  // (CategoryTree.inactive_source on the backend), so the officer is told.
+  const subCategoryNote = hasSubCategories(deletingCategoryId)
+    ? " Its sub-categories' budget lines also stop taking new charges while it is inactive."
+    : '';
 
   const handleDeleteCategory = async (id: string) => {
     const name = budgetCategories.find((c) => c.id === id)?.name ?? 'The category';
     try {
       const outcome = await budgetCategoryService.delete(id);
       if (outcome === 'deactivated') {
+        const subCategories = hasSubCategories(id)
+          ? " Its sub-categories' budget lines also stop taking new charges."
+          : '';
         toast.success(
-          `${name} is still used by budget lines, budget requests or approval chains, so it was deactivated instead of deleted. Those keep it; new budget lines can't use it.`
+          `${name} is still used by budget lines, budget requests or approval chains, so it was deactivated instead of deleted. Those keep it; new budget lines can't use it.${subCategories}`
         );
       } else {
         toast.success('Category deleted');
@@ -1125,6 +1134,13 @@ const FiscalYearSettingsPage: React.FC = () => {
                         Inactive
                       </span>
                     )}
+                    {/* Active itself, but closed by an inactive parent: say so,
+                        or an officer reads it as open to new charges. */}
+                    {cat.isActive && cat.inactiveThrough && (
+                      <span className="bg-theme-surface-secondary text-theme-text-secondary ml-2 rounded-sm px-1.5 py-0.5 text-xs font-medium">
+                        Inactive through {cat.inactiveThrough}
+                      </span>
+                    )}
                   </p>
                   {cat.description && <p className="text-theme-text-secondary text-xs">{cat.description}</p>}
                   <p className="text-theme-text-secondary text-xs">Owner: {cat.ownerPositionName || 'No owner'}</p>
@@ -1186,7 +1202,7 @@ const FiscalYearSettingsPage: React.FC = () => {
           if (deletingCategoryId) void handleDeleteCategory(deletingCategoryId);
         }}
         title="Delete Category"
-        message={`Delete ${deletingCategory ? `"${deletingCategory.name}"` : 'this category'}? If budget lines in any fiscal year, budget requests or approval chains use it, it is deactivated instead of deleted: they keep it, and new budget lines can't choose it. Otherwise it is deleted, which can't be undone.`}
+        message={`Delete ${deletingCategory ? `"${deletingCategory.name}"` : 'this category'}? If budget lines in any fiscal year, budget requests or approval chains use it, it is deactivated instead of deleted: they keep it, and new budget lines can't choose it.${subCategoryNote} Otherwise it is deleted, which can't be undone.`}
         confirmLabel="Delete"
         variant="danger"
       />

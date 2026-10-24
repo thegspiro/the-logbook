@@ -195,7 +195,8 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 6     | A department's own S3 / MinIO bucket (decision 31), step 1 of 3: one storage interface every caller uses                                        | done (#3537) |
 | 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | done (#3561) |
 | 8     | Decision 31, step 3 of 3: moving existing files into a bucket, rewrap on S3, backup notice                                                      | done (#3567) |
-| 9     | Decision 32, step 1 of 3: the connection test, status, migration and rewrap made platform-neutral (S3 unchanged)                                | this change  |
+| 9     | Decision 32, step 1 of 3: the connection test, status, migration and rewrap made platform-neutral (S3 unchanged)                                | done (#3611) |
+| 10    | Decision 32, step 2 of 3: the Google Drive backend (service account, Shared Drive) and its settings                                             | this change  |
 
 ### Phase 1 — what changed
 
@@ -433,6 +434,26 @@ The status response gains `platform_label`, `platform_short_label`,
 The activation record also stores `container`; one written earlier is read
 through its `bucket`. Existing activation records still match, because the S3
 fingerprint did not change.
+
+### Phase 10 — a department's Google Shared Drive (2026-10-23)
+
+| Piece              | Where                                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Talking to Drive   | `app/services/google_drive_storage.py`: Drive v3 REST through `google-auth`'s authorized session, 5 s / 30 s timeouts, three retries on 429 and 5xx    |
+| Signing in         | The department's service-account key, scoped to the whole Drive API; what it reaches is bounded by the Shared Drives the account has been added to     |
+| A stored reference | `gdrive://<shared_drive_id>/<file_id>/<org>/<area>/<record>/<name>`; `resolve()` confines it by the key after the id, as for a bucket                  |
+| A new file's id    | Reserved at Drive (`files.generateIds`, 20 at a time) before the upload, so a retried upload replaces the file it made rather than making a second one |
+| Settings           | `google_drive_service_account_key` (encrypted, never returned), `google_drive_shared_drive_id`, optional `google_drive_folder_id`                      |
+| Connection test    | The shared Test and switch: write, read back and delete a probe in the chosen folder; the account needs the Content manager role so it can delete      |
+
+`RemoteBackend.ref_for` may now ask the store, so it runs off the event loop
+with the upload, and the migration assigns each file's reference when it
+copies the file, not when it plans: a dry run reserves nothing. The
+platform-neutral migration, rewrap and backup notice from phase 9 already
+cover Drive. Step 3 renames the S3-named command and finishes the docs.
+
+The old OAuth client ID and secret fields were read by nothing; the API still
+accepts them, the screens no longer ask for them.
 
 ### Found in passing, not in this change
 

@@ -102,11 +102,14 @@ async def update_self_report_config(
         previous_retention = (
             await service.get_config(current_user.organization_id)
         ).attachment_retention_days
-    config = await service.update_config(
-        organization_id=current_user.organization_id,
-        updated_by=current_user.id,
-        **changes,
-    )
+    try:
+        config = await service.update_config(
+            organization_id=current_user.organization_id,
+            updated_by=current_user.id,
+            **changes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     # Shortening the period deletes certificate files on the next sweep, so
     # who set it, and from what, is kept with the rest of the audit trail.
     if (

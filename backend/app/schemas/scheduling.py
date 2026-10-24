@@ -1095,6 +1095,10 @@ class ShiftPatternResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Names of the inactive templates the pattern names (its own, or the
+    # day/night ones in schedule_config). Non-empty means the pattern is not
+    # generating shifts (SchedulingService.inactive_templates_by_pattern).
+    inactive_templates: list[str] = Field(default_factory=list)
 
     model_config = _response_config
 

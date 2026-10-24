@@ -504,6 +504,53 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A department can keep its files in a Google Shared Drive (2026-10-23)
+
+Google Drive under **Organization Settings > Storage** (and in onboarding) now
+works, the same way as S3. **Nothing moves on upgrade**: new files go to the
+drive only after an administrator presses **Test and switch to Google Drive**.
+
+- The screen now asks for a **service account key** (the JSON file Google
+  Cloud downloads) and a **Shared Drive ID**, plus an optional folder. Add
+  the service account to the Shared Drive as a **Content manager**, and
+  enable the Google Drive API in its Google Cloud project. Shared Drives need
+  Google Workspace.
+- The old OAuth client ID and secret fields were never read. A department
+  that filled them in has to enter the service-account details instead; the
+  saved values are left where they are and ignored.
+- Files are encrypted before upload, a drive that cannot be reached refuses
+  uploads (`LB-UPLD-006`), and `scripts/migrate_uploads_to_s3.py` already
+  moves existing files to whichever remote platform a department has
+  switched to, Google Drive included. `encrypt_uploads.py --rewrap` and the
+  `backup.sh` notice cover Drive too.
+- The server needs outbound HTTPS to `www.googleapis.com` and
+  `oauth2.googleapis.com`.
+
+### An explicit `null` for an on/off or count setting is refused with a 400 (2026-10-23)
+
+Migration `6dce1364ff7e` makes 99 columns `NOT NULL` with defaults. They are
+mostly on/off settings, counts, statuses and timestamps, across 36 tables,
+including training module configuration, inventory items and categories,
+shift templates and users. Which databases it touches:
+
+- **An installation that has been upgraded through the migrations** already had
+  these constraints. The migration finds nothing to change and finishes at once.
+- **An installation first set up from the models** (a fresh install) is
+  changed. Any stored `NULL` in one of these columns is set to the column's
+  default, and each affected table is rebuilt once to add the constraint. On a
+  large `inventory_items` or `checkout_records` table the rebuild takes longer
+  and the backend starts after it finishes. Back up first, as for every
+  upgrade.
+
+What you will notice afterwards: an API request that sends `null` for one of
+these fields gets a **400** naming the field ("Field 'quantity' cannot be
+cleared"). Before, an upgraded installation failed the same request with a 500
+and a fresh install stored the NULL. The app's own screens do not send these
+nulls. A script or integration that does should leave the field out instead.
+
+The downgrade does nothing on purpose: upgraded installations always had these
+constraints.
+
 ### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
 
 Nothing runs on upgrade. Three operator commands, all inside the backend

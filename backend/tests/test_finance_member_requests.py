@@ -506,7 +506,10 @@ class TestTheFormOptions:
         assert training["amountRemaining"] is None
         assert all(row["amountRemaining"] is None for row in by_id.values())
         # Nothing else about the line: no budgeted/spent figures, no notes.
-        assert set(training) == {"id", "label", "amountRemaining"}
+        # Whether its category is active is no figure; the form needs it to
+        # keep the line out of new choices.
+        assert set(training) == {"id", "label", "amountRemaining", "categoryActive"}
+        assert training["categoryActive"] is True
 
         assert by_id[budgets["apparatus_station"]]["label"] == "Apparatus (Station 2)"
         duplicates = {

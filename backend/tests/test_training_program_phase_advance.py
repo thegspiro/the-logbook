@@ -2,7 +2,8 @@
 Tests for training-pipeline phase advancement in TrainingProgramService:
 
 * _is_phase_complete — a phase is complete when every required requirement is
-  at 100% (no required rows → trivially complete)
+  at 100% (nothing linked as required → trivially complete; required items
+  that are all inactive → not complete)
 * advance_enrollment_phase — manual advance: moves to the next phase when the
   current one is complete, errors otherwise (unless forced), errors at the final
   phase and for non-phased programs
@@ -76,6 +77,11 @@ def _required(*requirement_ids):
     return _scalars(list(requirement_ids))
 
 
+def _links(first_row):
+    """The result of _has_required_links(): ``first()`` is a row or None."""
+    return MagicMock(first=MagicMock(return_value=first_row))
+
+
 class TestIsPhaseComplete:
     async def test_all_complete(self):
         db = RecordingSession(
@@ -96,8 +102,15 @@ class TestIsPhaseComplete:
         assert not await TrainingProgramService(db)._is_phase_complete(uuid4(), uuid4())
 
     async def test_no_required_rows_is_complete(self):
-        db = RecordingSession([_required()])
+        # Nothing linked as required at all: nothing gates leaving the phase.
+        db = RecordingSession([_required(), _links(None)])
         assert await TrainingProgramService(db)._is_phase_complete(uuid4(), uuid4())
+
+    async def test_required_items_all_inactive_is_not_complete(self):
+        # Required links exist but every one is inactive: an empty set is not
+        # a passing set (pitfall #29), so the phase does not complete.
+        db = RecordingSession([_required(), _links(("link-1",))])
+        assert not await TrainingProgramService(db)._is_phase_complete(uuid4(), uuid4())
 
     async def test_required_item_without_a_progress_row_blocks_advancement(self):
         # A required requirement the enrollment has no row for is not "nothing

@@ -131,6 +131,8 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
     if (ok) onDeleteRank(rank.id);
   };
 
+  const codeLocked = editingRank?.is_built_in === true;
+
   return (
     <div className="space-y-4">
       {/* Title and description come from the page's SettingsPanelHead, which
@@ -196,6 +198,11 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                   id="rank-code"
                   type="text"
                   value={rankForm.rank_code}
+                  // A built-in rank's default permissions are keyed by this
+                  // code; the server refuses a change, so the field says so
+                  // up front rather than after Save.
+                  readOnly={codeLocked}
+                  aria-describedby={codeLocked ? 'rank-code-locked' : undefined}
                   onChange={(e) =>
                     onSetRankForm((prev) => ({
                       ...prev,
@@ -206,8 +213,14 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                     }))
                   }
                   placeholder="e.g. captain"
-                  className="form-input"
+                  className={`form-input ${codeLocked ? 'bg-theme-surface-secondary cursor-not-allowed' : ''}`}
                 />
+                {codeLocked && (
+                  <p id="rank-code-locked" className="text-theme-text-muted mt-1 text-xs">
+                    Built-in rank: the code is fixed because its default permissions are tied to it. Change the display
+                    name instead.
+                  </p>
+                )}
               </div>
             )}
           </div>

@@ -10,7 +10,7 @@ import html as _html
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -95,6 +95,7 @@ from app.utils.apparatus_ref import (
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.member_names import format_display_name
 from app.utils.membership import is_administrative
+from app.utils.model_updates import reject_null_for_required
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import (
@@ -500,6 +501,7 @@ class SchedulingService:
         skipping protected fields, then commit and refresh."""
         try:
             pf = protected_fields or self.PROTECTED_FIELDS
+            reject_null_for_required(record, update_data, skip=pf)
             for key, value in update_data.items():
                 if key not in pf:
                     setattr(record, key, value)
@@ -2020,8 +2022,18 @@ class SchedulingService:
             .all()
         )
 
+        held = await self.inactive_templates_by_pattern(patterns, organization_id)
         total = 0
         for pattern in patterns:
+            if str(pattern.id) in held:
+                # Skipped, not failed: the pattern is paused by its template's
+                # deactivation and resumes on its own once that changes.
+                logger.info(
+                    "Auto-generation skipped pattern {}: template inactive ({})",
+                    pattern.id,
+                    ", ".join(held[str(pattern.id)]),
+                )
+                continue
             start = today
             if pattern.start_date and pattern.start_date > start:
                 start = pattern.start_date
@@ -3952,6 +3964,76 @@ class SchedulingService:
         return await self._crud_delete(pattern)
 
     @staticmethod
+    def _pattern_template_ids(pattern: ShiftPattern) -> list[str]:
+        """Every template a pattern names: its own, plus the day and night
+        templates ``schedule_config`` may carry (unvalidated JSON, so read
+        defensively)."""
+        ids = [str(pattern.template_id)] if pattern.template_id else []
+        config = pattern.schedule_config
+        if isinstance(config, dict):
+            for key in ("day_template_id", "night_template_id"):
+                raw = config.get(key)
+                if raw and isinstance(raw, (str, UUID)):
+                    ids.append(str(raw))
+        return ids
+
+    async def inactive_templates_by_pattern(
+        self, patterns: Sequence[ShiftPattern], organization_id: UUID | str
+    ) -> dict[str, list[str]]:
+        """Pattern id -> names of the inactive templates it names.
+
+        A template in use is deactivated rather than deleted
+        (``remove_template``). Owner decision (2026-10-22): a pattern naming
+        one generates no new shifts until the template is reactivated or the
+        pattern is pointed elsewhere. The whole pattern stops, not just the
+        day or night half whose template is inactive: every shift a pattern
+        generates is stamped with its main template, the day/night templates
+        only lend their times, and a rotation that silently produced days
+        without nights would leave a staffing gap nobody was told about.
+
+        One query for any number of patterns, so the list endpoint can flag
+        each row. Patterns naming no inactive template are absent.
+        """
+        wanted = {
+            template_id
+            for pattern in patterns
+            for template_id in self._pattern_template_ids(pattern)
+        }
+        if not wanted:
+            return {}
+        result = await self.db.execute(
+            select(ShiftTemplate.id, ShiftTemplate.name).where(
+                ShiftTemplate.id.in_(wanted),
+                ShiftTemplate.organization_id == str(organization_id),
+                ShiftTemplate.is_active.is_(False),
+            )
+        )
+        inactive = {str(row.id): row.name for row in result.all()}
+        if not inactive:
+            return {}
+        by_pattern: dict[str, list[str]] = {}
+        for pattern in patterns:
+            names = list(
+                dict.fromkeys(
+                    inactive[template_id]
+                    for template_id in self._pattern_template_ids(pattern)
+                    if template_id in inactive
+                )
+            )
+            if names:
+                by_pattern[str(pattern.id)] = names
+        return by_pattern
+
+    @staticmethod
+    def inactive_template_message(names: Sequence[str]) -> str:
+        """The refusal shown for a pattern held by an inactive template."""
+        named = ", ".join(f'"{name}"' for name in names)
+        return (
+            "Template inactive — this pattern is not generating shifts. "
+            f"Reactivate {named} or point the pattern at another template."
+        )
+
+    @staticmethod
     def _parse_weekday_shifts(config: Any) -> dict[int, list[str]]:
         """Read ``schedule_config["weekday_shifts"]`` defensively.
 
@@ -3993,6 +4075,10 @@ class SchedulingService:
             pattern = await self.get_pattern_by_id(pattern_id, organization_id)
             if not pattern:
                 return [], "Shift pattern not found"
+
+            held = await self.inactive_templates_by_pattern([pattern], organization_id)
+            if held:
+                return [], self.inactive_template_message(held[str(pattern.id)])
 
             # Load the associated template (required for shift times)
             if not pattern.template_id:
