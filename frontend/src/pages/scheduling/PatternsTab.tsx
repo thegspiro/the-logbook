@@ -23,6 +23,7 @@ import {
   SlidersHorizontal,
   Sun,
   Moon,
+  Pause,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -162,6 +163,7 @@ export const PatternsTab: React.FC = () => {
 
   // Generate form
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [generateForm, setGenerateForm] = useState({
     start_date: '',
     end_date: '',
@@ -426,6 +428,21 @@ export const PatternsTab: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to generate shifts'));
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleTogglePattern = async (pattern: ShiftPattern) => {
+    const resume = !pattern.is_active;
+    setTogglingId(pattern.id);
+    try {
+      await schedulingService.updatePattern(pattern.id, { is_active: resume });
+      toast.success(resume ? 'Pattern resumed' : 'Pattern paused — it generates no new shifts until resumed');
+      if (!resume) setGeneratingFor(null);
+      void loadData();
+    } catch (err) {
+      toast.error(getErrorMessage(err, resume ? 'Failed to resume pattern' : 'Failed to pause pattern'));
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -1017,6 +1034,9 @@ export const PatternsTab: React.FC = () => {
             const templateName = templates.find((t) => t.id === pattern.template_id)?.name;
             // The server decides whether the pattern is held (Pitfall #29).
             const heldBy = pattern.inactive_templates ?? [];
+            // The server answers 409 for a paused pattern or one held by an
+            // inactive template, so neither is offered a Generate it would refuse.
+            const canGenerate = pattern.is_active && heldBy.length === 0;
             const config: Record<string, unknown> = pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
             const weekdayShifts = readWeekdayShifts(config);
@@ -1057,7 +1077,7 @@ export const PatternsTab: React.FC = () => {
                           </span>
                           {!pattern.is_active && (
                             <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[10px] font-medium">
-                              Inactive
+                              Paused
                             </span>
                           )}
                         </div>
@@ -1139,7 +1159,8 @@ export const PatternsTab: React.FC = () => {
                       setGeneratingFor(pattern.id);
                       setGenerateForm({ start_date: '', end_date: '' });
                     }}
-                    className="mr-4 flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 max-sm:mt-4 sm:mr-5"
+                    disabled={!canGenerate}
+                    className="mr-4 flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50 max-sm:mt-4 sm:mr-5"
                   >
                     <Play className="h-3.5 w-3.5" aria-hidden="true" />
                     {/* Never sr-only: hiding the text on a phone leaves the same
@@ -1303,7 +1324,7 @@ export const PatternsTab: React.FC = () => {
                             onClick={() => {
                               void handleGenerate(pattern.id);
                             }}
-                            disabled={generating}
+                            disabled={generating || !canGenerate}
                             className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm text-white hover:bg-emerald-800 disabled:opacity-50"
                           >
                             {generating ? (
@@ -1322,9 +1343,21 @@ export const PatternsTab: React.FC = () => {
                             setGeneratingFor(pattern.id);
                             setGenerateForm({ start_date: '', end_date: '' });
                           }}
-                          className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-800"
+                          disabled={!canGenerate}
+                          className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
                         >
                           <Play className="h-3.5 w-3.5" /> Generate Shifts
+                        </button>
+                        <button
+                          onClick={() => {
+                            void handleTogglePattern(pattern);
+                          }}
+                          disabled={togglingId === pattern.id}
+                          className="btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm disabled:opacity-50"
+                          aria-label={`${pattern.is_active ? 'Pause' : 'Resume'} ${pattern.name}`}
+                        >
+                          {pattern.is_active ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                          {pattern.is_active ? 'Pause' : 'Resume'}
                         </button>
                         <div className="flex-1" />
                         {confirmingDelete === pattern.id ? (

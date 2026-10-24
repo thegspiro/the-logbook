@@ -8,6 +8,8 @@ import ShiftTemplatesPage from './ShiftTemplatesPage';
 const mockGetTemplates = vi.fn();
 const mockDeleteTemplate = vi.fn();
 const mockGetPatterns = vi.fn();
+const mockUpdateTemplate = vi.fn();
+const mockUpdatePattern = vi.fn();
 
 vi.mock('../modules/scheduling/services/api', async () => {
   const actual = await vi.importActual<typeof import('../modules/scheduling/services/api')>(
@@ -19,6 +21,8 @@ vi.mock('../modules/scheduling/services/api', async () => {
       getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
       deleteTemplate: (...args: unknown[]) => mockDeleteTemplate(...args) as unknown,
       getPatterns: (...args: unknown[]) => mockGetPatterns(...args) as unknown,
+      updateTemplate: (...args: unknown[]) => mockUpdateTemplate(...args) as unknown,
+      updatePattern: (...args: unknown[]) => mockUpdatePattern(...args) as unknown,
       getApparatusOptions: vi.fn().mockResolvedValue({ options: [], source: 'default' }),
     },
   };
@@ -221,5 +225,34 @@ describe('ShiftTemplatesPage pattern held by an inactive template', () => {
     await user.click(screen.getByRole('button', { name: 'Edit A-Shift' }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Template inactive — this pattern is not generating shifts');
+  });
+
+  it('reactivates the inactive template, and does not offer Generate on the held pattern', async () => {
+    const user = userEvent.setup();
+    mockUpdateTemplate.mockReset();
+    mockUpdateTemplate.mockResolvedValue(buildTemplate(['officer']));
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Reactivate Day Shift' }));
+    expect(mockUpdateTemplate).toHaveBeenCalledWith('tmpl-1', { is_active: true });
+    // Templates and patterns both reload: the pattern's held flag comes from the server.
+    await waitFor(() => {
+      expect(mockGetPatterns).toHaveBeenCalledTimes(2);
+    });
+
+    await user.click(screen.getByRole('tab', { name: /Patterns/ }));
+    expect(screen.getByRole('button', { name: 'Generate shifts from A-Shift' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Generate shifts from B-Shift' })).toBeEnabled();
+  });
+
+  it('pauses a pattern', async () => {
+    const user = userEvent.setup();
+    mockUpdatePattern.mockReset();
+    mockUpdatePattern.mockResolvedValue(pattern({ id: 'pat-2', is_active: false }));
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('tab', { name: /Patterns/ }));
+    await user.click(screen.getByRole('button', { name: 'Pause B-Shift' }));
+    expect(mockUpdatePattern).toHaveBeenCalledWith('pat-2', { is_active: false });
   });
 });

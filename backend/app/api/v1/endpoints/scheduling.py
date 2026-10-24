@@ -2347,6 +2347,8 @@ async def generate_shifts_from_pattern(
     # A pattern held by an inactive template is a state the officer has to
     # change, not a bad request: 409, with what to do about it.
     pattern = await service.get_pattern_by_id(pattern_id, current_user.organization_id)
+    if pattern is not None and not pattern.is_active:
+        raise HTTPException(status_code=409, detail=service.PAUSED_PATTERN_MESSAGE)
     if pattern is not None:
         held = await service.inactive_templates_by_pattern(
             [pattern], current_user.organization_id
@@ -2384,6 +2386,11 @@ async def generate_shifts_from_pattern(
     # unqualified assignment enforcement just prevented.
     if service.last_generation_warnings:
         response["driver_warnings"] = service.last_generation_warnings
+    # Members the pattern names whom it could not seat — not eligible for the
+    # seat, the seat already full, or a conflict that date — for the same
+    # reason: an officer has to know the roster is short.
+    if service.last_generation_seat_warnings:
+        response["seat_warnings"] = service.last_generation_seat_warnings
     return response
 
 
