@@ -9149,6 +9149,13 @@ class SchedulingService:
         self, requirement, reference_date: date
     ) -> Tuple[date, date]:
         """Compute the start/end of the compliance period for a requirement."""
+
+        def _clamped(year: int, month: int, day: int) -> date:
+            # A configured 29 February (or any day past a month's end) falls on
+            # that month's last day in a year without it. Building the date
+            # outright raised ValueError and took down the whole report.
+            return date(year, month, min(day, calendar.monthrange(year, month)[1]))
+
         freq = requirement.frequency
         due_type = requirement.due_date_type
 
@@ -9213,12 +9220,14 @@ class SchedulingService:
                     end_day = calendar.monthrange(reference_date.year, end_month)[1]
                 if start_month > end_month:
                     # Cross-year window (e.g. Nov -> Jan)
-                    cycle_end_a = date(reference_date.year, end_month, end_day)
-                    cycle_start_a = date(
+                    cycle_end_a = _clamped(reference_date.year, end_month, end_day)
+                    cycle_start_a = _clamped(
                         reference_date.year - 1, start_month, start_day
                     )
-                    cycle_start_b = date(reference_date.year, start_month, start_day)
-                    cycle_end_b = date(reference_date.year + 1, end_month, end_day)
+                    cycle_start_b = _clamped(
+                        reference_date.year, start_month, start_day
+                    )
+                    cycle_end_b = _clamped(reference_date.year + 1, end_month, end_day)
                     if cycle_start_a <= reference_date <= cycle_end_a:
                         period_start = cycle_start_a
                         period_end = cycle_end_a
@@ -9232,8 +9241,8 @@ class SchedulingService:
                         period_end = cycle_start_b - timedelta(days=1)
                 else:
                     yr = reference_date.year
-                    period_start = date(yr, start_month, start_day)
-                    period_end = date(yr, end_month, end_day)
+                    period_start = _clamped(yr, start_month, start_day)
+                    period_end = _clamped(yr, end_month, end_day)
             else:
                 # Default annual period from start_month
                 if reference_date.month >= start_month:
@@ -9252,16 +9261,8 @@ class SchedulingService:
                 period_end = requirement.due_date
             else:
                 period_end = reference_date
-                # Clamped: a year before 29 February has no 29th, and building
-                # it raised ValueError and took down the whole report.
-                prior_year = reference_date.year - 1
-                period_start = date(
-                    prior_year,
-                    reference_date.month,
-                    min(
-                        reference_date.day,
-                        calendar.monthrange(prior_year, reference_date.month)[1],
-                    ),
+                period_start = _clamped(
+                    reference_date.year - 1, reference_date.month, reference_date.day
                 )
 
         return period_start, period_end
