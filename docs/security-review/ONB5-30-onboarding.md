@@ -1,6 +1,6 @@
-# Security Review — Feature 30: Onboarding (passes 7–8)
+# Security Review — Feature 30: Onboarding (passes 7–9)
 
-**Prefix:** `ONB5` · **Rotation pass:** 8 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` / `ONB6` · **Rotation pass:** 9 (this file's pass 9; `ONB6-30-*` ids) (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
@@ -31,6 +31,93 @@ full; `steps.ts`, `routes.tsx`, `api-client.ts`, `OrganizationSetup.tsx`,
 read at each changed line).
 **Migrations:** `20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`
 (new `encryption_key_custody` table).
+
+---
+
+## Pass 9 (2026-10-24) — watchdog pickup; 3 fixed (ONB6-30-1/2/3), 0 flagged; the two long-standing "cosmetic" items closed
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0. #3569, #3580 and #3585 had merged docs-only, so nothing to record.
+Row 30 was the first `⬜` row on `main`.
+
+**Delta since pass 8** (`d7ee31408`). One real backend change in this
+feature's files: `_persist_session_data_to_org` now carries
+`google_drive_service_account_key` and `google_drive_shared_drive_id` instead
+of the OAuth client id and secret. Everything else is frontend
+(`OnboardingGate`, the Google Drive configuration step) or outside the
+feature. All 26 routes enumerated (unchanged).
+
+**Verified good (mechanisms).**
+
+- The new service-account key is a secret and is treated as one:
+  `schemas/organization.py` lists it in `_FILE_STORAGE_SECRET_FIELDS`, so
+  `encrypt_settings_secrets` (called straight after the mapping in
+  `_persist_session_data_to_org`) stores it as `enc:`-prefixed ciphertext, and
+  `FileStorageSettings`'s response redacts it. In the session it is held only
+  inside `config_encrypted` (AES via `encrypt_data`), and
+  `GET /session/data` returns just `platform` and `configured`.
+- The wizard keeps none of it client-side: `onboardingStore`'s `partialize`
+  persists `fileStoragePlatform` only, and the page's config lives in React
+  state.
+- `OnboardingGate` caches a definite "open" or "closed" answer at module
+  level; it only decides which screen to show, the server still refuses every
+  mutation after completion.
+
+### ONB6-30-1 — LOW — FIXED — Free-form config dicts had only the 60 MB request ceiling
+
+`EmailTestRequest.config`, `EmailConfigRequest.config`,
+`FileStorageConfigRequest.config` and `ITTeamRequest.backup_access`
+(`onboarding.py`) were bare `dict[str, Any]`. `/session/email`,
+`/session/file-storage` and `/session/it-team` encrypt and store them in the
+session's JSON `data` column for a caller holding only a session cookie, so one
+request could park up to `MAX_REQUEST_BODY_SIZE` (60 MB) in the row and spend
+CPU encrypting it. **Fix:** a `BoundedConfig` type caps the serialized value at
+64 KiB (`ONBOARDING_CONFIG_MAX_BYTES`; the largest honest value is a ~2.5 KB
+service-account key). Over the cap is a 422. **Guard:**
+`tests/test_onboarding_request_caps.py::TestFreeFormConfigCap`, including an
+AST check that no `*Request` model in `onboarding.py` declares a bare
+`dict[str, Any]` (it flags exactly those four fields on the pre-fix source).
+
+### ONB6-30-2 — LOW — FIXED — A rejected logo was reported as "Failed to create organization" (500)
+
+`/session/organization` runs `scan_and_validate_logo` inside its `try`; a bad
+or malicious image makes it raise `HTTPException(400, "Invalid image: …")`,
+which the route's `except Exception` caught and turned into a generic 500 whose
+text sends the administrator to the server logs. Reproduced with a stubbed
+service and `logo="not-an-image"` (500 instead of 400). The same blanket
+handler was missing from `POST /organization` (the standing "missing
+`except Exception`" item), and adding it naively would have copied the bug.
+**Fix:** both routes now re-raise `HTTPException` before the generic handler,
+and `POST /organization` has one. **Guard:**
+`tests/test_onboarding_organization_error_handling.py` (6 tests, both routes:
+rejected logo keeps its 400, an unexpected error is a generic 500 that does not
+echo the message, `ValueError` is a 400).
+
+### ONB6-30-3 — LOW — FIXED — A repeated position id in one payload was a 500
+
+The id is the stored slug, unique per organization, so two new entries sharing
+one id fail at flush with an `IntegrityError`. `RolesSetupRequest` and
+`PositionsSetupRequest` now refuse a repeated id with a 422. The wizard cannot
+produce one (`positionsConfig` is a record keyed by id), so this changes only
+what a hand-built request sees. **Guard:**
+`tests/test_onboarding_request_caps.py::TestDuplicatePositionIds`.
+
+**Still open (by design):** `ITTeamMemberRequest.email` is `str`, not
+`EmailStr`, so `create_it_team_users` can skip an invalid entry instead of
+rejecting the whole payload.
+
+### Completion gate (pass 9)
+
+| Check                                                                                                                      | Result                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0 + flake8-pytest-style 2.2.0)                                                          | ✅ 0 violations                                                                                                         |
+| `black --check app/ tests/ alembic/` (26.5.1)                                                                              | ✅ clean                                                                                                                |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                                                                          | ✅ clean                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                          | ✅ single head                                                                                                          |
+| `python3 scripts/check_route_permissions.py --strict`                                                                      | ✅ 0 errors, 0 warnings                                                                                                 |
+| `pytest -k "onboard or org_template or template_service or key_custody or system_notices or file_storage or google_drive"` | ✅ 408 passed, 1 skipped (`py_vapid`) before the second and third fixes; the three changed test files re-run: 21 passed |
+| `cd frontend && npm run typecheck`                                                                                         | recorded below                                                                                                          |
+| `cd frontend && npm run lint`                                                                                              | recorded below                                                                                                          |
 
 ---
 

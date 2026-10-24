@@ -21320,7 +21320,7 @@ this iteration's commit" rule.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -21332,6 +21332,17 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 30 (Onboarding, pass 9) — watchdog pickup, 3 fixed (ONB6-30-1/2/3), 0 flagged
+
+#3569, #3580 and #3585 merged docs-only, so only their rows were cleared. Delta
+since pass 8: onboarding now persists a Google Drive service-account key
+(encrypted and redacted like the other secrets, verified). Fixed: the free-form
+email, file-storage and backup-access config dicts had no size cap beyond 60 MB
+(now 64 KiB); a rejected logo was reported as a 500 on `/session/organization`
+and `POST /organization` lacked its generic handler (both fixed together);
+a repeated position id was a 500 (now a 422). The two long-standing
+"cosmetic" ONB items are closed. See `ONB5-30-onboarding.md`'s **Pass 9**.
 
 ### 2026-10-24 — Feature 29 (Reports & analytics, pass 11) — 0 fixes, 0 new findings, 1 documentation correction
 
