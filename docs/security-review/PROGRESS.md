@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3638](https://github.com/thegspiro/the-logbook/pull/3638)** (branch
+`claude/security-review-messaging-notifications`) —
+Feature 25 (Messaging & notifications), pass 9, a watchdog pickup. PR #3636
+(Feature 24, Meetings & minutes, pass 9) was found open, CI green on its
+head, `mergeable_state: clean`, no unresolved review comment — merged by
+this same watchdog run. Row 25 (Messaging & notifications) was confirmed
+the next `⬜` row. **0 fixed, 0 new findings** — the real delta since pass 8
+(explicit-null tightening on two columns, the shared file-storage interface
+swap in the email-attachment path, a role-deletion audience cleanup with
+its own org-scoped locked query, a stored-target leniency fix that cannot
+admit an unresolvable id, a row-locked scheduled-email cancel, and a
+timezone-correctness pair) was read in full and found clean: org scoping,
+JSON-column mutation shape, and the SMS/CSV/LIKE-pattern/Jinja2 re-sweeps
+all intact. Route count re-enumerated by AST at 51 (unchanged since pass
+5). MSG-3/MAIL-4/email_service F4/the NotificationRule `.config`
+unbounded-JSON note all re-confirmed open, owner-accepted or by-design,
+unchanged.
+
+Full writeup: `docs/security-review/MSG-25-messaging-notifications.md`'s
+**Pass 9** section.
+
+Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3636, Feature 24, Meetings & minutes, pass 9, merged), preserved for history</summary>
+
 **PR [#3636](https://github.com/thegspiro/the-logbook/pull/3636)** (branch
 `claude/security-review-meetings-minutes-p9`) — Feature 24 (Meetings &
 minutes), pass 9, a watchdog pickup. **0 fixed, 0 new findings** — re-verified
@@ -33,6 +60,8 @@ section.
 Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
 notifications) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3635, Feature 23, Medical supplies, pass 16, merged; duplicate sibling PR #3634 closed), preserved for history</summary>
@@ -21156,7 +21185,7 @@ this iteration's commit" rule.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
@@ -21173,6 +21202,52 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 25 (Messaging & notifications, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`). PR
+#3636 (Feature 24, Meetings & minutes, pass 9) was found open, CI fully
+green on its head commit, `mergeable_state: clean`, and with no unresolved
+review comment — the only review activity was a Codex bot run that failed
+outright from hitting its own usage limit, an external tool error rather
+than a finding — so it was merged by this same watchdog run
+(`53779a30112d510dbfca83439954dbc477133319`, squash). A fresh
+`search_pull_requests` (`head:claude/security-review-`) then returned 0;
+row 25 (Messaging & notifications) was confirmed the next `⬜` row in the
+rotation table on `main` at that head.
+
+Baseline `cd58d784` (PR #3457's squash, pass 8). Five non-merge commits
+touch this feature's declared scope since then — explicit-null tightening
+on `NotificationLog.pinned`/`DepartmentMessage.is_persistent` (with a new
+`reject_null_for_required` guard on the messaging update path), the shared
+file-storage interface swap in the email-attachment delete/send paths, a
+new `release_role_from_messages` cleanup called from role deletion (its own
+org-scoped, row-locked query; a full-list JSON reassignment, not an
+in-place mutation), a stored-target leniency fix that drops a vanished
+audience reference without being able to admit an unresolvable or
+cross-org one (the unchanged `_validate_targeting` call still gates every
+new id), and a row-locked scheduled-email cancel (audited, soft-stated,
+race-proof against the sender) alongside a timezone-correctness pair for
+`scheduled_at`. All five read in full against every `CHECKLIST.md`
+dimension; **0 new findings**. MSG-3, MAIL-4, `email_service.py`'s F4 and
+the `NotificationRule.config` unbounded-JSON note all re-confirmed
+open/by-design, unchanged. Route count re-enumerated by AST: 51, unchanged
+since pass 5.
+
+Full writeup: `docs/security-review/MSG-25-messaging-notifications.md`'s
+**Pass 9** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 649
+revisions, single head `a0195b397bf3`; `check_route_permissions.py
+--strict` — 273 routes, 0 errors/warnings; scoped backend tests (`-k
+"message or notification or email_template"`) — 1,084 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck` clean; `npm
+run lint` clean.
+
+Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
+re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-24 — Feature 24 (Meetings & minutes, pass 9) — watchdog pickup, 0 fixed, 0 new findings; MM-19/MM-20 re-confirmed OPEN
 
