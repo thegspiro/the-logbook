@@ -39,7 +39,10 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {/* Bottom-aligned so a label that wraps in a narrow column ("Default
+          Shift Duration (hours)") does not drop its input below its neighbour's.
+          These fields carry no help text underneath. */}
+      <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor={durationId} className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Default Shift Duration (hours)

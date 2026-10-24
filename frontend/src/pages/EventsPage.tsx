@@ -977,7 +977,10 @@ export const EventsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 md:min-w-0 md:flex-1">
+          {/* A floor, not `min-w-0`: in this wrapping row a basis-0 item never
+              wraps, so beside the filters on a tablet the search box was
+              crushed to its icon instead of moving to a line of its own. */}
+          <div className="flex items-center gap-2 md:min-w-64 md:flex-1">
             <div className="relative min-w-0 flex-1 md:max-w-sm">
               <Search
                 className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
@@ -1019,7 +1022,7 @@ export const EventsPage: React.FC = () => {
           >
             <button
               onClick={() => setShowMyEventsOnly((prev) => !prev)}
-              className={`touch:min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`touch:min-h-[44px] inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 showMyEventsOnly
                   ? 'border-red-600 bg-red-800 text-white shadow-sm'
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'

@@ -509,7 +509,7 @@ const PoolItemsPage: React.FC = () => {
             Quantity-based items issued from shared pools — uniforms, consumables, and supplies.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             className="btn-secondary btn-md flex items-center gap-1"
@@ -567,8 +567,10 @@ const PoolItemsPage: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        {/* `form-input` is `w-full`, which in a row claims the whole width and
+            leaves the search box beside it a few pixels wide. */}
         <select
-          className="form-input"
+          className="form-input sm:w-auto"
           aria-label="Filter by category"
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
