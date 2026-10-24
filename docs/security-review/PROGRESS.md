@@ -21039,7 +21039,7 @@ this iteration's commit" rule.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
@@ -21060,6 +21060,30 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 21 (Admin hours, pass 10) — watchdog pickup, 0 fixed by this pass, 0 new findings; AH-18 (pass 9's one open finding) confirmed fixed
+
+Watchdog pickup for the security-review rotation: PR #3631 (Feature 20,
+Compliance, pass 10) had already merged (this same watchdog run merged
+it). No open PR's head branch starts with `claude/security-review-`
+(`list_pull_requests`, 0 results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+21 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`. Baseline `4a1eeed4` (pass 9's merge, PR #3451).
+Real delta since then is two commits already merged by other branches
+before this pass began: `9789684f` (PR #3464, a dedicated security-sweep
+branch) fixed AH-18 — the read-then-write race in `_assert_name_free` — with
+CLAUDE.md Pitfall #27's full two-part lock pattern and a guard test
+asserting the SQL lock ordering directly; `1f02bcd5` (PR #3477, an
+app-review branch) fixed app-review finding B15, an explicit-null-silently-
+ignored bug on the event-hour-mapping update schema. Both re-verified
+against current code and their guard tests re-run (3/3 and included in the
+170/170 `-k admin_hours` run) rather than trusted from the commit message.
+Eleven frontend files also moved, all cosmetic (contrast/layout/alt-text
+sweeps plus an additive `config` passthrough param on
+`adminHoursCategoryService.list()`). Route surface unchanged (30/30,
+`endpoints/admin_hours.py` itself has no diff since pass 9). Full write-up:
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 10** section.
 
 ### 2026-10-24 — Feature 20 (Compliance, pass 10) — watchdog pickup, real delta (already-fixed Pitfall #32 sweep + numeric bounds), 0 fixed, 0 new findings; stale KNOWN_LIMITATIONS claim corrected
 
