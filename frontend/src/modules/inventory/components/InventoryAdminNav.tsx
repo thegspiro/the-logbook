@@ -99,9 +99,13 @@ export const InventoryAdminNav: React.FC<InventoryAdminNavProps> = ({
         {/* An intentional scroll region on a phone, declared so the mobile
             pass does not read off-screen pages as an overflow bug. The border
             sits on a wrapper so the edge fade does not erase it. */}
-        <nav className="border-theme-surface-border border-b" aria-label={`${selectedArea.label} pages`}>
+        <div className="border-theme-surface-border border-b">
+          {/* The scroller itself carries the landmark and its name, as the
+              mobile pass requires of a declared scroll region. */}
           <ScrollCueRow
             className="flex gap-1 px-2"
+            role="navigation"
+            aria-label={`${selectedArea.label} pages`}
             revealKey={`${selectedArea.id}-${activeDestinationId ?? ''}`}
             data-mobile-scroll-region
           >
@@ -134,7 +138,7 @@ export const InventoryAdminNav: React.FC<InventoryAdminNavProps> = ({
               );
             })}
           </ScrollCueRow>
-        </nav>
+        </div>
 
         {/* Says where the officer is and what the page is for. The live region
             announces that on a change without reading out the page body. */}
