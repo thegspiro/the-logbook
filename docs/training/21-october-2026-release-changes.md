@@ -258,6 +258,32 @@ Screenshots to create or replace are in
 
 ---
 
+# October 24, 2026 (afternoon) workflow updates
+
+Index for the latest window, plus earlier October changes no pass had indexed.
+Audit: [`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-24-2026-afternoon).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                                                                                | Now in                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Member ID Cards page: cards, coverage, tap log, retention; leavers' cards suspend themselves                         | [01 — Membership](./01-membership.md#the-member-id-cards-page), [16 — Integrations](./16-integrations.md)                           |
+| Card taps on the event page; Card Check-ins tab; Card Readers page                                                   | [04 — Events & Meetings](./04-events-meetings.md#seeing-who-tapped-a-card-2026-10-24)                                               |
+| NFC Tag Register; gear managers can now manage compartment tags                                                      | [05 — Inventory](./05-inventory.md#the-nfc-tag-register)                                                                            |
+| Medical supplies: recall a lot; Not yet counted tab, Next expiry sort, export columns, 30/60/90-day look-ahead       | [05 — Inventory](./05-inventory.md#recalling-a-lot)                                                                                 |
+| Templates: Reactivate; patterns: Pause / Resume; generation no longer blocked by another unit's shift; seat warnings | [03 — Scheduling](./03-scheduling.md) (Templates, Patterns, Edge Cases) — **corrects** the earlier "any shift at the same time" row |
+| Same seating checks on every path; open-to-all shifts with no named seats; swap and trade picker rules               | [03 — Scheduling](./03-scheduling.md)                                                                                               |
+| Attendance and calls locked on closed-out and cancelled shifts                                                       | [03 — Scheduling](./03-scheduling.md) (Shift finalization: what if …?)                                                              |
+| Position Names ticks are **Not in effect yet**                                                                       | [03 — Scheduling](./03-scheduling.md) — **corrects** the settings table                                                             |
+| Shift reports: status only through review; one sign-off per report; deleted officer's draft                          | [02 — Training](./02-training.md) (Draft Reports and Review Workflow)                                                               |
+| Library-course sessions credit the course's duration; wizard review shows local times (Oct 21)                       | [02 — Training](./02-training.md)                                                                                                   |
+| Check-In QR Codes opens with Facilities off                                                                          | [06 — Apparatus & Facilities](./06-apparatus-facilities.md)                                                                         |
+| Inventory validation: blank names, identifier clashes, tracking type, own-parent category (Oct 17)                   | [05 — Inventory](./05-inventory.md) (Item Creation & Updates)                                                                       |
+| Adding an applicant who already exists warns instead of a false "Applicant added" (Oct 17)                           | [15 — Prospective Members](./15-prospective-members.md)                                                                             |
+| Shift and calendar dates no longer slip a day across time zones; tabs refresh after panel changes                    | [03 — Scheduling](./03-scheduling.md) (Troubleshooting)                                                                             |
+
+---
+
 # October 23–24, 2026 workflow updates
 
 Index for the latest window. Audit:

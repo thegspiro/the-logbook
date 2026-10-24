@@ -1,5 +1,19 @@
 # Script currency
 
+## Flagged by the 2026-10-24 (afternoon) changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24-2026-afternoon).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+| Script                                              | Beat                                      | Was                                 | Now                                                                                                                 |
+| --------------------------------------------------- | ----------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **03** (IT), **04** (chief)                         | ID cards (03 ~1289, 04 "MEMBER ID CARDS") | Cards managed one profile at a time | **Members Admin → Member ID cards**: every card, coverage, tap log and retention; leavers' cards suspend themselves |
+| **06** (member)                                     | Tapping a card                            | No record of refused taps           | Every tap, refused or not, is logged; officers see it on the event and on **Card Readers**                          |
+| **Any inventory/NFC beat**                          | Lost tags                                 | Per item only                       | **NFC Tag Register** lists all tags; gear managers can now manage compartment tags                                  |
+| **Any EMS-supply beat**                             | Recalls                                   | Find the lot on each item           | **Find a lot → Recall lot** on the Expiring tab; recalled units leave stock and are listed to pull                  |
+| **03**, **04**, any scheduling beat                 | Patterns                                  | Delete a pattern to stop it         | **Pause / Resume**; templates **Reactivate**; members not seated are named in the toast                             |
+| **04** (chief, SHIFT REPORTS 23:45), **05**, **16** | Report review                             | Filing officer could approve        | Status moves only through review; a report signs skills off once                                                    |
+
 ## Flagged by the 2026-10-23 → 10-24 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).

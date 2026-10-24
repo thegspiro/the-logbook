@@ -5,6 +5,33 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 24, 2026 (afternoon)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-24-2026-afternoon).
+
+- **Member ID cards have their own admin page.** **Members Admin → Member ID
+  cards** lists every card, who has none, cards still held by former members
+  and every tap. A member who leaves has their cards suspended automatically.
+- **See where cards were tapped.** A new **Card Readers** page by room, a
+  **Card taps** section on each event, and a **Card Check-ins** tab in Events
+  Admin.
+- **NFC Tag Register** in Inventory lists every item, shelf and compartment
+  tag, to mark lost, move or unlink. Gear managers can now look after
+  compartment tags too.
+- **Medical supplies can be recalled by lot number.** Recalled units stop
+  counting as stock, cannot go on a truck, and are listed first to pull.
+- **Shift patterns can be paused, and templates reactivated.** A pattern no
+  longer skips a date because another unit has a shift at the same time.
+- **The same checks apply however someone is seated on a shift.** Attendance
+  and calls are locked once a shift is closed out.
+- **Shift reports change status only through review**, and approving a report
+  again no longer signs its skills off twice. A bug that erased report
+  narratives when a trainee opened them is fixed.
+- **Dates on scheduling screens** no longer slip a day across time zones.
+- This pass also caught up a few earlier-October changes nobody had written
+  down. Screenshots to create are in `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 23 – 24, 2026
 
 The engineering audit is

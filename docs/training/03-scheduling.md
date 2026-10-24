@@ -282,6 +282,8 @@ When you give up a shift and pick someone to cover it, the list already leaves
 out anyone who couldn't accept. That means anyone who is already on the shift,
 on approved leave, not cleared for the position, or working a shift that runs
 right up against this one. The least busy members are listed first.
+On a shift that is open to all members, every current member is considered,
+not only those in the seat's position _(2026-10-24)_.
 
 - **The member you offer a seat to can accept it.** A duty officer can also
   approve the offer, which hands the seat to that member. On the **Requests**
@@ -1091,6 +1093,11 @@ A swap starts from the shift you are giving up.
 The request then appears under **Requests → Swap Requests**, where you can
 follow it or cancel it.
 
+**Specific Shift** lists neither cancelled shifts nor shifts you are already
+on, and says so when the list was cut at 50. A request for a cancelled shift,
+for a shift you already hold, or from a seat you no longer hold is refused
+_(2026-10-24)_.
+
 ### Picking up an open swap
 
 When another member's open swap is a seat you are cleared for, **Requests →
@@ -1340,6 +1347,9 @@ shift.
 | Someone tries to delete a closed-out shift        | Refused: "Cannot delete a finalized shift."                                                                       |
 | Someone tries to delete a shift that has reports  | Refused: "Cannot delete shift with N completion report(s). Remove the reports first."                             |
 | You try to reopen a shift that was never closed   | Refused: "Shift is not finalized"                                                                                 |
+| Someone adds, edits or removes attendance, or adds or edits a call, on a closed-out shift | Refused _(2026-10-24)_. Close-out has already credited the hours. Reopen the shift to correct it |
+| Someone tries to close out, or check in to, a cancelled shift | Refused. A cancelled shift did not run, so it credits no hours                                     |
+| An officer adds attendance for a member who already checked in | Refused, instead of creating a second row. A check-out earlier than the check-in is refused too   |
 | A trainee's draft report fails to create          | The other trainees still get theirs                                                                               |
 | A member has no active training enrollment        | No draft report is made for them                                                                                  |
 
@@ -3113,7 +3123,14 @@ template — as its own template, or as its day or night template — **stops
 generating shifts**: automatic generation skips it, **Generate shifts** is
 refused, and the pattern shows _Template inactive — this pattern is not
 generating shifts_. Shifts it already made stay. It resumes once the template is
-reactivated or the pattern is pointed at another template. On the basic apparatus list, anyone
+reactivated or the pattern is pointed at another template. To reactivate a
+template, select **Reactivate** on its card on the **Templates** tab
+_(2026-10-24)_; patterns using it generate shifts again.
+
+**Pausing a pattern** _(2026-10-24)_. Each pattern has **Pause** and
+**Resume**. A paused pattern reads **Paused**, generates nothing on the nightly
+run, and its **Generate** button is disabled. Shifts it already made stay.
+**Generate** is also disabled while the pattern's template is inactive. On the basic apparatus list, anyone
 with scheduling manage rights can turn on **Show inactive** and select
 **Reactivate**; reactivating changes only the flag and re-adds nothing to
 shifts.
@@ -3411,7 +3428,7 @@ computer never sees your values.
 | **Restrict check-in to assigned members**                 | Only members on a shift's roster can check in to it (open shifts are exempt)                                                                                                                                   |
 | **Allow pre-shift work**                                  | Lets a member time prep work, such as an early equipment check, before check-in opens. An officer approves the time before it counts                                                                           |
 | **Department Defaults**                                   | **Default Shift Duration (hours)**, **Default Min Staffing** and **Overtime Threshold (hours/week)**. These are shown as your department's defaults on Shift Planning. The card is marked **Not in effect yet**: new shifts and templates don't use them, and no overtime warning reads the threshold |
-| **Position Names**                                        | Turn built-in seats on or off, and add your own under **Add Custom Position**. See [Your department's own seats](#your-departments-own-seats)                                                                  |
+| **Position Names**                                        | Add your own seats under **Add Custom Position**. See [Your department's own seats](#your-departments-own-seats). The on/off ticks for built-in seats are saved but marked **Not in effect yet**: templates and shifts still offer the full built-in list                                                                  |
 
 ### What the settings do not do
 
@@ -3696,6 +3713,19 @@ they see only the seats they are eligible for.
 - a member whose account is not active;
 - a member whose membership type is excluded from self-signup (see below),
   unless the shift is open to all members.
+
+**An open-to-all shift that names no seats** _(2026-10-24)_ offers the
+built-in seats to everyone. It used to offer nothing, so nobody could sign up.
+A department's own custom seat has to be named on the shift to be filled.
+
+**The same checks apply however a member is seated** _(2026-10-24)_: signing
+up, an officer's assignment, a standing claim, an offer, a pickup, a swap, a
+pattern, and changing someone's seat or reviving a declined one. A firefighter
+can no longer be placed in an officer's seat by one of the side routes. Only
+officers who can manage schedules can seat someone on a cancelled or
+closed-out shift. A member can confirm only a seat that is assigned or pending,
+on a shift that is neither cancelled nor closed out. Seat names are capped at
+100 characters.
 
 ### Shift Position Eligibility
 
@@ -4064,7 +4094,10 @@ assigned, time off is approved, shifts are generated, and staffing is checked.
 | What happened                                                  | What it means / what to do                                                                                                                                                          |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A template ends earlier in the day than it starts (e.g. 19:00–07:00) | The shift ends the next morning. The Logbook handles this for you                                                                                                             |
-| Some dates got no shift, or "no new shifts" were created       | The Logbook skips a date that already has **any** shift starting at the same time, whatever its template or apparatus. Two templates starting at the same time on the same day will not both be generated. Give one a different start time, or add the second shift by hand |
+| Some dates got no shift, or "no new shifts" were created       | The Logbook skips a date that already has a shift **from this pattern's template** starting at the same time, including one that was cancelled. Since 2026-10-24 another unit's shift, or a shift added by hand, at the same time no longer stops the pattern's shift being made |
+| The toast says some members were not seated                   | Each platoon member is placed in the first seat they are cleared for, with the same checks as assigning by hand: rank and seat eligibility, the seat's cap, leave, time off, another shift at the same time and the driver rule. The toast names who was left off and why. Their seat stays open |
+| An overnight or 24-hour shift on a daylight-saving day          | It ends at its usual clock time, not an hour early or late                                                                                                                         |
+| A shift made from a template that is open to all members        | The shift is open to all members too                                                                                                                                              |
 | Generating the same range twice                                | Safe. Shifts that already exist are skipped                                                                                                                                         |
 | A platoon member is on approved time off or leave              | They are left off the generated shifts on those dates. Their seat stays open for someone to fill                                                                                    |
 
@@ -4092,7 +4125,8 @@ assigned, time off is approved, shifts are generated, and staffing is checked.
 | A staffing warning on a fully staffed shift                          | A member whose assignment is still pending does not count toward staffing. Check every member on the crew is assigned or confirmed                                                            |
 | A swap request is stuck on pending                                   | It depends on the kind. An open swap waits for an eligible member to pick it up. A Specific Shift or exchange waits for an officer. An offer to a named member waits for that member or an officer. See [Shift Swap Requests](#shift-swap-requests) |
 | A swap is still pending after the member left the shift              | It should not be. Removing, declining, reassigning or cancelling the seat cancels its swaps and tells both members. Refresh the page                                                           |
-| Scheduling screens show old information                              | Refresh the page                                                                                                                                                                               |
+| Scheduling screens show old information                              | Since 2026-10-24, a change made in the shift panel also refreshes **My Shifts** and **Open Shifts**, and the board's "today" follows your department's calendar day, moving over at midnight on a tablet left open. If something still looks stale, refresh the page |
+| A shift's date reads a day early or late                             | Fixed on 2026-10-24: shift, leave and pattern dates now show as the calendar day they were set for, whatever time zone the device is in                                                       |
 | You cannot find scheduling settings                                  | They are under **Administration → Scheduling Admin**. You need the **Manage schedules** permission. Ask your administrator                                                                     |
 | "Too many requests" or a similar message when signing up             | You sent too many requests in a short time. Wait a minute and try again                                                                                                                         |
 | You need to change a shift's times                                   | Officers who can manage schedules can edit start and end times, apparatus, colour and notes from the shift detail panel                                                                         |

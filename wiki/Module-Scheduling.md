@@ -1031,6 +1031,58 @@ one tap.
 
 ---
 
+## What the 2026-10-24 shifts review changed
+
+Open items that need a schema change or a product decision are in
+[`docs/KNOWN_LIMITATIONS.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md).
+
+**Seating.** Every seat-placing path now runs `_validate_assignment_candidate`
+(eligibility, named-seat cap, duplicate, overlap, leave, time off, driver):
+`update_assignment` on a seat change or a revived row, standing claims, offers,
+pickups, trades and pattern generation. Seat eligibility is checked on a shift
+with no named seats too. An open-to-all shift naming no seats offers the
+built-in seats (`_open_to_all_seats`, shared by the single and bulk eligibility
+calls). `confirm_assignment` only from assigned/pending; `create_assignment`
+on a cancelled or finalized shift needs `scheduling.manage`. The trade picker
+considers every current member on an open-to-all shift and matches seat names
+case-insensitively. Seat lists in requests are capped at 100 characters per
+name.
+
+**Record locks.** On a finalized shift, attendance and calls cannot be added,
+edited or removed; a cancelled shift cannot be checked into or finalized.
+`add_attendance` locks the shift row and does a locking read for an existing
+row (Pitfall #27), so it no longer creates a duplicate that broke the member's
+check-out with `MultipleResultsFound`.
+
+**Templates and patterns.** `ShiftTemplateUpdate` and `ShiftPatternUpdate`
+accept `is_active`: templates can be reactivated, patterns paused (manual
+generation answers 409, the nightly run skips it). The generation duplicate
+guard is keyed on the pattern's own template. Overnight and 24-hour shifts roll
+their end on the local date before converting to UTC. Generated seats that
+fail the candidate check come back as `seat_warnings`.
+
+**Shift reports.** `review_status` changes only by submitting a draft;
+`report_review_required` decides pending vs approved. A re-approval does not
+re-run sign-offs: `_create_skill_checkoffs` records the report id and skips a
+skill already signed off from that report. Trainee views blank hidden fields on
+a serialized copy; before this, each trainee visit wrote NULL over
+`officer_narrative` and `reviewer_notes` through `get_db`'s end-of-request
+commit, so those fields were lost for everyone. The future-date check moved to
+the endpoints, against the department's today.
+
+**Numbers.** `PUT /scheduling/settings` returns `pre_shift_work_enabled`;
+`catch_up_deadline` is declared on `MemberComplianceRecord`; a finalized
+shift's call count and hours come from finalize's snapshots; coverage uses the
+shift → apparatus → 1 minimum and skips cancelled shifts; member-hours
+"scheduled" skips declined/cancelled seats; a custom annual window on 29
+February is clamped; history import keeps approved pre-shift time and does not
+recreate rejected outside-agency hours.
+
+**Dates.** Shift, leave and pattern dates are calendar days and render through
+`formatCalendarDate` (UTC-anchored), so they no longer slip a day where browser
+and department zones differ. The board's "today" is the department's calendar
+day on the shared scheduling clock tick.
+
 ## Related Documentation
 
 - [Shift History Import user guide](Scheduling-History-Import)

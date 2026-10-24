@@ -580,6 +580,30 @@ What matters for events:
 - A tap from an unregistered card, or from a member already checked in, is
   shown on screen, and the station stays ready for the next person.
 
+### Seeing who tapped a card _(2026-10-24)_
+
+Every ID-card tap, at a station or a room kiosk, is logged, including the ones
+that were refused. Three places show it:
+
+- **On the event page**, officers who can **Manage all events** see a **Card
+  taps** section: each tap for this event, its outcome (**Checked in**,
+  **Checked out**, **Already checked in**, **Unknown card**, **Card not
+  active**, **Member not active** or **Refused**) and its reader (**Check-in
+  station** or **Room kiosk**).
+- **Events Admin → Card Check-ins** lists taps across all events, filterable by
+  outcome, reader and date.
+- **Card Readers** (from **Locations**, **Check-In QR Codes** or the command
+  palette) lists every room, whether its reader is on, and its kiosk taps over
+  the last 7 days: taps, refusals and the last tap, with each room's recent
+  taps on demand. **Only rooms with a reader on** narrows the list. The
+  **Badge check-in** switch is here too, with the same rules as above.
+
+**Card Readers** opens for officers who manage locations or facilities, or who
+can **Write NFC check-in tags for rooms**, whether or not the Facilities module
+is on. It shows whose card each tap was only to officers who can also issue ID
+cards. The full card list and tap log are on **Members Admin → Member ID
+cards** (see [Membership](./01-membership.md#the-member-id-cards-page)).
+
 ### Monitoring Check-Ins
 
 Officers can watch check-ins as they happen. On the event page, open **More →

@@ -187,6 +187,19 @@ which names neither _(corrected 2026-10-04)_.
 > officers the full gear table; mailing the data is the same disclosure as
 > serving it, so recipients are now grouped by what they may actually see.
 
+## Recalls _(2026-10-23)_
+
+A recall is recorded against a **supply and a lot number**
+(`inventory_lot_recalls`, guarded migration `3d67883cd461`), so it reaches
+shelf lots, units already on an apparatus and later deliveries of the same lot.
+While it is active the units are not stock (on hand, Low stock, the low-stock
+email, reorder, truck figures), cannot be swapped onto a truck, and are listed
+first on the **Expiring** tab marked **Recalled**. Record one from **Find a
+lot** on that tab; the **Recalled lots** panel shows what is still to pull and
+lifts a recall with a required note. Both are audited, and a second active
+recall of the same lot is refused under a row lock. Full detail in
+[`docs/MEDICAL_SUPPLIES_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/MEDICAL_SUPPLIES_MODULE.md#recalls-2026-10-23).
+
 ## Naming
 
 The gear side is **Inventory**, administered from **Inventory Admin**. The

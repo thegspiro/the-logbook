@@ -531,6 +531,10 @@ grouped by station or facility, with a search box. To open it, use:
 - the link in a facility's **Rooms** section, or
 - the command palette (Ctrl+K, or Cmd+K on a Mac) and search "QR".
 
+The page works with the Facilities module on or off. Until 2026-10-24 the
+**Locations** page's link led to a "module disabled" screen when Facilities was
+off; it now opens the page.
+
 When your department uses Scheduling, the page also lists a **shift check-in
 code** for each vehicle. It is a permanent QR code: when scanned, it finds that
 vehicle's current shift. One printed card on the dashboard covers every shift.
