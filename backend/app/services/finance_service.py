@@ -5361,21 +5361,138 @@ class FinanceService:
         item = ExpenseLineItem(expense_report_id=er_id, **kwargs)
         self.db.add(item)
         await self.db.flush()
+        await self._recalculate_report_total(er)
+        await self.db.refresh(item, ["created_at"])
+        return item
 
-        # Recalculate the total from a fresh aggregate over the persisted line
-        # items rather than the loaded `er.line_items` collection. That
-        # collection may or may not already include the row just added (depending
-        # on whether it was loaded before the flush), so `sum(...) + item.amount`
-        # could double-count or drift. The DB sum is authoritative (FIN-7).
+    async def _recalculate_report_total(self, er: ExpenseReport) -> None:
+        """Set the report's total from a fresh aggregate over its persisted
+        lines, rather than the loaded ``er.line_items`` collection. That
+        collection may or may not reflect a line just added or removed
+        (depending on when it was loaded), so summing it could double-count or
+        drift. The DB sum is authoritative (FIN-7)."""
         total_result = await self.db.execute(
             select(func.coalesce(func.sum(ExpenseLineItem.amount), 0)).where(
-                ExpenseLineItem.expense_report_id == er_id
+                ExpenseLineItem.expense_report_id == er.id
             )
         )
         er.total_amount = total_result.scalar_one()
         await self.db.flush()
+
+    async def _draft_line(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str],
+    ) -> tuple[ExpenseReport, ExpenseLineItem]:
+        """A line on a draft report, the report locked so a change cannot
+        land beside a concurrent submission that is grading the lines."""
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=True
+        )
+        if not er:
+            _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
+        if er.status != ExpenseReportStatus.DRAFT:
+            raise ValueError("Lines can only be changed while the report is a draft")
+        item = next((i for i in er.line_items if i.id == item_id), None)
+        if item is None:
+            raise FinanceEntityNotFoundError("Expense line not found")
+        return er, item
+
+    async def update_expense_line_item(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str] = None,
+        **kwargs,
+    ) -> ExpenseLineItem:
+        """Edit a line while its report is a draft.
+
+        Only the fields sent change; an explicit null clears an optional one
+        (``apply_updates``). As ``update_purchase_request``, only a change of
+        budget line is checked against who may charge it, so a line copied
+        from a request (finance_reimbursement.py) can still be edited.
+        """
+        er, item = await self._draft_line(er_id, item_id, org_id, requester_id)
+        await self._validate_finance_fks(org_id, kwargs)
+        if "budget_id" in kwargs and kwargs["budget_id"] != item.budget_id:
+            await assert_may_charge(
+                self.db, org_id, requester_id, kwargs.get("budget_id")
+            )
+        apply_updates(item, kwargs)
+        await self.db.flush()
+        await self._recalculate_report_total(er)
         await self.db.refresh(item, ["created_at"])
         return item
+
+    async def delete_expense_line_item(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str] = None,
+    ) -> ExpenseReport:
+        """Remove a line while its report is a draft. Its receipt document is
+        kept, as replacing a receipt keeps the earlier one. A report left with
+        no lines stays a draft; submitting it is refused until one is added."""
+        er, item = await self._draft_line(er_id, item_id, org_id, requester_id)
+        await self.db.delete(item)
+        await self.db.flush()
+        await self._recalculate_report_total(er)
+        # The loaded collection still holds the deleted line until reloaded.
+        await self.db.refresh(er, ["line_items", "updated_at"])
+        return er
+
+    async def cancel_expense_report(
+        self, er_id: str, org_id: str, requester_id: Optional[str] = None
+    ) -> ExpenseReport:
+        """Withdraw or cancel an expense report.
+
+        ``requester_id`` is set when the caller is withdrawing their own
+        report rather than acting as a finance manager: as with a purchase
+        request, a member may withdraw only a draft, and the finance office
+        cancels one that is further along. A paid report is settled and a
+        denied one already closed. While a check is paying the report it is
+        refused: the check is cancelled or voided first.
+
+        Nothing has been spent or encumbered for an unpaid report, so no
+        budget line moves; a cancelled report stops counting against its cash
+        advance and its restricted funds, and frees the purchase it claimed
+        back (finance_reimbursement.py) for another claim.
+        """
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=True
+        )
+        if not er:
+            _raise_not_found("Expense report", requester_id)
+        await self.require_year_accepts(er.fiscal_year_id, org_id, action="finish")
+        if er.status == ExpenseReportStatus.PAID:
+            raise ValueError("Paid reports cannot be cancelled")
+        if er.status in (ExpenseReportStatus.DENIED, ExpenseReportStatus.CANCELLED):
+            raise ValueError("This report is already closed")
+        if requester_id is not None and er.status != ExpenseReportStatus.DRAFT:
+            raise ValueError(
+                "You can withdraw your own report only while it is a draft; "
+                "ask the finance office to cancel a submitted report"
+            )
+        check = await live_check_for_report(self.db, org_id, er.id)
+        if check is not None:
+            raise ReimbursementLinkError(
+                f"Check request {check.request_number} is paying this report. "
+                "Cancel or void that check first."
+            )
+        er.status = ExpenseReportStatus.CANCELLED
+        # Close the chain as cancel_purchase_request does, so it leaves every
+        # approver's queue and its emailed links stop working.
+        await self._terminate_entity_pending_steps(
+            ApprovalEntityType.EXPENSE_REPORT, er.id, org_id
+        )
+        await self.db.flush()
+        await self.db.refresh(er, ["updated_at"])
+        return er
 
     async def reviews_entity(
         self,
@@ -6051,6 +6168,44 @@ class FinanceService:
                 )
         else:
             cr.status = CheckRequestStatus.PENDING_APPROVAL
+
+    async def cancel_check_request(
+        self, cr_id: str, org_id: str, requester_id: Optional[str] = None
+    ) -> CheckRequest:
+        """Withdraw or cancel a check request that has not been issued.
+
+        The same rule as a purchase request: a member withdraws only their own
+        draft, and the finance office cancels one further along. An issued
+        check is voided instead, which reverses what it moved. An unissued
+        check has moved no budget total, so nothing is reversed; a cancelled
+        reimbursement check leaves its report approved, to be paid again.
+        """
+        cr = await self.get_check_request(
+            cr_id, org_id, for_update=True, restrict_to_user=requester_id
+        )
+        if not cr:
+            _raise_not_found("Check request", requester_id)
+        await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
+        if cr.status == CheckRequestStatus.ISSUED:
+            raise ValueError("An issued check is voided, not cancelled")
+        if cr.status in (
+            CheckRequestStatus.DENIED,
+            CheckRequestStatus.VOIDED,
+            CheckRequestStatus.CANCELLED,
+        ):
+            raise ValueError("This check request is already closed")
+        if requester_id is not None and cr.status != CheckRequestStatus.DRAFT:
+            raise ValueError(
+                "You can withdraw your own request only while it is a draft; "
+                "ask the finance office to cancel a submitted request"
+            )
+        cr.status = CheckRequestStatus.CANCELLED
+        await self._terminate_entity_pending_steps(
+            ApprovalEntityType.CHECK_REQUEST, cr.id, org_id
+        )
+        await self.db.flush()
+        await self.db.refresh(cr, ["updated_at"])
+        return cr
 
     async def issue_check(
         self,

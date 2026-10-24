@@ -13,41 +13,22 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
-import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
+import { MAX_MONEY_AMOUNT, MIN_MONEY_AMOUNT } from '../utils/moneyLimits';
+import { EXPENSE_TYPE_OPTIONS, expenseLineSchema } from '../utils/expenseLines';
+import { useLateLineWarning } from '../hooks/useLateLineWarning';
 import { useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import {
-  ApprovalEntityType,
-  ExpenseType,
-  EXPENSE_TYPE_LABELS,
-  SubstantiationMode,
-  type FinanceSettings,
-} from '../types';
-import { financeSettingsService } from '../services/api';
+import { ApprovalEntityType, ExpenseType } from '../types';
 import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
-import { useTimezone } from '@/hooks/useTimezone';
-import { calendarDaysBetween, getTodayLocalDate } from '@/utils/dateFormatting';
 
 // =============================================================================
 // Validation Schema
 // =============================================================================
-
-const lineItemSchema = z.object({
-  description: z.string().min(1, 'Description is required'),
-  amount: z
-    .number({ message: 'Amount is required' })
-    .positive('Amount must be greater than zero')
-    .min(MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE)
-    .max(MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE),
-  dateIncurred: z.string().min(1, 'Date is required'),
-  expenseType: z.string().min(1, 'Expense type is required'),
-  merchant: z.string().optional(),
-});
 
 const expenseReportSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
@@ -77,15 +58,6 @@ const labelClass = 'form-label';
 const errorClass = 'mt-1 text-xs text-red-600';
 
 // =============================================================================
-// Expense Type Options
-// =============================================================================
-
-const EXPENSE_TYPE_OPTIONS = Object.values(ExpenseType).map((value) => ({
-  value,
-  label: EXPENSE_TYPE_LABELS[value] ?? value,
-}));
-
-// =============================================================================
 // Loading Skeleton
 // =============================================================================
 
@@ -102,43 +74,6 @@ const FormSkeleton: React.FC = () => (
     </div>
   </div>
 );
-
-// =============================================================================
-// Late-line warning
-// =============================================================================
-
-/**
- * Warns about a line older than the department's substantiation deadline while
- * it is being entered. The server grades lines when the report is submitted;
- * this is advice only, so a failed read of the rule just means no warning.
- * Measured from today, the earliest the report can be submitted.
- */
-function useLateLineWarning(): (dateIncurred: string) => string | null {
-  const tz = useTimezone();
-  const [rules, setRules] = useState<FinanceSettings | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    financeSettingsService
-      .get()
-      .then((next) => {
-        if (current) setRules(next);
-      })
-      .catch(() => undefined);
-    return () => {
-      current = false;
-    };
-  }, []);
-
-  return (dateIncurred: string) => {
-    if (!rules || rules.substantiationMode === SubstantiationMode.OFF) return null;
-    const age = calendarDaysBetween(getTodayLocalDate(tz), dateIncurred);
-    if (age === null || age <= rules.substantiationDays) return null;
-    return rules.substantiationMode === SubstantiationMode.BLOCK
-      ? `More than ${rules.substantiationDays} days ago. The department does not accept expenses this old; this report cannot be submitted with this line.`
-      : `More than ${rules.substantiationDays} days ago. An approver will have to confirm this line, and the department may report its reimbursement as taxable pay.`;
-  };
-}
 
 // =============================================================================
 // Main Page Component
@@ -232,7 +167,7 @@ const ExpenseReportFormPage: React.FC = () => {
     for (let i = 0; i < lineItems.length; i++) {
       const item = lineItems[i];
       if (!item) continue;
-      const result = lineItemSchema.safeParse({
+      const result = expenseLineSchema.safeParse({
         ...item,
         amount: Number(item.amount),
       });

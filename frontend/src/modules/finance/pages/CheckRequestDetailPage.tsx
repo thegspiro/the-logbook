@@ -127,6 +127,32 @@ const CheckRequestDetailPage: React.FC = () => {
     }
   };
 
+  // A member withdraws only their own draft; the finance office cancels any
+  // request not yet issued (FinanceService.cancel_check_request decides).
+  const handleCancel = async () => {
+    if (!id || !cr) return;
+    const withdrawing = cr.status === CheckRequestStatus.DRAFT;
+    const ok = await confirm({
+      title: withdrawing ? 'Withdraw this request?' : 'Cancel this check request?',
+      message: withdrawing
+        ? `${cr.requestNumber} is closed and nobody is asked to approve it. It cannot be reopened.`
+        : `${cr.requestNumber} is closed for good: any approval still outstanding is withdrawn and emailed approval links stop working. No check has been issued, so nothing is reversed.${
+            cr.expenseReportId ? ' The expense report it would have paid stays approved, to be paid another way.' : ''
+          }`,
+      confirmLabel: withdrawing ? 'Withdraw request' : 'Cancel request',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await checkRequestService.cancel(id);
+      toast.success(withdrawing ? 'Request withdrawn' : 'Check request cancelled');
+      void fetchCheckRequest(id);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not cancel the check request'));
+    }
+  };
+
   const handleVoid = async () => {
     if (!id || !cr) return;
     // Voiding is final and takes the amount back off the budget line's
@@ -194,6 +220,16 @@ const CheckRequestDetailPage: React.FC = () => {
   const canSubmit = cr.status === CheckRequestStatus.DRAFT && access.canActAsRequester(cr.requestedBy);
   const canIssue = access.canManage && cr.status === CheckRequestStatus.APPROVED;
   const canVoid = access.canManage && cr.status === CheckRequestStatus.ISSUED;
+  const canCancel = access.canManage
+    ? (
+        [
+          CheckRequestStatus.DRAFT,
+          CheckRequestStatus.SUBMITTED,
+          CheckRequestStatus.PENDING_APPROVAL,
+          CheckRequestStatus.APPROVED,
+        ] as string[]
+      ).includes(cr.status)
+    : cr.status === CheckRequestStatus.DRAFT && access.canActAsRequester(cr.requestedBy);
 
   return (
     <div className="space-y-6">
@@ -261,6 +297,16 @@ const CheckRequestDetailPage: React.FC = () => {
               >
                 <XCircle className="h-3.5 w-3.5" />
                 Void Request
+              </button>
+            )}
+            {canCancel && (
+              <button
+                type="button"
+                onClick={() => void handleCancel()}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                {cr.status === CheckRequestStatus.DRAFT ? 'Withdraw Request' : 'Cancel Request'}
               </button>
             )}
           </div>

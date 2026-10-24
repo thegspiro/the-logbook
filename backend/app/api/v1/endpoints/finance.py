@@ -86,6 +86,7 @@ from app.schemas.finance import (
     DuesSummaryResponse,
     ExpenseLineItemCreate,
     ExpenseLineItemResponse,
+    ExpenseLineItemUpdate,
     ExpenseReportCreate,
     ExpenseReportResponse,
     ExpenseReportUpdate,
@@ -3731,6 +3732,119 @@ async def add_expense_line_item(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+@router.put(
+    "/expense-reports/{er_id}/items/{item_id}",
+    response_model=ExpenseLineItemResponse,
+)
+async def update_expense_line_item(
+    er_id: str,
+    item_id: str,
+    data: ExpenseLineItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Edit a line on a draft expense report.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only on the caller's own report. The line is
+    found through its report, which is org-scoped.
+    """
+    service = FinanceService(db)
+    try:
+        return await service.update_expense_line_item(
+            er_id,
+            item_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
+            **data.model_dump(exclude_unset=True),
+        )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.delete("/expense-reports/{er_id}/items/{item_id}", status_code=204)
+async def delete_expense_line_item(
+    er_id: str,
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Remove a line from a draft expense report.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only from the caller's own report.
+    """
+    service = FinanceService(db)
+    try:
+        await service.delete_expense_line_item(
+            er_id,
+            item_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
+        )
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/expense-reports/{er_id}/cancel",
+    response_model=ExpenseReportResponse,
+)
+async def cancel_expense_report(
+    er_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Withdraw or cancel an expense report.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant this is the member withdrawing their own draft;
+    anything further along is the finance office's to cancel.
+    """
+    service = FinanceService(db)
+    try:
+        er = await service.cancel_expense_report(
+            er_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.expense_report_cancelled",
+            event_category="finance",
+            severity="info",
+            event_data={"report_number": er.report_number},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return er
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
 @router.post(
     "/expense-reports/{er_id}/submit",
     response_model=ExpenseReportResponse,
@@ -4042,6 +4156,50 @@ async def submit_check_request(
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/check-requests/{cr_id}/cancel",
+    response_model=CheckRequestResponse,
+)
+async def cancel_check_request(
+    cr_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Withdraw or cancel a check request that has not been issued.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant this is the member withdrawing their own draft;
+    anything further along is the finance office's to cancel. An issued
+    check is voided instead.
+    """
+    service = FinanceService(db)
+    try:
+        cr = await service.cancel_check_request(
+            cr_id,
+            str(current_user.organization_id),
+            requester_id=_requester_scope(current_user),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.check_request_cancelled",
+            event_category="finance",
+            severity="info",
+            event_data={"request_number": cr.request_number},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return cr
+    except FinanceEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:

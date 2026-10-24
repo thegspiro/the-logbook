@@ -1042,6 +1042,16 @@ export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
   createdAt: string;
 }
 
+/** An edit to a draft report's line: omit a field to leave it, null to clear an optional one. */
+export interface ExpenseLineItemUpdatePayload {
+  description?: string | undefined;
+  amount?: MonetaryAmount | undefined;
+  dateIncurred?: string | undefined;
+  expenseType?: ExpenseType | undefined;
+  merchant?: string | null | undefined;
+  fundCampaignId?: string | null | undefined;
+}
+
 export interface ExpenseReport {
   id: string;
   organizationId: string;
