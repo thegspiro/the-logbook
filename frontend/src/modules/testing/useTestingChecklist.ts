@@ -199,7 +199,6 @@ export const useTestingChecklist = ({
 }: UseTestingChecklistOptions = {}): UseTestingChecklist => {
   const [results, setResults] = useState<ChecklistState>({});
   const [otherMarks, setOtherMarks] = useState<Record<string, OtherTesterMark[]>>({});
-  const [testerCount, setTesterCount] = useState(0);
   const [run, setRun] = useState<TestingRun | null>(null);
   // Read inside `update`, which is memoized on `save` alone and would otherwise
   // close over a stale `run`.
@@ -275,7 +274,6 @@ export const useTestingChecklist = ({
       setOtherMarks(others);
       setRun(loaded.run ?? null);
       setRuns(loaded.runs);
-      setTesterCount(loaded.testerCount);
       setLoadError(null);
       setIsModuleDisabled(false);
     } catch (err: unknown) {
@@ -460,6 +458,16 @@ export const useTestingChecklist = ({
 
   const summary = useMemo(() => summarize(results, ALL_TEST_PAGES.length), [results]);
 
+  // Derived from the marks on screen, not held from the last load: the count
+  // the server sent stayed at 0 through the first marks of a run, so "Clear
+  // everyone" offered to delete every mark "from 0 testers" (W77-4). The
+  // server counts distinct authors of the rows it returned, which is this.
+  const testerCount = useMemo(() => {
+    const others = new Set<string | null>();
+    for (const list of Object.values(otherMarks)) for (const mark of list) others.add(mark.userId);
+    return others.size + (Object.keys(results).length > 0 ? 1 : 0);
+  }, [results, otherMarks]);
+
   const gateMarks = useMemo(() => {
     const marks = Object.values(results).map((result) => ({
       status: result.status,
@@ -543,10 +551,20 @@ export const useTestingChecklist = ({
           `- Across ${testerCount} tester${testerCount === 1 ? '' : 's'}: ${coveredByAnyone} of ${summary.total} pages covered`
         );
       }
-      if (gateTally.verified > 0 || gateTally.mismatches > 0) {
-        lines.push(`- Gates: ${gateTally.verified} refusal(s) verified, ${gateTally.mismatches} mismatch(es)`);
+      // The same three counts the screen and the printed report give; the
+      // "to confirm" one was missing here, so the copy pasted into an issue
+      // disagreed with the report it was meant to summarise (W77-3).
+      if (gateTally.verified > 0 || gateTally.mismatches > 0 || gateTally.needsConfirmation > 0) {
+        const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+        lines.push(
+          `- Gates: ${plural(gateTally.verified, 'refusal', 'refusals')} verified, ` +
+            `${plural(gateTally.mismatches, 'mismatch', 'mismatches')}, ` +
+            `${gateTally.needsConfirmation} to confirm`
+        );
       }
-      if (staleCount > 0) lines.push(`- ${staleCount} mark(s) made against an earlier build`);
+      if (staleCount > 0) {
+        lines.push(`- ${staleCount} ${staleCount === 1 ? 'mark' : 'marks'} made against an earlier build`);
+      }
       lines.push('');
 
       if (mismatchedPaths.size > 0) {

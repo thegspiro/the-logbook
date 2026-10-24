@@ -5,11 +5,13 @@ Provides aggregated platform-wide analytics for IT admins:
 user adoption, module usage, operational activity, system health, and content metrics.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from loguru import logger
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
@@ -28,8 +30,59 @@ from app.schemas.platform_analytics import (
     ModuleUsage,
     PlatformAnalyticsResponse,
 )
+from app.services.organization_service import OrganizationService
+from app.utils.org_timezone import resolve_reporting_timezone
 
 router = APIRouter()
+
+
+def _local_midnight_utc(day: date, tz: ZoneInfo) -> datetime:
+    """The UTC instant at which ``day`` begins in the organization's zone."""
+    return datetime.combine(day, time.min, tzinfo=tz).astimezone(timezone.utc)
+
+
+async def _local_daily_counts(
+    db: AsyncSession,
+    column: Any,
+    conditions: list[Any],
+    tz: ZoneInfo,
+    first_day: date,
+    days: int,
+) -> list[DailyCount]:
+    """Count rows per organization-local day, ``first_day`` through today.
+
+    The trends were bucketed by the UTC date of each row and laid out from
+    ``now - N days``, so the last bar was the previous UTC day: everything
+    that happened today was counted in the headline total and missing from
+    the chart beneath it, and an evening in Chicago fell on the next day
+    (W78-1). Rows are grouped by UTC date and hour in SQL and each bucket is
+    moved to the local date here, which is exact for every whole-hour offset.
+    """
+    utc_day = func.date(column)
+    utc_hour = extract("hour", column)
+    result = await db.execute(
+        select(utc_day, utc_hour, func.count())
+        .where(*conditions)
+        .group_by(utc_day, utc_hour)
+    )
+    counts: dict[date, int] = {}
+    for day, hour, count in result.all():
+        if day is None or hour is None:
+            continue
+        day_value = day if isinstance(day, date) else date.fromisoformat(str(day))
+        local_day = (
+            datetime.combine(day_value, time(int(hour)), tzinfo=timezone.utc)
+            .astimezone(tz)
+            .date()
+        )
+        counts[local_day] = counts.get(local_day, 0) + count
+    return [
+        DailyCount(
+            date=(first_day + timedelta(days=i)).isoformat(),
+            count=counts.get(first_day + timedelta(days=i), 0),
+        )
+        for i in range(days)
+    ]
 
 
 @router.get("", response_model=PlatformAnalyticsResponse)
@@ -46,7 +99,15 @@ async def get_platform_analytics(
     org_id = current_user.organization_id
     now = datetime.now(timezone.utc)
     thirty_days_ago = now - timedelta(days=30)
-    seven_days_ago = now - timedelta(days=7)
+    # The two charted windows are whole local days ending today, and the
+    # totals shown above each chart count the same window, so a chart always
+    # adds up to the number printed over it.
+    tz = await resolve_reporting_timezone(db, org_id)
+    today_local = now.astimezone(tz).date()
+    login_first_day = today_local - timedelta(days=29)
+    login_since = _local_midnight_utc(login_first_day, tz)
+    error_first_day = today_local - timedelta(days=6)
+    error_since = _local_midnight_utc(error_first_day, tz)
 
     # ── User Adoption ──
     total_users = 0
@@ -67,7 +128,7 @@ async def get_platform_analytics(
             select(func.count(User.id)).where(
                 User.organization_id == org_id,
                 User.deleted_at.is_(None),
-                User.last_login_at >= thirty_days_ago,
+                User.last_login_at >= login_since,
             )
         )
         active_users = result.scalar() or 0
@@ -81,26 +142,20 @@ async def get_platform_analytics(
         )
         new_users_last_30 = result.scalar() or 0
 
-        # Daily login trend (past 30 days)
-        login_result = await db.execute(
-            select(
-                cast(User.last_login_at, Date).label("login_date"),
-                func.count(User.id),
-            )
-            .where(
+        # Each member is counted once, on the day of their most recent
+        # sign-in: there is no per-sign-in history to chart.
+        login_trend = await _local_daily_counts(
+            db,
+            User.last_login_at,
+            [
                 User.organization_id == org_id,
                 User.deleted_at.is_(None),
-                User.last_login_at >= thirty_days_ago,
-            )
-            .group_by("login_date")
-            .order_by("login_date")
+                User.last_login_at >= login_since,
+            ],
+            tz,
+            login_first_day,
+            30,
         )
-        login_map = {str(row[0]): row[1] for row in login_result.all()}
-
-        # Fill in all 30 days including zeros
-        for i in range(30):
-            day = (thirty_days_ago + timedelta(days=i)).strftime("%Y-%m-%d")
-            login_trend.append(DailyCount(date=day, count=login_map.get(day, 0)))
 
     except Exception as exc:
         logger.warning("platform-analytics: user adoption query failed: {}", exc)
@@ -112,57 +167,71 @@ async def get_platform_analytics(
 
     # ── Module Usage ──
     modules: list[ModuleUsage] = []
-    # Modules are available platform-wide; per-org usage is reflected by
-    # record_count/last_activity below (actual per-org availability lives in the
-    # organization's enabled_modules setting, not a deployment flag).
+    # ``enabled`` is the department's own switch, read the way navigation
+    # reads it. It was a literal True, so a module the department had turned
+    # off was badged "Enabled" here (W78-2).
+    try:
+        enabled_ids = set(
+            (await OrganizationService(db).get_enabled_modules(org_id)).enabled_modules
+        )
+    except Exception as exc:
+        logger.warning("platform-analytics: enabled modules query failed: {}", exc)
+        enabled_ids = set()
     module_configs = [
-        ("Events", True, Event, Event.organization_id, Event.created_at),
+        ("Events", "events", Event, Event.organization_id, Event.created_at),
         (
             "Training",
-            True,
+            "training",
             TrainingRecord,
             TrainingRecord.organization_id,
             TrainingRecord.created_at,
         ),
         (
             "Scheduling",
-            True,
+            "scheduling",
             Shift,
             Shift.organization_id,
             Shift.created_at,
         ),
         (
             "Inventory",
-            True,
+            "inventory",
             InventoryItem,
             InventoryItem.organization_id,
             InventoryItem.created_at,
         ),
         (
             "Meetings",
-            True,
+            "minutes",
             Meeting,
             Meeting.organization_id,
             Meeting.created_at,
         ),
         (
             "Elections",
-            True,
+            "elections",
             Election,
             Election.organization_id,
             Election.created_at,
         ),
-        ("Documents", True, Document, Document.organization_id, Document.created_at),
+        (
+            "Documents",
+            "documents",
+            Document,
+            Document.organization_id,
+            Document.created_at,
+        ),
         (
             "Forms",
-            True,
+            "forms",
             FormSubmission,
             FormSubmission.organization_id,
             FormSubmission.created_at,
         ),
     ]
 
-    for name, enabled, model, org_col, created_col in module_configs:
+    for name, module_id, model, org_col, created_col in module_configs:
+        enabled = module_id in enabled_ids
         try:
             count_result = await db.execute(
                 select(func.count()).select_from(model).where(org_col == org_id)
@@ -257,35 +326,29 @@ async def get_platform_analytics(
         result = await db.execute(
             select(func.count(ErrorLog.id)).where(
                 ErrorLog.organization_id == org_id,
-                ErrorLog.created_at >= seven_days_ago,
+                ErrorLog.created_at >= error_since,
             )
         )
         errors_last_7 = result.scalar() or 0
 
-        # Daily error trend (past 7 days)
-        error_trend_result = await db.execute(
-            select(
-                cast(ErrorLog.created_at, Date).label("error_date"),
-                func.count(ErrorLog.id),
-            )
-            .where(
+        error_trend = await _local_daily_counts(
+            db,
+            ErrorLog.created_at,
+            [
                 ErrorLog.organization_id == org_id,
-                ErrorLog.created_at >= seven_days_ago,
-            )
-            .group_by("error_date")
-            .order_by("error_date")
+                ErrorLog.created_at >= error_since,
+            ],
+            tz,
+            error_first_day,
+            7,
         )
-        error_map = {str(row[0]): row[1] for row in error_trend_result.all()}
-        for i in range(7):
-            day = (seven_days_ago + timedelta(days=i)).strftime("%Y-%m-%d")
-            error_trend.append(DailyCount(date=day, count=error_map.get(day, 0)))
 
         # Top error types
         error_type_result = await db.execute(
             select(ErrorLog.error_type, func.count(ErrorLog.id))
             .where(
                 ErrorLog.organization_id == org_id,
-                ErrorLog.created_at >= seven_days_ago,
+                ErrorLog.created_at >= error_since,
             )
             .group_by(ErrorLog.error_type)
             .order_by(func.count(ErrorLog.id).desc())

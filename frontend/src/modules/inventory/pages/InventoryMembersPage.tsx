@@ -410,7 +410,7 @@ const InventoryMembersPage: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={`/members/${member.user_id}`}
-                        className="text-theme-text-primary text-sm font-semibold hover:underline"
+                        className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-sm font-semibold hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {name}
@@ -512,7 +512,7 @@ const InventoryMembersPage: React.FC = () => {
                                 <div key={it.assignment_id} className="card-secondary p-3">
                                   <Link
                                     to={`/inventory/items/${it.item_id}`}
-                                    className="text-theme-text-primary text-sm font-medium hover:underline"
+                                    className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline"
                                   >
                                     {it.item_name}
                                   </Link>
@@ -542,7 +542,7 @@ const InventoryMembersPage: React.FC = () => {
                                 >
                                   <Link
                                     to={`/inventory/items/${it.item_id}`}
-                                    className="text-theme-text-primary text-sm font-medium hover:underline"
+                                    className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline"
                                   >
                                     {it.item_name}
                                   </Link>
@@ -569,7 +569,7 @@ const InventoryMembersPage: React.FC = () => {
                                 <div key={it.issuance_id} className="card-secondary p-3">
                                   <Link
                                     to={`/inventory/items/${it.item_id}`}
-                                    className="text-theme-text-primary text-sm font-medium hover:underline"
+                                    className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline"
                                   >
                                     {it.item_name}
                                   </Link>

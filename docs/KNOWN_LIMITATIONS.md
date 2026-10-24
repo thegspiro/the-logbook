@@ -6584,6 +6584,58 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
 
+## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23)
+
+Found driving W79 (`docs/workflow-review/W79-phone-pass.md`, W79-10).
+
+- **What happens:** on the inventory administration dashboard the headline
+  tile read "Needs attention 0 · nothing waiting" while the queue directly
+  below it read "Needs attention 1" (a member's pending return).
+- **Why:** two definitions share the name. The tile is the admin frame's
+  `needs_attention` metric (`admin_hub_service._inventory_attention`:
+  exceptions such as PPE past service life and stock below par). The queue is
+  assembled in `InventoryAdminHub.tsx` from work items: pending returns,
+  equipment requests and clearances. CLAUDE.md pitfall 29.
+- **Why it is not simply fixed:** choosing one definition changes a number
+  officers already watch, on a frame the other administration hubs share.
+- **Decision:** what inventory's "Needs attention" counts. Either the
+  backend resolver gains the work items (so the tile and queue are one
+  computation), or the queue is renamed so it does not claim the tile's name.
+
+## Public Portal — Three Statistics Fields Can Be Enabled but Always Publish Null (2026-10-21)
+
+Found driving W76 (`docs/workflow-review/W76-public-portal.md`, W76-6).
+
+- **What happens:** Data Control offers `stats.stations`,
+  `stats.total_volunteer_hours` and `stats.total_calls_ytd`. An administrator
+  can switch each on and the list counts it as enabled, but
+  `GET /api/public/v1/organization/stats` hard-codes all three to `null`, so a
+  department website receives nothing for them (CLAUDE.md pitfall 19).
+- **Why it is not simply fixed:** each needs a definition someone must choose.
+  "Stations" could count facilities of one type or every facility; volunteer
+  hours could come from admin hours, events, shifts or training, approved or
+  not; and calls year-to-date would need choosing which of the call-tracking
+  records count.
+- **Decision:** for each field, either define its source (and wire it), or
+  remove it from the catalogue or mark it "not yet available" in Data Control.
+  Removing a catalogue row also needs a data change for existing
+  installations.
+
+## IP Security — An Admin Can Approve Their Own IP Exception (2026-10-20)
+
+Found driving W74 (`docs/workflow-review/W74-ip-security.md`, W74-5).
+
+- **What happens:** `POST /ip-security/exceptions/{id}/approve` accepts an
+  approval from the member the exception is for. An admin who files a request
+  can approve it at once.
+- **Why it is not simply fixed:** the same admin can already add and remove
+  blocked countries, so self-approval widens little. A department with one
+  IT administrator would also be left unable to approve their own travel
+  exception.
+- **Decision:** whether approval needs a second person
+  (`assert_different_person`, as money approvals use), and if so what a
+  single-admin department does.
+
 ## RPT2-3 — The QR Check-In Analytics Dashboard Has A Reader And No Writer (2026-10-20)
 
 `/events/:id/analytics` (and the admin route) render `GET /analytics/metrics`, which counts

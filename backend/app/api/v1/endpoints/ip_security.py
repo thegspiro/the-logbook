@@ -33,6 +33,7 @@ from app.schemas.ip_security import (
     IPExceptionRevoke,
 )
 from app.services.ip_security_service import ip_security_service
+from app.utils.member_names import format_display_name
 
 router = APIRouter()
 
@@ -159,7 +160,33 @@ async def get_pending_exceptions(
             limit=limit,
             offset=offset,
         )
-        return exceptions
+        return await _with_user_names(
+            db, str(current_user.organization_id), list(exceptions)
+        )
+
+
+async def _with_user_names(
+    db: AsyncSession, organization_id: str, exceptions: list[IPException]
+) -> list[IPExceptionResponse]:
+    """The exceptions as responses, each naming the member it is for."""
+    user_ids = {e.user_id for e in exceptions if e.user_id}
+    names: dict[str, str] = {}
+    if user_ids:
+        rows = await db.execute(
+            select(User.id, User.first_name, User.last_name, User.preferred_name).where(
+                User.id.in_(user_ids), User.organization_id == organization_id
+            )
+        )
+        names = {
+            str(uid): format_display_name(first, last, preferred)
+            for uid, first, last, preferred in rows.all()
+        }
+    return [
+        IPExceptionResponse.model_validate(e).model_copy(
+            update={"user_name": names.get(str(e.user_id))}
+        )
+        for e in exceptions
+    ]
 
 
 # =============================================================================
@@ -204,7 +231,10 @@ async def get_all_exceptions(
         count_result = await db.execute(count_query)
         total = count_result.scalar() or 0
 
-        return IPExceptionListResponse(items=items, total=total)
+        return IPExceptionListResponse(
+            items=await _with_user_names(db, str(current_user.organization_id), items),
+            total=total,
+        )
 
 
 # =============================================================================

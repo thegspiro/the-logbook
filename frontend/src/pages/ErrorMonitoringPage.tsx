@@ -364,7 +364,9 @@ const ErrorMonitoringPage: React.FC = () => {
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         <button
                           type="button"
-                          className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+                          className="touch:min-h-11 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+                          // Every row's button read "View details" alone (W75).
+                          aria-label={`${expandedErrors.has(error.id) ? 'Hide' : 'View'} details of ${error.errorType ?? 'error'} ${error.id?.split('-')[0] ?? ''}`.trim()}
                           aria-expanded={expandedErrors.has(error.id)}
                           aria-controls={`error-details-${error.id}`}
                           onClick={() => toggleDetails(error.id)}
