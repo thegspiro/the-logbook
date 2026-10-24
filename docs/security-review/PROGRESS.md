@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD]** (branch `claude/security-review-reports-analytics-p11`) —
+**PR [#3647](https://github.com/thegspiro/the-logbook/pull/3647)** (branch
+`claude/security-review-reports-analytics-p11`) —
 Feature 29 (Reports & analytics), pass 11 (rotation lap 2). PR #3645
 (Feature 28, Security, audit & IP, pass 9) had already merged with no open
 rotation PR behind it — confirmed via `search_pull_requests`
