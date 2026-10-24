@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #pending** (branch `claude/security-review-messaging-notifications`) —
+**PR [#3638](https://github.com/thegspiro/the-logbook/pull/3638)** (branch
+`claude/security-review-messaging-notifications`) —
 Feature 25 (Messaging & notifications), pass 9, a watchdog pickup. PR #3636
 (Feature 24, Meetings & minutes, pass 9) was found open, CI green on its
 head, `mergeable_state: clean`, no unresolved review comment — merged by
