@@ -39,7 +39,12 @@ export const LotRecallsPanel: React.FC<LotRecallsPanelProps> = ({ canManage, ver
   const load = useCallback(async () => {
     try {
       // Past the cache: a recall just recorded must show at once.
-      setRecalls(await medicalSuppliesService.getRecalls(false, { bypassCache: true }));
+      const value: unknown = await medicalSuppliesService.getRecalls(false, { bypassCache: true });
+      // Checked, as the page checks its own sections: a 200 that is not a
+      // list (a captive portal's HTML, say) must read as a failed load, not
+      // reach .map and take the whole page down through the ErrorBoundary.
+      if (!Array.isArray(value)) throw new Error('The recalled lots service returned an unexpected response.');
+      setRecalls(value as MedicalLotRecall[]);
       setError(null);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Could not load the recalled lots'));

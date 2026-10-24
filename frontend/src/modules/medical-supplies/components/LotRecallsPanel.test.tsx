@@ -71,6 +71,13 @@ describe('LotRecallsPanel', () => {
     expect(mockGetRecalls).toHaveBeenCalledTimes(2);
   });
 
+  it('reports a response that is not a list as a failed load', async () => {
+    mockGetRecalls.mockResolvedValue('<html>Sign in to the station Wi-Fi</html>');
+    renderWithRouter(<LotRecallsPanel canManage version={0} onChanged={vi.fn()} />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('unexpected response');
+  });
+
   it('offers no Lift to a viewer who cannot manage stock', async () => {
     renderWithRouter(<LotRecallsPanel canManage={false} version={0} onChanged={vi.fn()} />);
 
