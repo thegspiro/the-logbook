@@ -471,12 +471,17 @@ export const getInventoryRoutes = () => {
           </ProtectedRoute>
         }
       />
-      {/* inventory.manage alone, compartment tags included: the quartermaster
-          keeps the register of every tag (owner's decision, 2026-10-23). */}
+      {/* The quartermaster sees every tag (owner's decision, 2026-10-23); a
+          checklist manager sees compartment tags only (2026-10-24). The
+          server applies the same limit. */}
       <Route
         path="/inventory/admin/nfc/tags"
         element={
-          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.manage', 'inventory.check_manage']}
+          >
             <Suspense fallback={null}>
               <InventoryNfcRegisterPage />
             </Suspense>

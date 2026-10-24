@@ -269,6 +269,33 @@ class TestBulkStatus:
         assert theirs_now == InventoryNfcTagStatus.ACTIVE
 
 
+class TestBulkStatusByKind:
+    async def test_a_disallowed_kind_is_reported_and_left_alone(
+        self, db_session, register, org, tagged
+    ):
+        updated, failed = await register.bulk_update_status(
+            org,
+            [tagged["item_tag"], tagged["compartment_tag"]],
+            InventoryNfcTagStatus.LOST,
+            ("compartment",),
+        )
+        assert [t["id"] for t in updated] == [tagged["compartment_tag"]]
+        assert failed == [
+            {
+                "id": tagged["item_tag"],
+                "detail": "You do not have permission to manage this tag.",
+            }
+        ]
+        item_status = (
+            await db_session.execute(
+                select(InventoryNfcTag.status).where(
+                    InventoryNfcTag.id == tagged["item_tag"]
+                )
+            )
+        ).scalar_one()
+        assert item_status == InventoryNfcTagStatus.ACTIVE
+
+
 class TestMove:
     async def test_an_item_tag_moves_to_another_item(
         self, db_session, register, org, tagged

@@ -7,7 +7,9 @@
  *  - lost / found reaches the bulk endpoint for one tag and for a selection;
  *  - unlinking asks first;
  *  - a move offers only targets of the tag's own kind and never its current
- *    one, then calls the move endpoint with the matching field.
+ *    one, then calls the move endpoint with the matching field;
+ *  - a checklist manager is shown compartment tags only, with no kind filter
+ *    and no link to the item-enrolment page it cannot open.
  */
 
 import { screen, waitFor, within } from '@testing-library/react';
@@ -17,7 +19,8 @@ import { renderWithRouter } from '../../../test/utils';
 import { InventoryNfcRegisterPage } from './InventoryNfcRegisterPage';
 import type { InventoryNfcRegisterTag } from '../types/nfc';
 
-const { service } = vi.hoisted(() => ({
+const { service, granted } = vi.hoisted(() => ({
+  granted: { permissions: new Set<string>() },
   service: {
     getNfcSettings: vi.fn(),
     getNfcRegister: vi.fn(),
@@ -30,6 +33,10 @@ const { service } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../services/api', () => ({ inventoryService: service }));
+vi.mock('../../../stores/authStore', () => ({
+  useAuthStore: (select: (state: { checkPermission: (p: string) => boolean }) => unknown) =>
+    select({ checkPermission: (p: string) => granted.permissions.has(p) }),
+}));
 vi.mock('../../../components/ux', () => ({ Breadcrumbs: () => null }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -74,6 +81,7 @@ const rowFor = (name: string) => screen.getByRole('row', { name: new RegExp(name
 describe('InventoryNfcRegisterPage', () => {
   beforeEach(() => {
     for (const fn of Object.values(service)) fn.mockReset();
+    granted.permissions = new Set(['inventory.manage']);
     service.getNfcSettings.mockResolvedValue({ enabled: true });
     service.getNfcRegister.mockResolvedValue({ items: TAGS, total: 2 });
     service.bulkUpdateNfcTagStatus.mockResolvedValue({ updated: [TAGS[0]], failed: [] });
@@ -180,5 +188,19 @@ describe('InventoryNfcRegisterPage', () => {
     service.getNfcRegister.mockRejectedValue(new Error('Could not load the tag register.'));
     renderWithRouter(<InventoryNfcRegisterPage />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load the tag register.');
+  });
+
+  it('shows a checklist manager compartment tags only', async () => {
+    granted.permissions = new Set(['inventory.check_manage']);
+    renderWithRouter(<InventoryNfcRegisterPage />);
+
+    await screen.findByText('Cab');
+    expect(service.getNfcRegister).toHaveBeenCalledWith(
+      { kind: 'compartment', status: undefined, search: undefined },
+      50,
+      0
+    );
+    expect(screen.queryByLabelText('Tagged')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Tag items in bulk/ })).not.toBeInTheDocument();
   });
 });

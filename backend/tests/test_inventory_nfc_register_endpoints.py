@@ -104,25 +104,112 @@ class TestPermissionGates:
             ("/nfc-tags/export", "GET"),
             ("/nfc-tags/bulk-status", "POST"),
             ("/nfc-tags/move-targets", "GET"),
+            ("/nfc-tags/{tag_id}/move", "POST"),
         ],
     )
-    def test_the_register_is_the_quartermasters(self, path, method):
-        assert _permission_set(path, method) == {"inventory.manage"}
-
-    def test_a_move_admits_either_manager(self):
-        assert _permission_set("/nfc-tags/{tag_id}/move", "POST") == {
+    def test_the_register_admits_either_manager(self, path, method):
+        # Owner's decision (2026-10-24): checklist managers open the register
+        # too, limited to compartment tags (TestChecklistManager below).
+        assert _permission_set(path, method) == {
             "inventory.manage",
             "inventory.check_manage",
         }
 
-    async def test_a_checklist_builder_cannot_open_the_register(self):
+    async def test_a_viewer_cannot_open_the_register(self):
         with patch(f"{MODULE}.require_inventory_nfc", AsyncMock()):
             response = await _request(
-                _app_for(_user(("inventory.check_manage",))),
+                _app_for(_user(("inventory.view",))),
                 "GET",
                 "/inventory/nfc-tags",
             )
         assert response.status_code == 403
+
+
+class TestChecklistManager:
+    """inventory.check_manage alone reads and changes compartment tags only."""
+
+    CHECKLIST = ("inventory.check_manage",)
+
+    async def _list(self, permissions, query=""):
+        register = MagicMock()
+        register.list_tags = AsyncMock(return_value=([], 0))
+        with patch(f"{MODULE}.require_inventory_nfc", AsyncMock()), patch(
+            f"{MODULE}.InventoryNfcRegisterService", return_value=register
+        ):
+            response = await _request(
+                _app_for(_user(permissions)), "GET", f"/inventory/nfc-tags{query}"
+            )
+        return response, register
+
+    async def test_sees_compartment_tags_only(self):
+        response, register = await self._list(self.CHECKLIST)
+        assert response.status_code == 200
+        assert register.list_tags.await_args.kwargs["kind"] == "compartment"
+
+    @pytest.mark.parametrize("kind", ["item", "storage_area"])
+    async def test_asking_for_another_kind_is_refused(self, kind):
+        response, register = await self._list(self.CHECKLIST, f"?kind={kind}")
+        assert response.status_code == 403
+        register.list_tags.assert_not_awaited()
+
+    async def test_the_quartermaster_still_sees_every_kind(self):
+        response, register = await self._list(("inventory.manage",))
+        assert response.status_code == 200
+        assert register.list_tags.await_args.kwargs["kind"] is None
+
+    async def test_the_export_is_compartment_tags_only(self):
+        register = MagicMock()
+        register.list_tags = AsyncMock(return_value=([], 0))
+        with patch(f"{MODULE}.require_inventory_nfc", AsyncMock()), patch(
+            f"{MODULE}.InventoryNfcRegisterService", return_value=register
+        ), patch(
+            f"{MODULE}.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        ), patch(
+            f"{MODULE}.log_audit_event", AsyncMock()
+        ):
+            response = await _request(
+                _app_for(_user(self.CHECKLIST)), "GET", "/inventory/nfc-tags/export"
+            )
+        assert response.status_code == 200
+        assert register.list_tags.await_args.kwargs["kind"] == "compartment"
+
+    async def test_bulk_changes_are_limited_to_compartment_tags(self):
+        register = MagicMock()
+        register.bulk_update_status = AsyncMock(return_value=([], []))
+        with patch(f"{MODULE}.require_inventory_nfc", AsyncMock()), patch(
+            f"{MODULE}.InventoryNfcRegisterService", return_value=register
+        ):
+            response = await _request(
+                _app_for(_user(self.CHECKLIST)),
+                "POST",
+                "/inventory/nfc-tags/bulk-status",
+                {"tag_ids": ["tag-1"], "status": "lost"},
+            )
+        assert response.status_code == 200
+        register.bulk_update_status.assert_awaited_once_with(
+            "org-1", ["tag-1"], InventoryNfcTagStatus.LOST, ("compartment",)
+        )
+
+    async def test_move_targets_are_compartments_only(self):
+        register = MagicMock()
+        register.move_targets = AsyncMock(return_value=[])
+        with patch(f"{MODULE}.require_inventory_nfc", AsyncMock()), patch(
+            f"{MODULE}.InventoryNfcRegisterService", return_value=register
+        ):
+            refused = await _request(
+                _app_for(_user(self.CHECKLIST)),
+                "GET",
+                "/inventory/nfc-tags/move-targets?kind=item",
+            )
+            allowed = await _request(
+                _app_for(_user(self.CHECKLIST)),
+                "GET",
+                "/inventory/nfc-tags/move-targets?kind=compartment",
+            )
+        assert refused.status_code == 403
+        assert allowed.status_code == 200
+        register.move_targets.assert_awaited_once_with("org-1", "compartment", None)
 
 
 class TestRegisterList:
@@ -227,7 +314,10 @@ class TestBulkStatus:
         assert [t["id"] for t in body["updated"]] == ["tag-1"]
         assert body["failed"] == [{"id": "tag-9", "detail": "NFC tag not found"}]
         register.bulk_update_status.assert_awaited_once_with(
-            "org-1", ["tag-1", "tag-9"], InventoryNfcTagStatus.LOST
+            "org-1",
+            ["tag-1", "tag-9"],
+            InventoryNfcTagStatus.LOST,
+            ("item", "storage_area", "compartment"),
         )
         audit.assert_awaited_once()
         assert audit.await_args.kwargs["event_data"]["bulk"] is True

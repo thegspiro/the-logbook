@@ -9,7 +9,10 @@
  *
  * Compartment tags are here too, by the owner's decision: the quartermaster
  * keeps the register of every tag, though a checklist builder still links them
- * from the checklist. Items without a tag are on the Tag Items in Bulk page.
+ * from the checklist. A checklist manager without `inventory.manage` opens the
+ * same page limited to compartment tags; the server applies that limit, and
+ * this page only stops offering what it would refuse. Items without a tag are
+ * on the Tag Items in Bulk page.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,6 +22,7 @@ import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useAuthStore } from '../../../stores/authStore';
 import { Breadcrumbs } from '../../../components/ux';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Pagination } from '../../../components/ux/Pagination';
@@ -55,6 +59,8 @@ export const InventoryNfcRegisterPage: React.FC = () => {
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const { enabled, loading: loadingSwitch } = useInventoryNfcEnabled();
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const seesEveryKind = checkPermission('inventory.manage');
 
   const [kind, setKind] = useState<InventoryNfcTagKind | ''>('');
   const [status, setStatus] = useState<InventoryNfcTagStatus | ''>('');
@@ -75,11 +81,11 @@ export const InventoryNfcRegisterPage: React.FC = () => {
 
   const filters = useCallback(
     (): InventoryNfcRegisterFilters => ({
-      kind: kind || undefined,
+      kind: seesEveryKind ? kind || undefined : InventoryNfcTagKind.COMPARTMENT,
       status: status || undefined,
       search: search.trim() || undefined,
     }),
-    [kind, status, search]
+    [kind, status, search, seesEveryKind]
   );
 
   useEffect(() => {
@@ -212,11 +218,13 @@ export const InventoryNfcRegisterPage: React.FC = () => {
             <Nfc className="h-5 w-5" aria-hidden="true" /> NFC Tag Register
           </h1>
           <p className="text-theme-text-secondary mt-1 text-sm">
-            Every NFC tag on an item, a storage area or a checklist compartment. Mark tags lost or found, move one
-            linked to the wrong thing, or unlink one to reuse it.
+            {seesEveryKind
+              ? 'Every NFC tag on an item, a storage area or a checklist compartment.'
+              : 'Every NFC tag on a checklist compartment. Item and shelf tags are the quartermaster’s.'}{' '}
+            Mark tags lost or found, move one linked to the wrong place, or unlink one to reuse it.
           </p>
         </div>
-        {enabled && (
+        {enabled && seesEveryKind && (
           <Link to="/inventory/admin/nfc/enroll" className="btn-secondary btn-auto inline-flex items-center gap-2">
             <Tags className="h-4 w-4" aria-hidden="true" /> Tag items in bulk
           </Link>
@@ -234,22 +242,24 @@ export const InventoryNfcRegisterPage: React.FC = () => {
       ) : (
         <>
           <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <label htmlFor="nfc-register-kind" className="form-label">
-                Tagged
-              </label>
-              <select
-                id="nfc-register-kind"
-                className="form-input"
-                value={kind}
-                onChange={(e) => setKind(e.target.value as InventoryNfcTagKind | '')}
-              >
-                <option value="">Everything</option>
-                <option value={InventoryNfcTagKind.ITEM}>Items</option>
-                <option value={InventoryNfcTagKind.STORAGE_AREA}>Storage areas</option>
-                <option value={InventoryNfcTagKind.COMPARTMENT}>Compartments</option>
-              </select>
-            </div>
+            {seesEveryKind && (
+              <div>
+                <label htmlFor="nfc-register-kind" className="form-label">
+                  Tagged
+                </label>
+                <select
+                  id="nfc-register-kind"
+                  className="form-input"
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as InventoryNfcTagKind | '')}
+                >
+                  <option value="">Everything</option>
+                  <option value={InventoryNfcTagKind.ITEM}>Items</option>
+                  <option value={InventoryNfcTagKind.STORAGE_AREA}>Storage areas</option>
+                  <option value={InventoryNfcTagKind.COMPARTMENT}>Compartments</option>
+                </select>
+              </div>
+            )}
             <div>
               <label htmlFor="nfc-register-status" className="form-label">
                 Status

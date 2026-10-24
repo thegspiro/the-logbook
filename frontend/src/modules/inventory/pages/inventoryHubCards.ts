@@ -535,7 +535,8 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     icon: Nfc,
     section: 'Setup & Tools',
     tone: 'indigo',
-    permission: 'inventory.manage',
+    // A checklist manager opens it too, for compartment tags only.
+    anyPermission: ['inventory.manage', 'inventory.check_manage'],
     requiresModule: 'inventory',
   },
   {

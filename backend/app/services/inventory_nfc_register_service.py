@@ -272,15 +272,30 @@ class InventoryNfcRegisterService:
         organization_id: str,
         tag_ids: Sequence[str],
         status: InventoryNfcTagStatus,
+        allowed_kinds: Sequence[str] = TAG_KINDS,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
         """Mark many tags lost or found, tag by tag.
 
-        An id that is not this organization's is reported under ``failed`` and
-        skipped; the rest still change.
+        An id that is not this organization's, or a tag whose kind is not in
+        ``allowed_kinds`` (a checklist manager selecting an item tag), is
+        reported under ``failed`` and skipped; the rest still change.
         """
         updated: List[Dict[str, Any]] = []
         failed: List[Dict[str, str]] = []
         for tag_id in dict.fromkeys(str(t) for t in tag_ids):
+            try:
+                current = await self._tags.get_tag(tag_id, str(organization_id))
+            except LookupError as e:
+                failed.append({"id": tag_id, "detail": str(e)})
+                continue
+            if tag_kind(current) not in allowed_kinds:
+                failed.append(
+                    {
+                        "id": tag_id,
+                        "detail": "You do not have permission to manage this tag.",
+                    }
+                )
+                continue
             try:
                 tag = await self._tags.update_tag(
                     tag_id, str(organization_id), {"status": status}

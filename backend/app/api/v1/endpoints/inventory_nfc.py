@@ -22,7 +22,8 @@ routes asks for ``inventory.check_manage`` or ``inventory.manage`` when the tag
 is on a compartment, and ``inventory.manage`` otherwise: the quartermaster runs
 the department-wide tag register (``GET /nfc-tags``, its export and bulk
 lost/found), which covers every kind of tag, by the owner's decision
-(2026-10-23). Resolving a tap during a check
+(2026-10-23). A checklist manager opens the same register limited to
+compartment tags (owner's decision, 2026-10-24). Resolving a tap during a check
 (``/nfc/resolve-check``) is for whoever may perform that template's check —
 ``inventory.check_submit`` limited to their assigned templates, as the check
 form itself is, or ``inventory.check_manage``.
@@ -97,6 +98,7 @@ from app.services.inventory_audit_schedule_service import (
 )
 from app.services.inventory_nfc_register_service import (
     MAX_EXPORT_ROWS,
+    TAG_KINDS,
     InventoryNfcRegisterService,
 )
 from app.services.inventory_nfc_service import (
@@ -598,6 +600,29 @@ async def link_item_nfc_tag(
 
 _TagKind = Literal["item", "storage_area", "compartment"]
 
+
+_REGISTER_PERMISSIONS = ("inventory.manage", "inventory.check_manage")
+
+
+def _register_kinds(user: User, requested: Optional[_TagKind]) -> Optional[_TagKind]:
+    """The kind filter a register read may use.
+
+    The quartermaster (``inventory.manage``) reads every kind. A checklist
+    manager (``inventory.check_manage`` alone) reads compartment tags only, the
+    ones ``_require_tag_manager`` lets them change; asking for another kind is
+    a 403 rather than an empty list, so the screen cannot mistake "not yours"
+    for "none".
+    """
+    if user_has_permission(user, "inventory.manage"):
+        return requested
+    if requested not in (None, "compartment"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can see compartment tags only.",
+        )
+    return "compartment"
+
+
 _KIND_LABELS = {
     "item": "Item",
     "storage_area": "Storage area",
@@ -613,14 +638,15 @@ async def list_inventory_nfc_register(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.manage")),
+    current_user: User = Depends(require_permission(*_REGISTER_PERMISSIONS)),
 ):
-    """Every tag in the department — items, storage areas and compartments."""
+    """Every tag in the department — items, storage areas and compartments —
+    or, for a checklist manager, its compartment tags."""
     org_id = str(current_user.organization_id)
     await require_inventory_nfc(db, org_id)
     items, total = await InventoryNfcRegisterService(db).list_tags(
         org_id,
-        kind=kind,
+        kind=_register_kinds(current_user, kind),
         status=tag_status,
         search=search,
         limit=limit,
@@ -635,7 +661,7 @@ async def export_inventory_nfc_register(
     tag_status: Optional[InventoryNfcTagStatus] = Query(None, alias="status"),
     search: Optional[str] = Query(None, max_length=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.manage")),
+    current_user: User = Depends(require_permission(*_REGISTER_PERMISSIONS)),
 ):
     """The filtered register as a CSV, capped at ``MAX_EXPORT_ROWS``.
 
@@ -643,6 +669,7 @@ async def export_inventory_nfc_register(
     """
     org_id = str(current_user.organization_id)
     await require_inventory_nfc(db, org_id)
+    kind = _register_kinds(current_user, kind)
     items, total = await InventoryNfcRegisterService(db).list_tags(
         org_id,
         kind=kind,
@@ -714,12 +741,15 @@ async def list_inventory_nfc_move_targets(
     kind: _TagKind = Query(...),
     search: Optional[str] = Query(None, max_length=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.manage")),
+    current_user: User = Depends(require_permission(*_REGISTER_PERMISSIONS)),
 ):
     """Items, storage areas or compartments a register tag could move to."""
     org_id = str(current_user.organization_id)
     await require_inventory_nfc(db, org_id)
-    items = await InventoryNfcRegisterService(db).move_targets(org_id, kind, search)
+    target_kind = _register_kinds(current_user, kind)
+    items = await InventoryNfcRegisterService(db).move_targets(
+        org_id, target_kind or kind, search
+    )
     return {"items": items}
 
 
@@ -727,18 +757,23 @@ async def list_inventory_nfc_move_targets(
 async def bulk_update_inventory_nfc_tag_status(
     data: InventoryNfcTagBulkStatusRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.manage")),
+    current_user: User = Depends(require_permission(*_REGISTER_PERMISSIONS)),
 ):
     """Mark several tags lost or found at once — after a bay clean-out turns up
     a pile of peeled-off tags, or a shelf of them goes missing.
 
-    Ids that are not this department's come back under ``failed`` and the rest
-    still change.
+    Ids that are not this department's, and for a checklist manager tags not on
+    a compartment, come back under ``failed``; the rest still change.
     """
     org_id = str(current_user.organization_id)
     await require_inventory_nfc(db, org_id)
+    allowed = (
+        TAG_KINDS
+        if user_has_permission(current_user, "inventory.manage")
+        else ("compartment",)
+    )
     updated, failed = await InventoryNfcRegisterService(db).bulk_update_status(
-        org_id, data.tag_ids, data.status
+        org_id, data.tag_ids, data.status, allowed
     )
     for tag in updated:
         await log_audit_event(

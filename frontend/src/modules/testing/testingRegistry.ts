@@ -601,7 +601,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/inventory/admin/nfc/tags',
         label: 'NFC tag register',
-        permission: 'inventory.manage',
+        anyPermission: ['inventory.manage', 'inventory.check_manage'],
         module: 'inventory',
       },
       {
