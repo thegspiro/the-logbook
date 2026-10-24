@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #PENDING** (branch
+`claude/security-review-security-audit-ip`) — Feature 28
+(Security, audit & IP), pass 9, a watchdog pickup. PR #3641 (Feature 27,
+Integrations, pass 9) had already merged with no open rotation PR behind
+it — confirmed via `list_pull_requests` (state=open) and
+`search_pull_requests` (`head:claude/security-review-`, both empty)
+immediately before starting, and after a fresh `git fetch origin` found no
+`claude/security-review-security-audit-ip` branch already pushed — and row
+28 (Security, audit & IP) was confirmed the next `⬜` row. **0 fixed, 0 new
+findings** — this is the most heavily pre-audited feature in the rotation
+(8 prior passes); the real delta since pass 8 was one feature commit
+(`require_stepup` added to seven mutating/export routes — audit rehash and
+export, IP-exception approve/revoke, country-block add/remove, error-log
+export — all correctly ordered after their existing permission check) plus
+an IP-exception-revocation cache-invalidation fix, both read in full and
+verified good. Route count re-enumerated by AST at the same 37 as pass 8;
+no new endpoint. The two items prior passes left open — a LOW TOCTOU race
+on duplicate IP-exception requests, and three detector functions with zero
+production callers — were re-verified still open; a no-migration lock-based
+fix for the TOCTOU race was considered this pass and rejected as introducing
+unmeasured contention on a high-traffic row, consistent with this feature's
+own SEC2-28-10 precedent for not locking a shared resource from inside a
+review pass.
+
+Full writeup: `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**Pass 9** section.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3641, Feature 27, Integrations, pass 9, merged), preserved for history</summary>
+
 **PR [#3641](https://github.com/thegspiro/the-logbook/pull/3641)** (branch
 `claude/security-review-integrations`) — Feature 27
 (Integrations), pass 9, a watchdog pickup. PR #3640 (Feature 26, Forms, pass 9) had already merged with no open rotation PR behind it — confirmed via
@@ -38,6 +72,8 @@ section.
 
 Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
 IP) — re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3640, Feature 26, Forms, pass 9, merged), preserved for history</summary>
@@ -21243,7 +21279,7 @@ this iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -37797,3 +37833,76 @@ suite (`npx vitest run src/modules/grants-fundraising`) — 112 passed
 Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
 supplies) — re-check `search_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-10-24 — Feature 28 (Security, audit & IP, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup: `list_pull_requests` (state=open) and `search_pull_requests`
+(`head:claude/security-review-`, state=open) both returned no rotation PR
+immediately before starting — PR #3641 (Feature 27, Integrations, pass 9)
+had already merged (`09b18569`) with no next-feature PR open. Row 28
+(Security, audit & IP) was confirmed the next `⬜` row on a freshly fetched
+`main`. Re-checked again immediately before pushing: `git fetch origin`
+surfaced no `claude/security-review-security-audit-ip` branch and no new
+rotation PR, so no concurrent session was already on this feature.
+
+Baseline `458f6ffd` (PR #3475's merge, pass 8). This is the most
+heavily pre-audited feature in the rotation (8 prior passes, 11 numbered
+findings, all but two already FIXED/RESOLVED). Diffed this doc's nine
+backend files, the four frontend surfaces, and `security_weekly_report.py`
+directly against the pass-8 merge commit through current `main` (not
+`git log --since=<date>`, which this repo's squash-merge history has made
+unreliable in prior passes) and found one real feature commit,
+`8b0ba129` ("Require MFA of privileged members and step-up before
+sensitive actions"), plus the IP-exception-revocation half of `94c8d82d`
+(whose own review sits under Feature 27). Both read in full: `require_stepup`
+added to seven of this feature's routes (audit rehash/export,
+IP-exception approve/revoke, country-block add/remove, error-log export),
+always ordered after the existing `require_permission` dependency and
+fail-closed on a missing/stale re-verification; and `revoke_exception` now
+clears the edge middleware's bounded, TTL'd allowlist-exception cache on
+every worker (direct clear + a best-effort Redis pub/sub fan-out) instead
+of leaving a just-revoked address able to pass the country block for up to
+60 seconds. Both verified good, no new finding. Four frontend touches
+(two button-contrast tweaks, an accessible expand control on the audit log
+table, a form-label association) are cosmetic/accessibility-only.
+
+Re-enumerated every route by AST (not grep, not the prior pass's table):
+37/37 unchanged from pass 8, every one still carrying a real auth
+dependency with the same permission string. Re-verified both items pass 8
+left open are still open and unchanged: **SEC2-28-6** (LOW — a TOCTOU race
+in the duplicate-IP-exception-request check; considered and rejected a
+no-migration row-lock fix this pass, since it would add contention to a
+high-traffic `User` row with no load-testing, the same reasoning this
+feature's own SEC2-28-10 finding already established for not locking a
+shared resource from inside a review pass) and the **dead-detector-code**
+note (pass 3 — three pattern-matching functions in
+`services/security_monitoring.py` with zero production callers). Both
+still need their respective product decisions, not a drive-by fix. Also
+directly re-confirmed, per this watchdog run's own brief: no route in
+`audit_logs.py` can modify or delete a row; `BlockedAccessAttempt` carries
+no `organization_id` (deliberately platform-wide, matching this feature's
+established no-platform-admin-role pattern); the two in-memory tracking
+caches (`_exception_cache`, `security_monitoring.py`'s
+`_MAX_TRACKING_KEYS`) are both still bounded; and `audit_ship_service.py`'s
+payload (`AuditLogger.serialize_row`) carries no credential or signing-key
+material and no `session_id`, with the one PII-shaped field
+(`event_data`) already covered by the cross-cutting baseline's own sweep
+rather than re-derived here.
+
+Full writeup: `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**Pass 9** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.3.0/26.5.1/9.0.1) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 650 revisions, single head `a8c3b50b6d9b`; scoped backend tests
+(`-k "audit or audit_ship or error_log or ip_security or privilege_ceiling
+or security_middleware or security_monitoring or suspicious_ip or
+w50_audit_username or signing_key_cutover or security_alert_workflow or
+ip_allowlist_middleware or ip_exception_lookup_db or task_error_reporting or
+integration_dns_pinning or audit_chain_sealing or mfa_policy"`) — 758
+passed, 1 pre-existing skip (`pywebpush`); frontend `npm run typecheck`
+clean; `npm run lint` clean.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `search_pull_requests` fresh rather than trusting
+this note.
