@@ -275,7 +275,7 @@ export const RequestsTab: React.FC = () => {
               setActiveView('swaps');
               void loadData();
             }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'swaps' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            className={`touch:min-h-11 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'swaps' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             <ArrowLeftRight className="h-4 w-4" /> <span className="hidden sm:inline">Swap Requests</span>
             <span className="sm:hidden">Swaps</span> ({swapTotal})
@@ -288,7 +288,7 @@ export const RequestsTab: React.FC = () => {
               setActiveView('timeoff');
               void loadData();
             }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'timeoff' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            className={`touch:min-h-11 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'timeoff' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             <CalendarOff className="h-4 w-4" /> Time Off ({timeOffTotal})
           </button>
@@ -420,7 +420,7 @@ export const RequestsTab: React.FC = () => {
                                   void handleQuickReview('swap', req.id, 'approved');
                                 }}
                                 disabled={quickReviewing === req.id}
-                                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                                className="touch:min-h-11 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
                                 aria-label={`Approve swap for ${req.requesting_user_name || req.user_name || 'member'}`}
                               >
                                 <Check className="h-3.5 w-3.5" /> Approve
@@ -431,7 +431,7 @@ export const RequestsTab: React.FC = () => {
                                 void handleQuickReview('swap', req.id, 'denied');
                               }}
                               disabled={quickReviewing === req.id}
-                              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                              className="touch:min-h-11 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                               aria-label={`Deny swap for ${req.requesting_user_name || req.user_name || 'member'}`}
                             >
                               <X className="h-3.5 w-3.5" /> Deny
@@ -441,8 +441,8 @@ export const RequestsTab: React.FC = () => {
                                 setReviewing({ type: 'swap', id: req.id });
                                 setReviewNotes('');
                               }}
-                              className="text-theme-text-muted hover:text-theme-text-primary rounded-lg px-2 py-1.5 text-[10px] transition-colors"
-                              aria-label="Review with notes"
+                              className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 rounded-lg px-2 py-1.5 text-[10px] transition-colors"
+                              aria-label={`Review the swap for ${req.requesting_user_name || req.user_name || 'member'} with notes`}
                               title="Add reviewer notes"
                             >
                               + Notes
@@ -454,7 +454,7 @@ export const RequestsTab: React.FC = () => {
                           confirmingCancel?.id !== req.id && (
                             <button
                               onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
-                              className="text-theme-text-muted flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+                              className="text-theme-text-muted touch:min-h-11 touch:min-w-11 flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
                               aria-label="Cancel swap request"
                             >
                               <X className="h-4 w-4" />
@@ -547,7 +547,7 @@ export const RequestsTab: React.FC = () => {
                             void handleQuickReview('timeoff', req.id, 'approved');
                           }}
                           disabled={quickReviewing === req.id}
-                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                          className="touch:min-h-11 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
                           aria-label={`Approve time off for ${req.user_name || 'member'}`}
                         >
                           <Check className="h-3.5 w-3.5" /> Approve
@@ -557,7 +557,7 @@ export const RequestsTab: React.FC = () => {
                             void handleQuickReview('timeoff', req.id, 'denied');
                           }}
                           disabled={quickReviewing === req.id}
-                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                          className="touch:min-h-11 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                           aria-label={`Deny time off for ${req.user_name || 'member'}`}
                         >
                           <X className="h-3.5 w-3.5" /> Deny
@@ -567,8 +567,8 @@ export const RequestsTab: React.FC = () => {
                             setReviewing({ type: 'timeoff', id: req.id });
                             setReviewNotes('');
                           }}
-                          className="text-theme-text-muted hover:text-theme-text-primary rounded-lg px-2 py-1.5 text-[10px] transition-colors"
-                          aria-label="Review with notes"
+                          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 rounded-lg px-2 py-1.5 text-[10px] transition-colors"
+                          aria-label={`Review the time off for ${req.user_name || 'member'} with notes`}
                           title="Add reviewer notes"
                         >
                           + Notes
@@ -580,7 +580,7 @@ export const RequestsTab: React.FC = () => {
                       confirmingCancel?.id !== req.id && (
                         <button
                           onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
-                          className="text-theme-text-muted flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+                          className="text-theme-text-muted touch:min-h-11 touch:min-w-11 flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
                           aria-label="Cancel time-off request"
                         >
                           <X className="h-4 w-4" />

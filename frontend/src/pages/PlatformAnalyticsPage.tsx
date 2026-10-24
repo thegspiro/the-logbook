@@ -16,7 +16,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { platformAnalyticsService } from '../services/api';
-import { formatTime, formatDate, formatNumber, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatTime, formatDate, formatCalendarDate, formatNumber, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { PlatformAnalytics, DailyCount, ModuleUsage } from '../types/platformAnalytics';
 
@@ -169,8 +169,8 @@ const PlatformAnalyticsPage: React.FC = () => {
       {/* Login Trend Chart */}
       {(data.loginTrend?.length ?? 0) > 0 && (
         <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
-          <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Daily Login Activity (30 Days)</h3>
-          <BarChart data={data.loginTrend} color="blue" />
+          <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Latest Sign-In by Day (30 Days)</h3>
+          <BarChart data={data.loginTrend} color="blue" label="Members by day of their latest sign-in" />
         </div>
       )}
 
@@ -218,7 +218,7 @@ const PlatformAnalyticsPage: React.FC = () => {
         <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs lg:col-span-2">
           <h3 className="text-theme-text-muted mb-3 text-sm font-medium">Error Trend (7 Days)</h3>
           {(data.errorTrend?.length ?? 0) > 0 ? (
-            <BarChart data={data.errorTrend} color="red" />
+            <BarChart data={data.errorTrend} color="red" label="Errors per day" />
           ) : (
             <p className="text-theme-text-muted text-sm">No error data</p>
           )}
@@ -338,6 +338,8 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
 interface BarChartProps {
   data: DailyCount[];
   color: 'blue' | 'red' | 'green';
+  /** What one bar counts; read out with every non-zero day. */
+  label: string;
 }
 
 const barColors = {
@@ -346,13 +348,26 @@ const barColors = {
   green: { bar: 'bg-green-600', hover: 'hover:bg-green-700' },
 } as const;
 
-const BarChart: React.FC<BarChartProps> = ({ data, color }) => {
+const BarChart: React.FC<BarChartProps> = ({ data, color, label }) => {
   const maxCount = Math.max(...data.map((d) => d.count), 1);
   const colors = barColors[color];
+  const busyDays = data.filter((d) => d.count > 0);
+  const summary =
+    busyDays.length === 0
+      ? `${label}: none in this period`
+      : `${label}: ${busyDays.map((d) => `${formatCalendarDate(d.date, { month: 'short', day: 'numeric' })} ${d.count}`).join(', ')}`;
 
   return (
-    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Daily activity chart">
-      <div className="flex h-32 min-w-full items-end justify-between gap-1">
+    // Focusable so a keyboard can scroll a chart wider than a phone; named
+    // after the chart, since the page holds two.
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={label} data-mobile-scroll-region>
+      {/* The bar's percentage height needs a parent with a height of its own.
+          The column it sat in was sized by its content, so every bar
+          resolved to 0px and both charts drew nothing (W78-3); the column now
+          fills the row and the bar sits in a flex-1 track. The count is
+          printed over the bar because a `title` tooltip is out of reach on a
+          phone and to a screen reader, which reads the summary instead. */}
+      <div role="img" aria-label={summary} className="flex h-32 min-w-full items-end justify-between gap-1">
         {data.map(({ date, count }) => {
           const heightPercent = (count / maxCount) * 100;
           // Show only day portion of date (DD)
@@ -361,12 +376,15 @@ const BarChart: React.FC<BarChartProps> = ({ data, color }) => {
           return (
             // Keep bars at a legible minimum width on phones (the row scrolls
             // horizontally) while still growing to fill wide screens.
-            <div key={date} className="flex min-w-[20px] flex-1 flex-col items-center">
-              <div
-                className={`w-full ${colors.bar} ${colors.hover} cursor-pointer rounded-t transition-all`}
-                style={{ height: `${Math.max(heightPercent, count > 0 ? 2 : 0)}%` }}
-                title={`${date}: ${count}`}
-              />
+            <div key={date} className="flex h-full min-w-[20px] flex-1 flex-col items-center" aria-hidden="true">
+              <div className="text-theme-text-secondary h-4 text-[10px] leading-4">{count > 0 ? count : ''}</div>
+              <div className="flex w-full flex-1 items-end">
+                <div
+                  className={`w-full ${colors.bar} ${colors.hover} rounded-t transition-all`}
+                  style={{ height: `${Math.max(heightPercent, count > 0 ? 2 : 0)}%` }}
+                  title={`${date}: ${count}`}
+                />
+              </div>
               <div className="text-theme-text-muted mt-1 w-full truncate text-center text-[10px]">{dayLabel}</div>
             </div>
           );

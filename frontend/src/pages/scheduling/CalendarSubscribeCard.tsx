@@ -67,7 +67,7 @@ export const CalendarSubscribeCard: React.FC = () => {
         onClick={() => {
           void handleOpen();
         }}
-        className="flex w-full items-center gap-2 text-left"
+        className="touch:min-h-11 flex w-full items-center gap-2 text-left"
         aria-expanded={open}
       >
         <CalendarPlus className="h-4 w-4 shrink-0 text-violet-500" />
