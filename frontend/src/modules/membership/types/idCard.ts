@@ -180,3 +180,28 @@ export interface NfcCardTapFilters {
 export interface NfcIdCardSettings {
   tapRetentionMonths: number;
 }
+
+/** One room on the Card Readers page. Counts are kiosk taps over `NfcReaderList.days`. */
+export interface NfcReaderRoom {
+  locationId: string;
+  name: string;
+  building?: string | null;
+  roomNumber?: string | null;
+  readerEnabled: boolean;
+  taps: number;
+  refusals: number;
+  lastTapAt?: string | null;
+}
+
+/**
+ * Rooms and their readers, plus what this viewer may do: `canSwitch` mirrors
+ * the grant the badge-check-in switch enforces, `canSeeMembers` whether room
+ * tap lists will name members.
+ */
+export interface NfcReaderList {
+  items: NfcReaderRoom[];
+  days: number;
+  cardsEnabled: boolean;
+  canSwitch: boolean;
+  canSeeMembers: boolean;
+}

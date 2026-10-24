@@ -727,6 +727,15 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },
+  {
+    path: '/locations/card-readers',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['locations.manage'],
+    // The catch-all `{}` mock is a malformed 200; the page must show its own
+    // load error, not the ErrorBoundary.
+    expectText: 'Unable to load card readers',
+  },
   { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/facilities/settings', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/governance/org-chart', maxSmallTargets: 0, maxTinyText: 0 },

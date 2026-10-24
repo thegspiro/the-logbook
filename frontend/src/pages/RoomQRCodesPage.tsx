@@ -378,6 +378,9 @@ export default function RoomQRCodesPage() {
   // the code: leadership and the Facilities Manager tag rooms, leadership and
   // the Apparatus Officer tag apparatus.
   const canWriteRoomTags = checkPermission('locations.manage_nfc_tags');
+  // Mirrors the Card Readers route; an apparatus-only viewer here is not offered it.
+  const canViewReaders =
+    canWriteRoomTags || checkPermission('locations.manage') || checkPermission('facilities.manage');
   const canWriteApparatusTags = checkPermission('apparatus.manage_nfc_tags');
   // The switch is offered only where it can work: a room's kiosk reads cards
   // only while the NFC ID Cards integration is connected, and the server
@@ -534,12 +537,19 @@ export default function RoomQRCodesPage() {
                 : 'Full-page signs, one code per printed page — post them on doors and dashboards.'}
             </p>
           </div>
-          <button
-            onClick={() => window.print()}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start py-2.5 sm:self-auto"
-          >
-            <Printer className="h-4 w-4" aria-hidden="true" /> Print All
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+            {canViewReaders && (
+              <Link
+                to="/locations/card-readers"
+                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+              >
+                <Nfc className="h-4 w-4" aria-hidden="true" /> Card Readers
+              </Link>
+            )}
+            <button onClick={() => window.print()} className="btn-primary flex items-center gap-2 py-2.5">
+              <Printer className="h-4 w-4" aria-hidden="true" /> Print All
+            </button>
+          </div>
         </div>
 
         {/* Search + layout toggle */}

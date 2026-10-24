@@ -379,6 +379,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/locations/card-readers',
+    source: 'src/modules/facilities/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/locations/:locationId/check-in',
     source: 'src/modules/facilities/routes.tsx',
     coverage: 'exempt',

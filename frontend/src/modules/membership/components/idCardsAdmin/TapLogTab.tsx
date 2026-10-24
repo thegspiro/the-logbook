@@ -9,22 +9,17 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import { AlertTriangle, Download, History, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../../../../components/ux/EmptyState';
 import { Pagination } from '../../../../components/ux/Pagination';
 import { useTimezone } from '../../../../hooks/useTimezone';
-import { addCalendarDays, formatDateTime, localToUTC } from '../../../../utils/dateFormatting';
+import { addCalendarDays, localToUTC } from '../../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../../utils/errorHandling';
 import { saveBlob } from '../../../../utils/saveBlob';
 import { NfcCheckInStatus, NfcTapSource } from '../../../../constants/enums';
-import {
-  NFC_TAP_OUTCOME_LABELS,
-  NFC_TAP_SOURCE_LABELS,
-  NFC_TAP_TONE_COLORS,
-  checkInResultTone,
-} from '../../constants/idCards';
+import { NFC_TAP_OUTCOME_LABELS, NFC_TAP_SOURCE_LABELS } from '../../constants/idCards';
+import { CardTapTable } from '../CardTapTable';
 import { nfcCardService } from '../../services/nfcCardService';
 import type { NfcCardTap, NfcCardTapFilters } from '../../types/idCard';
 
@@ -105,12 +100,6 @@ export const TapLogTab: React.FC<TapLogTabProps> = ({ scope, onClearScope }) => 
     } finally {
       setExporting(false);
     }
-  };
-
-  const cardText = (tap: NfcCardTap): string => {
-    if (tap.cardUidPreview) return `${tap.cardLabel || 'ID card'} …${tap.cardUidPreview}`;
-    if (tap.unknownCardKey) return `Unknown card ${tap.unknownCardKey}`;
-    return '—';
   };
 
   return (
@@ -229,52 +218,7 @@ export const TapLogTab: React.FC<TapLogTabProps> = ({ scope, onClearScope }) => 
 
       {taps.length > 0 && (
         <div className="card overflow-hidden">
-          <table className="rwd-table w-full text-sm">
-            <thead>
-              <tr className="text-theme-text-secondary text-left">
-                <th className="p-3">Time</th>
-                <th className="p-3">Outcome</th>
-                <th className="p-3">Member</th>
-                <th className="p-3">Card</th>
-                <th className="p-3">Where</th>
-                <th className="p-3">Checked into</th>
-              </tr>
-            </thead>
-            <tbody className="divide-theme-surface-border divide-y">
-              {taps.map((tap) => (
-                <tr key={tap.id}>
-                  <td className="text-theme-text-secondary p-3 whitespace-nowrap" data-label="Time">
-                    {formatDateTime(tap.tappedAt, tz)}
-                  </td>
-                  <td className="p-3" data-label="Outcome">
-                    <span className={`badge ${NFC_TAP_TONE_COLORS[checkInResultTone(tap.outcome)]}`}>
-                      {NFC_TAP_OUTCOME_LABELS[tap.outcome]}
-                    </span>
-                  </td>
-                  <td className="p-3" data-label="Member">
-                    {tap.userId && tap.memberName ? (
-                      <Link to={`/members/${tap.userId}`} className="text-theme-text-primary hover:underline">
-                        {tap.memberName}
-                      </Link>
-                    ) : (
-                      <span className="text-theme-text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="text-theme-text-secondary p-3" data-label="Card">
-                    <span className="font-mono">{cardText(tap)}</span>
-                  </td>
-                  <td className="text-theme-text-secondary p-3" data-label="Where">
-                    {NFC_TAP_SOURCE_LABELS[tap.source]}
-                    {tap.locationName ? ` · ${tap.locationName}` : ''}
-                    {tap.operatorName ? ` · run by ${tap.operatorName}` : ''}
-                  </td>
-                  <td className="text-theme-text-secondary p-3" data-label="Checked into">
-                    {tap.targetName || '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <CardTapTable taps={taps} tz={tz} />
         </div>
       )}
 

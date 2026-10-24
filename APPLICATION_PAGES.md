@@ -349,6 +349,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | --------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/locations`                      | Locations Management            | Authenticated                                                                                                                               |
 | `/locations/qr-codes`             | Check-In QR Codes               | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` **OR** `locations.manage_nfc_tags` **OR** `apparatus.manage_nfc_tags` |
+| `/locations/card-readers`         | Card Readers                    | `locations.manage` **OR** `facilities.manage` **OR** `locations.manage_nfc_tags`                                                            |
 | `/locations/:locationId/check-in` | Room Check-In (NFC tag landing) | Authenticated                                                                                                                               |
 
 > Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.

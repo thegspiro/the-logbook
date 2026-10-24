@@ -81,6 +81,12 @@ vi.mock('../modules/prospective-members/services/api', () => ({
 }));
 // Tested on its own (EventGuestsCard.test.tsx); its request is not under test here.
 vi.mock('../components/event-detail/EventGuestsCard', () => ({ default: () => null }));
+// The card-taps section has its own tests (EventCardCheckinsTab.test.tsx);
+// here it would only add a request the services/api mock above does not serve.
+vi.mock('../components/event-detail/EventCardTapsCard', () => ({ EventCardTapsCard: () => null }));
+vi.mock('../hooks/useConnectedIntegrations', () => ({
+  useConnectedIntegrations: () => ({ connected: new Set<string>(), loading: false, isConnected: () => false }),
+}));
 
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
