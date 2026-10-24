@@ -1854,6 +1854,10 @@ async def update_requirement(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
     before = _grandfathering_snapshot(requirement)
+    # Deactivating or reactivating changes whether pipelines require it.
+    active_changed = updates.get("active") is not None and (
+        updates["active"] is True
+    ) != (requirement.active is True)
 
     # Update fields
     for field, value in updates.items():
@@ -1887,9 +1891,27 @@ async def update_requirement(
             before=before,
         )
     await db.commit()
+    if active_changed:
+        await _recalculate_pipelines_for_requirement(
+            db, requirement_id, current_user.organization_id
+        )
     await db.refresh(requirement)
 
     return requirement
+
+
+async def _recalculate_pipelines_for_requirement(
+    db: AsyncSession, requirement_id: UUID, organization_id: Any
+) -> None:
+    """Bring pipeline enrollments up to date after a requirement's ``active``
+    flag changed, since an inactive requirement does not count toward
+    pipeline completion. Runs after the flag is committed, so the
+    recalculation reads it."""
+    from app.services.training_program_service import TrainingProgramService
+
+    await TrainingProgramService(db).recalculate_enrollments_for_requirement(
+        requirement_id, organization_id
+    )
 
 
 @router.delete("/requirements/{requirement_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1924,6 +1946,7 @@ async def delete_requirement(
         )
 
     requirement_name = requirement.name
+    was_active = requirement.active is True
     deleted = await remove_requirement(db, requirement)
     await log_audit_event(
         db=db,
@@ -1943,6 +1966,10 @@ async def delete_requirement(
         username=current_user.username,
     )
     await db.commit()
+    if not deleted and was_active:
+        await _recalculate_pipelines_for_requirement(
+            db, requirement_id, current_user.organization_id
+        )
 
 
 # Statistics and Reports
@@ -2375,6 +2402,27 @@ async def enroll_member_in_program(
     program = program_result.scalar_one_or_none()
     if not program:
         raise HTTPException(status_code=404, detail="Training program not found")
+
+    # The prerequisite gate every other manual enrollment path applies
+    # through TrainingProgramService.enroll_member, with the same refusal.
+    # Not routed through enroll_member itself: that also seeds progress rows,
+    # a deadline and a first phase and notifies the member, which this
+    # endpoint has never done, and answers duplicates in different words.
+    from app.services.training_program_service import (
+        TrainingProgramService,
+        prerequisite_refusal,
+    )
+
+    missing = await TrainingProgramService(db).missing_prerequisites(
+        program.prerequisite_program_ids,
+        [user_id],
+        current_user.organization_id,
+    )
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=prerequisite_refusal(next(iter(missing.values()))),
+        )
 
     # Check for existing active enrollment
     existing = await db.execute(

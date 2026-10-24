@@ -18,7 +18,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
+import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
@@ -226,7 +226,8 @@ const CheckRequestFormPage: React.FC = () => {
                 </label>
                 <select id="budgetId" {...register('budgetId')} className={selectClass}>
                   <option value="">No budget linked</option>
-                  {budgetOptions.map((option) => (
+                  {/* A new request: nothing on file, so no inactive line. */}
+                  {selectableBudgetOptions(budgetOptions).map((option) => (
                     <option key={option.id} value={option.id}>
                       {budgetOptionLabel(option)}
                     </option>

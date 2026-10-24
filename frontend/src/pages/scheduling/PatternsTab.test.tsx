@@ -383,3 +383,28 @@ describe('PatternsTab with a deactivated template', () => {
     expect(within(screen.getByLabelText('Shift Template *')).queryByRole('option', { name: /Day Shift A/ })).toBeNull();
   });
 });
+
+// The server reports which patterns an inactive template is holding; the
+// list says so, and only on those patterns.
+describe('PatternsTab with a pattern held by an inactive template', () => {
+  beforeEach(() => {
+    mockGetPatterns.mockReset();
+    mockGetPatterns.mockResolvedValue([
+      { ...PATTERN, inactive_templates: ['Day Shift A'] },
+      { ...PATTERN, id: 'pat-2', name: 'B-Shift 24/48', inactive_templates: [] },
+    ]);
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([{ ...TEMPLATE, is_active: false }]);
+  });
+
+  it('warns that the pattern is not generating shifts', async () => {
+    renderWithRouter(<PatternsTab />);
+
+    const notices = await screen.findAllByRole('status');
+    const held = notices.filter((n) =>
+      n.textContent?.includes('Template inactive — this pattern is not generating shifts')
+    );
+    expect(held).toHaveLength(1);
+    expect(held[0]).toHaveTextContent('Day Shift A');
+  });
+});

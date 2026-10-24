@@ -71,48 +71,82 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
       {/* Google Drive config */}
       {storageSettings.platform === 'googledrive' && (
         <div className="border-theme-surface-border space-y-4 border-t pt-4">
-          <p className="text-theme-text-primary text-sm font-medium">Google Drive Configuration</p>
+          <p className="text-theme-text-primary text-sm font-medium">Google Drive (Shared Drive)</p>
+          <p className="text-theme-text-muted text-xs">
+            The server signs in as a service account and stores files in a Shared Drive. Add the service account to the
+            drive as a Content manager. Shared Drives need Google Workspace.
+          </p>
+          <div>
+            <label htmlFor="google-drive-key" className="text-theme-text-muted mb-1 block text-xs">
+              Service account key (JSON)
+            </label>
+            <div className="relative">
+              {storageSecretVisible ? (
+                <textarea
+                  id="google-drive-key"
+                  rows={5}
+                  spellCheck={false}
+                  autoComplete="off"
+                  value={storageSettings.google_drive_service_account_key || ''}
+                  onChange={(e) =>
+                    onStorageSettingsChange((s) => ({ ...s, google_drive_service_account_key: e.target.value }))
+                  }
+                  placeholder='{"type": "service_account", …}'
+                  className="form-input pr-10 font-mono text-xs"
+                />
+              ) : (
+                <input
+                  id="google-drive-key"
+                  type="password"
+                  autoComplete="new-password"
+                  value={storageSettings.google_drive_service_account_key || ''}
+                  onChange={(e) =>
+                    onStorageSettingsChange((s) => ({ ...s, google_drive_service_account_key: e.target.value }))
+                  }
+                  placeholder="Paste the key file’s contents"
+                  className="form-input pr-10"
+                />
+              )}
+              <button
+                type="button"
+                onClick={onToggleSecretVisible}
+                aria-label={storageSecretVisible ? 'Hide the key' : 'Show the key'}
+                className="text-theme-text-muted hover:text-theme-text-primary absolute top-2 right-2"
+              >
+                {storageSecretVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="text-theme-text-muted mb-1 block text-xs">Client ID</label>
+              <label htmlFor="google-drive-shared-drive" className="text-theme-text-muted mb-1 block text-xs">
+                Shared Drive ID
+              </label>
               <input
+                id="google-drive-shared-drive"
                 type="text"
-                value={storageSettings.google_drive_client_id || ''}
-                onChange={(e) => onStorageSettingsChange((s) => ({ ...s, google_drive_client_id: e.target.value }))}
-                placeholder="123456789-abc.apps.googleusercontent.com"
+                value={storageSettings.google_drive_shared_drive_id || ''}
+                onChange={(e) =>
+                  onStorageSettingsChange((s) => ({ ...s, google_drive_shared_drive_id: e.target.value }))
+                }
+                placeholder="0AbCdEfGhIjKlMnOp"
+                className="form-input"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">From the drive’s address: drive/folders/&lt;ID&gt;.</p>
+            </div>
+            <div>
+              <label htmlFor="google-drive-folder" className="text-theme-text-muted mb-1 block text-xs">
+                Folder ID (optional)
+              </label>
+              <input
+                id="google-drive-folder"
+                type="text"
+                value={storageSettings.google_drive_folder_id || ''}
+                onChange={(e) => onStorageSettingsChange((s) => ({ ...s, google_drive_folder_id: e.target.value }))}
+                placeholder="Blank for the drive’s root"
                 className="form-input"
               />
             </div>
-            <div>
-              <label className="text-theme-text-muted mb-1 block text-xs">Client Secret</label>
-              <div className="relative">
-                <input
-                  type={storageSecretVisible ? 'text' : 'password'}
-                  value={storageSettings.google_drive_client_secret || ''}
-                  onChange={(e) =>
-                    onStorageSettingsChange((s) => ({ ...s, google_drive_client_secret: e.target.value }))
-                  }
-                  className="form-input pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={onToggleSecretVisible}
-                  className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-2 -translate-y-1/2"
-                >
-                  {storageSecretVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="text-theme-text-muted mb-1 block text-xs">Folder ID (optional)</label>
-            <input
-              type="text"
-              value={storageSettings.google_drive_folder_id || ''}
-              onChange={(e) => onStorageSettingsChange((s) => ({ ...s, google_drive_folder_id: e.target.value }))}
-              placeholder="Root folder ID for department files"
-              className="form-input sm:w-1/2"
-            />
           </div>
         </div>
       )}

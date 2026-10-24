@@ -23,7 +23,8 @@ an id that does not exist.
 | List / read purchase and check requests                                                                      | `finance.request`, `finance.view` or `finance.manage` | own only, unless the caller holds `finance.view`                                                                                                                                           |
 | List / read expense reports                                                                                  | `finance.request`, `finance.view` or `finance.manage` | own only — including for `finance.view` (FIN-5)                                                                                                                                            |
 | Create, edit (draft / submitted), submit; add an expense line                                                | `finance.request` or `finance.manage`                 | own only; `finance.view` alone cannot write                                                                                                                                                |
-| Cancel a purchase request                                                                                    | `finance.request` or `finance.manage`                 | own **draft** only — a submitted request has approval steps and possibly an encumbrance; the office cancels                                                                                |
+| Edit or remove an expense line — `PUT` / `DELETE /expense-reports/{id}/items/{item}` _(2026-10-23)_          | `finance.request` or `finance.manage`                 | own only, and only while the report is a **draft** (for `finance.manage` too); the report is locked against a concurrent submission                                                        |
+| Cancel a purchase request, expense report or check request — `POST …/{id}/cancel`                            | `finance.request` or `finance.manage`                 | own **draft** only ("withdraw") — a submitted one has approval steps; the office cancels it until it is paid, issued, denied or already cancelled                                          |
 | Mark ordered / received / paid, mark an expense paid, issue / void                                           | `finance.manage`                                      | —                                                                                                                                                                                          |
 | Attach a receipt — `POST /purchase-requests/{id}/receipt`, `POST /expense-reports/{id}/items/{item}/receipt` | `finance.request` or `finance.manage`                 | own only; a purchase request until paid, an expense line while the report is a draft or submitted. `finance.manage`: until denied or cancelled. Replacing a receipt keeps the earlier file |
 | Open a receipt — `GET` on the same paths                                                                     | `finance.request`, `finance.view` or `finance.manage` | whoever may read the record. The file is a document under **Finance > Receipts**, a folder only finance rights open                                                                        |
@@ -1487,7 +1488,21 @@ Enums:
 - `POST /finance/expense-reports/{id}/mark-paid`
 - `POST /finance/expense-reports/{id}/reimbursement-check` — pay it by check; see [Reimbursing a purchase](#reimbursing-a-purchase-2026-10-23)
 - `POST /finance/expense-reports/{id}/items` (add a line item; lines are read
-  back on the report)
+  back on the report, oldest first)
+- `PUT /finance/expense-reports/{id}/items/{item_id}`,
+  `DELETE /finance/expense-reports/{id}/items/{item_id}` — edit or remove a line
+  while the report is a draft; the total is recomputed from the stored lines.
+  An edit changes only the fields sent, null clearing an optional one. A line
+  copied from a purchase request keeps its budget line; removing one keeps its
+  receipt document. A report left with no lines stays a draft and cannot be
+  submitted until one is added.
+- `POST /finance/expense-reports/{id}/cancel` — withdraw a draft, or (finance
+  office) cancel a submitted, pending or approved report. Its approval steps
+  are skipped and their emailed links revoked. Nothing was spent or encumbered
+  for an unpaid report, so no budget line moves; a cancelled report stops
+  counting against its cash advance and its restricted funds, and frees the
+  purchase request it claimed back for a new claim. Refused while a
+  reimbursement check is paying the report, and for a paid report.
 - `GET/POST /finance/expense-reports/{id}/items/{item_id}/receipt`
 - `PUT /finance/expense-reports/{id}/items/{item_id}/functional-class`
 - `GET/POST /finance/check-requests`
@@ -1495,6 +1510,10 @@ Enums:
 - `POST /finance/check-requests/{id}/submit`
 - `POST /finance/check-requests/{id}/issue`
 - `POST /finance/check-requests/{id}/void`
+- `POST /finance/check-requests/{id}/cancel` — withdraw a draft, or (finance
+  office) cancel one not yet issued; an issued check is voided instead. An
+  unissued check moved no budget total, so nothing is reversed; a cancelled
+  reimbursement check leaves its report approved, to be paid again.
 - `PUT /finance/check-requests/{id}/functional-class`
 
 Approve and deny go through `/finance/approvals/...`, as for purchase requests.

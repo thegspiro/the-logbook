@@ -94,16 +94,17 @@ const FileStorageChoice: React.FC = () => {
     {
       id: 'googledrive',
       name: 'Google Drive',
-      description: 'Store files in Google Drive',
+      description: 'Store files in a Google Shared Drive',
       icon: <GoogleDriveIcon />,
       color: 'from-blue-500 to-green-500',
       features: [
-        '15 GB free storage (expandable)',
-        'Easy sharing and collaboration',
-        'Automatic backup and sync',
-        'Integrated with Google Workspace',
+        'Files belong to the department’s Shared Drive, not a person',
+        'Encrypted before they leave the server',
+        'Uses your Google Workspace storage',
+        'Requires Google Workspace (Shared Drives)',
       ],
-      setupInfo: "You'll need an OAuth client ID and secret from your Google Cloud project.",
+      setupInfo:
+        "You'll need a service account key and a Shared Drive the account has been added to. New files go to the drive once the connection test in Settings > Storage passes.",
       recommended: emailPlatform === 'gmail',
     },
     {

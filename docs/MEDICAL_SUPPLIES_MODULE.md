@@ -423,6 +423,14 @@ include_undated=True)`). Shelf-only columns (Received Date, Storage Location,
   Unit Cost, Notes) are blank on a truck row.
 - **Not yet counted count** _(2026-10-23)_: the tab reads "Not yet counted (N)"
   from the summary's `uncounted_on_apparatus`.
+- **Uncounted positions in the weekly email** _(2026-10-23)_: "Supplies to
+  Replace" adds a "Not yet counted on apparatus" table naming each medical
+  position no crew has counted, and the summary line counts them. It rides
+  along with an email that is going anyway and never sends one of its own, so a
+  department that never counts a position is not mailed about it every week.
+  Shown to audiences holding the medical domain, as the shelf lots are. Rows
+  come from `EquipmentCheckService.uncounted_supply_positions`, which reads the
+  same rule as the page's Not yet counted tab.
 - **Look-ahead window** _(2026-10-23)_: the Expiring tab offers 30, 60 or 90
   days. The tiles, the Expiring list, its empty state and the Next expiry
   colouring all follow the choice; it is not saved between visits, and the

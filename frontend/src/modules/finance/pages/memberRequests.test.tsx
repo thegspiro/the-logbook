@@ -271,6 +271,69 @@ describe('request forms pick a budget line by name and amount left', () => {
   });
 });
 
+// Owner decision 2026-10-22: a line under an inactive category takes no new
+// charges. The picker leaves it out of new choices, but a request already on
+// it still shows it, marked.
+describe('a budget line under an inactive category', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fiscalYearOptions.mockReset();
+    budgetOptions.mockReset();
+    granted = new Set(['finance.request']);
+    fiscalYearOptions.mockResolvedValue([{ id: 'fy-1', name: 'FY2026', status: 'active' }]);
+    budgetOptions.mockResolvedValue([
+      { id: 'b-1', label: 'Training', amountRemaining: null, categoryActive: true },
+      { id: 'b-3', label: 'Gear', amountRemaining: null, categoryActive: false },
+      { id: 'b-4', label: 'Uniforms', amountRemaining: null, categoryActive: false },
+    ]);
+    storeState = {
+      isLoading: false,
+      selectedPurchaseRequest: null,
+      fetchPurchaseRequest: vi.fn(),
+      createPurchaseRequest: vi.fn(),
+      createCheckRequest: vi.fn(),
+    };
+  });
+
+  it('is not offered on a new purchase request', async () => {
+    renderAt('/finance/purchase-requests/new', '/finance/purchase-requests/new', PurchaseRequestFormPage);
+
+    expect(await screen.findByRole('option', { name: 'Training' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Gear/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Uniforms/ })).not.toBeInTheDocument();
+  });
+
+  it('is not offered on a new check request', async () => {
+    const user = userEvent.setup();
+    renderAt('/finance/check-requests/new', '/finance/check-requests/new', CheckRequestFormPage);
+
+    await screen.findByRole('option', { name: 'FY2026' });
+    await user.selectOptions(screen.getByLabelText(/Fiscal Year/), 'fy-1');
+    expect(await screen.findByRole('option', { name: 'Training' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Gear/ })).not.toBeInTheDocument();
+  });
+
+  it('still shows, marked, as the line a saved request points at', async () => {
+    storeState = {
+      ...storeState,
+      selectedPurchaseRequest: {
+        id: 'pr-1',
+        fiscalYearId: 'fy-1',
+        title: 'Gloves',
+        estimatedAmount: '50.00',
+        priority: 'medium',
+        status: 'submitted',
+        budgetId: 'b-3',
+      },
+    };
+    renderAt('/finance/purchase-requests/pr-1/edit', '/finance/purchase-requests/:id/edit', PurchaseRequestFormPage);
+
+    expect(await screen.findByRole('option', { name: 'Gear (inactive category)' })).toBeInTheDocument();
+    // Only the saved line: another inactive one is still not a choice.
+    expect(screen.queryByRole('option', { name: /Uniforms/ })).not.toBeInTheDocument();
+  });
+});
+
 describe('detail page actions follow who may take them', () => {
   const pr = {
     id: 'pr-1',

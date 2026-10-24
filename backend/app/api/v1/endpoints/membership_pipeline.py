@@ -1989,6 +1989,18 @@ async def transfer_prospect(
     # and the welcome email that carries its password waits for it.
     send_after_commit = result.pop("_send_welcome_email", None)
     provision_after_commit = result.pop("_provision_directory_account", None)
+    # Training officers hear about a skipped automatic enrollment only once
+    # the member it names exists. Its own guard: a mail failure is logged and
+    # never touches the conversion or the welcome email below.
+    notify_skip_after_commit = result.pop("_notify_enrollment_skipped", None)
+    if notify_skip_after_commit is not None:
+        await db.commit()
+        try:
+            await notify_skip_after_commit()
+        except Exception:
+            logger.exception(
+                f"Enrollment-skipped notice failed for prospect {prospect_id}"
+            )
     if send_after_commit is not None or provision_after_commit is not None:
         await db.commit()
         # The member is committed: nothing after this point may turn the

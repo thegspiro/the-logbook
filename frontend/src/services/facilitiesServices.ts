@@ -1212,6 +1212,12 @@ export interface OperationalRankResponse {
    * rank a department invents for itself confers nothing and reports 0.
    */
   default_permission_count: number;
+  /**
+   * A rank of the built-in registry. Its default permissions are keyed by its
+   * code, so the server refuses to change the code; the display name may
+   * change. Custom ranks report false and may be recoded freely.
+   */
+  is_built_in: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.engine import CursorResult
 
 from app.models.training import (
     EnrollmentStatus,
@@ -152,7 +153,7 @@ class TestRecalculateEnrollmentProgress:
                 _required("r1", "r2"),
                 _scalars([_prog(100.0, "r1"), _prog(0.0, "r1"), _prog(100.0, "r2")]),
                 MagicMock(),  # update percentage
-                MagicMock(),  # update status=completed
+                MagicMock(spec=CursorResult, rowcount=1),  # claim: status=completed
                 _scalars([]),  # milestone lookup
                 _one(None),  # program fetch (notification path)
             ]
@@ -171,7 +172,7 @@ class TestRecalculateEnrollmentProgress:
                     _required("r1", "r2"),
                     _scalars([_prog(100.0, "r1"), _prog(100.0, "r2")]),
                     MagicMock(),  # update percentage
-                    MagicMock(),  # update status=completed
+                    MagicMock(spec=CursorResult, rowcount=1),  # claim: status=completed
                     _scalars([]),  # milestone lookup
                     _one(program),  # program fetch
                     _one(SimpleNamespace(id="u1")),  # user fetch

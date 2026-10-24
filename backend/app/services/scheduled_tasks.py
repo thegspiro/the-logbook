@@ -5440,12 +5440,14 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "nfpa_retirement_alerts", process)
 
 
-def _supply_summary(expiring: int, restock: int, shelf_lots: int) -> str:
+def _supply_summary(
+    expiring: int, restock: int, shelf_lots: int, uncounted: int = 0
+) -> str:
     """One clause per kind of row, naming only the kinds present.
 
     Used for the subject, the opening line and the plain-text body, so the
     three cannot drift apart. Example: "2 expiring on apparatus, 1 to restock
-    on apparatus, 3 stock lots expiring".
+    on apparatus, 3 stock lots expiring, 2 positions not yet counted".
     """
     parts = []
     if expiring:
@@ -5455,6 +5457,9 @@ def _supply_summary(expiring: int, restock: int, shelf_lots: int) -> str:
     if shelf_lots:
         noun = "stock lot" if shelf_lots == 1 else "stock lots"
         parts.append(f"{shelf_lots} {noun} expiring")
+    if uncounted:
+        noun = "position" if uncounted == 1 else "positions"
+        parts.append(f"{uncounted} {noun} not yet counted")
     return ", ".join(parts)
 
 
@@ -5548,6 +5553,12 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
 
         if not deployed and not lot_rows:
             return 0
+        # Rides along with an email that is going anyway rather than sending
+        # one of its own: a department that never counts a position would
+        # otherwise be mailed about it every Monday for good.
+        uncounted = await check_service.uncounted_supply_positions(
+            str(org.id), list(MEDICAL_ITEM_TYPES)
+        )
 
         # Split by whether a replacement is actually on hand: "swap it" and
         # "order it" are different jobs, and the officer plans the week around
@@ -5642,6 +5653,36 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
+        def _uncounted_section(rows: list) -> str:
+            if not rows:
+                return ""
+            body = ""
+            for row in rows:
+                name = str(row.get("item_name") or "Unknown")
+                if row.get("item_size"):
+                    name = f"{name} · {row['item_size']}"
+                place = " &rsaquo; ".join(
+                    _html.escape(part) for part in str(row["where"]).split(" › ")
+                )
+                body += "<tr>" + _cell(_stacked(_html.escape(name), place), _wrap)
+                body += "</tr>"
+            return f"""
+                <h3 style="color:#2563eb;margin-top:16px;">
+                    Not yet counted on apparatus ({len(rows)})
+                </h3>
+                <p style="color:#6b7280;font-size:13px;margin:4px 0;">
+                    No crew has counted these positions, so the stock figures
+                    assume each one is full. A count on the checklist or the
+                    apparatus inventory settles it.
+                </p>
+                <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+                    <thead><tr style="background:#f3f4f6;">
+                        {_th("Item")}
+                    </tr></thead>
+                    <tbody>{body}</tbody>
+                </table>
+                """
+
         def _lot_section(rows) -> str:
             if not rows:
                 return ""
@@ -5698,8 +5739,13 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 rows = list(gear_lots) + rows
             if not emails or (not deployed and not rows):
                 continue
+            # Medical stock figures, so for the audiences that manage them,
+            # as the shelf-lot table is.
+            unseen = uncounted if DOMAIN_MEDICAL in domains else []
 
-            summary = _supply_summary(expiring_count, restock_count, len(rows))
+            summary = _supply_summary(
+                expiring_count, restock_count, len(rows), len(unseen)
+            )
             html_body = wrap_email_body(
                 org,
                 "Supplies to Replace",
@@ -5716,7 +5762,8 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                     "#ea580c",
                     "In-date stock is on hand; swap it in during the next check.",
                 )
-                + _lot_section(rows),
+                + _lot_section(rows)
+                + _uncounted_section(unseen),
                 header_color="#dc2626",
             )
             success_count, _ = await email_svc.send_email(

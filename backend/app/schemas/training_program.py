@@ -256,6 +256,9 @@ class PrerequisiteProgramSummary(BaseModel):
 
     id: str
     name: str
+    # False while the prerequisite program is deactivated: it is still stored
+    # but not enforced, and applies again if the program is reactivated.
+    active: bool = True
 
 
 class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
@@ -531,6 +534,24 @@ class ProgramEnrollmentWithdraw(BaseModel):
     reason: Optional[str] = Field(None, max_length=500)
 
 
+class ProgramEnrollmentComplete(BaseModel):
+    """An officer marking a member's whole enrollment complete by hand.
+
+    The reason is required: the completion is recorded in the audit log with
+    it, alongside how many required items were still unmet. 500 characters,
+    as for a withdrawal reason.
+    """
+
+    reason: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def _strip_reason(cls, value: object) -> object:
+        # Trimmed before the length check, so a reason of only spaces is
+        # refused as empty rather than audited as one.
+        return value.strip() if isinstance(value, str) else value
+
+
 class ProgramEnrollmentReopen(BaseModel):
     """Options when an officer reopens an expired enrollment.
 
@@ -569,6 +590,12 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase, UTCResponseBase):
     progress_percentage: float
     status: EnrollmentStatusStr
     completed_at: Optional[datetime] = None
+    # An officer's reason for completing the enrollment by hand; None for an
+    # automatic completion and on any enrollment that is not COMPLETED. Output
+    # only: written by the complete endpoint alone, never by a create or
+    # update payload. An officer note, so the member-facing reads blank it for
+    # a caller without officer training access (_member_enrollment).
+    completion_reason: Optional[str] = None
     deadline_warning_sent: bool
     next_recert_reset_at: Optional[date] = None
     last_recert_reset_at: Optional[datetime] = None
@@ -902,6 +929,14 @@ class ProgramWithPhasesAndRequirements(TrainingProgramResponse):
     milestones: List[ProgramMilestoneResponse] = []
     total_requirements: int = 0
     total_required: int = 0
+    # True when nothing counts toward completing the pipeline — every required
+    # item is inactive, or none is required. Nobody completes it automatically
+    # then (an empty set is not a passing set); an officer completes members
+    # by hand or reactivates a requirement.
+    no_active_requirements: bool = False
+    # Phases whose required items are all inactive: none of them completes,
+    # so members do not advance out of one on their own.
+    phases_without_active_requirements: List[str] = []
 
 
 class MemberProgramProgress(BaseModel):
@@ -920,6 +955,12 @@ class MemberProgramProgress(BaseModel):
     # the member's page can grey a step out and say what unlocks it, instead of
     # offering work that the API will refuse.
     locked_requirements: Dict[str, List[str]] = {}
+    # Nothing counts toward completing this enrollment's pipeline (see
+    # ProgramWithPhasesAndRequirements). ``completed_requirements`` and
+    # ``total_requirements`` are then both 0 and the enrollment's stored
+    # ``progress_percentage`` is not a measure of anything: show this instead.
+    no_active_requirements: bool = False
+    phases_without_active_requirements: List[str] = []
 
 
 # Registry Import Schemas

@@ -292,6 +292,9 @@ class BudgetCategoryResponse(UTCResponseBase):
     charge_position_ids: list[str] = Field(default_factory=list)
     # Names from the top-level category down to this one.
     path: list[str] = Field(default_factory=list)
+    # The inactive ancestor that closes this category to new charges, lines
+    # and proposals while it is itself active; null otherwise.
+    inactive_through: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -608,6 +611,9 @@ class BudgetOptionResponse(BaseModel):
     id: str
     label: str
     amount_remaining: Optional[Decimal] = None
+    # False when the line's category is inactive: still listed so a request
+    # already on the line can show it, never offered as a new choice.
+    category_active: bool = True
 
 
 class FiscalYearOptionResponse(BaseModel):
@@ -1549,6 +1555,26 @@ class ExpenseLineItemCreate(BaseModel):
     _check_receipt_url = field_validator("receipt_url", mode="before")(
         validate_external_http_url
     )
+
+
+class ExpenseLineItemUpdate(BaseModel):
+    """Edit a line on a draft expense report. Omitted fields are left alone;
+    null clears an optional one (description, amount, date and type cannot be
+    cleared)."""
+
+    model_config = _REQUEST_CONFIG
+
+    _check_expense_type = field_validator("expense_type", mode="before")(
+        _enum_check(_EXPENSE_TYPES, "expense_type")
+    )
+
+    budget_id: Optional[str] = None
+    fund_campaign_id: Optional[str] = None
+    description: Optional[str] = Field(None, min_length=1, max_length=500)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
+    date_incurred: Optional[datetime] = None
+    expense_type: Optional[ExpenseType] = None
+    merchant: Optional[str] = Field(None, max_length=300)
 
 
 class ExpenseLineItemResponse(UTCResponseBase):

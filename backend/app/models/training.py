@@ -1669,15 +1669,16 @@ class TrainingProgram(Base):
         Index("idx_program_position", "target_position"),
     )
 
-    # Not a column: the service stamps resolved {id, name} pairs here
-    # (attach_prerequisite_summaries) so responses can show names. A program
-    # nobody stamped reads as an empty list, matching the response default.
+    # Not a column: the service stamps resolved {id, name, active} entries
+    # here (attach_prerequisite_summaries) so responses can show names and
+    # flag an inactive prerequisite. A program nobody stamped reads as an
+    # empty list, matching the response default.
     @property
-    def prerequisite_programs(self) -> list[dict[str, str]]:
+    def prerequisite_programs(self) -> list[dict[str, Any]]:
         return getattr(self, "_prerequisite_programs", [])
 
     @prerequisite_programs.setter
-    def prerequisite_programs(self, value: list[dict[str, str]]) -> None:
+    def prerequisite_programs(self, value: list[dict[str, Any]]) -> None:
         self._prerequisite_programs = value
 
     def __repr__(self):
@@ -1953,6 +1954,11 @@ class ProgramEnrollment(Base):
         server_default="active",
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Why an officer completed the enrollment by hand
+    # (TrainingProgramService.complete_enrollment_manually); NULL for an
+    # automatic completion. Cleared on every move out of COMPLETED, so a reason
+    # never outlives the completion it explains. Also kept in the audit log.
+    completion_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     withdrawn_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     withdrawal_reason: Mapped[Optional[str]] = mapped_column(Text)
 

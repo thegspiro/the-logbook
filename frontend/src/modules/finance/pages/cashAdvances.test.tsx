@@ -49,6 +49,7 @@ const formOptions = {
 vi.mock('../hooks/useRequestFormOptions', () => ({
   useRequestFormOptions: () => formOptions,
   budgetOptionLabel: (option: { categoryName: string }) => option.categoryName,
+  selectableBudgetOptions: (options: unknown[]) => options,
 }));
 const fundOptions = { funds: [], mode: 'warn' };
 vi.mock('../hooks/useFundOptions', () => ({ useFundOptions: () => fundOptions }));

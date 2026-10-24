@@ -149,3 +149,75 @@ describe('FiscalYearSettingsPage category delete', () => {
     expect(screen.getAllByText('Inactive')).toHaveLength(1);
   });
 });
+
+/**
+ * A deactivated parent closes its sub-categories to new charges (backend
+ * CategoryTree.inactive_source). The list says a sub-category is inactive
+ * through its parent, using the backend's inactiveThrough rather than
+ * re-deriving it, and the delete confirmation warns before a parent with
+ * sub-categories is deactivated.
+ */
+describe('FiscalYearSettingsPage inactive parent categories', () => {
+  const apparatus = category('cat-app', 'Apparatus', false);
+  const pump: BudgetCategory = {
+    ...category('cat-pump', 'Pump repairs'),
+    parentCategoryId: 'cat-app',
+    inactiveThrough: 'Apparatus',
+  };
+  const training = category('cat-train', 'Training');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    deleteCategory.mockReset();
+    deleteCategory.mockResolvedValue('deactivated');
+    fetchBudgetCategories.mockReset();
+    storeState = {
+      fiscalYears: [],
+      budgets: [],
+      budgetCategories: [apparatus, pump, training],
+      isLoading: false,
+      error: null,
+      fetchFiscalYears: vi.fn(),
+      fetchBudgets: vi.fn(),
+      fetchBudgetCategories,
+    };
+  });
+
+  it('marks a sub-category as inactive through its inactive parent', () => {
+    renderPage();
+
+    expect(within(screen.getByText('Pump repairs')).getByText('Inactive through Apparatus')).toBeInTheDocument();
+    expect(within(screen.getByText('Apparatus')).getByText('Inactive')).toBeInTheDocument();
+    expect(within(screen.getByText('Training')).queryByText(/Inactive/)).not.toBeInTheDocument();
+  });
+
+  it("warns that a parent's sub-categories stop taking new charges", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Delete Apparatus' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(
+      within(dialog).getByText(/Its sub-categories' budget lines also stop taking new charges while it is inactive\./)
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing about sub-categories for a category with none', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Delete Training' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByText(/Delete "Training"\?/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/sub-categories/)).not.toBeInTheDocument();
+  });
+
+  it('repeats the sub-category consequence when a parent is deactivated', async () => {
+    await confirmDelete('Apparatus');
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    expect(toastSuccess.mock.calls[0]?.[0]).toMatch(/Its sub-categories' budget lines also stop taking new charges\./);
+  });
+});

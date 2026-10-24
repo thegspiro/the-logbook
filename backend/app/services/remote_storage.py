@@ -66,11 +66,15 @@ class RemoteBackend(ABC):
 
     @abstractmethod
     def ref_for(self, key: str) -> str:
-        """The reference a new file stored under *key* will have."""
+        """The reference a new file stored under *key* will have. It may ask
+        the store (a Drive file id is reserved there before the upload), so
+        it blocks like every other method, and it may return a fresh
+        reference on each call: a caller keeps the one it was given."""
 
     @abstractmethod
     def put(self, ref: str, plaintext: bytes) -> None:
-        """Encrypt *plaintext* and store it as *ref*."""
+        """Encrypt *plaintext* and store it as *ref*, replacing what *ref*
+        held before in one write."""
 
     @abstractmethod
     def exists(self, ref: str) -> bool:
@@ -146,9 +150,12 @@ def platforms() -> Mapping[str, RemotePlatform]:
     """Every platform this installation can connect to, by setting value.
     Imported here rather than at module level: each platform's module
     imports this one for the interface."""
-    from app.services import s3_storage
+    from app.services import google_drive_storage, s3_storage
 
-    return {platform.name: platform for platform in (s3_storage.PLATFORM,)}
+    return {
+        platform.name: platform
+        for platform in (s3_storage.PLATFORM, google_drive_storage.PLATFORM)
+    }
 
 
 def platform_for_ref(ref: Any) -> Optional[RemotePlatform]:

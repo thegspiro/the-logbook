@@ -64,12 +64,14 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
   const [saving, setSaving] = useState(false);
 
   // In tree order and named by path, so "Quartermaster › Officer brass" is
-  // told apart from an Officer brass anywhere else.
+  // told apart from an Officer brass anywhere else. A category under an
+  // inactive parent is closed as well (the backend's inactiveThrough), and the
+  // server refuses a new line on it, so it is not offered either.
   const categoryOptions = useMemo(
     () =>
-      orderCategoryTree(categories.filter((c) => c.isActive || c.id === budget?.categoryId)).map(
-        ({ category }) => category
-      ),
+      orderCategoryTree(
+        categories.filter((c) => (c.isActive && !c.inactiveThrough) || c.id === budget?.categoryId)
+      ).map(({ category }) => category),
     [categories, budget?.categoryId]
   );
   const stationOptions = withCurrent(stations, budget?.stationId, budget?.stationName);
