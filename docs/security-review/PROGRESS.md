@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3640](https://github.com/thegspiro/the-logbook/pull/3640)** (branch
+`claude/security-review-forms`) —
+Feature 26 (Forms), pass 9, a watchdog pickup. PR #3638 (Feature 25,
+Messaging & notifications, pass 9) had already merged with no open
+rotation PR behind it — confirmed via `list_pull_requests` (state=open)
+and `search_pull_requests` (`head:claude/security-review-`, both empty)
+immediately before starting — and row 26 (Forms) was confirmed the next
+`⬜` row. **0 fixed, 0 new findings** — the real delta since pass 8 (a
+numeric-bounds tightening on form-field schemas, `delete_form` archiving
+instead of hard-deleting a form with existing submissions, and the
+repo-wide probationary-account-status sweep applied to the member-lookup
+search) was read in full and found clean: org scoping on the archive
+decision, the `PUBLISHED`-only submission gate holding on both the
+authenticated and public paths, and no change to `LIKE`-escaping. Two
+frontend commits (an a11y contrast fix, and a `useConfirm()` step added
+before a submission delete) are correctness/UX only.
+
+Full writeup: `docs/security-review/FORM-26-forms.md`'s **Pass 9** section.
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3638, Feature 25, Messaging & notifications, pass 9, merged), preserved for history</summary>
+
 **PR [#3638](https://github.com/thegspiro/the-logbook/pull/3638)** (branch
 `claude/security-review-messaging-notifications`) —
 Feature 25 (Messaging & notifications), pass 9, a watchdog pickup. PR #3636
@@ -39,6 +64,8 @@ Full writeup: `docs/security-review/MSG-25-messaging-notifications.md`'s
 
 Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
 re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3636, Feature 24, Meetings & minutes, pass 9, merged), preserved for history</summary>
