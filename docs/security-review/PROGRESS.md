@@ -16,14 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3647 (Feature 29, Reports & analytics, pass 11) merged clean
-(`14e95ce1`), docs-only (the findings file and `PROGRESS.md` itself — no app
-code), so nothing to record in the Log per the "docs-only PR is not a
-recordable event" rule. Row 29 is now `✅`. This iteration (a watchdog
-pickup — the dedicated loop session for this rotation was unreachable)
-re-confirmed via both `search_pull_requests` (`head:claude/security-review-`,
-state=open) and `list_pull_requests` (state=open) that no rotation PR is
-open, so it proceeds to Feature 30 (Onboarding), pass 9.
+**PR [#3658](https://github.com/thegspiro/the-logbook/pull/3658)** (branch
+`claude/security-review-onboarding-p9`) — Feature 30 (Onboarding), pass 9.
+Watchdog pickup (the dedicated loop session for this rotation was
+unreachable). PR #3647 (Feature 29, Reports & analytics, pass 11) had merged
+clean, docs-only, with nothing to record per the "docs-only PR is not a
+recordable event" rule — row 29 is `✅`; confirmed via both
+`search_pull_requests` (`head:claude/security-review-`, state=open) and
+`list_pull_requests` (state=open), 0 results both times, re-checked
+immediately before branching and again immediately before opening this PR,
+that no rotation PR was open. **0 fixed, 0 new findings, 1 documentation
+correction** — the real delta since pass 8 (two of this feature's own
+files: an onboarding.py storage-config field rename following a different
+feature's Google Drive redesign, still encrypted the same way; a new
+backup-encryption system notice, fail-closed and unreachable pre-auth; plus
+a new frontend `OnboardingGate` that redirects once setup is finished,
+deliberately failing open since every route it fronts already enforces
+`needs_onboarding()` server-side) was read in full and found clean. All
+three standing OPEN items re-verified unchanged at current line numbers. A
+stale "24 unauth bootstrap routes" count (pass 7 added 2 more without this
+file or the findings-file header being updated) corrected to 26.
+
+Full writeup: `docs/security-review/ONB5-30-onboarding.md`'s **Pass 9**
+section.
+
+Row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled tasks)
+— re-check `search_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3647, Feature 29, Reports & analytics, pass 11, merged), preserved for history</summary>
