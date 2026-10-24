@@ -16,12 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_None._ PR #3632 (Feature 21, Admin hours, pass 10) merged — docs-only (this
-file + `AH-21-admin-hours.md`), so not independently recordable per the
-rotation's own rule. Row 21 → ✅. Next is Feature 22 (Grants & fundraising),
-picked up by this same watchdog pass; see its **Pass 10** section in
-`docs/security-review/GF-22-grants-fundraising.md` for the writeup. This row
-will carry Feature 22's own PR once it is opened.
+**PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633)** (branch
+`claude/security-review-grants-fundraising-p10`) —
+Feature 22 (Grants & fundraising), pass 10, a watchdog pickup. PR #3632
+(Feature 21, Admin hours, pass 10) had already merged — docs-only, so not
+independently recordable. **0 fixed by this pass itself, 0 new findings** —
+GF-9 is now fully resolved (both remaining thirds closed by PR #3533's
+money-bounds and donor-PII fixes, re-verified against current code); a
+campaign soft-delete enforcement fix and two UTC-normalization fixes round
+out the real delta, all from non-rotation commits.
+
+Full writeup: `docs/security-review/GF-22-grants-fundraising.md`'s
+**Pass 10** section.
+
+Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
+supplies) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 10, PR #3632, merged, docs-only), preserved for history</summary>
