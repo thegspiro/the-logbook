@@ -467,6 +467,10 @@ ROUTES_OPEN_BY_DESIGN = {
         "a room NFC tag's landing; must work in Locations and Facilities mode, "
         "and forwards to /events/:id/check-in, which carries the event gate"
     ),
+    "/locations/qr-codes": (
+        "room kiosk QR codes are printed in Locations mode too; reached from "
+        "the Locations stand-in when Facilities is off"
+    ),
     "/locations/card-readers": (
         "room kiosk readers exist in Locations mode too; reached from the "
         "Locations stand-in when Facilities is off"

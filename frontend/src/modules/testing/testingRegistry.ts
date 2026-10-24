@@ -925,7 +925,6 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
           'locations.manage_nfc_tags',
           'apparatus.manage_nfc_tags',
         ],
-        module: 'facilities',
       },
       {
         path: '/locations/card-readers',
