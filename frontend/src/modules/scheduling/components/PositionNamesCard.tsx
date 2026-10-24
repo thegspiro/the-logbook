@@ -58,8 +58,12 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
     <div className="card-secondary p-4 sm:p-5">
       <h3 className="text-theme-text-primary mb-1 text-base font-semibold">Position Names</h3>
       <p className="text-theme-text-muted mb-4 text-xs">
-        Enable built-in position types or add custom ones unique to your department. Custom positions appear everywhere
-        built-in ones do.
+        Add custom position types unique to your department. Custom positions appear everywhere built-in ones do.
+      </p>
+      <p className="text-theme-text-muted mb-4 text-xs" role="note">
+        Not in effect yet — the ticks below are saved, but templates and shifts offer the same fixed list of built-in
+        positions, plus every custom position, whatever is ticked. To offer a position the built-in list lacks, add it
+        as a custom position.
       </p>
 
       {/* Built-in positions toggle */}

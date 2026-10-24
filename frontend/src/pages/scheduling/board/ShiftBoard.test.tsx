@@ -43,7 +43,7 @@ vi.mock('../../../stores/authStore', () => {
 });
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ShiftRecord } from '../../../modules/scheduling';
 import ShiftBoard from './ShiftBoard';
@@ -240,7 +240,7 @@ describe('ShiftBoard', () => {
 
     expect(await screen.findByText(/The next shift on the schedule is on Mon, Sep 7/)).toBeInTheDocument();
     // Asked from the day after the month the board fetched, not from today.
-    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: '2026-09-01', limit: 1 });
+    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: '2026-09-01', limit: 10 });
     expect(screen.queryByText(/Your scheduling officer has not published/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Go to the next shift' }));
@@ -268,7 +268,7 @@ describe('ShiftBoard', () => {
     mockGetWeek.mockResolvedValue([]);
     renderBoard({ view: 'week', visibleDate: new Date(2026, 7, 20) });
 
-    await waitFor(() => expect(mockGetShifts).toHaveBeenCalledWith({ start_date: '2026-08-23', limit: 1 }));
+    await waitFor(() => expect(mockGetShifts).toHaveBeenCalledWith({ start_date: '2026-08-23', limit: 10 }));
   });
 
   it('does not look for a later shift when the range has some', async () => {
@@ -450,5 +450,113 @@ describe("the way into a shift's full detail", () => {
     await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
 
     expect(screen.queryAllByRole('button', { name: /shift details/i })).toHaveLength(0);
+  });
+});
+
+describe("the board's today", () => {
+  const todayCell = () =>
+    grid()
+      .getAllByRole('gridcell')
+      .find((cell) => cell.getAttribute('aria-current') === 'date');
+
+  it("is the department's calendar day, not the browser's", async () => {
+    // 02:00 UTC on the 21st is 22:00 on the 20th in New York, the
+    // department's timezone. The test browser runs in UTC.
+    vi.setSystemTime(new Date('2026-08-21T02:00:00Z'));
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    expect(todayCell()).toHaveAccessibleName(/Thursday, August 20/);
+  });
+
+  it('moves on to the next day while the board stays open', async () => {
+    // The clock ticks on a shared 30-second interval, so this test fakes it.
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date('2026-08-20T13:00:00Z'));
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    expect(todayCell()).toHaveAccessibleName(/Thursday, August 20/);
+
+    act(() => {
+      vi.setSystemTime(new Date('2026-08-21T13:00:00Z'));
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(todayCell()).toHaveAccessibleName(/Friday, August 21/);
+  });
+
+  // The member's own shift, 10:00–22:00 UTC on the 26th.
+  const MINE_TIMED = shift({ ...MINE, start_time: '2026-08-26T10:00:00Z', end_time: '2026-08-26T22:00:00Z' });
+
+  it('does not offer a shift that has already ended as the next one', async () => {
+    // At 23:30 UTC it is over, though it is still the 26th in New York.
+    vi.setSystemTime(new Date('2026-08-26T23:30:00Z'));
+    mockGetMonth.mockResolvedValue([SHORT_DAY, MINE_TIMED]);
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    expect(screen.queryByText('Your next shift')).not.toBeInTheDocument();
+  });
+
+  it('still offers a shift that has not ended yet', async () => {
+    vi.setSystemTime(new Date('2026-08-26T15:00:00Z'));
+    mockGetMonth.mockResolvedValue([SHORT_DAY, MINE_TIMED]);
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    expect(screen.getByText('Your next shift')).toBeInTheDocument();
+  });
+
+  it('does not call a shift "next" from a month that does not contain today', async () => {
+    // Paged to September with today in August: the shift on screen is not
+    // the member's next one, since August is not loaded.
+    const september = shift({
+      ...MINE,
+      id: 'mine-sep',
+      shift_date: '2026-09-03',
+      start_time: '2026-09-03T10:00:00Z',
+      end_time: '2026-09-03T22:00:00Z',
+    });
+    mockGetMonth.mockResolvedValue([september]);
+    renderBoard({ visibleDate: new Date(2026, 8, 15) });
+    await screen.findByText(/open seats this month/i);
+    expect(screen.queryByText('Your next shift')).not.toBeInTheDocument();
+  });
+
+  const LATE_SHORT = shift({
+    id: 'day-31',
+    shift_date: '2026-08-31',
+    start_time: '2026-08-31T20:00:00Z',
+    end_time: '2026-09-01T08:00:00Z',
+    attendee_count: 1,
+  });
+
+  it('does not count "this week" from a month that holds only part of it', async () => {
+    // Monday the 31st: this week runs Aug 30 – Sep 5, and only two of its days
+    // are in the August fetch.
+    vi.setSystemTime(new Date('2026-08-31T13:00:00Z'));
+    mockGetMonth.mockResolvedValue([LATE_SHORT]);
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    expect(screen.queryByText(/this week still need people/)).not.toBeInTheDocument();
+  });
+
+  it('counts this week in a week view that covers all of it', async () => {
+    vi.setSystemTime(new Date('2026-08-31T13:00:00Z'));
+    mockGetWeek.mockResolvedValue([LATE_SHORT]);
+    renderBoard({ view: 'week', visibleDate: new Date(2026, 7, 31) });
+    expect(await screen.findByText('1 day this week still need people')).toBeInTheDocument();
+  });
+
+  it('skips a cancelled shift when pointing an empty range at the next one', async () => {
+    mockGetMonth.mockResolvedValue([]);
+    mockGetShifts.mockResolvedValue({
+      shifts: [
+        shift({ id: 'gone', shift_date: '2026-09-02', status: 'cancelled' }),
+        shift({ id: 'next', shift_date: '2026-09-07' }),
+      ],
+      total: 2,
+      skip: 0,
+      limit: 10,
+    });
+    renderBoard();
+    expect(await screen.findByText(/The next shift on the schedule is on Mon, Sep 7/)).toBeInTheDocument();
   });
 });

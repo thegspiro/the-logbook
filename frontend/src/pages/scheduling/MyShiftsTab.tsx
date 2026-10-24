@@ -36,6 +36,9 @@ import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { CalendarSubscribeCard } from './CalendarSubscribeCard';
 import { MyHoursSummary } from './MyHoursSummary';
 
+/** How many upcoming shifts the swap "Specific shift" picker reads. */
+const SWAP_TARGET_LIMIT = 50;
+
 interface SwapFormState {
   mode: 'open' | 'shift' | 'exchange';
   target_shift_id: string;
@@ -50,9 +53,11 @@ const exchangeKey = (c: ExchangeCandidate) => `${c.shift_id}:${c.user_id}`;
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
+  /** Bumped by the page when the shift panel changes a shift, so this list re-reads. */
+  refreshKey?: number;
 }
 
-export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
+export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKey = 0 }) => {
   const tz = useTimezone();
   const platoon = useAuthStore((s) => s.user?.platoon);
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
@@ -78,6 +83,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const [submittingSwap, setSubmittingSwap] = useState(false);
   const [availableShifts, setAvailableShifts] = useState<ShiftRecord[]>([]);
   const [availableShiftsLoading, setAvailableShiftsLoading] = useState(false);
+  const [availableShiftsTruncated, setAvailableShiftsTruncated] = useState(false);
   // Exchange picker: seats the server says both members qualify for. `null`
   // until loaded, so "loading" and "nobody qualifies" read differently.
   const [exchangeCandidates, setExchangeCandidates] = useState<ExchangeCandidate[] | null>(null);
@@ -124,7 +130,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [loadData, refreshKey]);
 
   const handleConfirm = async (assignmentId: string) => {
     setConfirmingId(assignmentId);
@@ -187,13 +193,26 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     setExchangeError(null);
     setShowSwapModal(true);
     setAvailableShifts([]);
+    setAvailableShiftsTruncated(false);
     setAvailableShiftsLoading(true);
     // Load available shifts for the picker
     try {
       const today = getTodayLocalDate(tz);
-      const data = await schedulingService.getShifts({ start_date: today, limit: 50 });
-      const shifts = data.shifts.filter((s) => s.id !== assignment.shift_id);
+      const data = await schedulingService.getShifts({ start_date: today, limit: SWAP_TARGET_LIMIT });
+      // A cancelled shift is not happening, and a shift the member already
+      // holds a seat on is not one they can swap into. The server files both
+      // without complaint, so the request would reach an officer's queue only
+      // to be refused there.
+      const alreadyOn = new Set(
+        assignments
+          .filter((a) => a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED)
+          .map((a) => a.shift_id)
+      );
+      const shifts = data.shifts.filter(
+        (s) => s.id !== assignment.shift_id && s.status !== 'cancelled' && !alreadyOn.has(s.id)
+      );
       setAvailableShifts(shifts);
+      setAvailableShiftsTruncated(data.total > data.shifts.length);
       // "Specific Shift" may have been chosen while the list was in flight,
       // which left it on the 'pick' placeholder; an unchosen target would be
       // filed as an open giveaway, so settle it on the first shift now.
@@ -910,6 +929,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       );
                     })}
                   </select>
+                  {availableShiftsTruncated && (
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Only the next {SWAP_TARGET_LIMIT} shifts are listed; shifts further out are not shown.
+                    </p>
+                  )}
                 </div>
               )}
               <div>

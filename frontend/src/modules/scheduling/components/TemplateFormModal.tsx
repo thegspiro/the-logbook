@@ -222,11 +222,17 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
   const addResource = (typeValue: string) => {
     const opt = RESOURCE_TYPE_OPTIONS.find((o) => o.value === typeValue);
     if (!opt) return;
+    // Event Resource Defaults (Scheduling Settings) override the built-in crew
+    // for the types it covers. Its shipped defaults are the same crews as
+    // RESOURCE_TYPE_OPTIONS, so an untouched department sees no change; a type
+    // the setting does not list keeps the built-in crew.
+    const configured = getCachedShiftSettings().resourceTypeDefaults[opt.value]?.positions;
+    const positions = configured && configured.length > 0 ? configured : opt.defaultPositions;
     setFormData((prev) => ({
       ...prev,
       resources: [
         ...prev.resources,
-        { type: opt.value, label: opt.label, quantity: opt.defaultQty, positions: [...opt.defaultPositions] },
+        { type: opt.value, label: opt.label, quantity: opt.defaultQty, positions: [...positions] },
       ],
     }));
   };

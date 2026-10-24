@@ -22,9 +22,11 @@ import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow'
 
 interface OpenShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
+  /** Bumped by the page when the shift panel changes a shift, so this list re-reads. */
+  refreshKey?: number;
 }
 
-export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => {
+export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refreshKey = 0 }) => {
   const { user, checkPermission } = useAuthStore();
   const canManage = checkPermission('scheduling.manage');
   const canAssign = checkPermission('scheduling.assign') || canManage;
@@ -130,7 +132,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
 
   useEffect(() => {
     void loadShifts();
-  }, [loadShifts]);
+  }, [loadShifts, refreshKey]);
 
   const surfaceWarnings = (res: { evoc_warnings?: { message: string }[]; overtime_warnings?: string[] }) => {
     const messages = [...(res.evoc_warnings ?? []).map((w) => w.message), ...(res.overtime_warnings ?? [])];

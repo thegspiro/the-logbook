@@ -25,6 +25,20 @@ vi.mock('../services/api', async () => {
   };
 });
 
+// The department settings are read through the real accessor unless a test
+// installs its own; the resource-defaults block below is the one that does.
+const mockCachedSettings = vi.hoisted(() => ({ override: null as Record<string, unknown> | null }));
+vi.mock('../services/shiftSettingsApi', async () => {
+  const actual = await vi.importActual<typeof import('../services/shiftSettingsApi')>('../services/shiftSettingsApi');
+  return {
+    ...actual,
+    getCachedShiftSettings: () =>
+      mockCachedSettings.override
+        ? { ...actual.getCachedShiftSettings(), ...mockCachedSettings.override }
+        : actual.getCachedShiftSettings(),
+  };
+});
+
 const mockIsModuleOn = vi.fn((_key: string) => true);
 vi.mock('../../../hooks/useEnabledModules', () => ({
   useEnabledModules: () => ({
@@ -51,6 +65,7 @@ beforeEach(() => {
   mockIsModuleOn.mockImplementation(() => true);
   mockGetBasicApparatus.mockReset();
   mockGetBasicApparatus.mockResolvedValue([]);
+  mockCachedSettings.override = null;
 });
 
 describe('TemplateFormModal equipment checklists', () => {
@@ -421,5 +436,61 @@ describe('TemplateFormModal with a deactivated vehicle', () => {
 
     expect(screen.queryByRole('option', { name: /inactive/ })).not.toBeInTheDocument();
     expect(mockGetBasicApparatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('TemplateFormModal event resource defaults', () => {
+  const renderEventForm = (onSubmit: (data: Record<string, unknown>) => Promise<void>) =>
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="New event template"
+        apparatusOptions={[]}
+        apparatusSource="default"
+        initialData={{ ...emptyTemplateForm, name: 'Fair day', category: 'event' }}
+      />
+    );
+
+  const submittedResourceSeats = (data: Record<string, unknown> | undefined): string[] => {
+    const positions = data?.positions as { resources?: { positions: (string | { position: string })[] }[] } | undefined;
+    return (positions?.resources?.[0]?.positions ?? []).map((p) => (typeof p === 'string' ? p : p.position));
+  };
+
+  it('staffs an added resource from the department’s Event Resource Defaults', async () => {
+    // The settings card promised this and nothing read it: the hardcoded crew
+    // was used whatever the department saved.
+    mockCachedSettings.override = {
+      resourceTypeDefaults: {
+        first_aid_station: { label: 'First Aid Station', positions: ['paramedic', 'ems', 'ems'] },
+      },
+    };
+    const user = userEvent.setup();
+    let submitted: Record<string, unknown> | undefined;
+    renderEventForm(async (data) => {
+      submitted = data;
+    });
+
+    await user.click(screen.getByRole('button', { name: 'First Aid Station' }));
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(submitted).toBeDefined());
+    expect(submittedResourceSeats(submitted)).toEqual(['paramedic', 'ems', 'ems']);
+  });
+
+  it('keeps the built-in crew for a type the defaults do not list', async () => {
+    mockCachedSettings.override = { resourceTypeDefaults: {} };
+    const user = userEvent.setup();
+    let submitted: Record<string, unknown> | undefined;
+    renderEventForm(async (data) => {
+      submitted = data;
+    });
+
+    await user.click(screen.getByRole('button', { name: 'First Aid Station' }));
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(submitted).toBeDefined());
+    expect(submittedResourceSeats(submitted)).toEqual(['ems', 'ems']);
   });
 });

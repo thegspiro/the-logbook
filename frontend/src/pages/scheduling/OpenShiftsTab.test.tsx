@@ -114,6 +114,17 @@ describe('OpenShiftsTab', () => {
     expect(screen.getByText('Refresh')).toBeInTheDocument();
   });
 
+  it('re-reads the board when the page says a shift changed', async () => {
+    // A sign-up or a cancellation in the shift panel otherwise leaves the
+    // shift listed with a Sign Up button the server will refuse.
+    const { rerender } = renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} refreshKey={0} />);
+    await waitFor(() => expect(mockGetOpenShifts).toHaveBeenCalledTimes(1));
+
+    rerender(<OpenShiftsTab onViewShift={mockOnViewShift} refreshKey={1} />);
+
+    await waitFor(() => expect(mockGetOpenShifts).toHaveBeenCalledTimes(2));
+  });
+
   it('should render empty state when no shifts available', async () => {
     mockGetOpenShifts.mockResolvedValue([]);
     mockGetShifts.mockResolvedValue({ shifts: [], total: 0 });

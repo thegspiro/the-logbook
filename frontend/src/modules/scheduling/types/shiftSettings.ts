@@ -17,9 +17,11 @@ export const BUILTIN_POSITIONS: PositionOption[] = [
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
   { value: 'ems', label: 'EMT' },
-  // Offered but not enabled by default: a BLS department never staffs a medic
-  // seat, and a seat nobody can fill is worse than one they tick on. Turning
-  // it on is one checkbox in Position Names.
+  // Not in the default `enabledPositions`. That list is saved from Position
+  // Names but has no reader yet: template and shift pickers offer the fixed
+  // BUILTIN_POSITION_OPTIONS (which has no Paramedic) plus custom positions,
+  // so ticking one there changes nothing, and the card says so. A department
+  // that staffs a medic seat adds it as a custom position.
   { value: 'paramedic', label: 'Paramedic' },
   { value: 'probationary', label: 'Probationary' },
   { value: 'volunteer', label: 'Volunteer' },

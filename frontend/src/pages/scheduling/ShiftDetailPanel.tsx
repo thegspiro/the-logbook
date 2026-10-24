@@ -690,6 +690,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const handleConfirm = async (assignmentId: string) => {
     if (pending.confirming) return;
     setPendingFlag('confirming', true);
+    const previousStatus = assignments.find((a) => a.id === assignmentId)?.status;
     // Optimistic update — show confirmed immediately
     setAssignments((prev) =>
       prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.CONFIRMED } : a))
@@ -698,10 +699,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await schedulingService.confirmAssignment(assignmentId);
       toast.success('Assignment confirmed');
       await refreshAssignments();
+      onRefresh?.();
     } catch (err) {
-      // Revert optimistic update
+      // Revert to what the row held before, not a guessed status.
       setAssignments((prev) =>
-        prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.ASSIGNED } : a))
+        prev.map((a) => (a.id === assignmentId && previousStatus ? { ...a, status: previousStatus } : a))
       );
       toast.error(getErrorMessage(err, 'Failed to confirm assignment'));
     } finally {
@@ -717,6 +719,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const handleDecline = async (assignmentId: string) => {
     if (pending.declining) return;
     setPendingFlag('declining', true);
+    const previousStatus = assignments.find((a) => a.id === assignmentId)?.status;
     // Optimistic update — show declined immediately
     setAssignments((prev) =>
       prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.DECLINED } : a))
@@ -725,10 +728,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await schedulingService.declineAssignment(assignmentId);
       toast.success('Assignment declined');
       await refreshAssignments();
+      // A decline frees the seat, so the board and the tab lists must re-read.
+      onRefresh?.();
     } catch (err) {
-      // Revert optimistic update
+      // Revert to what the row held before: a confirmed seat that failed to
+      // decline is still confirmed, not merely assigned.
       setAssignments((prev) =>
-        prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.ASSIGNED } : a))
+        prev.map((a) => (a.id === assignmentId && previousStatus ? { ...a, status: previousStatus } : a))
       );
       toast.error(getErrorMessage(err, 'Failed to decline assignment'));
     } finally {
