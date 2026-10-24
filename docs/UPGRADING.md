@@ -637,6 +637,32 @@ What an operator needs to know:
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
 
+### Plaintext to MySQL and Redis can now be refused, and certificate expiry is flagged (2026-10-24)
+
+Nothing changes until you set a switch: `DB_REQUIRE_TLS` and
+`REDIS_REQUIRE_TLS` both default to `false`. Guide: [TLS.md](./TLS.md#refusing-plaintext).
+
+- **Before switching, run `./scripts/tls-enforce.sh`.** It changes nothing; it
+  checks that each server is serving your certificates and lists every client
+  still connecting without TLS (they stop working at the switch).
+- **`REDIS_REQUIRE_TLS=true` needs the backend already on TLS** (`REDIS_SSL=true`,
+  `BACKEND_REDIS_PORT=6380`, client certificate), because it closes the plaintext
+  port and requires a client certificate. Otherwise the backend loses its cache
+  at the restart.
+- **A switch that cannot be honoured stops the container** with a `[tls] ERROR`
+  line instead of silently starting without it. Fix the certificates or set the
+  switch back to `false`.
+- **The Redis health check changed** in all four Unraid/Docker compose files: it
+  now runs `infrastructure/redis/healthcheck.sh` (mounted at `/healthcheck.sh`),
+  which keeps the password out of the command line and uses a container-local
+  socket once plaintext is closed. If you maintain your own compose file, copy
+  both the mount and the `test:` line.
+- **Administrators see a banner 30 days before a certificate in the backend's
+  TLS mount expires** (critical once expired). It reads public certificates only
+  and clears when you `--renew` and recreate the services.
+- The database does not require a client certificate (the `docker exec`
+  backup path would be locked out); see TLS.md for why.
+
 ### MySQL and Redis can offer TLS, and `REDIS_SSL=true` now works (2026-10-24)
 
 Nothing changes until you run `./scripts/tls-setup.sh`. With no certificates
@@ -667,8 +693,8 @@ working after you add them. Full guide: [TLS.md](./TLS.md).
 - **Backups:** once `tls/backup` holds a client certificate, the nightly sidecar
   and the restore drill connect with verified TLS and abort rather than fall
   back to plaintext if the directory is incomplete.
-- **Not yet enforced:** plaintext is still accepted. Refusing it, and requiring
-  the client certificate, is a separate later switch.
+- **Not yet enforced:** plaintext is still accepted until you set the switches
+  described in the entry above.
 
 ### Backups can be encrypted (2026-10-23)
 
