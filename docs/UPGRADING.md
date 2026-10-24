@@ -526,6 +526,31 @@ drive only after an administrator presses **Test and switch to Google Drive**.
 - The server needs outbound HTTPS to `www.googleapis.com` and
   `oauth2.googleapis.com`.
 
+### An explicit `null` for an on/off or count setting is refused with a 400 (2026-10-23)
+
+Migration `6dce1364ff7e` makes 99 columns `NOT NULL` with defaults. They are
+mostly on/off settings, counts, statuses and timestamps, across 36 tables,
+including training module configuration, inventory items and categories,
+shift templates and users. Which databases it touches:
+
+- **An installation that has been upgraded through the migrations** already had
+  these constraints. The migration finds nothing to change and finishes at once.
+- **An installation first set up from the models** (a fresh install) is
+  changed. Any stored `NULL` in one of these columns is set to the column's
+  default, and each affected table is rebuilt once to add the constraint. On a
+  large `inventory_items` or `checkout_records` table the rebuild takes longer
+  and the backend starts after it finishes. Back up first, as for every
+  upgrade.
+
+What you will notice afterwards: an API request that sends `null` for one of
+these fields gets a **400** naming the field ("Field 'quantity' cannot be
+cleared"). Before, an upgraded installation failed the same request with a 500
+and a fresh install stored the NULL. The app's own screens do not send these
+nulls. A script or integration that does should leave the field out instead.
+
+The downgrade does nothing on purpose: upgraded installations always had these
+constraints.
+
 ### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
 
 Nothing runs on upgrade. Three operator commands, all inside the backend

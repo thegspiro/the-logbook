@@ -454,13 +454,15 @@ class InventoryCategory(Base):
     )
 
     # Settings
-    requires_assignment: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False
+    requires_assignment: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
     )  # Must be assigned to member
-    requires_serial_number: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False
+    requires_serial_number: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
     )
-    requires_maintenance: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    requires_maintenance: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     low_stock_threshold: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # Alert when quantity falls below this
@@ -484,14 +486,19 @@ class InventoryCategory(Base):
     )  # Additional category-specific data
 
     # Status
-    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
+    active: Mapped[bool] = mapped_column(
+        Boolean, default=True, index=True, nullable=False, server_default="1"
+    )
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT")
@@ -658,11 +665,11 @@ class InventoryItem(Base):
     )
 
     # Quantity (for pool items)
-    quantity: Mapped[Optional[int]] = mapped_column(
-        Integer, default=1
+    quantity: Mapped[int] = mapped_column(
+        Integer, default=1, nullable=False, server_default="1"
     )  # On-hand / available count
-    quantity_issued: Mapped[Optional[int]] = mapped_column(
-        Integer, default=0
+    quantity_issued: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, server_default="0"
     )  # Currently issued to members
     unit_of_measure: Mapped[Optional[str]] = mapped_column(
         String(50)
@@ -710,7 +717,9 @@ class InventoryItem(Base):
     )  # Links to photos, manuals, etc.
 
     # Status
-    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
+    active: Mapped[bool] = mapped_column(
+        Boolean, default=True, index=True, nullable=False, server_default="1"
+    )
 
     # When a quartermaster confirmed a barcode label was printed for this item,
     # and who. Null means the item still needs one. Cleared automatically when
@@ -724,11 +733,14 @@ class InventoryItem(Base):
     )
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT")
@@ -978,14 +990,19 @@ class ItemAssignment(Base):
     return_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Status
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, index=True, nullable=False, server_default="1"
+    )
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     # Relationships
@@ -1062,8 +1079,8 @@ class ItemIssuance(Base):
     return_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Status
-    is_returned: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, index=True
+    is_returned: Mapped[bool] = mapped_column(
+        Boolean, default=False, index=True, nullable=False, server_default="0"
     )
 
     # Cost snapshot — records replacement_cost at the time of issuance
@@ -1090,11 +1107,14 @@ class ItemIssuance(Base):
     )  # Amount charged to member
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     # Relationships
@@ -1236,19 +1256,22 @@ class CheckOutRecord(Base):
     damage_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Status
-    is_returned: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, index=True
+    is_returned: Mapped[bool] = mapped_column(
+        Boolean, default=False, index=True, nullable=False, server_default="0"
     )
-    is_overdue: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, index=True
+    is_overdue: Mapped[bool] = mapped_column(
+        Boolean, default=False, index=True, nullable=False, server_default="0"
     )
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     # Relationships
@@ -1339,16 +1362,19 @@ class MaintenanceRecord(Base):
     )  # Photos, service reports, etc.
 
     # Status
-    is_completed: Mapped[Optional[bool]] = mapped_column(
-        Boolean, default=False, index=True
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, index=True, nullable=False, server_default="0"
     )
 
     # Timestamps
-    created_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT")
@@ -2101,7 +2127,9 @@ class NFPAItemCompliance(Base):
         Date, nullable=True
     )
     retirement_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    is_retired_by_age: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    is_retired_by_age: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Ensemble tracking — group coat + pants + helmet + gloves + boots
     ensemble_id: Mapped[Optional[str]] = mapped_column(
@@ -2273,8 +2301,12 @@ class NFPAExposureRecord(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Decontamination status
-    decon_required: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    decon_completed: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    decon_required: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    decon_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     decon_completed_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     decon_method: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
@@ -2645,7 +2677,9 @@ class ItemVariantGroup(Base):
     unit_of_measure: Mapped[Optional[str]] = mapped_column(String(50))
 
     # Status
-    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, index=True)
+    active: Mapped[bool] = mapped_column(
+        Boolean, default=True, index=True, nullable=False, server_default="1"
+    )
 
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(
@@ -2807,7 +2841,9 @@ class EquipmentKit(Base):
     min_rank_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Status
-    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(
@@ -2864,7 +2900,9 @@ class EquipmentKitItem(Base):
     )
 
     # Whether the member picks a size variant (for pool items with variants)
-    size_selectable: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    size_selectable: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Optional lines may be skipped when the catalog item is unavailable or
     # cannot be issued; required lines still fail the kit operation.
@@ -2873,7 +2911,9 @@ class EquipmentKitItem(Base):
     )
 
     # Sort order within the kit
-    sort_order: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    sort_order: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, server_default="0"
+    )
 
     # Relationships
     kit: Mapped["EquipmentKit"] = relationship(

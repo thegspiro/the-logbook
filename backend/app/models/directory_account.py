@@ -26,6 +26,10 @@ from app.core.utils import generate_uuid
 
 GOOGLE_WORKSPACE_INTEGRATION = "google-workspace"
 MICROSOFT_365_INTEGRATION = "microsoft-365"
+DIRECTORY_INTEGRATION_TYPES = (GOOGLE_WORKSPACE_INTEGRATION, MICROSOFT_365_INTEGRATION)
+# Integration config key: retiring suspends the member's directory account too.
+# Off unless the department turns it on (owner decision, 2026-10-23).
+SUSPEND_ON_RETIREMENT_KEY = "suspend_on_retirement"
 
 
 class DirectoryProvider(str, Enum):
@@ -75,6 +79,12 @@ class DirectoryAccountProvision(Base):
     )
     # Group addresses the member still has to be added to.
     pending_groups: Mapped[Optional[list[Any]]] = mapped_column(JSON, nullable=True)
+    # Groups a departed member's account still has to be taken out of: the
+    # integration's configured groups when the departure was recorded, less
+    # any it has left. The sweep retries what is listed; a return clears it.
+    pending_group_removals: Mapped[Optional[list[Any]]] = mapped_column(
+        JSON, nullable=True
+    )
     # The configured license could not be assigned yet (Microsoft 365, which
     # gives an account no mailbox until it is licensed). A retry assigns it.
     license_pending: Mapped[bool] = mapped_column(
@@ -116,6 +126,18 @@ class DirectoryAccountProvision(Base):
     # When the departure or return was recorded: how long an account has
     # been waiting, which ``updated_at`` cannot say -- every retry moves it.
     suspension_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # The member's name changed and the account (one The Logbook created) has
+    # not been given it yet. Set with the rename; the sweep retries it.
+    name_pending: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # When the daily departure check, listing the directory, first found this
+    # departed member's account still there more than 90 days after it was
+    # suspended -- still holding its license. Cleared when the account is
+    # gone from the directory, or the member returns.
+    long_suspended_since: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_by: Mapped[Optional[str]] = mapped_column(

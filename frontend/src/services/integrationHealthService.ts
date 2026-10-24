@@ -30,6 +30,11 @@ export interface IntegrationDetail {
   last_error: string | null;
   last_error_at: string | null;
   consecutive_error_count: number;
+  /** Days until the stored credential expires (negative once it has), where
+   * one is recorded — today only Microsoft 365's client secret. */
+  credential_days_left?: number | null;
+  /** True from 30 days before that expiry: the same rule the morning email uses. */
+  credential_expiring?: boolean;
   health: IntegrationHealth;
   /** True when Retry Sync re-runs a data sync; otherwise it re-checks the connection. */
   supports_sync: boolean;

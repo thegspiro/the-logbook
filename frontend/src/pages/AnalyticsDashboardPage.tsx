@@ -3,6 +3,8 @@ import { useParams } from 'react-router';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 import { useTimezone } from '../hooks/useTimezone';
 import { Breadcrumbs } from '../components/ux';
+import { QrCode } from 'lucide-react';
+import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { formatTime } from '../utils/dateFormatting';
 
 /**
@@ -100,34 +102,40 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     );
   }
 
+  const scopeLine = eventId ? 'Check-in scans for this event' : 'Check-in scans across all events';
+  const exportButton = (
+    <button
+      onClick={() => {
+        void exportData();
+      }}
+      className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
+    >
+      Export Data
+    </button>
+  );
+
   return (
     <div className={`mx-auto min-h-screen max-w-7xl ${shellPadding}`}>
-      {trail && <Breadcrumbs items={trail} />}
-
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          {/* Embedded, the Events hub's section nav already names this page, so
-              the title stays for heading navigation only and the hub keeps the
-              page's one <h1>. Standalone, it is the page's own title. */}
-          {embedded ? (
+      {embedded ? (
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            {/* Embedded, the Events hub's section nav already names this page,
+                so the title stays for heading navigation only and the hub
+                keeps the page's one <h1>. */}
             <h2 className="sr-only">QR Code Analytics</h2>
-          ) : (
-            <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">QR Code Analytics</h1>
-          )}
-          <p className={`text-theme-text-secondary ${embedded ? '' : 'mt-1'}`}>
-            {eventId ? 'Check-in scans for this event' : 'Check-in scans across all events'}
-          </p>
+            <p className="text-theme-text-secondary">{scopeLine}</p>
+          </div>
+          {exportButton}
         </div>
-        <button
-          onClick={() => {
-            void exportData();
-          }}
-          className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
-        >
-          Export Data
-        </button>
-      </div>
+      ) : (
+        <EventsPageHeader
+          icon={QrCode}
+          title="QR Code Analytics"
+          subtitle={scopeLine}
+          parentCrumbs={eventId ? [{ label: 'Event', path: `/events/${eventId}` }] : undefined}
+          actions={exportButton}
+        />
+      )}
 
       {/* Key Metrics */}
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { EventsPage } from './EventsPage';
@@ -456,21 +456,27 @@ describe('EventsPage', () => {
       expect(settingsLink).toHaveAttribute('href', '/events/admin?tab=settings');
     });
 
-    it('should keep the secondary event actions out of the header until the menu is opened', async () => {
+    it('offers Templates and Attendance Trends in the section strip, not the More menu', async () => {
       const user = userEvent.setup();
       mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
       vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
 
       renderWithRouter(<EventsPage />);
 
-      await screen.findByRole('link', { name: /create event/i });
-      expect(screen.queryByRole('link', { name: /event templates/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: /attendance trends/i })).not.toBeInTheDocument();
+      const strip = await screen.findByRole('navigation', { name: 'Events sections' });
+      expect(within(strip).getByRole('link', { name: /event templates/i })).toHaveAttribute(
+        'href',
+        '/events/templates'
+      );
+      expect(within(strip).getByRole('link', { name: /attendance trends/i })).toHaveAttribute(
+        'href',
+        '/events/analytics'
+      );
 
       await user.click(screen.getByRole('button', { name: /more event actions/i }));
-
-      expect(screen.getByRole('link', { name: /event templates/i })).toHaveAttribute('href', '/events/templates');
-      expect(screen.getByRole('link', { name: /attendance trends/i })).toHaveAttribute('href', '/events/analytics');
+      // One way to each page: the menu no longer repeats the strip.
+      expect(screen.getAllByRole('link', { name: /event templates/i })).toHaveLength(1);
+      expect(screen.getAllByRole('link', { name: /attendance trends/i })).toHaveLength(1);
     });
 
     it('should not offer an overflow menu to a member with nothing to put in it', async () => {

@@ -31,6 +31,7 @@ import { LateLinesBadge } from '../components/LateLinesBadge';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
 import { PayByCheckDialog } from '../components/PayByCheckDialog';
+import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { expenseReportService, functionalClassService } from '../services/api';
 import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundShortfallNotice } from '../components/FundShortfallNotice';
@@ -508,6 +509,12 @@ const ExpenseReportDetailPage: React.FC = () => {
         requesterId={er.submittedBy}
         onDecided={() => void fetchExpenseReport(er.id)}
       />
+
+      {er.status === ExpenseReportStatus.DRAFT && (
+        <div className="card p-6">
+          <ApprovalRoutePreview entityType={ApprovalEntityType.EXPENSE_REPORT} amount={Number(er.totalAmount)} />
+        </div>
+      )}
 
       {/* Approval Timeline */}
       {er.approvalSteps.length > 0 && (
