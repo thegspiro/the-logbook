@@ -184,7 +184,9 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
           ) : error ? (
             <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
               <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              {/* red-700, not red-600: on this red-tinted panel red-600 measures
+                  4.13:1, under the 4.5:1 AA floor for normal-size text. */}
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-theme-text-muted py-10 text-center text-sm">
