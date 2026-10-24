@@ -5088,7 +5088,7 @@ class SchedulingService:
             return None, str(e)
 
     async def _clear_inactive_assignment(
-        self, shift_id: UUID, user_id: Any, organization_id: UUID | str
+        self, shift_id: UUID | str, user_id: Any, organization_id: UUID | str
     ) -> None:
         """Remove a member's declined or cancelled row so they can be re-seated.
 
