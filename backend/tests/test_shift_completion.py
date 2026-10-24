@@ -18,7 +18,8 @@ import json
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
@@ -26,6 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.shift_completion_service import ShiftCompletionService
+from app.services.training_module_config_service import TrainingModuleConfigService
 
 pytestmark = [pytest.mark.integration]
 
@@ -754,7 +756,10 @@ async def setup_shift_with_crew(db_session: AsyncSession):
             },
         )
 
-    today = date.today()
+    # The department's today, not the server's: the create and batch
+    # endpoints refuse a date after it, and for this New York department the
+    # server's UTC date is already tomorrow every evening.
+    today = datetime.now(ZoneInfo("America/New_York")).date()
     await db_session.execute(
         text(
             "INSERT INTO shifts (id, organization_id, shift_date, start_time, "
@@ -1119,35 +1124,50 @@ class TestTrainingCreditReleaseBoundary:
         service._create_skill_checkoffs.assert_not_awaited()
         service._update_requirement_progress.assert_not_awaited()
 
-    async def test_pending_review_does_not_credit_until_approved(self):
-        org_id = uuid.uuid4()
-        report = SimpleNamespace(
-            organization_id=str(org_id),
-            officer_id="officer-1",
-            review_status="draft",
-        )
+    @staticmethod
+    def _service_for(report, review_required: bool):
         db = MagicMock()
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
         service = ShiftCompletionService(db)
         service.get_report = AsyncMock(return_value=report)
         service._trigger_deferred_progress = AsyncMock()
-
-        await service.update_report(
-            "report-1",
-            org_id,
-            "officer-1",
-            {"review_status": "pending_review"},
+        return service, patch.object(
+            TrainingModuleConfigService,
+            "get_config",
+            AsyncMock(
+                return_value=SimpleNamespace(report_review_required=review_required)
+            ),
         )
+
+    async def test_pending_review_does_not_credit_until_approved(self):
+        # The filing officer only submits; it is the department's review
+        # setting, not the status they send, that decides whether the report
+        # is released (and credited) or held for review.
+        org_id = uuid.uuid4()
+        held = SimpleNamespace(
+            organization_id=str(org_id), officer_id="officer-1", review_status="draft"
+        )
+        service, config = self._service_for(held, review_required=True)
+        with config:
+            await service.update_report(
+                "report-1", org_id, "officer-1", {"review_status": "approved"}
+            )
+        assert held.review_status == "pending_review"
         service._trigger_deferred_progress.assert_not_awaited()
 
-        await service.update_report(
-            "report-1",
-            org_id,
-            "officer-1",
-            {"review_status": "approved"},
+        released = SimpleNamespace(
+            organization_id=str(org_id), officer_id="officer-1", review_status="draft"
         )
-        service._trigger_deferred_progress.assert_awaited_once_with(report, "officer-1")
+        service, config = self._service_for(released, review_required=False)
+        with config:
+            await service.update_report(
+                "report-1", org_id, "officer-1", {"review_status": "pending_review"}
+            )
+        assert released.review_status == "approved"
+        service._trigger_deferred_progress.assert_awaited_once_with(
+            released, "officer-1"
+        )
 
     async def test_reviewer_releases_credit_under_filing_officer(self):
         org_id = uuid.uuid4()
@@ -2291,3 +2311,288 @@ class TestShiftOfficerFilesWithoutTrainingManage:
                 current_user=officer,
             )
         assert exc.value.status_code == 403
+
+
+# ── Review rules: status, sign-offs, orphaned drafts, trend, batch, date ──
+
+
+class TestFilingOfficerCannotSetReviewStatus:
+    """Once submitted, a report's status changes only through review."""
+
+    async def _report(self, db_session, setup_training_org, review_status):
+        org_id, officer_id, trainee_id = setup_training_org
+        svc = ShiftCompletionService(db_session)
+        report = await svc.create_report(
+            organization_id=uuid.UUID(org_id),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=date.today() - timedelta(days=1),
+            hours_on_shift=12.0,
+            review_status=review_status,
+        )
+        return svc, report, org_id, officer_id
+
+    async def test_cannot_approve_own_pending_report(
+        self, db_session, setup_training_org
+    ):
+        svc, report, org_id, officer_id = await self._report(
+            db_session, setup_training_org, "pending_review"
+        )
+        with pytest.raises(ValueError, match="changed through review"):
+            await svc.update_report(
+                report.id, uuid.UUID(org_id), officer_id, {"review_status": "approved"}
+            )
+        assert report.review_status == "pending_review"
+
+    async def test_cannot_clear_a_reviewers_flag(self, db_session, setup_training_org):
+        svc, report, org_id, officer_id = await self._report(
+            db_session, setup_training_org, "flagged"
+        )
+        with pytest.raises(ValueError, match="changed through review"):
+            await svc.update_report(
+                report.id,
+                uuid.UUID(org_id),
+                officer_id,
+                {"review_status": "pending_review"},
+            )
+
+    async def test_submitting_a_draft_follows_the_departments_review_setting(
+        self, db_session, setup_training_org
+    ):
+        svc, report, org_id, officer_id = await self._report(
+            db_session, setup_training_org, "draft"
+        )
+        config = await TrainingModuleConfigService(db_session).get_config(org_id)
+        config.report_review_required = True
+        await db_session.flush()
+
+        updated = await svc.update_report(
+            report.id, uuid.UUID(org_id), officer_id, {"review_status": "approved"}
+        )
+        assert updated.review_status == "pending_review"
+
+
+class TestReapprovalSignsOffOnce:
+    """A report approved, flagged and approved again signs each skill off once."""
+
+    async def test_reapproval_does_not_repeat_signoffs_or_competency(
+        self, db_session, setup_training_org
+    ):
+        from sqlalchemy import func, select
+
+        from app.models.training import (
+            MemberCompetency,
+            SkillCheckoff,
+            SkillEvaluation,
+            TrainingModuleConfig,
+        )
+
+        org_id, officer_id, trainee_id = setup_training_org
+        db_session.add(
+            TrainingModuleConfig(
+                organization_id=org_id, practical_skills_method="shift_signoffs"
+            )
+        )
+        skill = SkillEvaluation(organization_id=org_id, name="Hose Deployment")
+        db_session.add(skill)
+        await db_session.flush()
+
+        svc = ShiftCompletionService(db_session)
+        report = await svc.create_report(
+            organization_id=uuid.UUID(org_id),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=date.today() - timedelta(days=1),
+            hours_on_shift=12.0,
+            skills_observed=[{"skill_name": "Hose Deployment", "demonstrated": True}],
+            review_status="approved",
+        )
+        await svc.review_report(report.id, uuid.UUID(org_id), officer_id, "flagged")
+        await svc.review_report(report.id, uuid.UUID(org_id), officer_id, "approved")
+
+        checkoffs = (
+            await db_session.execute(
+                select(func.count(SkillCheckoff.id)).where(
+                    SkillCheckoff.user_id == trainee_id,
+                    SkillCheckoff.skill_evaluation_id == skill.id,
+                )
+            )
+        ).scalar()
+        competency = (
+            await db_session.execute(
+                select(MemberCompetency).where(
+                    MemberCompetency.user_id == trainee_id,
+                    MemberCompetency.skill_evaluation_id == skill.id,
+                )
+            )
+        ).scalar_one()
+        assert checkoffs == 1
+        assert competency.evaluation_count == 1
+        assert competency.current_level.value == "novice"
+
+
+class TestOrphanedDraft:
+    """A draft whose filing officer was deleted can still be completed."""
+
+    async def _draft(self, db_session, setup_training_org, orphan: bool):
+        org_id, officer_id, trainee_id = setup_training_org
+        svc = ShiftCompletionService(db_session)
+        report = await svc.create_report(
+            organization_id=uuid.UUID(org_id),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=date.today() - timedelta(days=1),
+            hours_on_shift=12.0,
+            review_status="draft",
+        )
+        if orphan:
+            # What a permanent delete of the officer leaves (SET NULL).
+            report.officer_id = None
+            await db_session.flush()
+        return svc, report, org_id
+
+    async def test_a_training_manager_may_complete_it(
+        self, db_session, setup_training_org
+    ):
+        svc, report, org_id = await self._draft(
+            db_session, setup_training_org, orphan=True
+        )
+        updated = await svc.update_report(
+            report.id,
+            uuid.UUID(org_id),
+            str(uuid.uuid4()),
+            {"officer_narrative": "Finished by the training officer"},
+            manages_training=True,
+        )
+        assert updated.officer_narrative == "Finished by the training officer"
+
+    async def test_without_training_manage_it_stays_refused(
+        self, db_session, setup_training_org
+    ):
+        svc, report, org_id = await self._draft(
+            db_session, setup_training_org, orphan=True
+        )
+        with pytest.raises(ValueError, match="Only the filing officer"):
+            await svc.update_report(
+                report.id,
+                uuid.UUID(org_id),
+                str(uuid.uuid4()),
+                {"officer_narrative": "x"},
+            )
+
+    async def test_another_officers_live_draft_stays_theirs(
+        self, db_session, setup_training_org
+    ):
+        svc, report, org_id = await self._draft(
+            db_session, setup_training_org, orphan=False
+        )
+        with pytest.raises(ValueError, match="Only the filing officer"):
+            await svc.update_report(
+                report.id,
+                uuid.UUID(org_id),
+                str(uuid.uuid4()),
+                {"officer_narrative": "x"},
+                manages_training=True,
+            )
+
+
+class TestTraineeTrendIsTheLatestTwelveMonths:
+    async def test_thirteen_months_shows_the_newest_twelve(
+        self, db_session, setup_training_org
+    ):
+        org_id, officer_id, trainee_id = setup_training_org
+        svc = ShiftCompletionService(db_session)
+        first_of_month = date.today().replace(day=1)
+        months = []
+        for back in range(13):
+            year_shift, month_index = divmod(first_of_month.month - 1 - back, 12)
+            day = date(first_of_month.year + year_shift, month_index + 1, 1)
+            months.append(day.strftime("%Y-%m"))
+            await svc.create_report(
+                organization_id=uuid.UUID(org_id),
+                officer_id=uuid.UUID(officer_id),
+                trainee_id=trainee_id,
+                shift_date=day,
+                hours_on_shift=12.0,
+            )
+
+        stats = await svc.get_trainee_stats(uuid.UUID(org_id), trainee_id)
+
+        assert [m["month"] for m in stats["monthly"]] == sorted(months)[1:]
+
+
+class TestBatchCommitsOnce:
+    async def test_an_approved_report_in_a_batch_does_not_commit_mid_batch(
+        self, db_session, setup_training_org
+    ):
+        org_id, officer_id, trainee_id = setup_training_org
+        svc = ShiftCompletionService(db_session)
+        # areas_for_improvement triggers the follow-up alert, so both
+        # notification paths are reached.
+        with patch.object(db_session, "commit", AsyncMock()) as commit:
+            await svc.create_report(
+                organization_id=uuid.UUID(org_id),
+                officer_id=uuid.UUID(officer_id),
+                trainee_id=trainee_id,
+                shift_date=date.today() - timedelta(days=1),
+                hours_on_shift=12.0,
+                areas_for_improvement="Size-up",
+                review_status="approved",
+                commit=False,
+            )
+        commit.assert_not_awaited()
+
+
+class TestFutureShiftDateUsesTheDepartmentsCalendar:
+    async def test_the_schema_no_longer_judges_the_date(self):
+        from app.schemas.shift_completion import ShiftCompletionReportCreate
+
+        # A department ahead of UTC is already on the server's tomorrow.
+        tomorrow = date.today() + timedelta(days=1)
+        data = ShiftCompletionReportCreate(
+            trainee_id=str(uuid.uuid4()), shift_date=tomorrow, hours_on_shift=12
+        )
+        assert data.shift_date == tomorrow
+
+    async def test_the_endpoint_refuses_a_date_after_the_departments_today(
+        self, db_session, setup_shift_with_crew
+    ):
+        from app.api.v1.endpoints import shift_completion as ep
+        from app.schemas.shift_completion import BatchShiftReportCreate
+
+        d = setup_shift_with_crew
+        officer = TestShiftOfficerFilesWithoutTrainingManage._user(
+            d["officer_id"], d["org_id"], "training.manage"
+        )
+        with pytest.raises(HTTPException) as exc:
+            await ep.batch_create_shift_reports(
+                BatchShiftReportCreate(
+                    shift_date=d["shift_date"] + timedelta(days=1),
+                    hours_on_shift=12.0,
+                    crew_member_ids=[d["crew_1"]],
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+        assert exc.value.status_code == 400
+        assert "future" in exc.value.detail
+
+    async def test_refuses_only_after_the_departments_today(
+        self, db_session, setup_training_org
+    ):
+        from app.services.shift_completion_service import reject_future_shift_date
+        from app.utils.org_timezone import resolve_org_today
+
+        org_id, _, _ = setup_training_org
+        await db_session.execute(
+            text("UPDATE organizations SET timezone = :tz WHERE id = :id"),
+            {"tz": "Pacific/Kiritimati", "id": org_id},
+        )
+        await db_session.flush()
+        today = await resolve_org_today(db_session, org_id)
+
+        await reject_future_shift_date(db_session, org_id, today)
+        with pytest.raises(ValueError, match="cannot be in the future"):
+            await reject_future_shift_date(
+                db_session, org_id, today + timedelta(days=1)
+            )
