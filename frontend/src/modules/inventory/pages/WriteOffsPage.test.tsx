@@ -54,12 +54,12 @@ describe('WriteOffsPage', () => {
     mockGetWriteOffRequests.mockResolvedValue([makeWriteOff()]);
   });
 
-  it('renders page title and back link', async () => {
+  it('renders its title, with the way back left to the admin header', async () => {
     renderWithRouter(<WriteOffsPage />);
-    expect(screen.getByText('Write-Off Requests')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Write-Off Requests' })).toBeInTheDocument();
     expect(screen.getByText('Process loss and damage write-off requests')).toBeInTheDocument();
-    const backLink = screen.getByRole('link', { name: /Back to Admin/ });
-    expect(backLink).toHaveAttribute('href', '/inventory/admin');
+    // InventoryAdminLayout draws the trail and area cards around this page.
+    expect(screen.queryByRole('link', { name: /Back to Admin/ })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(mockGetWriteOffRequests).toHaveBeenCalledWith({ status: 'pending' });
     });

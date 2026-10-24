@@ -7,8 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
-import { ArrowLeft, SlidersHorizontal, RefreshCw, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { SlidersHorizontal, RefreshCw, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { roleService } from '../../../services/userServices';
 import type { IssuanceAllowance, InventoryCategory, Role } from '../types';
@@ -16,7 +15,6 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import toast from 'react-hot-toast';
-import { Breadcrumbs } from '../../../components/ux';
 
 const PERIOD_OPTIONS = [
   { value: 'annual', label: 'Per Year' },
@@ -136,24 +134,14 @@ const AllowancesPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-4xl py-6 sm:py-8">
-        <Breadcrumbs />
-
-        <Link
-          to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Admin
-        </Link>
-
+      <div className="max-w-4xl py-6 sm:py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-blue-600 p-2">
               <SlidersHorizontal className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-xl font-bold">Issuance Allowances</h1>
+              <h2 className="text-theme-text-primary text-xl font-bold">Issuance Allowances</h2>
               <p className="text-theme-text-muted text-sm">
                 Limit how many units of a category each member can be issued per period
               </p>

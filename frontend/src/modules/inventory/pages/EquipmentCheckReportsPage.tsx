@@ -41,7 +41,6 @@ import {
   toLocalISODate,
 } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { Modal } from '../../../components/Modal';
 import { dayHeading } from '../utils/dayHeading';
 import { lastCheckLabel } from '../utils/lastCheckLabel';
@@ -106,12 +105,9 @@ const EquipmentCheckReportsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-6 sm:space-y-5 sm:px-6">
-        {/* On a phone the trail is one link up; the title and its tabs follow
-            directly, so a report starts on the first screen. */}
-        <Breadcrumbs className="mb-0" compactOnPhone />
+      <div className="max-w-7xl space-y-4 py-6 sm:space-y-5">
         <div>
-          <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Equipment Check Reports</h1>
+          <h2 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Equipment Check Reports</h2>
           <p className="text-theme-text-muted text-sm max-sm:hidden">Review compliance and deficiencies</p>
         </div>
 

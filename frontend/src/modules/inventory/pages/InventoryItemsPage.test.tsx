@@ -92,6 +92,29 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import InventoryItemsPage from './InventoryItemsPage';
+import { InventoryAdminShellContext } from '../components/inventoryAdminShell';
+import type { InventoryAdminShell } from '../components/inventoryAdminShell';
+
+/** Only presence matters to the page: it reads the shell to know it is inside the header. */
+const ADMIN_SHELL: InventoryAdminShell = {
+  data: {
+    summary: null,
+    lowStockAlerts: [],
+    pendingReturns: 0,
+    pendingRequests: 0,
+    pendingWriteOffs: 0,
+    setupStatus: null,
+    attentionRows: [],
+    failedSources: [],
+    medicalExpiring: null,
+    loading: false,
+    reload: () => Promise.resolve(),
+  },
+  visibleCards: [],
+  modulesLoading: false,
+  canManage: true,
+  refreshFrame: () => undefined,
+};
 
 const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   id: 'it-1',
@@ -178,6 +201,26 @@ describe('InventoryItemsPage', () => {
     // A failed load is not an empty department.
     expect(await screen.findByText('The items did not load')).toBeInTheDocument();
     expect(screen.queryByText('Your department has no inventory items yet')).not.toBeInTheDocument();
+  });
+
+  it('keeps the Operations header on its own routes', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    expect(await screen.findByRole('heading', { level: 1, name: /Inventory Items/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Administration/ })).toHaveAttribute('href', '/inventory/admin');
+  });
+
+  it('drops its own header chrome inside Inventory Administration’s header', async () => {
+    // At /inventory/admin/items the layout already draws the trail, the area
+    // cards and the way back, so the Operations strip and the Administration
+    // link would be a second navigation above the first.
+    renderWithRouter(
+      <InventoryAdminShellContext.Provider value={ADMIN_SHELL}>
+        <InventoryItemsPage />
+      </InventoryAdminShellContext.Provider>
+    );
+    expect(await screen.findByRole('heading', { level: 2, name: /Inventory Items/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Administration/ })).not.toBeInTheDocument();
   });
 
   it('renders items and summary stats', async () => {

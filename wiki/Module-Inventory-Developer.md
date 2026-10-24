@@ -71,19 +71,32 @@ the page.
 
 ### Inventory Administration hub
 
-`/inventory/admin` opens on the three supply lines a department staffs —
-**PPE & Turnout Gear**, **Uniforms** and **EMS Supplies** — which share one
-catalog partitioned by `inventory_categories.item_type`. Below them the cards
-are grouped by task: **Catalog**, **Issuance & Members**, **Requests &
-Approvals**, **Readiness & Compliance**, **Department Store** and **Setup &
-Tools** (`inventoryHubCards.ts`).
+Navigation is drawn the way Training Administration's is: seven area cards
+(**Overview**, **Catalog**, **Issuance & Members**, **Requests & Approvals**,
+**Readiness & Compliance**, **Department Store**, **Setup & Tools**) above a
+strip of the chosen area's pages. The pages are the hub cards
+(`inventoryHubCards.ts`), grouped by `inventoryAdminAreas.ts`.
 
-- **Every card carries the gate of the route it targets**, and a section with
-  no visible cards is not rendered. `checkPermission` is exact match plus
+Each page keeps its own route. `InventoryAdminLayout` draws the header, and the
+routes in `INVENTORY_ADMIN_SHELL_PATHS` wrap their page in it **inside** their
+`ProtectedRoute`; `inventoryAdminAreas.test.ts` fails if the list and the
+routes disagree. The layout loads the attention figures once
+(`useInventoryAdminData`) and shares them with the page through
+`useInventoryAdminShell()`; a page that is also served outside the hub
+(`InventoryItemsPage`, at `/inventory`) uses that to drop its own header
+chrome. A viewer who passes a page's gate but not the hub's gets the page with
+a breadcrumb trail and no header.
+
+Overview opens on the **Needs attention** queue and the three supply lines a
+department staffs — **PPE & Turnout Gear**, **Uniforms** and **EMS Supplies** —
+which share one catalog partitioned by `inventory_categories.item_type`.
+
+- **Every page carries the gate of the route it targets**, and an area with
+  no visible pages is not rendered. `checkPermission` is exact match plus
   module wildcard, so `inventory.manage` implies neither
   `inventory.view_medical` nor `inventory.check_*`.
 - The hub admits checklist officers and store managers, whose consoles it
-  links to; each card still resolves its own permission.
+  links to; each page still resolves its own permission.
 - The attention queue reads ten sources. Each carries a shape check, and a
   source that fails or returns a malformed body is named in a "Some inventory
   services did not respond" banner rather than crashing the page. Open return
@@ -891,20 +904,20 @@ Request status labels are `EQUIPMENT_REQUEST_STATUS_LABELS` in
 
 ### Key Components
 
-| Component               | Purpose                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `InventoryItemsPage`    | Items list: filters, location cards, pins, grouping, bulk actions, label selection                                             |
-| `InventoryAdminHub`     | Inventory Administration hub (cards in `inventoryHubCards.ts`)                                                                 |
-| `InventoryMembersPage`  | Per-member inventory view with sorting and expandable details                                                                  |
-| `ItemDetailPage`        | Item detail with barcode sidebar and tabs                                                                                      |
-| `MyEquipmentPage`       | My Issued Gear                                                                                                                 |
-| `RequestEquipmentModal` | Member request form over the requestable catalog                                                                               |
-| `MemberIdScannerModal`  | Camera-based member ID scanning, resolved through `POST /member-badges/resolve`                                                |
-| `InventoryScanModal`    | Barcode/QR scanning + live search for distribution and return (native BarcodeDetector with html5-qrcode fallback, **Tap NFC**) |
-| `ReturnItemsModal`      | List-based return workflow for a member's held items                                                                           |
-| `VariantCapsules`       | Size/colour/style pills                                                                                                        |
-| `LabelScopePicker`      | Choose a label batch by filter                                                                                                 |
-| `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect                                                                       |
+| Component               | Purpose                                                                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `InventoryItemsPage`    | Items list: filters, location cards, pins, grouping, bulk actions, label selection                                                      |
+| `InventoryAdminHub`     | Inventory Administration's Overview, inside `InventoryAdminLayout` (pages in `inventoryHubCards.ts`, areas in `inventoryAdminAreas.ts`) |
+| `InventoryMembersPage`  | Per-member inventory view with sorting and expandable details                                                                           |
+| `ItemDetailPage`        | Item detail with barcode sidebar and tabs                                                                                               |
+| `MyEquipmentPage`       | My Issued Gear                                                                                                                          |
+| `RequestEquipmentModal` | Member request form over the requestable catalog                                                                                        |
+| `MemberIdScannerModal`  | Camera-based member ID scanning, resolved through `POST /member-badges/resolve`                                                         |
+| `InventoryScanModal`    | Barcode/QR scanning + live search for distribution and return (native BarcodeDetector with html5-qrcode fallback, **Tap NFC**)          |
+| `ReturnItemsModal`      | List-based return workflow for a member's held items                                                                                    |
+| `VariantCapsules`       | Size/colour/style pills                                                                                                                 |
+| `LabelScopePicker`      | Choose a label batch by filter                                                                                                          |
+| `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect                                                                                |
 
 ### Test Coverage
 

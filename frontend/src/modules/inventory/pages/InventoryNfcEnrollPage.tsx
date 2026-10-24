@@ -23,7 +23,6 @@ import { useNfcScanner } from '../../../hooks/useNfcScanner';
 import { useNfcWriter } from '../../../hooks/useNfcWriter';
 import { useScanFeedback } from '../../../hooks/useScanFeedback';
 import { ScanSuccessFlash } from '../../../components/ux/ScanSuccessFlash';
-import { Breadcrumbs } from '../../../components/ux';
 import { NfcCredentialType } from '../../../constants/enums';
 import { buildInventoryTagUrl, generateInventoryTagCode } from '../../../constants/nfc';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -175,14 +174,12 @@ export const InventoryNfcEnrollPage: React.FC = () => {
   const remaining = Math.max(0, items.length - index);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 sm:px-6">
+    <div className="max-w-3xl space-y-4 py-6">
       <ScanSuccessFlash active={flashing} />
-      <Breadcrumbs />
-
       <header>
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
           <Tags className="h-5 w-5" /> Tag Items in Bulk
-        </h1>
+        </h2>
         <p className="text-theme-text-secondary mt-1 text-sm">
           Work down the list of items without a working tag, tagging each one in turn.
         </p>

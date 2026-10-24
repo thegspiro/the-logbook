@@ -29,7 +29,6 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 import { useAuthStore } from '../../../stores/authStore';
-import { Breadcrumbs } from '../../../components/ux';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
 
@@ -325,16 +324,14 @@ const SupplyExpiringPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:space-y-6 sm:px-6 sm:py-8">
-      {/* No back link of its own, and reachable by a scheduling officer holding
-          no inventory grant beyond this route's — so the trail drops the
-          Inventory crumbs it cannot open and keeps the rest. On a phone it is
-          one link up, to the nearest of those. */}
-      <Breadcrumbs className="mb-0" compactOnPhone />
-
+    <div className="max-w-5xl space-y-4 py-6 sm:space-y-6 sm:py-8">
+      {/* No back link or trail of its own: InventoryAdminLayout draws them.
+          A scheduling officer holding no inventory grant beyond this route's
+          gets the layout's trail without the header, which drops the Inventory
+          crumbs they cannot open and keeps the rest. */}
       <div>
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Expiring on Apparatus</h1>
+          <h2 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Expiring on Apparatus</h2>
           <div
             className="border-theme-surface-border flex shrink-0 items-center gap-0.5 rounded-lg border p-0.5"
             role="group"
@@ -439,12 +436,12 @@ const SupplyExpiringPage: React.FC = () => {
             <section key={group.name} aria-label={group.name} className="space-y-2">
               {/* Pinned below the fixed mobile header (top-0 from 768px) on an
                   opaque layer, so a long rig keeps saying which rig it is. */}
-              <h2 className={GROUP_HEADING_CLASS}>
+              <h3 className={GROUP_HEADING_CLASS}>
                 {group.name}{' '}
                 <span className="text-theme-text-muted font-normal">
                   · {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
                 </span>
-              </h2>
+              </h3>
               <ul className="space-y-2">{group.items.map(renderItem)}</ul>
             </section>
           ))}

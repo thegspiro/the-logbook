@@ -562,16 +562,29 @@ Admin**. The launching point for whoever runs the department's stock — gear,
 PPE, uniforms and EMS supplies, which share one catalog partitioned by
 `InventoryCategory.item_type`.
 
-Body, top to bottom: a **Needs attention** queue of record-level work (each row
-links to the record itself, not to a list); a **supply-line** row — PPE &
-Turnout Gear and Uniforms, both opening `/inventory/admin/items` filtered by
-`item_type`, plus EMS Supplies opening `/medical-supplies`; then the card wall
-grouped as Catalog, Issuance & Members, Requests & Approvals, Readiness &
-Compliance, Department Store, and Setup & Tools.
+Navigation matches Training Administration _(2026-10-24)_: seven **area cards**
+— Overview, Catalog, Issuance & Members, Requests & Approvals, Readiness &
+Compliance, Department Store, Setup & Tools — above a strip of the chosen
+area's pages and a line naming the open page. Unlike Training, each page keeps
+its own route: the admin pages listed in `INVENTORY_ADMIN_SHELL_PATHS`
+(`modules/inventory/pages/inventoryAdminAreas.ts`) wrap their element in
+`InventoryAdminLayout`, inside their `ProtectedRoute`, so every route keeps its
+own gate and URL. A page outside that list (the kiosk, the NFC scanning tools,
+Storage Areas, Import, Temporary Loans, EMS Supplies, the store console) still
+sits in the strip, marked as opening its own page. A viewer who passes a page's
+gate but not the hub's gets that page with a breadcrumb trail and no header.
+Area cards and pages are badged with the work waiting in them.
 
-> **Every card carries the gate of the route it targets**, from the registry in
-> `modules/inventory/pages/inventoryHubCards.ts`, and a section with no visible
-> cards is not rendered. This matters where a department splits the role:
+The Overview body, top to bottom: a **Needs attention** queue of record-level
+work (each row links to the record itself, not to a list); then a
+**supply-line** row — PPE & Turnout Gear and Uniforms, both opening
+`/inventory/admin/items` filtered by `item_type`, plus EMS Supplies opening
+`/medical-supplies`. **Headline Metrics** is Overview's second page, still at
+`?tab=settings`.
+
+> **Every page carries the gate of the route it targets**, from the registry in
+> `modules/inventory/pages/inventoryHubCards.ts`, and an area with no visible
+> pages is not rendered. This matters where a department splits the role:
 > `checkPermission` is exact match plus module wildcard, so `inventory.manage`
 > implies neither `inventory.view_medical` nor `inventory.check_*`. The seeded
 > Quartermaster holds no check grant, so the checklist cards do not appear for
