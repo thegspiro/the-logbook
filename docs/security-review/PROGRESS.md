@@ -35,62 +35,48 @@ notifications) — re-check `search_pull_requests` fresh rather than trusting
 this note.
 
 <details>
-<summary>Superseded — prior Open PR note ("None" after PR #3635's docs-only merge and #3634's closure as its duplicate, Feature 23, Medical supplies, pass 16), preserved for history</summary>
+<summary>Superseded — prior Open PR note (PR #3635, Feature 23, Medical supplies, pass 16, merged; duplicate sibling PR #3634 closed), preserved for history</summary>
 
-**None.** Two watchdog sessions raced Feature 23 (Medical supplies, pass 16)
-concurrently: PR #3635 (`claude/security-review-medical-supplies-p16`) merged
-first — docs-only (`docs/security-review/MSUP-23-medical-supplies.md` and
-this file, 2 files, 227/−2 lines; confirmed via the merged PR's own diff
-stat) — and PR #3634 (`claude/security-review-medical-supplies`, the same
-branch name an earlier, already-merged pass had used) was then closed as a
-duplicate superseded by #3635, per this rotation's own race-handling rule;
-its one genuinely new finding (MSUP-28, MED, a domain-check TOCTOU on
-`record_lot_recall`) had already been posted as a review comment on the
-actually-relevant target, the open sibling PR #3627 ("Medical supplies:
-record lot recalls"), rather than lost with the closed PR. Row 23 stays ✅.
-A docs-only merge is not independently recordable, so only this Open PR row
-needed clearing — which rode along in this pass's own commit (Feature 24,
-Meetings & minutes, pass 9) rather than getting a PR of its own.
-
-</details>
-
-<details>
-<summary>Superseded — prior Open PR note (PR #3634, closed as a duplicate of #3635; Feature 23, Medical supplies, pass 16), preserved for history</summary>
-
-**PR [#3634](https://github.com/thegspiro/the-logbook/pull/3634)** (branch
-`claude/security-review-medical-supplies`) — Feature 23 (Medical supplies),
-pass 16, a watchdog pickup. PR #3633 (Feature 22, Grants & fundraising,
-pass 10) had already merged, docs-only — not independently recordable, so
-only its Open PR row needed clearing, which rode along in this PR's commit.
-**0 fixed, 0 new findings on `main`** — re-verified the substantial delta
-since pass 15 (a new lot-recall lookup route, Next-expiry/uncounted-position
-tracking, truck lots in the lot export, the repo-wide numeric-bounds
-sweep), all already correctly org/domain-scoped. One finding (MSUP-28, MED)
-flagged as a review comment on the open, unmerged sibling PR #3627 ("Medical
-supplies: record lot recalls"), which is not on `main` and not counted in
-this pass's own totals. **This PR itself was closed unmerged, superseded by
-the identical, independently-opened PR #3635 — see above.**
+**PR [#3635](https://github.com/thegspiro/the-logbook/pull/3635)** (branch
+`claude/security-review-medical-supplies-p16`) —
+Feature 23 (Medical supplies), pass 16, a watchdog run. PR #3633 (Feature
+22, Grants & fundraising, pass 10) had already merged — confirmed via
+`list_pull_requests` (state=open, empty) and `search_pull_requests`
+(`head:claude/security-review-`, empty) immediately before starting, and
+row 23 (Medical supplies) was the first ⬜ row. **0 fixed, 0 new
+findings** — the real delta since pass 15 (six commits: the lot recall
+lookup's `GET /lots/search`, truck-stock links, a Low stock tab, a
+next-expiry sort, truck lots in the lot export, and an uncounted-positions
+table on the weekly email) was read in full and found clean: org scoping,
+domain pinning, LIKE-pattern escaping and HTML escaping all intact. Route
+count re-enumerated by AST at 26 (up from 25), the one addition being
+`search_medical_lots`. MSUP-4/MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) re-confirmed open, owner-accepted,
+unchanged. Noted for the next pass: PR #3627 ("Medical supplies: record
+lot recalls") is open but not yet merged, and will add three new routes
+(`GET /recalls`, `POST /recalls`, `POST /recalls/{id}/lift`) this findings
+file has not reviewed.
 
 Full writeup: `docs/security-review/MSUP-23-medical-supplies.md`'s
 **Pass 16** section.
 
+**A second, independent watchdog session raced this same pass concurrently**
+and opened PR #3634 (`claude/security-review-medical-supplies`, the same
+branch name an earlier, already-merged pass had used) with materially the
+same conclusions; #3635's push landed first and merged, so #3634 was closed
+as a duplicate per this rotation's own race-handling rule. #3634's one
+genuinely new finding (MSUP-28, MED, a domain-check TOCTOU on
+`record_lot_recall`) had already been posted as a review comment on the
+actually-relevant target, the open sibling PR #3627 ("Medical supplies:
+record lot recalls"), rather than lost with the closed PR.
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes).
+
 </details>
 
 <details>
-<summary>Superseded — prior Open PR note ("None" after PR #3633's docs-only merge, Feature 22, Grants & fundraising, pass 10), preserved for history</summary>
-
-**None.** PR #3633 (Feature 22, Grants & fundraising, pass 10) merged
-docs-only (`docs/security-review/GF-22-grants-fundraising.md` and
-`PROGRESS.md` only — confirmed by `git show --stat` on its merge commit,
-`dbf2d64b8`) — not independently recordable per this file's own rule above.
-Row 22 stays ✅. This pass (Feature 23, Medical supplies, pass 16) rides
-this clearing along with its own commit rather than opening a PR for it
-alone.
-
-</details>
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 10, PR #3633, merged docs-only), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 10, PR #3633, merged), preserved for history</summary>
 
 **PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633)** (branch
 `claude/security-review-grants-fundraising-p10`) —
@@ -21235,42 +21221,43 @@ against current code and confirmed still accurate.
 Full write-up: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 9**
 section.
 
-### 2026-10-24 — Feature 23 (Medical supplies, pass 16) — watchdog pickup, 0 fixed, 0 new findings on `main`; MSUP-28 flagged on open sibling PR #3627
+### 2026-10-24 — Feature 23 (Medical supplies, pass 16) — watchdog run, 0 fixed, 0 new findings
 
-Watchdog pickup for the security-review rotation: PR #3633 (Feature 22,
-Grants & fundraising, pass 10) had already merged, docs-only — not
-independently recordable per this file's own rule, so nothing to clear
-beyond the Open PR row itself. No open PR's head branch starts with
-`claude/security-review-` (`search_pull_requests` and `list_pull_requests`,
-both empty); row 23 was confirmed the next `⬜` row on a freshly fetched
-`main`.
+Watchdog run for the security-review rotation. PR #3633 (Feature 22,
+Grants & fundraising, pass 10) had already merged. No open PR's head
+branch starts with `claude/security-review-` (`list_pull_requests`
+state=open empty, and `search_pull_requests` `head:claude/security-review-`
+empty, both checked immediately before starting), and row 23 (Medical
+supplies) was confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `main` (head `dbf2d64b`).
 
-Scope check against pass 15's merge (`d21c20494`, PR #3455) found four days
-of real, substantial feature work on this module: a lot-recall lookup
-(`GET /lots/search`, route count 25 → 26), Next-expiry sorting and
-uncounted-position tracking added to the supply list/export/summary, truck
-lots added to the lot CSV export with a 30/60/90-day look-ahead window, and
-the repo-wide inventory numeric-bounds sweep (`8e43a68e7`, 75 fields across
-the shared inventory schemas). All re-verified directly against current
-code across all seven `CHECKLIST.md` dimensions — full route
-re-enumeration (26/26 auth-gated, OR-gated domain-first exactly as before),
-the new lookup's org/domain scoping on both its shelf and truck halves, its
-`LIKE` escaping, and the CSV exports' continued use of `SafeCsvWriter`.
-MSUP-4 and MSUP-11 (the two owner-accepted unbounded-list items) re-checked
-at their current line numbers, unchanged. **0 new findings on `main`.**
+Routes re-enumerated by AST walk rather than trusted from the prior pass's
+count: **26**, up from pass 15's 25 — the one addition is `GET
+/lots/search` (`search_medical_lots`), the lot recall lookup added by
+commit `c75e0cea` after pass 15 closed. Real delta since pass 15's baseline
+(`dce89db1`) is six commits, all read in full: the lot recall lookup
+itself (shelf half through `InventoryService.find_lots_by_number`, truck
+half through a new `lot_number` filter on
+`EquipmentCheckService.apparatus_expiring_stock`), a truck-row link to
+Inventory's swap/restock pages, a Low stock tab, a next-expiry sort on the
+items list/export, truck lots added to the lot export, and a "Not yet
+counted on apparatus" table on the weekly low-stock email. All six verified
+clean: the new route's LIKE pattern goes through `like_pattern()` with
+`escape=LIKE_ESCAPE_CHAR` on both the shelf and truck sides (Pitfall #25),
+every query stays org- and domain-scoped (including a subquery that scopes
+itself independently rather than inheriting the outer query's filter), both
+CSV exports still use `SafeCsvWriter`, the email's new section runs free
+text through `html.escape()`, and `sort_by` stays allowlisted (unknown keys
+fall back to a name sort, no arbitrary-column exposure). MSUP-4
+(`get_expiring_lots`, no row cap) and MSUP-11 (`list_lots`, no row cap)
+re-confirmed open at their current line numbers, still owner-accepted
+(`docs/KNOWN_LIMITATIONS.md`, 2026-10-05) — not re-opened for a fix.
 
-Separately, read PR #3627 ("Medical supplies: record lot recalls") — open
-against `main`, not merged, the sibling PR that will add the recall
-**recording**/**lifting** endpoints this pass's own `GET /lots/search`
-lookup anticipates. Not this pass's rotation scope (not on `main`) and not
-counted in the fix/flag totals, but flagged one real finding before it
-merges: **MSUP-28 (MED)** — `record_lot_recall` re-validates the
-duplicate-recall race under a row lock but not medical-domain membership,
-reopening the exact TOCTOU class MSUP-25 already fixed for this file's
-other medical writes (the service already has the `_items_in_domain_locked`
-helper this needs, one line above the ad hoc lock it uses instead). Posted
-as a review comment on PR #3627 rather than fixed, since that PR is not
-this review's own branch.
+Noted for the next pass, not reviewed here: PR #3627 ("Medical supplies:
+record lot recalls") is open against `main`, not yet merged
+(`mergeable_state: clean`), and will add a new `inventory_lot_recalls`
+table plus three new routes (`GET /recalls`, `POST /recalls`, `POST
+/recalls/{id}/lift`) once it lands.
 
 Full write-up: `docs/security-review/MSUP-23-medical-supplies.md`'s
 **Pass 16** section.
