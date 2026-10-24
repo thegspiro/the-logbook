@@ -87,6 +87,9 @@ import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { formatHoursExact } from '../utils/hoursFormatting';
 import { CREDITED_HOURS_BASIS } from '../components/events/creditedHours';
+import { EventCardTapsCard } from '../components/event-detail/EventCardTapsCard';
+import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
+import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 
 /**
  * `custom_fields` keys that are not custom fields.
@@ -265,6 +268,9 @@ export const EventDetailPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
+  // Card taps are shown to event managers; the integration only decides
+  // whether an event with none yet still gets an (empty) section.
+  const { isConnected: isIntegrationConnected } = useConnectedIntegrations({ enabled: canManage });
   // Deliberately a separate grant from events.manage: whoever closed the event
   // should not also be able to quietly reopen it and move the numbers.
   const canReopenAttendance = checkPermission('events.reopen_attendance');
@@ -1742,6 +1748,13 @@ export const EventDetailPage: React.FC = () => {
                 onPrintRoster={printRoster}
                 onExportCSV={exportAttendanceCSV}
                 attendanceFinalized={isAttendanceFinalized}
+              />
+            )}
+            {canManage && eventId && (
+              <EventCardTapsCard
+                eventId={eventId}
+                tz={tz}
+                cardsEnabled={isIntegrationConnected(NFC_ID_CARDS_INTEGRATION)}
               />
             )}
             {/* The member-facing counterpart. Managers are excluded rather

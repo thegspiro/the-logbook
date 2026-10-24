@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -24,6 +24,7 @@ from app.models.location import Location
 from app.models.nfc_tag import (
     NfcCardTap,
     NfcCheckInStatus,
+    NfcCheckInTarget,
     NfcTag,
     NfcTagStatus,
     NfcTapSource,
@@ -53,6 +54,33 @@ MAX_BULK_CARDS = 200
 # roster. Each list reports its true total, so a capped list says so.
 MAX_COVERAGE_ROWS = 1000
 MAX_EXPORT_ROWS = 10000
+
+# The window the Card Readers page counts over. A week shows whether a reader
+# is in use without one busy month swamping a quiet room.
+READER_SUMMARY_DAYS = 7
+MAX_READER_ROOMS = 500
+
+# Outcomes where the reader did its job: the member is checked in or out, or
+# already was. Everything else is a refusal worth an officer's attention.
+_SUCCESSFUL_OUTCOMES = (
+    NfcCheckInStatus.CHECKED_IN,
+    NfcCheckInStatus.CHECKED_OUT,
+    NfcCheckInStatus.ALREADY_CHECKED_IN,
+    NfcCheckInStatus.ALREADY_CHECKED_OUT,
+)
+
+# Fields that say whose card a tap was. Cleared for viewers who may see that a
+# reader was used but not by whom.
+_IDENTITY_KEYS = (
+    "tag_id",
+    "card_uid_preview",
+    "card_label",
+    "unknown_card_key",
+    "user_id",
+    "member_name",
+    "operator_id",
+    "operator_name",
+)
 
 # Short enough to read aloud ("unknown card 3f9a1c2b"), long enough that two
 # strangers' cards will not share one in a department's lifetime.
@@ -268,6 +296,10 @@ class NfcCardAdminService:
         source: Optional[NfcTapSource] = None,
         since: Optional[datetime] = None,
         until: Optional[datetime] = None,
+        location_id: Optional[str] = None,
+        target_type: Optional[NfcCheckInTarget] = None,
+        target_id: Optional[str] = None,
+        include_identity: bool = True,
         limit: int = 50,
         offset: int = 0,
     ) -> Tuple[List[Dict[str, Any]], int]:
@@ -290,6 +322,12 @@ class NfcCardAdminService:
             filters.append(NfcCardTap.tapped_at >= _as_utc(since))
         if until:
             filters.append(NfcCardTap.tapped_at < _as_utc(until))
+        if location_id:
+            filters.append(NfcCardTap.location_id == str(location_id))
+        if target_type:
+            filters.append(NfcCardTap.target_type == target_type)
+        if target_id:
+            filters.append(NfcCardTap.target_id == str(target_id))
 
         total = (
             await self.db.execute(
@@ -357,7 +395,120 @@ class NfcCardAdminService:
                     "target_name": tap.target_name,
                 }
             )
+        if not include_identity:
+            # A who-was-where log is a card administrator's to read. A room
+            # manager sees that a tap happened and how it ended, never whose
+            # card it was — the row ids that could be joined back to a member
+            # go with the names.
+            for item in items:
+                for key in _IDENTITY_KEYS:
+                    item[key] = None
         return items, total
+
+    # =========================================================================
+    # Readers (room kiosks)
+    # =========================================================================
+
+    async def reader_summary(
+        self,
+        organization_id: str,
+        *,
+        days: int = READER_SUMMARY_DAYS,
+        now: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """Every active room, with its reader switch and recent kiosk taps.
+
+        Counts cover kiosk taps only: a station is carried from room to room,
+        so a station tap says nothing about the reader mounted in a room.
+        """
+        org_id = str(organization_id)
+        cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=days)
+
+        rooms = (
+            await self.db.execute(
+                select(
+                    Location.id,
+                    Location.name,
+                    Location.building,
+                    Location.room_number,
+                    Location.nfc_badge_check_in_enabled,
+                )
+                .where(
+                    Location.organization_id == org_id,
+                    Location.is_active.is_(True),
+                )
+                .order_by(Location.name)
+                .limit(MAX_READER_ROOMS)
+            )
+        ).all()
+        if not rooms:
+            return []
+
+        kiosk_room = (
+            NfcCardTap.organization_id == org_id,
+            NfcCardTap.source == NfcTapSource.KIOSK,
+            NfcCardTap.location_id.in_([r.id for r in rooms]),
+        )
+        recent = {
+            row.location_id: row
+            for row in (
+                await self.db.execute(
+                    select(
+                        NfcCardTap.location_id,
+                        func.count().label("taps"),
+                        func.sum(
+                            case(
+                                (NfcCardTap.outcome.in_(_SUCCESSFUL_OUTCOMES), 0),
+                                else_=1,
+                            )
+                        ).label("refusals"),
+                    )
+                    .where(*kiosk_room, NfcCardTap.tapped_at >= cutoff)
+                    .group_by(NfcCardTap.location_id)
+                )
+            ).all()
+        }
+        last_tap = dict(
+            (
+                await self.db.execute(
+                    select(NfcCardTap.location_id, func.max(NfcCardTap.tapped_at))
+                    .where(*kiosk_room)
+                    .group_by(NfcCardTap.location_id)
+                )
+            ).all()
+        )
+
+        summary = []
+        for room in rooms:
+            counts = recent.get(room.id)
+            summary.append(
+                {
+                    "location_id": room.id,
+                    "name": room.name,
+                    "building": room.building,
+                    "room_number": room.room_number,
+                    "reader_enabled": bool(room.nfc_badge_check_in_enabled),
+                    "taps": int(counts.taps) if counts else 0,
+                    "refusals": int(counts.refusals or 0) if counts else 0,
+                    "last_tap_at": last_tap.get(room.id),
+                }
+            )
+        return summary
+
+    async def get_location(
+        self, location_id: str, organization_id: str
+    ) -> Optional[Location]:
+        """A room in this organization, or None (XC-3: the permission does not
+        scope the object)."""
+        location: Optional[Location] = (
+            await self.db.execute(
+                select(Location).where(
+                    Location.id == str(location_id),
+                    Location.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        return location
 
     # =========================================================================
     # Bulk status

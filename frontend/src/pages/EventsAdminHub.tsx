@@ -22,6 +22,7 @@ const CommunityEngagementTab = lazyWithRetry(() => import('./CommunityEngagement
 const PastEventsTab = lazyWithRetry(() => import('./PastEventsTab'));
 const EventRequestsTab = lazyWithRetry(() => import('./EventRequestsTab'));
 const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
+const EventCardCheckinsTab = lazyWithRetry(() => import('./EventCardCheckinsTab'));
 
 type AdminTab = EventsAdminTab;
 const tabs = EVENTS_ADMIN_TABS;
@@ -87,6 +88,7 @@ export const EventsAdminHub: React.FC = () => {
         {activeTab === 'requests' && <EventRequestsTab />}
         {activeTab === 'analytics' && <AnalyticsDashboardPage embedded />}
         {activeTab === 'community' && <CommunityEngagementTab />}
+        {activeTab === 'card_checkins' && <EventCardCheckinsTab />}
         {activeTab === 'settings' && <EventsSettingsTab onMetricsSaved={() => setFrameToken((token) => token + 1)} />}
       </Suspense>
     </AdminHubFrame>

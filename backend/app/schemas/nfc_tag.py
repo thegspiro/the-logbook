@@ -244,6 +244,39 @@ class NfcCardTapListResponse(UTCResponseBase):
     offset: int
 
 
+class NfcReaderRoom(UTCResponseBase):
+    """One room on the Card Readers page."""
+
+    model_config = _RESPONSE_CONFIG
+
+    location_id: str
+    name: str
+    building: Optional[str] = None
+    room_number: Optional[str] = None
+    reader_enabled: bool
+    taps: int
+    refusals: int
+    last_tap_at: Optional[datetime] = None
+
+
+class NfcReaderListResponse(UTCResponseBase):
+    """Rooms and their readers, plus what this viewer may do with them.
+
+    ``can_switch`` mirrors the grant ``PUT /locations/{id}/badge-check-in``
+    enforces, and ``can_see_members`` whether the room tap lists will name
+    members, so the screen offers neither a switch nor a name column the
+    server would refuse.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    items: List[NfcReaderRoom]
+    days: int
+    cards_enabled: bool
+    can_switch: bool
+    can_see_members: bool
+
+
 class NfcIdCardSettingsResponse(UTCResponseBase):
     model_config = _RESPONSE_CONFIG
 

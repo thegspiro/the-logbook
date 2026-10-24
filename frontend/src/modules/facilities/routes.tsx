@@ -32,6 +32,7 @@ const InspectionsListPage = lazyWithRetry(() => import('./pages/InspectionsListP
 const FacilitiesSettingsPage = lazyWithRetry(() => import('./pages/FacilitiesSettingsPage'));
 const LocationsPage = lazyWithRetry(() => import('../../pages/LocationsPage'));
 const RoomQRCodesPage = lazyWithRetry(() => import('../../pages/RoomQRCodesPage'));
+const CardReadersPage = lazyWithRetry(() => import('../../pages/CardReadersPage'));
 const RoomCheckInPage = lazyWithRetry(() => import('../../pages/RoomCheckInPage'));
 const ApparatusBasicPage = lazyWithRetry(() => import('../../pages/ApparatusBasicPage'));
 const LocationKioskPage = lazyWithRetry(() => import('../../pages/LocationKioskPage'));
@@ -153,6 +154,22 @@ export const getFacilitiesRoutes = () => (
             ]}
           >
             <RoomQRCodesPage />
+          </ProtectedRoute>
+        </Suspense>
+      }
+    />
+    {/* No module gate, unlike the QR codes page: a department on the plain
+        Locations page runs room kiosks with card readers too. The grants are
+        the room-management half of the QR page's, the ones /nfc-activity/readers
+        enforces. */}
+    <Route
+      path="/locations/card-readers"
+      element={
+        <Suspense fallback={null}>
+          <ProtectedRoute
+            requiredAnyPermission={['locations.manage', 'facilities.manage', 'locations.manage_nfc_tags']}
+          >
+            <CardReadersPage />
           </ProtectedRoute>
         </Suspense>
       }

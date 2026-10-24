@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronUp,
   QrCode,
+  Nfc,
   Building,
   HelpCircle,
   Monitor,
@@ -1010,6 +1011,8 @@ export default function LocationsPage() {
   const { confirm } = useConfirm();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canExportQRCodes = checkPermission('locations.manage') || checkPermission('facilities.manage');
+  // Mirrors the Card Readers route: room managers and room-tag writers.
+  const canViewReaders = canExportQRCodes || checkPermission('locations.manage_nfc_tags');
   // The page is open to every member, since events and forms pick from these
   // locations, so each control mirrors the permission its endpoint enforces.
   // Offered to a plain member, they ended in a 403 and "Failed to save setting".
@@ -1430,6 +1433,14 @@ export default function LocationsPage() {
               className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
             >
               <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
+            </Link>
+          )}
+          {canViewReaders && (
+            <Link
+              to="/locations/card-readers"
+              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+            >
+              <Nfc className="h-4 w-4" aria-hidden="true" /> Card Readers
             </Link>
           )}
           {canCreate && (!isSingleStation || stations.length === 0) && (
