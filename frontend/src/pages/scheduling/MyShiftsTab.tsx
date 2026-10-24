@@ -26,7 +26,7 @@ import type { ShiftRecord, ShiftAttendanceRecord } from '../../modules/schedulin
 import type { ExchangeCandidate } from '../../modules/scheduling/types';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
 import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
@@ -593,12 +593,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
             {displayList.map((assignment) => {
               const shift = assignment.shift;
               const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
-              const shiftDate = shift ? new Date(shift.shift_date + 'T12:00:00') : null;
+              // A calendar date, not an instant: formatted as written, so a viewer
+              // whose browser is hours from the department still sees its day.
+              const shiftDay = shift?.shift_date
+                ? formatCalendarDate(shift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })
+                : null;
               // Every row carries the same four actions, so each needs the
               // shift in its name or a screen reader hears "Confirm" per row
               // with nothing to tell them apart.
-              const when = shiftDate
-                ? `${formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}${shift?.start_time ? `, ${formatTime(shift.start_time, tz)}` : ''}`
+              const when = shiftDay
+                ? `${shiftDay}${shift?.start_time ? `, ${formatTime(shift.start_time, tz)}` : ''}`
                 : 'an unknown date';
 
               return (
@@ -618,7 +622,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                             checked={selectedIds.has(assignment.id)}
                             onChange={() => toggleSelection(assignment.id)}
                             className="border-theme-input-border h-4 w-4 shrink-0 rounded text-violet-600 focus:ring-violet-500"
-                            aria-label={`Select shift for ${shiftDate ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'unknown date'}`}
+                            aria-label={`Select shift for ${shiftDay ?? 'unknown date'}`}
                           />
                         )}
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
@@ -626,9 +630,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                       </div>
                       <div className="min-w-0">
                         <p className="text-theme-text-primary truncate text-sm font-semibold sm:text-base">
-                          {shiftDate
-                            ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz)
-                            : 'Unknown Date'}
+                          {shiftDay ?? 'Unknown Date'}
                         </p>
                         <p className="text-theme-text-secondary text-xs sm:text-sm">
                           {shift?.start_time
@@ -794,7 +796,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
               <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
               <p className="text-theme-text-secondary mt-1 text-sm">
                 {swapAssignment?.shift?.shift_date
-                  ? `Ask to swap your shift on ${formatDateCustom(swapAssignment.shift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz)}`
+                  ? `Ask to swap your shift on ${formatCalendarDate(swapAssignment.shift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}`
                   : 'Ask to swap your shift'}
               </p>
             </div>
@@ -880,11 +882,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                       >
                         {exchangeCandidates.map((c) => (
                           <option key={exchangeKey(c)} value={exchangeKey(c)}>
-                            {formatDateCustom(
-                              c.shift_date + 'T12:00:00',
-                              { weekday: 'short', month: 'short', day: 'numeric' },
-                              tz
-                            )}
+                            {formatCalendarDate(c.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}
                             {c.start_time ? ` ${formatTime(c.start_time, tz)}` : ''} — {c.user_name || 'Member'}
                             {c.position ? ` (${positionLabel(c.position)})` : ''}
                           </option>
@@ -918,10 +916,9 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                       </option>
                     )}
                     {availableShifts.map((s) => {
-                      const d = new Date(s.shift_date + 'T12:00:00');
                       return (
                         <option key={s.id} value={s.id}>
-                          {formatDateCustom(d, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}{' '}
+                          {formatCalendarDate(s.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
                           {formatTime(s.start_time, tz)}
                           {s.end_time ? ` - ${formatTime(s.end_time, tz)}` : ''}
                           {s.apparatus_unit_number ? ` (${s.apparatus_unit_number})` : ''}
@@ -1044,11 +1041,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                       {timeOffConflicts.map((a) => (
                         <li key={a.id}>
                           {a.shift?.shift_date
-                            ? formatDateCustom(
-                                a.shift.shift_date + 'T12:00:00',
-                                { weekday: 'short', month: 'short', day: 'numeric' },
-                                tz
-                              )
+                            ? formatCalendarDate(a.shift.shift_date, {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                              })
                             : 'Unknown date'}
                           {a.shift?.start_time ? ` at ${formatTime(a.shift.start_time, tz)}` : ''}
                         </li>

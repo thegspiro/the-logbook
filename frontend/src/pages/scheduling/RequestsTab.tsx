@@ -14,7 +14,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { SwapRequest, TimeOffRequest } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDate, formatTime, formatDateCustom } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { EXCHANGE_NOT_QUALIFIED_CODE, REQUEST_STATUS_COLORS, RequestStatus } from '../../constants/enums';
 import { useConfirm } from '../../contexts/ConfirmContext';
@@ -369,11 +369,7 @@ export const RequestsTab: React.FC = () => {
                             {req.offering_shift_date ? (
                               <>
                                 Offering:{' '}
-                                {formatDateCustom(
-                                  req.offering_shift_date + 'T12:00:00',
-                                  { month: 'short', day: 'numeric' },
-                                  tz
-                                )}
+                                {formatCalendarDate(req.offering_shift_date, { month: 'short', day: 'numeric' })}
                                 {req.offering_shift_start_time
                                   ? ` ${formatTime(req.offering_shift_start_time, tz)}`
                                   : ''}
@@ -385,11 +381,7 @@ export const RequestsTab: React.FC = () => {
                               <>
                                 {' '}
                                 {' \u2192 '}{' '}
-                                {formatDateCustom(
-                                  req.requesting_shift_date + 'T12:00:00',
-                                  { month: 'short', day: 'numeric' },
-                                  tz
-                                )}
+                                {formatCalendarDate(req.requesting_shift_date, { month: 'short', day: 'numeric' })}
                                 {req.requesting_shift_start_time
                                   ? ` ${formatTime(req.requesting_shift_start_time, tz)}`
                                   : ''}
@@ -538,9 +530,9 @@ export const RequestsTab: React.FC = () => {
                         </span>
                       </div>
                       <p className="text-theme-text-muted mt-0.5 text-xs">
-                        {formatDateCustom(req.start_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}
+                        {formatCalendarDate(req.start_date, { month: 'short', day: 'numeric' })}
                         {req.end_date !== req.start_date &&
-                          ` - ${formatDateCustom(req.end_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}`}
+                          ` - ${formatCalendarDate(req.end_date, { month: 'short', day: 'numeric' })}`}
                       </p>
                       {req.reason && (
                         <p className="text-theme-text-secondary mt-1 line-clamp-2 text-xs">{req.reason}</p>

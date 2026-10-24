@@ -29,8 +29,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import { reportGeneration } from '../../modules/scheduling/utils/patternGeneration';
 import type { ShiftTemplateRecord } from '../../modules/scheduling/services/api';
 import type { ShiftPattern } from '../../types/scheduling';
-import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, formatTimeOfDay } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatTimeOfDay } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type { PresetPatternDef, CycleEntry, WeekdayShiftType } from './shiftPatternPresets';
 import { PlatoonSelector } from './PlatoonSelector';
@@ -107,7 +106,6 @@ const CycleStrip: React.FC<{ config: Record<string, unknown> }> = ({ config }) =
 };
 
 export const PatternsTab: React.FC = () => {
-  const tz = useTimezone();
   const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
   const [templates, setTemplates] = useState<ShiftTemplateRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1064,28 +1062,20 @@ export const PatternsTab: React.FC = () => {
                         <p className="text-theme-text-muted mt-0.5 text-xs">
                           {templateName && <span>Template: {templateName} · </span>}
                           Starts:{' '}
-                          {formatDateCustom(
-                            pattern.start_date + 'T12:00:00',
-                            {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            },
-                            tz
-                          )}
+                          {formatCalendarDate(pattern.start_date, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
                           {pattern.end_date && (
                             <span>
                               {' '}
                               · Ends:{' '}
-                              {formatDateCustom(
-                                pattern.end_date + 'T12:00:00',
-                                {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                },
-                                tz
-                              )}
+                              {formatCalendarDate(pattern.end_date, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
                             </span>
                           )}
                         </p>

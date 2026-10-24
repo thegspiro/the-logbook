@@ -13,7 +13,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, formatDateCustom } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
@@ -255,20 +255,19 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refre
       ) : (
         <div className="space-y-6">
           {sortedDates.map((date) => {
-            const dateObj = new Date(date + 'T12:00:00');
             const dayShifts = groupedByDate[date];
 
             return (
               <div key={date}>
                 <h3 className="text-theme-text-secondary mb-3 text-sm font-semibold tracking-wider uppercase">
-                  {formatDateCustom(dateObj, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }, tz)}
+                  {formatCalendarDate(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                 </h3>
                 <div className="space-y-3">
                   {dayShifts?.map((shift) => {
                     const signupClosed = boardClosedReason(shift);
                     // Named per shift: a day can carry several, and every row's
                     // buttons otherwise read alike to a screen reader.
-                    const when = `${formatDateCustom(dateObj, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}, ${formatTime(shift.start_time, tz)}${shift.apparatus_unit_number ? ` (${shift.apparatus_unit_number})` : ''}`;
+                    const when = `${formatCalendarDate(date, { weekday: 'short', month: 'short', day: 'numeric' })}, ${formatTime(shift.start_time, tz)}${shift.apparatus_unit_number ? ` (${shift.apparatus_unit_number})` : ''}`;
                     return (
                       <div key={shift.id} className="card p-4 hover:border-violet-500/30 sm:p-5">
                         <div className="flex items-start justify-between gap-3 sm:items-center">
@@ -367,11 +366,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refre
                   <h2 className="text-theme-text-primary text-lg font-bold">Sign Up for Shift</h2>
                   {targetShift && (
                     <p className="text-theme-text-secondary mt-1 text-sm">
-                      {formatDateCustom(
-                        targetShift.shift_date + 'T12:00:00',
-                        { weekday: 'short', month: 'short', day: 'numeric' },
-                        tz
-                      )}{' '}
+                      {formatCalendarDate(targetShift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
                       {formatTime(targetShift.start_time, tz)}
                       {targetShift.end_time ? ` - ${formatTime(targetShift.end_time, tz)}` : ''}
                       {targetShift.apparatus_unit_number ? ` (${targetShift.apparatus_unit_number})` : ''}

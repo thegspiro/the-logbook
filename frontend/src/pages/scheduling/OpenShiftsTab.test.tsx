@@ -34,8 +34,10 @@ vi.mock('../../stores/authStore', () => {
   return { useAuthStore: Object.assign(() => state(), { getState: state }) };
 });
 
+// Mutable so one test can put the department far from the browser's UTC.
+const mockTimezone = vi.hoisted(() => ({ value: 'America/New_York' }));
 vi.mock('../../hooks/useTimezone', () => ({
-  useTimezone: () => 'America/New_York',
+  useTimezone: () => mockTimezone.value,
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -91,6 +93,7 @@ describe('OpenShiftsTab', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTimezone.value = 'America/New_York';
     mockPermissions.granted = new Set();
     mockGetOpenShifts.mockResolvedValue(mockShifts);
     mockGetShifts.mockResolvedValue({ shifts: mockShifts, total: 2 });
@@ -123,6 +126,27 @@ describe('OpenShiftsTab', () => {
     rerender(<OpenShiftsTab onViewShift={mockOnViewShift} refreshKey={1} />);
 
     await waitFor(() => expect(mockGetOpenShifts).toHaveBeenCalledTimes(2));
+  });
+
+  it('heads a day with its own calendar date, whatever the department timezone', async () => {
+    // A shift_date is a calendar day, not an instant. Padded to noon in the
+    // browser's zone (UTC here) and then formatted in the department's, it
+    // read as the next day for a department at UTC+14 and as the previous day
+    // for one far enough west.
+    mockTimezone.value = 'Pacific/Kiritimati';
+    mockGetOpenShifts.mockResolvedValue([
+      {
+        ...mockShifts[0],
+        id: 'far',
+        shift_date: '2099-08-25',
+        start_time: '2099-08-24T17:00:00Z',
+        end_time: '2099-08-25T05:00:00Z',
+      },
+    ]);
+    renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+
+    expect(await screen.findByRole('heading', { name: 'Tuesday, August 25, 2099' })).toBeInTheDocument();
+    expect(screen.queryByText(/August 26, 2099/)).not.toBeInTheDocument();
   });
 
   it('should render empty state when no shifts available', async () => {

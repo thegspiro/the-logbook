@@ -1031,7 +1031,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     else onClose();
   }, [editingNotesId, onClose]);
 
-  const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
 
   // Whether *this viewer* may still be seated. The server computes it for the
@@ -1371,11 +1370,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     Shift Details
                   </h2>
                   <p className="text-theme-text-secondary mt-1 truncate text-xs sm:text-sm">
-                    {formatDateCustom(
-                      shiftDate,
-                      { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
-                      tz
-                    )}
+                    {formatCalendarDate(shift.shift_date, {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
                   </p>
                   {platoonsEnabled && shift.platoon && (
                     <span className="mt-1.5 inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">

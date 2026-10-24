@@ -56,7 +56,13 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import {
+  formatCalendarDate,
+  formatDateCustom,
+  formatTime,
+  getTodayLocalDate,
+  toLocalDateString,
+} from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import {
   DEFAULT_SKILLS,
@@ -930,7 +936,7 @@ export const ShiftReportsTab: React.FC = () => {
   }, [ratingScaleType, ratingScaleLabels]);
 
   // "2026-07" → "Jul". The charts labelled their columns "07", "08".
-  const monthLabel = (month: string) => formatDateCustom(`${month}-15T12:00:00`, { month: 'short' }, tz);
+  const monthLabel = (month: string) => formatCalendarDate(`${month}-15`, { month: 'short' });
 
   const renderTraineeDashboard = () => {
     if (!traineeStats || traineeStats.total_reports === 0) return null;
@@ -1144,16 +1150,12 @@ export const ShiftReportsTab: React.FC = () => {
     const isExpanded = expandedId === report.id;
     const isMyReport = report.trainee_id === user?.id;
     const isReviewMode = viewMode === 'pending-review';
-    const dateStr = formatDateCustom(
-      report.shift_date + 'T12:00:00',
-      {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      },
-      tz
-    );
+    const dateStr = formatCalendarDate(report.shift_date, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
 
     const statusStyle = REVIEW_STATUS_STYLES[report.review_status] ?? {
       bg: 'bg-green-500/10',
@@ -2724,16 +2726,12 @@ export const ShiftReportsTab: React.FC = () => {
                         </span>
                       )}
                       <span className="text-theme-text-muted">
-                        {formatDateCustom(
-                          reviewReport.shift_date + 'T12:00:00',
-                          {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          },
-                          tz
-                        )}
+                        {formatCalendarDate(reviewReport.shift_date, {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
                       </span>
                       {(reviewReport.officer_name || !reviewReport.officer_id) && (
                         <span className="text-theme-text-muted flex items-center gap-1">
