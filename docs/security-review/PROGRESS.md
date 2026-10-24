@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3630](https://github.com/thegspiro/the-logbook/pull/3630)** (branch
+`claude/security-review-skills-testing-p10`) —
+Feature 19 (Skills testing), pass 10, a watchdog pickup. PR #3629
+(Feature 18, Training extended, pass 10) had already merged. No open
+PR's head branch starts with `claude/security-review-`
+(`search_pull_requests`, 0 results), and the dedicated loop session was
+not reachable (`ListAgents`); row 19 was confirmed the next `⬜` by
+reading the rotation table directly on a freshly fetched `main`. **0
+fixed, 0 new findings** — real delta since pass 9's merge (`cef8a679`):
+69/19 lines across the endpoint, schema and model files, 16 frontend
+files. All of it a single, already-correctly-implemented cross-cutting
+change (`SkillTest.examiner_id` relaxed to nullable with `ondelete` CASCADE
+→ SET NULL, so a candidate's test record survives the examiner's
+permanent deletion — Pitfall #2-compliant, every call site in this
+feature already null-safe) plus the repo-wide Pitfall #32 status sweep, a
+new business-rule gate refusing to open a test for a department that
+records skills on shift sign-offs instead, and a defensive column-bounds
+hardening sweep. Every standing SKT finding (SKT-1 through SKT-4, SKT2-1,
+SKT3-1/2, SKT4-1 through SKT4-7, SKT5-1) re-verified unchanged. Route
+surface 29/29, unchanged. See `SKT-19-skills-testing.md`'s **Pass 10**
+section. Row 19 → ✅ (pending this PR's merge); next is Feature 20
+(Compliance) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 10, PR #3629, merged), preserved for history</summary>
+
 **PR [#3629](https://github.com/thegspiro/the-logbook/pull/3629)** (branch
 `claude/security-review-training-extended`) —
 Feature 18 (Training extended), pass 10, a watchdog pickup. PR #3628
@@ -39,6 +66,8 @@ at its current citation. See `TRX-18-training-extended.md`'s **Pass 10**
 section. Row 18 → ✅ (pending this PR's merge); next is Feature 19
 (Skills testing) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 10, PR #3628, merged), preserved for history</summary>
@@ -20976,7 +21005,7 @@ this iteration's commit" rule.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -20999,6 +21028,39 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 18 (Training extended, pass 10) — watchdog pickup, real delta (eight files), 0 fixed, 0 new findings; PR #3629 merged
+
+Watchdog pickup for the security-review rotation: PR #3628 (Feature 17,
+Training core, pass 10) had already merged. No open PR's head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0
+results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+18 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`.
+
+Real delta since pass 9's merge (`69f785be`): eight files touched. A
+`delete_training_program` deactivate-instead-of-delete path (shared with
+Feature 17's own file, already reviewed and merged by PR #3628); a new
+org-scoped `import-matched` retry endpoint for staged external-training
+completions, with the full org-scoping chain traced (provider lookup
+org-filtered before the service call, the service's own query filtering
+both `organization_id` and `deleted_at`); a column-bounds hardening
+sweep (`le=INT32_MAX`/`FLOAT32_MAX`) across the training schemas; a
+file-storage call-site migration onto the already-reviewed shared
+`file_storage` interface, with the org/area confinement check confirmed
+still gating every call before the new primitives run; a migration
+relaxing `training_waivers.end_date` to nullable (Pitfall #35-compliant,
+table-existence guard, no data loss, safe downgrade); and a frontend
+hardening (an attachment delete now goes through `useConfirm()` instead
+of deleting unconfirmed). All traced safe. Every standing TRX finding
+(TRX-1 through TRX-10, TRX3-1, TRX4-1/TRX4-2) re-verified unchanged at its
+current citation. Completion gate fully green (flake8/black/isort clean,
+single migration head, 273 routes/0 errors, 2173 targeted tests passed,
+frontend typecheck/lint 0 errors). See
+`TRX-18-training-extended.md`'s **Pass 10** section and PR
+[#3629](https://github.com/thegspiro/the-logbook/pull/3629) (merged). Row
+18 → ✅.
 
 ### 2026-10-24 — Feature 17 (Training core, pass 10) — watchdog pickup, real delta (9 of 395 commits), 0 fixed, 0 new findings; repo-wide Alembic fork found and merged
 
