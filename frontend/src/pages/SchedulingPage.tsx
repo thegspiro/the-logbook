@@ -240,7 +240,9 @@ const SchedulingPage: React.FC = () => {
   // The calendar's own data lives in ShiftBoard: it fetches the visible range
   // with the roster attached and mutates it optimistically, so a second copy
   // up here could only ever be the stale one. `boardRefreshKey` is how this
-  // page asks it to re-read after creating a shift.
+  // page asks it to re-read after creating a shift. My Shifts and Open Shifts
+  // keep their own lists too, and read the same key: a change made in the
+  // shift panel must reach whichever tab the panel was opened from.
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -581,8 +583,10 @@ const SchedulingPage: React.FC = () => {
         {/* Other Tabs */}
         {activeTab !== 'schedule' && (
           <Suspense fallback={<TabLoadingFallback />}>
-            {activeTab === 'my-shifts' && <MyShiftsTab onViewShift={handleShiftClick} />}
-            {activeTab === 'open-shifts' && <OpenShiftsTab onViewShift={handleShiftClick} />}
+            {activeTab === 'my-shifts' && <MyShiftsTab onViewShift={handleShiftClick} refreshKey={boardRefreshKey} />}
+            {activeTab === 'open-shifts' && (
+              <OpenShiftsTab onViewShift={handleShiftClick} refreshKey={boardRefreshKey} />
+            )}
             {activeTab === 'requests' && <RequestsTab />}
             {activeTab === 'shift-reports' && <ShiftReportsTab />}
           </Suspense>

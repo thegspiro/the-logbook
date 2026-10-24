@@ -71,6 +71,14 @@ const clockSnapshot = (): number => Math.floor(Date.now() / SIGNUP_CLOCK_INTERVA
  */
 export const useSchedulingClock = (): number => useSyncExternalStore(subscribeToClock, clockSnapshot, clockSnapshot);
 
+/**
+ * The instant a clock tick stands for (the start of its 30-second bucket).
+ *
+ * Lets a `useMemo` keyed on the tick read "now" from the tick itself rather
+ * than from a `new Date()` the dependency list does not mention.
+ */
+export const schedulingClockInstant = (tick: number): Date => new Date(tick * SIGNUP_CLOCK_INTERVAL_MS);
+
 interface UseSignupWindowOptions {
   /**
    * False skips loading the scheduling settings, leaving the window

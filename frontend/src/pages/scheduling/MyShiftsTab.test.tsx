@@ -246,6 +246,20 @@ describe('MyShiftsTab', () => {
       mockGetMyAssignments.mockResolvedValue([row('a', day(5)), row('b', day(8))]);
     });
 
+    it('re-reads the list when the page says a shift changed', async () => {
+      // A withdrawal in the shift panel otherwise leaves the shift listed with
+      // Confirm, Decline and Swap, each of which then fails on the server.
+      const { rerender } = renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} refreshKey={0} />);
+      await screen.findAllByRole('button', { name: /^Swap shift on / });
+      expect(mockGetMyAssignments).toHaveBeenCalledTimes(1);
+
+      mockGetMyAssignments.mockResolvedValue([row('b', day(8))]);
+      rerender(<MyShiftsTab onViewShift={mockOnViewShift} refreshKey={1} />);
+
+      await waitFor(() => expect(screen.getAllByRole('button', { name: /^Swap shift on / })).toHaveLength(1));
+      expect(mockGetMyAssignments).toHaveBeenCalledTimes(2);
+    });
+
     it('names every action after its own shift', async () => {
       renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
 
@@ -323,6 +337,39 @@ describe('MyShiftsTab', () => {
           target_user_id: undefined,
           reason: undefined,
         });
+      });
+
+      it('leaves out cancelled shifts and shifts the member is already on', async () => {
+        // The server files a swap into either without complaint, and the
+        // request then reaches an officer only to be refused there.
+        mockGetShifts.mockResolvedValue({
+          shifts: [{ ...target, id: 'shift-cancelled', status: 'cancelled' }, { ...target, id: 'shift-b' }, target],
+          total: 3,
+        });
+        const user = userEvent.setup();
+        renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+        const [swap] = await screen.findAllByRole('button', { name: /^Swap shift on / });
+        await user.click(swap as HTMLElement);
+        await waitFor(() => expect(mockGetShifts).toHaveBeenCalledTimes(1));
+        await user.click(await screen.findByRole('button', { name: /Specific Shift/ }));
+
+        const options = within(screen.getByLabelText('Select Shift')).getAllByRole('option');
+        expect(options.map((option) => option.getAttribute('value'))).toEqual(['shift-x']);
+        expect(screen.queryByText(/Only the next 50 shifts are listed/)).not.toBeInTheDocument();
+      });
+
+      it('says so when the list is cut short', async () => {
+        mockGetShifts.mockResolvedValue({ shifts: [target], total: 120 });
+        const user = userEvent.setup();
+        renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+        const [swap] = await screen.findAllByRole('button', { name: /^Swap shift on / });
+        await user.click(swap as HTMLElement);
+        await waitFor(() => expect(mockGetShifts).toHaveBeenCalledTimes(1));
+        await user.click(await screen.findByRole('button', { name: /Specific Shift/ }));
+
+        expect(await screen.findByText(/Only the next 50 shifts are listed/)).toBeInTheDocument();
       });
 
       it('will not submit when no shift is available, and says why', async () => {

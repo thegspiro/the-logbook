@@ -690,6 +690,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const handleConfirm = async (assignmentId: string) => {
     if (pending.confirming) return;
     setPendingFlag('confirming', true);
+    const previousStatus = assignments.find((a) => a.id === assignmentId)?.status;
     // Optimistic update — show confirmed immediately
     setAssignments((prev) =>
       prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.CONFIRMED } : a))
@@ -698,10 +699,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await schedulingService.confirmAssignment(assignmentId);
       toast.success('Assignment confirmed');
       await refreshAssignments();
+      onRefresh?.();
     } catch (err) {
-      // Revert optimistic update
+      // Revert to what the row held before, not a guessed status.
       setAssignments((prev) =>
-        prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.ASSIGNED } : a))
+        prev.map((a) => (a.id === assignmentId && previousStatus ? { ...a, status: previousStatus } : a))
       );
       toast.error(getErrorMessage(err, 'Failed to confirm assignment'));
     } finally {
@@ -717,6 +719,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const handleDecline = async (assignmentId: string) => {
     if (pending.declining) return;
     setPendingFlag('declining', true);
+    const previousStatus = assignments.find((a) => a.id === assignmentId)?.status;
     // Optimistic update — show declined immediately
     setAssignments((prev) =>
       prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.DECLINED } : a))
@@ -725,10 +728,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await schedulingService.declineAssignment(assignmentId);
       toast.success('Assignment declined');
       await refreshAssignments();
+      // A decline frees the seat, so the board and the tab lists must re-read.
+      onRefresh?.();
     } catch (err) {
-      // Revert optimistic update
+      // Revert to what the row held before: a confirmed seat that failed to
+      // decline is still confirmed, not merely assigned.
       setAssignments((prev) =>
-        prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.ASSIGNED } : a))
+        prev.map((a) => (a.id === assignmentId && previousStatus ? { ...a, status: previousStatus } : a))
       );
       toast.error(getErrorMessage(err, 'Failed to decline assignment'));
     } finally {
@@ -1025,7 +1031,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     else onClose();
   }, [editingNotesId, onClose]);
 
-  const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
 
   // Whether *this viewer* may still be seated. The server computes it for the
@@ -1365,11 +1370,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     Shift Details
                   </h2>
                   <p className="text-theme-text-secondary mt-1 truncate text-xs sm:text-sm">
-                    {formatDateCustom(
-                      shiftDate,
-                      { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
-                      tz
-                    )}
+                    {formatCalendarDate(shift.shift_date, {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
                   </p>
                   {platoonsEnabled && shift.platoon && (
                     <span className="mt-1.5 inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">

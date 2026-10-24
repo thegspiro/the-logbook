@@ -108,17 +108,27 @@ export const GiveUpShiftModal: React.FC<GiveUpShiftModalProps> = ({
     setSubmitting(true);
     try {
       await schedulingService.withdrawSignup(shift.id);
-      if (endSeries && standingClaim) {
-        // The remaining dates go with it — that is what the member ticked.
-        await schedulingService.endStandingShift(standingClaim.id, true);
-      }
-      onChanged();
-      setStep(2);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not release this shift.'));
-    } finally {
       setSubmitting(false);
+      return;
     }
+    // The seat is gone from here on, whatever happens to the series: the board
+    // must re-read now, or it keeps showing the member seated and a retry
+    // fails with "You are not assigned".
+    onChanged();
+    if (endSeries && standingClaim) {
+      try {
+        // The remaining dates go with it — that is what the member ticked.
+        await schedulingService.endStandingShift(standingClaim.id, true);
+      } catch (err) {
+        toast.error(
+          `This shift was released, but the standing shift could not be ended (${getErrorMessage(err, 'unknown error')}). End it from your standing shifts.`
+        );
+      }
+    }
+    setStep(2);
+    setSubmitting(false);
   };
 
   const handleOffer = async () => {
