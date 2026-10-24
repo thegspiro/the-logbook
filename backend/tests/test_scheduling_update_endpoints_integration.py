@@ -218,6 +218,35 @@ class _Bench:
         ).scalar()
 
 
+# One application for the whole module. Mounting the full router tree costs
+# seconds on the first request (the routers are included lazily), which is more
+# than every other step of a case together; paid per test it made the file the
+# slowest in the integration job. The overrides read the current test's user and
+# session from here instead of closing over them.
+_CURRENT: dict[str, Any] = {}
+_APP: FastAPI | None = None
+
+
+async def _current_session() -> AsyncGenerator[AsyncSession]:
+    db: AsyncSession = _CURRENT["db"]
+    try:
+        yield db
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+
+def _app() -> FastAPI:
+    global _APP
+    if _APP is None:
+        _APP = FastAPI()
+        _APP.include_router(api_router)
+        _APP.dependency_overrides[get_current_user] = lambda: _CURRENT["user"]
+        _APP.dependency_overrides[get_db] = _current_session
+    return _APP
+
+
 @pytest.fixture
 async def bench(db_session: AsyncSession) -> AsyncGenerator[_Bench]:
     org_id = str(uuid.uuid4())
@@ -258,20 +287,10 @@ async def bench(db_session: AsyncSession) -> AsyncGenerator[_Bench]:
     assert user is not None
     await db_session.refresh(user, ["positions"])
 
-    async def get_session_like() -> AsyncGenerator[AsyncSession]:
-        try:
-            yield db_session
-            await db_session.commit()
-        except Exception:
-            await db_session.rollback()
-            raise
-
-    app = FastAPI()
-    app.include_router(api_router)
-    app.dependency_overrides[get_current_user] = lambda: user
-    app.dependency_overrides[get_db] = get_session_like
+    _CURRENT["user"] = user
+    _CURRENT["db"] = db_session
     async with AsyncClient(
-        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        transport=ASGITransport(app=_app(), raise_app_exceptions=False),
         base_url="http://test",
     ) as client:
         yield _Bench(db_session, user, client)
