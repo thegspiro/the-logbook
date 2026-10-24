@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3632](https://github.com/thegspiro/the-logbook/pull/3632)** (branch
+`claude/security-review-admin-hours-p10`) —
+Feature 21 (Admin hours), pass 10, a watchdog pickup. PR #3631 (Feature 20,
+Compliance, pass 10) had already merged (this same watchdog run merged
+it). No open PR's head branch starts with `claude/security-review-`
+(`list_pull_requests`, 0 results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+21 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`. **0 fixed by this pass, 0 new findings** — real
+delta since pass 9's merge (`4a1eeed4`): AH-18 (pass 9's one open finding,
+a read-then-write race in `_assert_name_free`) was already fixed by
+`9789684f` (PR #3464, a dedicated security-sweep branch) with CLAUDE.md
+Pitfall #27's full lock pattern and a guard test; app-review finding B15
+(an explicit null silently ignored on the event-hour-mapping update
+schema) was already fixed by `1f02bcd5` (PR #3477, an app-review branch).
+Both re-verified against current code and their guard tests re-run rather
+than trusted from the commit message. Eleven frontend files also moved,
+all cosmetic.
+
+Full writeup: `docs/security-review/AH-21-admin-hours.md`'s **Pass 10**
+section.
+
+Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 10, PR #3631, merged), preserved for history</summary>
+
 **PR [#3631](https://github.com/thegspiro/the-logbook/pull/3631)** (branch
 `claude/security-review-compliance-p10`) —
 Feature 20 (Compliance), pass 10, a watchdog pickup. PR #3630 (Feature 19,
@@ -44,6 +73,8 @@ section.
 
 Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
 re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 10, PR #3630, merged), preserved for history</summary>
