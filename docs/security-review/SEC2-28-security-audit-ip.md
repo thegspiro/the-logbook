@@ -3,7 +3,8 @@
 **Prefix:** `SEC2` · **Iteration:** 28 · **Reviewed:** 2026-08-27 (pass 1, PR
 #1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4, and a
 pass-4 addendum, PR #2515), 2026-10-04 (pass 5), 2026-10-07 (pass 6),
-2026-10-17 (pass 7) · **PR:** #1911 (pass 1)
+2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9) · **PR:** #1911
+(pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -1671,6 +1672,164 @@ drive-by fix. No `KNOWN_LIMITATIONS.md` change needed this pass.
 | backend tests, scope (as pass 7's list, plus `security_weekly_report`) | 552 passed, 1 pre-existing skip (`pywebpush`)      |
 | frontend `npm run typecheck` (`tsc-native.mjs --noEmit`)               | 0 errors                                           |
 | frontend `npm run lint` (`eslint --max-warnings 10`)                   | clean, exit 0                                      |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
+
+## Pass 9 (2026-10-24)
+
+PR #3641 (Feature 27, Integrations, pass 9) had merged (docs-only — the
+findings file and `PROGRESS.md` itself, confirmed via `git show --stat` on
+its squash commit), and a fresh `search_pull_requests`
+(`head:claude/security-review-`, state=open) returned 0 — this pass picked
+up Feature 28, the next `⬜` row.
+
+### Real delta since pass 8 — read in full
+
+Diffed each of this doc's nine backend files plus the four frontend
+surfaces directly against pass 8's merge commit (`458f6ffd`) through
+current `main`, rather than trusting `git log --since`/path-filtered `git
+log`, which this repo's squash-merge/grafted history has made unreliable in
+prior passes (`git log 458f6ffd..HEAD -- <these files>` surfaced a commit
+whose message and file-count are unrelated to its real diff — the same
+history quirk pass 7 already worked around — so every file below was
+diffed by content, not attributed by commit).
+
+Five real, security-relevant changes land in this feature's own files:
+
+- **`require_stepup` added to seven endpoints**
+  (`security_monitoring.py`: `rehash_audit_chain`, `export_audit_logs`;
+  `ip_security.py`: `approve_exception`, `revoke_exception`,
+  `add_blocked_country`, `remove_blocked_country`; `error_logs.py`:
+  `export_errors`), part of the repo-wide MFA-grace/step-up feature. Every
+  one declares `current_user: User = Depends(require_permission(...))`
+  first and `_stepup: User = Depends(require_stepup)` last — permission
+  checked before re-verification is demanded, matching `require_stepup`'s
+  own docstring contract. This is **not a re-derivation**: a dedicated
+  guard test already proves it exactly, enumerated and run as part of this
+  pass's completion gate —
+  `tests/test_mfa_policy.py::test_step_up_is_on_exactly_the_documented_handlers`
+  walks every `endpoints/*.py` file by AST and asserts the set of handlers
+  carrying `require_stepup` equals a hand-maintained `STEPUP_HANDLERS`
+  registry (bijective: a handler added to the dependency without being
+  listed, or listed without the dependency, fails), and
+  `test_step_up_always_follows_the_permission_check` asserts
+  `require_stepup` is always the **last** default in the signature. All
+  seven of this feature's call sites are in that registry; weekly-report's
+  `GET`/`PUT` (added pass 8) are correctly **not** in it — a notification
+  cadence setting, not a security- or access-changing action, consistent
+  with the registry's own stated categories (exports, security/policy
+  changes, account-takeover paths, destructive member actions). Confirmed
+  by direct read, not the registry's own say-so.
+- **`IPBlockingMiddleware.BYPASS_PATHS` no longer exempts
+  `/health/detailed`.** That route (unauthenticated, reports host CPU/
+  memory and config flags) was listed beside `/health` in the IP-blocking
+  bypass set, so a blocked IP or country could still read it. Fixed
+  already, and guard-tested:
+  `tests/test_health_detailed_hardening.py::TestDetailedHealthIsNotExemptFromIpBlocking`
+  asserts the path is absent from `BYPASS_PATHS` and that `/health`/`/`
+  still bypass (liveness probes). **Verified good, no new finding** — this
+  is a fix already shipped and tested, not something this pass needed to
+  do.
+- **Revoking an IP exception now invalidates the edge middleware's cache
+  on every worker**, not just the one that handled the request.
+  `_ExceptionCache` gained `invalidate_ip_exception_cache()`
+  (`security_middleware.py`); `IPSecurityService.revoke_exception` calls it
+  and `geoip_sync.publish_ip_exception_invalidation()` (new function,
+  reusing the existing `geoip:invalidate` Redis channel with a distinct
+  payload so no second subscription is needed); `GeoIPInvalidationListener`
+  dispatches on the payload — the IP-exception sentinel clears the cache
+  only, anything else still re-syncs blocked countries as before. Before
+  this, a revoked address kept passing the country block on every worker
+  that had cached "allowed" until that entry's 60s TTL ran out — closes
+  that gap. Guard-tested end to end in
+  `tests/test_ip_exception_revoke_cache.py` (cache cleared locally, Redis
+  publish asserted, a refused revoke leaves the cache alone, the listener
+  applies the invalidation without touching the unrelated country-refresh
+  path, and — the scenario that matters — a revoked address is rejected by
+  `IPBlockingMiddleware` on its very next request with the DB lookup
+  reached, proving the cache no longer shields it). **Verified good, no new
+  finding.**
+- **`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` gained
+  `/api/v1/nfc-tags/taps/export`** — a new export route (outside this
+  feature's own scope) correctly added to data-exfiltration-sizing
+  monitoring, matching the direction this list is supposed to grow in.
+  **Verified good, no new finding.**
+- **Frontend: three a11y/contrast-only edits** — `AuditLogPage.tsx`'s
+  expand/collapse affordance moved from a bare `onClick` on the `<tr>` (no
+  keyboard path) to a real `<button>` with `aria-expanded`/`aria-label`,
+  and the table wrapper gained `role="region"`/`aria-label`/`tabIndex`;
+  `ErrorMonitoringPage.tsx` added a `<label htmlFor>` pairing and an AAA
+  contrast fix on the error timestamp; `IPExceptionTable.tsx`'s
+  approve/revoke icon colors moved to the AA-floor-safe 700-weight tier in
+  light mode. No data flow, auth, or permission-check change in any of the
+  three. **Verified good, no new finding** (UX/correctness only).
+
+No other commit touches `security_monitoring.py` (either file),
+`ip_security.py` (either file), `audit_logs.py`, `error_logs.py`,
+`core/audit.py`, `core/geoip.py`, `models/audit.py`, or
+`security_weekly_report.py` since pass 8 — confirmed by `git diff --stat
+458f6ffd..HEAD -- <each file>` individually, which is immune to the
+grafted-history issue above since it diffs two fixed points directly
+rather than walking commits.
+
+Consumed, not re-derived: `require_stepup` itself and the
+`mfa_grace_started_at`/`stepup_verified_at` migration
+(`f7535f478280`) belong to Feature 01 (Auth & session lifecycle)'s own
+scope. Read directly to confirm this feature's seven call sites are wired
+correctly (above); the mechanism's own correctness is Feature 01's finding
+to make. The migration guards table existence (Pitfall #26) and both
+columns are nullable/additive (Pitfall #35) — consistent with this
+repo's conventions, not independently re-verified beyond that direct read.
+
+### Re-verified — every open finding re-checked against current code, not the doc
+
+- **SEC2-28-6** (LOW, flagged) — still open, unchanged. Re-read
+  `request_ip_exception` (`ip_security_service.py`): still a plain
+  `SELECT` (pending/approved rows for the same user+IP) followed by an
+  `INSERT`, no row lock, no DB-level unique constraint. No commit since
+  pass 8 touches this function.
+- **Dead detector code** (pass 3, flagged) — re-grepped `analyze_request`,
+  `_check_rate_limit`, `_check_injection_patterns` across all of `backend/
+app` outside `services/security_monitoring.py`: still zero production
+  callers.
+- **All previously-FIXED/RESOLVED items** (SEC-1 through SEC-9, SEC2-28-1
+  through SEC2-28-11): no code touching their mechanisms changed this pass
+  beyond the step-up/cache-invalidation work already covered above; not
+  independently re-exercised beyond the completion gate below.
+
+### Route inventory — re-enumerated by AST, 37 routes, unchanged from pass 8
+
+Walked every `@router.<method>` decorator in the four endpoint files by AST
+(not grep, not a diff-only spot check): 16 in `security_monitoring.py`, 12
+in `ip_security.py`, 3 in `audit_logs.py`, 6 in `error_logs.py` = **37**,
+identical to pass 8's count. No route added, removed, or re-gated. Every
+one of the 37 carries an auth dependency (`get_current_user`,
+`require_permission`, or both) — enumerated individually, not spot-checked;
+none bare. The seven that gained `require_stepup` this pass are listed
+above.
+
+### No new findings this pass
+
+**0 fixed, 0 new findings.** SEC2-28-6 and the dead-detector-code note
+remain open and still need their respective owner/product decision, not a
+drive-by fix; both are already correctly described in this file (see Pass
+4 and Pass 3 sections) and proportionate-effort reasoning stands unchanged.
+No `KNOWN_LIMITATIONS.md` change needed this pass — neither open item rises
+to an owner-decision item beyond what this file already records.
+
+### Completion gate (Pass 9)
+
+| Check                                                                                                                                                                                                                                                          | Result                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI-pinned 7.3.0, installed into this session's interpreter — the sandbox default resolved 7.4.1)                                                                                                                                | clean                                              |
+| `black --check app/ tests/ alembic/` (26.5.1)                                                                                                                                                                                                                  | clean, 2612 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)                                                                                                                                                                                                    | clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                              | PASSED — 650 revisions, single head `a8c3b50b6d9b` |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                          | 275 routes, 0 errors/warnings                      |
+| backend tests, scope (`-k "audit or security_monitoring or security_middleware or ip_security or ip_allowlist or ip_exception or error_log or suspicious_ip or signing_key_cutover or security_alert or mfa_policy or geoip or health_detailed or w50_audit"`) | 755 passed, 1 pre-existing skip (`pywebpush`)      |
+| frontend `npm run typecheck` (`tsc-native.mjs --noEmit`)                                                                                                                                                                                                       | 0 errors                                           |
+| frontend `npm run lint` (`eslint --max-warnings 10`)                                                                                                                                                                                                           | clean, exit 0                                      |
 
 Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
 `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
