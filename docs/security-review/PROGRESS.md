@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3631](https://github.com/thegspiro/the-logbook/pull/3631)** (branch
+`claude/security-review-compliance-p10`) —
+Feature 20 (Compliance), pass 10, a watchdog pickup. PR #3630 (Feature 19,
+Skills testing, pass 10) had already merged. No open PR's head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0 results),
+and the dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was
+not reachable (`ListAgents`); row 20 was confirmed the next `⬜` by
+reading the rotation table directly on a freshly fetched `main`. **0
+fixed, 0 new findings** — real delta since pass 9's merge (`4f346dab`):
+the repo-wide Pitfall #32 status-gate sweep (now verified complete for
+this feature's own query sites — `ISOReadinessService`,
+`ContributedHoursService`, `AnnualComplianceReportService`,
+`compute_org_compliance_tally`, `grade_org_members` — closing a real
+denominator gap this rotation had not previously flagged: a probationary
+member was silently excluded from every department-wide compliance
+figure), the repo-wide numeric-bounds hardening sweep, and audit logging
+added to the two profile/report delete routes. All already correctly
+implemented before this pass began; this pass's own contribution is
+verifying each against current code and correcting a stale
+`docs/KNOWN_LIMITATIONS.md` claim ("Probationary counts as active...
+Pending an owner decision per site") that named this feature among the
+sites still excluding probationary members.
+
+Full writeup: `docs/security-review/CMP-20-compliance.md`'s **Pass 10**
+section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 10, PR #3630, merged), preserved for history</summary>
+
 **PR [#3630](https://github.com/thegspiro/the-logbook/pull/3630)** (branch
 `claude/security-review-skills-testing-p10`) —
 Feature 19 (Skills testing), pass 10, a watchdog pickup. PR #3629
@@ -21006,7 +21038,7 @@ this iteration's commit" rule.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
@@ -21028,6 +21060,68 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 20 (Compliance, pass 10) — watchdog pickup, real delta (already-fixed Pitfall #32 sweep + numeric bounds), 0 fixed, 0 new findings; stale KNOWN_LIMITATIONS claim corrected
+
+Watchdog pickup for the security-review rotation: PR #3630 (Feature 19,
+Skills testing, pass 10) had already merged. No open PR's head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0
+results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+20 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`.
+
+Real delta since pass 9's merge (`4f346dab`): the repo-wide Pitfall #32
+status-gate sweep closed a real (if quiet) gap in this feature's own
+query sites — `ISOReadinessService`, `ContributedHoursService`,
+`AnnualComplianceReportService`, `compute_org_compliance_tally`,
+`grade_org_members` all moved from `User.status == UserStatus.ACTIVE` to
+`User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, so a probationary member is no
+longer silently dropped from the ISO-readiness roster, the
+contributed-hours tally, the annual compliance report or any
+department-wide compliance percentage. Verified by direct grep of both
+files and by `tests/test_account_status_gates.py`'s repo-wide sweep
+(single allowlisted exception, elsewhere in the codebase). Also landed: a
+repo-wide numeric-bounds hardening sweep on this feature's schemas
+(`year`, `priority`, `required_hours`), and audit logging on the profile
+and report delete routes. All already correctly implemented before this
+pass began — 0 fixes needed, 0 new code findings.
+
+One documentation correction: `docs/KNOWN_LIMITATIONS.md`'s "Probationary
+counts as active only where `User.is_active` is read" entry still named
+training compliance and the compliance officer views as sites "Pending an
+owner decision." Per the sweep verified above, marked ✅ Resolved.
+
+Full writeup: `docs/security-review/CMP-20-compliance.md`'s **Pass 10**
+section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-24 — Feature 19 (Skills testing, pass 10) — watchdog pickup, real delta (SkillTest.examiner_id nullable + sweeps), 0 fixed, 0 new findings; PR #3630 merged
+
+Watchdog pickup for the security-review rotation: PR #3629 (Feature 18,
+Training extended, pass 10) had already merged. No open PR's head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0
+results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`); row
+19 was confirmed the next `⬜` by reading the rotation table directly on a
+freshly fetched `main`.
+
+Real delta since pass 9's merge (`cef8a679`): `SkillTest.examiner_id`
+relaxed to nullable with `ondelete` CASCADE → SET NULL (Pitfall
+#2-compliant, every call site already null-safe), a new business-rule
+gate refusing to open a test for a department that records skills on
+shift sign-offs instead, the repo-wide Pitfall #32 status sweep, and a
+defensive column-bounds hardening sweep. Every standing SKT finding
+(SKT-1 through SKT-4, SKT2-1, SKT3-1/2, SKT4-1 through SKT4-7, SKT5-1)
+re-verified unchanged. Route surface 29/29, unchanged.
+
+Full writeup: `docs/security-review/SKT-19-skills-testing.md`'s **Pass
+10** section.
+
+Row 19 → ✅ (PR #3630 merged); row 20 (Compliance) picked up next, logged
+above.
 
 ### 2026-10-24 — Feature 18 (Training extended, pass 10) — watchdog pickup, real delta (eight files), 0 fixed, 0 new findings; PR #3629 merged
 
