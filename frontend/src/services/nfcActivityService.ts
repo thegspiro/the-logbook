@@ -27,10 +27,19 @@ const params = (filters: ScopedTapFilters, limit: number, offset: number) => ({
   offset,
 });
 
+// A 200 that is not this API's answer (a captive portal's HTML page) is a
+// failed load, reported through each screen's own error state, rather than a
+// crash on `.items` that takes the page down through the ErrorBoundary. The
+// message is shown to the user, so it is their wording.
+const expectList = <T extends { items: unknown }>(body: T, message: string): T => {
+  if (!Array.isArray((body as { items?: unknown } | null | undefined)?.items)) throw new Error(message);
+  return body;
+};
+
 export const nfcActivityService = {
   async listReaders(): Promise<NfcReaderList> {
     const response = await api.get<NfcReaderList>('/nfc-activity/readers');
-    return response.data;
+    return expectList(response.data, 'Unable to load card readers');
   },
 
   async listRoomTaps(
@@ -42,7 +51,7 @@ export const nfcActivityService = {
     const response = await api.get<NfcCardTapList>(`/nfc-activity/readers/${locationId}/taps`, {
       params: params(filters, limit, offset),
     });
-    return response.data;
+    return expectList(response.data, 'Unable to load card taps');
   },
 
   /** Card taps against events; pass an event id for one event's taps. */
@@ -55,6 +64,6 @@ export const nfcActivityService = {
     const response = await api.get<NfcCardTapList>('/nfc-activity/event-taps', {
       params: { ...params(filters, limit, offset), event_id: eventId || undefined },
     });
-    return response.data;
+    return expectList(response.data, 'Unable to load card taps');
   },
 };
