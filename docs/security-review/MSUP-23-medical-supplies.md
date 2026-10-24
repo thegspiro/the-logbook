@@ -4,7 +4,199 @@
 #1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076),
 2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
 #2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, PR #2981),
-2026-10-17 (pass 14, PR #3352), 2026-10-20 (pass 15, this PR)
+2026-10-17 (pass 14, PR #3352), 2026-10-20 (pass 15, PR #3455), 2026-10-24
+(pass 16, this PR)
+
+## Pass 16 (2026-10-24) — 0 fixed, 0 new findings on `main`; 1 new finding flagged on an open, unmerged sibling PR (watchdog pickup)
+
+**Watchdog pickup.** `search_pull_requests` (`head:claude/security-review-`)
+and `list_pull_requests` (state=open) both returned no open security-review
+PR immediately before this pass began — PR #3633 (Feature 22, Grants &
+fundraising, pass 10) had already merged. Confirmed row 23 (MSUP) was the
+first `⬜` row in `PROGRESS.md`'s rotation table on a freshly fetched `main`.
+`git ls-remote origin 'refs/heads/claude/security-review-*'` showed no branch
+named `claude/security-review-medical-supplies` (only an unrelated
+`medical-screening-p11` for a different feature), so this pass's branch name
+needed no `-pN` suffix.
+
+**Scope check.** `git log d21c20494..origin/main` (pass 15's merge commit,
+PR #3455) restricted to this feature's files
+(`backend/app/api/v1/endpoints/medical_supplies.py`,
+`backend/app/services/inventory_service.py`,
+`backend/app/services/equipment_check_service.py`,
+`backend/app/schemas/inventory.py`, `frontend/src/modules/medical-supplies/`)
+found substantial real delta — four days of active feature work on this
+module, not a near-zero-delta pickup:
+
+- **`c75e0cea9`** adds the lot-recall **lookup** (`GET /lots/search` — find
+  every unit of a lot number, shelf and truck, for the officer deciding
+  whether to act on a manufacturer recall notice). Route count: **25 → 26**,
+  re-enumerated by direct grep of `@router.` decorators against
+  `require_permission(` calls (26/26, matching) rather than trusted from the
+  commit message.
+- **`54a04340f`** adds Next-expiry sorting across shelf+truck, truck stock
+  and uncounted-position counts in the CSV export, and an "uncounted
+  positions" filter/tab.
+- **`4e1ff7ac7`** adds truck lots to the lot CSV export and a 30/60/90-day
+  look-ahead window on the Expiring tab.
+- **`8e43a68e7`** (2026-10-20, same-day as pass 15 but landed after its
+  merge) is the repo-wide inventory numeric-bounds sweep (CLAUDE.md's
+  numeric-bounds hardening): 75 request fields across
+  `schemas/inventory.py`/`schemas/equipment_check.py` bounded to their
+  column's real range via the new `app/schemas/column_bounds.py`, with
+  `tests/test_request_numeric_bounds.py` added as an OpenAPI sweep guard.
+  This feature's own lot/item/quantity fields are schemas this router
+  shares with the general inventory router, so they are covered by the same
+  sweep — re-verified the sweep's guard test still passes (below) rather
+  than re-deriving bounds by hand.
+- **`925051877`** fixes `delete_medical_lot` to return a clean 409
+  (`LotReceivedAgainstReorderError`) instead of a prior 404-only path when a
+  lot received against a reorder is deleted — a correctness fix, not a
+  tenant-isolation or auth change; re-read in full, no new finding.
+- Six further commits in the window (`609e04d21`, `69eec8e06`, `7197f5770`,
+  `6ba0a5524`, `8a57d0699`, `78a6a57eb`, `052776fc5b`/`048d189b4`,
+  `6b952406e`, `88af4c829`, `652214f94`) touch `inventory_service.py` or
+  `schemas/inventory.py` but not in this feature's own methods/routes —
+  confirmed by diff hunk inspection (variant-group renames, UTC
+  normalization of unrelated date fields, probationary-status gate sweep,
+  a shared-service NOT-NULL migration, member-delete reference handling,
+  and frontend-only low-stock tab linking). No finding.
+
+**Re-verified against all seven `CHECKLIST.md` dimensions on the new
+surface, reading the real code rather than trusting the commit prose:**
+
+- **Auth/authz, full re-enumeration:** all 26 routes carry
+  `Depends(require_permission(...))` — 26 `@router.` decorators, 26
+  `require_permission(` calls, matched one-for-one by direct read, not a
+  bare count comparison. The new `GET /lots/search` is view-gated
+  (`inventory.view_medical`/`inventory.view` OR), matching every other read
+  route; no new write route was added by this delta.
+- **Tenant isolation (XC-3), the new lookup:** `search_medical_lots`
+  resolves `org_id` from `current_user.organization_id` only (never a
+  request parameter) and passes it to both halves —
+  `InventoryService.find_lots_by_number` (org-filtered on
+  `InventoryLot.organization_id`, with `item_types` narrowed through the
+  already-audited, org-scoped `_category_ids_of_type` subquery) and
+  `EquipmentCheckService.apparatus_expiring_stock`'s new `lot_number`
+  parameter (the truck-side match, scoped through
+  `EquipmentCheckTemplate.organization_id`/`InventoryItem.organization_id`
+  on the position join and `CheckItemDeployedLot.organization_id` on the
+  deployed-lot subquery it adds) — read both methods in full rather than
+  trusting their docstrings.
+- **Injection (Pitfall #25):** `find_lots_by_number`'s and
+  `apparatus_expiring_stock`'s new `lot_number ilike` clauses both use
+  `like_pattern(needle)` with `escape=LIKE_ESCAPE_CHAR` — re-read directly,
+  not assumed from the pattern being correct elsewhere in the file.
+- **Abuse resistance:** `GET /lots/search` requires `min_length=2` on
+  `lot_number` (a 1-character query is rejected with 400 before any DB
+  call), matching the route's own docstring; no unbounded new list surface
+  — the recall lookup returns at most "every unit of one lot," not an
+  org-wide scan.
+- **Data exposure / CSV (Pitfall #15):** the new export columns in both
+  `export_medical_items_csv` and `export_medical_lots_csv` are still
+  written through the same `SafeCsvWriter` instance as every other cell in
+  those rows — no new raw `csv.writer` introduced, confirmed by reading the
+  full diff hunks, not a grep for the writer's name alone (a second,
+  unguarded writer instantiated later in the same function would not show
+  up in that grep).
+- **Numeric bounds:** `days_ahead: int = Query(30, ge=1, le=365)` on the new
+  look-ahead window, consistent with the pre-existing `/lots/expiring`
+  bound; `8e43a68e7`'s sweep (above) is the one that actually re-bounded the
+  75 request fields and is re-verified by its own guard test passing
+  (completion gate, below), not re-checked field-by-field here.
+- **MSUP-4 / MSUP-11 re-confirmed still open, unchanged, at current line
+  numbers.** `get_expiring_lots` (`inventory_service.py:9891`) still has no
+  `limit`/pagination; `list_lots` (`inventory_service.py:9305`) still
+  returns an item's complete lot history unpaginated. Both still correctly
+  reflected in `docs/KNOWN_LIMITATIONS.md` as owner-accepted (2026-10-05).
+
+**0 new findings on code merged to `main`.**
+
+### Supplementary check: open, unmerged sibling PR #3627 ("Medical supplies: record lot recalls")
+
+Per this pass's instructions, also read PR #3627 — open against `main`
+(base `d7e7e9f6`, not yet merged; `pull_request_read` confirms
+`"merged": false`) and the PR that will add the actual recall **recording**
+and **lifting** endpoints that `c75e0cea9`'s lookup above anticipates. This
+is **not** code on `main` today, so it is not this pass's own rotation
+scope and is not counted in the fix/flag totals above — but it is a direct,
+named extension of this exact feature, still under review by its own
+author, so flagging a real gap before it merges is cheaper than finding it
+in pass 17.
+
+**Verified sound:** `POST /recalls` and `POST /recalls/{id}/lift` are both
+gated `inventory.manage_medical`/`inventory.manage`; `GET /recalls` is
+view-gated; every service method (`record_lot_recall`, `lift_lot_recall`,
+`list_lot_recalls`, `recalled_lot_keys`, `get_recalled_shelf_lots`) filters
+`organization_id` directly, re-read method-by-method; `list_lot_recalls`
+additionally scopes by `item_types` through the same org-scoped
+`_category_ids_of_type` subquery already audited for this feature, so a
+medical-only officer cannot list or lift a gear recall; a cross-org or
+cross-domain `recall_id` reads as 404 on `lift`, matching this router's
+established convention; both writes are audit-logged
+(`medical_lot_recalled`, `medical_lot_recall_lifted`); `LotRecallCreate`/
+`LotRecallLift` bound `lot_number`/`reason`/`note` to sane max lengths;
+`record_lot_recall` locks the duplicate-recall race with
+`with_for_update()` and a post-lock existence re-check (CLAUDE.md Pitfall
+#27's shape); the new frontend component uses `PromptDialog`, not
+`window.confirm`/`window.prompt` (Pitfall #16); no `dangerouslySetInnerHTML`
+or `innerHTML` introduced.
+
+**MSUP-28 — MED, flagged on PR #3627 (not on `main`, not fixed here) —
+`record_lot_recall` re-validates the duplicate-recall race under its lock
+but not the medical-domain membership, re-opening the exact TOCTOU pattern
+MSUP-25 already fixed for this file's other medical-scoped writes.**
+`record_medical_lot_recall` (the route) calls `_require_medical_item`
+(an unlocked read) before calling `InventoryService.record_lot_recall`,
+which then does its own `SELECT ... FOR UPDATE` on the item row — but only
+to serialize the _duplicate-recall_ check, not to re-read the item's
+`category_id`/domain the way `_items_in_domain_locked` does for
+`update_item`/`add_lot`/`add_lots_bulk`/`update_lot`/`delete_lot` (MSUP-25,
+fixed 2026-10-05). Concretely: two broad `inventory.manage` holders racing
+— one moving the item to a non-medical category or reclassifying its
+category's `item_type` away from `medical`, the other recording a recall on
+that same item id — can land the recall after the reclassification commits,
+with nothing in `record_lot_recall` noticing, because its lock is read
+_after_ the preflight and checked only for the recall-uniqueness query, not
+for domain membership. The service file already has the exact helper this
+needs (`_items_in_domain_locked(..., required_item_types=MEDICAL_ITEM_TYPES)`)
+one line above where the ad hoc `with_for_update()` select sits — this is a
+narrower, lower-likelihood instance of the same class MSUP-25 fixed (both
+sides require `inventory.manage`-level access in the same org, not a
+cross-tenant path), rated MED to match MSUP-25's own rating for the
+identical mechanism. `lift_lot_recall` has a related but lower-severity gap:
+it resolves the recall id through an org-and-domain-scoped read
+(`list_lot_recalls`) before locking, but the lock it takes is on the
+`InventoryLotRecall` row, not a re-check of the underlying item's current
+domain — a narrower window than the record path, since lifting a recall
+that already exists does not newly expose cross-domain data, only
+(in the already-narrow race) lets a medical-only officer lift a recall on an
+item that has since been reclassified to gear. Posted as a review comment
+on PR #3627 with a concrete fix (reuse `_items_in_domain_locked` inside
+`record_lot_recall`, under the item lock it already takes) rather than
+applied here, since PR #3627 is someone else's open branch, not a target
+of this review's own commit.
+
+### Completion gate (pass 16)
+
+| Check                                                      | Result                                       |
+| ---------------------------------------------------------- | -------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                              | ✅ clean                                     |
+| `black --check app/ tests/ alembic/`                       | ✅ clean — 2606 files unchanged              |
+| `isort --check-only app/ tests/ alembic/`                  | ✅ clean                                     |
+| `python3 scripts/validate_migrations.py --strict`          | ✅ 649 revisions, single head `a0195b397bf3` |
+| `pytest tests/ -q -k "medical_supplies or medical_supply"` | ✅ 203 passed, 0 skipped                     |
+| `cd frontend && npm run typecheck`                         | ✅ 0 errors                                  |
+| `cd frontend && npm run lint`                              | ✅ (see PR body)                             |
+
+No source file was modified by this pass itself — it is a re-verification
+pass on `main` (the real delta since pass 15 was already merged by other
+work and reviewed clean above) plus one new finding (MSUP-28) raised on a
+sibling PR that has not merged.
+
+MSUP-4 and MSUP-11 remain the only open, flagged items on `main`. MSUP-28 is
+flagged on PR #3627 only and does not apply to any code currently on `main`.
+MSUP-1 through MSUP-27 all re-verified intact at their current citations.
 
 ## Pass 15 (2026-10-20) — 0 fixed, 0 new findings (watchdog pickup)
 

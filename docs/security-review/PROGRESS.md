@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3633 (Feature 22, Grants & fundraising, pass 10) merged
+docs-only (`docs/security-review/GF-22-grants-fundraising.md` and
+`PROGRESS.md` only — confirmed by `git show --stat` on its merge commit,
+`dbf2d64b8`) — not independently recordable per this file's own rule above.
+Row 22 stays ✅. This pass (Feature 23, Medical supplies, pass 16) rides
+this clearing along with its own commit rather than opening a PR for it
+alone.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 10, PR #3633, merged docs-only), preserved for history</summary>
+
 **PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633)** (branch
 `claude/security-review-grants-fundraising-p10`) —
 Feature 22 (Grants & fundraising), pass 10, a watchdog pickup. PR #3632
@@ -32,6 +43,8 @@ Full writeup: `docs/security-review/GF-22-grants-fundraising.md`'s
 Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
 supplies) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 10, PR #3632, merged, docs-only), preserved for history</summary>
@@ -21090,7 +21103,7 @@ this iteration's commit" rule.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -21109,6 +21122,46 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 23 (Medical supplies, pass 16) — watchdog pickup, 0 fixed, 0 new findings on `main`; MSUP-28 flagged on open sibling PR #3627
+
+Watchdog pickup for the security-review rotation: PR #3633 (Feature 22,
+Grants & fundraising, pass 10) had already merged, docs-only — not
+independently recordable per this file's own rule, so nothing to clear
+beyond the Open PR row itself. No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests` and `list_pull_requests`,
+both empty); row 23 was confirmed the next `⬜` row on a freshly fetched
+`main`.
+
+Scope check against pass 15's merge (`d21c20494`, PR #3455) found four days
+of real, substantial feature work on this module: a lot-recall lookup
+(`GET /lots/search`, route count 25 → 26), Next-expiry sorting and
+uncounted-position tracking added to the supply list/export/summary, truck
+lots added to the lot CSV export with a 30/60/90-day look-ahead window, and
+the repo-wide inventory numeric-bounds sweep (`8e43a68e7`, 75 fields across
+the shared inventory schemas). All re-verified directly against current
+code across all seven `CHECKLIST.md` dimensions — full route
+re-enumeration (26/26 auth-gated, OR-gated domain-first exactly as before),
+the new lookup's org/domain scoping on both its shelf and truck halves, its
+`LIKE` escaping, and the CSV exports' continued use of `SafeCsvWriter`.
+MSUP-4 and MSUP-11 (the two owner-accepted unbounded-list items) re-checked
+at their current line numbers, unchanged. **0 new findings on `main`.**
+
+Separately, read PR #3627 ("Medical supplies: record lot recalls") — open
+against `main`, not merged, the sibling PR that will add the recall
+**recording**/**lifting** endpoints this pass's own `GET /lots/search`
+lookup anticipates. Not this pass's rotation scope (not on `main`) and not
+counted in the fix/flag totals, but flagged one real finding before it
+merges: **MSUP-28 (MED)** — `record_lot_recall` re-validates the
+duplicate-recall race under a row lock but not medical-domain membership,
+reopening the exact TOCTOU class MSUP-25 already fixed for this file's
+other medical writes (the service already has the `_items_in_domain_locked`
+helper this needs, one line above the ad hoc lock it uses instead). Posted
+as a review comment on PR #3627 rather than fixed, since that PR is not
+this review's own branch.
+
+Full write-up: `docs/security-review/MSUP-23-medical-supplies.md`'s
+**Pass 16** section.
 
 ### 2026-10-24 — Feature 21 (Admin hours, pass 10) — watchdog pickup, 0 fixed by this pass, 0 new findings; AH-18 (pass 9's one open finding) confirmed fixed
 
