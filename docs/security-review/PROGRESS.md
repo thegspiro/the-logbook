@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)** (branch
+**PR [#3672](https://github.com/thegspiro/the-logbook/pull/3672)** (branch
 `claude/security-review-scheduled-tasks-p9`) — Feature 31 (Scheduled
 tasks), pass 9. Watchdog pickup (the dedicated loop session for this
 rotation, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable — no
