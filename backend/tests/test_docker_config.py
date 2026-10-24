@@ -696,7 +696,11 @@ class TestExternalServicesOverride:
     def test_base_file_still_runs_the_bundled_services(self):
         env = self.base["backend"]["environment"]
         assert (env["DB_HOST"], env["DB_PORT"]) == ("mysql", 3306)
-        assert (env["REDIS_HOST"], env["REDIS_PORT"]) == ("redis", 6379)
+        # 6379 unless BACKEND_REDIS_PORT points the backend at Redis's TLS port.
+        assert (env["REDIS_HOST"], env["REDIS_PORT"]) == (
+            "redis",
+            "${BACKEND_REDIS_PORT:-6379}",
+        )
         assert self.base["backend"]["depends_on"] == {
             "mysql": {"condition": "service_healthy"},
             "redis": {"condition": "service_healthy"},

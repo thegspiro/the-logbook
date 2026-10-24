@@ -39,6 +39,10 @@
 # and SECURITY_REQUIRE_TLS already reach the backend from .env through the
 # base and production files; a managed service should use all of them, with
 # the provider's CA bundle in SSL_CERTS_DIR (mounted at /etc/ssl/logbook).
+# A service that also requires a client certificate takes DB_SSL_CERT /
+# DB_SSL_KEY and REDIS_SSL_CERT / REDIS_SSL_KEY (container paths, e.g. a
+# directory you mount at /etc/ssl/logbook-tls via TLS_DIR). The bundled TLS
+# wrappers and scripts/tls-setup.sh are for the bundled mysql and redis only.
 #
 # Migrations need nothing extra: the backend applies them itself on start,
 # against DB_HOST, as it does against the bundled database.

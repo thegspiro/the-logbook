@@ -637,6 +637,39 @@ What an operator needs to know:
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
 
+### MySQL and Redis can offer TLS, and `REDIS_SSL=true` now works (2026-10-24)
+
+Nothing changes until you run `./scripts/tls-setup.sh`. With no certificates
+mounted the database and Redis start exactly as before, and plaintext keeps
+working after you add them. Full guide: [TLS.md](./TLS.md).
+
+- **To turn it on:** `./scripts/tls-setup.sh`, add the lines from
+  `./scripts/tls-setup.sh --print-env` to `.env`, `docker compose up -d`. On
+  Unraid run it as root so the keys can be handed to the containers' users. It
+  writes a private CA, server certificates for MySQL and Redis, and client
+  certificates for the backend and backup sidecar. **Keep the CA private key
+  (`tls-ca-private/`) off the server's shared storage**; it is needed only to
+  renew.
+- **Redis port:** the compose files now read the backend's Redis port from
+  `BACKEND_REDIS_PORT` (default `6379`, plaintext; `6380` is TLS). Before, it
+  was hard-coded; `REDIS_PORT` in `.env` was never what the backend used.
+- **Certificates expire** (servers and clients after a year). An expired
+  certificate stops the connection it protects. `./scripts/tls-setup.sh --check`
+  lists the dates and exits 1 within 30 days; `--renew` reissues them.
+- **Bug fix:** `REDIS_SSL=true` never worked. The backend passed redis-py an
+  option the pinned version does not accept, so every Redis connection failed and
+  the application quietly ran without its cache (unless `REDIS_REQUIRED=true`).
+  If you had set `REDIS_SSL=true` and your Redis was not actually serving TLS,
+  expect it to start connecting properly once it is.
+- **New settings:** `DB_SSL_CERT`, `DB_SSL_KEY`, `REDIS_SSL_CERT`,
+  `REDIS_SSL_KEY` (client certificate and key, both or neither; startup reports
+  half a pair as critical).
+- **Backups:** once `tls/backup` holds a client certificate, the nightly sidecar
+  and the restore drill connect with verified TLS and abort rather than fall
+  back to plaintext if the directory is incomplete.
+- **Not yet enforced:** plaintext is still accepted. Refusing it, and requiring
+  the client certificate, is a separate later switch.
+
 ### Backups can be encrypted (2026-10-23)
 
 Backups were plaintext. They can now be encrypted, and **nothing changes until
