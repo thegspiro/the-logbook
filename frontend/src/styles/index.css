@@ -494,6 +494,81 @@
   min-width: min(14rem, 100%);
 }
 
+/* A button in the same row as a field takes the field's height, on a desktop.
+ *
+ * With a mouse there is no 44px floor, so each control keeps its own natural
+ * height, and a toolbar row mixes them: a 42px search box beside a 38px
+ * "Filters" button or a 30px "Add", and — the other way — a 38px field beside
+ * a button carrying an unconditional 44px touch minimum (`min-h-11`,
+ * `mobile-touch-target`, Pagination). Measured on eleven routes at 1366–1920px.
+ *
+ * A stretch cannot fix it: half these rows are `items-end`, with a label above
+ * the field, where a stretched button would take the label's height too. What
+ * is known is the field's own height, which `form-input` fixes per size — one
+ * line of its text plus py-2 (42px at 16px), 38px with `text-sm`, 50px with
+ * `py-3`, 34px for `form-input-sm` — so the row publishes it and its buttons
+ * take it as a minimum: a short button grows, a
+ * 44px one comes down, and a button whose label wraps can still grow past it.
+ *
+ * Scope: a flex row (a column only once `sm:`/`md:`/`lg:flex-row` makes it a
+ * row) holding a field directly or one wrapper deep, and buttons at the same
+ * depths. A segmented control, toggle group or `<nav>` keeps its own geometry
+ * (Pagination sizes its whole bar itself), and an
+ * absolutely positioned button is a field's clear or show-password control,
+ * not a row member. Mouse-driven screens from 768px only; a phone or touch
+ * screen keeps its 44px targets. `styles/fieldRowHeight.test.ts` pins it. */
+/* Registered so that the default below — `1lh` — resolves on the row, at the
+   line height an un-classed `form-input` inherits from it, rather than at each
+   button's own. A field reads its text size from the page as often as from a
+   class, and assuming 16px lifted a 38px row's button to 42px. */
+@property --row-field-h {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@media (min-width: 768px) and (pointer: fine) {
+  :is(.flex, .inline-flex, .sm\:flex, .md\:flex):not(
+    .flex-col:not(.sm\:flex-row, .md\:flex-row, .lg\:flex-row),
+    .flex-col-reverse:not(.sm\:flex-row, .md\:flex-row, .lg\:flex-row)
+  ) {
+    /* py-2 and a 1px border around one line of the inherited text. */
+    &:has(> .form-input, > * > .form-input) {
+      --row-field-h: calc(1lh + 1rem + 2px);
+    }
+    &:has(
+      > .form-input:is(.text-sm, .sm\:text-sm),
+      > * > .form-input:is(.text-sm, .sm\:text-sm),
+      > .text-sm > .form-input
+    ) {
+      --row-field-h: 2.375rem;
+    }
+    &:has(> .form-input.py-3, > * > .form-input.py-3) {
+      --row-field-h: 3.125rem;
+    }
+    &:has(> .form-input-sm, > * > .form-input-sm) {
+      --row-field-h: 2.125rem;
+    }
+    /* Two selectors, not one `:is()`: in `row > :is(button, :not(.group) > button)`
+       the element after `>` must itself be the row's child, so the second
+       branch could only ever match a direct child too. */
+    &:has(> :is(.form-input, .form-input-sm), > * > :is(.form-input, .form-input-sm)) > button:not(.absolute),
+    &:has(> :is(.form-input, .form-input-sm), > * > :is(.form-input, .form-input-sm))
+      > :not(
+        nav,
+        .segmented-group,
+        .segmented-group-secondary,
+        .overflow-hidden,
+        [role='tablist'],
+        [role='group'],
+        [role='radiogroup']
+      )
+      > button:not(.absolute) {
+      min-height: var(--row-field-h);
+    }
+  }
+}
+
 /* Keep native and one-off form controls usable even when a feature has not yet
    migrated to the form-input utility. min-width:0 also lets date/time inputs
    shrink inside narrow grid columns instead of widening the whole page. */

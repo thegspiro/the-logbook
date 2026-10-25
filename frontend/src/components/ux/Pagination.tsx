@@ -63,7 +63,10 @@ export const Pagination: React.FC<PaginationProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-        {/* Page size selector */}
+        {/* Page size selector. One height for the whole bar with a mouse: the
+            select, the arrows and the page numbers are all 40px, and all 44px
+            on a phone or touch screen. The arrows used to keep an
+            unconditional 44px beside 40px numbers and a 33px select. */}
         {onPageSizeChange && (
           <div className="flex items-center gap-2">
             <label htmlFor="page-size" className="text-theme-text-muted text-sm">
@@ -73,7 +76,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               id="page-size"
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="form-input-sm"
+              className="form-input-sm md:pointer-fine:min-h-10"
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
@@ -94,7 +97,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               onPageChange(1);
             }}
             aria-disabled={currentPage === 1}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch:min-h-[44px] touch:min-w-[44px] inline-flex min-h-10 min-w-10 items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
             aria-label="First page"
           >
             <ChevronsLeft className="h-4 w-4" />
@@ -105,7 +108,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               onPageChange(currentPage - 1);
             }}
             aria-disabled={currentPage === 1}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch:min-h-[44px] touch:min-w-[44px] inline-flex min-h-10 min-w-10 items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
             aria-label="Previous page"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -138,7 +141,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               onPageChange(currentPage + 1);
             }}
             aria-disabled={currentPage === totalPages}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch:min-h-[44px] touch:min-w-[44px] inline-flex min-h-10 min-w-10 items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
             aria-label="Next page"
           >
             <ChevronRight className="h-4 w-4" />
@@ -149,7 +152,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               onPageChange(totalPages);
             }}
             aria-disabled={currentPage === totalPages}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch:min-h-[44px] touch:min-w-[44px] inline-flex min-h-10 min-w-10 items-center justify-center rounded-md transition-all duration-150 active:scale-95 aria-disabled:cursor-not-allowed aria-disabled:opacity-30"
             aria-label="Last page"
           >
             <ChevronsRight className="h-4 w-4" />
