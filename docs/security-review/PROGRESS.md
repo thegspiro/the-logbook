@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3691](https://github.com/thegspiro/the-logbook/pull/3691)** (branch
+`claude/security-review-elections-ballots`) —
+Feature 06 (Elections & ballots), pass 12. No security-review PR was
+open — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 matching results, PR
+#3689 (Feature 05, Finance & approvals, pass 12) having already merged
+with no open rotation PR behind it. Dedicated review session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) unreachable; this is a watchdog
+pickup. **0 new findings, 0 fixed.** True zero delta since pass 11's
+baseline (`da233695`, PR #3564): `git diff --stat` across the feature's
+full established scope (`elections.py`, `election_service.py`,
+`minutes_election_filing.py`, `schemas/election.py`, `models/election.py`,
+the two election PDF utils, `mcp/tools/elections.py`, and the frontend
+module tree) is empty — the migrations that landed since touch unrelated
+tables only. Routes re-enumerated by AST (73, every one carrying a
+`Depends`). All standing findings (ELEC-12, ELEC-14, ELEC-16, ELEC-28,
+ELEC-40, ELEC-48, ELEC-49, ELEC-50) re-confirmed unchanged at their current
+dispositions and line numbers. See `ELEC-06-elections-ballots.md`'s
+**Pass 12** section for the full review.
+
+Rotation row 06 → ✅ (pending this PR's merge); next is Feature 07
+(Users & organizations).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3689, Feature 05, Finance & approvals, pass 12, merged), preserved for history</summary>
+
 **PR [#3689](https://github.com/thegspiro/the-logbook/pull/3689)** (branch
 `claude/security-review-finance-approvals-p12`) —
 Feature 05 (Finance & approvals), pass 12. No security-review PR was
@@ -35,6 +61,8 @@ re-confirmed OPEN/FLAGGED at their current line numbers. See
 
 Rotation row 05 → ✅ (pending this PR's merge); next is Feature 06
 (Elections & ballots).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3688, Feature 04, Storefront & payments, pass 12, merged), preserved for history</summary>
@@ -21654,7 +21682,7 @@ PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
