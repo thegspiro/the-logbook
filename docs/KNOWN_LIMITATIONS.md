@@ -6867,7 +6867,7 @@ the sole intended backstop is an owner decision, not a drive-by fix.
 Found in security-review FIN-05 pass 8 (2026-10-12); see
 `docs/security-review/FIN-05-finance-approvals.md` → FIN8-05-1.
 
-## CI-1 — Backend Lint's Pinned `flake8`/`isort` Have Drifted From `requirements.txt` Again (2026-10-12)
+## CI-1 — Backend Lint's Pinned `flake8`/`isort` Have Drifted From `requirements.txt` Again (2026-10-12) — ✅ FIXED (2026-10-25)
 
 `.github/workflows/ci.yml`'s Backend Lint job installs
 `flake8==7.3.0`/`isort==9.0.1` explicitly (its own comment at lines 110-121
@@ -6880,12 +6880,18 @@ against. `black==26.5.1` is in step with both.
 
 Found incidentally during security review SF-04 pass 8 (2026-10-12) while
 installing the completion gate's linters at CI's pinned versions — not a
-storefront-specific finding, and not fixed here (it is a repo-wide tooling
-question: bump the workflow's pin to match `requirements.txt`, or revert
-`requirements.txt` to match the workflow, is a one-line choice either way,
-but is outside this feature's scope and better made by whichever pass next
-touches `requirements.txt` or the workflow file — most likely Feature 00's
-cross-cutting sweep or Feature 33's core-infrastructure pass).
+storefront-specific finding, flagged for whichever pass next touched
+`requirements.txt` or the workflow file to resolve.
+
+**Fixed in security review CI9-33 (core infrastructure, pass 9,
+2026-10-25):** by that point `backend/requirements.txt` had also moved
+`black` to `26.10.1`, widening the drift to all three tools. Re-ran all three
+linters against the full `app/ tests/ alembic/` tree at the newer
+(`requirements.txt`) versions first — clean at `flake8==7.4.1`,
+`black==26.10.1`, `isort==9.0.2` — then bumped `.github/workflows/ci.yml`'s
+pin to match rather than reverting `requirements.txt` backward, so a
+Dependabot-style forward bump doesn't have to fight this pin again. See
+`docs/security-review/CI9-33-core-infra.md`.
 
 ## LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04)
 
