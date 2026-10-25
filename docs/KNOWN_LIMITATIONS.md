@@ -1033,6 +1033,13 @@ Still open:
   the drives it was added to; the existence check also requires the file to
   be in the drive the reference names, but a download does not repeat that
   check. Rows are written only by the server.
+- **A file deleted from a Shared Drive stays in its trash for 30 days
+  (2026-10-25).** The Content manager role the account is given may trash a
+  file but not delete it outright, and Google empties a Shared Drive's trash
+  after 30 days. The file is encrypted, and until then it still counts against
+  the drive's storage; a drive Manager can empty the trash sooner. Granting the
+  account Manager would allow an outright delete, but also lets it change who
+  belongs to the drive, so it is not asked for.
 - **Resolved 2026-10-22: existing files move with
   `scripts/migrate_uploads_to_s3.py`** (apply, rollback, finalize), and
   `scripts/encrypt_uploads.py --rewrap` reaches bucket objects. Every object
