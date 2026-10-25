@@ -134,6 +134,34 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The backend needs the `webauthn` package for passkeys (2026-10-25)
+
+Members can now use a passkey on their phone or computer as their second
+factor (see `docs/MFA.md`). The server verifies passkeys with `webauthn`
+(py_webauthn), now pinned in `backend/requirements.txt` and imported when the
+authentication code loads, so a backend started without it fails at import
+and never serves a request.
+
+- **Docker (including Unraid Compose Manager):** rebuild the backend image
+  (`docker compose build backend` or `--build`); the Dockerfile installs
+  `requirements.txt`.
+- **Running from source:** run `pip install -r backend/requirements.txt`
+  before restarting.
+
+The migration only creates two new tables (`user_passkeys`,
+`webauthn_challenges`); no existing row changes, and nobody's sign-in changes
+until they add a passkey.
+
+**Passkeys need `FRONTEND_URL` to be the site's HTTPS address on a domain
+name**, which is what members' browsers will check. On a deployment reached
+over plain HTTP or at an IP address the option is hidden and members keep
+using the authenticator app. **Changing `FRONTEND_URL` to a different host
+later retires every passkey**: they stop counting as a second factor, members
+add new ones, and where MFA is required members whose only factor was a
+passkey are sent to set one up at their next sign-in. Recovery codes keep
+working throughout. An administrator can turn new passkeys off under
+**Settings > Authentication**.
+
 ### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
 
 `unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`

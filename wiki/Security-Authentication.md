@@ -137,8 +137,8 @@ rate-limited sign-in shows the server's `Retry-After` wait ("Too many failed
 attempts. Try again in N seconds.").
 
 Every sign-in event is written to the tamper-evident audit log under category
-`authentication`: `login` (with `method`: `password`, `password+totp` or
-`password+recovery_code`), `login_failed` (with `reason` and `stage`),
+`authentication`: `login` (with `method`: `password`, `password+totp`,
+`password+passkey` or `password+recovery_code`), `login_failed` (with `reason` and `stage`),
 `account_locked` on the attempt that sets the lock, and `logout`. A failure
 against an identifier that matches no account is recorded with no member and
 no organization, and the identifier itself is not stored, because members
@@ -296,10 +296,21 @@ future addition, not because it half-works today.
 
 ## Multi-Factor Authentication (MFA)
 
-App-based **TOTP** two-factor authentication using apps like Google
-Authenticator, Authy, or 1Password. MFA is self-enrolled by default and can be
+Two second factors, either of which is enough: a **passkey** on the member's
+phone or computer (Face ID, a fingerprint or the device PIN), or app-based
+**TOTP** with apps like Google Authenticator, Authy, or 1Password. Both come
+after the password or SSO sign-in. MFA is self-enrolled by default and can be
 required org-wide by an administrator. See [MFA](../docs/MFA.md) for full
 implementation detail.
+
+### Adding a passkey
+
+1. Navigate to **Settings → Security → Passkeys** and choose **Add a passkey**
+2. Name it, choose **Create passkey**, and confirm on the device
+3. If it is your first second factor, **save the recovery codes** shown once
+
+Up to three passkeys per member. Passkeys need the site on HTTPS at its domain
+name (`FRONTEND_URL`); elsewhere only the authenticator app is offered.
 
 ### Enrolling (per-user, opt-in)
 
@@ -314,8 +325,9 @@ implementation detail.
 
 When an account has MFA enabled, the password step (`POST /auth/login`) does
 **not** issue a session. It returns `{ mfa_required: true, mfa_token }`, and the
-client completes `POST /auth/mfa/login` with that token plus either a 6-digit
-TOTP code or a single-use recovery code before session cookies are issued. TOTP
+client completes `POST /auth/mfa/login` with that token plus a 6-digit TOTP
+code, a single-use recovery code, or a passkey response (challenge from
+`POST /auth/mfa/challenge`) before session cookies are issued. TOTP
 verification tolerates ±30 s of clock drift.
 
 ### Admin-enforced (org-wide)
