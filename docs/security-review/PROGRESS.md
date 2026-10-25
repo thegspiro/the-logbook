@@ -16,6 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_(none — PR #3691 merged; see superseded note below)_
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3691, Feature 06, Elections & ballots, pass 12, merged), preserved for history</summary>
+
 **PR [#3691](https://github.com/thegspiro/the-logbook/pull/3691)** (branch
 `claude/security-review-elections-ballots`) —
 Feature 06 (Elections & ballots), pass 12. No security-review PR was
@@ -38,6 +43,8 @@ dispositions and line numbers. See `ELEC-06-elections-ballots.md`'s
 
 Rotation row 06 → ✅ (pending this PR's merge); next is Feature 07
 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3689, Feature 05, Finance & approvals, pass 12, merged), preserved for history</summary>
@@ -21683,7 +21690,7 @@ PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -21718,6 +21725,59 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-25 — Feature 07 (Users & organizations, pass 12, watchdog pickup) — 0 fixed, 1 new finding flagged (USR-14, LOW)
+
+Dedicated review session (`session_011T1ZyyLrD5HagusgK9uDw2`) unreachable;
+watchdog pickup. PR #3691 (Feature 06, Elections & ballots, pass 12) had
+merged with no open rotation PR behind it — confirmed independently via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+results. Rotation row 07 (Users & organizations) was the first ⬜, matching
+the Open PR note's own "next is Feature 07."
+
+**Scope:** the same twelve files passes 6–11 declared. **Baseline:** `60ac18fd`
+(PR #3569's merge, pass 11). `git log --no-merges 60ac18fd..origin/main --
+<declared files>` found 6 commits touching a declared file directly, every one
+read in full: DOB/emergency-contact encryption at rest (`EncryptedDate`/
+`EncryptedJSON`), step-up MFA wired onto 8 sensitive routes already permission-
+gated (role grants, password/MFA resets, member delete/anonymize, two
+settings-PATCH routes), a 99-column NOT NULL tightening pass (`User.status`
+is this feature's one affected column), NFC card lifecycle sync wired into all
+three status-changing endpoints (correctly org-scoped in the sync service
+itself), and a platform-neutral remote-storage refactor adding Google Drive
+support (the existing settings-injection guard preserved and extended
+correctly to the new secret field).
+
+**1 new finding, flagged not fixed, LOW:**
+
+- **USR-14** — the two new generic file-storage activate/deactivate routes
+  (and their S3-era aliases) do not require step-up re-verification, unlike
+  the sibling route that saves the credentials they activate and every other
+  route this pass's step-up rollout covers. Not a credential or cross-tenant
+  issue (the underlying permission check is unchanged and activation only uses
+  already step-up-protected saved settings); whether storage-platform
+  switching belongs in the step-up policy's "destructive admin action"
+  category is an owner call, not a reviewer's to make unilaterally. Mirrored
+  into `docs/KNOWN_LIMITATIONS.md`. See `docs/security-review/USR-07-users-
+organizations.md`'s **Pass 12** section for the full review.
+
+All 84 routes across the four principal files re-enumerated by AST walk (32/
+29/16/7 — `organizations.py` up from 27 for the two new generic storage
+routes). Both standing findings (USR-5, USR-8) re-confirmed unchanged at their
+current dispositions and line numbers.
+
+**Completion gate:** flake8/black/isort (backend `app/`, `tests/`, `alembic/`)
+clean; `validate_migrations.py --strict` single head (652 revisions, up from
+651 — the new encryption migration); `check_route_permissions.py --strict`
+276 routes, 0 errors/0 warnings; scoped backend tests (pass 11's selection plus
+`stepup`/`step_up`/`encrypt`/`nfc_card`/`remote_storage`/`google_drive`/
+`file_storage`) 2,105 passed, 1 pre-existing skip (`py_vapid`), run under
+`/usr/bin/python3` (Python 3.13, where pytest is installed — `/usr/local/bin/
+python3` resolves to a bare 3.11 with no pytest in this sandbox); frontend
+`typecheck` 0 errors; frontend `lint` 0 errors/0 warnings.
+
+Rotation row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline).
 
 ### 2026-10-25 — Feature 02 (Permissions & roles, pass 12) — 0 fixed, 2 new findings flagged (PERM-10, PERM-11, both MED)
 

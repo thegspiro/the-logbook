@@ -3373,6 +3373,28 @@ non-manager view and leave every other caller unchanged.
 
 (Security review USR-8, `docs/security-review/USR-07-users-organizations.md`.)
 
+## Organizations: Switching The File Storage Platform Does Not Require Step-Up Re-Verification (2026-10-25)
+
+**Open — owner decision needed.** `POST /organization/settings/file-storage/activate`
+and `/deactivate` (and their S3-era aliases) let a `settings.manage` holder
+switch where new files are written without a fresh step-up re-verification,
+while the sibling route that saves the credentials being activated
+(`PATCH /settings/file-storage`) and the analogous `PATCH /settings/auth` both
+require one, as does every other route the 2026-10-23 step-up rollout covers
+(role grants, password/MFA resets, member deletion/anonymization).
+
+Not a credential-exposure or cross-tenant issue — activation only takes effect
+on settings already saved through a step-up-gated write, and the
+`settings.manage` permission check is unchanged. The open question is whether
+"switch storage platform" belongs in the step-up policy's "destructive admin
+action" category (it moves where data lives going forward) or is intentionally
+excluded (it moves no secret and grants no permission itself). Adding
+`_stepup: User = Depends(require_stepup)` to the four routes in
+`backend/app/api/v1/endpoints/organizations.py` is a one-line fix once that
+call is made.
+
+(Security review USR-14, `docs/security-review/USR-07-users-organizations.md`.)
+
 ## Users: A Membership-Tier Removal's Occupancy Check Can Still Miss an Unattended Batch Advancement (2026-09-14)
 
 ✅ **Resolved 2026-10-11 (owner decision: hold the Organization lock for the
