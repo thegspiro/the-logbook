@@ -578,7 +578,7 @@ its own route: the admin pages listed in `INVENTORY_ADMIN_SHELL_PATHS`
 (`modules/inventory/pages/inventoryAdminAreas.ts`) wrap their element in
 `InventoryAdminLayout`, inside their `ProtectedRoute`, so every route keeps its
 own gate and URL. A page outside that list (the kiosk, the NFC scanning tools,
-Storage Areas, Import, Temporary Loans, EMS Supplies, the store console) still
+Storage Areas, Print Labels, Import, Temporary Loans, EMS Supplies, the store console) still
 sits in the strip, marked as opening its own page. A viewer who passes a page's
 gate but not the hub's gets that page with a breadcrumb trail and no header.
 Area cards and pages are badged with the work waiting in them.

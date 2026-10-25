@@ -1873,7 +1873,7 @@ describe('InventoryItemsPage — selecting every matching item for labels', () =
     expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0, limit: 500 }));
     expect(mockGetItems.mock.lastCall?.[0]).not.toHaveProperty('group_by');
 
-    await user.click(screen.getByRole('button', { name: /Print Labels/ }));
+    await user.click(screen.getByRole('button', { name: /Print Selected/ }));
     expect(window.location.pathname).toBe('/inventory/print-labels');
     const qs = new URLSearchParams(window.location.search);
     expect(qs.get('all')).toBe('1');
@@ -1890,7 +1890,7 @@ describe('InventoryItemsPage — selecting every matching item for labels', () =
     await user.click(screen.getByRole('checkbox', { name: /Saw/ }));
     expect(screen.getByText('119 selected')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Print Labels/ }));
+    await user.click(screen.getByRole('button', { name: /Print Selected/ }));
     const qs = new URLSearchParams(window.location.search);
     expect(qs.has('all')).toBe(false);
     expect(qs.get('ids')?.split(',')).toHaveLength(119);
