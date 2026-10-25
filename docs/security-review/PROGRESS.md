@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#TBD]** (branch `claude/security-review-finance-approvals-p12`) —
+Feature 05 (Finance & approvals), pass 12. No security-review PR was
+open — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 matching results, PR
+#3688 (Feature 04, Storefront & payments, pass 12) having already merged
+with no open rotation PR behind it. Dedicated review session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) unreachable; this is a watchdog
+pickup. **0 new findings, 0 fixed.** Real delta since pass 11's baseline
+(`f9909b70`, PR #3562): a new purchase -> expense report -> reimbursement
+check flow (`app/services/finance_reimbursement.py`, 7 new routes),
+budget-category deactivation now closing sub-categories, and draft
+withdrawal/cancellation routes. All reviewed against the seven checklist
+dimensions with no new finding; FIN8-05-1 (MED) and FIN-30 (LOW) both
+re-confirmed OPEN/FLAGGED at their current line numbers. See
+`FIN-05-finance-approvals.md`'s **Pass 12** section for the full review.
+
+Rotation row 05 → ✅ (pending this PR's merge); next is Feature 06
+(Elections & ballots).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3688, Feature 04, Storefront & payments, pass 12, merged), preserved for history</summary>
+
 **PR [#3688](https://github.com/thegspiro/the-logbook/pull/3688)** (branch
 `claude/security-review-storefront-payments-p12`) — Feature 04 (Storefront &
 payments), pass 12. No security-review PR was open — confirmed via
@@ -21630,7 +21652,7 @@ PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
