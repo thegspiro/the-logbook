@@ -6236,37 +6236,30 @@ server. Doing it for these two endpoints would close all three items at once.
 Until then the two screens are reliable for small organizations and quietly
 partial for large ones.
 
-## Notifications — Rules Cannot Be Renamed or Deleted From the Screen (2026-10-12)
+## W56-4 / NOTIF2-6 — Notification Rules Could Not Be Edited or Deleted From the Screen (2026-10-12, resolved 2026-10-25)
 
-Found driving W56 (`docs/workflow-review/W56-notifications.md`, W56-4).
+**Resolved (owner decision: delete, with a warning).** Each rule on Notifications
+→ Rules now has Edit and Delete. Because a trigger with no rule sends with its
+defaults, and one with rules sends while any is on, the delete confirmation
+says when removing the rule switches that notification back on or off for the
+whole department, and the edit dialog says the same when the trigger changes.
+Kept only because `NotificationsPage.ruleEdit.test.tsx` cites it; history in
+`docs/workflow-review/W56-notifications.md` and `docs/app-review/notifications.md`.
 
-- **What the screen offers:** the rules tab creates a rule and switches it on
-  or off, and nothing else. A rule with a typo in its name, or on the wrong
-  trigger, stays on the list for good.
-- **What the API already supports:** `PATCH /notifications/rules/{id}` and
-  `DELETE /notifications/rules/{id}`, both behind `notifications.manage`.
-- **Why it is not simply a Delete button:** with no rule for a trigger, that
-  trigger's notifications go out with their default settings (pitfall 19). So
-  deleting the one switched-off rule for, say, event reminders turns the
-  reminders back on, with nothing on the screen to say so.
-- **Decisions needed before building it:**
-  - whether to offer edit only, or delete as well;
-  - if delete, whether it warns that the trigger reverts to sending.
+## MM5-4 — Two People Editing One Set of Minutes Silently Overwrite Each Other's Sections (2026-10-13)
 
-- **MM5-4 — Two people editing one set of minutes silently overwrite each
-  other's sections.** _(app-review B6, 2026-10-13)_ The minutes page saves,
-  reorders, adds and deletes a section by sending the **entire** `sections` list
-  built from its local copy, and `MinuteService.update_minutes` replaces the stored
-  list wholesale. There is no version or precondition, so if two secretaries have
-  the same draft open, the second save writes back the first one's stale text for
-  every section the second did not touch, behind a success toast. **Why not
-  fixed.** The cure is an API change — a per-section update endpoint, or an
-  `If-Match` / `updated_at` precondition on `PUT /minutes-records/{id}` — plus a
-  decision on how a conflict is shown ("reload and re-apply" versus a merge).
-  **Owner decision:** whether concurrent editing of one draft is a supported
-  workflow (the per-section endpoint) or is to be refused with a conflict message
-  (the precondition). Same lost-update class as SF-9. See
-  `docs/app-review/meetings-minutes.md` → Pass 5.
+_(app-review B6.)_ The minutes page saves, reorders, adds and deletes a section
+by sending the **entire** `sections` list built from its local copy, and
+`MinuteService.update_minutes` replaces the stored list wholesale. There is no
+version or precondition, so if two secretaries have the same draft open, the
+second save writes back the first one's stale text for every section the second
+did not touch, behind a success toast. **Why not fixed.** The cure is an API
+change — a per-section update endpoint, or an `If-Match` / `updated_at`
+precondition on `PUT /minutes-records/{id}` — plus a decision on how a conflict
+is shown ("reload and re-apply" versus a merge). **Owner decision:** whether
+concurrent editing of one draft is a supported workflow (the per-section
+endpoint) or is to be refused with a conflict message (the precondition). Same
+lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
 
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
 
@@ -6308,27 +6301,6 @@ public API or add a feature:
    the API reference. Cheapest, and it leaves the trap in place.
 
 Until one is chosen, the fields are harmless to set and useless.
-
-## NOTIF2-6 — Notification Rules Can Be Created And Toggled But Not Edited Or Deleted In The UI (2026-10-15)
-
-The Notifications → Rules screen calls `getRules`, `createRule` and `toggleRule` and
-nothing else. `PATCH /notifications/rules/{id}` and `DELETE /notifications/rules/{id}`
-work, and `updateRule` / `deleteRule` / `getRule` exist in
-`frontend/src/services/communicationsServices.ts`, but no screen calls them. A rule
-created with the wrong trigger, or a duplicate, can therefore only be switched off,
-never removed or corrected — and because the resolver keeps a notification on if
-**any** rule for its trigger is enabled, every stray rule has to be remembered and
-switched off one by one.
-
-**Why not fixed.** It is a missing screen, not a defect in what ships, and it needs a
-design call. **Owner decision:**
-
-1. **Add edit and delete to the rules list** — the endpoints and client wrappers
-   are already there; the work is a row menu and a confirm dialog (`useConfirm`).
-2. **Leave as is** — rules stay append-and-toggle, and the wrappers are documented
-   as reserved.
-
-See `docs/app-review/notifications.md` → Pass 5.
 
 ## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16)
 
