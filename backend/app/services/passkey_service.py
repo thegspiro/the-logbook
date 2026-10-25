@@ -420,6 +420,10 @@ async def verify_registration(
     )
     db.add(passkey)
     await db.flush()
+    # created_at is a server default. MariaDB hands it back through
+    # INSERT ... RETURNING; MySQL 8 has no RETURNING, so without this the
+    # first read of it is a lazy load, which an async session cannot run.
+    await db.refresh(passkey)
     return passkey
 
 
