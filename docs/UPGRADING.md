@@ -525,6 +525,28 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Gmail can send through a Google Workspace service account (2026-10-25)
+
+Gmail departments can now send through the Gmail API with a domain-wide
+delegated service account instead of an App Password, so email no longer stops
+when someone changes the sending account's password. **Nothing changes on
+upgrade**: every existing Gmail configuration has no method saved, which means
+App Password, and keeps signing in to `smtp.gmail.com` exactly as before.
+
+- Choosing it needs `admin.access`, not only `settings.manage`, because the key
+  can send as any user in the Workspace domain
+  (`docs/KNOWN_LIMITATIONS.md`, "Gmail — Sending Through a Service Account").
+- The service account's client ID must be authorized in the Google Admin
+  console under **Security > API controls > Domain-wide delegation** for
+  `https://www.googleapis.com/auth/gmail.send`, and the Gmail API must be
+  enabled in its Google Cloud project.
+- The server needs outbound HTTPS to `gmail.googleapis.com` and
+  `oauth2.googleapis.com`.
+- **Before downgrading** to a release from before this change, switch any
+  department on the service account back to an App Password. An older release
+  does not know the method, reads the row as App Password, finds none, and
+  that department's email stops.
+
 ### A department can keep its files in a Google Shared Drive (2026-10-23)
 
 Google Drive under **Organization Settings > Storage** (and in onboarding) now

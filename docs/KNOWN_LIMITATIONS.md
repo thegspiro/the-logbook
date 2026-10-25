@@ -209,6 +209,38 @@ and an owner may want to revisit each:
 
 ---
 
+## Gmail — Sending Through a Service Account (2026-10-25)
+
+Gmail departments on Google Workspace can send through the Gmail API with a
+domain-wide delegated service account (`app/utils/google_oauth.py`,
+`app/services/gmail_api_sender.py`) instead of an App Password. Each of these is
+a known edge an owner should know about:
+
+- **The key can send as anyone in the domain.** Domain-wide delegation cannot be
+  limited to one mailbox; the `gmail.send` scope limits it to sending, not to a
+  sender. Whoever holds the key could send mail as the chief. The key is
+  encrypted at rest and never returned by the API, configuring the method needs
+  `admin.access` (owner decision, 2026-10-25), and the From address is fixed by
+  the saved settings — but the key itself is as powerful as the delegation
+  allows. Microsoft 365's equivalent is narrower: its app registration is granted
+  `SendAs` on one mailbox. Recommend a dedicated Google Cloud project for the
+  key, and delete the key in Google Cloud if it may have leaked.
+- **Not yet proven against a live tenant.** The request shape, the scope and the
+  upload endpoint are taken from Google's own API description bundled with
+  `google-api-python-client`. Three behaviours are taken from Google's
+  documentation without a live test: that the Gmail API delivers to a `Bcc`
+  header and strips it (the sender adds one for recipients not in To or Cc),
+  how a daily sending limit is reported (the sender stops the batch on a
+  message naming a daily limit, or a `Retry-After` longer than 60 seconds), and
+  that the `Message-ID` and `List-Unsubscribe` headers the sender sets are kept.
+- **No settings screen yet.** The method can be set through
+  `PATCH /api/v1/organizations/settings/email`; the screen arrives separately.
+  Onboarding offers App Password only, so a department chooses the service
+  account after setup, in Settings, where the `admin.access` check applies.
+- **The connection test is open to `settings.manage`.** It obtains a token as
+  the From address and sends nothing, and a saved key is only used for the From
+  address it was saved with, so it cannot be pointed at another mailbox.
+
 ## Google Workspace — What Account Provisioning Leaves Out (2026-10-15)
 
 The Google Workspace integration creates an account for each applicant
