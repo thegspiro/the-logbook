@@ -1,6 +1,64 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11), 2026-10-25 (pass 12) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10)
+
+---
+
+## Pass 12 (2026-10-25) — watchdog pickup: one owner-directed fix (MS-17, MS2-7) verified, 0 fixed by this pass, 0 new findings; MS-14/MS-15 re-confirmed unchanged
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+and a fresh `list_pull_requests` (state open) showed no security-review PR.
+The rotation had wrapped on `main` (rows 09 onward were `⬜` again), so row 09
+was the first pending row.
+
+**Scope.** Pass 11 was written 2026-10-23. One commit has touched this
+feature's files since: `2f2b8cc6a` ("404 for an unknown compliance subject,
+list lapsing waivers", 2026-10-25), read in full as a diff. The 16 routes in
+`endpoints/medical_screening.py` were enumerated mechanically: every one
+carries `require_permission("medical_screening.view" | ".manage")` except
+`GET /compliance/me`, which is `get_current_user` and reads only the caller's
+own record. `/compliance/me` is declared before `/compliance/{user_id}`, so
+the literal path is not shadowed. No migration touches a screening table.
+
+**Verified good (mechanisms).**
+
+- **MS-17 fix.** `get_user_compliance` and `get_prospect_compliance` now call
+  `is_in_org(db, User | ProspectiveMember, id, current_user.organization_id)`
+  before grading. `is_in_org` filters `model.id` **and** `model.organization_id`
+  and fails closed on a falsy id or org, so an id from another organization and
+  an id that does not exist both answer the same 404; the route is not an
+  oracle for whether an id exists elsewhere. Covered by
+  `tests/test_medical_screening_compliance_subjects.py`.
+- **MS2-7 fix.** `_SATISFYING_STATUSES` is the one definition read by both
+  `_grade` (the count) and `get_expiring_soon` (the list), so the two cannot
+  disagree again. The list now returns each row's `status`, a value the same
+  `medical_screening.view` holder already sees on the compliance summary; no
+  narrative field (`provider_name`, `result_summary`, `notes`, `result_data`)
+  is added to `ExpiringScreening`, which is the MS-14 boundary.
+- **Frontend delta** (`ComplianceDashboard.tsx`, `types/index.ts`): marks a
+  waiver in the list; no `dangerouslySetInnerHTML`, `window.confirm`, storage
+  or raw `fetch` in the added lines.
+
+**Standing:** MS-14 (`.view` carries narrative PHI with no finer tier) and
+MS-15 (the roster loads every record in the organization) are untouched by
+this window; neither route's code changed.
+
+**In flight, not reviewed here:** open PR #3699 wires `frequency_months` into
+`_grade` and `get_expiring_soon` (`_effective_expiration`). It changes the
+code this pass just read, so the next pass should take it as its delta.
+
+### Completion gate (pass 12)
+
+| Check                                                   | Result                                                                                          |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations                                                                                 |
+| `black --check app/ tests/ alembic/`                    | ✅ clean                                                                                        |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                                                                        |
+| `python3 scripts/validate_migrations.py --strict`       | ✅ single head `3f2593e8071e`                                                                   |
+| `python3 scripts/check_route_permissions.py --strict`   | ✅ 0 errors, 0 warnings                                                                         |
+| `pytest -k "medical_screening or screening or medical"` | ✅ 452 passed, 1 skipped (`py_vapid`); the sandbox database needed `alembic upgrade head` first |
+| `cd frontend && npm run typecheck`                      | ✅ 0 errors                                                                                     |
+| `cd frontend && npm run lint`                           | not finished when this was committed; the result is in the PR body                              |
 
 ---
 

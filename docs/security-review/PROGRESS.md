@@ -21765,7 +21765,7 @@ PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -21798,6 +21798,16 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-25 — Feature 09 (Medical screening, pass 12) — watchdog pickup, 0 fixed, 0 new findings; MS-14/MS-15 re-confirmed
+
+PR #3702 (Feature 08, pass 13) merged docs-only, so only its Open PR row was
+cleared. The rotation had wrapped on `main`, so row 09 was first pending. The
+one commit since pass 11 is the owner-directed MS-17 / MS2-7 fix (404 for an
+unknown compliance subject, one shared satisfying-status set for the count and
+the list); verified, including that the 404 does not distinguish another
+organization's id from a missing one. Open PR #3699 will change the
+frequency-grading code next. See `MS-09-medical-screening.md`'s **Pass 12**.
 
 ### 2026-10-25 — Feature 07 (Users & organizations, pass 12) — 0 fixed, 1 new finding flagged (USR-11, MED)
 
