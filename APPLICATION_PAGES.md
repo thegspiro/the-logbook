@@ -176,13 +176,17 @@ Complete reference of all pages in the application, organized by module.
 
 ### Members Admin Hub (`/members/admin`)
 
-Requires `members.manage` permission. Tab-based admin interface.
+Requires `members.manage` permission. Drawn with the same two-level navigation as Training, Events, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (MembersAdminNav, with the areas declared in membersAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
 
-| Tab      | Label             | Additional Permission |
-| -------- | ----------------- | --------------------- |
-| `manage` | Member Management | —                     |
-| `add`    | Add Member        | `members.create`      |
-| `import` | Import Members    | `members.create`      |
+| Area         | `?tab=`          | Label                 | Additional Permission |
+| ------------ | ---------------- | --------------------- | --------------------- |
+| Roster       | `manage`         | Member Management     | —                     |
+| Add & Import | `add`            | Add Member            | `users.create`        |
+| Add & Import | `import`         | Import Members        | `users.create`        |
+| Add & Import | `qualifications` | Import Qualifications | —                     |
+| Settings     | `settings`       | Settings              | —                     |
+
+A missing or unknown `?tab=`, or one the viewer lacks the permission for, opens Member Management.
 
 ### Members Admin Pages
 
