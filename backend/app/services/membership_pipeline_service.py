@@ -4914,31 +4914,60 @@ class MembershipPipelineService:
         """Fetch upcoming event details for the meeting section of a stage email.
 
         Returns a list of formatted detail strings (HTML-escaped if *html* is True).
-        If the event cannot be found or has already passed, returns an empty list.
+        If no qualifying event is found, returns an empty list.
+
+        The stage editor saves the event that was next *when the stage was
+        configured* as ``event_id``. That event is used while it is still
+        upcoming; once it has started, been cancelled or deleted, the next
+        upcoming event of ``event_type`` stands in. Without the fallback a
+        stage configured before one meeting silently dropped the section for
+        every applicant who arrived after it.
         """
         import html as _html
 
         from app.models.event import Event
 
-        try:
-            query = select(Event).where(
-                Event.organization_id == str(organization_id),
-                Event.start_datetime >= datetime.now(timezone.utc),
+        def _upcoming():
+            return (
+                select(Event)
+                .options(selectinload(Event.location_obj))
+                .where(
+                    Event.organization_id == str(organization_id),
+                    Event.start_datetime >= datetime.now(timezone.utc),
+                    Event.is_cancelled.is_(False),
+                    or_(Event.is_draft.is_(None), Event.is_draft.is_(False)),
+                )
             )
-            if event_id:
-                query = query.where(Event.id == str(event_id))
-            elif event_type:
-                query = query.where(Event.event_type == event_type)
-            query = query.order_by(Event.start_datetime).limit(1)
 
-            result = await self.db.execute(query)
-            event = result.scalar_one_or_none()
+        try:
+            event = None
+            if event_id:
+                result = await self.db.execute(
+                    _upcoming().where(Event.id == str(event_id))
+                )
+                event = result.scalar_one_or_none()
+            if event is None and event_type:
+                if event_id:
+                    logger.info(
+                        "Saved meeting event {} for org {} is no longer upcoming;"
+                        " using the next {} event",
+                        event_id,
+                        organization_id,
+                        event_type,
+                    )
+                result = await self.db.execute(
+                    _upcoming()
+                    .where(Event.event_type == event_type)
+                    .order_by(Event.start_datetime)
+                    .limit(1)
+                )
+                event = result.scalar_one_or_none()
             if not event:
                 return []
 
             title = event.title or ""
             start = event.start_datetime
-            loc = event.location or ""
+            loc = self._format_event_location(event, organization_id)
 
             parts: List[str] = []
             if title:
@@ -4952,8 +4981,29 @@ class MembershipPipelineService:
                 parts.append(_html.escape(loc) if html else loc)
             return parts
         except Exception as e:
-            logger.warning(f"Failed to fetch meeting event details: {e}")
+            logger.warning("Failed to fetch meeting event details: {}", e)
             return []
+
+    @staticmethod
+    def _format_event_location(event: Any, organization_id: str) -> str:
+        """One line naming where an event is: the named location, else free text.
+
+        Events created against the locations directory carry ``location_id``
+        and leave the free-text ``location`` empty, so reading only the latter
+        left the meeting's place out of every email. A location belonging to
+        another organization is never printed, however the event came to
+        reference it.
+        """
+        location = getattr(event, "location_obj", None)
+        if location is not None and str(location.organization_id) == str(
+            organization_id
+        ):
+            city_state = ", ".join(filter(None, [location.city, location.state]))
+            if city_state and location.zip:
+                city_state += f" {location.zip}"
+            address = ", ".join(filter(None, [location.address, city_state]))
+            return " — ".join(filter(None, [location.name, address]))
+        return getattr(event, "location", None) or ""
 
     async def _send_stage_email(
         self,
@@ -5003,27 +5053,46 @@ class MembershipPipelineService:
                     )
                 return None
 
-            async def _build_next_meeting() -> str | None:
-                if not config.get("include_next_meeting"):
-                    return None
-                meeting_parts: List[str] = []
+            # Resolved once so the HTML and plain-text bodies cannot name
+            # different events.
+            meeting_lines: List[str] = []
+            if config.get("include_next_meeting"):
                 event_type_filter = config.get("next_meeting_event_type")
                 event_id = config.get("next_meeting_event_id")
                 if event_type_filter or event_id:
-                    meeting_parts = await self._fetch_meeting_details(
+                    meeting_lines = await self._fetch_meeting_details(
                         prospect.organization_id,
                         event_type=event_type_filter,
                         event_id=event_id,
+                        html=False,
                         organization=org,
                     )
-                extra_details = config.get("next_meeting_details")
-                if extra_details:
-                    meeting_parts.append(_html.escape(extra_details))
-                if meeting_parts:
+                    if not meeting_lines:
+                        logger.warning(
+                            "Stage {} email for prospect {} found no upcoming"
+                            " {} event for its Next Meeting section",
+                            step.id,
+                            prospect.id,
+                            event_type_filter or "linked",
+                        )
+                        await self._log_activity(
+                            prospect_id=prospect.id,
+                            action="stage_email_meeting_missing",
+                            details={
+                                "step_id": str(step.id),
+                                "step_name": step.name,
+                                "event_type": event_type_filter,
+                            },
+                        )
+                if config.get("next_meeting_details"):
+                    meeting_lines.append(config["next_meeting_details"])
+
+            def _build_next_meeting() -> str | None:
+                if meeting_lines:
                     return (
                         '<div class="details">'
                         "<strong>Next Meeting</strong><br>"
-                        + "<br>".join(meeting_parts)
+                        + "<br>".join(_html.escape(line) for line in meeting_lines)
                         + "</div>"
                     )
                 return None
@@ -5081,7 +5150,7 @@ class MembershipPipelineService:
                 elif sid == "faq_link":
                     html_part = _build_faq_link()
                 elif sid == "next_meeting":
-                    html_part = await _build_next_meeting()
+                    html_part = _build_next_meeting()
                 elif sid == "status_tracker":
                     html_part = _build_status_tracker()
                 else:
@@ -5116,24 +5185,8 @@ class MembershipPipelineService:
                     if config.get("include_faq_link") and config.get("faq_url"):
                         text_parts.append(f"View Membership FAQ: {config['faq_url']}")
                 elif sid == "next_meeting":
-                    if config.get("include_next_meeting"):
-                        text_meeting: List[str] = []
-                        if config.get("next_meeting_event_type") or config.get(
-                            "next_meeting_event_id"
-                        ):
-                            text_meeting = await self._fetch_meeting_details(
-                                prospect.organization_id,
-                                event_type=config.get("next_meeting_event_type"),
-                                event_id=config.get("next_meeting_event_id"),
-                                html=False,
-                                organization=org,
-                            )
-                        if config.get("next_meeting_details"):
-                            text_meeting.append(config["next_meeting_details"])
-                        if text_meeting:
-                            text_parts.append(
-                                "Next Meeting:\n" + "\n".join(text_meeting)
-                            )
+                    if meeting_lines:
+                        text_parts.append("Next Meeting:\n" + "\n".join(meeting_lines))
                 elif sid == "status_tracker":
                     if config.get("include_status_tracker") and prospect.status_token:
                         if public_status_enabled_for(prospect):
@@ -5167,7 +5220,7 @@ class MembershipPipelineService:
             )
             if success:
                 logger.info(
-                    f"Stage email sent to {prospect.email} " f"for step '{step.name}'"
+                    "Stage email sent to prospect {} for step {}", prospect.id, step.id
                 )
             return success > 0
         except Exception as e:

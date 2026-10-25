@@ -911,6 +911,77 @@ describe('StageConfigModal', () => {
     });
   });
 
+  // The email uses the saved event while it is upcoming and falls back to the
+  // next of its type once it is not, so the preview must show that choice —
+  // not the live next event, which is what hid a stale saved event before.
+  const emailStageSaving = (savedEventId: string): PipelineStage => ({
+    id: 'stage-email',
+    pipeline_id: 'pipeline-1',
+    name: 'Send Welcome Email',
+    description: '',
+    stage_type: 'automated_email' as const,
+    config: {
+      email_subject: 'Welcome',
+      include_welcome: false,
+      include_faq_link: false,
+      include_next_meeting: true,
+      next_meeting_event_type: 'recruitment',
+      next_meeting_event_id: savedEventId,
+      include_status_tracker: false,
+      custom_sections: [],
+    },
+    sort_order: 0,
+    is_required: true,
+    notify_prospect_on_completion: false,
+    public_visible: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  });
+
+  const recruitmentEvents = [
+    {
+      ...mockUpcomingEvents[1],
+      id: 'evt-sooner',
+      title: 'Sooner Open House',
+      event_type: 'recruitment',
+      start_datetime: '2026-11-02T15:00:00Z',
+      end_datetime: '2026-11-02T16:00:00Z',
+    },
+    {
+      ...mockUpcomingEvents[1],
+      id: 'evt-saved',
+      title: 'November Interest Meeting',
+      event_type: 'recruitment',
+      start_datetime: '2026-11-10T00:00:00Z',
+      end_datetime: '2026-11-10T01:00:00Z',
+    },
+  ];
+
+  it('previews the saved event the email will use, not a sooner one', async () => {
+    mockGetEvents.mockResolvedValue(recruitmentEvents);
+    render(<StageConfigModal {...defaultProps} editingStage={emailStageSaving('evt-saved')} />);
+
+    expect(await screen.findByText('November Interest Meeting')).toBeInTheDocument();
+    expect(screen.getByText(/Saved event \(included in the email while it is upcoming\)/)).toBeInTheDocument();
+    expect(screen.queryByText('Sooner Open House')).not.toBeInTheDocument();
+  });
+
+  it('previews the fallback event when the saved one has passed', async () => {
+    mockGetEvents.mockResolvedValue(recruitmentEvents);
+    render(<StageConfigModal {...defaultProps} editingStage={emailStageSaving('evt-long-gone')} />);
+
+    expect(await screen.findByText('Sooner Open House')).toBeInTheDocument();
+    expect(screen.getByText(/The saved event has passed or was cancelled/)).toBeInTheDocument();
+  });
+
+  it('never previews a draft event for the email', async () => {
+    mockGetEvents.mockResolvedValue([{ ...recruitmentEvents[0], is_draft: true }, recruitmentEvents[1]]);
+    render(<StageConfigModal {...defaultProps} editingStage={emailStageSaving('evt-long-gone')} />);
+
+    expect(await screen.findByText('November Interest Meeting')).toBeInTheDocument();
+    expect(screen.queryByText('Sooner Open House')).not.toBeInTheDocument();
+  });
+
   // =========================================================================
   // All 12 Stage Types Present
   // =========================================================================
