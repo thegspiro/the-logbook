@@ -58,7 +58,7 @@ from its open list.
 | B17 | events                     | EV2    | ✅     |
 | B18 | training                   | TR2    | ✅     |
 | B19 | scheduling                 | SCH2   | ⬜     |
-| B20 | finance                    | FIN2   | ⬜     |
+| B20 | finance                    | FIN2   | ✅     |
 | B21 | orgs, roles & users        | ORU2   | ⬜     |
 | B22 | compliance & skills        | CS2    | ⬜     |
 | B23 | security, audit & IP       | SEC2   | ⬜     |
@@ -3382,3 +3382,18 @@ secrets redacted for non-admins. See
   five checklist dimensions; passes 1–4 stand. Gate: flake8 / black / isort / mypy (changed
   schema modules) clean · typecheck and lint 0 · 1,613 backend tests pass, 26 modal tests pass ·
   new file is all `integration`. See training.md → Pass 5. Next: B19 scheduling.
+- **B20 finance ✅ (pass 5) — the update routes are clean; a second waiver overwrote the first
+  (FIN2-2).** The B18/B19 method on the twelve `PUT` update routes: a test derives its cases
+  from each route's request and response schemas and sends `null` for every field (99 tests,
+  87 of them null cases), and all pass. Finance schemas are camelCase, so the first run of
+  the snake_case harness derived 28 cases that proved nothing; it is now alias-aware.
+  **Fixed (FIN2-2)** — `waive_dues` had no status guard and no row lock, so a repeat waive
+  answered 200 and replaced who granted the waiver, when and why, and wrote a second audit
+  event; it now locks the row and refuses a repeat with 400 (the UI never offers it). **Verified
+  good:** all 136 endpoints carry an auth dependency; every other money state transition
+  locks the row and checks status first. **Not covered:** the whole-object action bodies
+  (charge access, functional class, export accounts, payment record). **Follow-up:** the test
+  harness is now a third copy and should move to a shared helper. **Not re-run:** the other
+  five checklist dimensions. Gate: flake8 / black / isort clean · 1,618 related tests pass,
+  1 skipped for a missing time-zone table · new file all `integration`. See finance.md →
+  Pass 5. Next: B21 orgs, roles & users.
