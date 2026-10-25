@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None. PR #3691 (Feature 06, Elections & ballots, pass 12) merged
+2026-10-25 — docs-only (findings file + this tracker), not independently
+recordable here beyond what follows (confirmed via `pull_request_read`,
+`merged: true`). No security-review PR is open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results. Rotation row 06 → ✅. Next is Feature 07 (Users &
+organizations).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3691, Feature 06, Elections & ballots, pass 12, merged), preserved for history</summary>
+
 **PR [#3691](https://github.com/thegspiro/the-logbook/pull/3691)** (branch
 `claude/security-review-elections-ballots`) —
 Feature 06 (Elections & ballots), pass 12. No security-review PR was
@@ -38,6 +49,8 @@ dispositions and line numbers. See `ELEC-06-elections-ballots.md`'s
 
 Rotation row 06 → ✅ (pending this PR's merge); next is Feature 07
 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3689, Feature 05, Finance & approvals, pass 12, merged), preserved for history</summary>
@@ -21683,7 +21696,7 @@ PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -21718,6 +21731,46 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-25 — Feature 07 (Users & organizations, pass 12) — 0 fixed, 1 new finding flagged (USR-11, MED)
+
+PR #3691 (Feature 06, Elections & ballots, pass 12) merged, docs-only — not
+independently recordable beyond clearing the Open PR row (done in this PR's
+own working tree per Step 0). No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results. Dedicated review session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) unreachable; this is a watchdog pickup.
+
+Real delta since pass 11's baseline (`60ac18fd`, PR #3569): 6 non-merge
+commits touching the declared scope, 235 insertions / 63 deletions across
+`member_status.py`, `organizations.py`, `users.py`, `models/user.py`,
+`schemas/organization.py`, `organization_service.py` — a new MFA step-up
+re-verification requirement on several sensitive handlers, Google Drive as a
+second remote-storage platform, the Member ID Cards feature's auto-suspend
+wiring into the status-change/archive/undo-drop paths, encryption of
+`date_of_birth`/`emergency_contacts` at rest, and a 99-column NOT NULL sweep
+touching `users.status`. All 84 routes across the four principal files
+re-enumerated by AST; every one carries an auth dependency.
+
+**One new finding (USR-11, MED, flagged, not fixed):** the step-up
+re-verification gate the MFA commit added to `delete_user` does not extend to
+`change_member_status`/`archive_member` in the same file set, despite all
+three being bound by the identical `_enforce_account_reset_ceiling` call as
+three equally privilege-ceiling-sensitive "destructive member action"
+mutations (added together in pass 11). Same disposition this same lap
+already gave the identical mechanism's two other gaps (AUTH-23, PERM-10,
+PERM-11) — owner decision, mirrored into `KNOWN_LIMITATIONS.md`. USR-5 and
+USR-8 (both accepted-as-is by the owner) re-confirmed unchanged. See
+`USR-07-users-organizations.md`'s **Pass 12** section for the full review.
+
+Completion gate: `flake8`/`black`/`isort` installed fresh at CI's pinned
+versions (7.4.1/26.10.1/9.0.2) and all clean; `validate_migrations.py
+--strict` 652 revisions single head; `check_route_permissions.py --strict`
+276 routes, 0 errors/0 warnings; scoped `pytest` 1,404 passed, 1 pre-existing
+skip; frontend `typecheck`/`lint` both clean.
+
+Rotation row 07 → ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
 
 ### 2026-10-25 — Feature 02 (Permissions & roles, pass 12) — 0 fixed, 2 new findings flagged (PERM-10, PERM-11, both MED)
 
