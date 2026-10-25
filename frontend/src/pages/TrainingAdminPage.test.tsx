@@ -22,6 +22,7 @@ vi.mock('./MemberTrainingStatusPage', () => lazy('Member Status'));
 vi.mock('./TrainingRequirementsPage', () => lazy('Requirements'));
 vi.mock('./CourseLibraryPage', () => lazy('Courses'));
 vi.mock('./CreatePipelinePage', () => lazy('Pipeline'));
+vi.mock('./TrainingProgramsPage', () => lazy('Programs List'));
 vi.mock('./training/SkillEvaluationsTab', () => lazy('Skill Evaluations'));
 vi.mock('./training/KnowledgeTestsTab', () => lazy('Knowledge Tests'));
 vi.mock('./training/ManualEntrySettingsPanel', () => lazy('Manual Entry'));
@@ -148,7 +149,7 @@ describe('TrainingAdminPage', () => {
     ['records', 'shift-reports', 'Shift Report'],
     ['records', 'member-status', 'Member Status'],
     ['curriculum', 'courses', 'Courses'],
-    ['curriculum', 'pipelines', 'Pipeline'],
+    ['curriculum', 'pipelines', 'Programs List'],
     ['evaluations', 'knowledge-tests', 'Knowledge Tests'],
     ['evaluations', 'templates', 'Templates'],
     ['enhancements', 'instructors', 'Enhancements instructors'],
@@ -160,6 +161,29 @@ describe('TrainingAdminPage', () => {
     renderWithRouter(<TrainingAdminPage />);
 
     await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent(content));
+  });
+
+  // The Programs tab used to render only the create wizard, so an officer
+  // opening it was asked to build a program and never shown the ones that
+  // already exist.
+  it('opens the program wizard only when the URL asks for it', async () => {
+    window.history.replaceState({}, '', '/training/admin?page=curriculum&tab=pipelines&view=new');
+    renderWithRouter(<TrainingAdminPage />);
+
+    expect(screen.getByRole('tab', { name: 'Programs' })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Pipeline'));
+  });
+
+  it('returns from the program wizard to the list through the Programs tab', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/training/admin?page=curriculum&tab=pipelines&view=new');
+    renderWithRouter(<TrainingAdminPage />);
+    await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Pipeline'));
+
+    await user.click(screen.getByRole('tab', { name: 'Programs' }));
+
+    expect(window.location.search).toBe('?page=curriculum&tab=pipelines');
+    await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Programs List'));
   });
 
   it('wires both navigation levels to their panels', () => {

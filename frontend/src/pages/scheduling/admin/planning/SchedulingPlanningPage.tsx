@@ -14,17 +14,28 @@
  * in Inventory. One editing home, and a link to it.
  */
 
-import React, { Suspense, useCallback } from 'react';
+import React, { Suspense } from 'react';
 import { useNavigate } from 'react-router';
-import { ExternalLink, Loader2, CalendarRange } from 'lucide-react';
+import { ExternalLink, Loader2 } from 'lucide-react';
 import { lazyWithRetry } from '../../../../utils/lazyWithRetry';
-import { SchedulingPageHeader } from '../../../../components/scheduling/SchedulingPageHeader';
-import { PLANNING_SECTIONS, planningPathFor, type PlanningSection } from './planningSections';
 import PlanningSettingsSummary from './PlanningSettingsSummary';
 
 const StaffingGapsSection = lazyWithRetry(() => import('./StaffingGapsSection'));
 const ShiftTemplatesPage = lazyWithRetry(() => import('../../../ShiftTemplatesPage'));
 const PatternsTab = lazyWithRetry(() => import('../../PatternsTab'));
+
+/**
+ * The three sections, each its own route under `/scheduling/admin/planning`.
+ * The administration header's page strip is what moves between them; this
+ * screen draws only the section's body.
+ */
+export type PlanningSection = 'gaps' | 'templates' | 'patterns';
+
+const SECTION_TITLES: Record<PlanningSection, string> = {
+  gaps: 'Staffing gaps',
+  templates: 'Shift templates',
+  patterns: 'Shift patterns',
+};
 
 interface SchedulingPlanningPageProps {
   /** Which section this route mounts. */
@@ -40,51 +51,12 @@ const SectionFallback = () => (
 const SchedulingPlanningPage: React.FC<SchedulingPlanningPageProps> = ({ section }) => {
   const navigate = useNavigate();
 
-  const go = useCallback(
-    (next: PlanningSection) => {
-      void navigate(planningPathFor(next));
-    },
-    [navigate]
-  );
-
-  const active = PLANNING_SECTIONS.find((entry) => entry.key === section) ?? PLANNING_SECTIONS[0];
-
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingPageHeader
-          icon={CalendarRange}
-          title="Shift Planning"
-          subtitle={active?.description}
-          underHub="/scheduling/admin"
-        />
-
-        {/* Scrolls sideways below md rather than wrapping, and says so, so its
-            off-screen items are exempt from the mobile overflow check and a
-            keyboard can still reach them. */}
-        <nav
-          className="segmented-group hscroll mb-5 flex gap-1 md:flex-wrap md:overflow-x-visible"
-          aria-label="Planning sections"
-          data-mobile-scroll-region
-          tabIndex={0}
-        >
-          {PLANNING_SECTIONS.map(({ key, label, icon: Icon }) => {
-            const isActive = active?.key === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => go(key)}
-                className={`settings-section-tab ${isActive ? 'settings-nav-item-active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
-              >
-                <Icon className={`h-4 w-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} aria-hidden="true" />
-                {label}
-              </button>
-            );
-          })}
-        </nav>
-
+      <div className="py-6">
+        {/* The header above names the page visibly (its strip line); this keeps
+            it in heading navigation, under the header's <h1>. */}
+        <h2 className="sr-only">{SECTION_TITLES[section]}</h2>
         <Suspense fallback={<SectionFallback />}>
           {section === 'gaps' && (
             <div className="space-y-6">

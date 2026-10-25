@@ -5,6 +5,56 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 24 – 25, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
+
+- **Member ID Cards page** for card clerks: every card, members with no card,
+  a tap log, and how long taps are kept. Cards of members who leave are
+  suspended automatically and return with them.
+- **Card Readers page** and a **Card Check-ins** tab on Events show where cards
+  were tapped.
+- **NFC Tag Register** lists every inventory tag; mark lost or found, move, unlink,
+  download.
+- **Scheduling:** pause a pattern, reactivate a template, and night shifts are built
+  from the night template. Generating tells you who could not be seated.
+- **Scheduling and Inventory Administration** share Training's area-card header.
+- **Training Admin Programs tab** shows the programs you already have.
+- **Report emails** that fail are retried the next day, and the dialog says why.
+- **Date of birth and emergency contacts are encrypted at rest.** Operators:
+  see `docs/UPGRADING.md` before upgrading.
+- **MySQL and Redis can require TLS** (`DB_REQUIRE_TLS`, `REDIS_REQUIRE_TLS`).
+- Screenshots to create or re-check are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Recent changes: October 24, 2026 (afternoon)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-24-2026-afternoon).
+
+- **Member ID cards have their own admin page.** **Members Admin → Member ID
+  cards** lists every card, who has none, cards still held by former members
+  and every tap. A member who leaves has their cards suspended automatically.
+- **See where cards were tapped.** A new **Card Readers** page by room, a
+  **Card taps** section on each event, and a **Card Check-ins** tab in Events
+  Admin.
+- **NFC Tag Register** in Inventory lists every item, shelf and compartment
+  tag, to mark lost, move or unlink. Gear managers can now look after
+  compartment tags too.
+- **Medical supplies can be recalled by lot number.** Recalled units stop
+  counting as stock, cannot go on a truck, and are listed first to pull.
+- **Shift patterns can be paused, and templates reactivated.** A pattern no
+  longer skips a date because another unit has a shift at the same time.
+- **The same checks apply however someone is seated on a shift.** Attendance
+  and calls are locked once a shift is closed out.
+- **Shift reports change status only through review**, and approving a report
+  again no longer signs its skills off twice. A bug that erased report
+  narratives when a trainee opened them is fixed.
+- **Dates on scheduling screens** no longer slip a day across time zones.
+- This pass also caught up a few earlier-October changes nobody had written
+  down. Screenshots to create are in `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 23 – 24, 2026
 
 The engineering audit is

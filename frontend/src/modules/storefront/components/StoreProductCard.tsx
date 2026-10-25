@@ -28,7 +28,7 @@ import type { StorefrontProductOffer, StorefrontVariantOption } from '../types';
 const LOW_STOCK_THRESHOLD = 5;
 
 const CHIP_BASE =
-  'focus-visible:ring-theme-focus-ring inline-flex h-11 min-w-[44px] items-center justify-center rounded-lg px-2.5 text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden md:h-9';
+  'focus-visible:ring-theme-focus-ring touch:h-11 inline-flex h-9 min-w-[44px] items-center justify-center rounded-lg px-2.5 text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden';
 const CHIP_IDLE =
   'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border bg-theme-surface';
 const CHIP_SELECTED =

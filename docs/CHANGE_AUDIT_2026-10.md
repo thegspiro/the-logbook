@@ -5,6 +5,83 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 24 – 25, 2026
+
+Merged to `main` since `adf1d463` (2026-10-24 13:15 UTC) through `4f27e679`
+(2026-10-25 11:14 UTC). Security-review passes (locations-kiosk, scheduled-tasks,
+frontend-shared, core-infrastructure, cross-cutting-baseline, auth-session,
+permissions-roles, onboarding recovery ONB6-30-1/2/3, public-surface-webhooks,
+storefront-payments) are in `docs/security-review/PROGRESS.md`. `CHANGELOG.md`
+stays closed.
+
+| Change                                                                                                                                                                                                                                    | Guide                                   | Disposition                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
+| Member ID Cards admin page (Cards, Coverage, Tap log, Settings); bulk status; tap retention; leavers' cards suspended and restored; `nfc_card_taps` table                                                                                 | 01                                      | Added (new section); screenshot queued          |
+| Card Readers page, event **Card taps** section, **Events → Card Check-ins** tab; Room QR Codes opens with Facilities off                                                                                                                  | 06, 04                                  | Added; screenshot queued                        |
+| Inventory **NFC Tag Register**; checklist managers see compartment tags; quartermaster now manages compartment tags                                                                                                                       | 05                                      | Added (new section); screenshot queued          |
+| Date of birth and emergency contacts encrypted at rest (migration converts columns to TEXT and encrypts rows; needs `ENCRYPTION_KEY`); key-rotation scripts now cover them and `screening_records`                                        | `UPGRADING`, wiki Security-Encryption   | Written with the change                         |
+| MySQL and Redis TLS: `tls-setup.sh`, `DB_REQUIRE_TLS`, `REDIS_REQUIRE_TLS`, `tls-enforce.sh`, certificate-expiry warning; `REDIS_SSL=true` now connects                                                                                   | `TLS`, `UPGRADING`, wiki Security pages | Written with the change                         |
+| Scheduling Administration and Inventory Administration use the area-card header (seven areas each)                                                                                                                                        | 03, 05                                  | Written with the change; full-page shots queued |
+| Scheduling: pause/resume patterns, reactivate templates, per-side day/night templates, seat checks and **not seated** warnings on generate, DST-correct overnight shifts, calendar-day dates, open-to-all seats                           | 03                                      | Added                                           |
+| Shifts: seat changes, attendance and calls checked under the shift lock (no duplicate attendance; finalized/cancelled shifts refuse edits); shift report status moves only through review; trainee view no longer blanks stored narrative | `KNOWN_LIMITATIONS`, 03                 | Backend; no screen change                       |
+| Training Admin **Programs** tab lists existing programs; registry import moved to **Requirements**; tabs fit 320px                                                                                                                        | 02                                      | Added                                           |
+| Saved and compliance report email: retry-safe, failed sends recorded, specific error in the dialog                                                                                                                                        | 08                                      | Added                                           |
+| Status words (not stored codes) on nine more screens; member picker error text AA contrast; tablet form-grid and 16px field fixes                                                                                                         | 02, 04, 05                              | No wording change; tablet shots queued          |
+| Getting Started lesson says two-factor is required for privileged roles; 05-139 re-shot without the grace banner                                                                                                                          | 00, Learning Center                     | Written with the change                         |
+| Fixes: first checklist item add under MySQL (500), medical-supply lot recalls (`3d67883cd461`)                                                                                                                                            | `MEDICAL_SUPPLIES_MODULE`               | Written with the change                         |
+
+**Screenshots to create:** Member ID Cards (four tabs), Card Readers, Events
+Card Check-ins, NFC Tag Register, paused pattern with Resume and the not-seated
+message, Training Admin Programs tab. **Re-check:** Scheduling and Inventory
+Administration hub shots (new header), any form shot taken on a tablet. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Change audit: October 24, 2026 (afternoon)
+
+Merged to `main` since `c1fc4894` (2026-10-24 12:33 UTC) through `c9054d67`
+(2026-10-24 20:32 UTC): 13 feature merges plus security-review passes
+(meetings-minutes, messaging-notifications, forms, integrations,
+security-audit-ip, reports-analytics; all 0 fixed, one folded-in watchdog
+finding RPT6-29-3), recorded in `docs/security-review/PROGRESS.md`. The pass
+also checked every merge back to 2026-10-17 against this file. The gaps it
+found are in the second table. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                              | Guide                            | Disposition                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Member ID Cards page** (`/members/admin/id-cards`, `members.manage_id_cards`): bulk status, coverage, tap log (`nfc_card_taps`, CSV, `EXPORT_ENDPOINTS`), retention 3–84 months (purged nightly); leavers' cards auto-suspend and restore (#3621) | 01, 16, wiki Member-ID-Cards     | Added; `UPGRADING` written with the change                                               |
+| **Card Readers** page, event **Card taps** section, Events **Card Check-ins** tab (`/nfc-activity`, uncached) (#3639)                                                                                                                               | 04, wiki Member-ID-Cards         | Added                                                                                    |
+| **NFC Tag Register** (`/inventory/admin/nfc/tags`); `inventory.manage` gains compartment tags; `inventory.check_manage` sees compartments only (#3643)                                                                                              | 05, wiki Inventory-NFC-Tags      | Added; **permission behaviour change** called out in the guide                           |
+| Check-In QR Codes no longer gated on Facilities (#3642)                                                                                                                                                                                             | 06                               | Added                                                                                    |
+| Medical supplies: lot recalls, migration `3d67883cd461` (#3627)                                                                                                                                                                                     | 05, wiki Module-Medical-Supplies | Added; `MEDICAL_SUPPLIES_MODULE` written with the change                                 |
+| Shift reports: trainee view no longer erases narrative and reviewer notes (#3646)                                                                                                                                                                   | wiki Module-Scheduling           | Recorded (data-loss fix; no guide wording needed)                                        |
+| Shift reports: status only through review, one sign-off per report, deleted officer's draft, department-day date check (#3650)                                                                                                                      | 02, wiki Module-Scheduling       | Added                                                                                    |
+| Attendance and calls locked on finalized/cancelled shifts; no duplicate attendance (#3648)                                                                                                                                                          | 03, wiki Module-Scheduling       | Added                                                                                    |
+| Shift numbers: pre-shift toggle, catch-up deadline, call counts, coverage, member hours, leap-day window, history import (#3649)                                                                                                                    | wiki Module-Scheduling           | Recorded (each a figure now matching the backend)                                        |
+| Templates reactivate, patterns pause/resume, duplicate guard per template, DST end, candidate check on generated seats (#3651)                                                                                                                      | 03, wiki Module-Scheduling       | Added; **corrected** guide 03's "any shift at the same time" row, false since this merge |
+| Board refresh, department's day, calendar dates as written; Position Names marked not in effect; Event Resource Defaults now read (#3653)                                                                                                           | 03                               | Added; **corrected** the Position Names settings row                                     |
+| Full candidate check on every seat-placing path; open-to-all unseated shifts; trade picker (#3654)                                                                                                                                                  | 03, wiki Module-Scheduling       | Added                                                                                    |
+| Shifts-module review's open items (#3652)                                                                                                                                                                                                           | `KNOWN_LIMITATIONS`              | Written with the change                                                                  |
+
+**Earlier October changes no pass had recorded** (found by checking every
+merge since 2026-10-17):
+
+| Change                                                                                                                                                                                                                                                                                                                                                                               | Guide              | Disposition                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------- |
+| Add Member can create a Google/Microsoft account; every new member linked to an existing directory account (#3471)                                                                                                                                                                                                                                                                   | 16                 | Guide already carried it; recorded here                 |
+| Duplicate active applicant warns / 409 instead of a false success (#3466)                                                                                                                                                                                                                                                                                                            | 15                 | Added                                                   |
+| Recurring series: per-occurrence RSVP deadline; zero issuance allowance; exercise with no organization (#3466)                                                                                                                                                                                                                                                                       | 04                 | RSVP rule already in 04; recorded here                  |
+| Library-course session credits the course's duration; wizard review in local time (#3507)                                                                                                                                                                                                                                                                                            | 02                 | Added                                                   |
+| Inventory validation: blank names, identifier clashes, tracking-type lock, own-parent category (#3462)                                                                                                                                                                                                                                                                               | 05                 | Added to Item Creation & Updates                        |
+| Medical supplies: Not yet counted tab, Next expiry sort, export columns, 30/60/90-day look-ahead (#3595, #3606)                                                                                                                                                                                                                                                                      | 05                 | Added (the Oct 23–24 row named only part of it)         |
+| Target Solutions mapping dialog keeps its tab bar, unmapped first (#3545); metrics dashboard survives a bad error reason (#3552); Monthly Status headers aligned (#3498); seven tablet routes stop scrolling sideways (#3470); MCP `list_open_shifts` drops ended shifts (#3481); admin-hours mapping null → 422 (#3477); Purge Inactive spares the caller's own application (#3594) | 16, 08, 02, 10, 15 | Recorded; layout or bug fixes, no guide wording changed |
+| `/onboarding/test/email` refused after onboarding; Sentry BAA warning in env/compose files (#3463, #3465)                                                                                                                                                                                                                                                                            | operator docs      | Written with the change                                 |
+
+**Screenshots to create:** the Member ID Cards tabs, Card Readers, the event
+**Card taps** section, the Events **Card Check-ins** tab, the NFC Tag Register,
+the Recall this lot dialog and **Recalled lots** panel, the Medical Supplies
+**Not yet counted** tab, and a template's **Reactivate** and a pattern's
+**Pause/Paused**. See `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 23 – 24, 2026
 
 Merged to `main` since `b92a4add` (2026-10-23 12:31 UTC) through `c1fc4894`
@@ -383,8 +460,8 @@ reports-analytics security pass.
    (alerts, errors, audit-chain verification), Monday 07:00 on the department's
    clock, to the IT Manager position or, failing that, full administrators. It
    needs the scheduler, and a required email cannot be switched off by the
-   recipient. Change or disable it under **Organization Settings > Authentication
-   > Security Report**. Recorded in `UPGRADING.md`.
+   recipient. Change or disable it under \*\*Organization Settings > Authentication
+   > Security Report\*\*. Recorded in `UPGRADING.md`.
 2. **Equipment-check count lines change verdicts.** **Min to Pass** (or **Critical
    Min** when it is blank) fails a line; **par** only drives restock, swaps and
    the supply worklist, and never fails anything. A par-only line that used to
@@ -1482,7 +1559,7 @@ report a single head, `7db20aa49329`.
   apparatus page.
 - An empty fleet reads **No apparatus yet** with a sentence on what a record is
   for; a search or filter with no match still reads **No Apparatus Found**.
-- Add form: "Only the fields marked * are needed to start." The NFPA checkbox says
+- Add form: "Only the fields marked \* are needed to start." The NFPA checkbox says
   tracking is per vehicle and off by default, even when the department switch is
   on. Fuel type reads **CNG**, not "Cng".
 - Equipment tab explains that crew shift checks come from a separately built

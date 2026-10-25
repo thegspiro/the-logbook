@@ -57,7 +57,7 @@ from its open list.
 | B16 | reports & analytics        | RPT2   | ✅     |
 | B17 | events                     | EV2    | ✅     |
 | B18 | training                   | TR2    | ✅     |
-| B19 | scheduling                 | SCH2   | ⬜     |
+| B19 | scheduling                 | SCH2   | ✅     |
 | B20 | finance                    | FIN2   | ✅     |
 | B21 | orgs, roles & users        | ORU2   | ⬜     |
 | B22 | compliance & skills        | CS2    | ⬜     |
@@ -3382,6 +3382,22 @@ secrets redacted for non-admins. See
   five checklist dimensions; passes 1–4 stand. Gate: flake8 / black / isort / mypy (changed
   schema modules) clean · typecheck and lint 0 · 1,613 backend tests pass, 26 modal tests pass ·
   new file is all `integration`. See training.md → Pass 5. Next: B19 scheduling.
+- **B19 scheduling ✅ (pass 5) — three update routes accepted a null they could not store
+  (SCH2-2 to SCH2-4).** The B18 method on the seven `PATCH` routes: a test derives its cases
+  from each route's request and response schemas and sends `null` for every field (67
+  cases, 7 failed). **Fixed** — `PATCH /apparatus/{id}` answered 500 on `name`,
+  `unit_number` and `apparatus_type` (bare `setattr`; now `apply_updates`, 400);
+  `PATCH /calls/{id}` stored a null `incident_type`, `cancelled_en_route` or
+  `medical_refusal` and the call then failed to serialize on every read (service writes
+  through `apply_updates`, schema refuses with 422); a null assignment `position` was
+  silently dropped behind a 200 (now 400). Shifts, attendance, templates and patterns were
+  clean. **Verified good:** all 108 endpoints carry an auth dependency; the three settings
+  `PUT`s type their fields non-Optional (422 on null). **Not covered:** the two closeout
+  `PATCH`es. **Follow-up:** the test harness is a copy of B18's and should move to a shared helper. **Not re-run:**
+  the other five checklist dimensions; SCH-5 and the SCH-6 residual stay flagged. Gate:
+  flake8 / black / isort / mypy clean · route-permission check 0 errors · 2,398 related
+  tests pass · new file 71 pass, all `integration`. See scheduling.md → Pass 5. Next: B20
+  finance.
 - **B20 finance ✅ (pass 5) — the update routes are clean; a second waiver overwrote the first
   (FIN2-2).** The B18/B19 method on the twelve `PUT` update routes: a test derives its cases
   from each route's request and response schemas and sends `null` for every field (99 tests,

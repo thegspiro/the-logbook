@@ -3,6 +3,7 @@ import { SettingsToggle as Toggle } from './SettingsToggle';
 import EmailLinkDomainCard from './EmailLinkDomainCard';
 import { Loader2, Mail, Server, Cloud, Info, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { MicrosoftAuthMethod } from '../../constants/enums';
+import { GMAIL_SENDING_NOTES } from '../../constants/gmailSendingGuidance';
 import { SMTP_PROVIDER_PRESETS, findSmtpProviderPreset } from '../../constants/smtpProviders';
 import type { EmailServiceSettings } from '../../types/user';
 
@@ -355,6 +356,16 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                   </a>
                 </span>
               </div>
+              {emailSettings.platform === 'gmail' && (
+                <div className="alert-info text-theme-text-secondary text-xs">
+                  <p className="text-theme-text-primary mb-1 font-medium">Before you rely on it:</p>
+                  <ul className="list-inside list-disc space-y-1">
+                    {GMAIL_SENDING_NOTES.map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {isMicrosoft && (
                 <div className="alert-warning text-theme-text-secondary text-xs">
                   An App Password is Basic authentication. Microsoft disables it by default for existing tenants at the

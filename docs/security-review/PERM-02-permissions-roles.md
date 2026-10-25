@@ -1,9 +1,278 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), pass 11 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), pass 12 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 12 (2026-10-25, watchdog pickup) — 0 fixed, 2 new findings (PERM-10, PERM-11, both MED/flagged)
+
+Watchdog pickup (step 0, re-verified immediately before branching):
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
+`list_pull_requests` (`state:open`) both returned 0 matching results — the 4
+open PRs at the time (#3680, #3679, #3663, #3661) are unrelated feature/CI/docs
+work. PR #3684 (Feature 01, Auth & session lifecycle, pass 12) had already
+merged with no open rotation PR behind it. Rotation row 01 was already ✅;
+row 02 (Permissions & roles) was confirmed the next `⬜` by reading the
+rotation table directly off fresh `origin/main`.
+
+**Baseline:** `4783dc35b` (PR #3557's merge, pass 11). **Head:** current
+`main` (`d5f44cc4b`, PR #3684's merge). 383 commits between them. `git diff
+--stat` against every one of the eleven files this feature tracks
+(`dependencies.py`, `core/permissions.py`, `roles.py` + `role_service.py`,
+`operational_ranks.py` + `operational_rank_service.py`, `officers.py` +
+`officer_service.py`, `org_chart.py` + `org_chart_service.py`,
+`admin_continuity_service.py`, and the rank/role-assignment surface in
+`users.py`) is non-empty in five: `dependencies.py` (+114/-4),
+`core/permissions.py` (+26), `roles.py` (+5), `operational_ranks.py` (+10/-1),
+`operational_rank_service.py` (+22/-1), and `users.py` (+8). `role_service.py`,
+`officers.py`, `officer_service.py`, `org_chart.py`, `org_chart_service.py`,
+and `admin_continuity_service.py` are byte-identical to pass 11.
+
+### Route inventory — re-enumerated by AST, not diffed
+
+**28 routes, unchanged from pass 11** — enumerated with a Python AST walk over
+every `@router.*` decorator and the full `Depends(...)` default list on the
+function immediately below it, across all four endpoint files: `roles.py`
+(13), `operational_ranks.py` (7), `officers.py` (3), `org_chart.py` (5). No
+route gained or lost a permission string or an auth dependency; every gate
+matches pass 11's table exactly (OR-gate `positions.*`/`roles.*` on
+`roles.py`'s four mutating routes, `settings.manage`/`members.manage` on
+`operational_ranks.py`'s mutating routes plus the independent
+`settings.manage`-only `_refuse_ordering` gate on `sort_order`/`/reorder`,
+`settings.manage`/`organization.update_settings` on `officers.py`,
+`orgchart.manage`/`settings.manage` on `org_chart.py`'s four mutations and
+auth-only `GET ""`). The only change at the route layer is additive and
+orthogonal to permissions: `roles.py`'s four mutating routes
+(`create_role`/`update_role`/`delete_role`/`clone_role`) each gained
+`_stepup: User = Depends(require_stepup)` as the **last** parameter default —
+confirmed to follow (not precede) the existing permission dependency in every
+case, which matters because FastAPI resolves dependencies in signature order:
+a caller lacking the permission is told that, not asked to re-verify first.
+
+### The five changed files, reviewed
+
+- **`dependencies.py` / `core/permissions.py` — the MFA-grace, kiosk-session,
+  and `require_stepup` machinery.** This is Feature 01's (Auth & session
+  lifecycle) own new mechanism, reviewed end-to-end from its own three files
+  in `AUTH-01-auth-session.md`'s pass-12 section (dimensions 1-4 confirmed
+  there, including `test_mfa_policy.py`'s AST-pinned `STEPUP_HANDLERS` set and
+  the self-session-only scoping of the step-up stamp). Not re-derived here.
+  `core/permissions.py`'s other diff, `SECURITY_KIOSK_SESSION`, is also
+  Feature 01's permission to seed-check (confirmed there: seeded to no
+  position). What **is** this feature's own question — whether the new
+  step-up gate was applied completely and consistently across the
+  grant-ceiling surface this feature owns — is PERM-10 and PERM-11 below.
+- **`core/permissions.py` — `is_built_in_rank_code(rank_code)`.** A new, pure,
+  read-only predicate (`rank_code in OPERATIONAL_RANKS`, no DB access, no
+  permission-string change). Traced every caller: `assert_rank_code_may_change`
+  (below) and `RankResponse.is_built_in` (a computed field, not a stored
+  column — no migration needed, no schema finding). Nothing writes through
+  it and no endpoint branches its authorization on it.
+- **`roles.py` — `require_stepup` added to `create_role`/`update_role`/
+  `delete_role`/`clone_role`.** Correct composition with this feature's own
+  grant-ceiling guards: `_enforce_permission_grant_ceiling` /
+  `_enforce_role_edit_ceiling` still run (unchanged) inside the handler body,
+  so a caller now needs **both** the ceiling (cannot grant/edit above their
+  own permissions) **and** a fresh step-up — strictly additive, no gap opened.
+- **`operational_ranks.py` / `operational_rank_service.py` — a built-in rank's
+  code can no longer be changed (commit `bdec1a878`, "Lock the code of
+  built-in ranks," 2026-10-23, already shipped with its own tests and
+  reviewed as ordinary feature work; re-verified here as this feature's own
+  file).** `get_rank_default_permissions` resolves a rank's permissions by
+  **code** against the static `OPERATIONAL_RANKS` registry, so renaming e.g.
+  `captain` away from that code previously stripped its default permissions
+  from everyone who held it, silently — a correctness/data-loss bug, not
+  previously flagged as a security finding, now closed. `assert_rank_code_may_
+change` (`operational_rank_service.py`) raises before any write once
+  `is_built_in_rank_code(old_code)` is true, regardless of the caller's
+  permissions ("refused for everyone," confirmed by reading: the function
+  takes no permission/user argument at all). Wired at **both** layers —
+  `operational_ranks.py:257-260` (API handler, ahead of the existing
+  `_enforce_rank_grant_ceiling` ceiling check: "a built-in code is refused for
+  everyone, and saying so beats a 403 that implies more authority would do")
+  and `operational_rank_service.py:359` (service layer, defense in depth for
+  any other caller of `update_rank`). A custom (non-built-in) rank's code
+  still moves freely, with `_move_rank_references` still cascading the rename
+  to `User.rank`/`OrgChartNode.rank_code`/`TrainingRequirement.required_roles`/
+  `InventoryImpactPlan.filters["ranks"]` exactly as pass 11 described — this
+  guard narrows **when** a rename may run, it does not change what a rename
+  does. `RankCreate`/`RankUpdate` carry no `default_permissions` field (only
+  `rank_code`/`display_name`/`description`/`sort_order`/`is_active`/
+  `eligible_positions` — confirmed by reading `schemas/operational_rank.py`),
+  so a rank's permissions are never directly settable; the only way `create_
+rank`/`update_rank` can grant permissions is by choosing or renaming to a
+  **built-in** code, which `_enforce_rank_grant_ceiling` already ceiling-checks
+  on both paths. No new finding from this file's own change — it closes a gap,
+  it does not open one.
+- **`users.py` — `require_stepup` added to `assign_user_roles`/`add_role_to_
+user`/`remove_role_from_user` (role-assignment handlers this feature tracks)
+  plus `delete_user`/`admin_reset_password`/`admin_reset_mfa`/`anonymize_member`
+  (Feature 01's/the users-feature's own territory, not re-reviewed here beyond
+  confirming the diff is additive-only and does not touch this feature's
+  rank/role-assignment logic otherwise).** The three role-assignment handlers
+  are exactly parallel to `roles.py`'s mutating routes: ceiling-checked
+  (`_enforce_role_grant_ceiling`, unchanged) **and** now step-up-gated. See
+  PERM-10 for the asymmetry this surfaced.
+
+### Re-verified, not re-derived
+
+- **PERM-1 through PERM-9** — re-checked by direct read rather than trusted
+  from this doc's own prior text: `operational_ranks.py:170`'s `/validate`
+  still gated `settings.manage`/`members.manage`;
+  `admin_continuity_service.py`'s last-administrator guard is present and
+  byte-identical to pass 11 (confirmed by the empty diff above, not merely
+  assumed). All remain fixed/closed; none reopened.
+- **OR-gate alternatives** — `positions.*`/`roles.*`/`members.manage`/
+  `organization.update_settings`/`orgchart.manage` re-confirmed not seeded to
+  `member` or `firefighter` across `DEFAULT_POSITIONS`; unchanged since pass
+  11 because no permission grant changed this pass (`SECURITY_KIOSK_SESSION`
+  is new but is Feature 01's own permission, seeded nowhere, as noted above).
+
+### PERM-10 — MED — The new step-up gate covers role-granting handlers but not the structurally equivalent rank-granting ones in the same file — FLAGGED (not fixed)
+
+**What:** `users.py` gained `require_stepup` on `assign_user_roles`,
+`add_role_to_user`, and `remove_role_from_user` (`users.py:1319`, `:1464`,
+`:1573`) — all three already ceiling-checked by `_enforce_role_grant_ceiling`.
+Two structurally identical, ceiling-checked grant paths in the **same file**
+did not gain it:
+
+- **`update_user_profile`'s rank-assignment branch** (`users.py:2011-2039`,
+  ceiling call at `:2094`). Changing another member's `rank` is restricted to
+  `members.manage` holders (`restricted_fields` includes `"rank"`,
+  `users.py:2013`) and is bound by the identical `_enforce_rank_grant_ceiling`
+  mechanism `ORU-7d`/`PERM-4` established as this feature's answer to "a rank
+  change must not grant more than the caller's own permissions." It is exactly
+  as sensitive as `assign_user_roles` (same ceiling guarantee, same
+  `members.manage` gate, same "mutates someone else's effective permission
+  set" shape) but has no step-up requirement.
+- **`create_member`** (`users.py:319`, `POST /users`, gated `users.create`
+  only). Sets a client-chosen initial password (`AdminUserCreate.password`)
+  **and** a ceiling-checked rank (`_enforce_rank_grant_ceiling` at `:457`)
+  **and** ceiling-checked `role_ids` (the `ORU-1` fix) in one call, with no
+  step-up at all — despite combining the exact shape of `admin_reset_password`
+  (sets a credential) with the exact shape of `assign_user_roles` (grants
+  roles up to the ceiling), both of which are now step-up-gated on their own.
+
+**Where:** `backend/app/api/v1/endpoints/users.py:319` (`create_member`),
+`:1914` (`update_user_profile`, restricted-field check `:2011-2039`, ceiling
+call `:2094`).
+
+**Failure scenario:** an attacker who has obtained a member's **live session**
+holding `members.manage` (AUTH-23's own precondition — cookie theft, an
+unattended device, a session-fixation bug) cannot change that member's own
+rank or role without a fresh step-up challenge via `PATCH /users/{id}/roles`-
+family endpoints, but **can** reach the identical outcome — entrenching a
+rank/role grant up to their own ceiling on an account, without ever
+re-verifying — by instead calling `PATCH /users/{id}/profile` with a `rank`
+field, or by calling `POST /users` to mint a brand-new account at a
+caller-chosen password and a ceiling-bound rank/role set. Neither route asks
+the attacker to prove they are still the legitimate session holder, which is
+precisely the property `require_stepup` exists to add to this class of action.
+`create_member` is the more serious of the two: it lets the attacker establish
+a **persistent, attacker-known credential** rather than touching an existing
+member's account at all, which is the more natural way to entrench access
+from a stolen session and sidesteps `admin_reset_password`'s own step-up gate
+entirely.
+
+**Impact:** the ceiling still bounds the grant to the attacker's own
+effective permissions (this is not privilege escalation beyond the stolen
+session's own level), but it is a gap in the step-up control's stated purpose
+— re-verifying identity before the most sensitive member-management actions —
+on two paths that are functionally indistinguishable from three paths the
+same commit just gated.
+
+**Why flagged, not fixed:** `STEPUP_HANDLERS` (`backend/tests/
+test_mfa_policy.py`) is Feature 01's own pinned, AST-checked set — adding a
+handler to it is a deliberate, reviewed behavior change (every caller of that
+handler now faces a re-verification prompt), not a mechanical fix, and `create_
+member`/`update_user_profile` mix sensitive branches with routine, high-
+frequency ones (ordinary self-service profile edits; routine member
+onboarding) that a blanket `require_stepup` on the whole handler would also
+gate — exactly the kind of UX-tradeoff decision CLAUDE.md's Pitfall #37 and
+this skill's own instructions reserve for the owner, not for a mechanical
+fix inside this review. The narrower options (split the rank-change branch of
+`update_user_profile` into its own gated helper; gate `create_member` only
+when a `rank`/`role_ids`/`password` field is actually supplied) are both
+plausible but are a design choice belonging to Feature 01, which owns the
+step-up mechanism and its test.
+
+**Fix:** not applied. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Severity reasoning:** MED — same precondition and reasoning as `AUTH-23`
+(a stolen live session of a privileged account is already a serious
+compromise), scored the same because it is the same control gap applied to
+a different, equally sensitive pair of call sites rather than a distinct
+vulnerability class.
+
+### PERM-11 — MED — Rank CRUD has no step-up gate, unlike the structurally parallel role CRUD it sits beside — FLAGGED (not fixed)
+
+**What:** `roles.py`'s four mutating routes (`create_role`, `update_role`,
+`delete_role`, `clone_role`) all gained `require_stepup` this pass.
+`operational_ranks.py`'s three mutating routes that play the same role for
+ranks — `create_rank` (`:117`), `update_rank` (`:211`), `delete_rank`
+(`:284`) — did not. Both pairs are `settings.manage`/`members.manage`-gated
+(roles: an OR-gate over `positions.*`/`roles.*`; ranks: `settings.manage`,
+`members.manage`), both are ceiling-checked before the grant-bearing part of
+the write (`_enforce_permission_grant_ceiling`/`_enforce_role_edit_ceiling`
+for roles; `_enforce_rank_grant_ceiling` for ranks, as of this pass also
+guarded by `assert_rank_code_may_change`), and `update_rank`'s own code
+comment draws the same comparison unprompted: "the same escalation
+settings.manage alone must not authorize... CLAUDE.md pitfall 23's aliasing
+note is the same failure mode: a rank's grants reach the database by a side
+door" (`operational_rank_service.py`, around the `update_rank` ceiling call).
+`reorder_ranks` is correctly excluded from this comparison — it never touches
+`_enforce_rank_grant_ceiling` and grants nothing; only the ladder's `sort_order`
+moves, which is an inventory-visibility concern already handled by a dedicated
+`settings.manage`-only gate (`_refuse_ordering`), not a permission grant.
+
+**Where:** `backend/app/api/v1/endpoints/operational_ranks.py:117`
+(`create_rank`), `:211` (`update_rank`), `:284` (`delete_rank`).
+
+**Failure scenario:** the same stolen-live-session precondition as PERM-10 and
+`AUTH-23`. An attacker holding a `settings.manage`/`members.manage` session
+can rename a custom rank's code to a built-in one (still ceiling-checked,
+still bounded to their own permissions, but a standing, hard-to-notice change
+to every member who currently or later holds that rank) or delete/recreate
+ranks, without the re-verification step `delete_role`/`update_role` now
+require for the equivalent operation on roles.
+
+**Impact:** same shape and bound as PERM-10 — ceiling-limited, not an
+escalation beyond the attacker's own level, but an inconsistency in a control
+whose entire purpose is raising the bar on exactly this class of action.
+
+**Why flagged, not fixed:** identical reasoning to PERM-10 — expanding
+`STEPUP_HANDLERS` is Feature 01's reviewed, test-pinned decision, and doing so
+here would need that feature's own test file touched and its own judgment
+call about where the UX cost of re-verification is worth paying. Unlike
+`update_user_profile`/`create_member`, these three handlers _are_ narrow
+enough that gating the whole handler would be a clean, low-collateral change
+(no routine/self-service traffic through them) — which is why this is flagged
+as the more actionable of the two findings, for whichever feature's next pass
+picks it up.
+
+**Fix:** not applied. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Severity reasoning:** MED, same reasoning as PERM-10.
+
+### Completion gate (pass 12)
+
+| Check                                                                            | Result                                                    |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                  | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                         | ✅ 2637 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                      | ✅ clean                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                | ✅ single head `3d67883cd461`, 651 revisions              |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                | ✅ 276 routes, 0 errors, 0 warnings                       |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart"`) | ✅ 1512 passed, 1 skipped (environment-only: `pywebpush`) |
+| `cd frontend && npm run typecheck`                                               | ✅ 0 errors                                               |
+| `npm run lint` (frontend)                                                        | ✅ 0 errors, 0 warnings                                   |
+
+No source file needed a fix this pass. Both findings are flagged (owner
+decision / another feature's test-pinned mechanism), not fixed, and mirrored
+into `docs/KNOWN_LIMITATIONS.md`.
 
 ---
 

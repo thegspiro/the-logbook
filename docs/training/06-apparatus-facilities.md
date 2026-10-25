@@ -531,6 +531,10 @@ grouped by station or facility, with a search box. To open it, use:
 - the link in a facility's **Rooms** section, or
 - the command palette (Ctrl+K, or Cmd+K on a Mac) and search "QR".
 
+The page works with the Facilities module on or off. Until 2026-10-24 the
+**Locations** page's link led to a "module disabled" screen when Facilities was
+off; it now opens the page.
+
 When your department uses Scheduling, the page also lists a **shift check-in
 code** for each vehicle. It is a permanent QR code: when scanned, it finds that
 vehicle's current shift. One printed card on the dashboard covers every shift.
@@ -669,6 +673,28 @@ open there, or out if they are already in, with nobody signed in at the kiosk.
 
 For setup, see
 [Member ID Cards](../../wiki/Member-ID-Cards.md#tapping-in-at-a-room-kiosk-2026-10-03).
+
+### Card Readers: Seeing Where Cards Were Tapped _(2026-10-25)_
+
+**Locations → Card Readers** (`/locations/card-readers`) lists every active room
+with its **Badge check-in** switch and its kiosk taps over the last 7 days:
+taps, refusals and the last tap. Select a room to see its recent taps. Other
+ways in: Room QR Codes, the Locations page and the command palette.
+
+- It opens for **Manage locations**, **Manage facilities** or **Manage NFC tags
+  on locations**, with the Facilities module on or off. Only the last of those
+  can flip the switch, and **turn on** is not offered while NFC ID cards are off.
+- Whose card it was is hidden unless you also hold **Manage ID cards**. Without
+  it you see the room, the time and the outcome.
+- Events show the same taps: an event's page has a **Card taps** section (for
+  people who manage events), and **Events → Card Check-ins** lists every event's
+  card taps, filterable by outcome, reader and date.
+
+The **Room QR Codes** page (`/locations/qr-codes`) now opens when Facilities is
+off. It used to land on a "module disabled" screen even though the Locations
+page linked to it.
+
+> **Screenshot to create:** Card Readers, and Events → Card Check-ins.
 
 ---
 

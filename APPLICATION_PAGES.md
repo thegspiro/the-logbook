@@ -329,13 +329,19 @@ Set per event on **Edit Event → Check-In Settings**. Both default to off.
 
 ### Events Admin Hub (`/events/admin`)
 
-Requires `events.manage` permission. Tab-based admin interface.
+Requires `events.manage` permission. Drawn with the same two-level navigation as Training, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (EventsAdminNav, with the areas declared in eventsAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
 
-| Tab         | Label                |
-| ----------- | -------------------- |
-| `create`    | Create Event         |
-| `analytics` | Analytics            |
-| `community` | Community Engagement |
+| Area               | `?tab=`         | Label                |
+| ------------------ | --------------- | -------------------- |
+| Events             | `create`        | Create Event         |
+| Events             | `past_events`   | Past Events          |
+| Community Outreach | `requests`      | Requests             |
+| Community Outreach | `community`     | Community Engagement |
+| Check-ins          | `analytics`     | QR Code Analytics    |
+| Check-ins          | `card_checkins` | Card Check-ins       |
+| Settings           | `settings`      | Settings             |
+
+A missing or unknown `?tab=` opens Create Event.
 
 **Legacy redirects:**
 
@@ -468,13 +474,15 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `knowledge-tests`   | Knowledge Tests (Setup)       |
 | `compliance`        | Compliance Matrix             |
 | `expiring-certs`    | Expiring Certs                |
-| `pipelines`         | Pipelines                     |
+| `pipelines`         | Programs                      |
 | `shift-reports`     | Shift Reports                 |
 | `integrations`      | Integrations                  |
 | `import`            | Import Past Training          |
 | `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
+
+> The **Programs** tab (`pipelines`) lists the department's existing programs. Its New Pipeline button opens the create wizard in the same tab at `&view=new`; selecting Programs in the hub nav returns to the list. Its views are Programs and Templates. The standalone `/training/programs` page also has a Requirements view, but the hub leaves it out because the hub's own **Requirements** tab covers it, including **Import from Registry** (NFPA, Pro Board, NREMT).
 
 > The **Training Waivers** tab (within Officer Dashboard) shows all training waivers with summary cards, status filtering, and source tracking (Auto LOA vs Manual).
 >
@@ -506,7 +514,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 - `/training/submissions` → `/training/admin?tab=submissions`
 - `/training/requirements` → `/training/admin?tab=requirements`
 - `/training/sessions/new` → `/training/admin?tab=sessions`
-- `/training/programs/new` → `/training/admin?tab=pipelines`
+- `/training/programs/new` → `/training/admin?page=curriculum&tab=pipelines&view=new`
 - `/training/shift-reports` → `/training/admin?tab=shift-reports`
 - `/training/integrations` → `/training/admin?tab=integrations`
 
@@ -753,6 +761,20 @@ section had no scheduling entry at all. That row is gone.
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
 > `/scheduling/qualifications` and `/scheduling/settings` no longer resolve.
+
+Navigation matches Training and Inventory Administration _(2026-10-25)_:
+seven **area cards** — Overview, Planning, On the Shift, Close-Out & History,
+People & Eligibility, Reports, Settings — above a strip of the chosen area's
+pages and a line naming the open page, with a red **Create Shift** in the
+header (it opens the Create Shift dialog on `/scheduling` via
+`?create=shift`). The tool-card grid that sat under the setup guide is gone;
+the areas replace it. Each page keeps its own route: the routes listed in
+`SCHEDULING_ADMIN_SHELL_PATHS` (`pages/scheduling/admin/schedulingAdminAreas.ts`)
+wrap their element in `SchedulingAdminLayout`, inside their `ProtectedRoute`,
+and draw no title, back arrow or trail of their own. The history-import review
+screen is the exception: it is reached from the list and keeps its own trail.
+On the Shift's two pages open Inventory's own screens, and the strip marks them
+so.
 
 > **One grant runs the whole area** _(2026-09-05)_: `scheduling.manage`, on the
 > hub's route, on every page behind it, and on the nav rows that offer it. The

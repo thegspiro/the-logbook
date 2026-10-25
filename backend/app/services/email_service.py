@@ -81,6 +81,41 @@ def _redact_email(address: str) -> str:
     return "***"
 
 
+# 421 = service unavailable / too many connections, 451 = local error or
+# temporary rate limit, 452 = insufficient system storage. All are transient.
+_SMTP_RATE_LIMIT_CODES = (421, 451, 452)
+
+
+def _smtp_replies(exc: smtplib.SMTPException) -> List[Tuple[int, str]]:
+    """The (code, text) replies carried by an SMTP rejection.
+
+    ``SMTPRecipientsRefused`` (every RCPT refused) holds one reply per
+    recipient and no code of its own; the recipient addresses are dropped so
+    they are never logged.
+    """
+    if isinstance(exc, smtplib.SMTPResponseException):
+        pairs = [(exc.smtp_code, exc.smtp_error)]
+    elif isinstance(exc, smtplib.SMTPRecipientsRefused):
+        pairs = list(exc.recipients.values())
+    else:
+        return []
+    return [
+        (code, text.decode("utf-8", "replace") if isinstance(text, bytes) else text)
+        for code, text in pairs
+    ]
+
+
+def _is_sending_quota_reply(code: int, text: str) -> bool:
+    """Whether a reply means the sending account has exhausted its quota.
+
+    Gmail and Google Workspace answer a sender over its daily limit with
+    ``550 5.4.5 Daily user sending limit exceeded``. The limit belongs to the
+    account, not the recipient, so every later message in the batch would be
+    refused the same way.
+    """
+    return 500 <= code < 600 and "5.4.5" in text
+
+
 # One address, nothing else: no display name, no list, no whitespace. Deliberately
 # narrow — this decides whether the department's stored contact address is fit
 # for a Reply-To header, and "not fit" costs only the header, never the send.
@@ -826,46 +861,76 @@ class EmailService:
         Includes rate-limit mitigation:
         * ``RSET`` between messages to cleanly reset the envelope
         * 0.25 s pause between sends to stay within provider rate limits
-        * Automatic reconnection if the server drops the connection
+        * Automatic reconnection, and one resend of the same message, if the
+          server drops the connection or answers 421/451/452
+        * The batch stops at a sending-quota reply (``5.4.5``) or a failed
+          reconnect; the messages not attempted are reported failed
+
+        Returns one result per message, in order. It does not raise once the
+        first connection is open, so messages already delivered are never
+        reported as failed.
         """
         server = self._smtp_connect()
         results: List[bool] = []
         from_email = self._smtp_config["from_email"]
+        # Set when no later message in the batch can succeed, so the rest are
+        # reported failed without being attempted.
+        stop_reason: Optional[str] = None
         try:
             for idx, (recipients, msg_str) in enumerate(messages):
-                try:
-                    server.sendmail(from_email, recipients, msg_str)
-                    results.append(True)
-                except smtplib.SMTPServerDisconnected:
-                    # Server dropped the connection (rate limit, timeout,
-                    # etc.) — reconnect and retry this message once.
-                    logger.warning(
-                        "SMTP server disconnected during batch send, reconnecting"
-                    )
+                sent = False
+                # One send plus at most one retry, after a dropped connection
+                # or a rate-limit reply. The retry resends the same message:
+                # a 421 means "not now", not "never", so recording it as
+                # failed loses a message the server would have taken.
+                for attempt in range(2):
                     try:
-                        server = self._smtp_connect()
                         server.sendmail(from_email, recipients, msg_str)
-                        results.append(True)
-                    except Exception as e2:
-                        logger.error("Batch email retry failed: {}", e2)
-                        results.append(False)
-                except smtplib.SMTPResponseException as e:
-                    logger.error(
-                        "Batch email rejected (code={}): {}", e.smtp_code, e.smtp_error
-                    )
-                    results.append(False)
-                    # 421/451/452 = rate limit / too many connections
-                    if e.smtp_code in (421, 451, 452):
+                        sent = True
+                        break
+                    except smtplib.SMTPServerDisconnected:
+                        if attempt:
+                            logger.error("Batch email retry failed: disconnected")
+                            break
+                        logger.warning(
+                            "SMTP server disconnected during batch send, reconnecting"
+                        )
+                    except (
+                        smtplib.SMTPResponseException,
+                        smtplib.SMTPRecipientsRefused,
+                    ) as e:
+                        replies = _smtp_replies(e)
+                        logger.error("Batch email rejected: {}", replies)
+                        if any(_is_sending_quota_reply(c, t) for c, t in replies):
+                            stop_reason = "sending quota exhausted"
+                            break
+                        if attempt or not any(
+                            c in _SMTP_RATE_LIMIT_CODES for c, _ in replies
+                        ):
+                            break
                         logger.warning("Rate limit detected, reconnecting after 2 s")
                         time.sleep(2)
-                        try:
-                            server.quit()
-                        except Exception:
-                            pass
+                    except Exception as e:
+                        logger.error("Batch email send failed: {}", e)
+                        break
+
+                    try:
+                        server.quit()
+                    except Exception:
+                        pass
+                    try:
                         server = self._smtp_connect()
-                except Exception as e:
-                    logger.error("Batch email send failed: {}", e)
-                    results.append(False)
+                    except Exception as e:
+                        # Raising here would discard the results of the
+                        # messages already delivered, and the caller would
+                        # report the whole batch failed.
+                        logger.error("SMTP reconnect failed during batch send: {}", e)
+                        stop_reason = "reconnect failed"
+                        break
+
+                results.append(sent)
+                if stop_reason:
+                    break
 
                 # Brief pause between messages to avoid rate limiting
                 if idx < len(messages) - 1:
@@ -879,6 +944,14 @@ class EmailService:
                 server.quit()
             except Exception:
                 pass
+        if stop_reason:
+            skipped = len(messages) - len(results)
+            logger.error(
+                "Batch send stopped ({}); {} remaining message(s) not attempted",
+                stop_reason,
+                skipped,
+            )
+            results.extend([False] * skipped)
         succeeded = sum(1 for r in results if r)
         logger.info("Batch send complete: {}/{} succeeded", succeeded, len(results))
         return results

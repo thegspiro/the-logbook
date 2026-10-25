@@ -224,7 +224,7 @@ export const getTrainingRoutes = () => {
       />
       <Route
         path="/training/programs/new"
-        element={<Navigate to="/training/admin?page=setup&tab=pipelines" replace />}
+        element={<Navigate to="/training/admin?page=curriculum&tab=pipelines&view=new" replace />}
       />
       <Route
         path="/training/shift-reports"

@@ -1,6 +1,160 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (this PR)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 12 (this PR)
+
+---
+
+## Pass 12 (2026-10-25) — re-enumerated all 40 routes by AST, re-verified the three webhook handlers and the one changed file; 0 fixed, 0 new findings
+
+Picked up the rotation at its normal Feature-03 slot. Step 0:
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) returned
+0 results, re-confirmed immediately before branching. PR #3685 (Feature 02,
+Permissions & roles, pass 12) and PR #3686 (an orphaned-fix recovery for
+Feature 30, Onboarding) had both merged minutes earlier, bringing `main` to
+`e6da6486`. Rotation row 03 was confirmed the next `⬜` by reading
+`PROGRESS.md`'s table directly on a freshly fetched `main` — not from the
+rotation note that triggered this iteration.
+
+**Baseline:** `b06de81f` (PR #3558's merge, pass 11). **Head:** `e6da6486`.
+`git diff b06de81f e6da6486 --stat -- backend/app/api/public/
+backend/app/core/public_portal_security.py
+backend/app/services/integration_services/webhook_service.py
+backend/app/utils/webhook_replay.py` (18 files: the whole `app/api/public/`
+directory, 15 files, plus the three named collaborators) touches exactly
+**one** file: `backend/app/api/public/portal.py` (+33/-24). The three
+webhook receivers (`paypal_webhook.py`, `integrations_webhook.py`,
+`salesforce_webhook.py`), `public_portal_security.py`, `webhook_service.py`,
+`webhook_replay.py`, and the other 9 route-bearing files under
+`app/api/public/` (plus `responses.py` and `__init__.py`, neither of which
+defines a route) are byte-identical to pass 11's reviewed state (confirmed by
+the same diff command returning no hunks for each). No migration touches
+this feature's tables this pass.
+
+**Route re-enumeration (per this pass's own instruction to re-derive the count
+rather than trust it forward):** an AST walk of every `@router.<verb>`
+decorator across all 13 route-bearing files under `app/api/public/`
+(`responses.py` and `__init__.py` excluded — neither defines a route) finds
+**40 routes**, unchanged from the count pass 7–11's additions imply
+(28 after pass 7, +9 for `mcp_oauth.py`'s actual decorator count in pass 8,
++1 for `calendar.py`'s org feed in pass 10, +2 for `minutes.py` in pass 11 = 40) and confirmed by cross-checking every router import against
+`backend/main.py`'s `app.include_router(...)` calls — all 13 routers (plus the
+shared `responses.py` constants module) are mounted, none orphaned. **0 new
+routes, 0 removed.** `check_route_permissions.py --strict` separately reports
+276 routes app-wide, 0 errors, 0 warnings — identical to SEC-00 pass 12's
+same-day whole-app count, confirming neither Feature 02's permissions work nor
+this feature's own unchanged files shifted the total.
+
+**The one changed file, read in full rather than trusted from the diff:**
+
+- **`app/api/public/portal.py`, `get_organization_info` (`GET
+/public/v1/organization/info`)** — a data-correctness fix (W76-2, a workflow
+  review finding outside this rotation), not a security change. Previously,
+  `physical_address` was published only when
+  `physical_address_line1 and not physical_address_same` — so a department
+  that set "physical address same as mailing" (which stores the station's
+  address in the _mailing_ columns only, never populating the physical ones)
+  published `physical_address: null` even though the station's address is
+  public information the mailing address already carries. The fix mirrors
+  `mailing_address` onto `physical_address` when `physical_address_same` is
+  set, and otherwise falls back to the physical columns, unchanged. Re-checked
+  against all seven dimensions as this feature's own scope requires, not
+  deferred to the workflow review that authored it: the route is still gated
+  by `Depends(authenticate_api_key)` (API-key auth, IP rate-limited inside
+  that dependency ahead of any DB work — PP-4, unchanged), `organization_id`
+  is still taken only from `api_key.organization_id` (server-resolved, never
+  client-supplied — no new by-id surface), and the assembled `org_data` dict
+  still passes through `filter_data_by_whitelist(...)` before
+  `PublicOrganizationInfo(**filtered_data)` validates it — so a department
+  that has not whitelisted `physical_address` still gets it stripped
+  regardless of this fix. Both address dicts are built from `Organization`
+  columns the department itself entered at onboarding (street address, city,
+  state, zip) — not member or applicant PII, and already within the set an
+  administrator can choose to publish. No new field was added to
+  `PublicOrganizationInfo` or `org_data`; only which of two pre-existing
+  fields a given configuration populates changed.
+
+**The three webhook handlers, re-read in full against Pitfall #36
+(idempotency) and the injection/auth dimensions, not assumed sound because
+byte-identical to pass 11:**
+
+- **PayPal (`paypal_webhook.py`):** rate-limited (60/min/IP) as a `Depends()`
+  parameter, so it resolves before the integration lookup in the function
+  body; signature verified through PayPal's own verify-webhook-signature API
+  (`verify_webhook_signature`, keyed on the configured webhook id — an
+  integration with none configured cannot be verified and nothing here
+  trusts an unverifiable delivery); `is_duplicate_webhook` (10-minute
+  freshness cache) runs after verification, never before. Below that
+  freshness cache, the durable guard:
+  `StorefrontService.record_external_payment` looks up
+  `StorePaymentEvent` by `(organization_id, provider, external_id)` before
+  inserting, **and** that tuple carries a real `UniqueConstraint`
+  (`uq_store_payment_events_provider_external`,
+  `app/models/storefront.py:941-946`) — so two deliveries racing past the
+  SELECT still can't both insert: the loser's `db.commit()` raises
+  `IntegrityError`, which the handler catches, rolls back, re-reads the
+  winning row and returns it rather than erroring or double-crediting
+  (`storefront_service.py:2672-2688`). This is the textbook shape Pitfall #36
+  asks for — a lookup-then-insert backed by a DB constraint, not only an
+  in-process check — read directly in the service rather than taken from the
+  module's own docstring claim.
+- **Documenso / Cal.com (`integrations_webhook.py`):** both routes rate-limit
+  first (`await _rate_limit_webhook(...)` is the first line of the handler
+  body, ahead of the integration lookup), then load the integration, then
+  require a configured `webhook_secret` (401 if absent — never trusts an
+  unsigned payload), then verify (shared-secret or HMAC for Documenso; HMAC
+  only for Cal.com), then check `is_duplicate_webhook` — same ordering as
+  PayPal. Idempotency beyond the 10-minute cache is structural rather than a
+  constraint:
+  `MembershipPipelineService.complete_current_step_for_integration_event`
+  matches on the prospect's **current** step type, so a redelivery arriving
+  after the first one already advanced the prospect past that step finds no
+  match and returns `None` — there is no second row to double-write, because
+  the condition that made the first delivery effective is no longer true.
+- **Salesforce (`salesforce_webhook.py`):** webhook secret required (401 if
+  absent), HMAC verified with `hmac.compare_digest` (constant-time), payload
+  shape and the 500-record cap checked, and only _then_
+  `is_duplicate_webhook` — deliberately after shape validation, per the
+  module's own comment, so a rejected (400/422) delivery can't poison the
+  replay fingerprint and cause a provider's identical retry to be silently
+  dropped as "already handled". `sync_inbound_contacts` is this file's own
+  previously-reviewed idempotency path (unchanged this pass).
+
+**RFC 8414/9728 metadata endpoints (`mcp_oauth.py`'s
+`authorization_server_metadata`/`protected_resource_metadata`, 6 of the 9
+route decorators in that file) carry no rate limit, checked and not a
+finding:** both build their response from in-memory config
+(`app/mcp/oauth.py:272-300` — string formatting over settings already in
+memory, no DB query, no CPU-heavy work) and set
+`Cache-Control: public, max-age=300`, so there is no "expensive work" for
+checklist §6 to guard ahead of; the three stateful endpoints in the same file
+(`authorize`, `token`, `revoke`) still rate-limit before any DB work, as pass
+8 established and this pass re-confirmed by reading `_limit`'s call sites
+directly.
+
+**Nothing to fix, nothing to flag.** The one changed file is a pre-existing
+public field's data-correctness fix, still gated and whitelisted exactly as
+before; the three webhook handlers are unchanged and re-verified sound,
+including the durable (constraint-backed) half of idempotency this pass read
+directly in the service layer rather than took from a docstring. No
+`KNOWN_LIMITATIONS.md` entry needed — nothing new is flagged.
+
+### Completion gate (pass 12)
+
+| Check                                                                                                                                                                                                                                                                                                       | Result                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                                                                                                                                                                       | ✅ 0 violations                                      |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pinned version — the locally-shadowing uv-tool install was at 26.5.1 and was corrected to match before running)                                                                                                                                         | ✅ 2638 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                                                                                                                                                                           | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                           | ✅ single head `3d67883cd461`, 651 revisions         |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                                       | ✅ 276 routes, 0 errors, 0 warnings                  |
+| scoped pytest, unit (`-k "public or webhook or paypal or salesforce or integrations or minutes or mcp_oauth or calendar or finance_approval or branding or kiosk or badge_tap or application_self_withdraw or forms or legal or display or security_txt" -m "not integration and not slow and not docker"`) | ✅ 1488 passed, 1 skipped (`py_vapid`, pre-existing) |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, database-schema/`SET NULL`, baseline member grants, endpoint-auth coverage, PII-cache exclusions)                                                                                     | ✅ 208 passed                                        |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                          | ✅ 0 errors                                          |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                               | ✅ 0 errors, 0 warnings                              |
+
+No `KNOWN_LIMITATIONS.md` change needed — nothing flagged this pass. Rotation
+row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments).
 
 ---
 

@@ -3558,9 +3558,7 @@ async def check_in_external_attendee(
     # A staff-entered attendee is never given a prospect_id when it is created,
     # so without this the pipeline branch below could only ever fire for kiosk
     # guests — and the kiosk already runs the hook itself. Resolving it here
-    # rather than at creation also covers rows staff entered earlier. Only an
-    # existing active prospect is linked: opening a new one is the kiosk's
-    # behaviour, gated on the event's guest_check_in_creates_prospect setting.
+    # rather than at creation also covers rows staff entered earlier.
     if not attendee.prospect_id and attendee.email:
         prospect = await MembershipPipelineService(db).find_active_prospect_by_email(
             current_user.organization_id, attendee.email
@@ -3569,11 +3567,33 @@ async def check_in_external_attendee(
             attendee.prospect_id = prospect.id
 
     await db.commit()
+    # Read before anything below can roll back, which expires the instance.
+    attendee_id_str = str(attendee.id)
+    existing_prospect_id = attendee.prospect_id
+
+    # At an event that adds its guests to the pipeline, the kiosk signs in only
+    # applicants it already knows and sends everyone else to staff — so a
+    # walk-in staff sign in here is where their application is opened. Done
+    # after the attendance commit: a pipeline failure must not cost the guest
+    # their sign-in. It opens and links the prospect itself, so the link step
+    # below is skipped for it.
+    opened_prospect_id = None
+    if not existing_prospect_id and event is not None:
+        opened_prospect_id, failed = await GuestCheckInService(
+            db
+        ).open_prospect_for_staff_entry(event, current_user.organization_id, attendee)
+        if failed:
+            await db.rollback()
+        elif opened_prospect_id is not None:
+            attendee.prospect_id = opened_prospect_id
+            await db.commit()
 
     # Committed first, and everything below is best-effort against it. The
     # sign-in is what the member came to do; neither the link nor the pipeline
     # may cost them it.
-    if attendee.prospect_id and event is not None:
+    linked_prospect_id = opened_prospect_id
+    if existing_prospect_id and event is not None:
+        linked_prospect_id = str(existing_prospect_id)
         # Written for an attendee that already carried a prospect_id too, not
         # only one matched just now: rows checked in before this linking existed
         # are exactly the inconsistent state it repairs, and a guard on the
@@ -3582,7 +3602,7 @@ async def check_in_external_attendee(
         # already advanced on.
         try:
             await GuestCheckInService(db).link_prospect_to_event(
-                str(attendee.prospect_id),
+                str(existing_prospect_id),
                 event,
                 # Not the kiosk's wording: a coordinator reading this history
                 # would otherwise be told a guest scanned the room code when a
@@ -3598,7 +3618,7 @@ async def check_in_external_attendee(
             await db.rollback()
             logger.error(
                 "Could not link prospect {} to event {}: {}",
-                attendee.prospect_id,
+                existing_prospect_id,
                 event_id,
                 exc,
             )
@@ -3607,7 +3627,11 @@ async def check_in_external_attendee(
         # at the door, which is not the same as the department's final word on
         # who attended — the advance runs when this event's attendance is
         # finalized, for every checked-in applicant at once.
-    return ExternalAttendeeCheckInResponse(status="checked_in", attendee_id=attendee.id)
+    return ExternalAttendeeCheckInResponse(
+        status="checked_in",
+        attendee_id=attendee_id_str,
+        prospect_id=linked_prospect_id,
+    )
 
 
 @router.delete(

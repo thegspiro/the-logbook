@@ -211,11 +211,57 @@ stays the honest record of when the member arrived, and the event's manager is
 shown how early it was rather than having to compare timestamps by eye. See
 [Events → Early check-in](Module-Events#early-check-in).
 
+## The Member ID Cards page _(2026-10-24)_
+
+`/members/admin/id-cards`, linked as **Member ID cards** from Members Admin, is
+gated on `members.manage_id_cards` alone, so a card clerk who does not edit the
+roster can reach it. Four tabs:
+
+- **Cards** — every card, searchable, with bulk **Suspend**, **Reactivate**,
+  **Report lost** and **Revoke** (`POST /nfc-tags/bulk-status`, which applies
+  the per-card lifecycle rules card by card).
+- **Coverage** — current members with no working card (issue from the row),
+  active cards unused for _N_ days, and cards still held by former members.
+- **Tap log** — every station and kiosk tap, refusals included, from the new
+  `nfc_card_taps` table. An unknown card is kept only as its peppered hash.
+  Filterable, paginated and exportable as CSV through `SafeCsvWriter`; the
+  export is in `EXPORT_ENDPOINTS` so a bulk download is watched like the
+  others.
+- **Settings** — tap retention per department, 3–84 months, 24 by default,
+  purged nightly by `nfc_card_tap_purge`. Attendance rows are not affected.
+
+### Leavers' cards suspend themselves
+
+Moving a member to Inactive, Suspended, Dropped (either kind) or Archived
+suspends their active cards and flags them `auto_suspended`; returning
+restores only those. The set is the same one the tap-time refusal reads
+(`BLOCKED_MEMBER_STATUSES` in `nfc_card_status_sync.py`), so a card is
+suspended for exactly the members whose taps are refused anyway. An officer's
+own suspension, and lost or revoked cards, are untouched in both directions.
+Every status-change path calls it, guarded by an AST sweep. The migration
+backfills existing cards and its downgrade restores them.
+
+## Where cards were tapped _(2026-10-24)_
+
+Read from the same tap log, seen from the place rather than the card
+(`/api/v1/nfc-activity`, in `UNCACHEABLE_PREFIXES`):
+
+- **Card Readers** (`/locations/card-readers`) — every active room, its reader
+  switch, and its kiosk taps over the last 7 days. Opens for
+  `locations.manage`, `facilities.manage` or `locations.manage_nfc_tags`, with
+  or without the Facilities module; switching stays
+  `locations.manage_nfc_tags`, and turning on is not offered while NFC ID cards
+  are off. Whose card a tap was is cleared server-side unless the viewer also
+  holds `members.manage_id_cards`.
+- **Card taps** on the event page, for `events.manage` holders.
+- **Card Check-ins** tab on the Events hub, across all events, filterable by
+  outcome, reader and date.
+
 ## API
 
 See [API Reference → NFC ID Cards & Station Check-In](API-Reference#nfc-id-cards--station-check-in) and, for badge codes and CR80 printing, [API Reference → Member badges and ID card printing](API-Reference#member-badges-and-id-card-printing).
 
 ## Data
 
-`nfc_tags` — see
+`nfc_tags` and `nfc_card_taps` — see
 the [generated schema reference](https://github.com/thegspiro/the-logbook/blob/main/docs/DATABASE_SCHEMA.md#nfc_tags).

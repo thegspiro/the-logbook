@@ -2554,13 +2554,14 @@ class Seeder:
         return created
 
     def _sign_a_guest_in(self, event_id: str, display_code: str) -> None:
-        """Put one visitor through the public sign-in, as a visitor would.
+        """Put one applicant through the open house's kiosk sign-in.
 
-        Signed in through `/api/public/v1/...` with no session rather than
-        written through the admin external-attendee endpoint, because the
-        prospect record and its "Attended: <event>" referral source are made by
-        the guest path and by nothing else — an attendee added by an officer
-        gets no pipeline card, so the screenshot of one would be staged.
+        The open house adds its guests to the prospective members pipeline,
+        and such an event's kiosk signs in only applicants it already knows —
+        by email, with a "Is this you?" confirmation. So Rosa is opened as an
+        applicant first, as someone on the door would, and then signs in from
+        the public page with no session, as a visitor does. The sign-in is what
+        links the open house to her card.
         """
         if not (event_id and display_code):
             return
@@ -2569,22 +2570,49 @@ class Seeder:
         )
         if any(pick(a, "email") == GUEST_EMAIL for a in attendees):
             return
+        self._sign_in_as_applicant(
+            event_id,
+            display_code,
+            {
+                "first_name": "Rosa",
+                "last_name": "Delgado",
+                "email": GUEST_EMAIL,
+                "phone": "(703) 555-0184",
+                "interest_reason": (
+                    "My neighbour is on the department and said to come "
+                    "and have a look. I work days but I'm free evenings."
+                ),
+            },
+            label="guest sign-in",
+        )
+
+    def _sign_in_as_applicant(
+        self, event_id: str, display_code: str, guest: dict, *, label: str
+    ) -> None:
+        """Open *guest* as an applicant if needed, then sign in by email."""
+        email = guest["email"]
         try:
-            self.api.post_public(
-                f"/display/{display_code}/events/{event_id}/guest-check-in",
-                {
-                    "first_name": "Rosa",
-                    "last_name": "Delgado",
-                    "email": GUEST_EMAIL,
-                    "phone": "(703) 555-0184",
-                    "interest_reason": (
-                        "My neighbour is on the department and said to come "
-                        "and have a look. I work days but I'm free evenings."
-                    ),
-                },
+            found = items(
+                self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+                "prospects",
             )
+            if not any(p.get("email") == email for p in found):
+                self.api.post(
+                    "/prospective-members/prospects",
+                    {**guest, "referral_source": "Open house"},
+                )
+            base = f"/display/{display_code}/events/{event_id}"
+            lookup = self.api.post_public(f"{base}/guest-lookup", {"email": email})
+            token = pick(lookup or {}, "confirm_token")
+            if not token:
+                self.blocked.append(
+                    f"{label}: {email} was not recognised "
+                    f"({pick(lookup or {}, 'status')})"
+                )
+                return
+            self.api.post_public(f"{base}/guest-confirm", {"confirm_token": token})
         except ApiError as exc:
-            self.blocked.append(f"guest sign-in: {exc}")
+            self.blocked.append(f"{label}: {exc}")
 
     RECRUITMENT_EVENT_TITLE = "Fall Recruitment Open House"
 
@@ -2725,13 +2753,9 @@ class Seeder:
         for guest in self.RECRUITMENT_GUESTS:
             if guest["email"] in signed_in:
                 continue
-            try:
-                self.api.post_public(
-                    f"/display/{display_code}/events/{event_id}/guest-check-in",
-                    guest,
-                )
-            except ApiError as exc:
-                self.blocked.append(f"recruitment guest sign-in: {exc}")
+            self._sign_in_as_applicant(
+                event_id, display_code, guest, label="recruitment guest sign-in"
+            )
         return event
 
     VALIDATION_EVENT_TITLE = "Wednesday Evening Drill — Attendance Pending"
@@ -19624,6 +19648,198 @@ class Seeder:
             )
         return {"issued": issued, "member_id": member_id}
 
+    # More fabricated serials, for the Member ID Cards page: a roster of two
+    # cards on one member pictures neither the list nor the coverage figure.
+    NFC_EXTRA_CARDS = (
+        ("snolan", "04C3D19A6E2B71", "Duty wallet"),
+        ("okittredge", "04D58E27B1C903", "Duty wallet"),
+    )
+    # A serial no card was ever registered under, so the tap log shows the
+    # Unknown card outcome a stray tap produces.
+    NFC_UNKNOWN_TAG = "04E6F03C88D415"
+
+    def seed_card_taps(self) -> dict[str, Any]:
+        """Real taps for the tap log, the event's Card taps and Card Readers.
+
+        Every row comes from the endpoints a station and a kiosk call, so each
+        outcome is the one the server decided: the demo member checking in to
+        the drill and tapping again, a revoked card, an unknown card, and a
+        kiosk tap in the Volunteer Office, whose two overlapping events make
+        the server refuse it. Taps are a log, so a re-seed adds none once any
+        exist.
+        """
+        users = {
+            str(pick(u, "username")): u
+            for u in items(self.api.get("/users?limit=200"), "users")
+        }
+        existing = {
+            str(pick(card, "uidPreview") or "")
+            for card in items(self.api.get("/nfc-tags?limit=200"), "items")
+        }
+        for username, tag, label in self.NFC_EXTRA_CARDS:
+            member = users.get(username)
+            if member and tag[-4:] not in existing:
+                self.api.post(
+                    "/nfc-tags",
+                    {"user_id": pick(member, "id"), "tag_uid": tag, "label": label},
+                )
+
+        if pick(self.api.get("/nfc-tags/taps?limit=1"), "total"):
+            return {"taps": "already recorded"}
+
+        drill = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=200"), "events")
+                if e.get("title") == IN_PROGRESS_EVENT_TITLE
+            ),
+            None,
+        )
+        outcomes: list[str] = []
+        if drill:
+            for tag in (
+                self.NFC_ACTIVE_TAG,
+                self.NFC_ACTIVE_TAG,
+                self.NFC_EXTRA_CARDS[0][1],
+                self.NFC_REVOKED_TAG,
+                self.NFC_UNKNOWN_TAG,
+            ):
+                result = self.api.post(
+                    "/nfc-tags/check-in",
+                    {
+                        "tag_uid": tag,
+                        "target_type": "event",
+                        "target_id": pick(drill, "id"),
+                    },
+                )
+                outcomes.append(str(pick(result, "status")))
+
+        room = next(
+            (
+                loc
+                for loc in items(self.api.get("/locations?limit=100"), "locations")
+                if str(pick(loc, "name") or "").startswith(self.GUIDE04_TAG_ROOM_PREFIX)
+            ),
+            None,
+        )
+        code = pick(room or {}, "display_code", "displayCode")
+        if room and code:
+            self.api.put(
+                f"/locations/{pick(room, 'id')}/badge-check-in", {"enabled": True}
+            )
+            result = self.api.post_public(
+                f"/display/{code}/badge-tap",
+                {"tag_uid": self.NFC_EXTRA_CARDS[1][1]},
+            )
+            outcomes.append(f"kiosk {pick(result, 'status')}")
+        return {"outcomes": outcomes}
+
+    # A lot of its own, so recalling it moves nothing the other medical shots
+    # count: the saline's in-date stock stays NS-5520.
+    RECALLED_LOT = ("Normal Saline 1000mL", "NS-4471", 4)
+
+    def seed_lot_recall(self) -> str:
+        """One active recall, for the Recalled lots panel and the Recalled row."""
+        name, lot_number, quantity = self.RECALLED_LOT
+        recalls = self.api.get("/medical-supplies/recalls")
+        if any(
+            str(pick(r, "lot_number", "lotNumber") or "") == lot_number
+            for r in (recalls or [])
+        ):
+            return "already recalled"
+        item = next(
+            (
+                i
+                for i in items(
+                    self.api.get("/medical-supplies/items?limit=200"), "items"
+                )
+                if pick(i, "name") == name
+            ),
+            None,
+        )
+        if not item:
+            return "saline not found"
+        item_id = pick(item, "id")
+        lots = items(self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots")
+        if not any(pick(lot, "lot_number", "lotNumber") == lot_number for lot in lots):
+            self.api.post(
+                f"/medical-supplies/items/{item_id}/lots",
+                {
+                    "lot_number": lot_number,
+                    "expiration_date": str(TODAY + timedelta(days=260)),
+                    "quantity": quantity,
+                    "received_date": str(TODAY - timedelta(days=20)),
+                },
+            )
+        self.api.post(
+            "/medical-supplies/recalls",
+            {
+                "inventory_item_id": item_id,
+                "lot_number": lot_number,
+                "reason": "Manufacturer notice 2026-117: bag seam may leak",
+            },
+        )
+        return "recalled"
+
+    INACTIVE_TEMPLATE = "Reserve Engine — Out of Service"
+    PAUSED_PATTERN = "Summer Reserve Rotation"
+
+    def seed_paused_scheduling(self) -> dict[str, str]:
+        """An inactive template and a paused pattern, for their Reactivate and
+        Resume controls. Neither is used by another shot, and the pattern is
+        paused before anything generates from it."""
+        result: dict[str, str] = {}
+        templates = items(self.api.get("/scheduling/templates"), "templates")
+        template = next(
+            (t for t in templates if pick(t, "name") == self.INACTIVE_TEMPLATE), None
+        )
+        if template is None:
+            template = self.api.post(
+                "/scheduling/templates",
+                {
+                    "name": self.INACTIVE_TEMPLATE,
+                    "description": "Reserve engine while its pump is rebuilt.",
+                    "start_time_of_day": "07:00",
+                    "end_time_of_day": "19:00",
+                    "duration_hours": 12,
+                    "color": "#64748b",
+                    "min_staffing": 3,
+                    "is_default": False,
+                },
+            )
+        if pick(template, "is_active") is not False:
+            self.api.patch(
+                f"/scheduling/templates/{pick(template, 'id')}", {"is_active": False}
+            )
+            result["template"] = "deactivated"
+
+        patterns = items(self.api.get("/scheduling/patterns"), "patterns")
+        pattern = next(
+            (p for p in patterns if pick(p, "name") == self.PAUSED_PATTERN), None
+        )
+        active = [t for t in templates if pick(t, "is_active") is not False]
+        if pattern is None and active:
+            pattern = self.api.post(
+                "/scheduling/patterns",
+                {
+                    "name": self.PAUSED_PATTERN,
+                    "description": "Extra weekday cover while the summer interns ride.",
+                    "pattern_type": "weekly",
+                    "days_on": 1,
+                    "days_off": 6,
+                    "rotation_days": 7,
+                    "start_date": str(TODAY + timedelta(days=30)),
+                    "end_date": str(TODAY + timedelta(days=120)),
+                    "template_id": pick(active[0], "id"),
+                },
+            )
+        if pattern and pick(pattern, "is_active") is not False:
+            self.api.patch(
+                f"/scheduling/patterns/{pick(pattern, 'id')}", {"is_active": False}
+            )
+            result["pattern"] = "paused"
+        return result
+
     ICAL_INTEGRATION_TYPE = "ical"
 
     def seed_ical_feed(self) -> dict[str, Any]:
@@ -19888,6 +20104,9 @@ class Seeder:
         self.step("guide 03 scheduling states", self.seed_guide03_scheduling)
         self.step("label printers", self.seed_label_printers)
         self.step("id cards", self.seed_id_cards)
+        self.step("card taps", self.seed_card_taps)
+        self.step("lot recall", self.seed_lot_recall)
+        self.step("paused scheduling", self.seed_paused_scheduling)
         self.step("ical feed", self.seed_ical_feed)
         self.step("unused approval chain", self.seed_unused_approval_chain)
         self.step("guide 11 finance states", self.seed_guide11_finance_states)

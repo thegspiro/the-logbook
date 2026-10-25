@@ -571,6 +571,17 @@ task loop.
   `PositionRosterPage` and `SchedulingAdminReportsPage`. Templates are
   `pages/ShiftTemplatesPage.tsx` with `TemplateFormModal`, `PatternFormModal`,
   `GenerateShiftsModal` and `shiftTemplateTypes.ts`.
+- **Administration header** _(2026-10-25)_ — the same area navigation Training
+  and Inventory Administration draw. `SchedulingAdminLayout` wraps
+  `AdminHubFrame` with seven area cards and a page strip
+  (`SchedulingAdminNav`); `schedulingAdminAreas.ts` builds the areas from
+  `schedulingHubCards.ts`, so each page keeps its route's gate. Every route in
+  `SCHEDULING_ADMIN_SHELL_PATHS` wraps its page in the layout, inside its
+  `ProtectedRoute`; `schedulingAdminAreas.test.ts` fails if the routes and the
+  list drift. The wrapped pages draw no title, back arrow or trail of their
+  own (an `sr-only` `<h2>` keeps heading navigation). The header's
+  **Create Shift** links to `/scheduling?create=shift`, which `SchedulingPage`
+  reads once to open its Create Shift dialog.
 - **Settings components** — `ShiftSettingsPanel` composed of
   `ApparatusTypeDefaultsCard`, `DepartmentDefaultsCard`, `PositionNamesCard`,
   `ResourceTypeDefaultsCard`, `TemplatesOverviewCard`, `PositionListEditor`,

@@ -15,6 +15,8 @@ import type {
   EventStats,
   EventUpdate,
   ExternalAttendee,
+  ExternalAttendeeCheckInResult,
+  ExternalAttendeeCreate,
   RSVP,
   RSVPCreate,
 } from '../types/event';
@@ -628,8 +630,8 @@ export const eventService = {
     const response = await api.get<ExternalAttendee[]>(`/events/${eventId}/external-attendees`);
     return response.data;
   },
-  async addExternalAttendee(eventId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post<Record<string, unknown>>(`/events/${eventId}/external-attendees`, data);
+  async addExternalAttendee(eventId: string, data: ExternalAttendeeCreate): Promise<ExternalAttendee> {
+    const response = await api.post<ExternalAttendee>(`/events/${eventId}/external-attendees`, data);
     return response.data;
   },
   async updateExternalAttendee(
@@ -643,8 +645,8 @@ export const eventService = {
     );
     return response.data;
   },
-  async checkInExternalAttendee(eventId: string, attendeeId: string): Promise<Record<string, unknown>> {
-    const response = await api.patch<Record<string, unknown>>(
+  async checkInExternalAttendee(eventId: string, attendeeId: string): Promise<ExternalAttendeeCheckInResult> {
+    const response = await api.patch<ExternalAttendeeCheckInResult>(
       `/events/${eventId}/external-attendees/${attendeeId}/check-in`
     );
     return response.data;

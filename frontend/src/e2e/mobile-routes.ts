@@ -348,6 +348,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['training.manage'],
+    expectText: 'New Pipeline',
+  },
+  {
+    path: '/training/admin?page=curriculum&tab=pipelines&view=new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
     expectText: 'Create Training Pipeline',
   },
   {

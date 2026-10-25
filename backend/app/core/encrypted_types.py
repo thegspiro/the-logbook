@@ -14,6 +14,7 @@ so tampered ciphertext fails closed rather than returning unverified bytes.
 """
 
 import json
+from datetime import date, datetime
 
 from cryptography.fernet import InvalidToken
 from sqlalchemy import Text
@@ -104,3 +105,56 @@ class EncryptedJSON(TypeDecorator):
             # Not valid JSON (shouldn't happen for well-formed rows) — return
             # the raw decrypted string rather than raising during a read.
             return payload
+
+
+class EncryptedDate(TypeDecorator):
+    """A calendar date stored as encrypted ISO-8601 TEXT.
+
+    The Python value is a ``datetime.date`` on both sides, so callers, schemas
+    and exports are unchanged by the move from a ``DATE`` column. The database
+    can no longer compare, sort or range-filter the column: the ciphertext is
+    different every time a value is written. Match on another column in SQL and
+    compare the decrypted date in Python.
+
+    A row left over from the ``DATE`` column reads back as its ``YYYY-MM-DD``
+    text (``InvalidToken`` on decrypt), so the application keeps working before
+    the migration's backfill has encrypted it. Anything else that fails to
+    decrypt propagates, as for ``EncryptedText``.
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None or value == "":
+            return None
+        from app.core.security import encrypt_data
+
+        if isinstance(value, datetime):
+            value = value.date()
+        if isinstance(value, str):
+            try:
+                value = date.fromisoformat(value.strip())
+            except ValueError:
+                # Deliberately without the value: a date of birth must not end up
+                # in an exception message and from there in a log.
+                raise ValueError(
+                    "EncryptedDate takes a date or an ISO date string (YYYY-MM-DD)"
+                ) from None
+        if not isinstance(value, date):
+            raise ValueError(
+                "EncryptedDate takes a date or an ISO date string, "
+                f"not {type(value).__name__}"
+            )
+        return encrypt_data(value.isoformat())
+
+    def process_result_value(self, value, dialect):
+        if value is None or value == "":
+            return None
+        from app.core.security import decrypt_data
+
+        try:
+            plain = decrypt_data(value)
+        except InvalidToken:
+            plain = value
+        return date.fromisoformat(plain.strip()[:10])

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { trainingService, trainingProgramService } from '../services/api';
 import { RequirementModal } from '../components/training/RequirementModal';
+import { RegistryImportPanel } from '../components/training/RegistryImportPanel';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { isSafeExternalUrl } from '@/utils/safeUrl';
 import { toChecklistItems } from '../utils/checklistItems';
@@ -290,6 +291,10 @@ const TrainingRequirementsPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* This page renders only inside the training.manage-gated hub, which
+            is what both registry calls require. */}
+        <RegistryImportPanel registries={registries} onImported={() => void fetchData()} />
 
         {/* Filters */}
         <div className="card mb-6 p-4" role="search" aria-label="Search and filter requirements">

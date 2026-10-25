@@ -637,6 +637,35 @@ What an operator needs to know:
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
 
+### Date of birth and emergency contacts are encrypted at rest (2026-10-25)
+
+A migration (`3f2593e8071e`) runs on the next start. **It encrypts every existing
+value in place**, so the first start after upgrading takes a moment longer on a
+large roster, and it needs `ENCRYPTION_KEY` set, as the backend already does. With
+the key missing and members on file, the migration stops with a clear error and
+changes nothing, instead of writing ciphertext nobody can read back.
+
+- **What changes:** `users.date_of_birth`, `users.emergency_contacts` and
+  `prospective_members.date_of_birth` become `TEXT` holding AES-256-GCM
+  ciphertext. The API, screens, exports and integrations see the same dates and
+  contact lists as before.
+- **Take the database backup first**, as for any upgrade. The downgrade decrypts
+  and restores `DATE` / `JSON`, but only the same `ENCRYPTION_KEY` and
+  `ENCRYPTION_SALT` can read the ciphertext: **losing them loses these values.**
+  Keep them with the backup keys (see [BACKUP.md](./BACKUP.md)).
+- **No longer searchable in SQL.** Nothing in the application filtered or sorted
+  on either column except the applicant self-match, which now compares the date
+  after decryption with the same result. Custom reports or database queries of
+  your own that read `date_of_birth` or `emergency_contacts` directly will see
+  ciphertext.
+- **Key rotation:** `scripts/rotate_encryption_key.py` and
+  `scripts/reencrypt_to_aesgcm.py` now cover these columns. They also now cover
+  `screening_records` (provider, summary, notes, result data), which both scripts
+  had been skipping since the medical-screening columns were encrypted: a
+  rotation before this release left them under the old key, so **run
+  `rotate_encryption_key.py` before removing an old key from
+  `ENCRYPTION_KEYS_LEGACY`**.
+
 ### Plaintext to MySQL and Redis can now be refused, and certificate expiry is flagged (2026-10-24)
 
 Nothing changes until you set a switch: `DB_REQUIRE_TLS` and

@@ -57,7 +57,7 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
     <div>
       {/* Same grid geometry as the day cells below, gap included, or the
         weekday initials stop lining up with their columns. */}
-      <div className="mb-1 grid grid-cols-7 gap-0" aria-hidden="true">
+      <div className="-mx-1.5 mb-1 grid grid-cols-7 gap-0" aria-hidden="true">
         {WEEKDAY_INITIALS.map((label, index) => (
           <div key={index} className="text-theme-text-muted text-center text-[10px] font-bold">
             {label}
@@ -76,8 +76,14 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
         with no gap and 41.9px at `gap-1`, which is what
         `mobile-presentation.spec.ts` fails on. Each cell carries its own
         border, so adjacent edges still read as a divider. Re-introducing a
-        gap here means finding the width somewhere else first. */}
-      <div className="grid grid-cols-7 gap-0" role="grid" aria-label="Month calendar, compact">
+        gap here means finding the width somewhere else first.
+
+        `-mx-1.5` is that somewhere else, for a 360px phone — the most common
+        Android width — where the same sum left 43px a cell. The card's 12px
+        padding is forced by an unlayered phone rule in index.css, so the grid
+        reaches 6px into it on each side instead of the card giving it up
+        (and the weekday row above has to match). */}
+      <div className="-mx-1.5 grid grid-cols-7 gap-0" role="grid" aria-label="Month calendar, compact">
         {weeksOf(days).map((week, index) => (
           <div key={`week-${index}`} role="row" className="contents">
             {week.map((day) => {

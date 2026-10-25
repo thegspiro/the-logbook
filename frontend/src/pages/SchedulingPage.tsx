@@ -237,6 +237,19 @@ const SchedulingPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(() => parseCalendarDate(searchParams.get('date')) ?? new Date());
   const [showCreateShift, setShowCreateShift] = useState(false);
 
+  // `?create=shift` is Scheduling Administration's Create Shift: the dialog
+  // lives here, beside the board it adds to. The query is a one-time request,
+  // so it is dropped once read — left in place, a refresh or the back button
+  // would open the dialog again. Without the grant it opens nothing, as the
+  // page's own Create Shift button is not drawn for that viewer either.
+  useEffect(() => {
+    if (searchParams.get('create') !== 'shift') return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('create');
+    setSearchParams(next, { replace: true });
+    if (canManage) setShowCreateShift(true);
+  }, [searchParams, setSearchParams, canManage]);
+
   // The calendar's own data lives in ShiftBoard: it fetches the visible range
   // with the roster attached and mutates it optimistically, so a second copy
   // up here could only ever be the stale one. `boardRefreshKey` is how this

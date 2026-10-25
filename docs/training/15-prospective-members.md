@@ -295,17 +295,20 @@ address:
 - An **archived member** has it → a suggestion to reactivate them instead
 - Another **applicant** has it → a warning with the applicant's details
 
+<!-- Screenshot needed: The Add Applicant dialog warning that the email belongs to an active applicant, naming their pipeline and stage -->
+
 ![Add Applicant dialog with contact fields, membership type and the Target Role picker](./images/15-03-create-applicant.png)
 
 ### Edge Cases
 
-| Situation                                          | What happens                                                                                                                                                                              |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The email belongs to an active member              | Refused. Use a different email, or reactivate the existing member                                                                                                                         |
-| The email belongs to an archived member            | A warning, with the option to reactivate                                                                                                                                                  |
-| No email                                           | Required — you cannot add an applicant without one                                                                                                                                        |
-| **The referring member is not in your department** | Refused with a clear message. It is deliberately vague: it will not say whether the person exists in another department, because that would let someone probe another department's roster |
-| An invalid pipeline is selected                    | Refused with a clear message                                                                                                                                                              |
+| Situation                                          | What happens                                                                                                                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The email belongs to an active member              | Refused. Use a different email, or reactivate the existing member                                                                                                                                 |
+| The email belongs to an archived member            | A warning, with the option to reactivate                                                                                                                                                          |
+| The email belongs to an active applicant           | A warning naming the applicant, their pipeline and stage, with the choice to go back or open them. Nothing is created and no email is sent. (It used to say "Applicant added" and create nothing) |
+| No email                                           | Required — you cannot add an applicant without one                                                                                                                                                |
+| **The referring member is not in your department** | Refused with a clear message. It is deliberately vague: it will not say whether the person exists in another department, because that would let someone probe another department's roster         |
+| An invalid pipeline is selected                    | Refused with a clear message                                                                                                                                                                      |
 
 > **Why "Referred by" is checked at all.** The referring member is copied onto
 > the new member's own record when the applicant is elected and converted. An

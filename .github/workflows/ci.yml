@@ -118,7 +118,12 @@ jobs:
         # so CI went *red* on four files that black 26 — the version the
         # pre-commit hook and every developer runs — formats exactly as they
         # are. A pinned version is only a gate if both sides pin the same one.
-        run: pip install 'flake8==7.3.0' 'black==26.5.1' 'isort==9.0.1' 'flake8-pytest-style==2.2.0'
+        #
+        # Re-pinned to flake8 7.4.1 / black 26.10.1 / isort 9.0.2 (2026-10-25)
+        # to match requirements.txt's Code Quality block again, after it had
+        # drifted ahead a third time; verified clean against the full
+        # app/tests/alembic tree at the new versions before bumping this pin.
+        run: pip install 'flake8==7.4.1' 'black==26.10.1' 'isort==9.0.2' 'flake8-pytest-style==2.2.0'
 
       # tests/ is in scope alongside app/. It was left out originally, which
       # let 85 violations accumulate unseen: lint-staged only lints *staged*
@@ -1030,12 +1035,11 @@ jobs:
 
       # Only Chromium's headless shell: the specs stub every /api/v1 call through
       # page.route(), so they need the Vite dev server and nothing else, and
-      # a single engine covers the behaviour under test. The config's other
-      # projects (firefox, webkit, and the two mobile viewports) are for
-      # local cross-browser runs — the mobile ones deliberately fail the
-      # navigation specs, whose destinations sit behind a hamburger menu at
-      # that width. Installing the shell directly avoids also downloading the
-      # full headed Chromium build, which this CI job never launches.
+      # a single engine covers the behaviour under test. The phone layout and
+      # WebKit are covered by `frontend-e2e-safari` below; firefox and the
+      # Mobile Chrome project remain for local cross-browser runs. Installing
+      # the shell directly avoids also downloading the full headed Chromium
+      # build, which this CI job never launches.
       # Cached so the usual run does no network fetch at all. The key is the
       # lockfile hash, so a Playwright version bump invalidates it and any
       # other change reuses it.
@@ -1075,6 +1079,72 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ strategy.job-index }}
+          path: frontend/playwright-report/
+          retention-days: 7
+
+  # The only job that runs a WebKit engine, and so the only one that sees the
+  # phone layout the way an iPhone renders it. Chromium's engine accepts things
+  # Safari does not (viewport units under the dynamic toolbar, input types,
+  # the software keyboard's visual viewport), and the Mobile Chrome project
+  # cannot reproduce them, so a phone-only regression in those areas had no
+  # check at all.
+  #
+  # `@sweep` is left to the Chromium legs: those walk every route in every
+  # theme for contrast and reflow, which is engine-independent and takes
+  # 25-48 minutes a leg. `@screenshots` is a capture utility, as above.
+  #
+  # Unlike the Chromium job, WebKit cannot run on the runner image as shipped:
+  # it links against libraries (woff2, harfbuzz-icu, gstreamer, enchant, ...)
+  # the image does not carry. They are installed by `install-deps` on every
+  # run, since apt packages are not part of the browser cache, and that step
+  # has its own deadline for the reason `install-system-deps.sh` gives — an
+  # apt fetch with no timeout once consumed a whole job's budget. A stall
+  # fails this job in minutes rather than hanging it.
+  frontend-e2e-safari:
+    name: Frontend E2E (Mobile Safari)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # A separate key from the Chromium jobs: this cache holds WebKit, and
+      # sharing the key would let whichever job saved first decide whether the
+      # other finds its browser.
+      - name: Cache Playwright WebKit
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright WebKit
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install webkit
+
+      - name: Install WebKit system libraries
+        timeout-minutes: 8
+        run: npx playwright install-deps webkit
+
+      - name: Run Mobile Safari E2E tests
+        run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep'
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-safari
           path: frontend/playwright-report/
           retention-days: 7
 
@@ -1228,6 +1298,7 @@ jobs:
       - frontend-checks
       - frontend-test
       - frontend-e2e
+      - frontend-e2e-safari
       - frontend-pwa
       - docs-links
     runs-on: ubuntu-latest

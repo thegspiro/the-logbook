@@ -235,6 +235,29 @@ only, so they look the same on a black-only ribbon as on a colour one.
 
 ![Print ID Cards for two members with Front and back chosen: the Orientation, Sides and Code choices, Test card and Save as department layout, the duplex printing note, and the Accept old badges switch at the bottom](./images/01-43-print-id-cards.png)
 
+### Managing NFC ID Cards for the Department _(2026-10-25)_
+
+If your department issues NFC ID cards, **Members → Member ID Cards**
+(`/members/admin/id-cards`) is the one page for all of them. It needs the
+**Manage ID cards** permission alone, so a card clerk who cannot edit the
+roster can still use it. When NFC ID cards are off, the page says so at the
+top and tells you where to turn them on.
+
+| Tab          | What it is for                                                                                                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Cards**    | Every card, with a search box. Tick several and **Suspend**, **Reactivate**, **Report lost** or **Revoke** them together. Each card is judged on its own, so one refusal does not stop the rest. |
+| **Coverage** | Three lists: current members with no working card (issue one from the row), active cards not used for a number of days, and cards still held by former members.                                  |
+| **Tap log**  | Every tap at a station or room kiosk, including refusals. Filter it, page through it, or download it as a CSV. A card the system does not know is kept only as an unreadable hash.               |
+| **Settings** | How long taps are kept. The default is 24 months; you can choose 3 to 84. Older taps are deleted each night.                                                                                     |
+
+When a member moves to a status whose taps are already refused (for example
+retired or dropped), their active cards are suspended automatically and marked
+as suspended by the system. If the member returns, only those cards come back;
+a card an officer suspended or reported lost stays that way.
+
+> **Screenshot to create:** Member ID Cards with the four tabs, and the Coverage
+> tab. See [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
 ### Badge Codes
 
 Every badge carries a **badge code**, such as `MB-7KQ2W9HXRT`. That includes
@@ -2417,6 +2440,39 @@ When a card is tapped at a station for admin hours, the entry's method reads
 **ID Card Station**. A member scanning a category's QR code with their own
 phone reads **QR Scan**. These are different acts by different people, so an
 admin-hours check can tell a station tap from a member's own scan.
+
+### The Member ID Cards page
+
+**Who can do this:** officers with the **Issue and revoke member ID card (NFC)
+credentials** permission. They do not need permission to edit the roster.
+
+Open **Members Admin** and select **Member ID cards**. The page covers every
+card in the department, in four tabs:
+
+| Tab          | What it is for                                                                                                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cards**    | Every card, searchable by member, label or last four characters, and filterable by status and card type. Tick cards to **Suspend**, **Reactivate**, **Report lost** or **Revoke** them together. Revoking asks for an optional reason |
+| **Coverage** | **Current members without a working card** (with **Issue card** on each row), **Cards held by former members** (**Revoke all shown**), and **Active cards not used in** a number of days you choose                                   |
+| **Tap log**  | Every tap at a check-in station or room kiosk, **including refused ones**, filterable by outcome and reader. **Export CSV** downloads it                                                                                              |
+| **Settings** | **Keep the tap log for (months)**: between 3 and 84, 24 by default. Older taps are deleted overnight                                                                                                                                  |
+
+Deleting old taps does not touch attendance. The check-in itself stays on the
+shift, event or admin-hours record.
+
+<!-- Screenshot needed: The Member ID Cards page on the Cards tab with two cards ticked and the Suspend, Reactivate, Report lost and Revoke bar above the list -->
+
+<!-- Screenshot needed: The Coverage tab of Member ID Cards: current members without a working card, cards held by former members, and active cards not used lately -->
+
+<!-- Screenshot needed: The Tap log tab of Member ID Cards with the drill's taps, including an unknown card and a card that is not active -->
+
+A tap from a card nobody has registered is logged as **Unknown card**, without
+the card's number.
+
+**When a member leaves, their cards stop by themselves.** Changing a member to
+Inactive, Suspended, Dropped or Archived suspends their active cards, because
+those members' taps are refused anyway. If the member comes back, only the
+cards suspended this way are reactivated. A card an officer suspended, reported
+lost or revoked stays as it is.
 
 ## Troubleshooting
 

@@ -499,7 +499,7 @@ to off (except on new recruitment events — see
 | Setting (form label)                           | Field                             | Effect                                                                        |
 | ---------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
 | Allow guest (non-member) sign-in               | `allow_guest_check_in`            | Shows the guest QR code on the room display and opens the public sign-in page |
-| Add guests to the prospective members pipeline | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email             |
+| Add guests to the prospective members pipeline | `guest_check_in_creates_prospect` | Signs guests in by email instead, and only active applicants (see below)      |
 
 > **Off by default is deliberate.** Turning the first one on exposes an
 > **unauthenticated write path**. It belongs on outreach events and should stay
@@ -510,37 +510,64 @@ Guest sign-in stays editable on a finalized event.
 
 ### What the guest sees
 
-`/display/:code/events/:eventId/guest` — a public sign-in form, outside the app
-shell. It asks for first and last name (required) and, optionally, email, phone,
+`/display/:code/events/:eventId/guest` — a public sign-in page, outside the app
+shell. At an event **without** the pipeline switch it is a form that asks for first and last name (required) and, optionally, email, phone,
 the organization they are with, and why they came. Nothing more: a walk-in should
 be asked for the minimum needed to follow up, not for a membership application.
 The real application form is what the follow-up email links to.
+
+At an event **with** the pipeline switch the page is email-first
+_(2026-10-25)_. The guest enters an email; an **active** applicant is shown their
+first name and last initial ("Is this you, Jane S.?") and confirms; a member
+account (active or probationary) is told to scan the member QR code; anyone else
+— including a withdrawn, rejected or on-hold applicant — is asked to see a member
+of staff. **The kiosk opens no new applicants at these events**, and the typed
+`guest-check-in` endpoint refuses them with `LB-EVT-006`, so hiding the form is
+not the only thing stopping it. The confirm call carries a ten-minute signed
+token bound to the applicant, event, room and department; the browser never
+names the applicant.
 
 The page is addressed through the **room's display code** so the backend can
 resolve the department without a session, and it uses bare `fetch` rather than
 the shared axios instance — that instance's 401 interceptor would redirect the
 very visitors the page exists for. The backing endpoints are
-`GET /api/public/v1/display/{code}/events/{event_id}/guest` and
-`POST /api/public/v1/display/{code}/events/{event_id}/guest-check-in`.
+`GET /api/public/v1/display/{code}/events/{event_id}/guest`,
+`POST …/guest-check-in` (typed form), and `POST …/guest-lookup` with
+`POST …/guest-confirm` (email-first) — see
+`docs/PUBLIC_API_DOCUMENTATION.md` §8.
 
 ### What gets written
 
-| Record                     | When                                                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `event_external_attendees` | Always. `source = 'kiosk_qr'`, distinguishing a self-recorded sign-in from one a staff member typed in |
-| `prospective_members`      | Only when the event opts in **and** the guest supplied an email                                        |
-| `prospect_event_links`     | Links that prospect to the event, `referral_source = "Attended: {title}"`                              |
+| Record                     | When                                                                                                                          |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `event_external_attendees` | Always. `source = 'kiosk_qr'`, distinguishing a self-recorded sign-in from one a staff member typed in                        |
+| `prospective_members`      | Not by the kiosk: an email-first sign-in finds an existing active applicant. Opened when **staff** check in a walk-in (below) |
+| `prospect_event_links`     | Links the confirmed applicant to the event                                                                                    |
 
 `event_external_attendees.prospect_id` ties the two together with
 `ON DELETE SET NULL`, so purging a prospect never destroys the record of who was
 in the room — that is the event's history, not the prospect's.
 
-A new prospect goes into the organization's default membership pipeline. If no
-pipeline is marked default, the prospect is created without one.
-
 Guests who signed in are listed on the event detail page in a **Guests** card
 (managers only — `GET /events/{id}/external-attendees` returns contact
 details). They are not counted in member attendance.
+
+**Staff entry** _(2026-10-25)_. The card's **Add guest** posts
+`POST /events/{id}/external-attendees` and then
+`PATCH …/external-attendees/{attendee_id}/check-in`; a row entered earlier gets
+a **Sign in** button for the second call alone. The check-in links an existing
+active applicant with that email, as it always has. At an event with
+`guest_check_in_creates_prospect`, it now also **opens** an application for a
+walk-in who is not one — the visitor the email-first kiosk sent to staff —
+following the kiosk's lookup: a member account is left alone, and nothing is
+opened without an email or without a first and last name (split on the last
+space of `name`). The new prospect carries `metadata.source = 'staff_entry'`,
+its event link the note "Checked in at {title} by staff", and a phone longer than
+the applicant record's 20 characters is left off rather than cut. The check-in
+response's `prospect_id` names the applicant linked or opened. The attendance
+is committed first; a pipeline failure is logged and rolled back without
+costing the guest their sign-in, and checking the same guest in again opens
+nothing new.
 
 ### How it is protected
 
@@ -548,25 +575,29 @@ details). They are not counted in member attendance.
   and the event must actually be held in that room.
 - **Per-IP rate limiting** and a **per-event daily ceiling**
   (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300; `0` disables it). Per-IP limiting
-  alone cannot stop a distributed flood, and each sign-in can create a pipeline
-  record — a far more expensive side effect than a page view.
+  alone cannot stop a distributed flood, and each sign-in writes attendance — a
+  more expensive side effect than a page view.
+- The email lookup has its own **per-IP limit** and **per-event daily ceiling**,
+  works only while the check-in window is open, and is **audited** on every
+  call (outcome and applicant id, never the email), because it is the endpoint
+  someone holding a room's link would script to learn who is applying.
 - A **honeypot field** that a real browser leaves empty. A populated honeypot is
   answered with a plausible success and nothing is written, so a bot gets no
   signal to adapt to.
 
 ### Edge cases
 
-| Situation                                                   | Behavior                                                                                                                                                                                                                                                                                                                      |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Guest arrives before the check-in window opens              | Refused. Guests get the organizer's window **minus the early-arrival grace** members get — a member checking in early is identifiable and correctable, an anonymous early write is neither                                                                                                                                    |
-| Guest taps the QR code twice                                | Matched on email where one was given, on name where it was not; returns `already_checked_in` rather than a second row                                                                                                                                                                                                         |
-| Two guests with the same name and no email                  | They collapse into one row. The weaker fallback is deliberate — a duplicate on every double-tap is the far more common problem at a kiosk                                                                                                                                                                                     |
-| Staff pre-registered the guest                              | The sign-in fills blanks only; anything staff deliberately typed is kept                                                                                                                                                                                                                                                      |
-| Guest is already in the pipeline                            | The existing active prospect is linked to the event instead of a duplicate being opened                                                                                                                                                                                                                                       |
-| The prospect cannot be created                              | Logged and swallowed. The attendance is still recorded and the guest still sees a confirmation — the sign-in is the thing they came to do                                                                                                                                                                                     |
-| The prospect is later purged                                | The attendance row survives with `prospect_id` set to NULL                                                                                                                                                                                                                                                                    |
-| Guest leaves no email                                       | Attendance is recorded; no prospect is opened, because there is no way to follow up                                                                                                                                                                                                                                           |
-| The new prospect's pipeline has an "attend a meeting" stage | The sign-in that opened the record counts for a meeting stage the applicant is on **at that event**, but not for a later stage — that needs a second meeting. A check-in advances nobody by itself: the stage moves when the event's attendance is **finalized**, or 7 days after it ends (`PIPELINE_ATTENDANCE_SETTLE_DAYS`) |
+| Situation                                                | Behavior                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Guest arrives before the check-in window opens           | Refused. Guests get the organizer's window **minus the early-arrival grace** members get — a member checking in early is identifiable and correctable, an anonymous early write is neither                                                                                                             |
+| Guest taps the QR code twice                             | Matched on email where one was given, on name where it was not; returns `already_checked_in` rather than a second row                                                                                                                                                                                  |
+| Two guests with the same name and no email               | They collapse into one row. The weaker fallback is deliberate — a duplicate on every double-tap is the far more common problem at a kiosk                                                                                                                                                              |
+| Staff pre-registered the guest                           | The sign-in fills blanks only; anything staff deliberately typed is kept                                                                                                                                                                                                                               |
+| Applicant confirms twice                                 | The second confirm answers `already_checked_in` ("You're already checked in, Jane S.") and changes nothing                                                                                                                                                                                             |
+| Applicant withdrawn between "Continue" and "Yes"         | The confirm is refused; the applicant is re-read, not trusted from the lookup                                                                                                                                                                                                                          |
+| The link to the applicant cannot be written              | Logged and swallowed. The attendance is still recorded and the guest still sees a confirmation — the sign-in is the thing they came to do                                                                                                                                                              |
+| The prospect is later purged                             | The attendance row survives with `prospect_id` set to NULL                                                                                                                                                                                                                                             |
+| The applicant's pipeline has an "attend a meeting" stage | The sign-in counts for a meeting stage the applicant is on **at that event**, but not for a later stage — that needs a second meeting. A check-in advances nobody by itself: the stage moves when the event's attendance is **finalized**, or 7 days after it ends (`PIPELINE_ATTENDANCE_SETTLE_DAYS`) |
 
 ---
 
@@ -597,7 +628,7 @@ The default is applied carefully rather than bluntly:
   you set _yourself_ are left alone.
 
 A recruitment event whose guest sign-in is off shows a banner on the form
-explaining that prospects reach the pipeline by signing in as guests, with a
+explaining that applicants record their attendance by signing in as guests, with a
 button to turn it on. That banner is the backstop for the create-only rule —
 the usual failure is an outreach night whose attendees are recorded as
 external attendees and never become leads.
@@ -1013,8 +1044,8 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
 - **Analytics' "Avg Attendance Rate"** pools upcoming events with past ones in
   the selected range.
 - **Template Delete** deactivates rather than deletes.
-- **Guest prospects** land in no pipeline when the department has no default
-  pipeline.
+- **Guest applications opened by staff** land in no pipeline when the
+  department has no default pipeline.
 - **Outreach requesters** are not sent their status link automatically; a
   coordinator copies it from the request.
 - **Kiosk badge check-in** accepts a copied card unattended — see

@@ -1,5 +1,40 @@
 # Screenshot currency
 
+## Queued by the October 24 – 25 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
+Nothing was captured by this pass. Guides 01, 05 and 06 carry a
+"screenshot to create" note where the first picture goes.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 01 | Member ID Cards with Cards, Coverage, Tap log and Settings tabs; the Coverage lists | Create |
+| 06 | Card Readers: room list with taps, refusals and the Badge check-in switch | Create |
+| 04 | Events → Card Check-ins; the event page **Card taps** section | Create |
+| 05 | NFC Tag Register with a selection and Mark lost / Move / Unlink | Create |
+| 03 | Shift Patterns with a paused pattern and **Resume**; the generate message listing members not seated | Create |
+| 02 | Training Admin → Curriculum → Programs listing existing programs; Requirements tab with the registry import panel | Create / replace any shot of the old Programs tab |
+| 03, 05 | Scheduling Administration and Inventory Administration hubs with the area cards | Re-check any full-page shot |
+| All | Any form shot taken on a tablet (field grids and sub-page rail changed at 768–1023px) | Re-check |
+| 02, 04, 05 | Badges that showed raw statuses (training history, action items, minutes) | Re-check wording in shots |
+
+## Queued by the October 24 (afternoon) documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24-2026-afternoon).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 01 | Member ID Cards: **Cards** tab with two cards ticked and the bulk bar; **Coverage** tab's three sections; **Tap log** with a refused tap; **Settings** retention box | Create |
+| 04 | Event page **Card taps** section; Events Admin **Card Check-ins** tab; **Card Readers** with one room's reader on | Create |
+| 05 | **NFC Tag Register** (full view, and the compartment-only view of a checklist builder); **Move tag** dialog | Create |
+| 05 | Medical Supplies **Expiring** tab: **Find a lot** result with **Recall lot**, the **Recall this lot** dialog, the **Recalled lots** panel, a row marked **Recalled** | Create |
+| 05 | Medical Supplies **Not yet counted** tab; the **Look ahead** 30/60/90 choice | Create |
+| 03 | Templates tab: an inactive template with **Reactivate**; a pattern reading **Paused** with **Resume** and Generate disabled; the "not seated" generation toast | Create |
+| 03 | Scheduling Settings **Position Names** with the **Not in effect yet** note | Replace if 03 has a shot of this card |
+| 02 | Session wizard first step **Use a course from the Course Library** with Credit Hours shown | Re-check |
+| 15 | Add Applicant duplicate-applicant warning naming pipeline and stage | Create |
+
 ## Queued by the October 23 – 24 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
@@ -512,6 +547,7 @@ unchanged. The notes it carried are kept here, unchanged in substance.
 | `04-02-event-detail.png` | **CURRENT** 2026-10-17 | Taken as an administrator, the page changed twice: the details card gained an **Organized by** row with a **Transfer event** link (2026-10-03), and every card on the page now carries the shared bordered `card` treatment instead of the borderless surface (2026-10-04). Re-shoot an upcoming event with RSVP open so the RSVP controls, the Organized by row and the bordered cards are in frame |
 | `04-04-event-qr-code.png` | **CURRENT** 2026-10-17 | The page's copy was rewritten on 2026-09-29: the line under the title now reads "Members scan this code to check themselves in", and the steps read "Members sign in if they aren't already" and "Members tap Check In to record their attendance". Re-shoot the same open-window state so those lines are in frame |
 | `04-05-create-event.png` | **CURRENT** 2026-10-17 | The form gained the **Organizer** (showing "Me (default)") and **Alternate (optional)** pickers with the line "Attendance requests for this event go to the organizer and the alternate." (2026-10-03); the template hint now reads "Pick a template to pre-fill common settings, or start blank."; the check-in window options read "Flexible - Opens before the start, closes when the event ends" etc.; and the attachments note reads "Files can't be attached from the app yet." Re-shoot the full blank create form |
+| `04-05-create-event.png` | **REPLACE** (2026-10-25) | Events Administration's seven section cards became Training/Scheduling/Inventory-style navigation: four area cards (Events, Community Outreach, Check-ins, Settings) above a page strip and a line naming the open page. Re-shoot the blank create form with the header in frame |
 | `04-35-recurring-event-form.png` | **CURRENT** 2026-10-17 | The note under the recurrence controls now reads "Each occurrence is created as its own event, which you can edit or cancel on its own." (2026-09-29), and the series end date, date-to-skip field and reminder control are now labelled. Re-shoot the same weekly pattern with a series end date |
 | `04-08-event-analytics.png` | **CURRENT** 2026-10-17 | The subtitle under the page title now reads "Attendance and check-in rates across your events" (2026-09-29). Re-shoot the same date range. The page title is **Attendance Trends** and it has four summary cards |
 | `04-09-event-templates.png` | **CURRENT** 2026-10-17 | The page's description now reads "Save common event settings to reuse when you create an event." (2026-09-29). Re-shoot the same list |
@@ -933,6 +969,7 @@ Compliance box.
 | `03-47-settings-desktop.png` | **CURRENT** 2026-10-17 | Seven sections including **Outside Apparatus**; General reads "Shift defaults, overtime, and close-out" |
 | `03-48-settings-phone.png` | **CURRENT** 2026-10-17 | Seven-section strip; settings use full width on phones |
 | `20-16-scheduling-admin-hub.png` | **REPLACE** | **Outside Apparatus** card added; Shift Templates / Shift Patterns / Who Can Fill What descriptions reworded. Shoot on a department with shifts so the setup guide is hidden |
+| `20-16-scheduling-admin-hub.png`, `20-17-staffing-gaps.png`, `03-51-admin-subpage-header.png` | **REPLACE** (2026-10-25) | Scheduling Admin's card grid became Training/Inventory-style navigation: seven area cards (Overview, Planning, On the Shift, Close-Out & History, People & Eligibility, Reports, Settings) above a page strip, and a red **Create Shift** button in the header. Every admin page now sits under that header, without its own title, back arrow or trail, and Shift Planning no longer has its own Staffing gaps / Templates / Patterns tabs. Re-shoot `20-16` on the Overview, `20-17` with Planning chosen, and `03-51` on any other page |
 | `03-31-shift-edit-times.png` | **CHECK** | The shift form may have changed since it was taken |
 | `03-61-review-queue-batch.png` | **CURRENT** 2026-10-17 | **New report** is a separate button beside the view strip (was **+ New** inside it) |
 | `03-62-flagged-queue.png` | **CURRENT** 2026-10-17 | Same strip change; the expanded card shows only the reviewer's comment box |
