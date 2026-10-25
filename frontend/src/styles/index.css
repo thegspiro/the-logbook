@@ -878,16 +878,17 @@
 }
 
 @utility settings-subnav-item {
-  /* Sub-page in the left rail. Below lg the rail collapses to a scrolling
-     strip above the panel — lg rather than md because from 768px the app's
+  /* Sub-page in the left rail. Below xl the rail collapses to a scrolling
+     strip above the panel — xl rather than md because from 768px the app's
      own side navigation takes 16rem, and a 13rem rail beside it left an iPad
      in portrait a ~200px panel whose headings overlapped and whose selects
-     showed two letters. In the strip the same active signal reads as an
+     showed two letters, and an iPad on its side (1024px) still only ~390px,
+     where the timezone read "America/New Y". In the strip the same active signal reads as an
      underline rather than a left marker — one nav element either way, so the sub-page
      list is a single landmark at every width. An inactive item keeps the
      marker transparent rather than absent, so selecting one does not shift
      the label sideways. */
-  @apply settings-nav-item block w-auto shrink-0 border-b-3 border-b-transparent px-3 py-2.5 text-left whitespace-nowrap duration-150 ease-out lg:w-full lg:border-b-0 lg:border-l-3 lg:border-l-transparent lg:whitespace-normal;
+  @apply settings-nav-item block w-auto shrink-0 border-b-3 border-b-transparent px-3 py-2.5 text-left whitespace-nowrap duration-150 ease-out xl:w-full xl:border-b-0 xl:border-l-3 xl:border-l-transparent xl:whitespace-normal;
 
   /* Touch minimum. Padded rather than capped: on desktop the item carries a
      hint line under its label, so shrinking it would clip the hint instead. */
@@ -897,7 +898,7 @@
 }
 
 @utility settings-subnav-item-active {
-  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-800 lg:border-l-red-800;
+  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-800 xl:border-l-red-800;
 }
 
 @utility settings-save-pill {
@@ -1619,6 +1620,51 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
     & > :is(.col-span-3, .col-span-4, .sm\:col-span-3, .sm\:col-span-4, .md\:col-span-3, .md\:col-span-4) {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+/* The same correction one breakpoint up. From 1024px `lg:` believes it has
+ * the whole screen, and beside the side navigation it has ~690px: a field grid
+ * written four across (`lg:grid-cols-4`, or `md:grid-cols-4` with no `lg:`
+ * override) gave each field ~155px, so a select showed "All Categorie" and a
+ * placeholder half of itself — the audit-log filters and both inventory filter
+ * bars on an iPad on its side. Three columns until `xl`, where the content
+ * column is ~1000px. Scoped exactly as the rule above, and a grid that already
+ * steps down at `lg` keeps its own count. `styles/sideNavFormGrid.test.ts`
+ * pins it. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .has-side-nav
+    main
+    :is(
+      .sm\:grid-cols-4,
+      .md\:grid-cols-4,
+      .lg\:grid-cols-4,
+      .md\:grid-cols-5,
+      .lg\:grid-cols-5,
+      .md\:grid-cols-6,
+      .lg\:grid-cols-6
+    ):not(.lg\:grid-cols-1, .lg\:grid-cols-2, .lg\:grid-cols-3):has(
+      input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='range'], [type='color']),
+      select,
+      textarea
+    ):not(:is(.modal-overlay, .modal-panel, [role='dialog']) *) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    &
+      > :is(
+        .col-span-4,
+        .col-span-5,
+        .col-span-6,
+        .sm\:col-span-4,
+        .md\:col-span-4,
+        .md\:col-span-5,
+        .md\:col-span-6,
+        .lg\:col-span-4,
+        .lg\:col-span-5,
+        .lg\:col-span-6
+      ) {
       grid-column: 1 / -1;
     }
   }

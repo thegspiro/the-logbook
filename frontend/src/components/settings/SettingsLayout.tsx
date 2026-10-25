@@ -246,10 +246,10 @@ export function SettingsLayout<K extends string, S extends string = string>({
           })}
         </nav>
 
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:gap-6">
           {hasSubPages ? (
             <nav
-              className="border-theme-surface-border hscroll flex shrink-0 gap-1 border-b pb-2 lg:w-52 lg:flex-col lg:gap-0 lg:border-b-0 lg:border-l lg:pb-0"
+              className="border-theme-surface-border hscroll flex shrink-0 gap-1 border-b pb-2 xl:w-52 xl:flex-col xl:gap-0 xl:border-b-0 xl:border-l xl:pb-0"
               aria-label={`${current?.label ?? ''} pages`.trim()}
               data-mobile-scroll-region
               tabIndex={0}
@@ -265,7 +265,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
                     aria-current={isActive ? 'page' : undefined}
                   >
                     <span className="block text-sm font-medium">{label}</span>
-                    {hint ? <span className="text-theme-text-muted mt-0.5 hidden text-xs lg:block">{hint}</span> : null}
+                    {hint ? <span className="text-theme-text-muted mt-0.5 hidden text-xs xl:block">{hint}</span> : null}
                   </button>
                 );
               })}
