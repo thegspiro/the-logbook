@@ -5789,6 +5789,11 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     Checks each organization's compliance config for auto_report_frequency.
     On the configured report_day_of_month, generates monthly reports.
     On January 1st, generates yearly reports.
+
+    Every run first re-sends scheduled reports from the last
+    ``ComplianceReportService.UNSENT_EMAIL_RETRY_DAYS`` days that were stored
+    but never emailed, so a mail outage on the report day is not the end of
+    that period's delivery.
     """
     import calendar
 
@@ -5798,6 +5803,7 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
 
     results = []
     total_generated = 0
+    total_resent = 0
 
     configs = await db.execute(
         select(ComplianceConfig)
@@ -5851,6 +5857,36 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
             )
 
             service = ComplianceReportService(db)
+
+            # Before anything is generated, so a report stored in this run is
+            # not retried in the same run it was first attempted.
+            for stored, outcome in await service.retry_unsent_auto_emails(org_id):
+                stored_period = (
+                    f"{stored.period_year}-{stored.period_month:02d}"
+                    if stored.period_month
+                    else str(stored.period_year)
+                )
+                retry_entry: Dict[str, Any] = {
+                    "org_id": org_id,
+                    "type": stored.report_type,
+                    "period": stored_period,
+                    "resent": True,
+                }
+                if outcome == "sent":
+                    total_resent += 1
+                else:
+                    retry_entry["email"] = "failed"
+                    await persist_task_error_log(
+                        org_id,
+                        "Compliance auto-report email",
+                        RuntimeError(
+                            f"The {stored.report_type} compliance report for "
+                            f"{stored_period} is stored but could not be emailed; "
+                            "it is retried on the next run"
+                        ),
+                    )
+                results.append(retry_entry)
+
             due: list[tuple[str, int, Optional[int]]] = []
             if should_generate_monthly:
                 # Generate for the previous month
@@ -5866,41 +5902,36 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
                     org_id, report_type, year, month
                 )
                 if existing is not None:
-                    # A rerun the same day: never a second report. But a report
-                    # that was stored and never emailed is sent now, so a mail
-                    # outage on the report day is not the end of that period.
-                    if existing.emailed_at is not None:
-                        continue
-                    if await service._email_report(existing, org_id) == "no_recipients":
-                        continue
-                    entry: Dict[str, Any] = {
-                        "org_id": org_id,
-                        "type": report_type,
-                        "period": period,
-                        "resent": True,
-                    }
-                else:
-                    attempt = (report_type, year, month)
-                    await service.generate_report(
-                        organization_id=org_id,
-                        report_type=report_type,
-                        year=year,
-                        month=month,
-                        send_email=True,
-                    )
-                    attempt = None
-                    total_generated += 1
-                    entry = {"org_id": org_id, "type": report_type, "period": period}
+                    # A rerun: never a second report. An email that was never
+                    # sent is the retry pass above, not this one.
+                    continue
+                attempt = (report_type, year, month)
+                await service.generate_report(
+                    organization_id=org_id,
+                    report_type=report_type,
+                    year=year,
+                    month=month,
+                    send_email=True,
+                )
+                attempt = None
+                total_generated += 1
+                entry: Dict[str, Any] = {
+                    "org_id": org_id,
+                    "type": report_type,
+                    "period": period,
+                }
                 if service.last_email_outcome == "failed":
                     # Stored but not delivered: reported where the department's
-                    # administrators look, rather than only in the log.
+                    # administrators look, rather than only in the log. The
+                    # retry pass sends it again on the next run.
                     entry["email"] = "failed"
                     await persist_task_error_log(
                         org_id,
                         "Compliance auto-report email",
                         RuntimeError(
                             f"The {report_type} compliance report for {period} "
-                            "was stored but could not be emailed"
+                            "was stored but could not be emailed; it is retried "
+                            "on the next run"
                         ),
                     )
                 results.append(entry)
@@ -5943,6 +5974,7 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     return {
         "task": "compliance_auto_reports",
         "total_generated": total_generated,
+        "total_resent": total_resent,
         "details": results,
     }
 

@@ -6,7 +6,7 @@ report; the check below is what makes the second run a no-op.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import func, select
@@ -19,7 +19,7 @@ from app.services.compliance_config_service import ComplianceReportService
 pytestmark = pytest.mark.integration
 
 
-async def _org_with_config(db_session) -> str:
+async def _org_with_config(db_session, recipients=None) -> str:
     org = Organization(
         id=str(uuid.uuid4()),
         name="Auto Report Department",
@@ -33,6 +33,7 @@ async def _org_with_config(db_session) -> str:
             organization_id=org.id,
             auto_report_frequency="monthly",
             report_day_of_month=15,
+            report_email_recipients=recipients or [],
         )
     )
     await db_session.commit()
@@ -322,7 +323,7 @@ class TestTheScheduledRunAfterAFailure:
     async def test_a_rerun_sends_the_report_that_was_stored_but_not_emailed(
         self, db_session, monkeypatch, logged
     ):
-        org_id = await _org_with_config(db_session)
+        org_id = await _org_with_config(db_session, ["chief@dept.org"])
         stored = await _report(db_session, org_id, emailed_at=None)
 
         async def fake_today(_db, _org_id):
@@ -387,3 +388,171 @@ class TestTheScheduledRunAfterAFailure:
         assert not await ComplianceReportService(db_session).auto_report_exists(
             org_id, "monthly", 2026, 2
         )
+
+
+class TestTheNextDayRetry:
+    """A scheduled report that was stored but not emailed is retried on later
+    days, not only if the task happens to run again on the report day."""
+
+    NOT_THE_REPORT_DAY = date(2026, 3, 20)  # the config's report day is the 15th
+
+    @pytest.fixture
+    def not_the_report_day(self, monkeypatch):
+        async def fake_today(_db, _org_id):
+            return self.NOT_THE_REPORT_DAY
+
+        monkeypatch.setattr("app.utils.org_timezone.resolve_org_today", fake_today)
+        return self.NOT_THE_REPORT_DAY
+
+    @pytest.fixture
+    def logged(self, monkeypatch):
+        entries: list[tuple[str, str]] = []
+
+        async def persist(org_id, task_name, exc, extra_context=None):
+            entries.append((task_name, str(exc)))
+            return True
+
+        monkeypatch.setattr(st, "persist_task_error_log", persist)
+        return entries
+
+    async def _entry(self, result, org_id):
+        return next((d for d in result["details"] if d.get("org_id") == org_id), None)
+
+    async def test_the_report_is_emailed_on_a_day_that_is_not_the_report_day(
+        self, db_session, mailer, not_the_report_day, logged
+    ):
+        org_id = await _org_with_config(db_session, ["chief@dept.org"])
+        report = await _completed_report(db_session, org_id)
+
+        result = await st.run_compliance_auto_reports(db_session)
+
+        assert [c["to"] for c in mailer.calls] == [["chief@dept.org"]]
+        await db_session.refresh(report)
+        assert report.emailed_at is not None
+        entry = await self._entry(result, org_id)
+        assert entry["resent"] is True
+        assert entry["period"] == "2026-02"
+        assert result["total_resent"] >= 1
+
+    async def test_a_second_run_does_not_send_it_again(
+        self, db_session, mailer, not_the_report_day, logged
+    ):
+        org_id = await _org_with_config(db_session, ["chief@dept.org"])
+        await _completed_report(db_session, org_id)
+
+        await st.run_compliance_auto_reports(db_session)
+        second = await st.run_compliance_auto_reports(db_session)
+
+        assert len(mailer.calls) == 1
+        assert await self._entry(second, org_id) is None
+
+    async def test_a_send_that_fails_again_is_reported_and_tried_the_next_day(
+        self, db_session, mailer, not_the_report_day, logged
+    ):
+        org_id = await _org_with_config(db_session, ["chief@dept.org"])
+        report = await _completed_report(db_session, org_id)
+        mailer.result = (0, 1)
+
+        first = await st.run_compliance_auto_reports(db_session)
+
+        entry = await self._entry(first, org_id)
+        assert entry["email"] == "failed"
+        assert any(name == "Compliance auto-report email" for name, _ in logged)
+        await db_session.refresh(report)
+        assert report.emailed_at is None
+
+        mailer.result = (1, 0)
+        await st.run_compliance_auto_reports(db_session)
+        await db_session.refresh(report)
+        assert report.emailed_at is not None
+        assert len(mailer.calls) == 2
+
+    async def test_a_report_past_the_retry_window_is_left_alone(
+        self, db_session, mailer, not_the_report_day, logged
+    ):
+        org_id = await _org_with_config(db_session, ["chief@dept.org"])
+        old = datetime.now(timezone.utc) - timedelta(
+            days=ComplianceReportService.UNSENT_EMAIL_RETRY_DAYS + 1
+        )
+        await _report(db_session, org_id, generated_at=old)
+
+        result = await st.run_compliance_auto_reports(db_session)
+
+        assert mailer.calls == []
+        assert await self._entry(result, org_id) is None
+
+    async def test_a_manually_generated_report_is_never_retried(
+        self, db_session, mailer, not_the_report_day, logged
+    ):
+        org_id = await _org_with_config(db_session, ["chief@dept.org"])
+        user = User(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            username=f"u-{uuid.uuid4().hex[:8]}",
+            email=f"{uuid.uuid4().hex[:8]}@retry.org",
+            first_name="Mina",
+            last_name="Officer",
+            password_hash="x",
+            status=UserStatus.ACTIVE,
+        )
+        db_session.add(user)
+        await db_session.commit()
+        await _report(db_session, org_id, generated_by=user.id)
+
+        await st.run_compliance_auto_reports(db_session)
+
+        assert mailer.calls == []
+
+    async def test_no_configured_recipient_means_nothing_to_retry(
+        self, db_session, mailer, not_the_report_day, logged
+    ):
+        org_id = await _org_with_config(db_session)
+        await _completed_report(db_session, org_id)
+
+        result = await st.run_compliance_auto_reports(db_session)
+
+        assert mailer.calls == []
+        assert await self._entry(result, org_id) is None
+        assert logged == []
+
+    async def test_a_report_made_in_this_run_is_not_retried_in_the_same_run(
+        self, db_session, monkeypatch, logged
+    ):
+        org_id = await _org_with_config(db_session, ["chief@dept.org"])
+
+        async def fake_today(_db, _org_id):
+            return date(2026, 3, 15)
+
+        async def generate(
+            self, *, organization_id, report_type, year, month=None, **_
+        ):
+            self.db.add(
+                ComplianceReport(
+                    organization_id=organization_id,
+                    report_type=report_type,
+                    period_label=str(year),
+                    period_year=year,
+                    period_month=month,
+                    status="completed",
+                )
+            )
+            await self.db.flush()
+            self.last_email_outcome = "failed"
+
+        attempts: list[str] = []
+
+        async def email(self, report, organization_id, *args, **kwargs):
+            attempts.append(report.id)
+            self.last_email_outcome = "failed"
+            return "failed"
+
+        monkeypatch.setattr("app.utils.org_timezone.resolve_org_today", fake_today)
+        monkeypatch.setattr(ComplianceReportService, "generate_report", generate)
+        monkeypatch.setattr(ComplianceReportService, "_email_report", email)
+
+        result = await st.run_compliance_auto_reports(db_session)
+
+        assert attempts == []
+        entry = await self._entry(result, org_id)
+        assert entry["email"] == "failed"
+        assert "resent" not in entry
