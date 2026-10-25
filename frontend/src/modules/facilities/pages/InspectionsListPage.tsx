@@ -22,6 +22,7 @@ import {
   Pencil,
   RotateCcw,
 } from 'lucide-react';
+import ListPager from '../components/ListPager';
 import { enumLabel } from '../types';
 import { inputCls, labelCls, INSPECTION_TYPE_OPTIONS } from '../constants';
 import { useInspectionForm } from '../hooks/useInspectionForm';
@@ -42,6 +43,10 @@ export default function InspectionsListPage() {
 
   const {
     inspections: filtered,
+    page,
+    setPage,
+    total,
+    pageSize,
     isLoading,
     loadError,
     reload,
@@ -218,6 +223,7 @@ export default function InspectionsListPage() {
           ))}
         </div>
       )}
+      <ListPager page={page} total={total} pageSize={pageSize} onPageChange={setPage} />
 
       {canEdit && showModal && (
         <div

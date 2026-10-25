@@ -21,6 +21,7 @@ import {
   DollarSign,
   RotateCcw,
 } from 'lucide-react';
+import ListPager from '../components/ListPager';
 import { inputCls, labelCls } from '../constants';
 import { useMaintenanceForm } from '../hooks/useMaintenanceForm';
 import MaintenanceDueLabel from '../components/MaintenanceDueLabel';
@@ -47,6 +48,10 @@ export default function MaintenanceListPage() {
 
   const {
     records: filtered,
+    page,
+    setPage,
+    total,
+    pageSize,
     maintenanceTypes,
     isLoading,
     loadError,
@@ -229,6 +234,7 @@ export default function MaintenanceListPage() {
           ))}
         </div>
       )}
+      <ListPager page={page} total={total} pageSize={pageSize} onPageChange={setPage} />
 
       {canMaintenance && showModal && (
         <div

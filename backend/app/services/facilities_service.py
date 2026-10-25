@@ -1418,6 +1418,108 @@ class FacilitiesService:
         limit: int = 100,
     ) -> List[FacilityMaintenance]:
         """List maintenance records"""
+        conditions = self._maintenance_conditions(
+            organization_id,
+            facility_id=facility_id,
+            maintenance_type_id=maintenance_type_id,
+            system_id=system_id,
+            is_completed=is_completed,
+            is_overdue=is_overdue,
+            is_historic=is_historic,
+            occurred_after=occurred_after,
+            occurred_before=occurred_before,
+        )
+
+        query = (
+            select(FacilityMaintenance)
+            .where(and_(*conditions))
+            .options(selectinload(FacilityMaintenance.maintenance_type))
+            .order_by(desc(FacilityMaintenance.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def page_maintenance_records(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        maintenance_type_id: Optional[str] = None,
+        is_completed: Optional[bool] = None,
+        is_overdue: Optional[bool] = None,
+        is_historic: Optional[bool] = None,
+        occurred_after: Optional[date] = None,
+        occurred_before: Optional[date] = None,
+        search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[FacilityMaintenance], int]:
+        """One page of maintenance records and the organization-wide match count.
+
+        FAC2-5: the cross-facility screen used to load the first 100 rows and
+        filter and search them in the browser, so a search or a long overdue
+        list was silently partial. Filters and search here run in SQL.
+        """
+        conditions = self._maintenance_conditions(
+            organization_id,
+            facility_id=facility_id,
+            maintenance_type_id=maintenance_type_id,
+            is_completed=is_completed,
+            is_overdue=is_overdue,
+            is_historic=is_historic,
+            occurred_after=occurred_after,
+            occurred_before=occurred_before,
+        )
+        if search:
+            pattern = like_pattern(search)
+            conditions.append(
+                or_(
+                    FacilityMaintenance.description.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    FacilityMaintenance.vendor.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    FacilityMaintenance.work_order_number.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    FacilityMaintenance.performed_by.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                )
+            )
+        total = (
+            await self.db.scalar(
+                select(func.count(FacilityMaintenance.id)).where(and_(*conditions))
+            )
+            or 0
+        )
+        # The id breaks created_at ties, so an offset page never repeats or
+        # skips a record.
+        result = await self.db.execute(
+            select(FacilityMaintenance)
+            .where(and_(*conditions))
+            .options(selectinload(FacilityMaintenance.maintenance_type))
+            .order_by(
+                desc(FacilityMaintenance.created_at), desc(FacilityMaintenance.id)
+            )
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all()), total
+
+    @staticmethod
+    def _maintenance_conditions(
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        maintenance_type_id: Optional[str] = None,
+        system_id: Optional[str] = None,
+        is_completed: Optional[bool] = None,
+        is_overdue: Optional[bool] = None,
+        is_historic: Optional[bool] = None,
+        occurred_after: Optional[date] = None,
+        occurred_before: Optional[date] = None,
+    ) -> list:
         conditions = [FacilityMaintenance.organization_id == organization_id]
 
         if facility_id:
@@ -1438,18 +1540,7 @@ class FacilitiesService:
             conditions.append(FacilityMaintenance.occurred_date >= occurred_after)
         if occurred_before:
             conditions.append(FacilityMaintenance.occurred_date <= occurred_before)
-
-        query = (
-            select(FacilityMaintenance)
-            .where(and_(*conditions))
-            .options(selectinload(FacilityMaintenance.maintenance_type))
-            .order_by(desc(FacilityMaintenance.created_at))
-            .offset(skip)
-            .limit(limit)
-        )
-
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return conditions
 
     async def get_maintenance_record(
         self, record_id: str, organization_id: str
@@ -1730,6 +1821,90 @@ class FacilitiesService:
         limit: int = 100,
     ) -> List[FacilityInspection]:
         """List facility inspections"""
+        conditions = self._inspection_conditions(
+            organization_id,
+            facility_id=facility_id,
+            inspection_type=inspection_type,
+            passed=passed,
+            after_date=after_date,
+            before_date=before_date,
+        )
+
+        query = (
+            select(FacilityInspection)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityInspection.inspection_date))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def page_inspections(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        inspection_type: Optional[str] = None,
+        result: Optional[str] = None,
+        search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[FacilityInspection], int]:
+        """One page of inspections and the organization-wide match count.
+
+        ``result`` is ``passed``, ``failed`` or ``pending`` (no result recorded
+        yet). The list endpoint's ``passed`` filter cannot say "pending",
+        because its ``None`` already means "no filter" (FAC2-5).
+        """
+        conditions = self._inspection_conditions(
+            organization_id, facility_id=facility_id, inspection_type=inspection_type
+        )
+        if result == "passed":
+            conditions.append(FacilityInspection.passed.is_(True))
+        elif result == "failed":
+            conditions.append(FacilityInspection.passed.is_(False))
+        elif result == "pending":
+            conditions.append(FacilityInspection.passed.is_(None))
+        if search:
+            pattern = like_pattern(search)
+            conditions.append(
+                or_(
+                    FacilityInspection.title.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    FacilityInspection.inspector_name.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    FacilityInspection.inspector_organization.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                )
+            )
+        total = (
+            await self.db.scalar(
+                select(func.count(FacilityInspection.id)).where(and_(*conditions))
+            )
+            or 0
+        )
+        rows = await self.db.execute(
+            select(FacilityInspection)
+            .where(and_(*conditions))
+            .order_by(
+                desc(FacilityInspection.inspection_date), desc(FacilityInspection.id)
+            )
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(rows.scalars().all()), total
+
+    @staticmethod
+    def _inspection_conditions(
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        inspection_type: Optional[str] = None,
+        passed: Optional[bool] = None,
+        after_date: Optional[date] = None,
+        before_date: Optional[date] = None,
+    ) -> list:
         conditions = [FacilityInspection.organization_id == organization_id]
 
         if facility_id:
@@ -1742,17 +1917,7 @@ class FacilitiesService:
             conditions.append(FacilityInspection.inspection_date >= after_date)
         if before_date:
             conditions.append(FacilityInspection.inspection_date <= before_date)
-
-        query = (
-            select(FacilityInspection)
-            .where(and_(*conditions))
-            .order_by(desc(FacilityInspection.inspection_date))
-            .offset(skip)
-            .limit(limit)
-        )
-
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return conditions
 
     async def get_inspection(
         self, inspection_id: str, organization_id: str

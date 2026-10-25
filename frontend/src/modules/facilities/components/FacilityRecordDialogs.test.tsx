@@ -12,16 +12,16 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
-const mockGetMaintenanceRecords = vi.fn();
+const mockGetMaintenancePage = vi.fn();
 const mockCreateMaintenanceRecord = vi.fn();
 const mockToastError = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   facilitiesService: {
-    getMaintenanceRecords: (...args: unknown[]) => mockGetMaintenanceRecords(...args) as unknown,
+    getMaintenancePage: (...args: unknown[]) => mockGetMaintenancePage(...args) as unknown,
     getMaintenanceTypes: vi.fn().mockResolvedValue([{ id: 'mt-1', name: 'Roof Inspection' }]),
     createMaintenanceRecord: (...args: unknown[]) => mockCreateMaintenanceRecord(...args) as unknown,
-    getInspections: vi.fn().mockResolvedValue([]),
+    getInspectionsPage: vi.fn().mockResolvedValue({ items: [], total: 0, skip: 0, limit: 50 }),
   },
 }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -35,8 +35,8 @@ import InspectionsSection from './InspectionsSection';
 describe('facility record dialogs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetMaintenanceRecords.mockReset();
-    mockGetMaintenanceRecords.mockResolvedValue([]);
+    mockGetMaintenancePage.mockReset();
+    mockGetMaintenancePage.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 50 });
     mockCreateMaintenanceRecord.mockReset();
     mockCreateMaintenanceRecord.mockResolvedValue({});
   });
@@ -111,32 +111,37 @@ describe('facility record dialogs', () => {
   });
 
   it('says on the row when a record is overdue, and when it was due', async () => {
-    mockGetMaintenanceRecords.mockResolvedValue([
-      {
-        id: 'm-1',
-        facilityId: 'f-1',
-        description: 'Replace bay door seal',
-        dueDate: '2026-10-06',
-        isCompleted: false,
-        isOverdue: true,
-      },
-      {
-        id: 'm-2',
-        facilityId: 'f-1',
-        description: 'Change HVAC filters',
-        dueDate: '2026-11-02',
-        isCompleted: false,
-        isOverdue: false,
-      },
-      {
-        id: 'm-3',
-        facilityId: 'f-1',
-        description: 'Generator load test',
-        completedDate: '2026-10-01',
-        isCompleted: true,
-        isOverdue: false,
-      },
-    ]);
+    mockGetMaintenancePage.mockResolvedValue({
+      skip: 0,
+      limit: 50,
+      total: 3,
+      items: [
+        {
+          id: 'm-1',
+          facilityId: 'f-1',
+          description: 'Replace bay door seal',
+          dueDate: '2026-10-06',
+          isCompleted: false,
+          isOverdue: true,
+        },
+        {
+          id: 'm-2',
+          facilityId: 'f-1',
+          description: 'Change HVAC filters',
+          dueDate: '2026-11-02',
+          isCompleted: false,
+          isOverdue: false,
+        },
+        {
+          id: 'm-3',
+          facilityId: 'f-1',
+          description: 'Generator load test',
+          completedDate: '2026-10-01',
+          isCompleted: true,
+          isOverdue: false,
+        },
+      ],
+    });
     renderWithRouter(<MaintenanceSection facilityId="f-1" canEdit canDelete />);
 
     expect(await screen.findByText('Overdue · due 10/6/2026')).toBeInTheDocument();
