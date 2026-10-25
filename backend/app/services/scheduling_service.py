@@ -95,7 +95,7 @@ from app.utils.apparatus_ref import (
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.member_names import format_display_name
 from app.utils.membership import is_administrative
-from app.utils.model_updates import reject_null_for_required
+from app.utils.model_updates import apply_updates, reject_null_for_required
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import (
@@ -3677,9 +3677,7 @@ class SchedulingService:
                 ):
                     return None, "One or more members are not in your organization"
 
-            for key, value in update_data.items():
-                if key not in self.PROTECTED_FIELDS:
-                    setattr(call, key, value)
+            apply_updates(call, update_data, skip=self.PROTECTED_FIELDS)
 
             await self.db.commit()
             await self.db.refresh(call)
@@ -5540,20 +5538,18 @@ class SchedulingService:
                     )
 
             # A seat change is held to the seats the shift has, by the same
-            # rule a new assignment is. A null cannot clear a NOT NULL seat, so
-            # it means "leave the seat alone" rather than a flush error.
-            if "position" in update_data:
-                if not update_data["position"]:
-                    update_data.pop("position")
-                else:
-                    seat_shift = await self.get_shift_by_id(
-                        assignment.shift_id, organization_id
-                    )
-                    if seat_shift is None:
-                        return None, "Shift not found"
-                    update_data["position"] = self.resolve_shift_seat(
-                        seat_shift, update_data["position"]
-                    )
+            # rule a new assignment is. A null seat is not a change: the column
+            # is NOT NULL, so it is refused below like any other required field
+            # rather than acknowledged and ignored.
+            if update_data.get("position") is not None:
+                seat_shift = await self.get_shift_by_id(
+                    assignment.shift_id, organization_id
+                )
+                if seat_shift is None:
+                    return None, "Shift not found"
+                update_data["position"] = self.resolve_shift_seat(
+                    seat_shift, update_data["position"]
+                )
 
             reject_null_for_required(
                 assignment, update_data, skip=self.PROTECTED_FIELDS
