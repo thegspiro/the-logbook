@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD]** (branch `claude/security-review-elections-ballots-p12`) —
+**PR [#3691](https://github.com/thegspiro/the-logbook/pull/3691)** (branch
+`claude/security-review-elections-ballots`) —
 Feature 06 (Elections & ballots), pass 12. No security-review PR was
 open — confirmed via `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`), 0 matching results, PR
