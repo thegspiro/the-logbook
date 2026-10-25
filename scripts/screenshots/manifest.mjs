@@ -15575,6 +15575,7 @@ export const SHOTS = [
       "The Add Applicant dialog warning that the email belongs to an active applicant",
     alt: "The Already an applicant warning: the person is already an active applicant with this email, naming their pipeline and stage, with Go back and Open existing applicant",
     route: "/prospective-members",
+    expect: "Already an applicant",
     fullPage: false,
     // Nothing is created: the warning answers before the create request,
     // and the cleanup takes Go back.
@@ -17429,6 +17430,7 @@ export const SHOTS = [
     anchor: "The Card taps section on an event page",
     alt: "The Card taps section of the in-progress drill's event page, listing each ID card tap with its time, member, outcome and the check-in station it was made at",
     route: "/events",
+    expect: { selector: "#event-card-taps-heading" },
     prepare: async (page, helpers) => {
       await openFirstFromApi(
         "/events?limit=200",
@@ -23196,6 +23198,7 @@ export const SHOTS = [
     anchor: "The Move tag dialog from the NFC Tag Register",
     alt: "The Move tag dialog for an item tag: a search for another item and the matching items to move the tag onto, with Move tag and Cancel",
     route: "/inventory/admin/nfc/tags",
+    expect: "A tag moves to another",
     fullPage: false,
     prepare: withInventoryNfc(async (page) => {
       await page
@@ -23221,6 +23224,7 @@ export const SHOTS = [
     anchor: "Find a lot on the Medical Supplies Expiring tab",
     alt: "Find a lot on the Medical Supplies Expiring tab: the lot number GZ-9910 typed, the shelf lot it found, and the Recall lot button for it",
     route: "/medical-supplies",
+    expect: "with a lot number containing",
     fullPage: false,
     prepare: async (page) => {
       await page
@@ -23244,6 +23248,7 @@ export const SHOTS = [
     anchor: "The Recall this lot dialog with a reason typed",
     alt: "The Recall this lot dialog for Gauze lot GZ-9910, saying the units stop counting as stock and cannot be swapped onto a truck, with a reason typed and Recall lot",
     route: "/medical-supplies",
+    expect: "stops counting as stock",
     fullPage: false,
     // Photographed with the reason typed and never submitted: Cancel in the
     // cleanup, so the gauze lot the other medical shots count stays stock.
@@ -23275,6 +23280,7 @@ export const SHOTS = [
     anchor: "The Recalled lots panel on the Expiring tab",
     alt: "The Recalled lots panel on the Medical Supplies Expiring tab: Normal Saline lot NS-4471, the date it was recalled, how many are still to pull and Lift recall",
     route: "/medical-supplies",
+    expect: { selector: "section[aria-label='Recalled lots'] h3" },
     prepare: async (page) => {
       await page
         .getByRole("tab", { name: /^Expiring/ })
@@ -23293,6 +23299,7 @@ export const SHOTS = [
     anchor: "The Not yet counted tab of Medical Supplies",
     alt: "The Not yet counted tab of Medical Supplies: supplies whose truck positions nobody has counted, each naming the apparatus and compartment and linking to that truck's inventory",
     route: "/medical-supplies",
+    expect: { selector: "[aria-label^='Uncounted positions for']" },
     fullPage: false,
     prepare: async (page) => {
       await page
