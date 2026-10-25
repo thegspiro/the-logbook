@@ -1758,6 +1758,28 @@ Tags**. Managing inventory alone does not open that setting.
 
 ![Tag Items in Bulk after one typed serial was linked: 1 tagged this session and how many are left, the next item, Bunker Coat, with its serial number, asset tag, category and storage area, Read serials chosen with Write links greyed out on a desktop, the serial box and Skip this item](./images/05-114-nfc-enroll.png)
 
+### NFC Tag Register _(2026-10-25)_
+
+**Inventory Administration → NFC Tag Register** (`/inventory/admin/nfc/tags`)
+lists every tag your department has linked, whether it is on an item, a storage
+area or an equipment-check compartment. Each row shows what the tag names and,
+for item tags, the last time staff tapped it. It needs **Manage gear, uniforms
+and equipment** and NFC tracking turned on.
+
+- **Mark lost** or **Mark found**, for one tag or a ticked selection.
+- **Move** a tag onto another target of the same kind (an item tag to another
+  item). Use it when a tag was stuck on the wrong thing.
+- **Unlink** removes the tag from what it names, after a confirmation.
+- **Download** saves the filtered list as a CSV.
+
+People who manage equipment checklists (**Manage equipment check templates**)
+can open the register too, but see only compartment tags. They cannot list item
+or shelf tags, and a selection of those is refused rather than changed. The
+same goes for the quartermaster in the other direction: managing inventory now
+covers compartment tags as well.
+
+> **Screenshot to create:** NFC Tag Register with a row selected.
+
 ### Identifying a member by their ID card
 
 If your department issues NFC ID cards (**Settings → Integrations → NFC ID

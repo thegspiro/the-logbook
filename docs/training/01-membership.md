@@ -235,6 +235,29 @@ only, so they look the same on a black-only ribbon as on a colour one.
 
 ![Print ID Cards for two members with Front and back chosen: the Orientation, Sides and Code choices, Test card and Save as department layout, the duplex printing note, and the Accept old badges switch at the bottom](./images/01-43-print-id-cards.png)
 
+### Managing NFC ID Cards for the Department _(2026-10-25)_
+
+If your department issues NFC ID cards, **Members → Member ID Cards**
+(`/members/admin/id-cards`) is the one page for all of them. It needs the
+**Manage ID cards** permission alone, so a card clerk who cannot edit the
+roster can still use it. When NFC ID cards are off, the page says so at the
+top and tells you where to turn them on.
+
+| Tab          | What it is for                                                                                                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Cards**    | Every card, with a search box. Tick several and **Suspend**, **Reactivate**, **Report lost** or **Revoke** them together. Each card is judged on its own, so one refusal does not stop the rest. |
+| **Coverage** | Three lists: current members with no working card (issue one from the row), active cards not used for a number of days, and cards still held by former members.                                  |
+| **Tap log**  | Every tap at a station or room kiosk, including refusals. Filter it, page through it, or download it as a CSV. A card the system does not know is kept only as an unreadable hash.               |
+| **Settings** | How long taps are kept. The default is 24 months; you can choose 3 to 84. Older taps are deleted each night.                                                                                     |
+
+When a member moves to a status whose taps are already refused (for example
+retired or dropped), their active cards are suspended automatically and marked
+as suspended by the system. If the member returns, only those cards come back;
+a card an officer suspended or reported lost stays that way.
+
+> **Screenshot to create:** Member ID Cards with the four tabs, and the Coverage
+> tab. See [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
 ### Badge Codes
 
 Every badge carries a **badge code**, such as `MB-7KQ2W9HXRT`. That includes
