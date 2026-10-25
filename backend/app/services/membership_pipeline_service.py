@@ -391,6 +391,21 @@ def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
     return False
 
 
+# The meeting gate's refusals reach a single Advance through
+# safe_error_detail, which replaces any message over 300 characters with a
+# generic error, so the coordinator saw no reason and no remedy. The fixed text
+# is kept short for that reason, and the names spliced into it are clipped:
+# an event title may run to 200 characters and a stage name to 255.
+_MESSAGE_NAME_LIMIT = 50
+
+
+def _name_for_message(name: Optional[str]) -> str:
+    name = name or ""
+    if len(name) <= _MESSAGE_NAME_LIMIT:
+        return name
+    return name[: _MESSAGE_NAME_LIMIT - 1].rstrip() + "…"
+
+
 def meeting_stage_names_an_event(config: Dict[str, Any]) -> bool:
     """Whether a meeting stage identifies the event its applicants must attend.
 
@@ -2509,23 +2524,20 @@ class MembershipPipelineService:
 
         if awaiting_finalization is not None:
             raise ValueError(
-                f"This applicant is checked in at "
-                f"'{awaiting_finalization.title}', but that event's attendance "
-                "has not been finalized, so '"
-                f"{step.name}' is not ready yet. A sign-in at the door is not "
-                "the final roster — finalize the event (End Event, record its "
-                "actual end time, or Finalize Attendance) and they advance on "
-                "their own."
+                "Checked in at "
+                f"'{_name_for_message(awaiting_finalization.title)}', but that "
+                "event's attendance has not been finalized, so "
+                f"'{_name_for_message(step.name)}' cannot advance yet. Finalize "
+                "the event (End Event or Finalize Attendance) and they advance "
+                "on their own."
             )
 
         raise ValueError(
-            f"No attendance has been recorded for '{step.name}' since this "
-            "application was opened. This stage names the event its applicants "
-            "must attend, so it advances once they are checked in there and "
-            "that event's attendance is finalized. Check them in on the event "
-            "if they attended and it was missed — reopening the event first if "
-            "it is already finalized; otherwise un-tick Required on the stage "
-            "to skip it, or clear its Auto-Link Event Type."
+            "No attendance has been recorded for "
+            f"'{_name_for_message(step.name)}' since this application was "
+            "opened. Check them in on the event and finalize its attendance; "
+            "otherwise un-tick Required on the stage to skip it, or clear its "
+            "Auto-Link Event Type."
         )
 
     async def _authorized_multi_approval_result(

@@ -3204,11 +3204,12 @@ out, along with everyone else who was there — or, if nobody closes it out, a
 week later. Trying to advance one by hand in between names the event and says
 what is missing:
 
-> This applicant is checked in at 'Recruitment Night', but that event's
-> attendance has not been finalized, so 'Chief Interview' is not ready yet. A
-> sign-in at the door is not the final roster — finalize the event (End Event,
-> record its actual end time, or Finalize Attendance) and they advance on their
-> own.
+> Checked in at 'Recruitment Night', but that event's attendance has not been
+> finalized, so 'Chief Interview' cannot advance yet. Finalize the event (End
+> Event or Finalize Attendance) and they advance on their own.
+
+(Wording shortened on 2026-10-25 so a single Advance shows it in full — a
+longer message was replaced with "An unexpected error occurred".)
 
 **The stage checkbox was relabelled** from "Auto-advance when attendance is
 recorded" to "Auto-advance when the event's attendance is finalized". The
@@ -3256,10 +3257,8 @@ attendance recorded since their application was opened can no longer be
 advanced, and the refusal names what to do:
 
 > No attendance has been recorded for 'Chief Interview' since this application
-> was opened. This stage names the event its applicants must attend, so it
-> advances once they are checked in there. Add them to that event's attendees
-> and check them in if they attended and it was not recorded; otherwise un-tick
-> Required on the stage to skip it, or clear its Auto-Link Event Type.
+> was opened. Check them in on the event and finalize its attendance; otherwise
+> un-tick Required on the stage to skip it, or clear its Auto-Link Event Type.
 
 Those are the three ways out, in the order to reach for them. Recording the
 attendance is the one to prefer — it is how the applicant is meant to clear the
