@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)** (branch
+`claude/security-review-storefront-payments-p12`) — Feature 04 (Storefront &
+payments), pass 12. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, checked before starting and re-checked immediately before
+branching. **0 new findings, 0 fixed.** True zero backend delta since pass
+11's baseline (`6b85bc33`, PR #3559): the only commit touching this
+feature's full established scope (`storefront.py`, `storefront_service.py`,
+`storefront_notification_service.py`, `storefront_preview_service.py`,
+`email_templates_storefront.py`, `storefront_payments.py`,
+`paypal_webhook.py`, `models/storefront.py`, `schemas/storefront.py`,
+`utils/size_order.py`, `utils/embroidery.py`, the frontend module tree, and
+storefront-matching migrations) was a 2-line, CSS-only grid fix in
+`StoreOrdersTab.tsx` from a repo-wide tablet-layout sweep — no logic, auth,
+or org-scoping content. Routes re-enumerated by AST (48, unchanged from
+pass 11). All 48 routes' permission gates re-verified unchanged by direct
+read, including that both the refund route and all four payment-settlement
+routes (`record_payment`, `mark_order_paid`, `waive_order_payment`,
+`bulk_mark_orders_paid`) require `storefront.manage`. The two standing
+findings were re-verified unchanged at their pass-11-cited lines: SF8-04-2
+(MED, `update_order_status`'s settlement branch still reads the order
+unlocked) and SF8-04-3 (LOW, `waive_order_payment` still overwrites
+`payment_status` unconditionally) — both stay OPEN/FLAGGED, both already
+mirrored in `KNOWN_LIMITATIONS.md`, both an owner decision rather than a
+mechanical fix per pass 8's original rationale. See
+`SF-04-storefront-payments.md`'s **Pass 12** section for the full review.
+
+Rotation row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3687, Feature 03, Public surface & webhooks, pass 12, merged), preserved for history</summary>
+
 **PR [#3687](https://github.com/thegspiro/the-logbook/pull/3687)** (branch
 `claude/security-review-public-surface-webhooks-p12`) — Feature 03
 (Public surface & webhooks), pass 12. PR #3685 (Feature 02, Permissions &
@@ -39,6 +72,8 @@ review.
 
 Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
 (Storefront & payments).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3685, Feature 02, Permissions & roles, pass 12, merged), preserved for history</summary>
@@ -21594,7 +21629,7 @@ PR is recorded in the Log, not repeated here.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
@@ -38752,4 +38787,72 @@ typecheck`/`npm run lint` — 0 errors.
 
 Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
 payments) — re-check `search_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-10-25 — Feature 04 (Storefront & payments, pass 12) — watchdog pickup, true zero backend delta, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed OPEN
+
+Standing-rotation pickup (`/loop 30m /security-review`, dedicated session
+unreachable): PR #3687 (Feature 03, Public surface & webhooks, pass 12) had
+already merged with no open rotation PR behind it — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, checked before starting and re-checked immediately before
+branching. Row 04 (Storefront & payments) was the next pending feature.
+
+Diffed pass 11's own merge (`6b85bc33`, PR #3559) against current `HEAD`
+across the full established scope (13 declared/established backend files,
+the frontend module tree, and every storefront/embroidery/personalization-
+matching migration). After unshallowing the clone
+(`git fetch --unshallow`), exactly one commit touches that scope:
+`8d5764549`, a 134-route Playwright tablet-layout sweep whose only
+in-scope line is a 2-line CSS grid fix in `StoreOrdersTab.tsx` (the order
+method `<select>` moved into its own grid cell on iPad-width screens) — no
+logic, auth, or org-scoping content. No backend file in the declared scope
+changed at all; no new storefront-matching migration landed.
+
+Routes re-enumerated by AST: 48, unchanged from pass 11. All 48 re-verified
+by direct read of each `Depends(...)` line: the member self-service surface
+is `storefront.view`, order creation is `storefront.order`, every
+catalog/window/order-admin/payment-admin route — including the refund route
+and all four settlement routes — is `storefront.manage`, and the one
+exception (`GET /permissions`) is an authenticated self-introspection
+endpoint. Price integrity re-confirmed (`StoreOrderItemInput` carries no
+price field; `_price_lines` derives every line from the org-scoped
+catalog under lock). Capacity locking (Pitfall #27) re-confirmed at its
+documented organisation → window → products → tallies lock order. All five
+self-settlement separation-of-duties guards re-confirmed calling
+`assert_different_person` before any ledger mutation. The PayPal webhook's
+signature verification and unique-constraint-backed idempotency are
+unchanged (file outside this window's one-commit delta), consistent with
+`PUB-03-public-surface-webhooks.md`'s own pass-12 re-read of the same
+mechanism three days earlier.
+
+**SF8-04-2 (MED) and SF8-04-3 (LOW) both re-confirmed OPEN/FLAGGED,
+unchanged at their pass-11-cited lines** — `update_order_status`'s
+settlement branch still reads the order unlocked
+(`storefront_service.py:1905`) before writing `amount_paid`/
+`payment_status` (`:1949`–`:1951`); `waive_order_payment` still
+unconditionally overwrites `payment_status = WAIVED` (`:2142`) with no
+`_is_settled()` guard. Both remain an owner decision per pass 8's original
+rationale, already mirrored in `KNOWN_LIMITATIONS.md` (verified present, no
+edit needed).
+
+Full writeup: `docs/security-review/SF-04-storefront-payments.md`'s
+**Pass 12** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean at CI's pinned versions (7.4.1/26.10.1/9.0.2);
+`validate_migrations.py --strict` — 651 revisions, single head
+`3d67883cd461`; `check_route_permissions.py --strict` (repo root) — 276
+routes, 0 errors/warnings; scoped backend tests
+(`-k "storefront or stripe or payment or refund or checkout"`) — 887
+passed, 1 skipped (environment-only: `pywebpush`); standing guard suites
+(org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping,
+`create_all`-table tolerance, baseline member grants, account-status gates,
+storefront race/deadlock/schema/backfill tests) — 227 passed; full backend
+suite (`pytest tests/ -m "not integration and not slow and not docker"`) —
+17,491 passed, 5 skipped, 0 failed; frontend `npm run typecheck`/`npm run
+lint` — 0 errors.
+
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals) — re-check `search_pull_requests` fresh rather than trusting this
 note.
