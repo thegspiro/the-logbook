@@ -133,16 +133,19 @@ test.describe('Search fields stay readable on a phone', () => {
   }
 });
 
-test.describe('Shift calendar beside the side navigation', () => {
-  // From 768px the calendar sat beside a 360px day panel, and the side
-  // navigation took 256px more: seven 18px day cells with their dates cut.
+test.describe('Shift calendar day cells', () => {
+  // From 768px the calendar sat beside a fixed day panel and the side
+  // navigation took 256px more: 18px day cells at 844 and 820px, 33px at 1024.
+  // On a 360px phone the compact strip's cells came to 43px.
   for (const viewport of [
-    { name: 'phone landscape', ...LANDSCAPE },
-    { name: 'iPad portrait', width: 820, height: 1180 },
+    { name: 'phone landscape', grid: 'Month calendar', ...LANDSCAPE },
+    { name: 'iPad portrait', grid: 'Month calendar', width: 820, height: 1180 },
+    { name: 'iPad landscape', grid: 'Month calendar', width: 1024, height: 768 },
+    { name: '360px phone', grid: 'Month calendar, compact', width: 360, height: 780 },
   ]) {
     test(viewport.name, async ({ page }) => {
       await open(page, '/scheduling', viewport);
-      const grid = page.getByRole('grid', { name: 'Month calendar' });
+      const grid = page.getByRole('grid', { name: viewport.grid, exact: true });
       await expect(grid).toBeVisible();
       const widths = await grid
         .getByRole('gridcell')
