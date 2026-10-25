@@ -14,13 +14,11 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { Link } from 'react-router';
-import { ArrowLeft, Loader2, Nfc } from 'lucide-react';
+import { Loader2, Nfc } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { isNfcSupported } from '../../../constants/nfc';
-import { Breadcrumbs } from '../../../components/ux';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 
 export const InventoryNfcSettingsPage: React.FC = () => {
@@ -54,20 +52,11 @@ export const InventoryNfcSettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target mb-4 justify-start gap-2 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to Inventory Administration
-      </Link>
-
+    <div className="max-w-3xl py-6">
       <header className="mb-6">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
           <Nfc className="h-5 w-5" /> NFC Tags
-        </h1>
+        </h2>
         <p className="text-theme-text-secondary mt-1 text-sm">
           Stick an NFC tag on a piece of equipment and link it to the item. Tapping the tag with a phone then finds that
           exact item: in the distribute and return scanner, or straight from the phone&rsquo;s home screen.

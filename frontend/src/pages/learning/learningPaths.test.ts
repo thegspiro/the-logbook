@@ -88,6 +88,8 @@ describe('learning path content', () => {
       ['getting-started.notifications', 'My Notifications', 'pages/NotificationsPage.tsx'],
       ['getting-started.notifications', 'Save Preferences', 'pages/UserSettingsPage.tsx'],
       ['getting-started.notifications', 'Always emailed to you', 'pages/UserSettingsPage.tsx'],
+      ['getting-started.account', 'Set it up now', 'components/MfaGraceBanner.tsx'],
+      ['getting-started.account', 'Your access requires two-factor authentication', 'components/MfaGraceBanner.tsx'],
       ['getting-started.directory', 'Profile visibility', 'pages/UserSettingsPage.tsx'],
       ['mobile.offline', 'Check for updates', 'components/settings/AppVersionSection.tsx'],
       ['mobile.offline', 'pending sync', 'components/layout/TopNavigation.tsx'],

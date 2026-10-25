@@ -10,7 +10,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
   RefreshCw,
   Search,
   Plus,
@@ -45,7 +44,6 @@ import type {
   InventoryVendorUpdate,
   UnlinkedVendorName,
 } from '../types';
-import { Breadcrumbs } from '../../../components/ux';
 
 const lbl = 'form-label';
 const inp = 'form-input';
@@ -1102,19 +1100,10 @@ export const VendorsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl py-6 sm:py-8">
-        <Breadcrumbs />
-
-        <Link
-          to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Admin
-        </Link>
-
+      <div className="max-w-5xl py-6 sm:py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex-1">
-            <h1 className="text-theme-text-primary text-2xl font-bold">Vendors</h1>
+            <h2 className="text-theme-text-primary text-2xl font-bold">Vendors</h2>
             <p className="text-theme-text-muted text-sm">Suppliers, their contacts, and what we buy from them</p>
           </div>
           <div className="flex items-center gap-3 self-start sm:self-auto">

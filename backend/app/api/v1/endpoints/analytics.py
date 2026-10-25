@@ -5,6 +5,7 @@ Endpoints for tracking and retrieving analytics data.
 """
 
 import json
+from datetime import date, datetime, time, timezone
 from typing import Optional
 
 import sqlalchemy as sa
@@ -22,6 +23,7 @@ from app.core.constants import (
 from app.core.database import get_db
 from app.models.analytics import AnalyticsEvent
 from app.models.user import User
+from app.utils.org_timezone import resolve_reporting_timezone
 
 router = APIRouter()
 
@@ -147,14 +149,27 @@ async def get_metrics(
     for device_type, count in device_result.all():
         device_breakdown[device_type or "unknown"] = count
 
-    # Hourly activity
+    # Hourly activity, by the department's clock. W75: this grouped on the
+    # UTC hour, so an evening check-in in Chicago landed after midnight.
+    # Grouped by UTC date and hour first — at most 24 rows a day however busy
+    # the events were — then each bucket is moved to its local hour, which
+    # keeps a daylight-saving change in the right place.
+    tz = await resolve_reporting_timezone(db, current_user.organization_id)
+    utc_day = func.date(AnalyticsEvent.created_at)
+    utc_hour = extract("hour", AnalyticsEvent.created_at)
     hourly_result = await db.execute(
-        select(extract("hour", AnalyticsEvent.created_at).label("hour"), func.count())
+        select(utc_day, utc_hour, func.count())
         .where(*base_filter)
-        .group_by("hour")
-        .order_by("hour")
+        .group_by(utc_day, utc_hour)
     )
-    hourly_map = {int(h): c for h, c in hourly_result.all()}
+    hourly_map: dict[int, int] = {}
+    for day, hour, count in hourly_result.all():
+        if day is None or hour is None:
+            continue
+        day_value = day if isinstance(day, date) else date.fromisoformat(str(day))
+        bucket = datetime.combine(day_value, time(int(hour)), tzinfo=timezone.utc)
+        local_hour = bucket.astimezone(tz).hour
+        hourly_map[local_hour] = hourly_map.get(local_hour, 0) + count
     hourly_activity = [{"hour": h, "count": hourly_map.get(h, 0)} for h in range(24)]
 
     # Error breakdown from failure events

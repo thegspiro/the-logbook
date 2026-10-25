@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
 from app.services import saved_report_schedule as schedule
 from app.services.saved_report_schedule import (
@@ -104,12 +105,20 @@ class TestScheduleRules:
 class _Mailer:
     def __init__(self):
         self.sends: list[dict] = []
+        self.enabled = True
+        self.accepting = True
 
     def factory(self, organization=None):
         mailer = self
 
         class _Service:
+            @property
+            def can_send(self):
+                return mailer.enabled
+
             async def send_email(self, to_emails, subject, html_body, **kwargs):
+                if not mailer.accepting:
+                    return 0, len(to_emails)
                 mailer.sends.append(
                     {
                         "to": list(to_emails),
@@ -326,6 +335,101 @@ class TestTheSender:
 
         assert await schedule.send_due_saved_reports(db_session, dept.org) == 1
         assert mailer.sends[0]["to"] == ["county@example.org"]
+
+
+@pytest.mark.integration
+class TestARunThatFails:
+    async def test_a_send_the_provider_refuses_is_tried_again_next_run(
+        self, db_session, mailer, fake_report, today
+    ):
+        dept = await _dept(db_session)
+        saved = await _saved(db_session, dept)
+
+        mailer.accepting = False
+        assert await schedule.send_due_saved_reports(db_session, dept.org) == 0
+        assert saved.next_run_date == TODAY
+        assert saved.last_run_at is None
+
+        mailer.accepting = True
+        assert await schedule.send_due_saved_reports(db_session, dept.org) == 1
+        assert saved.next_run_date == TODAY + timedelta(days=1)
+        assert saved.last_run_at is not None
+
+    async def test_disabled_email_does_not_generate_or_advance(
+        self, db_session, mailer, fake_report, today
+    ):
+        dept = await _dept(db_session)
+        saved = await _saved(db_session, dept)
+        mailer.enabled = False
+
+        assert await schedule.send_due_saved_reports(db_session, dept.org) == 0
+        assert fake_report == []
+        assert saved.next_run_date == TODAY
+
+    async def test_a_generator_that_raises_does_not_block_the_rest(
+        self, db_session, mailer, monkeypatch
+    ):
+        dept = await _dept(db_session)
+        broken = await _saved(db_session, dept, name="Broken", report_type="apparatus")
+        sound = await _saved(
+            db_session, dept, name="Sound", report_type="apparatus_status"
+        )
+        broken_id, sound_id = broken.id, sound.id
+        # Committed, as it is in production: the failure path rolls back.
+        await db_session.commit()
+        logged: list[str] = []
+
+        async def generate(self, organization_id, report_type, **kwargs):
+            if report_type == "apparatus":
+                raise RuntimeError("generator blew up")
+            return {"report_type": report_type, "total_members": 2}
+
+        async def persist(org_id, task_name, exc, extra_context=None):
+            logged.append((extra_context or {}).get("saved_report_id"))
+            return True
+
+        monkeypatch.setattr(
+            "app.services.reports_service.ReportsService.generate_report", generate
+        )
+        monkeypatch.setattr("app.core.error_reporting.persist_task_error_log", persist)
+        monkeypatch.setattr("app.utils.org_timezone.org_today", lambda _org: TODAY)
+
+        assert await schedule.send_due_saved_reports(db_session, dept.org) == 1
+
+        from app.models.analytics import SavedReport
+
+        rows = {
+            r.id: r
+            for r in (
+                await db_session.execute(
+                    select(SavedReport).where(
+                        SavedReport.organization_id == dept.org.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+        assert [m["subject"] for m in mailer.sends] == ["Scheduled report: Sound"]
+        assert logged == [broken_id]
+        assert rows[broken_id].next_run_date == TODAY
+        assert rows[sound_id].next_run_date == TODAY + timedelta(days=1)
+
+    async def test_an_unknown_report_type_is_settled_not_retried(
+        self, db_session, mailer, today, monkeypatch
+    ):
+        dept = await _dept(db_session)
+        saved = await _saved(db_session, dept, report_type="apparatus_status")
+
+        async def refuse(self, *args, **kwargs):
+            return {"error": "Unknown report type: apparatus_status"}
+
+        monkeypatch.setattr(
+            "app.services.reports_service.ReportsService.generate_report", refuse
+        )
+
+        assert await schedule.send_due_saved_reports(db_session, dept.org) == 0
+        assert saved.next_run_date == TODAY + timedelta(days=1)
 
 
 @pytest.mark.integration

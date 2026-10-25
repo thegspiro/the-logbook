@@ -13,6 +13,10 @@ import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 // Lazy-loaded pages
 const InventoryItemsPage = lazyWithRetry(() => import('./pages/InventoryItemsPage'));
+// The header every Inventory Administration page is drawn inside. Lazy like the
+// pages it wraps: it carries the assign-to-member scan flow, which has no place
+// in the bundle every route loads.
+const InventoryAdminLayout = lazyWithRetry(() => import('./components/InventoryAdminLayout'));
 const MyEquipmentPage = lazyWithRetry(() => import('./pages/MyEquipmentPage'));
 const InventoryAdminHub = lazyWithRetry(() =>
   import('./pages/InventoryAdminHub').then((m) => ({
@@ -145,7 +149,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <InventorySetupPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventorySetupPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -157,7 +165,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <InventoryItemsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventoryItemsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -168,7 +180,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <PoolItemsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <PoolItemsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -179,7 +195,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <InventoryCategoriesPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventoryCategoriesPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -190,7 +210,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <InventoryMaintenancePage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventoryMaintenancePage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -201,7 +225,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <InventoryMembersPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventoryMembersPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -212,7 +240,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <ChargesPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <ChargesPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -223,7 +255,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <ReturnRequestsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <ReturnRequestsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -234,7 +270,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <EquipmentRequestsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <EquipmentRequestsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -256,7 +296,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <WriteOffsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <WriteOffsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -267,7 +311,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <ReorderRequestsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <ReorderRequestsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -278,7 +326,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <EquipmentKitsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <EquipmentKitsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -289,7 +341,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <VariantGroupsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <VariantGroupsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -300,7 +356,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <AllowancesPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <AllowancesPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -311,7 +371,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <VendorsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <VendorsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -322,7 +386,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <ImpactPlannerPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <ImpactPlannerPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -436,7 +504,11 @@ export const getInventoryRoutes = () => {
             requiredAnyPermission={['settings.manage', 'organization.update_settings']}
           >
             <Suspense fallback={null}>
-              <InventoryNfcSettingsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventoryNfcSettingsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -466,7 +538,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <InventoryNfcEnrollPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventoryNfcEnrollPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -483,7 +559,11 @@ export const getInventoryRoutes = () => {
             requiredAnyPermission={['inventory.manage', 'inventory.check_manage']}
           >
             <Suspense fallback={null}>
-              <InventoryNfcRegisterPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventoryNfcRegisterPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -494,7 +574,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
-              <InventoryNotSeenPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <InventoryNotSeenPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -548,7 +632,11 @@ export const getInventoryRoutes = () => {
             requiredPermission="inventory.check_manage"
           >
             <Suspense fallback={null}>
-              <ChecklistsAdminPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <ChecklistsAdminPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -607,7 +695,11 @@ export const getInventoryRoutes = () => {
         element={
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.check_view">
             <Suspense fallback={null}>
-              <EquipmentCheckReportsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <EquipmentCheckReportsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -628,7 +720,11 @@ export const getInventoryRoutes = () => {
             requiredAnyPermission={['inventory.check_view', 'inventory.manage']}
           >
             <Suspense fallback={null}>
-              <SupplyExpiringPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <SupplyExpiringPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }

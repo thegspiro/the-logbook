@@ -5853,6 +5853,11 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
                 # Generate for the previous month
                 prev_month = today.month - 1 if today.month > 1 else 12
                 prev_year = today.year if today.month > 1 else today.year - 1
+                if await service.auto_report_exists(
+                    org_id, "monthly", prev_year, prev_month
+                ):
+                    should_generate_monthly = False
+            if should_generate_monthly:
                 await service.generate_report(
                     organization_id=org_id,
                     report_type="monthly",
@@ -5869,6 +5874,10 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
                     }
                 )
 
+            if should_generate_yearly and await service.auto_report_exists(
+                org_id, "yearly", today.year - 1
+            ):
+                should_generate_yearly = False
             if should_generate_yearly:
                 prev_year = today.year - 1
                 await service.generate_report(

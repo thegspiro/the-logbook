@@ -46,7 +46,7 @@ response fields that are plain `str` / `bool`. `update_shift_call` wrote the pay
 `setattr`, so a null was committed and every later read of that call failed response
 validation (500) until the row was repaired by hand. **Fixed** in two places: the service
 writes through `apply_updates` (which also reports a field the model lacks instead of
-dropping it), and `ShiftCallUpdate` refuses a null on those three fields with a 422. The
+dropping it), and `ShiftCallUpdate` (now inheriting `RefusesNull`) refuses a null on those three fields with a 422. The
 frontend `ShiftCallUpdate` type already excludes null for them, so the app's own form
 could not send one; the exposure was a direct client holding `scheduling.manage`.
 
@@ -66,11 +66,8 @@ shift is still refused, which a new test pins.
 - **`PATCH /shifts/{id}/closeout/attendance` and `/closeout/calls`** take their own
   request bodies rather than an update schema and are not in the derived test.
 - **The harness is a copy of the one in `test_training_update_endpoints_integration.py`**
-  (B18, PR #3659), with only the route table and fixture names changed. Once that merges,
-  it should move to a shared test helper that both files import.
-- **`ShiftCallUpdate._refuse_null` duplicates `RefusesNull`** from the same PR. It is a
-  local validator here because the base class is not on `main` yet; it should inherit it
-  once it is.
+  (B18, PR #3659, merged), with only the route table and fixture names changed. It should
+  move to a shared test helper that both files import.
 - The other five checklist dimensions were not re-run beyond the auth scan above; passes
   1–4 stand, and SCH-5 (swap accept-path) and the SCH-6 residual stay flagged as before.
 

@@ -186,6 +186,12 @@ export const EditProgramModal: React.FC<{
       toast.error('Name is required');
       return;
     }
+    // Unlike the limits below, this column cannot be cleared: the server
+    // refuses a null, and storing one would break the programs list.
+    if (!warnDays.trim()) {
+      toast.error('First warning is required');
+      return;
+    }
     // A fixed anchor needs both parts; require them together to avoid an
     // ambiguous "reset in March, day unknown".
     if (recertEnabled && !!recertAnchorMonth !== !!recertAnchorDay) {
@@ -217,7 +223,7 @@ export const EditProgramModal: React.FC<{
         structure_type: structureType,
         target_position: blankToNull(targetPosition),
         time_limit_days: timeLimit ? Number(timeLimit) : null,
-        warning_days_before: warnDays ? Number(warnDays) : null,
+        warning_days_before: Number(warnDays),
         reminder_conditions: {
           days_before_deadline: parsedWarnDays.map(Number),
           // Omitting this one does clear it: the backend replaces the whole

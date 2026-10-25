@@ -193,12 +193,15 @@ async def audit_log_stats(
         key = sev.value if hasattr(sev, "value") else str(sev)
         by_severity[key] = count
 
+    # Every category, not a top ten: the audit page builds its category filter
+    # from these keys, and the cap left the quieter ones — integrations,
+    # documents, minutes — unselectable (W75). Categories are a small fixed
+    # vocabulary, so the full list stays short.
     category_result = await db.execute(
         select(AuditLog.event_category, func.count())
         .where(base_filter)
         .group_by(AuditLog.event_category)
         .order_by(func.count().desc())
-        .limit(10)
     )
     by_category = {category: count for category, count in category_result.all()}
 

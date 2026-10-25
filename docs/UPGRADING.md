@@ -637,6 +637,65 @@ What an operator needs to know:
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
 
+### Plaintext to MySQL and Redis can now be refused, and certificate expiry is flagged (2026-10-24)
+
+Nothing changes until you set a switch: `DB_REQUIRE_TLS` and
+`REDIS_REQUIRE_TLS` both default to `false`. Guide: [TLS.md](./TLS.md#refusing-plaintext).
+
+- **Before switching, run `./scripts/tls-enforce.sh`.** It changes nothing; it
+  checks that each server is serving your certificates and lists every client
+  still connecting without TLS (they stop working at the switch).
+- **`REDIS_REQUIRE_TLS=true` needs the backend already on TLS** (`REDIS_SSL=true`,
+  `BACKEND_REDIS_PORT=6380`, client certificate), because it closes the plaintext
+  port and requires a client certificate. Otherwise the backend loses its cache
+  at the restart.
+- **A switch that cannot be honoured stops the container** with a `[tls] ERROR`
+  line instead of silently starting without it. Fix the certificates or set the
+  switch back to `false`.
+- **The Redis health check changed** in all four Unraid/Docker compose files: it
+  now runs `infrastructure/redis/healthcheck.sh` (mounted at `/healthcheck.sh`),
+  which keeps the password out of the command line and uses a container-local
+  socket once plaintext is closed. If you maintain your own compose file, copy
+  both the mount and the `test:` line.
+- **Administrators see a banner 30 days before a certificate in the backend's
+  TLS mount expires** (critical once expired). It reads public certificates only
+  and clears when you `--renew` and recreate the services.
+- The database does not require a client certificate (the `docker exec`
+  backup path would be locked out); see TLS.md for why.
+
+### MySQL and Redis can offer TLS, and `REDIS_SSL=true` now works (2026-10-24)
+
+Nothing changes until you run `./scripts/tls-setup.sh`. With no certificates
+mounted the database and Redis start exactly as before, and plaintext keeps
+working after you add them. Full guide: [TLS.md](./TLS.md).
+
+- **To turn it on:** `./scripts/tls-setup.sh`, add the lines from
+  `./scripts/tls-setup.sh --print-env` to `.env`, `docker compose up -d`. On
+  Unraid run it as root so the keys can be handed to the containers' users. It
+  writes a private CA, server certificates for MySQL and Redis, and client
+  certificates for the backend and backup sidecar. **Keep the CA private key
+  (`tls-ca-private/`) off the server's shared storage**; it is needed only to
+  renew.
+- **Redis port:** the compose files now read the backend's Redis port from
+  `BACKEND_REDIS_PORT` (default `6379`, plaintext; `6380` is TLS). Before, it
+  was hard-coded; `REDIS_PORT` in `.env` was never what the backend used.
+- **Certificates expire** (servers and clients after a year). An expired
+  certificate stops the connection it protects. `./scripts/tls-setup.sh --check`
+  lists the dates and exits 1 within 30 days; `--renew` reissues them.
+- **Bug fix:** `REDIS_SSL=true` never worked. The backend passed redis-py an
+  option the pinned version does not accept, so every Redis connection failed and
+  the application quietly ran without its cache (unless `REDIS_REQUIRED=true`).
+  If you had set `REDIS_SSL=true` and your Redis was not actually serving TLS,
+  expect it to start connecting properly once it is.
+- **New settings:** `DB_SSL_CERT`, `DB_SSL_KEY`, `REDIS_SSL_CERT`,
+  `REDIS_SSL_KEY` (client certificate and key, both or neither; startup reports
+  half a pair as critical).
+- **Backups:** once `tls/backup` holds a client certificate, the nightly sidecar
+  and the restore drill connect with verified TLS and abort rather than fall
+  back to plaintext if the directory is incomplete.
+- **Not yet enforced:** plaintext is still accepted until you set the switches
+  described in the entry above.
+
 ### Backups can be encrypted (2026-10-23)
 
 Backups were plaintext. They can now be encrypted, and **nothing changes until

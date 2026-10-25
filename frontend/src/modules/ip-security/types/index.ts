@@ -33,6 +33,8 @@ export interface IPException {
   useCount?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  /** The member it is for; sent on the admin lists only. */
+  userName?: string | null;
 }
 
 export interface IPExceptionListResponse {

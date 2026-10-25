@@ -7,8 +7,10 @@ does, which is what keeps a deliberate opt-out from becoming a forgotten one.
 """
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
+from cryptography import x509
 from loguru import logger
 
 from app.core.config import settings
@@ -18,6 +20,7 @@ from app.services import upload_encryption
 MALWARE_SCANNING_DISABLED = "malware_scanning_disabled"
 FILES_NOT_ENCRYPTED = "files_not_encrypted"
 BACKUPS_NOT_ENCRYPTED = "backups_not_encrypted"
+TLS_CERTIFICATES_EXPIRING = "tls_certificates_expiring"
 # Needs the database, so the endpoint adds it (see endpoints/system_notices.py).
 KEY_CUSTODY_UNCONFIRMED = "encryption_key_custody_unconfirmed"
 
@@ -48,6 +51,43 @@ def backups_are_unencrypted() -> bool:
         logger.warning("The backup status file is not valid JSON")
         return False
     return isinstance(status, dict) and status.get("encrypted") is False
+
+
+#: The backend's mount from scripts/tls-setup.sh: its own CA and client
+#: certificate plus public copies of the database and Redis server certificates
+#: (never a server key), so one directory shows every certificate that expires.
+TLS_CERTIFICATE_DIR = Path("/etc/ssl/logbook-tls")
+
+#: Matches `scripts/tls-setup.sh --check`, so the banner and the script agree.
+TLS_EXPIRY_WARNING_DAYS = 30
+
+
+def expiring_tls_certificates() -> list[tuple[str, int]]:
+    """(file name, whole days left) for each certificate near or past expiry.
+
+    A negative number of days means it has already expired. A missing directory
+    means TLS is not set up here, which is not this notice's business; a file
+    that is not a certificate is skipped, because a notice that cried wolf over
+    a stray file would only teach administrators to ignore the banner.
+    """
+    try:
+        paths = sorted(TLS_CERTIFICATE_DIR.glob("*.pem"))
+    except OSError as exc:
+        logger.warning("Cannot list the TLS certificate directory: {}", exc)
+        return []
+    now = datetime.now(timezone.utc)
+    found: list[tuple[str, int]] = []
+    for path in paths:
+        try:
+            certs = x509.load_pem_x509_certificates(path.read_bytes())
+        except (OSError, ValueError) as exc:
+            logger.warning("Cannot read TLS certificate {}: {}", path.name, exc)
+            continue
+        for cert in certs:
+            days_left = (cert.not_valid_after_utc - now).days
+            if days_left <= TLS_EXPIRY_WARNING_DAYS:
+                found.append((path.name, days_left))
+    return found
 
 
 def current_notices() -> list[SystemNotice]:
@@ -98,6 +138,30 @@ def current_notices() -> list[SystemNotice]:
                     "key it prints somewhere other than the server (see "
                     "docs/BACKUP.md). Backups encrypt from the next run, and "
                     "existing ones are converted."
+                ),
+            )
+        )
+    expiring = expiring_tls_certificates()
+    if expiring:
+        expired = [name for name, days in expiring if days < 0]
+        listing = ", ".join(
+            f"{name} ({'expired' if days < 0 else f'{days} days left'})"
+            for name, days in expiring
+        )
+        notices.append(
+            SystemNotice(
+                key=TLS_CERTIFICATES_EXPIRING,
+                severity="critical" if expired else "warning",
+                title=(
+                    "A database or cache TLS certificate has expired"
+                    if expired
+                    else "A database or cache TLS certificate expires soon"
+                ),
+                detail=(
+                    f"{listing}. When one expires, connections between the "
+                    "application, the database and Redis are refused. Ask "
+                    "whoever runs the server to run scripts/tls-setup.sh "
+                    "--renew and restart the stack (see docs/TLS.md)."
                 ),
             )
         )

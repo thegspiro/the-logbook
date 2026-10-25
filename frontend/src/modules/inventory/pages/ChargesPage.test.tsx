@@ -16,10 +16,12 @@ describe('ChargesPage', () => {
     expect(screen.getByText('Cost recovery for lost or damaged items')).toBeInTheDocument();
   });
 
-  it('renders back link to admin', () => {
+  it('titles itself under the admin header and leaves the way back to it', () => {
     renderWithRouter(<ChargesPage />);
-    const backLink = screen.getByRole('link', { name: /Back to Admin/ });
-    expect(backLink).toHaveAttribute('href', '/inventory/admin');
+    // A level-2 heading with no back link of its own: InventoryAdminLayout
+    // draws the page's header, trail and area cards around it.
+    expect(screen.getByRole('heading', { level: 2, name: 'Charge Management' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Back to Admin/ })).not.toBeInTheDocument();
   });
 
   it('renders the ChargeManagementPanel component', async () => {

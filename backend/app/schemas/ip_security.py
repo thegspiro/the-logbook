@@ -90,6 +90,10 @@ class IPExceptionResponse(UTCResponseBase):
     use_count: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # W74: the admin queue showed an address with no name beside it, so the
+    # approver could not tell whose access they were granting. Filled by the
+    # admin list endpoints; absent from a member's own list.
+    user_name: Optional[str] = None
 
 
 # =============================================================================

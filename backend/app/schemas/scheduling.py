@@ -15,7 +15,6 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
-    ValidationInfo,
     field_validator,
     model_validator,
 )
@@ -25,7 +24,7 @@ from app.models.call_tracking import (
     UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
 )
-from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.base import RefusesNull, UTCDateTime, UTCResponseBase
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.utils.positions import SEAT_NAME_MAX_LENGTH, canonical_position
 
@@ -891,7 +890,7 @@ class ShiftCallCreate(BaseModel):
     notes: Optional[str] = Field(None, max_length=2000)
 
 
-class ShiftCallUpdate(BaseModel):
+class ShiftCallUpdate(RefusesNull):
     """Schema for updating a shift call"""
 
     incident_number: Optional[str] = Field(None, max_length=100)
@@ -909,15 +908,7 @@ class ShiftCallUpdate(BaseModel):
     # All three are nullable columns behind response fields that are plain
     # str / bool, so a stored NULL would be written and then fail to serialize
     # on every read of the call.
-    @field_validator("incident_type", "cancelled_en_route", "medical_refusal")
-    @classmethod
-    def _refuse_null(cls, value: Any, info: ValidationInfo) -> Any:
-        if value is None:
-            raise ValueError(
-                f"{info.field_name} cannot be null; leave the field out to keep "
-                "its current value"
-            )
-        return value
+    null_refused = frozenset({"incident_type", "cancelled_en_route", "medical_refusal"})
 
 
 class ShiftCallResponse(UTCResponseBase):

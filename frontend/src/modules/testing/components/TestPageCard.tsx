@@ -172,13 +172,18 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
       {access.kind === 'denied' && (
         <p className="text-xs text-red-800 dark:text-red-400">
           Your account is missing {access.missing.length > 1 ? 'all of' : ''}{' '}
-          <span className="font-mono">{access.missing.join(', ')}</span> — this page should refuse with Access Denied.
+          <span className="font-mono">{access.missing.join(', ')}</span> — this page should refuse with Access Denied.{' '}
+          {/* The verdict reads Blocked as "refused" and Pass as "opened"
+              (gateVerdict.ts). Nothing said so, and a tester who met the
+              refusal they were told to expect marked it Pass — which the
+              screen then reported as a permissions defect (W77-1). */}
+          <strong>Mark Blocked if it refuses</strong>; Pass means it opened.
         </p>
       )}
       {access.kind === 'module-off' && (
         <p className="text-xs text-amber-800 dark:text-amber-300">
           The <span className="font-mono">{access.module}</span> module is switched off for this department — the page
-          should say so rather than render.
+          should say so rather than render. <strong>Mark Blocked if it does</strong>; Pass means it rendered.
         </p>
       )}
 
@@ -254,17 +259,18 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
           <p className="text-theme-text-muted mb-1.5 text-xs">Other testers</p>
           <ul className="flex flex-wrap gap-1.5">
             {(otherMarks ?? []).map((mark) => (
-              <li key={mark.markId}>
+              <li key={mark.markId} className="flex flex-col items-start gap-0.5">
                 {/* The seat is the point: the same page tested by a chief and
                     by a firefighter are two different observations. */}
-                <span
-                  className={`badge gap-1 ${OTHER_MARK_STYLE[mark.status]}`}
-                  title={mark.note ? `${mark.testerName}: ${mark.note}` : mark.testerName}
-                >
+                <span className={`badge gap-1 ${OTHER_MARK_STYLE[mark.status]}`}>
                   {mark.testerName}
                   {mark.testedAs.length > 0 && <span className="opacity-75">({mark.testedAs.join(', ')})</span>}
                   <span className="font-semibold">{mark.status === 'untested' ? 'not tested' : mark.status}</span>
                 </span>
+                {/* Shown, not left in a `title`: a tooltip never appears on a
+                    touch screen and is not reliably read out, so another
+                    tester's account of what broke was out of reach (W77-2). */}
+                {mark.note && <span className="text-theme-text-secondary text-xs">{mark.note}</span>}
               </li>
             ))}
           </ul>

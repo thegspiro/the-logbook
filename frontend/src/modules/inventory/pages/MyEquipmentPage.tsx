@@ -448,7 +448,7 @@ const MyEquipmentPage: React.FC = () => {
               <div className="space-y-1">
                 <Link
                   to={`/inventory/items/${g.itemId}`}
-                  className="text-theme-text-primary font-medium hover:underline"
+                  className="text-theme-text-primary touch:min-h-11 inline-flex items-center font-medium hover:underline"
                 >
                   {g.itemName}
                 </Link>
@@ -520,7 +520,7 @@ const MyEquipmentPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Link
                     to={`/inventory/items/${c.item_id}`}
-                    className="text-theme-text-primary font-medium hover:underline"
+                    className="text-theme-text-primary touch:min-h-11 inline-flex items-center font-medium hover:underline"
                   >
                     {c.item_name}
                   </Link>

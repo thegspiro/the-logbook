@@ -186,7 +186,7 @@ const PendingReviewTab: React.FC = () => {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-theme-text-primary text-xl font-semibold">Pending Review</h2>
         {allEntries.length > 0 && (
           <div className="flex items-center gap-2">
@@ -328,8 +328,9 @@ const PendingReviewTab: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  /* Normal Review View */
-                  <div className="flex items-start justify-between gap-4">
+                  /* Normal Review View — wraps, so the actions drop under the
+                     entry on a phone instead of widening the page (W79-3). */
+                  <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
                       <label className="touch-target-phone touch:-m-3 mt-1 cursor-pointer">
                         <input
@@ -360,16 +361,16 @@ const PendingReviewTab: React.FC = () => {
                         {entry.description && <p className="text-theme-text-muted mt-1 text-sm">{entry.description}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {rejectingEntryId === entry.id ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <input
                             type="text"
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
                             placeholder="Reason for rejecting"
                             aria-label="Reason for rejecting"
-                            className="bg-theme-surface-secondary border-theme-surface-border text-theme-text-primary rounded-sm border px-2 py-1 text-sm"
+                            className="form-input w-auto min-w-0 flex-1"
                           />
                           <button
                             onClick={() => {
@@ -384,7 +385,8 @@ const PendingReviewTab: React.FC = () => {
                               setRejectingEntryId(null);
                               setRejectionReason('');
                             }}
-                            className="text-theme-text-muted text-sm"
+                            type="button"
+                            className="text-theme-text-muted touch:min-h-11 px-2 text-sm"
                           >
                             Cancel
                           </button>

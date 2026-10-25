@@ -185,7 +185,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                   <button
                     type="button"
                     onClick={() => onNavigate('pending')}
-                    className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                    className="touch:min-h-11 text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
                   >
                     Review now →
                   </button>
@@ -206,7 +206,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => onNavigate('all')}
-                  className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                  className="touch:min-h-11 text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
                 >
                   View source entries →
                 </button>

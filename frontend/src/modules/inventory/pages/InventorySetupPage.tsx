@@ -49,7 +49,6 @@ import { ItemFormModal } from '../components/ItemFormModal';
 import type { CategoryPreset, InventoryCategory, InventorySetupStatus, Location, StorageAreaResponse } from '../types';
 import { STORAGE_TYPES, ITEM_TYPES } from '../types';
 import { INVENTORY_TERMS } from '../terminology';
-import { Breadcrumbs } from '../../../components/ux';
 
 const STEPS = [
   { label: 'Rooms', description: 'Where equipment lives' },
@@ -353,24 +352,14 @@ const InventorySetupPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
+    <div className="max-w-4xl space-y-6 py-6 sm:py-8">
       <div>
         <div className="flex items-center gap-3">
           <div className="shrink-0 rounded-lg bg-blue-600 p-2">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Inventory Setup</h1>
+            <h2 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Inventory Setup</h2>
             <p className="text-theme-text-secondary text-sm">
               Four steps, in the order an item needs them. Skip anything already done.
             </p>
