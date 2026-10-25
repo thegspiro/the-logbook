@@ -16,7 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #(opening)** — Feature 00 (Cross-cutting baseline), pass 12. PR #3682
+**PR [#3683](https://github.com/thegspiro/the-logbook/pull/3683)** (branch
+`claude/security-review-cross-cutting-baseline-p12`) — Feature 00
+(Cross-cutting baseline), pass 12. PR #3682
 (Feature 34, Frontend shared, pass 11) merged, closing out rotation lap
 "pass 10" (every row ✅) and resetting the table to `⬜` for pass 11 in that
 PR's own commit. `search_pull_requests` (`is:pr is:open
