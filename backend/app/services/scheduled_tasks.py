@@ -5824,6 +5824,9 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     ]
 
     for org_id, freq, report_day in targets:
+        # The period being generated when something raises, so the failure can
+        # be recorded after the rollback has discarded the attempt's own row.
+        attempt: Optional[tuple[str, int, Optional[int]]] = None
         try:
             # The department's date, not UTC's. This runs at 06:30 UTC, which
             # on the 1st is still the last day of the previous month on the
@@ -5848,43 +5851,59 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
             )
 
             service = ComplianceReportService(db)
-
+            due: list[tuple[str, int, Optional[int]]] = []
             if should_generate_monthly:
                 # Generate for the previous month
                 prev_month = today.month - 1 if today.month > 1 else 12
                 prev_year = today.year if today.month > 1 else today.year - 1
-                await service.generate_report(
-                    organization_id=org_id,
-                    report_type="monthly",
-                    year=prev_year,
-                    month=prev_month,
-                    send_email=True,
-                )
-                total_generated += 1
-                results.append(
-                    {
-                        "org_id": org_id,
-                        "type": "monthly",
-                        "period": f"{prev_year}-{prev_month:02d}",
-                    }
-                )
-
+                due.append(("monthly", prev_year, prev_month))
             if should_generate_yearly:
-                prev_year = today.year - 1
-                await service.generate_report(
-                    organization_id=org_id,
-                    report_type="yearly",
-                    year=prev_year,
-                    send_email=True,
+                due.append(("yearly", today.year - 1, None))
+
+            for report_type, year, month in due:
+                period = f"{year}-{month:02d}" if month else str(year)
+                existing = await service.find_auto_report(
+                    org_id, report_type, year, month
                 )
-                total_generated += 1
-                results.append(
-                    {
+                if existing is not None:
+                    # A rerun the same day: never a second report. But a report
+                    # that was stored and never emailed is sent now, so a mail
+                    # outage on the report day is not the end of that period.
+                    if existing.emailed_at is not None:
+                        continue
+                    if await service._email_report(existing, org_id) == "no_recipients":
+                        continue
+                    entry: Dict[str, Any] = {
                         "org_id": org_id,
-                        "type": "yearly",
-                        "period": str(prev_year),
+                        "type": report_type,
+                        "period": period,
+                        "resent": True,
                     }
-                )
+                else:
+                    attempt = (report_type, year, month)
+                    await service.generate_report(
+                        organization_id=org_id,
+                        report_type=report_type,
+                        year=year,
+                        month=month,
+                        send_email=True,
+                    )
+                    attempt = None
+                    total_generated += 1
+                    entry = {"org_id": org_id, "type": report_type, "period": period}
+                if service.last_email_outcome == "failed":
+                    # Stored but not delivered: reported where the department's
+                    # administrators look, rather than only in the log.
+                    entry["email"] = "failed"
+                    await persist_task_error_log(
+                        org_id,
+                        "Compliance auto-report email",
+                        RuntimeError(
+                            f"The {report_type} compliance report for {period} "
+                            "was stored but could not be emailed"
+                        ),
+                    )
+                results.append(entry)
 
             # Commit per config so one org's failure can't poison the shared
             # session for the orgs still to come, nor discard their reports
@@ -5898,6 +5917,19 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
                 await db.rollback()
             except Exception:
                 pass
+            if attempt is not None:
+                try:
+                    await ComplianceReportService(db).record_failed_attempt(
+                        org_id, *attempt, e
+                    )
+                    await db.commit()
+                except Exception as record_error:
+                    logger.error(
+                        "Could not record the failed compliance report for org {}: {}",
+                        org_id,
+                        record_error,
+                    )
+                    await db.rollback()
             results.append(
                 {
                     "org_id": org_id,

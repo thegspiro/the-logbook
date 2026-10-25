@@ -14,6 +14,7 @@ from app.api.dependencies import PaginationParams, get_current_user, require_per
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.membership_pipeline import ProspectiveMember
 from app.models.user import User
 from app.schemas.medical_screening import (
     ComplianceRoster,
@@ -30,6 +31,7 @@ from app.schemas.medical_screening import (
     ScreeningSubjects,
 )
 from app.services.medical_screening_service import MedicalScreeningService
+from app.utils.org_scoping import is_in_org
 
 router = APIRouter()
 
@@ -532,6 +534,12 @@ async def get_user_compliance(
     current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """Get compliance status for a specific user."""
+    # MS-17: grading an id that names nobody in the org answered 200 with a
+    # blank name and a verdict — fully compliant when no requirement is active.
+    if not await is_in_org(db, User, user_id, current_user.organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
     service = MedicalScreeningService(db)
     summary = await service.get_compliance_status(
         organization_id=current_user.organization_id,
@@ -556,6 +564,13 @@ async def get_prospect_compliance(
     current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """Get compliance status for a prospective member."""
+    # MS-17, as on the member route above.
+    if not await is_in_org(
+        db, ProspectiveMember, prospect_id, current_user.organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
     service = MedicalScreeningService(db)
     summary = await service.get_compliance_status(
         organization_id=current_user.organization_id,

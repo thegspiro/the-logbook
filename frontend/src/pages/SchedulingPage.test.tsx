@@ -173,6 +173,33 @@ describe('SchedulingPage', () => {
     });
   });
 
+  /**
+   * Scheduling Administration's header offers Create Shift, and the dialog
+   * lives here beside the board, so the header links to `?create=shift`.
+   */
+  describe('arriving with ?create=shift', () => {
+    it('opens Create Shift for a scheduling manager, and spends the request', async () => {
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'scheduling.manage');
+      window.history.replaceState({}, '', '/scheduling?create=shift');
+
+      renderWithRouter(<SchedulingPage />);
+
+      expect(await screen.findByRole('heading', { name: 'Create Shift' })).toBeInTheDocument();
+      // Dropped once read, so a refresh or the back button does not reopen it.
+      expect(new URLSearchParams(window.location.search).get('create')).toBeNull();
+    });
+
+    it('opens nothing for a viewer who could not create the shift', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      window.history.replaceState({}, '', '/scheduling?create=shift');
+
+      renderWithRouter(<SchedulingPage />);
+
+      await waitFor(() => expect(new URLSearchParams(window.location.search).get('create')).toBeNull());
+      expect(screen.queryByRole('heading', { name: 'Create Shift' })).not.toBeInTheDocument();
+    });
+  });
+
   describe('Calendar Controls', () => {
     it('should render view mode toggle buttons', async () => {
       renderWithRouter(<SchedulingPage />);

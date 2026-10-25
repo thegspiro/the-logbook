@@ -295,7 +295,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                 <div className="flex shrink-0 items-center gap-0.5">
                   <a
                     href={`/inventory/admin/checklists/templates/${template.id}`}
-                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
+                    className="text-theme-text-muted touch:min-h-[44px] touch:min-w-[44px] flex items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:p-1.5"
                     aria-label={template.isActive ? `Edit ${template.name}` : `Continue editing ${template.name}`}
                   >
                     <Pencil className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
@@ -306,11 +306,11 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                     document={StationDocument.APPARATUS_CHECK_SHEET}
                     recordId={template.id}
                     label=""
-                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
+                    className="text-theme-text-muted touch:min-h-[44px] touch:min-w-[44px] flex items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:p-1.5"
                   />
                   <button
                     onClick={() => setCloneTarget(template)}
-                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-blue-500/10 hover:text-blue-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
+                    className="text-theme-text-muted touch:min-h-[44px] touch:min-w-[44px] flex items-center justify-center rounded-md p-2 transition-colors hover:bg-blue-500/10 hover:text-blue-600 sm:p-1.5"
                     aria-label={`Clone ${template.name}`}
                   >
                     <Copy className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
@@ -320,7 +320,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                       void handleDelete(template);
                     }}
                     disabled={isDeleting}
-                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 sm:min-h-0 sm:min-w-0 sm:p-1.5"
+                    className="text-theme-text-muted touch:min-h-[44px] touch:min-w-[44px] flex items-center justify-center rounded-md p-2 transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 sm:p-1.5"
                     aria-label={`Delete ${template.name}`}
                   >
                     {isDeleting ? (

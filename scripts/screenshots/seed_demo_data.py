@@ -2554,13 +2554,14 @@ class Seeder:
         return created
 
     def _sign_a_guest_in(self, event_id: str, display_code: str) -> None:
-        """Put one visitor through the public sign-in, as a visitor would.
+        """Put one applicant through the open house's kiosk sign-in.
 
-        Signed in through `/api/public/v1/...` with no session rather than
-        written through the admin external-attendee endpoint, because the
-        prospect record and its "Attended: <event>" referral source are made by
-        the guest path and by nothing else — an attendee added by an officer
-        gets no pipeline card, so the screenshot of one would be staged.
+        The open house adds its guests to the prospective members pipeline,
+        and such an event's kiosk signs in only applicants it already knows —
+        by email, with a "Is this you?" confirmation. So Rosa is opened as an
+        applicant first, as someone on the door would, and then signs in from
+        the public page with no session, as a visitor does. The sign-in is what
+        links the open house to her card.
         """
         if not (event_id and display_code):
             return
@@ -2569,22 +2570,49 @@ class Seeder:
         )
         if any(pick(a, "email") == GUEST_EMAIL for a in attendees):
             return
+        self._sign_in_as_applicant(
+            event_id,
+            display_code,
+            {
+                "first_name": "Rosa",
+                "last_name": "Delgado",
+                "email": GUEST_EMAIL,
+                "phone": "(703) 555-0184",
+                "interest_reason": (
+                    "My neighbour is on the department and said to come "
+                    "and have a look. I work days but I'm free evenings."
+                ),
+            },
+            label="guest sign-in",
+        )
+
+    def _sign_in_as_applicant(
+        self, event_id: str, display_code: str, guest: dict, *, label: str
+    ) -> None:
+        """Open *guest* as an applicant if needed, then sign in by email."""
+        email = guest["email"]
         try:
-            self.api.post_public(
-                f"/display/{display_code}/events/{event_id}/guest-check-in",
-                {
-                    "first_name": "Rosa",
-                    "last_name": "Delgado",
-                    "email": GUEST_EMAIL,
-                    "phone": "(703) 555-0184",
-                    "interest_reason": (
-                        "My neighbour is on the department and said to come "
-                        "and have a look. I work days but I'm free evenings."
-                    ),
-                },
+            found = items(
+                self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+                "prospects",
             )
+            if not any(p.get("email") == email for p in found):
+                self.api.post(
+                    "/prospective-members/prospects",
+                    {**guest, "referral_source": "Open house"},
+                )
+            base = f"/display/{display_code}/events/{event_id}"
+            lookup = self.api.post_public(f"{base}/guest-lookup", {"email": email})
+            token = pick(lookup or {}, "confirm_token")
+            if not token:
+                self.blocked.append(
+                    f"{label}: {email} was not recognised "
+                    f"({pick(lookup or {}, 'status')})"
+                )
+                return
+            self.api.post_public(f"{base}/guest-confirm", {"confirm_token": token})
         except ApiError as exc:
-            self.blocked.append(f"guest sign-in: {exc}")
+            self.blocked.append(f"{label}: {exc}")
 
     RECRUITMENT_EVENT_TITLE = "Fall Recruitment Open House"
 
@@ -2725,13 +2753,9 @@ class Seeder:
         for guest in self.RECRUITMENT_GUESTS:
             if guest["email"] in signed_in:
                 continue
-            try:
-                self.api.post_public(
-                    f"/display/{display_code}/events/{event_id}/guest-check-in",
-                    guest,
-                )
-            except ApiError as exc:
-                self.blocked.append(f"recruitment guest sign-in: {exc}")
+            self._sign_in_as_applicant(
+                event_id, display_code, guest, label="recruitment guest sign-in"
+            )
         return event
 
     VALIDATION_EVENT_TITLE = "Wednesday Evening Drill — Attendance Pending"

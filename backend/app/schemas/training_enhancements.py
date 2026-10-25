@@ -12,7 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX
 
 _response_config = ConfigDict(from_attributes=True)
@@ -48,7 +48,7 @@ class RecertificationPathwayCreate(RecertificationPathwayBase):
     """Schema for creating a recertification pathway"""
 
 
-class RecertificationPathwayUpdate(BaseModel):
+class RecertificationPathwayUpdate(RefusesNull):
     """Schema for updating a recertification pathway"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -69,6 +69,16 @@ class RecertificationPathwayUpdate(BaseModel):
     new_expiration_months: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     auto_create_record: Optional[bool] = None
     active: Optional[bool] = None
+
+    null_refused = frozenset(
+        {
+            "active",
+            "auto_create_record",
+            "grace_period_days",
+            "renewal_window_days",
+            "requires_assessment",
+        }
+    )
 
 
 class RecertificationPathwayResponse(RecertificationPathwayBase):
@@ -151,7 +161,7 @@ class CompetencyMatrixCreate(CompetencyMatrixBase):
     """Schema for creating a competency matrix"""
 
 
-class CompetencyMatrixUpdate(BaseModel):
+class CompetencyMatrixUpdate(RefusesNull):
     """Schema for updating a competency matrix"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -160,6 +170,8 @@ class CompetencyMatrixUpdate(BaseModel):
     role_id: Optional[str] = None
     skill_requirements: Optional[List[Dict[str, Any]]] = None
     active: Optional[bool] = None
+
+    null_refused = frozenset({"active"})
 
 
 class CompetencyMatrixResponse(CompetencyMatrixBase):
@@ -260,7 +272,7 @@ class InstructorQualificationCreate(InstructorQualificationBase):
     user_id: UUID
 
 
-class InstructorQualificationUpdate(BaseModel):
+class InstructorQualificationUpdate(RefusesNull):
     """Schema for updating an instructor qualification"""
 
     qualification_type: Optional[str] = Field(
@@ -276,6 +288,8 @@ class InstructorQualificationUpdate(BaseModel):
     expiration_date: Optional[date] = None
     active: Optional[bool] = None
     verified: Optional[bool] = None
+
+    null_refused = frozenset({"active", "verified"})
 
 
 class InstructorQualificationResponse(InstructorQualificationBase):
@@ -418,7 +432,7 @@ class MultiAgencyTrainingCreate(MultiAgencyTrainingBase):
     """Schema for creating a multi-agency training record"""
 
 
-class MultiAgencyTrainingUpdate(BaseModel):
+class MultiAgencyTrainingUpdate(RefusesNull):
     """Schema for updating a multi-agency training record"""
 
     exercise_name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -435,6 +449,8 @@ class MultiAgencyTrainingUpdate(BaseModel):
     after_action_report: Optional[str] = None
     lessons_learned: Optional[List[Dict[str, Any]]] = None
     mutual_aid_agreement_id: Optional[str] = Field(None, max_length=100)
+
+    null_refused = frozenset({"nims_compliant"})
 
 
 class MultiAgencyTrainingResponse(MultiAgencyTrainingBase):

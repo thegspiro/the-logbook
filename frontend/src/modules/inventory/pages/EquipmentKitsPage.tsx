@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
 import {
-  ArrowLeft,
   BoxSelect,
   Plus,
   Pencil,
@@ -30,7 +28,6 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
-import { Breadcrumbs } from '../../../components/ux';
 
 interface LineItemFormData {
   item_id: string;
@@ -377,21 +374,11 @@ const EquipmentKitsPage: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
+    <div className="max-w-7xl space-y-6 py-6 sm:py-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Gear Kits</h1>
+          <h2 className="text-theme-text-primary text-2xl font-bold">Gear Kits</h2>
           <p className="text-theme-text-secondary mt-1">
             Create kit templates to issue multiple items to members at once.
           </p>

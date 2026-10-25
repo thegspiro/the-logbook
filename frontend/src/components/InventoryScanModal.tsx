@@ -1281,7 +1281,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                           ? 'temporary loan'
                           : distributionOperation === 'temporary_assignment'
                             ? 'temporary assignment'
-                            : 'permanent assignment'}
+                            : // The option chosen above is labelled "Ongoing
+                              // assignment"; the confirmation repeats that
+                              // word rather than the stored code (W79-7).
+                              'ongoing assignment'}
                     </li>
                   ))}
                 </ul>

@@ -17,7 +17,6 @@ import { Link } from 'react-router';
 import { BarChart3, ClipboardList, Clock, Link2, SlidersHorizontal, Truck } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { EquipmentCheckTemplateList } from '../components/EquipmentCheckTemplateList';
-import { Breadcrumbs } from '../../../components/ux';
 import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
 
 interface RelatedLink {
@@ -103,15 +102,13 @@ export const ChecklistsAdminPage: React.FC = () => {
   const related = RELATED.filter((link) => link.anyPermission.some((p) => checkPermission(p)));
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-      {/* This page carries no back link of its own, and it is reached from two
-          different hubs — Inventory Administration, and the Scheduling
-          Administration card for the checklists a crew runs on shift. The trail
-          is the only route back up either way. */}
-      <Breadcrumbs />
-
+    <div className="max-w-6xl py-6">
+      {/* No back link or trail of its own: it is drawn inside Inventory
+          Administration's header (InventoryAdminLayout), whose trail and area
+          cards are the way back up. A viewer the header refuses still gets the
+          trail, from the layout. */}
       <header className="mb-6">
-        <h1 className="text-theme-text-primary text-2xl font-bold">Equipment Checklists</h1>
+        <h2 className="text-theme-text-primary text-2xl font-bold">Equipment Checklists</h2>
         <p className="text-theme-text-secondary mt-1 text-sm">
           The lists a crew walks over an apparatus. A shift template can name which of these its shifts carry; otherwise
           a shift uses the ones written for its vehicle.

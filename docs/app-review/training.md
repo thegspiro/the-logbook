@@ -1,7 +1,81 @@
 # Application Review — Training (Tier B)
 
 **Prefix:** `TR2` · **Iteration:** B18 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-23 (pass 5)
+
+---
+
+## Pass 5 (2026-10-23) — a null on a required training field was accepted by 13 update schemas (45 cases fixed)
+
+Lens for this pass: the update-payload contract of B4–B17 (omit = keep, `null` = clear,
+a value = set), driven through the real handlers rather than read off the code. The test
+derives its cases instead of listing them: for each of 15 `PATCH` routes it takes the
+fields the request schema accepts, finds the model column behind each, and sends a
+`null` for every one. A field is expected to be **refused** when its column is NOT NULL
+or its response field cannot hold `None` (a stored NULL there makes every later read of
+the row a 500), and expected to **clear** otherwise. Passes 1–4 were not re-read; the
+other five checklist dimensions were not re-run this pass.
+
+**Result before the fix:** 46 of the 212 derived cases failed, all of them in the
+"refused" group: the update schemas typed every field `Optional`, so `null` validated,
+and what happened next depended on the handler. Where the column is NOT NULL the write
+failed at the flush (500, the session rolled back). Where the column is nullable behind
+a non-Optional response field it was **stored**, and the row then failed to serialize.
+The "may be cleared" group (every nullable, response-safe field) passed in full.
+
+### TR2-2 — LOW/MED — `null` on a required field accepted by 13 update schemas — ✅ FIXED
+
+`RefusesNull` (new, `schemas/base.py`) is a base class whose `null_refused` set names the
+fields that cannot be emptied; an explicit `null` for one is a 422 on that field, an
+omitted key is untouched. Applied to `TrainingCategoryUpdate`, `TrainingCourseUpdate`,
+`TrainingRecordUpdate`, `TrainingRequirementUpdate`, `ExternalTrainingProviderUpdate`,
+`TrainingProgramUpdate`, `ProgramPhaseUpdate`, `ProgramMilestoneUpdate`,
+`SkillEvaluationUpdate`, `InstructorQualificationUpdate`, `CompetencyMatrixUpdate`,
+`RecertificationPathwayUpdate` and `MultiAgencyTrainingUpdate`, 45 field names in all
+(`active`, `name`, `training_type`, `status`, `frequency`, `structure_type`,
+`grace_period_days`, `sync_interval_hours` and so on). It is a class rather than a
+`field_validator` assigned in each schema because mypy's pydantic plugin rejects an
+untyped class attribute, and the version that did that failed the gate on 13 lines.
+
+Deliberately **not** refused: `TrainingProgramUpdate.prerequisite_program_ids`. Its column
+is nullable, the service stores an emptied list as NULL, and the response model turns NULL
+back into `[]`, so `null` clears it by design and an existing test pins that. The derived
+test lists it in `_CLEARS_BY_DESIGN` with the reason rather than special-casing the
+schema. `allows_concurrent_enrollment` and `active` on a program were already answered
+with a 400 by the service and are unchanged.
+
+### TR2-3 — MED — the program edit modal could corrupt a program from the UI — ✅ FIXED
+
+`PipelineEditModals.tsx` sent `warning_days_before: warnDays ? Number(warnDays) : null`,
+so blanking "First warning (days before the due date)" and pressing Save sent a null for
+a NOT NULL column. The existing component test `clears the program’s text, limits and
+recert schedule` asserted `warning_days_before: null`, so the bug was pinned as the
+expected behaviour.
+The modal now refuses a blank first warning with a toast, sends the number, and the
+`TrainingProgramUpdate` type no longer admits `null` for the field. The old test now
+keeps the field and a new one asserts the update is not sent.
+
+### TR2-4 — INFO — update routes the derived test does not cover — OPEN
+
+Fifteen routes are covered. Not covered, and not reviewed under this lens:
+`CertAlertSettingsUpdate`, the three `External*MappingUpdate` schemas,
+`MemberCompetencyUpdate`, `TrainingModuleConfigUpdate`, `ProgramEnrollmentUpdate`,
+`RequirementProgressUpdate`, `SkillCheckoffUpdate`, `TrainingSessionLinkageUpdate`,
+`SelfReportConfigUpdate`, `SkillTemplateUpdate`, `SkillTestUpdate`,
+`TrainingRequirementEnhancedUpdate` and `ProgramRequirementUpdate` (whose `PATCH` answers
+422 on nullable fields and was left for a separate look). The harness takes a route as one
+line in `_ROUTES`; adding these is mechanical and is the next training pass.
+
+**Completion gate (pass 5):** `flake8 app/ tests/` 0 · `black --check app/ tests/` clean ·
+`isort` clean · `mypy` on the four changed schema modules clean · `npm run typecheck` 0 ·
+`npm run lint` 0 · `prettier --check` clean on the three changed frontend files · new file
+`test_training_update_endpoints_integration.py` 212 pass (46 failed before the fix; one of those, `prerequisite_program_ids`, was
+reclassified as a clear-by-design case rather than fixed, leaving the 45 above) with the 1,401 other tests selected by
+`train|program|recert|competen|instructor|multi_agency|model_updates|external_train`:
+**1,613 passed** · `PipelineEditModals.test.tsx` 26 pass · collected under the unit job's
+marker expression: 0 (all marked `integration`). `npm ci` was needed first: the sandbox
+`node_modules` lacked `@tiptap/*`, which `package.json` declares.
 
 ---
 

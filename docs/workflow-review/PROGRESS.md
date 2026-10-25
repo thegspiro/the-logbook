@@ -137,12 +137,12 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ✅     |
 | W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ✅     |
 | W73 | Integrations                                                              | admin            | `/integrations`                            | ✅     |
-| W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ⬜     |
-| W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ⬜     |
-| W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ⬜     |
-| W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ⬜     |
-| W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ⬜     |
-| W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ⬜     |
+| W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ✅     |
+| W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ✅     |
+| W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ✅     |
+| W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ✅     |
+| W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ✅     |
+| W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ✅     |
 
 ---
 
@@ -163,10 +163,9 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
-- **W79** — tap targets under 44px on the onboarding Modules, Ranks &
-  Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
-  screen's "Forgot your password?", Privacy and Terms links (W02-5), and
-  "Back to Login" on the forgot-password page (36px, W03).
+- **A fresh install** — tap targets under 44px on the onboarding Modules,
+  Ranks & Positions and Apparatus steps at 390px wide (W01-13); setup cannot
+  be replayed on an installed department, so W79 could not drive it.
 - **Any run touching the app shell** — nothing keeps `TopNavigation` and
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
@@ -180,20 +179,9 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
   migrations.
-- **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
-  "Read this version" summary are 20px tall (W54-6).
-- **W79** — the checklist builder's header and chip controls are 30–40px tall
-  at 390×844, and its drag handles 20px (W46-18).
 - **W33 / W34** — the shift-assignment notice names the equipment checklists
   but opens the schedule rather than My Checklists, and prints the shift date
   as `2026-09-30` (W46-16).
-- **W75** — password sign-in, failure, lockout and sign-out never reach the
-  audit log, so the audit screen cannot show them (W02-3).
-- **W75** — since W50-45, `/audit-logs` resolves the actor's `username`
-  server-side and the page should read "system" only for rows with no
-  `user_id`; confirm on the audit page. Also `GET /audit-logs?event_type=runoff_election_created`
-  returned 0 for a row visibly present in the table (W50, A10) — check the
-  event-type filter.
 - **W50 follow-up** — the election meeting-link → Import Attendees → unlink
   round trip could not be driven in W50. W51 left a business-meeting event for
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
@@ -218,7 +206,205 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   as ISO strings (`2026-01-01 — 2026-12-31`), unlike the rest of the app
   (W72-4).
 
+- **Integrations, a later pass** — the `integration.connected` and
+  `integration.disconnected` audit rows carry no IP address (W75).
+
+- **Public portal, a later pass** — public events are only `public_education`
+  events, and their location is the free-text `location` alone, so an event
+  placed at a facility (`location_id`) would publish no location; read from
+  code, not driven (W76).
+
+- **Tooling** — a full `npm run lint` needs about 3.5 GB of heap (2,350
+  files with type-aware rules). It aborted out of memory under the 2 GB default
+  of the W77 container and passed with `--max-old-space-size=8192`. CI's
+  `ubuntu-latest` default is larger, but the margin is thin (W77).
+
+- **Platform analytics, a later pass** — the other "last 30 days" figures
+  (events, forms, documents, new users) are still a rolling `now - 30 days`,
+  while the two charts and their totals are now whole local days; read from
+  code (W78).
+
 ## Log
+
+### W79 — Phone pass: W08, W19, W24, W33, W39 and W70 at 390×844 — 2026-10-23
+
+Driven as: anonymous, `admin`, `member`, `training_officer`,
+`scheduling_officer`, `quartermaster` and a newly added member, all at 390×844.
+
+Held:
+
+- all six flows complete on a phone, each double-click acting once;
+- every result was read back from the other role or after a reload.
+
+Fixed:
+
+- W79-2 (MED — Admin Hours management was 929px wide).
+- W79-3 (MED — Pending Review's actions were off-screen).
+- W79-9 (MED — the checklist builder's section heading was 18px wide;
+  W46-18's small controls).
+- W79-1 (LOW — sign-in, forgot-password and legal links; W02-5, W03, W54-6).
+- W79-4 (LOW — event page controls).
+- W79-5 (LOW — My Training status codes).
+- W79-6 (LOW — training review controls).
+- W79-7 (LOW — scheduling controls and names).
+- W79-8 (LOW — inventory links and the confirmation wording).
+
+Flagged: W79-10 (LOW — the inventory dashboard's attention tile and queue
+disagree).
+
+Still open: W08-6, now 25 refused requests; W01-13, not drivable.
+
+Gate: typecheck clean; lint clean with an 8 GB heap; 1,061 tests across the
+touched pages pass.
+
+Next: none. W79 was the last activity of the rotation.
+
+### W78 — Platform administration — 2026-10-22
+
+Driven as: `admin` at 1280×900 and 390×844, and `member` for access.
+
+Held:
+
+- members are refused on the page and the API;
+- user, module and error totals match the data;
+- the export names the local date.
+
+Fixed:
+
+- W78-1 (MED — the trends ended on the previous UTC day and missed
+  everything since UTC midnight).
+- W78-2 (LOW — every module was badged Enabled).
+- W78-3 (MED — both charts drew 0px bars, and the counts were tooltip-only).
+
+Flagged: none.
+
+Gate: typecheck clean; lint clean with an 8 GB heap; 2 frontend and 26
+backend tests pass.
+
+Next: W79.
+
+### W77 — The testing module and its printed report — 2026-10-22
+
+Driven as: `admin` and `member` at 1280×900 and 390×844.
+
+Held:
+
+- members are refused the admin actions on screen and through the API;
+- marks and notes survive a reload and reach the admin's combined view;
+- an archived run is read-only;
+- the report, CSV and Markdown agree with the page;
+- both clears ask first, and the department-wide one is audited.
+
+Fixed:
+
+- W77-1 (MED — recording a correct refusal as Pass was reported as a
+  permissions defect, and nothing said to mark it Blocked).
+- W77-2 (LOW — another tester's note was tooltip-only).
+- W77-3 (LOW — the Markdown summary dropped "to confirm" and printed
+  "(s)").
+- W77-4 (LOW — Clear everyone counted 0 testers).
+- W77-5 (LOW — both pages scrolled sideways at 390px).
+
+Flagged: none.
+
+Gate: typecheck clean; lint clean with an 8 GB heap (it runs out of memory at
+this container's 2 GB default); 110 testing-module tests pass.
+
+Next: W78.
+
+### W76 — Public portal and the public pages — 2026-10-21
+
+Driven as:
+
+- anonymous: the home, privacy and terms pages signed out, and the public API
+  with no key, an unknown key, a live key, a revoked key, and the portal
+  disabled;
+- `admin` at 1280×900 and 390×844: enabling, keys, Data Control, the rate
+  limit, access logs, statistics, revoking and disabling.
+
+Held:
+
+- nothing is published until a field is enabled, and then only that field;
+- members-only events stay private;
+- every refusal answers with its reason;
+- double-clicks act once.
+
+Fixed:
+
+- W76-1 (MED — each Data Control switch moved the list under the pointer,
+  and the next tap enabled the wrong field).
+- W76-2 (MED — the station address was never published when it matched the
+  mailing address).
+- W76-3 (LOW — Disable Portal did not ask).
+- W76-4 (LOW — the access log hid refusal reasons and overstated what it
+  lists).
+- W76-5 (LOW — duplicate switch names, unnamed revoke buttons, a placeholder
+  host).
+
+Flagged: W76-6 (LOW — three statistics fields can be enabled but always
+publish null).
+
+Gate: typecheck and lint are clean; 58 public-portal frontend tests and 154
+backend portal tests pass.
+
+Next: W77.
+
+### W75 — Audit log, error monitoring and analytics — 2026-10-20
+
+Driven as: `admin` at 1280×900 and 390×844, with one deliberate failed
+sign-in for `member2`.
+
+Held:
+
+- search, the event-type filter and the totals agree;
+- sign-in, failure and sign-out now reach the audit log (W02-3 resolved);
+- "system" appears only for a row with no actor (W50-45 resolved);
+- Clear All asks first.
+
+Fixed:
+
+- W75-1 (MED — the category filter offered only the ten busiest categories).
+- W75-2 (LOW — "Activity by Hour" charted the UTC hour).
+- W75-3 (LOW — a desktop audit row could not be opened from the keyboard).
+- W75-4 (LOW — Error Monitoring's filter label and detail buttons).
+
+Flagged: none.
+
+Gate: typecheck and lint are clean; 19 frontend and 396 backend tests pass.
+
+Next: W76.
+
+### W74 — IP security, and a member's access request — 2026-10-20
+
+Driven as:
+
+- `member` filing requests, with bad input, a bad address and a good one, and
+  reading the outcome at 390×844;
+- `admin` approving and rejecting from the queue, and approving their own
+  request.
+
+Held:
+
+- Submit waits for the required fields;
+- double-clicks file and approve once;
+- members are refused the admin page and endpoints;
+- rejection needs a reason.
+
+Fixed:
+
+- W74-1 (MED — any string was queued as an address, and none but an exact
+  canonical address could ever match).
+- W74-2 (MED — a refused request wiped the member's justification).
+- W74-3 (MED — the admin approved without seeing the member, the reason or
+  even the address).
+- W74-4 (LOW — raw status codes; no rejection reason for the member).
+
+Flagged: W74-5 (LOW — an admin can approve their own exception).
+
+Gate: typecheck and lint are clean; 47 IP-security frontend tests and 64
+related backend tests pass.
+
+Next: W75.
 
 ### W73 — Integrations — 2026-10-17
 

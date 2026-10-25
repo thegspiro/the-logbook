@@ -41,12 +41,13 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     published: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     archived: 'bg-theme-surface-secondary text-theme-text-primary',
   };
+  const labels: Record<string, string> = { draft: 'Draft', published: 'Published', archived: 'Archived' };
 
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status] ?? styles['draft']}`}
     >
-      {status.replace('_', ' ')}
+      {labels[status] ?? status.replace(/_/g, ' ')}
     </span>
   );
 };
@@ -310,8 +311,8 @@ const SkillsTestingTemplatesTab: React.FC = () => {
       )}
 
       {/* Toolbar */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <div className="field-min relative flex-1">
           <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"

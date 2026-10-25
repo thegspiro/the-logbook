@@ -194,7 +194,9 @@ describe('SupplyExpiringPage — phone layout', () => {
     await renderPage();
     await userEvent.click(screen.getByRole('button', { name: 'By apparatus' }));
 
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+    // Level 3: the page's own title is the level-2 heading now that it sits
+    // under Inventory Administration's header, and the rigs sit under it.
+    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
       'Engine 2 · 1 item',
       'Medic 1 · 2 items',
     ]);

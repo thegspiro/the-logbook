@@ -1,9 +1,7 @@
 /** PoolItemsPage — View for pool-tracked (quantity-based) inventory items. */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
 import {
-  ArrowLeft,
   Package,
   Plus,
   Search,
@@ -30,7 +28,6 @@ import { EmptyState } from '../../../components/ux/EmptyState';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
-import { Breadcrumbs } from '../../../components/ux';
 import { displayNameOf } from '../../../utils/memberName';
 
 interface SummaryCardProps {
@@ -488,28 +485,18 @@ const PoolItemsPage: React.FC = () => {
     returnQty < 1 ? 'Enter a quantity of at least 1.' : returnQty > returnMax ? `Only ${returnMax} issued.` : null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
+    <div className="max-w-7xl space-y-6 py-6 sm:py-8">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
+          <h2 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
             <Package size={24} /> Pool Items
-          </h1>
+          </h2>
           <p className="text-theme-text-muted mt-1 text-sm">
             Quantity-based items issued from shared pools — uniforms, consumables, and supplies.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             className="btn-secondary btn-md flex items-center gap-1"
@@ -567,8 +554,10 @@ const PoolItemsPage: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        {/* `form-input` is `w-full`, which in a row claims the whole width and
+            leaves the search box beside it a few pixels wide. */}
         <select
-          className="form-input"
+          className="form-input sm:w-auto"
           aria-label="Filter by category"
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}

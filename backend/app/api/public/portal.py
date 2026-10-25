@@ -275,6 +275,37 @@ async def get_organization_info(
             )
 
         # Build full data dictionary
+        mailing_address = (
+            {
+                "line1": org.mailing_address_line1,
+                "line2": org.mailing_address_line2,
+                "city": org.mailing_city,
+                "state": org.mailing_state,
+                "zip_code": org.mailing_zip,
+                "country": org.mailing_country,
+            }
+            if org.mailing_address_line1
+            else None
+        )
+        # "Physical address same as mailing" stores the station's address in
+        # the mailing columns only, so the physical one is the mailing one —
+        # as onboarding and the email templates read it. Returning None here
+        # left a department that enabled only the physical address publishing
+        # nothing (W76-2). It is only published when that field is enabled.
+        if org.physical_address_same:
+            physical_address = mailing_address
+        elif org.physical_address_line1:
+            physical_address = {
+                "line1": org.physical_address_line1,
+                "line2": org.physical_address_line2,
+                "city": org.physical_city,
+                "state": org.physical_state,
+                "zip_code": org.physical_zip,
+                "country": org.physical_country,
+            }
+        else:
+            physical_address = None
+
         org_data = {
             "name": org.name,
             "organization_type": (
@@ -285,30 +316,8 @@ async def get_organization_info(
             "phone": org.phone,
             "email": org.email,
             "website": org.website,
-            "mailing_address": (
-                {
-                    "line1": org.mailing_address_line1,
-                    "line2": org.mailing_address_line2,
-                    "city": org.mailing_city,
-                    "state": org.mailing_state,
-                    "zip_code": org.mailing_zip,
-                    "country": org.mailing_country,
-                }
-                if org.mailing_address_line1
-                else None
-            ),
-            "physical_address": (
-                {
-                    "line1": org.physical_address_line1,
-                    "line2": org.physical_address_line2,
-                    "city": org.physical_city,
-                    "state": org.physical_state,
-                    "zip_code": org.physical_zip,
-                    "country": org.physical_country,
-                }
-                if org.physical_address_line1 and not org.physical_address_same
-                else None
-            ),
+            "mailing_address": mailing_address,
+            "physical_address": physical_address,
         }
 
         # Filter by whitelist

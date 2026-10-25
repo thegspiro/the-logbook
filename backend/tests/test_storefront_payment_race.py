@@ -13,12 +13,10 @@ waits and adds to the first.
 and, until this pass, locked nothing: a settlement committing between its
 read and its write was silently overwritten the instant refund's own blocked
 UPDATE finally landed, computed from a balance that predated the settlement.
-It now locks the order too, for the same reason and the same way. (See
-SF8-04-1 in the findings doc for why ``waive_order_payment`` is flagged, not
-fixed the same way: it does not do arithmetic on ``amount_paid`` at all, and
-its real gap — unconditionally overwriting ``payment_status`` even when the
-order was already settled by the time of read — is a business-rule question
-a lock does not answer.)
+It now locks the order too, for the same reason and the same way.
+
+``update_order_status`` settles the ledger itself on a move to ``PAID``, and
+locks the order for that transition only (SF8-04-2).
 
 The first writer here is raw SQL holding the row lock, so the test does not
 depend on the code under test to create the contention.
@@ -35,6 +33,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import database_manager
+from app.models.storefront import StoreOrderStatus
 from app.services.storefront_service import StorefrontService
 
 pytestmark = [pytest.mark.integration]
@@ -286,3 +285,63 @@ async def test_a_refund_racing_a_payment_does_not_lose_it():
         "refund read the balance before the payment committed and wrote over "
         "it."
     )
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_a_status_update_to_paid_racing_a_payment_does_not_lose_it():
+    """SF8-04-2: ``update_order_status(PAID)`` settles the ledger itself when
+    the order is unpaid. Off an unlocked read it decided that from a balance a
+    concurrent payment had already changed, and wrote ``amount_paid = total``
+    over the payment once its UPDATE got the row."""
+    org, order = await _seed()
+    first_locked = asyncio.Event()
+
+    async def first():
+        # A payment of 120 against a total of 100 landing while the status
+        # update is in flight; an overpayment, so a write of ``total`` over it
+        # is visible as money lost rather than as the same number rewritten.
+        async with database_manager.engine.connect() as conn:
+            async with conn.begin():
+                await conn.execute(
+                    text("SELECT amount_paid FROM store_orders WHERE id=:i FOR UPDATE"),
+                    {"i": order},
+                )
+                first_locked.set()
+                await asyncio.sleep(_HOLD_SECONDS)
+                await conn.execute(
+                    text(
+                        "UPDATE store_orders SET amount_paid = amount_paid + 120, "
+                        "payment_status = 'paid' WHERE id=:i"
+                    ),
+                    {"i": order},
+                )
+
+    async def second():
+        await first_locked.wait()
+        async with database_manager.engine.connect() as conn:
+            session = AsyncSession(bind=conn, expire_on_commit=False)
+            try:
+                await StorefrontService(session).update_order_status(
+                    order, org, StoreOrderStatus.PAID, None, notify_member=False
+                )
+            finally:
+                await session.close()
+
+    try:
+        await asyncio.gather(first(), second())
+        async with database_manager.engine.connect() as conn:
+            paid, status = (
+                await conn.execute(
+                    text("SELECT amount_paid, status FROM store_orders WHERE id=:i"),
+                    {"i": order},
+                )
+            ).one()
+    finally:
+        await _cleanup(org)
+
+    assert Decimal(paid) == Decimal("120"), (
+        f"amount_paid is {paid} after a payment of 120 landed. 100 means the "
+        "status update settled the order from a read taken before the payment "
+        "committed and wrote the order total over it."
+    )
+    assert status == "paid"

@@ -12278,7 +12278,7 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 163,
     anchor: "The guest sign-in page as a visitor sees it on a",
-    alt: "The guest sign-in form on a phone, with the event name above the name and contact fields",
+    alt: "The guest sign-in page on a phone, with the event name above the email field",
     route: "/login",
     auth: "anonymous",
     viewport: "mobile",
@@ -12297,19 +12297,24 @@ export const SHOTS = [
     auth: "anonymous",
     viewport: "mobile",
     // **This shot signs a guest in.** The confirmation is client state that no
-    // route reaches — the only way to it is to submit the form. It reuses the
-    // seeder's visitor rather than inventing a new one on each capture: a
-    // repeat sign-in is recognised and updates that attendee instead of adding
-    // another, so running this a hundred times leaves one Rosa Delgado.
+    // route reaches — the only way to it is the email-first sign-in the open
+    // house uses (it feeds the pipeline). It reuses the seeder's applicant
+    // rather than inventing a new one on each capture: a repeat sign-in is
+    // recognised and changes nothing, so running this a hundred times leaves
+    // one Rosa Delgado — and, because the seeder already signed her in, the
+    // page shown is "You're already checked in, Rosa D.".
     prepare: async (page, ctx) => {
       await withDisplayCode(
         (code, eventId) => `/display/${code}/events/${eventId}/guest`,
       )(page, ctx);
-      await page.getByLabel(/first name/i).fill("Rosa");
-      await page.getByLabel(/last name/i).fill("Delgado");
       await page.getByLabel(/email/i).fill("rosa.delgado@example.com");
-      await page.getByRole("button", { name: /sign in/i }).click();
-      await page.getByText(/You're signed in!/i).waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: /continue/i }).click();
+      await page
+        .getByRole("button", { name: /yes, check me in/i })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText(/You're (already checked in|signed in)/i)
+        .waitFor({ timeout: 15_000 });
     },
     fullPage: true,
   },

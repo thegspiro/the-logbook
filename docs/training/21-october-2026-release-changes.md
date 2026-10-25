@@ -258,6 +258,23 @@ Screenshots to create or replace are in
 
 ---
 
+# October 24–25, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                  | Now in                                                                                              |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Member ID Cards admin page                                             | [01 — Membership](./01-membership.md) (Managing NFC ID Cards for the Department)                    |
+| Card Readers, Card taps on events, Card Check-ins tab                  | [06 — Apparatus & Facilities](./06-apparatus-facilities.md), [04 — Events](./04-events-meetings.md) |
+| NFC Tag Register                                                       | [05 — Inventory](./05-inventory.md)                                                                 |
+| Pause a pattern, reactivate a template, per-side templates, not seated | [03 — Scheduling](./03-scheduling.md) (Pausing a pattern and reactivating a template)               |
+| Training Admin Programs tab; registry import on Requirements           | [02 — Training](./02-training.md)                                                                   |
+| Report email retry and error message                                   | [08 — Admin & Reports](./08-admin-reports.md)                                                       |
+| Encrypted date of birth; MySQL/Redis TLS                               | Operator-facing: `UPGRADING.md`, `TLS.md`, wiki Security pages                                      |
+
 # October 24, 2026 (afternoon) workflow updates
 
 Index for the latest window, plus earlier October changes no pass had indexed.

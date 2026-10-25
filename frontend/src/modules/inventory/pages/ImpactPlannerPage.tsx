@@ -9,7 +9,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
 import {
-  ArrowLeft,
   Target,
   RefreshCw,
   Users,
@@ -47,7 +46,6 @@ import type {
   ImpactPlan,
 } from '../types';
 import { csvEscape } from '../utils/csv';
-import { Breadcrumbs } from '../../../components/ux';
 
 const URGENCY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -413,23 +411,15 @@ const ImpactPlannerPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-6xl py-6 sm:py-8">
+      <div className="max-w-6xl py-6 sm:py-8">
         {/* Header */}
-        <Breadcrumbs />
-
-        <Link
-          to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1.5 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Admin
-        </Link>
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-center gap-3">
             <div className="shrink-0 rounded-lg bg-purple-600 p-2">
               <Target className="h-6 w-6 text-white" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-theme-text-primary truncate text-xl font-bold sm:text-2xl">Impact Planner</h1>
+              <h2 className="text-theme-text-primary truncate text-xl font-bold sm:text-2xl">Impact Planner</h2>
               <p className="text-theme-text-muted text-sm">
                 Plan a new issue: who is impacted, the sizes they need, and who to contact
               </p>

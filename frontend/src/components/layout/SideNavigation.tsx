@@ -712,7 +712,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           collapsed ? 'w-20' : 'w-64'
         } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col" data-nav-column>
           {/* Logo Section */}
           <div className="border-theme-surface-border hidden border-b p-4 md:block">
             {collapsed ? (
@@ -782,9 +782,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               scrolling with it. Phones draw no scrollbar until a scroll is
               already under way, so a list cut off on an item boundary looked
               complete and members never found the items below the fold. */}
-          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 flex-1 flex-col" data-nav-region>
             <nav
               ref={navListRef}
+              data-nav-list
               className="-webkit-overflow-scrolling-touch flex-1 space-y-1 overflow-y-auto overscroll-contain p-4"
               aria-label="Side navigation"
             >

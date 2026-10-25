@@ -1,5 +1,23 @@
 # Screenshot currency
 
+## Queued by the October 24 – 25 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
+Nothing was captured by this pass. Guides 01, 05 and 06 carry a
+"screenshot to create" note where the first picture goes.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 01 | Member ID Cards with Cards, Coverage, Tap log and Settings tabs; the Coverage lists | Create |
+| 06 | Card Readers: room list with taps, refusals and the Badge check-in switch | Create |
+| 04 | Events → Card Check-ins; the event page **Card taps** section | Create |
+| 05 | NFC Tag Register with a selection and Mark lost / Move / Unlink | Create |
+| 03 | Shift Patterns with a paused pattern and **Resume**; the generate message listing members not seated | Create |
+| 02 | Training Admin → Curriculum → Programs listing existing programs; Requirements tab with the registry import panel | Create / replace any shot of the old Programs tab |
+| 03, 05 | Scheduling Administration and Inventory Administration hubs with the area cards | Re-check any full-page shot |
+| All | Any form shot taken on a tablet (field grids and sub-page rail changed at 768–1023px) | Re-check |
+| 02, 04, 05 | Badges that showed raw statuses (training history, action items, minutes) | Re-check wording in shots |
+
 ## Queued by the October 24 (afternoon) documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24-2026-afternoon).
@@ -381,7 +399,7 @@ down carry their own dispositions.
 | `03-117-reporting-summary`, `03-118-report-card-phone` | **CURRENT** 2026-10-17 | New: Your reporting summary with the per-month chart; a report card at 390px |
 | `03-119-pattern-generate-nothing-new` | **CURRENT** 2026-10-17 | New: a pattern re-run over the seeded platoon window, creating nothing |
 | `03-120-history-import-list`, `03-121-history-import-members` | **CURRENT** 2026-10-17 | New: the import list with one draft, and the draft's Members tab |
-| My Checklists on a phone (03 placeholder), `03-126-my-checklists-phone` | **CURRENT** 2026-10-23 (re-shot) | Was NOT POSSIBLE, left open; see the October 15 – 16 queue below. Re-shot after overdue moved to the server's end-of-shift rule, as the demo member (`auth: "member"`, so no two-factor grace banner): her unfiled checks on Mon Oct 19 (ended 23:00 UTC) and the overnight Wed Oct 21 shift (ended 11:00 UTC the next morning) carry `isOverdue`; the ⋯ menu holds only Apparatus inventory, since Manage templates needs `inventory.check_manage` |
+| My Checklists on a phone (03 placeholder), `03-126-my-checklists-phone` | **CURRENT** 2026-10-23 (re-shot) | Was NOT POSSIBLE, left open; see the October 15 – 16 queue below. Re-shot after overdue moved to the server's end-of-shift rule, as the demo member (`auth: "member"`, so no two-factor grace banner): the member's unfiled checks on Mon Oct 19 (ended 23:00 UTC) and the overnight Wed Oct 21 shift (ended 11:00 UTC the next morning) carry `isOverdue`; the ⋯ menu holds only Apparatus inventory, since Manage templates needs `inventory.check_manage` |
 | Scheduling setup guide card (03 placeholder) | **NOT POSSIBLE** in the seeded demo | Renders only while a department has no templates |
 
 ## Guide 01 re-shot or added 2026-10-17
@@ -514,7 +532,7 @@ blocks with the same wording.
 | Item detail, return-request review and transfer captures | **CURRENT** 2026-10-17: `05-06` re-shot; the receive dialog is new as `05-96`; no transfer image is in the guide | The vocabulary changed and the transfer screen lost its "Transfer is immediate" checkbox |
 | Template builder (readiness panel, unpublished banner); failed-item note prompt | **NEW** | Neither is pictured in the guide |
 | Camera viewfinder shots (scanning, member ID scan) | **NOT POSSIBLE** | The capture harness has no camera, and a synthetic video stream shows a test pattern rather than a scannable code. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#screenshot-harness--camera-viewfinders-cannot-be-photographed-2026-08-12) |
-| `05-25-admin-hub.png`, `05-60-admin-hub-groups.png`, `05-54-admin-hub-assign.png` | **CHECK** | The guide describes the hub from its card registry: Supply lines, Catalog, Issuance & Members, Requests & Approvals, Readiness & Compliance, Department Store, Setup & Tools. Older frames showing Items / Members / Checkouts headline cards or an Import / Export card are out of date |
+| `05-25-admin-hub.png`, `05-60-admin-hub-groups.png`, `05-54-admin-hub-assign.png` | **REPLACE** (2026-10-24) | The hub's card wall became Training-style navigation: seven area cards above a page strip, with Needs attention and the supply lines on the Overview. Re-shoot `05-25` on the Overview and `05-60` with an area such as Requests & Approvals chosen. Any inventory admin page shot with a **Back to Admin** link or its own breadcrumb above the title is also out of date: those pages now sit under the hub's header |
 | `05-02-inventory-dashboard.png` | **CHECK** | The guide places it under Low Stock Alerts. Confirm the frame shows the current **Needs attention** list rather than the older summary cards |
 | `05-04-variant-group-form.png`, `05-49-variant-stock-matrix.png` | **CHECK** | The stock matrix lists sizes down the side and colours across the top, red at zero and green otherwise; the alt text of `05-04` says "size and colour matrix" on a form |
 
@@ -950,6 +968,7 @@ Compliance box.
 | `03-47-settings-desktop.png` | **CURRENT** 2026-10-17 | Seven sections including **Outside Apparatus**; General reads "Shift defaults, overtime, and close-out" |
 | `03-48-settings-phone.png` | **CURRENT** 2026-10-17 | Seven-section strip; settings use full width on phones |
 | `20-16-scheduling-admin-hub.png` | **REPLACE** | **Outside Apparatus** card added; Shift Templates / Shift Patterns / Who Can Fill What descriptions reworded. Shoot on a department with shifts so the setup guide is hidden |
+| `20-16-scheduling-admin-hub.png`, `20-17-staffing-gaps.png`, `03-51-admin-subpage-header.png` | **REPLACE** (2026-10-25) | Scheduling Admin's card grid became Training/Inventory-style navigation: seven area cards (Overview, Planning, On the Shift, Close-Out & History, People & Eligibility, Reports, Settings) above a page strip, and a red **Create Shift** button in the header. Every admin page now sits under that header, without its own title, back arrow or trail, and Shift Planning no longer has its own Staffing gaps / Templates / Patterns tabs. Re-shoot `20-16` on the Overview, `20-17` with Planning chosen, and `03-51` on any other page |
 | `03-31-shift-edit-times.png` | **CHECK** | The shift form may have changed since it was taken |
 | `03-61-review-queue-batch.png` | **CURRENT** 2026-10-17 | **New report** is a separate button beside the view strip (was **+ New** inside it) |
 | `03-62-flagged-queue.png` | **CURRENT** 2026-10-17 | Same strip change; the expanded card shows only the reviewer's comment box |
@@ -5506,7 +5525,9 @@ this entry once said they must not be manifest entries. That was too strong:
 session flag (`webNfcStub` in `manifest.mjs`), so the app renders the Android
 UI and a tapped tag is resolved against the real database. Only the radio is a
 stand-in. The camera-viewfinder shots recorded under the 2026-08-12 entry below
-remain manual.
+remain manual. `05-139` was re-shot 2026-10-24: the first capture, taken before
+the demo administrator was enrolled in two-factor, carried the grace-period
+banner across the top.
 
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 

@@ -69,7 +69,11 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
       {/* Built-in positions toggle */}
       <div className="mb-4">
         <p className="text-theme-text-secondary mb-2 text-xs font-medium">Built-in Positions</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {/* Columns follow the card's width, not the viewport's: beside the side
+            navigation on an iPad in portrait, `sm:grid-cols-3` left each pill
+            too narrow for "Driver/Operator". 9.5rem fits the longest built-in
+            label; a phone gets one column, where two clipped it. */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
           {BUILTIN_POSITIONS.map((pos) => (
             <label
               key={pos.value}

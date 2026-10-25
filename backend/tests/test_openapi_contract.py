@@ -79,6 +79,18 @@ class TestPublicRouteErrorResponses:
                 "post",
                 {"400", "404", "429"},
             ),
+            (
+                "/api/public/v1/display/{display_code}/events/{event_id}"
+                "/guest-lookup",
+                "post",
+                {"400", "404", "429"},
+            ),
+            (
+                "/api/public/v1/display/{display_code}/events/{event_id}"
+                "/guest-confirm",
+                "post",
+                {"400", "404", "429"},
+            ),
         ],
     )
     def test_declares_the_codes_it_can_return(self, schema, path, method, expected):

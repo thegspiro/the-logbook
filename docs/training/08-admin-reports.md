@@ -951,6 +951,14 @@ ran.
 
 ![Editing a saved report: its name, report and reporting period, with Email this report on a schedule ticked, Quarterly on day 5 and two recipients](./images/08-108-saved-report-schedule.png)
 
+**If an email fails** _(2026-10-25)_, the next daily run sends it again; a
+scheduled report is only marked as sent once the mail is accepted. A report that
+can never send (its owner lost access, no allowed recipient) is settled rather
+than retried. A compliance report that was stored but never emailed goes out on a
+rerun the same day. When you email a compliance report by hand and nothing goes
+out, the dialog now says why (nobody reached, or no recipient) instead of a
+generic "Failed to email report".
+
 **What the email contains:** a summary — the report's totals and figures and an
 **Open saved reports** link. It never contains a list of members. The full
 report opens in the app, where the reader's own access applies.

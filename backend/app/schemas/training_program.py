@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.training import RequirementFrequency as ModelRequirementFrequency
 from app.models.training import TrainingType as ModelTrainingType
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX
 from app.schemas.enum_validation import validate_enum_value
@@ -226,7 +226,7 @@ class TrainingProgramCreate(TrainingProgramBase):
     allows_concurrent_enrollment: bool = True
 
 
-class TrainingProgramUpdate(BaseModel):
+class TrainingProgramUpdate(RefusesNull):
     """Schema for updating a training program"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -249,6 +249,16 @@ class TrainingProgramUpdate(BaseModel):
     # Omitted leaves the setting alone; null is rejected by the service, since
     # the column has no "unset" meaning the enrollment checks could honour.
     allows_concurrent_enrollment: Optional[bool] = None
+
+    null_refused = frozenset(
+        {
+            "is_template",
+            "name",
+            "recert_enabled",
+            "structure_type",
+            "warning_days_before",
+        }
+    )
 
 
 class PrerequisiteProgramSummary(BaseModel):
@@ -318,7 +328,7 @@ class ProgramPhaseCreate(ProgramPhaseBase):
     program_id: UUID
 
 
-class ProgramPhaseUpdate(BaseModel):
+class ProgramPhaseUpdate(RefusesNull):
     """Schema for updating a program phase"""
 
     phase_number: Optional[int] = Field(None, ge=1, le=INT32_MAX)
@@ -327,6 +337,8 @@ class ProgramPhaseUpdate(BaseModel):
     prerequisite_phase_ids: Optional[List[UUID]] = None
     time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     requires_manual_advancement: Optional[bool] = None
+
+    null_refused = frozenset({"name", "phase_number", "requires_manual_advancement"})
 
 
 class ProgramPhaseResponse(ProgramPhaseBase, UTCResponseBase):
@@ -491,13 +503,15 @@ class ProgramMilestoneCreate(ProgramMilestoneBase):
     phase_id: Optional[UUID] = None
 
 
-class ProgramMilestoneUpdate(BaseModel):
+class ProgramMilestoneUpdate(RefusesNull):
     """Schema for updating a program milestone"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     completion_percentage_threshold: Optional[float] = Field(None, ge=0, le=100)
     notification_message: Optional[str] = None
+
+    null_refused = frozenset({"completion_percentage_threshold", "name"})
 
 
 class ProgramMilestoneResponse(ProgramMilestoneBase, UTCResponseBase):
@@ -799,7 +813,7 @@ class SkillEvaluationCreate(SkillEvaluationBase):
     """Schema for creating a skill evaluation"""
 
 
-class SkillEvaluationUpdate(BaseModel):
+class SkillEvaluationUpdate(RefusesNull):
     """Schema for updating a skill evaluation.
 
     Omitted fields are left alone; an explicit null clears the field.
@@ -829,6 +843,8 @@ class SkillEvaluationUpdate(BaseModel):
     @classmethod
     def _check_criteria(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         return _clean_criteria(v)
+
+    null_refused = frozenset({"active"})
 
 
 class SkillEvaluatorMember(BaseModel):

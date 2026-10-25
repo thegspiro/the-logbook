@@ -19,9 +19,15 @@ request-side counterpart, for datetimes a request writes.
 """
 
 from datetime import datetime, timezone
-from typing import Annotated, Optional, overload
+from typing import Annotated, Any, ClassVar, Optional, overload
 
-from pydantic import AfterValidator, BaseModel, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 
 @overload
@@ -79,3 +85,30 @@ class UTCResponseBase(BaseModel):
             if isinstance(val, datetime) and val.tzinfo is None:
                 object.__setattr__(self, name, val.replace(tzinfo=timezone.utc))
         return self
+
+
+class RefusesNull(BaseModel):
+    """Base for an update schema that refuses an explicit ``null`` on some fields.
+
+    Update schemas type every field ``Optional`` so a request can omit it, and the
+    handlers dump with ``exclude_unset``, so a ``null`` that survives to the write is
+    an explicit "clear this". For a field whose column is NOT NULL, or whose response
+    field cannot hold ``None``, clearing it is not a state the row can be in: the write
+    fails at the flush, or is stored and then makes the row unreadable (a 500 on every
+    later read). Refusing it here answers 422 before anything is written. An omitted
+    key is untouched, because a validator does not run for a key that was not sent.
+
+    A subclass names its fields in ``null_refused``.
+    """
+
+    null_refused: ClassVar[frozenset[str]] = frozenset()
+
+    @field_validator("*")
+    @classmethod
+    def _refuse_null(cls, value: Any, info: ValidationInfo) -> Any:
+        if value is None and info.field_name in cls.null_refused:
+            raise ValueError(
+                f"{info.field_name} cannot be null; leave the field out to keep "
+                "its current value"
+            )
+        return value

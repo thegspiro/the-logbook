@@ -3,10 +3,8 @@
  * vendor tracking, and cost management.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
   RefreshCw,
   Search,
   Plus,
@@ -36,7 +34,6 @@ import type {
   InventoryVendor,
   LowStockAlert,
 } from '../../../services/eventServices';
-import { Breadcrumbs } from '../../../components/ux';
 
 const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'] as const;
 const URGENCY_OPTIONS = ['low', 'normal', 'high', 'critical'] as const;
@@ -790,19 +787,11 @@ export const ReorderRequestsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl py-6 sm:py-8">
+      <div className="max-w-5xl py-6 sm:py-8">
         {/* Header */}
-        <Breadcrumbs />
-
-        <Link
-          to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Admin
-        </Link>
         <div className="mb-6 flex items-center gap-3">
           <div className="flex-1">
-            <h1 className="text-theme-text-primary text-2xl font-bold">Reorder Requests</h1>
+            <h2 className="text-theme-text-primary text-2xl font-bold">Reorder Requests</h2>
             <p className="text-theme-text-muted text-sm">Track supply orders from request to receipt</p>
           </div>
           <button

@@ -883,7 +883,7 @@ export const EventDetailPage: React.FC = () => {
           <p className="text-red-700 dark:text-red-300">{error || 'Event not found'}</p>
           <button
             onClick={() => void navigate('/events')}
-            className="mt-2 text-sm text-red-700 underline hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+            className="touch:min-h-11 mt-2 inline-flex items-center text-sm text-red-700 underline hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
           >
             Back to Events
           </button>
@@ -1131,7 +1131,7 @@ export const EventDetailPage: React.FC = () => {
                 {!isEventOver && (
                   <button
                     onClick={() => downloadICSFile(event)}
-                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
                   >
                     <CalendarPlus className="h-4 w-4" />
                     Add to Calendar
@@ -1441,7 +1441,7 @@ export const EventDetailPage: React.FC = () => {
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location_name || event.location || '')}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-1 inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400"
+                        className="touch:min-h-11 mt-1 inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400"
                       >
                         <MapPin className="h-3.5 w-3.5" />
                         Get Directions
@@ -1694,7 +1694,7 @@ export const EventDetailPage: React.FC = () => {
                   {canRSVP && (
                     <button
                       onClick={rsvpForm.openModal}
-                      className="text-sm text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                      className="touch:min-h-11 text-sm text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                     >
                       Change RSVP
                     </button>

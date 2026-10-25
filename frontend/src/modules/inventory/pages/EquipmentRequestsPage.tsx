@@ -5,9 +5,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -28,7 +27,6 @@ import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate, localToUTC } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
-import { Breadcrumbs } from '../../../components/ux';
 
 /**
  * The status, but only when it is worth the reader's attention.
@@ -380,24 +378,14 @@ const EquipmentRequestsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl py-6 sm:py-8">
-        <Breadcrumbs />
-
-        <Link
-          to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Admin
-        </Link>
-
+      <div className="max-w-5xl py-6 sm:py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-purple-600 p-2">
               <ClipboardList className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-xl font-bold">Gear Requests</h1>
+              <h2 className="text-theme-text-primary text-xl font-bold">Gear Requests</h2>
               <p className="text-theme-text-muted text-sm">Review member requests for equipment</p>
             </div>
           </div>

@@ -108,7 +108,8 @@ export const AccessLogsTab: React.FC = () => {
       <div>
         <h3 className="text-theme-text-primary text-lg font-semibold">Access Logs</h3>
         <p className="text-theme-text-muted mt-1 text-sm">
-          Every request to the public API, including rejected ones. Newest first.
+          Every request made with one of your keys, including refused ones — revoked, expired or over its limit.
+          Requests with no key or an unknown key belong to no department and are not listed. Newest first.
         </p>
       </div>
 
@@ -117,8 +118,11 @@ export const AccessLogsTab: React.FC = () => {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* IP Address Filter */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">IP Address</label>
+            <label htmlFor="access-log-ip" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              IP Address
+            </label>
             <input
+              id="access-log-ip"
               type="text"
               value={filters.ip_address || ''}
               onChange={(e) => handleFilterChange('ip_address', e.target.value)}
@@ -129,8 +133,11 @@ export const AccessLogsTab: React.FC = () => {
 
           {/* Endpoint Filter */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Endpoint</label>
+            <label htmlFor="access-log-endpoint" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Endpoint
+            </label>
             <input
+              id="access-log-endpoint"
               type="text"
               value={filters.endpoint || ''}
               onChange={(e) => handleFilterChange('endpoint', e.target.value)}
@@ -141,8 +148,11 @@ export const AccessLogsTab: React.FC = () => {
 
           {/* Status Code Filter */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Status Code</label>
+            <label htmlFor="access-log-status" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Status Code
+            </label>
             <select
+              id="access-log-status"
               value={filters.status_code || ''}
               onChange={(e) => handleFilterChange('status_code', e.target.value ? parseInt(e.target.value) : undefined)}
               className="form-input"
@@ -159,8 +169,11 @@ export const AccessLogsTab: React.FC = () => {
 
           {/* Flagged Only Filter */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Suspicious Activity</label>
+            <label htmlFor="access-log-flagged" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Suspicious Activity
+            </label>
             <select
+              id="access-log-flagged"
               value={filters.flagged_suspicious === undefined ? '' : filters.flagged_suspicious.toString()}
               onChange={(e) =>
                 handleFilterChange('flagged_suspicious', e.target.value === '' ? undefined : e.target.value === 'true')
@@ -175,8 +188,11 @@ export const AccessLogsTab: React.FC = () => {
 
           {/* Results Per Page */}
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Results Per Page</label>
+            <label htmlFor="access-log-limit" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Results Per Page
+            </label>
             <select
+              id="access-log-limit"
               value={filters.limit || 50}
               onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
               className="form-input"
@@ -309,15 +325,19 @@ export const AccessLogsTab: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
                         <button
+                          type="button"
                           onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
-                          className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                          aria-expanded={expandedLog === log.id}
+                          aria-controls={`access-log-${log.id}`}
+                          aria-label={`${expandedLog === log.id ? 'Hide' : 'Show'} details of ${log.method} ${log.endpoint} at ${formatDateTime(log.timestamp, tz)}`}
+                          className="text-theme-accent-blue touch:min-h-11 hover:underline"
                         >
                           {expandedLog === log.id ? 'Hide' : 'Details'}
                         </button>
                       </td>
                     </tr>
                     {expandedLog === log.id && (
-                      <tr className="bg-theme-surface-secondary">
+                      <tr id={`access-log-${log.id}`} className="bg-theme-surface-secondary">
                         <td colSpan={8} className="px-6 py-4">
                           <div className="space-y-2 text-sm">
                             {log.user_agent && (
@@ -332,10 +352,22 @@ export const AccessLogsTab: React.FC = () => {
                                 <span className="text-theme-text-muted ml-2">{log.referer}</span>
                               </div>
                             )}
-                            {log.flagged_suspicious && log.flag_reason && (
+                            {/* A refusal records its reason ("Revoked API key")
+                                without being suspicious; it is the one thing
+                                that says why a 401 happened, so it shows
+                                whether or not the row is flagged. */}
+                            {log.flag_reason && (
                               <div>
-                                <span className="font-semibold text-red-700">Flag Reason:</span>
-                                <span className="ml-2 text-red-600">{log.flag_reason}</span>
+                                <span
+                                  className={`font-semibold ${log.flagged_suspicious ? 'text-red-700 dark:text-red-400' : 'text-theme-text-secondary'}`}
+                                >
+                                  {log.flagged_suspicious ? 'Flag Reason:' : 'Reason:'}
+                                </span>
+                                <span
+                                  className={`ml-2 ${log.flagged_suspicious ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'}`}
+                                >
+                                  {log.flag_reason}
+                                </span>
                               </div>
                             )}
                             {log.api_key_id && (

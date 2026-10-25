@@ -24,6 +24,8 @@
 # Environment:
 #   DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD   dump credentials
 #   MYSQL_ROOT_PASSWORD                           verification (CREATE/DROP)
+#   DB_TLS_DIR           directory with ca.pem client.pem client.key; when present
+#                        the dump connects over verified TLS (scripts/db_tls.sh)
 #   BACKUP_KEYS_DIR      default /keys: backup-recipient.pem / backup-drill.key
 #   BACKUP_ENCRYPT_EXISTING default true: encrypt plaintext archives once keys exist
 #   BACKUP_TIME          HH:MM, default 02:00 (container timezone, UTC)
@@ -48,6 +50,8 @@ export BACKUP_KEYS_DIR
 
 # shellcheck source=backup_crypto.sh
 source "$SCRIPT_DIR/backup_crypto.sh"
+# shellcheck source=db_tls.sh
+source "$SCRIPT_DIR/db_tls.sh"
 
 # NOTE on error handling: run_backup is invoked as `run_backup || ...`, and
 # POSIX errexit is IGNORED inside any function called in a || list — so `set -e`
@@ -71,11 +75,18 @@ run_backup() {
         return 1
     fi
 
+    if ! db_tls_args; then
+        echo "[backup] ERROR: the database TLS files are incomplete — aborting run" >&2
+        rm -rf "$workroot"
+        return 1
+    fi
+
     echo "[backup] $(date -Is) starting $name"
     # MYSQL_PWD keeps the password out of the process list;
     # --no-tablespaces avoids needing the PROCESS privilege (app user).
     if ! MYSQL_PWD="$DB_PASSWORD" mysqldump \
         -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" \
+        ${DB_TLS_ARGS[@]+"${DB_TLS_ARGS[@]}"} \
         "$DB_NAME" \
         --single-transaction --quick --lock-tables=false \
         --routines --triggers --no-tablespaces \

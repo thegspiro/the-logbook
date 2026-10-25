@@ -5,7 +5,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
-  ArrowLeft,
   Users,
   RefreshCw,
   Search,
@@ -41,7 +40,6 @@ import { ReturnItemsModal } from '../../../components/ReturnItemsModal';
 import { OverduePropertyReturnsPanel } from '../../../components/members/OverduePropertyReturnsPanel';
 import { MemberIdScannerModal } from '../../../components/MemberIdScannerModal';
 import { SizePreferencesModal } from '../components/SizePreferencesModal';
-import { Breadcrumbs } from '../../../components/ux';
 
 type SortOption = 'name' | 'total_items' | 'overdue' | 'assigned';
 
@@ -239,20 +237,11 @@ const InventoryMembersPage: React.FC = () => {
   const totalOverdue = members.reduce((acc, m) => acc + m.overdue_count, 0);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="max-w-7xl py-8">
       {/* Header */}
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-4 flex items-center gap-1 text-sm"
-        title="Back to Inventory Administration"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to Admin
-      </Link>
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Member Equipment</h1>
+          <h2 className="text-theme-text-primary text-2xl font-bold">Member Equipment</h2>
           <p className="text-theme-text-muted text-sm">View and manage equipment assigned to members</p>
         </div>
         <div className="flex items-center gap-2">
@@ -410,7 +399,7 @@ const InventoryMembersPage: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={`/members/${member.user_id}`}
-                        className="text-theme-text-primary text-sm font-semibold hover:underline"
+                        className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-sm font-semibold hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {name}
@@ -512,7 +501,7 @@ const InventoryMembersPage: React.FC = () => {
                                 <div key={it.assignment_id} className="card-secondary p-3">
                                   <Link
                                     to={`/inventory/items/${it.item_id}`}
-                                    className="text-theme-text-primary text-sm font-medium hover:underline"
+                                    className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline"
                                   >
                                     {it.item_name}
                                   </Link>
@@ -542,7 +531,7 @@ const InventoryMembersPage: React.FC = () => {
                                 >
                                   <Link
                                     to={`/inventory/items/${it.item_id}`}
-                                    className="text-theme-text-primary text-sm font-medium hover:underline"
+                                    className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline"
                                   >
                                     {it.item_name}
                                   </Link>
@@ -569,7 +558,7 @@ const InventoryMembersPage: React.FC = () => {
                                 <div key={it.issuance_id} className="card-secondary p-3">
                                   <Link
                                     to={`/inventory/items/${it.item_id}`}
-                                    className="text-theme-text-primary text-sm font-medium hover:underline"
+                                    className="text-theme-text-primary touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline"
                                   >
                                     {it.item_name}
                                   </Link>

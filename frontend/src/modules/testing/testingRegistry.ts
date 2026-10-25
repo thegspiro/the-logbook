@@ -425,7 +425,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/training/programs/new',
         label: 'New program (legacy URL)',
-        redirectsTo: '/training/admin?page=setup&tab=pipelines',
+        redirectsTo: '/training/admin?page=curriculum&tab=pipelines&view=new',
       },
       {
         path: '/training/shift-reports',

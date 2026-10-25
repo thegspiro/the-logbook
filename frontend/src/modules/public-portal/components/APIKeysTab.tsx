@@ -251,8 +251,11 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
           when making requests to the public API:
         </p>
         <pre className="overflow-x-auto rounded-sm bg-blue-500/20 p-2 text-xs">
+          {/* This server's own address: the public API is served beside the
+              app, and a placeholder host left every example to be rewritten
+              before it would run. */}
           {`curl -H "X-API-Key: ${apiKey}" \\
-  https://your-domain.com/api/public/v1/organization/info`}
+  ${window.location.origin}/api/public/v1/organization/info`}
         </pre>
       </div>
     </Modal>
@@ -408,8 +411,10 @@ export const APIKeysTab: React.FC = () => {
                 </div>
                 {key.is_active && (
                   <button
+                    type="button"
                     onClick={() => setRevokeTarget({ id: key.id, name: key.name })}
-                    className="mt-1 text-xs font-medium text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                    aria-label={`Revoke ${key.name}`}
+                    className="touch:min-h-11 mt-1 text-xs font-medium text-red-700 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                   >
                     Revoke
                   </button>
@@ -491,8 +496,10 @@ export const APIKeysTab: React.FC = () => {
                     <td className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
                       {key.is_active && (
                         <button
+                          type="button"
                           onClick={() => setRevokeTarget({ id: key.id, name: key.name })}
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                          aria-label={`Revoke ${key.name}`}
+                          className="touch:min-h-11 text-red-700 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                         >
                           Revoke
                         </button>

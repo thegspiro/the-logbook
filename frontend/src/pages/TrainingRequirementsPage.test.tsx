@@ -9,6 +9,7 @@ const mockGetRequirements = vi.fn();
 const mockGetCategories = vi.fn();
 const mockCreateRequirement = vi.fn();
 const mockDeleteRequirement = vi.fn();
+const mockPreviewRegistry = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingService: {
@@ -21,6 +22,7 @@ vi.mock('../services/api', () => ({
   },
   trainingProgramService: {
     getRegistries: vi.fn().mockResolvedValue([]),
+    previewRegistry: (...args: unknown[]) => mockPreviewRegistry(...args) as unknown,
     importRegistry: vi.fn(),
   },
 }));
@@ -65,6 +67,8 @@ describe('TrainingRequirementsPage', () => {
       },
     ]);
     mockGetCategories.mockResolvedValue([]);
+    mockPreviewRegistry.mockReset();
+    mockPreviewRegistry.mockResolvedValue([]);
     // The real endpoint echoes back the persisted requirement, which the page
     // appends to its list — returning undefined would crash the list filter.
     mockCreateRequirement.mockResolvedValue({
@@ -86,6 +90,18 @@ describe('TrainingRequirementsPage', () => {
     await waitFor(() => {
       expect(mockGetRequirements).toHaveBeenCalledWith({ active_only: false });
     });
+  });
+
+  // Registry import used to live only in the Programs page's Requirements
+  // view; the hub's Requirements tab is now where it is offered.
+  it('offers registry import and opens the chosen registry', async () => {
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Import from Registry' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Import NFPA/ }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(mockPreviewRegistry).toHaveBeenCalledWith('nfpa');
   });
 
   it('handles empty requirements list', async () => {

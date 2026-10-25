@@ -113,6 +113,25 @@ of a rotation safe: nothing breaks the moment you deploy the new key.
 4. When a `--commit` run reports zero rotated and zero unreadable values,
    remove the drained key from `ENCRYPTION_KEYS_LEGACY` and restart.
 
+### Date of birth and emergency contacts
+
+Members' and applicants' dates of birth and members' emergency contacts (names,
+relationships, phones, emails of people who are not members) are stored as
+AES-256-GCM ciphertext, like screening records. Screens, exports and integrations
+are unchanged; the database cannot search or sort on them. They are covered by
+`scripts/rotate_encryption_key.py`. See
+[`docs/UPGRADING.md`](../docs/UPGRADING.md).
+
+### Database and cache TLS
+
+The bundled MySQL and Redis can offer TLS with certificates from a private CA
+you generate (`scripts/tls-setup.sh`). The backend and the backup sidecar verify
+the server's certificate and name, and present a client certificate. Plaintext is
+accepted until you set `DB_REQUIRE_TLS=true` / `REDIS_REQUIRE_TLS=true`; run
+`scripts/tls-enforce.sh` first, which lists any client still connecting without
+TLS. Administrators get a banner 30 days before a certificate expires. Setup,
+enforcement, renewal and CA-key custody: [`docs/TLS.md`](../docs/TLS.md).
+
 ### Encrypted backups
 
 Backups are encrypted once `scripts/backup-keygen.sh` has created a key

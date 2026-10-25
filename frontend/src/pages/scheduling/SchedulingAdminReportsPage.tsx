@@ -2,26 +2,21 @@
  * Scheduling Admin Reports Page
  *
  * Standalone admin page for scheduling reports (member hours, coverage, etc.).
- * Wraps the existing SchedulingReportsPage component with page chrome and back navigation.
+ * Wraps the existing SchedulingReportsPage component; the page chrome is the
+ * Scheduling Administration header the route draws it inside.
  */
 
 import React, { Suspense } from 'react';
-import { Loader2, BarChart3 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
-import { SchedulingPageHeader } from '../../components/scheduling/SchedulingPageHeader';
 
 const SchedulingReportsPage = lazyWithRetry(() => import('../SchedulingReportsPage'));
 
 const SchedulingAdminReportsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingPageHeader
-          icon={BarChart3}
-          title="Scheduling Reports"
-          subtitle="Review staffing, coverage, and member hours"
-          underHub="/scheduling/admin"
-        />
+      <div className="py-6">
+        <h2 className="sr-only">Scheduling Reports</h2>
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">

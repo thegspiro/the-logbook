@@ -29,7 +29,7 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, getSaveFailureMessage } from '../utils/errorHandling';
 import { asArray } from '../utils/asArray';
 import toast from 'react-hot-toast';
 import { formatDate, formatDateCustom } from '../utils/dateFormatting';
@@ -430,8 +430,8 @@ export default function ComplianceRequirementsConfigPage() {
       setEmailModalReportId(null);
       setEmailRecipients('');
       await loadReports();
-    } catch {
-      toast.error('Failed to email report');
+    } catch (err: unknown) {
+      toast.error(getSaveFailureMessage(err, 'email the report'));
     }
   };
 

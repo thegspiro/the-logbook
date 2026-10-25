@@ -141,6 +141,9 @@ class TestGuestCheckInDailyCapOrdering:
             check_in_minutes_before=30,
             check_in_minutes_after=None,
             allow_guest_check_in=True,
+            # The typed form; a pipeline-linked event refuses it before the
+            # cap (see TestEmailFirstSignIn).
+            guest_check_in_creates_prospect=False,
             attendance_finalized_at=None,
             custom_fields={},
         )

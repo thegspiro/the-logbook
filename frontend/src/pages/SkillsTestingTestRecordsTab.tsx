@@ -57,12 +57,24 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
   };
+  // The badge printed the stored code ("in progress", "pass"); these are the
+  // words, and an unknown status still reads as itself.
+  const labels: Record<string, string> = {
+    draft: 'Draft',
+    in_progress: 'In progress',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    voided: 'Voided',
+    pass: 'Passed',
+    fail: 'Failed',
+    incomplete: 'Incomplete',
+  };
 
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}
     >
-      {status.replace('_', ' ')}
+      {labels[status] ?? status.replace(/_/g, ' ')}
     </span>
   );
 };
@@ -476,8 +488,8 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
   return (
     <div className="py-6">
       {/* Toolbar */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <div className="field-min relative flex-1">
           <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"

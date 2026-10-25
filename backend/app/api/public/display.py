@@ -51,6 +51,9 @@ from app.schemas.event import (
     GuestCheckInEventInfo,
     GuestCheckInRequest,
     GuestCheckInResponse,
+    GuestConfirmRequest,
+    GuestLookupRequest,
+    GuestLookupResponse,
     QRCheckInData,
 )
 from app.schemas.location import LocationDisplayInfo
@@ -95,6 +98,30 @@ async def _rate_limit_guest_check_in(request: Request) -> None:
     client_ip = get_client_ip(request)
     is_limited, _ = await public_rate_limit(
         key=f"pub_guest_checkin:{client_ip}",
+        max_requests=10,
+        window_seconds=60,
+        lockout_seconds=600,
+    )
+    if is_limited:
+        raise CodedHTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many sign-in attempts. Please try again in a few minutes.",
+            error_code=ErrorCode.SYS_RATE_LIMITED,
+        )
+
+
+async def _rate_limit_guest_lookup(request: Request) -> None:
+    """Rate limit email lookups: 10/minute per IP, then a 10-minute lockout.
+
+    The lookup answers "is this email an applicant (or a member) here", which
+    is exactly what someone holding a room's link would script against. The
+    per-IP allowance matches sign-ins so a genuine rush on shared venue wi-fi
+    still gets through, and the endpoint adds a per-event daily ceiling so a
+    caller spread across addresses is bounded too.
+    """
+    client_ip = get_client_ip(request)
+    is_limited, _ = await public_rate_limit(
+        key=f"pub_guest_lookup:{client_ip}",
         max_requests=10,
         window_seconds=60,
         lockout_seconds=600,
@@ -205,6 +232,39 @@ async def _resolve_guest_event(
     ).scalar_one_or_none()
 
     return location, event, org
+
+
+def _assert_guest_sign_in_open(event: Event) -> None:
+    """Refuse a guest write outside the window or after attendance is final."""
+    is_open, closed_reason = GuestCheckInService.check_in_window_state(
+        event, datetime.now(timezone.utc)
+    )
+    if not is_open:
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=closed_reason or "Check-in is not available for this event.",
+            error_code=ErrorCode.EVT_CHECKIN_WINDOW_CLOSED,
+        )
+    if attendance_is_finalized(event):
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attendance for this event has been closed.",
+            error_code=ErrorCode.EVT_CHECKIN_WINDOW_CLOSED,
+        )
+
+
+def _require_email_first(event: Event) -> None:
+    """The lookup/confirm pair exists only on pipeline-linked events.
+
+    Answered with the same 404 as every other unavailable sign-in, so the
+    pair cannot be used to learn which events feed the pipeline.
+    """
+    if not event.guest_check_in_creates_prospect:
+        raise CodedHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sign-in is not available for this event.",
+            error_code=ErrorCode.EVT_SIGNIN_UNAVAILABLE,
+        )
 
 
 @router.get(
@@ -455,6 +515,17 @@ async def guest_check_in(
             message="Thanks for signing in!",
         )
 
+    # A pipeline-linked event signs in only applicants the kiosk recognises,
+    # through guest-lookup and guest-confirm. Refused here as well as hidden
+    # in the page, so the typed form cannot still open a prospect for anyone
+    # who calls it directly; staff record the visitors the kiosk turns away.
+    if event.guest_check_in_creates_prospect:
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please see a member of staff to sign in.",
+            error_code=ErrorCode.EVT_GUEST_STAFF_REQUIRED,
+        )
+
     # Every rejection gate must run *before* the daily cap: daily_cap_exceeded
     # is an atomic Redis INCR, so merely asking the question spends an
     # allowance slot. A rejection that runs after it lets refused traffic
@@ -465,25 +536,11 @@ async def guest_check_in(
     # Same ordering `event_requests.py`'s public submission endpoint keeps
     # (EV-19) — the counter is spent only by a sign-in that would otherwise
     # be accepted.
-    is_open, closed_reason = GuestCheckInService.check_in_window_state(
-        event, datetime.now(timezone.utc)
-    )
-    if not is_open:
-        raise CodedHTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=closed_reason or "Check-in is not available for this event.",
-            error_code=ErrorCode.EVT_CHECKIN_WINDOW_CLOSED,
-        )
-    if attendance_is_finalized(event):
-        raise CodedHTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Attendance for this event has been closed.",
-            error_code=ErrorCode.EVT_CHECKIN_WINDOW_CLOSED,
-        )
+    _assert_guest_sign_in_open(event)
 
     # Per-event/day ceiling. Per-IP limiting alone cannot stop a distributed
-    # flood, and each sign-in can create a pipeline record — a far more
-    # expensive side effect than a page view.
+    # flood, and each sign-in writes attendance — a more expensive side effect
+    # than a page view.
     if await daily_cap_exceeded(
         f"guest_checkin:{event.id}", settings.GUEST_CHECK_IN_DAILY_LIMIT
     ):
@@ -547,4 +604,197 @@ async def guest_check_in(
             attendee.checked_in_at.isoformat() if attendee.checked_in_at else ""
         ),
         message=message,
+    )
+
+
+@router.post(
+    "/{display_code}/events/{event_id}/guest-lookup",
+    response_model=GuestLookupResponse,
+    dependencies=[Depends(_rate_limit_guest_lookup)],
+)
+async def guest_lookup(
+    display_code: str,
+    event_id: UUID,
+    payload: GuestLookupRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Recognise a returning applicant by email (public, no auth required).
+
+    First step of sign-in at an event that adds guests to the prospective
+    members pipeline. Writes no attendance: an active applicant gets back their
+    first name and last initial plus a short-lived token for guest-confirm; a
+    department member is pointed at the member QR code; anyone else is asked to
+    see a member of staff.
+    """
+    location, event, _org = await _resolve_guest_event(db, display_code, event_id)
+    _require_email_first(event)
+
+    not_found_message = "We couldn't find you. Please see a member of staff to sign in."
+
+    # Honeypot: the same plausible, uninformative answer an unknown email gets.
+    if payload.hp_website:
+        return GuestLookupResponse(
+            status=GuestCheckInService.LOOKUP_NOT_FOUND, message=not_found_message
+        )
+
+    # Gates before the daily cap, which spends an allowance on every call.
+    _assert_guest_sign_in_open(event)
+    if await daily_cap_exceeded(
+        f"guest_lookup:{event.id}", settings.GUEST_CHECK_IN_DAILY_LIMIT
+    ):
+        raise CodedHTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="This event is not accepting further sign-ins today.",
+            error_code=ErrorCode.EVT_SIGNIN_DAILY_LIMIT,
+        )
+
+    service = GuestCheckInService(db)
+    outcome, prospect = await service.lookup_guest(
+        location.organization_id, str(payload.email)
+    )
+
+    # Every lookup is audited, matched or not, because a run of misses from
+    # one address is what probing looks like. The email itself is not
+    # recorded — the prospect id answers who was found.
+    await log_audit_event(
+        db=db,
+        event_type="event_guest_lookup",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event.id),
+            "location_id": location.id,
+            "outcome": outcome,
+            "prospect_id": prospect.id if prospect is not None else None,
+            "source": GuestCheckInService.SOURCE_KIOSK_QR,
+        },
+        organization_id=location.organization_id,
+        ip_address=get_client_ip(request),
+    )
+
+    if prospect is not None:
+        return GuestLookupResponse(
+            status=outcome,
+            display_name=GuestCheckInService.short_name(
+                prospect.first_name, prospect.last_name
+            ),
+            confirm_token=GuestCheckInService.issue_confirm_token(
+                prospect_id=prospect.id,
+                event_id=str(event.id),
+                location_id=location.id,
+                organization_id=location.organization_id,
+            ),
+            message="Welcome back! Please confirm this is you.",
+        )
+    if outcome == GuestCheckInService.LOOKUP_MEMBER:
+        return GuestLookupResponse(
+            status=outcome,
+            message=(
+                "This looks like a department member account. "
+                "Please scan the member QR code on the display instead."
+            ),
+        )
+    return GuestLookupResponse(status=outcome, message=not_found_message)
+
+
+@router.post(
+    "/{display_code}/events/{event_id}/guest-confirm",
+    response_model=GuestCheckInResponse,
+    dependencies=[Depends(_rate_limit_guest_check_in)],
+)
+async def guest_confirm(
+    display_code: str,
+    event_id: UUID,
+    payload: GuestConfirmRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sign in an applicant who confirmed the kiosk recognised them (public).
+
+    Takes only the token guest-lookup issued: the token, not the request,
+    names the applicant, and it is accepted only for the event and room it was
+    issued for, within ten minutes.
+    """
+    location, event, _org = await _resolve_guest_event(db, display_code, event_id)
+    _require_email_first(event)
+    _assert_guest_sign_in_open(event)
+
+    prospect_id = GuestCheckInService.read_confirm_token(
+        payload.confirm_token,
+        event_id=str(event.id),
+        location_id=location.id,
+        organization_id=location.organization_id,
+    )
+    if prospect_id is None:
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This confirmation has expired. Please enter your email again.",
+            error_code=ErrorCode.EVT_SIGNIN_UNAVAILABLE,
+        )
+
+    if await daily_cap_exceeded(
+        f"guest_checkin:{event.id}", settings.GUEST_CHECK_IN_DAILY_LIMIT
+    ):
+        raise CodedHTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="This event is not accepting further sign-ins today.",
+            error_code=ErrorCode.EVT_SIGNIN_DAILY_LIMIT,
+        )
+
+    service = GuestCheckInService(db)
+    try:
+        attendee, error, already_checked_in = await service.check_in_known_prospect(
+            event=event,
+            organization_id=location.organization_id,
+            prospect_id=prospect_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(exc)
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(exc),
+        )
+
+    if error or attendee is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "Unable to record sign-in.",
+        )
+
+    if not already_checked_in:
+        await log_audit_event(
+            db=db,
+            event_type="event_guest_checkin",
+            event_category="events",
+            severity="info",
+            event_data={
+                "event_id": str(event.id),
+                "attendee_id": attendee.id,
+                "location_id": location.id,
+                "prospect_id": prospect_id,
+                "prospect_created": False,
+                "source": GuestCheckInService.SOURCE_KIOSK_QR,
+            },
+            organization_id=location.organization_id,
+            ip_address=get_client_ip(request),
+        )
+
+    return GuestCheckInResponse(
+        status="already_checked_in" if already_checked_in else "checked_in",
+        attendee_id=attendee.id,
+        event_name=event.title,
+        checked_in_at=(
+            attendee.checked_in_at.isoformat() if attendee.checked_in_at else ""
+        ),
+        message=(
+            f"You're already checked in to {event.title}."
+            if already_checked_in
+            else f"You're signed in to {event.title}."
+        ),
     )

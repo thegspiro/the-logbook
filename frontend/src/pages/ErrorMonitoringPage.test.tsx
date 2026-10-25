@@ -68,7 +68,7 @@ describe('ErrorMonitoringPage', () => {
 
     renderWithRouter(<ErrorMonitoringPage />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^View details of/ }));
     expect(screen.getByText(/POST\s+\/events\/42/)).toBeInTheDocument();
     expect(screen.getByText(/→ 500/)).toBeInTheDocument();
   });
@@ -98,7 +98,7 @@ describe('ErrorMonitoringPage', () => {
 
     expect(await screen.findByText('/events/42/edit')).toBeInTheDocument();
     expect(screen.getByText('Updating events')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'View details' }));
+    await userEvent.click(screen.getByRole('button', { name: /^View details of/ }));
     expect(screen.getByText(/PATCH\s+\/events\/42/)).toBeInTheDocument();
     expect(screen.getByText('Try the request again.')).toBeInTheDocument();
     expect(screen.getByText('ValueError: invalid event')).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('ErrorMonitoringPage', () => {
 
     renderWithRouter(<ErrorMonitoringPage />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^View details of/ }));
     expect(screen.getByText('Dana Reyes (dreyes)')).toBeInTheDocument();
     // The id stays alongside the name, and in full: support tickets quote it.
     expect(screen.getByText('3fb15bc7-0000-0000-0000-000000000001')).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe('ErrorMonitoringPage', () => {
 
     renderWithRouter(<ErrorMonitoringPage />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^View details of/ }));
     expect(screen.getByText('Account not found')).toBeInTheDocument();
   });
 
@@ -252,7 +252,7 @@ describe('ErrorMonitoringPage', () => {
 
     renderWithRouter(<ErrorMonitoringPage />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^View details of/ }));
     expect(screen.getByText(/\[LB-SYS-001\]/)).toBeInTheDocument();
   });
 

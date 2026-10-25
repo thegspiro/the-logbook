@@ -47,6 +47,18 @@ const CELL: React.CSSProperties = {
 };
 const HEAD: React.CSSProperties = { ...CELL, fontWeight: 'bold', background: '#eee' };
 
+/**
+ * Lets a table scroll sideways on a phone instead of widening the page: the
+ * coverage table needs about 440px and the screen view of this report is the
+ * one a tester opens from their phone (W77-5). Printing is unaffected — the
+ * paper is wider than the table, so nothing overflows to scroll.
+ */
+const TableScroll: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="overflow-x-auto" data-mobile-scroll-region role="region" aria-label={label} tabIndex={0}>
+    {children}
+  </div>
+);
+
 export const TestingReportPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
@@ -173,134 +185,142 @@ export const TestingReportPrintPage: React.FC = () => {
           </div>
 
           <h2 style={SECTION}>Summary</h2>
-          <table style={TABLE}>
-            <tbody>
-              <tr>
-                <td style={CELL}>Pages in the application</td>
-                <td style={CELL}>{summary.total}</td>
-                <td style={CELL}>Checked</td>
-                <td style={CELL}>{totals.checked}</td>
-              </tr>
-              <tr>
-                <td style={CELL}>Passed</td>
-                <td style={CELL}>{totals.pass}</td>
-                <td style={CELL}>Failed</td>
-                <td style={CELL}>{totals.fail}</td>
-              </tr>
-              <tr>
-                <td style={CELL}>Blocked</td>
-                <td style={CELL}>{totals.blocked}</td>
-                <td style={CELL}>Not tested</td>
-                <td style={CELL}>{totals.untested}</td>
-              </tr>
-              <tr>
-                <td style={CELL}>Gate refusals verified</td>
-                <td style={CELL}>{gateTally.verified}</td>
-                <td style={CELL}>Gate mismatches</td>
-                <td style={CELL}>
-                  {gateTally.mismatches}
-                  {gateTally.needsConfirmation > 0 && ` (+${gateTally.needsConfirmation} to confirm)`}
-                </td>
-              </tr>
-              <tr>
-                <td style={CELL}>Testers</td>
-                <td style={CELL}>{canSeeAllTesters ? testerCount : 1}</td>
-                <td style={CELL}>Marks on an earlier build</td>
-                <td style={CELL}>{staleCount}</td>
-              </tr>
-            </tbody>
-          </table>
+          <TableScroll label="Summary">
+            <table style={TABLE}>
+              <tbody>
+                <tr>
+                  <td style={CELL}>Pages in the application</td>
+                  <td style={CELL}>{summary.total}</td>
+                  <td style={CELL}>Checked</td>
+                  <td style={CELL}>{totals.checked}</td>
+                </tr>
+                <tr>
+                  <td style={CELL}>Passed</td>
+                  <td style={CELL}>{totals.pass}</td>
+                  <td style={CELL}>Failed</td>
+                  <td style={CELL}>{totals.fail}</td>
+                </tr>
+                <tr>
+                  <td style={CELL}>Blocked</td>
+                  <td style={CELL}>{totals.blocked}</td>
+                  <td style={CELL}>Not tested</td>
+                  <td style={CELL}>{totals.untested}</td>
+                </tr>
+                <tr>
+                  <td style={CELL}>Gate refusals verified</td>
+                  <td style={CELL}>{gateTally.verified}</td>
+                  <td style={CELL}>Gate mismatches</td>
+                  <td style={CELL}>
+                    {gateTally.mismatches}
+                    {gateTally.needsConfirmation > 0 && ` (+${gateTally.needsConfirmation} to confirm)`}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={CELL}>Testers</td>
+                  <td style={CELL}>{canSeeAllTesters ? testerCount : 1}</td>
+                  <td style={CELL}>Marks on an earlier build</td>
+                  <td style={CELL}>{staleCount}</td>
+                </tr>
+              </tbody>
+            </table>
+          </TableScroll>
 
           <h2 style={SECTION}>Failures</h2>
           {failures.length === 0 ? (
             <p style={{ margin: 0 }}>No page was recorded as failing.</p>
           ) : (
-            <table style={TABLE}>
-              <thead>
-                <tr>
-                  <th style={HEAD}>Page</th>
-                  <th style={HEAD}>Route</th>
-                  <th style={HEAD}>Tester</th>
-                  <th style={HEAD}>What was found</th>
-                </tr>
-              </thead>
-              <tbody>
-                {failures.map((mark) => (
-                  <tr key={`${mark.page.path}-${mark.testerName}`}>
-                    <td style={CELL}>{mark.page.label}</td>
-                    <td style={CELL}>{mark.page.path}</td>
-                    <td style={CELL}>{mark.testerName}</td>
-                    <td style={CELL}>{mark.note || '—'}</td>
+            <TableScroll label="Failures">
+              <table style={TABLE}>
+                <thead>
+                  <tr>
+                    <th style={HEAD}>Page</th>
+                    <th style={HEAD}>Route</th>
+                    <th style={HEAD}>Tester</th>
+                    <th style={HEAD}>What was found</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {failures.map((mark) => (
+                    <tr key={`${mark.page.path}-${mark.testerName}`}>
+                      <td style={CELL}>{mark.page.label}</td>
+                      <td style={CELL}>{mark.page.path}</td>
+                      <td style={CELL}>{mark.testerName}</td>
+                      <td style={CELL}>{mark.note || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableScroll>
           )}
 
           <h2 style={SECTION}>Gate findings</h2>
           {gateFindings.length === 0 ? (
             <p style={{ margin: 0 }}>Every gate behaved as the application predicted.</p>
           ) : (
+            <TableScroll label="Gate findings">
+              <table style={TABLE}>
+                <thead>
+                  <tr>
+                    <th style={HEAD}>Page</th>
+                    <th style={HEAD}>Gate</th>
+                    <th style={HEAD}>Tester</th>
+                    <th style={HEAD}>Finding</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gateFindings.map((mark) => {
+                    const verdict = gateVerdict({
+                      status: mark.status,
+                      ...(mark.expectedAccess ? { expectedAccess: mark.expectedAccess } : {}),
+                    });
+                    return (
+                      <tr key={`${mark.page.path}-${mark.testerName}`}>
+                        <td style={CELL}>{mark.page.label}</td>
+                        <td style={CELL}>{describeGate(mark.page) || '—'}</td>
+                        <td style={CELL}>
+                          {mark.testerName}
+                          {mark.testedAs.length > 0 && ` (${mark.testedAs.join(', ')})`}
+                        </td>
+                        <td style={CELL}>{verdict === 'none' ? '' : GATE_VERDICT_LABELS[verdict]}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableScroll>
+          )}
+
+          <h2 style={SECTION}>Coverage by area</h2>
+          <TableScroll label="Coverage by area">
             <table style={TABLE}>
               <thead>
                 <tr>
-                  <th style={HEAD}>Page</th>
-                  <th style={HEAD}>Gate</th>
-                  <th style={HEAD}>Tester</th>
-                  <th style={HEAD}>Finding</th>
+                  <th style={HEAD}>Area</th>
+                  <th style={HEAD}>Pages</th>
+                  <th style={HEAD}>Checked</th>
+                  <th style={HEAD}>Passed</th>
+                  <th style={HEAD}>Failed</th>
+                  <th style={HEAD}>Blocked</th>
                 </tr>
               </thead>
               <tbody>
-                {gateFindings.map((mark) => {
-                  const verdict = gateVerdict({
-                    status: mark.status,
-                    ...(mark.expectedAccess ? { expectedAccess: mark.expectedAccess } : {}),
-                  });
+                {TESTING_GROUPS.map((group) => {
+                  const statuses = group.pages.map((page) => pageStatus.get(page.path) ?? 'untested');
+                  const count = (value: string) => statuses.filter((status) => status === value).length;
                   return (
-                    <tr key={`${mark.page.path}-${mark.testerName}`}>
-                      <td style={CELL}>{mark.page.label}</td>
-                      <td style={CELL}>{describeGate(mark.page) || '—'}</td>
-                      <td style={CELL}>
-                        {mark.testerName}
-                        {mark.testedAs.length > 0 && ` (${mark.testedAs.join(', ')})`}
-                      </td>
-                      <td style={CELL}>{verdict === 'none' ? '' : GATE_VERDICT_LABELS[verdict]}</td>
+                    <tr key={group.id}>
+                      <td style={CELL}>{group.label}</td>
+                      <td style={CELL}>{group.pages.length}</td>
+                      <td style={CELL}>{statuses.filter((status) => status !== 'untested').length}</td>
+                      <td style={CELL}>{count('pass')}</td>
+                      <td style={CELL}>{count('fail')}</td>
+                      <td style={CELL}>{count('blocked')}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          )}
-
-          <h2 style={SECTION}>Coverage by area</h2>
-          <table style={TABLE}>
-            <thead>
-              <tr>
-                <th style={HEAD}>Area</th>
-                <th style={HEAD}>Pages</th>
-                <th style={HEAD}>Checked</th>
-                <th style={HEAD}>Passed</th>
-                <th style={HEAD}>Failed</th>
-                <th style={HEAD}>Blocked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {TESTING_GROUPS.map((group) => {
-                const statuses = group.pages.map((page) => pageStatus.get(page.path) ?? 'untested');
-                const count = (value: string) => statuses.filter((status) => status === value).length;
-                return (
-                  <tr key={group.id}>
-                    <td style={CELL}>{group.label}</td>
-                    <td style={CELL}>{group.pages.length}</td>
-                    <td style={CELL}>{statuses.filter((status) => status !== 'untested').length}</td>
-                    <td style={CELL}>{count('pass')}</td>
-                    <td style={CELL}>{count('fail')}</td>
-                    <td style={CELL}>{count('blocked')}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          </TableScroll>
 
           <p style={{ marginTop: '14pt', fontSize: '8pt', color: '#666' }}>
             Counts cover {canSeeAllTesters ? 'every tester in the department' : 'your own marks'}. Pages with no mark

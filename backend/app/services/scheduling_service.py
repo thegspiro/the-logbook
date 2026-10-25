@@ -95,7 +95,7 @@ from app.utils.apparatus_ref import (
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.member_names import format_display_name
 from app.utils.membership import is_administrative
-from app.utils.model_updates import reject_null_for_required
+from app.utils.model_updates import apply_updates, reject_null_for_required
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import (
@@ -3677,9 +3677,7 @@ class SchedulingService:
                 ):
                     return None, "One or more members are not in your organization"
 
-            for key, value in update_data.items():
-                if key not in self.PROTECTED_FIELDS:
-                    setattr(call, key, value)
+            apply_updates(call, update_data, skip=self.PROTECTED_FIELDS)
 
             await self.db.commit()
             await self.db.refresh(call)
@@ -4196,10 +4194,9 @@ class SchedulingService:
         (``remove_template``). Owner decision (2026-10-22): a pattern naming
         one generates no new shifts until the template is reactivated or the
         pattern is pointed elsewhere. The whole pattern stops, not just the
-        day or night half whose template is inactive: every shift a pattern
-        generates is stamped with its main template, the day/night templates
-        only lend their times, and a rotation that silently produced days
-        without nights would leave a staffing gap nobody was told about.
+        day or night half whose template is inactive: a rotation that
+        silently produced days without nights would leave a staffing gap
+        nobody was told about.
 
         One query for any number of patterns, so the list endpoint can flag
         each row. Patterns naming no inactive template are absent.
@@ -4316,12 +4313,15 @@ class SchedulingService:
                     "Linked shift template was not found — it may have been deleted",
                 )
 
+            def _parse_times(tmpl: ShiftTemplate) -> tuple[int, int, int, int]:
+                """A template's local (start_h, start_m, end_h, end_m)."""
+                s_h, s_m = map(int, tmpl.start_time_of_day.split(":"))
+                e_h, e_m = map(int, tmpl.end_time_of_day.split(":"))
+                return s_h, s_m, e_h, e_m
+
             # Parse template times safely
             try:
-                start_hour, start_minute = map(
-                    int, template.start_time_of_day.split(":")
-                )
-                end_hour, end_minute = map(int, template.end_time_of_day.split(":"))
+                start_hour, start_minute, end_hour, end_minute = _parse_times(template)
             except (ValueError, AttributeError):
                 return [], "Invalid time format in template. Expected HH:MM."
 
@@ -4332,12 +4332,16 @@ class SchedulingService:
             config = pattern.schedule_config or {}
 
             # -----------------------------------------------------------
-            # Resolve day/night templates for cycle_pattern support.
-            # When a platoon pattern uses cycle_pattern with "day"/"night"
-            # entries, optional day_template_id / night_template_id in
-            # schedule_config point to separate ShiftTemplate records so
-            # day and night shifts can have different start/end times and
-            # colors.  Falls back to the main template when unset.
+            # Resolve day/night templates. A weekly pattern's weekday_shifts
+            # or a platoon's cycle_pattern can name "day" and "night"
+            # entries, and day_template_id / night_template_id in
+            # schedule_config pick the template each side is built from —
+            # its seats, minimum staffing, apparatus, open-to-all flag,
+            # colour and times, and the template link its equipment
+            # checklists resolve through. A night side staffed differently
+            # from the day side is the reason the two are chosen separately.
+            # A side with no template of its own, or one that cannot be
+            # found, is built from the main template.
             # -----------------------------------------------------------
             cycle_pattern_cfg = (
                 config.get("cycle_pattern") if isinstance(config, dict) else None
@@ -4345,10 +4349,8 @@ class SchedulingService:
             if cycle_pattern_cfg and not isinstance(cycle_pattern_cfg, list):
                 cycle_pattern_cfg = None
 
-            day_tmpl_times = (start_hour, start_minute, end_hour, end_minute)
-            night_tmpl_times = (start_hour, start_minute, end_hour, end_minute)
-            day_tmpl_color = template.color
-            night_tmpl_color = template.color
+            side_templates: dict[str, ShiftTemplate] = {}
+            side_times: dict[str, tuple[int, int, int, int]] = {}
 
             weekday_shifts_cfg = self._parse_weekday_shifts(config)
 
@@ -4356,26 +4358,24 @@ class SchedulingService:
                 cycle_pattern_cfg
                 and any(e in ("day", "night") for e in cycle_pattern_cfg)
             ):
-                raw_day_id = config.get("day_template_id")
-                raw_night_id = config.get("night_template_id")
-                if raw_day_id:
-                    dt = await self.get_template_by_id(
-                        UUID(str(raw_day_id)), organization_id
+                for side in ("day", "night"):
+                    raw_side_id = config.get(f"{side}_template_id")
+                    if not raw_side_id:
+                        continue
+                    side_template = await self.get_template_by_id(
+                        UUID(str(raw_side_id)), organization_id
                     )
-                    if dt:
-                        dh, dm = map(int, dt.start_time_of_day.split(":"))
-                        deh, dem = map(int, dt.end_time_of_day.split(":"))
-                        day_tmpl_times = (dh, dm, deh, dem)
-                        day_tmpl_color = dt.color
-                if raw_night_id:
-                    nt = await self.get_template_by_id(
-                        UUID(str(raw_night_id)), organization_id
-                    )
-                    if nt:
-                        nh, nm = map(int, nt.start_time_of_day.split(":"))
-                        neh, nem = map(int, nt.end_time_of_day.split(":"))
-                        night_tmpl_times = (nh, nm, neh, nem)
-                        night_tmpl_color = nt.color
+                    if not side_template:
+                        continue
+                    try:
+                        side_times[side] = _parse_times(side_template)
+                    except (ValueError, AttributeError):
+                        return (
+                            [],
+                            f"Invalid time format in the {side} shift template. "
+                            "Expected HH:MM.",
+                        )
+                    side_templates[side] = side_template
 
             # ----------------------------------------------------------------
             # Determine occurrences: which (date, shift type) combinations get
@@ -4563,21 +4563,25 @@ class SchedulingService:
                             occ["members"].append((uid, member.get("position")))
                     current += timedelta(days=1)
 
-            # Helper: resolve template times and color for a given shift type
-            def _resolve_times(stype: str) -> tuple:
-                """Return (s_hour, s_min, e_hour, e_min, color) for a shift type."""
-                if stype == "night":
-                    return (*night_tmpl_times, night_tmpl_color)
-                if stype == "day":
-                    return (*day_tmpl_times, day_tmpl_color)
-                return (start_hour, start_minute, end_hour, end_minute, template.color)
+            def _template_for(stype: str) -> ShiftTemplate:
+                """The template an occurrence of ``stype`` is built from."""
+                return side_templates.get(stype, template)
+
+            def _times_for(stype: str) -> tuple[int, int, int, int]:
+                return side_times.get(
+                    stype, (start_hour, start_minute, end_hour, end_minute)
+                )
 
             # Duplicate guard: skip occurrences that already have a shift from
-            # this pattern's template starting at the same time (allows
-            # multiple shifts per day, e.g. day + night). Every shift a pattern
-            # generates is stamped with its main template, so that is the key:
-            # another unit's template at the same hour, or an ad-hoc shift with
-            # no template, is not this occurrence and must not suppress it.
+            # one of this pattern's templates starting at the same time (allows
+            # multiple shifts per day, e.g. day + night). A generated shift is
+            # stamped with the template it was built from, so those are the
+            # key: another unit's template at the same hour, or an ad-hoc shift
+            # with no template, is not this occurrence and must not suppress
+            # it. The main template stays in the set even when both sides have
+            # their own: night shifts generated before each side was built
+            # from its own template carry the main one, and regenerating must
+            # not lay a second shift over them.
             # Cancelled shifts stay in the set — a cancelled occurrence is an
             # officer's decision, not a gap to refill. Tracks created within
             # this run are added to the set too, so two tracks resolving to the
@@ -4587,7 +4591,12 @@ class SchedulingService:
                 existing_result = await self.db.execute(
                     select(Shift.shift_date, Shift.start_time)
                     .where(Shift.organization_id == str(organization_id))
-                    .where(Shift.template_id == str(template.id))
+                    .where(
+                        Shift.template_id.in_(
+                            {str(template.id)}
+                            | {str(t.id) for t in side_templates.values()}
+                        )
+                    )
                     .where(Shift.shift_date.in_(occ_dates))
                 )
                 existing_shifts = {
@@ -4604,9 +4613,8 @@ class SchedulingService:
             ):
                 members = occ["members"]
                 shift_platoon = occ["platoon"]
-                s_hour, s_minute, e_hour, e_minute, shift_color = _resolve_times(
-                    entry_type
-                )
+                shift_template = _template_for(entry_type)
+                s_hour, s_minute, e_hour, e_minute = _times_for(entry_type)
                 # Build datetimes in the org's local timezone, then
                 # convert to UTC for storage so the frontend's
                 # timezone-aware formatting produces the correct local time.
@@ -4645,12 +4653,12 @@ class SchedulingService:
                     shift_date=shift_date_val,
                     start_time=shift_start,
                     end_time=shift_end,
-                    apparatus_id=getattr(template, "apparatus_id", None),
+                    apparatus_id=getattr(shift_template, "apparatus_id", None),
                     # Recorded, not just copied from: the equipment checklists
                     # this shift carries are resolved through its template.
-                    template_id=getattr(template, "id", None),
+                    template_id=getattr(shift_template, "id", None),
                     platoon=shift_platoon,
-                    color=shift_color,
+                    color=shift_template.color,
                     # Structured slots, not bare strings: this writer is how
                     # a recurring pattern fills the calendar, so stripping the
                     # required flag here would re-seed the legacy shape after
@@ -4660,12 +4668,14 @@ class SchedulingService:
                     # wants; the stored-form pass then settles the seat names
                     # so this write path matches every other one.
                     positions=normalize_stored_positions(
-                        self.normalize_positions(getattr(template, "positions", None))
+                        self.normalize_positions(
+                            getattr(shift_template, "positions", None)
+                        )
                     )
                     or None,
-                    min_staffing=getattr(template, "min_staffing", None),
+                    min_staffing=getattr(shift_template, "min_staffing", None),
                     open_to_all_members=bool(
-                        getattr(template, "open_to_all_members", False)
+                        getattr(shift_template, "open_to_all_members", False)
                     ),
                     created_by=created_by,
                 )
@@ -5528,20 +5538,18 @@ class SchedulingService:
                     )
 
             # A seat change is held to the seats the shift has, by the same
-            # rule a new assignment is. A null cannot clear a NOT NULL seat, so
-            # it means "leave the seat alone" rather than a flush error.
-            if "position" in update_data:
-                if not update_data["position"]:
-                    update_data.pop("position")
-                else:
-                    seat_shift = await self.get_shift_by_id(
-                        assignment.shift_id, organization_id
-                    )
-                    if seat_shift is None:
-                        return None, "Shift not found"
-                    update_data["position"] = self.resolve_shift_seat(
-                        seat_shift, update_data["position"]
-                    )
+            # rule a new assignment is. A null seat is not a change: the column
+            # is NOT NULL, so it is refused below like any other required field
+            # rather than acknowledged and ignored.
+            if update_data.get("position") is not None:
+                seat_shift = await self.get_shift_by_id(
+                    assignment.shift_id, organization_id
+                )
+                if seat_shift is None:
+                    return None, "Shift not found"
+                update_data["position"] = self.resolve_shift_seat(
+                    seat_shift, update_data["position"]
+                )
 
             reject_null_for_required(
                 assignment, update_data, skip=self.PROTECTED_FIELDS

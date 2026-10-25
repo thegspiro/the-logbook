@@ -18,7 +18,6 @@ import { AlertTriangle, Download, EyeOff, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { Breadcrumbs } from '../../../components/ux';
 import { formatDateTime, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { getStatusLabel, type InventoryCategory } from '../types';
@@ -100,13 +99,11 @@ export const InventoryNotSeenPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6">
-      <Breadcrumbs />
-
+    <div className="max-w-5xl space-y-4 py-6">
       <header>
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
           <EyeOff className="h-5 w-5" /> Items Not Seen
-        </h1>
+        </h2>
         <p className="text-theme-text-secondary mt-1 text-sm">
           Items nobody has tapped, assigned, returned, checked out, checked in or issued lately. Editing an item’s
           record does not count as seeing it. Retired items are left out.

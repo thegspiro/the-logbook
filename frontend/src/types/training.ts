@@ -1132,7 +1132,8 @@ export interface TrainingProgramUpdate {
   target_position?: string | null | undefined;
   structure_type?: ProgramStructureType | undefined;
   time_limit_days?: number | null | undefined;
-  warning_days_before?: number | null | undefined;
+  // NOT NULL on the server: it can be changed but not cleared.
+  warning_days_before?: number | undefined;
   reminder_conditions?: ReminderConditions | undefined;
   is_template?: boolean | undefined;
   active?: boolean | undefined;

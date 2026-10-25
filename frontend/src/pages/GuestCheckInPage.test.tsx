@@ -28,9 +28,13 @@ const eventInfo = {
   organization_name: 'Falls Church Volunteer Fire Department',
   is_open: true,
   closed_reason: null,
-  collects_prospect_details: true,
+  // The typed form. A pipeline-linked event signs in by email instead; see
+  // "Email-first sign-in" below.
+  collects_prospect_details: false,
   timezone: 'America/New_York',
 };
+
+const pipelineEventInfo = { ...eventInfo, event_name: 'Recruitment Night', collects_prospect_details: true };
 
 /** Queue up fetch responses in call order. */
 const mockFetchSequence = (...responses: Array<{ ok: boolean; status?: number; body: unknown }>) => {
@@ -136,8 +140,8 @@ describe('GuestCheckInPage', () => {
       expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
     });
 
-    it('omits the interest question when the event does not feed the pipeline', async () => {
-      mockFetchSequence({ ok: true, body: { ...eventInfo, collects_prospect_details: false } });
+    it('asks only for name and contact details on the typed form', async () => {
+      mockFetchSequence({ ok: true, body: eventInfo });
 
       renderWithRouter(<GuestCheckInPage />);
 
@@ -213,7 +217,7 @@ describe('GuestCheckInPage', () => {
       expect(body).not.toHaveProperty('phone');
     });
 
-    it('tells the guest a follow-up is coming when the event collects prospect details', async () => {
+    it('does not greet a typed sign-in as a returning applicant', async () => {
       const user = userEvent.setup();
       mockFetchSequence(
         { ok: true, body: eventInfo },
@@ -236,36 +240,8 @@ describe('GuestCheckInPage', () => {
       await fillRequiredFields(user);
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
-      await waitFor(() => {
-        expect(screen.getByText('We have your details')).toBeInTheDocument();
-      });
-    });
-
-    it('does not promise a follow-up when the event does not collect prospect details', async () => {
-      const user = userEvent.setup();
-      mockFetchSequence(
-        { ok: true, body: { ...eventInfo, collects_prospect_details: false } },
-        {
-          ok: true,
-          status: 201,
-          body: {
-            status: 'checked_in',
-            attendee_id: 'att-1',
-            event_name: 'Volunteer Interest Night',
-            checked_in_at: '2026-08-09T23:05:00Z',
-            message: 'Signed in.',
-          },
-        }
-      );
-
-      renderWithRouter(<GuestCheckInPage />);
-      expect(await screen.findByLabelText(/first name/i)).toBeInTheDocument();
-
-      await fillRequiredFields(user);
-      await user.click(screen.getByRole('button', { name: /sign in/i }));
-
       expect(await screen.findByText("You're signed in!")).toBeInTheDocument();
-      expect(screen.queryByText('We have your details')).not.toBeInTheDocument();
+      expect(screen.queryByText('Thanks for coming back')).not.toBeInTheDocument();
     });
 
     it('surfaces the server error and keeps the form usable', async () => {
@@ -294,6 +270,183 @@ describe('GuestCheckInPage', () => {
       expect(await screen.findByLabelText(/first name/i)).toBeInTheDocument();
 
       expect(screen.getByRole('button', { name: /sign in/i })).toBeDisabled();
+    });
+  });
+
+  describe('Email-first sign-in at a pipeline event', () => {
+    const recognised = {
+      status: 'prospect',
+      display_name: 'Jane S.',
+      confirm_token: 'tok-123',
+      message: 'Welcome back! Please confirm this is you.',
+    };
+    const signedIn = {
+      status: 'checked_in',
+      attendee_id: 'att-1',
+      event_name: 'Recruitment Night',
+      checked_in_at: '2026-08-09T23:05:00Z',
+      message: "You're signed in to Recruitment Night.",
+    };
+
+    const lookUp = async (user: ReturnType<typeof userEvent.setup>, email = 'jane@example.com') => {
+      await user.type(await screen.findByLabelText(/^email/i), email);
+      await user.click(screen.getByRole('button', { name: /continue/i }));
+    };
+
+    it('asks for an email instead of a name', async () => {
+      mockFetchSequence({ ok: true, body: pipelineEventInfo });
+
+      renderWithRouter(<GuestCheckInPage />);
+
+      expect(await screen.findByLabelText(/^email/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/first name/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/last name/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled();
+    });
+
+    it('looks the email up and asks a recognised applicant to confirm', async () => {
+      const user = userEvent.setup();
+      const fetchMock = mockFetchSequence({ ok: true, body: pipelineEventInfo }, { ok: true, body: recognised });
+
+      renderWithRouter(<GuestCheckInPage />);
+      await lookUp(user, '  jane@example.com ');
+
+      expect(await screen.findByText('Is this you, Jane S.?')).toBeInTheDocument();
+      const [url, options] = fetchMock.mock.calls[1] as [string, RequestInit];
+      expect(url).toBe('/api/public/v1/display/ABC123XY/events/evt-1/guest-lookup');
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body as string)).toEqual({ email: 'jane@example.com' });
+      // Nothing is recorded until the applicant confirms.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('confirms with the token alone and greets the applicant', async () => {
+      const user = userEvent.setup();
+      const fetchMock = mockFetchSequence(
+        { ok: true, body: pipelineEventInfo },
+        { ok: true, body: recognised },
+        { ok: true, body: signedIn }
+      );
+
+      renderWithRouter(<GuestCheckInPage />);
+      await lookUp(user);
+      await user.click(await screen.findByRole('button', { name: /yes, check me in/i }));
+
+      expect(await screen.findByText("You're signed in, Jane S.!")).toBeInTheDocument();
+      expect(screen.getByText('Thanks for coming back')).toBeInTheDocument();
+      const [url, options] = fetchMock.mock.calls[2] as [string, RequestInit];
+      expect(url).toBe('/api/public/v1/display/ABC123XY/events/evt-1/guest-confirm');
+      expect(JSON.parse(options.body as string)).toEqual({ confirm_token: 'tok-123' });
+    });
+
+    it('tells a returning applicant they are already checked in', async () => {
+      const user = userEvent.setup();
+      mockFetchSequence(
+        { ok: true, body: pipelineEventInfo },
+        { ok: true, body: recognised },
+        {
+          ok: true,
+          body: {
+            ...signedIn,
+            status: 'already_checked_in',
+            message: "You're already checked in to Recruitment Night.",
+          },
+        }
+      );
+
+      renderWithRouter(<GuestCheckInPage />);
+      await lookUp(user);
+      await user.click(await screen.findByRole('button', { name: /yes, check me in/i }));
+
+      expect(await screen.findByText("You're already checked in, Jane S.")).toBeInTheDocument();
+    });
+
+    it('returns to the email step with a typo hint on "That\'s not me"', async () => {
+      const user = userEvent.setup();
+      const fetchMock = mockFetchSequence({ ok: true, body: pipelineEventInfo }, { ok: true, body: recognised });
+
+      renderWithRouter(<GuestCheckInPage />);
+      await lookUp(user);
+      await user.click(await screen.findByRole('button', { name: /that's not me/i }));
+
+      const input = await screen.findByLabelText(/^email/i);
+      expect(input).toHaveValue('jane@example.com');
+      expect(input).toHaveFocus();
+      expect(screen.getByText(/check your email address for typos/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Jane S\./)).not.toBeInTheDocument();
+      // No confirm call was made.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('points a member account at the member QR code', async () => {
+      const user = userEvent.setup();
+      mockFetchSequence(
+        { ok: true, body: pipelineEventInfo },
+        {
+          ok: true,
+          body: {
+            status: 'member',
+            message:
+              'This looks like a department member account. Please scan the member QR code on the display instead.',
+          },
+        }
+      );
+
+      renderWithRouter(<GuestCheckInPage />);
+      await lookUp(user);
+
+      expect(await screen.findByText(/department member account/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /yes, check me in/i })).not.toBeInTheDocument();
+    });
+
+    it('sends an unrecognised visitor to staff, with a way to retry a typo', async () => {
+      const user = userEvent.setup();
+      mockFetchSequence(
+        { ok: true, body: pipelineEventInfo },
+        {
+          ok: true,
+          body: { status: 'not_found', message: "We couldn't find you. Please see a member of staff to sign in." },
+        }
+      );
+
+      renderWithRouter(<GuestCheckInPage />);
+      await lookUp(user);
+
+      expect(await screen.findByText(/please see a member of staff/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /try a different email/i }));
+      expect(await screen.findByLabelText(/^email/i)).toHaveValue('jane@example.com');
+    });
+
+    it('starts again from the email when the confirmation has expired', async () => {
+      const user = userEvent.setup();
+      mockFetchSequence(
+        { ok: true, body: pipelineEventInfo },
+        { ok: true, body: recognised },
+        { ok: false, status: 400, body: { detail: 'This confirmation has expired. Please enter your email again.' } }
+      );
+
+      renderWithRouter(<GuestCheckInPage />);
+      await lookUp(user);
+      await user.click(await screen.findByRole('button', { name: /yes, check me in/i }));
+
+      expect(
+        await screen.findByText('This confirmation has expired. Please enter your email again.')
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText(/^email/i)).toBeInTheDocument();
+    });
+
+    it('surfaces a lookup error and keeps the form usable', async () => {
+      const user = userEvent.setup();
+      mockFetchSequence(
+        { ok: true, body: pipelineEventInfo },
+        { ok: false, status: 429, body: { detail: 'Too many sign-in attempts. Please try again in a few minutes.' } }
+      );
+
+      renderWithRouter(<GuestCheckInPage />);
+      await lookUp(user);
+
+      expect(await screen.findByText(/too many sign-in attempts/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
     });
   });
 });

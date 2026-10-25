@@ -160,6 +160,7 @@ from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
 from app.utils.delete_outcome import set_delete_outcome
 from app.utils.hours import hours_from_minutes
+from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import resolve_org_today
 from app.utils.outreach_roles import normalize_staffing_roles
 from app.utils.positions import UnknownSeatError, normalize_stored_positions
@@ -3881,8 +3882,10 @@ async def update_basic_apparatus(
     update_data = apparatus.model_dump(exclude_unset=True)
     if "positions" in update_data:
         update_data["positions"] = normalize_stored_positions(update_data["positions"])
-    for key, value in update_data.items():
-        setattr(existing, key, value)
+    try:
+        apply_updates(existing, update_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     await db.commit()
     await db.refresh(existing)
     return existing

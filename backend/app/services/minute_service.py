@@ -643,10 +643,23 @@ class MinuteService:
         """
         sections = [s for s in minutes.get_sections() if s.get("needs_motion")]
         wanted = {s["key"]: s for s in sections if s.get("key")}
+        # MM-19: a find-or-create, so two saves of one draft at once could each
+        # find no motion for a section and each add one. Lock the minutes row
+        # to serialize them, and read the motions with a locking read too: a
+        # plain SELECT answers from the snapshot this transaction took at its
+        # first read, which predates the lock and so misses a motion the other
+        # save committed while this one waited (pitfall #27).
+        await self.db.execute(
+            select(MeetingMinutes.id)
+            .where(MeetingMinutes.id == minutes.id)
+            .with_for_update()
+        )
         rows = (
             (
                 await self.db.execute(
-                    select(Motion).where(Motion.minutes_id == minutes.id)
+                    select(Motion)
+                    .where(Motion.minutes_id == minutes.id)
+                    .with_for_update()
                 )
             )
             .scalars()

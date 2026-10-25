@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router';
-import { CheckCircle2, MapPin, UserPlus } from 'lucide-react';
+import { CheckCircle2, MapPin, UserCheck } from 'lucide-react';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateCustom } from '../utils/dateFormatting';
+import { GuestEmailSignIn } from '../components/GuestEmailSignIn';
 import type { GuestCheckInEventInfo, GuestCheckInResult } from '../types/event';
 
 /**
@@ -11,6 +12,11 @@ import type { GuestCheckInEventInfo, GuestCheckInResult } from '../types/event';
  * Landing page for the guest QR code on a room display. Lets a visitor at an
  * outreach event — a volunteer interest night, an open house — record their own
  * attendance without an account.
+ *
+ * An event that adds its guests to the prospective members pipeline signs in
+ * only applicants it recognises, through GuestEmailSignIn; anyone else is sent
+ * to staff rather than opening an applicant from an anonymous form. Every
+ * other guest event keeps the typed form below.
  *
  * Deliberately standalone: it lives outside AppLayout and makes bare `fetch`
  * calls rather than using the shared axios instance, because that instance
@@ -30,13 +36,15 @@ const GuestCheckInPage: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [interestReason, setInterestReason] = useState('');
   // Honeypot. Hidden from real users, so anything here came from a bot.
   const [website, setWebsite] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<GuestCheckInResult | null>(null);
+  // Set only by the email-first flow: the first name and last initial the
+  // visitor confirmed, used to greet them on the confirmation.
+  const [recognisedName, setRecognisedName] = useState<string | null>(null);
 
   // This page runs with no session, so useTimezone() can only fall back to the
   // device's own zone. Prefer the department timezone the API reports.
@@ -85,7 +93,6 @@ const GuestCheckInPage: React.FC = () => {
           // rather than an empty string, which the API rejects with a 422.
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
-          interest_reason: interestReason.trim() || undefined,
           hp_website: website || undefined,
         }),
       });
@@ -135,13 +142,20 @@ const GuestCheckInPage: React.FC = () => {
   }
 
   if (result) {
+    const alreadyIn = result.status === 'already_checked_in';
+    let heading = "You're signed in!";
+    if (alreadyIn) {
+      heading = recognisedName ? `You're already checked in, ${recognisedName}` : "You're already checked in";
+    } else if (recognisedName) {
+      heading = `You're signed in, ${recognisedName}!`;
+    }
     return (
       <main id="main-content" className="bg-theme-surface-secondary mx-auto min-h-screen max-w-xl p-6">
         <div className="bg-theme-surface rounded-lg p-8 text-center shadow-md">
           <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-500/20">
             <CheckCircle2 className="h-12 w-12 text-green-700 dark:text-green-400" />
           </div>
-          <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">You're signed in!</h1>
+          <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">{heading}</h1>
           <p className="text-theme-text-secondary mb-8 text-lg">{result.message}</p>
 
           <div className="alert-info p-6 text-left">
@@ -161,14 +175,14 @@ const GuestCheckInPage: React.FC = () => {
             </div>
           </div>
 
-          {info.collects_prospect_details && (
+          {recognisedName && (
             <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-left dark:border-green-500/30 dark:bg-green-500/10">
               <div className="flex items-start">
-                <UserPlus className="mt-0.5 mr-2 h-5 w-5 shrink-0 text-green-700 dark:text-green-600" />
+                <UserCheck className="mt-0.5 mr-2 h-5 w-5 shrink-0 text-green-700 dark:text-green-600" />
                 <div>
-                  <p className="mb-1 text-sm font-medium text-green-900 dark:text-green-300">We have your details</p>
+                  <p className="mb-1 text-sm font-medium text-green-900 dark:text-green-300">Thanks for coming back</p>
                   <p className="text-sm text-green-800 dark:text-green-400">
-                    Someone will be in touch about becoming a member. You can close this page.
+                    Your attendance has been added to your application. You can close this page.
                   </p>
                 </div>
               </div>
@@ -206,12 +220,18 @@ const GuestCheckInPage: React.FC = () => {
             <h3 className="mb-2 font-semibold">Sign-in is not open</h3>
             <p>{info.closed_reason || 'Please ask a member of the department to record your attendance.'}</p>
           </div>
+        ) : info.collects_prospect_details && code && eventId ? (
+          <GuestEmailSignIn
+            code={code}
+            eventId={eventId}
+            onSignedIn={(signedIn, displayName) => {
+              setRecognisedName(displayName);
+              setResult(signedIn);
+            }}
+          />
         ) : (
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-            <p className="text-theme-text-secondary text-sm">
-              Not a member? Sign in here so we know you were with us
-              {info.collects_prospect_details ? ' — and so we can follow up if you want to join.' : '.'}
-            </p>
+            <p className="text-theme-text-secondary text-sm">Not a member? Sign in here so we know you were with us.</p>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -248,7 +268,7 @@ const GuestCheckInPage: React.FC = () => {
 
             <div>
               <label htmlFor="guest-email" className="form-label">
-                Email {info.collects_prospect_details && <span className="text-theme-text-muted">(to hear back)</span>}
+                Email
               </label>
               <input
                 id="guest-email"
@@ -275,22 +295,6 @@ const GuestCheckInPage: React.FC = () => {
                 className="form-input"
               />
             </div>
-
-            {info.collects_prospect_details && (
-              <div>
-                <label htmlFor="guest-interest" className="form-label">
-                  What brings you here today?
-                </label>
-                <textarea
-                  id="guest-interest"
-                  rows={3}
-                  maxLength={2000}
-                  value={interestReason}
-                  onChange={(e) => setInterestReason(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-            )}
 
             {/* Honeypot — hidden from people, irresistible to form-filling bots. */}
             <div aria-hidden="true" className="hidden">

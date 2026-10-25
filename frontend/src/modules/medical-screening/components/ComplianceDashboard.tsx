@@ -9,7 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
-import { SCREENING_TYPE_LABELS } from '../types';
+import { SCREENING_STATUS_COLORS, SCREENING_STATUS_LABELS, SCREENING_TYPE_LABELS, ScreeningStatus } from '../types';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { SelfRecordedBadge } from './SelfRecordedBadge';
 import { SubjectCompliancePanel, type ComplianceSubject } from './SubjectCompliancePanel';
@@ -52,6 +52,13 @@ export const ComplianceDashboard: React.FC = () => {
                     <p className="text-theme-text-primary flex flex-wrap items-center gap-2 text-sm font-medium">
                       {screening.user_name ?? screening.prospect_name ?? 'Unknown'}
                       {screening.self_recorded && <SelfRecordedBadge />}
+                      {/* A lapsing waiver is listed beside screenings (MS2-7); renewing
+                          it is different work from booking a screening, so say which. */}
+                      {screening.status === ScreeningStatus.WAIVED && (
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${SCREENING_STATUS_COLORS.waived}`}>
+                          {SCREENING_STATUS_LABELS.waived}
+                        </span>
+                      )}
                     </p>
                     <p className="text-theme-text-muted text-xs">
                       {SCREENING_TYPE_LABELS[screening.screening_type] ?? screening.screening_type}

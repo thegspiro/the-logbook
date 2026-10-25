@@ -33,7 +33,10 @@ interface TimeQuarterHourProps {
 // 320px. Inline rather than `min-w-*` / `px-*` classes because index.css resets
 // `min-width: 0` on phone-width selects in unlayered CSS, which outranks
 // utilities, and a padding class could lose to the caller's `form-input`.
-const SELECT_FIT = { minWidth: '4.25rem', paddingLeft: '0.5rem', paddingRight: '0.5rem' } as const;
+// `width: auto` overrides that `w-full` too: the row wraps when its column is
+// too narrow for all three, and a 100% width would give each select a line of
+// its own instead of wrapping only the last one.
+const SELECT_FIT = { width: 'auto', minWidth: '4.25rem', paddingLeft: '0.5rem', paddingRight: '0.5rem' } as const;
 
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => {
   const hour12 = i === 0 ? 12 : i;
@@ -108,7 +111,10 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
   const label = ariaLabel || placeholder || 'Time';
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
+    // Three selects at their 4.25rem floor need ~14rem. In a column narrower
+    // than that — a two-column form on an iPad in portrait — `shrink-0` alone
+    // let AM/PM run into the next field; capped and wrapping, it drops below.
+    <div className="flex max-w-full shrink-0 flex-wrap items-center gap-1.5">
       <select
         id={id}
         value={hour12Index !== null ? String(hour12Index) : ''}

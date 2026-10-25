@@ -43,7 +43,7 @@ export const DurationStepper: React.FC<{
               type="button"
               onClick={() => onChange(quick)}
               aria-pressed={active}
-              className={`min-h-11 rounded-full border px-3.5 font-mono text-sm transition-colors sm:min-h-9 ${
+              className={`touch:min-h-11 min-h-9 rounded-full border px-3.5 font-mono text-sm transition-colors ${
                 active
                   ? 'border-red-800 bg-red-800 text-white'
                   : 'border-theme-input-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'

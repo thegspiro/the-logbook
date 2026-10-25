@@ -291,6 +291,19 @@
     flex-shrink: 0;
   }
 
+  /* A checkbox takes its touch target from the <label> wrapping it (see
+     form-checkbox). Most such labels clear 44px only because their text wraps
+     to a second line at 390px; on a phone held sideways the same label fits on
+     one line and came out 36–40px tall. Height only, and only on a touch or
+     phone-width screen, so desktop density is untouched; in `base`, so a call
+     site's own `min-h-*` still wins. An inline label ignores min-height, which
+     is right for a checkbox inside a sentence. */
+  @media (max-width: 767px), (pointer: coarse) {
+    label:has(> input:is([type='checkbox'], [type='radio'])) {
+      min-height: 44px;
+    }
+  }
+
   /* WebKit (iPad/iPhone, every iOS browser) sizes a native date/time control
      from its own intrinsic box and can ignore `w-full` + border-box, so it
      spills past its grid column by the padding and border and paints over the
@@ -469,6 +482,18 @@
   }
 }
 
+/* A field that takes the rest of its row — a search box beside filters and
+   buttons — and wraps to a line of its own rather than shrink below a readable
+   width. Pair it with `flex-1` in a row that wraps (`flex-wrap`, or
+   `sm:flex-wrap` on a row that is a column on phones). `flex-1`'s zero basis
+   alone means a wrapping row never wraps the field: it shrinks it, and seven
+   search boxes rendered as their icon on a phone or tablet. Only a minimum
+   width, deliberately — a flex-basis here would turn into a 14rem height in
+   the `flex-col` rows these sit in on a phone. */
+@utility field-min {
+  min-width: min(14rem, 100%);
+}
+
 /* Keep native and one-off form controls usable even when a feature has not yet
    migrated to the form-input utility. min-width:0 also lets date/time inputs
    shrink inside narrow grid columns instead of widening the whole page. */
@@ -478,6 +503,20 @@
   textarea {
     min-width: 0;
     max-width: 100%;
+  }
+}
+
+/* iOS zooms the whole page when a focused field is under 16px, and the zoom
+   does not undo itself on blur. That is a property of the touch browser, not
+   of the width: a phone held sideways is 844–932px wide and fell outside the
+   767px rule above, so every `text-sm` field zoomed the page on focus. The
+   pointer clause also reaches tablets. Only the font size moves to the wider
+   query — the width resets above are unlayered and would override a call
+   site's own `max-w-*` on a tablet, where the page has room to honour it. */
+@media (max-width: 767px), (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  select,
+  textarea {
     font-size: max(1rem, 16px);
   }
 }
@@ -839,13 +878,16 @@
 }
 
 @utility settings-subnav-item {
-  /* Sub-page in the left rail. Below md the rail collapses to a scrolling
-     strip above the panel, where the same active signal reads as an underline
-     rather than a left marker — one nav element either way, so the sub-page
+  /* Sub-page in the left rail. Below lg the rail collapses to a scrolling
+     strip above the panel — lg rather than md because from 768px the app's
+     own side navigation takes 16rem, and a 13rem rail beside it left an iPad
+     in portrait a ~200px panel whose headings overlapped and whose selects
+     showed two letters. In the strip the same active signal reads as an
+     underline rather than a left marker — one nav element either way, so the sub-page
      list is a single landmark at every width. An inactive item keeps the
      marker transparent rather than absent, so selecting one does not shift
      the label sideways. */
-  @apply settings-nav-item block w-auto shrink-0 border-b-3 border-b-transparent px-3 py-2.5 text-left whitespace-nowrap duration-150 ease-out md:w-full md:border-b-0 md:border-l-3 md:border-l-transparent md:whitespace-normal;
+  @apply settings-nav-item block w-auto shrink-0 border-b-3 border-b-transparent px-3 py-2.5 text-left whitespace-nowrap duration-150 ease-out lg:w-full lg:border-b-0 lg:border-l-3 lg:border-l-transparent lg:whitespace-normal;
 
   /* Touch minimum. Padded rather than capped: on desktop the item carries a
      hint line under its label, so shrinking it would clip the hint instead. */
@@ -855,7 +897,7 @@
 }
 
 @utility settings-subnav-item-active {
-  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-800 md:border-l-red-800;
+  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-800 lg:border-l-red-800;
 }
 
 @utility settings-save-pill {
@@ -1548,6 +1590,40 @@
   }
 }
 
+/* A form grid beside the side navigation, on a tablet.
+ *
+ * `sm:` and `md:` ask about the viewport, and the side navigation takes 16rem
+ * of it from 768px up. On an iPad in portrait (768–834px) a field grid written
+ * `sm:grid-cols-3` therefore splits a ~400px card into three ~124px columns, or
+ * four ~78px ones: a select shows two letters of its value, and any label long
+ * enough to wrap ("Membership Number") pushes its own input 20px below the
+ * inputs beside it. Measured on seven routes, among them Edit Member, My
+ * Account and Organization Settings.
+ *
+ * Two columns until `lg`, where the content column is wide enough for the
+ * call site's own count. Limited to grids that hold a text field, select or
+ * textarea, so stat tiles and card grids keep their layout; limited to the
+ * left-navigation layout, whose root is the only one marked `.has-side-nav`;
+ * and kept out of dialogs, whose width does not depend on the navigation.
+ * Unlayered, so it outranks the `sm:`/`md:` utilities it corrects. A span
+ * wider than two would create implicit columns, so those become full rows.
+ * `styles/sideNavFormGrid.test.ts` pins the rule. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .has-side-nav
+    main
+    :is(.sm\:grid-cols-3, .sm\:grid-cols-4, .md\:grid-cols-3, .md\:grid-cols-4, .form-grid-3):has(
+      input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='range'], [type='color']),
+      select,
+      textarea
+    ):not(:is(.modal-overlay, .modal-panel, [role='dialog']) *) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    & > :is(.col-span-3, .col-span-4, .sm\:col-span-3, .sm\:col-span-4, .md\:col-span-3, .md\:col-span-4) {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
 /* Republished at the root for fixed elements that are NOT inside AppLayout and
  * so cannot inherit the declaration above — the update banner is mounted beside
  * the router, one level up. `:has` keeps it conditional on the layout, and
@@ -1623,6 +1699,27 @@
     height: auto;
     max-width: min(20rem, 88vw);
     padding-top: 0;
+  }
+
+  /* A phone on its side is wider than 767px, so it gets the desktop rail at
+     its full 390px height. The header and the Theme / High contrast / Logout
+     footer keep their size, and the menu list between them — the only part
+     that scrolls — was left ~130px: two items and part of a third. On a
+     screen that short the whole column scrolls instead, so the menu takes the
+     height and the footer follows it. 30rem catches a landscape phone and
+     leaves every tablet, and a desktop window of ordinary height, as it was.
+     The hooks are data attributes in SideNavigation. */
+  @media (min-width: 768px) and (max-height: 30rem) {
+    & [data-nav-column] {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    & [data-nav-region],
+    & [data-nav-list] {
+      flex: none;
+      min-height: auto;
+      overflow-y: visible;
+    }
   }
 }
 

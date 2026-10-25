@@ -468,13 +468,15 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `knowledge-tests`   | Knowledge Tests (Setup)       |
 | `compliance`        | Compliance Matrix             |
 | `expiring-certs`    | Expiring Certs                |
-| `pipelines`         | Pipelines                     |
+| `pipelines`         | Programs                      |
 | `shift-reports`     | Shift Reports                 |
 | `integrations`      | Integrations                  |
 | `import`            | Import Past Training          |
 | `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
+
+> The **Programs** tab (`pipelines`) lists the department's existing programs. Its New Pipeline button opens the create wizard in the same tab at `&view=new`; selecting Programs in the hub nav returns to the list. Its views are Programs and Templates. The standalone `/training/programs` page also has a Requirements view, but the hub leaves it out because the hub's own **Requirements** tab covers it, including **Import from Registry** (NFPA, Pro Board, NREMT).
 
 > The **Training Waivers** tab (within Officer Dashboard) shows all training waivers with summary cards, status filtering, and source tracking (Auto LOA vs Manual).
 >
@@ -506,7 +508,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 - `/training/submissions` → `/training/admin?tab=submissions`
 - `/training/requirements` → `/training/admin?tab=requirements`
 - `/training/sessions/new` → `/training/admin?tab=sessions`
-- `/training/programs/new` → `/training/admin?tab=pipelines`
+- `/training/programs/new` → `/training/admin?page=curriculum&tab=pipelines&view=new`
 - `/training/shift-reports` → `/training/admin?tab=shift-reports`
 - `/training/integrations` → `/training/admin?tab=integrations`
 
@@ -562,16 +564,29 @@ Admin**. The launching point for whoever runs the department's stock — gear,
 PPE, uniforms and EMS supplies, which share one catalog partitioned by
 `InventoryCategory.item_type`.
 
-Body, top to bottom: a **Needs attention** queue of record-level work (each row
-links to the record itself, not to a list); a **supply-line** row — PPE &
-Turnout Gear and Uniforms, both opening `/inventory/admin/items` filtered by
-`item_type`, plus EMS Supplies opening `/medical-supplies`; then the card wall
-grouped as Catalog, Issuance & Members, Requests & Approvals, Readiness &
-Compliance, Department Store, and Setup & Tools.
+Navigation matches Training Administration _(2026-10-24)_: seven **area cards**
+— Overview, Catalog, Issuance & Members, Requests & Approvals, Readiness &
+Compliance, Department Store, Setup & Tools — above a strip of the chosen
+area's pages and a line naming the open page. Unlike Training, each page keeps
+its own route: the admin pages listed in `INVENTORY_ADMIN_SHELL_PATHS`
+(`modules/inventory/pages/inventoryAdminAreas.ts`) wrap their element in
+`InventoryAdminLayout`, inside their `ProtectedRoute`, so every route keeps its
+own gate and URL. A page outside that list (the kiosk, the NFC scanning tools,
+Storage Areas, Import, Temporary Loans, EMS Supplies, the store console) still
+sits in the strip, marked as opening its own page. A viewer who passes a page's
+gate but not the hub's gets that page with a breadcrumb trail and no header.
+Area cards and pages are badged with the work waiting in them.
 
-> **Every card carries the gate of the route it targets**, from the registry in
-> `modules/inventory/pages/inventoryHubCards.ts`, and a section with no visible
-> cards is not rendered. This matters where a department splits the role:
+The Overview body, top to bottom: a **Needs attention** queue of record-level
+work (each row links to the record itself, not to a list); then a
+**supply-line** row — PPE & Turnout Gear and Uniforms, both opening
+`/inventory/admin/items` filtered by `item_type`, plus EMS Supplies opening
+`/medical-supplies`. **Headline Metrics** is Overview's second page, still at
+`?tab=settings`.
+
+> **Every page carries the gate of the route it targets**, from the registry in
+> `modules/inventory/pages/inventoryHubCards.ts`, and an area with no visible
+> pages is not rendered. This matters where a department splits the role:
 > `checkPermission` is exact match plus module wildcard, so `inventory.manage`
 > implies neither `inventory.view_medical` nor `inventory.check_*`. The seeded
 > Quartermaster holds no check grant, so the checklist cards do not appear for
@@ -740,6 +755,20 @@ section had no scheduling entry at all. That row is gone.
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
 > `/scheduling/qualifications` and `/scheduling/settings` no longer resolve.
+
+Navigation matches Training and Inventory Administration _(2026-10-25)_:
+seven **area cards** — Overview, Planning, On the Shift, Close-Out & History,
+People & Eligibility, Reports, Settings — above a strip of the chosen area's
+pages and a line naming the open page, with a red **Create Shift** in the
+header (it opens the Create Shift dialog on `/scheduling` via
+`?create=shift`). The tool-card grid that sat under the setup guide is gone;
+the areas replace it. Each page keeps its own route: the routes listed in
+`SCHEDULING_ADMIN_SHELL_PATHS` (`pages/scheduling/admin/schedulingAdminAreas.ts`)
+wrap their element in `SchedulingAdminLayout`, inside their `ProtectedRoute`,
+and draw no title, back arrow or trail of their own. The history-import review
+screen is the exception: it is reached from the list and keeps its own trail.
+On the Shift's two pages open Inventory's own screens, and the strip marks them
+so.
 
 > **One grant runs the whole area** _(2026-09-05)_: `scheduling.manage`, on the
 > hub's route, on every page behind it, and on the nav rows that offer it. The

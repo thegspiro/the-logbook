@@ -359,3 +359,6 @@ class ExpiringScreening(BaseModel):
     expiration_date: date
     days_until_expiration: int
     self_recorded: bool = False
+    # A waiver about to lapse is listed beside screenings (MS2-7); the status
+    # is what lets the list say which one it is.
+    status: Optional[str] = None

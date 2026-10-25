@@ -405,12 +405,17 @@ in this file's cross-reference, not in the finding itself.
   (`services/medical_screening_service.py:70-146`) line by line: no
   reference to any of the three. `test_medical_screening_requirement_
 fields_are_unwired.py` still passes (below).
-- **Compliance-404 (now mirrored as MS-17) — LOW.** `get_compliance_status`
+- **Compliance-404 (now mirrored as MS-17) — LOW. ✅ FIXED 2026-10-25
+  (owner-directed):** both compliance routes answer 404 for an id that is not
+  a member/prospect of the caller's org (`test_medical_screening_compliance_subjects.py`).
+  As found: `get_compliance_status`
   still returns 200 for a nonexistent/out-of-org subject rather than 404.
   Re-confirmed not an enumeration channel: both the records query and
   `_resolve_names` filter `organization_id`, so a foreign or made-up id
   simply resolves to an empty summary, not another org's data.
-- **MS2-7 — LOW.** The waived-screening divergence between
+- **MS2-7 — LOW. ✅ FIXED 2026-10-25 (owner chose "list it"):** the two
+  methods share `_SATISFYING_STATUSES`, the expiring list carries each row's
+  `status`, and the Compliance tab marks a waiver. As found: The waived-screening divergence between
   `get_compliance_status`'s `expiring_soon_count` and `get_expiring_soon`'s
   listing is still live, and the code now says so explicitly — the comment
   at `services/medical_screening_service.py:111-119` names MS2-7 as the
