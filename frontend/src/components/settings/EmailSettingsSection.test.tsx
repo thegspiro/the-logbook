@@ -277,3 +277,19 @@ describe('EmailSettingsSection — enabled with no platform', () => {
     expect(screen.queryByText(/nothing can be sent/i)).not.toBeInTheDocument();
   });
 });
+
+describe('EmailSettingsSection — Gmail sending guidance', () => {
+  it('warns Gmail about the ways an App Password stops sending', () => {
+    renderSection(settings({ platform: 'gmail' }));
+
+    expect(screen.getByText(/dedicated account/i)).toBeInTheDocument();
+    expect(screen.getByText(/revokes all of its App Passwords/i)).toBeInTheDocument();
+    expect(screen.getByText(/turn on DKIM/i)).toBeInTheDocument();
+  });
+
+  it('does not show the Gmail guidance for another platform', () => {
+    renderSection(settings({ platform: 'microsoft' }));
+
+    expect(screen.queryByText(/revokes all of its App Passwords/i)).not.toBeInTheDocument();
+  });
+});

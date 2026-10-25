@@ -16,6 +16,7 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { MicrosoftAuthMethod } from '@/constants/enums';
+import { GMAIL_SENDING_NOTES } from '@/constants/gmailSendingGuidance';
 import { SMTP_PROVIDER_PRESETS, findSmtpProviderPreset } from '@/constants/smtpProviders';
 import { nextStepPath, stepPath } from '../config/steps';
 
@@ -358,6 +359,15 @@ const EmailConfiguration: React.FC = () => {
               >
                 Create App Password →
               </a>
+            </div>
+
+            <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
+              <p className="text-theme-text-primary mb-2 font-medium">Before you rely on it:</p>
+              <ul className="list-inside list-disc space-y-1">
+                {GMAIL_SENDING_NOTES.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
             </div>
           </>
         );

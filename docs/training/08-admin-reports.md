@@ -1498,6 +1498,20 @@ template editor; it uses whatever platform is saved here.
 address and an app password. The server address, port and encryption come from a
 fixed preset that both sending and **Test Connection** use.
 
+Three things stop **Gmail** from sending without anything in The Logbook
+changing. The form lists them too:
+
+- **Send from a dedicated account**, such as `notifications@yourdepartment.org`,
+  not a member's own. A personal account stops sending when its owner leaves
+  and the account is suspended.
+- **Changing that account's password revokes all of its App Passwords.** Email
+  stops until a new App Password is entered here. Run **Test Connection** after
+  any password change.
+- **On your own domain, turn on DKIM** in the Google Admin console (**Apps →
+  Google Workspace → Gmail → Authenticate email**) and publish SPF and DMARC
+  records. Without them, Gmail, Outlook and Yahoo may send department mail to
+  spam or reject it.
+
 **Microsoft 365** also offers **App registration (OAuth)**. It asks for the
 directory (tenant) ID, application (client) ID and client secret. In Microsoft,
 the app registration needs the **SMTP.SendAsApp** application permission and
