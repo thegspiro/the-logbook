@@ -1454,9 +1454,19 @@ another device.
 
 The **Manage Events** entry in the sidebar opens the Events page. Its **⋯**
 menu links to **Event Settings**; the **Create Event** button opens the
-creation tab. Both are tabs of **Events Administration**, which also holds
-**Past Events**, **Requests**, **QR Code Analytics** and **Community
-Engagement**.
+creation tab. Both are pages of **Events Administration**, which is laid out
+like Training, Scheduling and Inventory Administration: four area cards, and
+under them a strip of the chosen area's pages with a line naming the open one.
+
+| Area                   | Pages                                   |
+| ---------------------- | --------------------------------------- |
+| **Events**             | **Create Event**, **Past Events**       |
+| **Community Outreach** | **Requests**, **Community Engagement**  |
+| **Check-ins**          | **QR Code Analytics**, **Card Check-ins** |
+| **Settings**           | **Settings**                            |
+
+An area card and the page under it carry a red count when the **Needs
+attention** list has items there.
 
 **The top of the page.** Like every administration page, it opens with four
 headline numbers and a **Needs attention** list. The built-in numbers are

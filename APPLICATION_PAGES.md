@@ -329,13 +329,19 @@ Set per event on **Edit Event → Check-In Settings**. Both default to off.
 
 ### Events Admin Hub (`/events/admin`)
 
-Requires `events.manage` permission. Tab-based admin interface.
+Requires `events.manage` permission. Drawn with the same two-level navigation as Training, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (EventsAdminNav, with the areas declared in eventsAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
 
-| Tab         | Label                |
-| ----------- | -------------------- |
-| `create`    | Create Event         |
-| `analytics` | Analytics            |
-| `community` | Community Engagement |
+| Area               | `?tab=`         | Label                |
+| ------------------ | --------------- | -------------------- |
+| Events             | `create`        | Create Event         |
+| Events             | `past_events`   | Past Events          |
+| Community Outreach | `requests`      | Requests             |
+| Community Outreach | `community`     | Community Engagement |
+| Check-ins          | `analytics`     | QR Code Analytics    |
+| Check-ins          | `card_checkins` | Card Check-ins       |
+| Settings           | `settings`      | Settings             |
+
+A missing or unknown `?tab=` opens Create Event.
 
 **Legacy redirects:**
 
