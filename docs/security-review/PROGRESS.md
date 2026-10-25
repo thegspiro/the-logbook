@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702)** (branch
+`claude/security-review-membership-pipeline-p13`) — Feature 08 (Membership
+pipeline), pass 13. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, PR #3695 (Feature 07, Users & organizations, pass 12)
+having just been merged by this same watchdog with no open rotation PR
+behind it. Dedicated review session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+still unreachable; this is a watchdog pickup. **0 fixed, 0 new findings.**
+Real delta since pass 12's baseline (`aa15ccbb`, PR #3574): 8 commits
+touching the declared scope, 2 of them already-documented MP-33/MP-34
+follow-up fixes, the other 6 real (DOB/emergency-contact encryption,
+stage-email meeting fallback with a new cross-org location guard, a
+99-column NOT NULL sweep touching 3 pipeline columns, and an
+auto-enrollment prerequisite skip on automatic conversion). All 53 routes
+re-enumerated by AST, unchanged. MP-10 (listing half) and MP-22
+re-confirmed OPEN, unaffected. See
+`MP-08-membership-pipeline.md`'s **Pass 13** section for the full review.
+
+Rotation row 08 → ✅ (pending this PR's merge); next is Feature 09
+(Medical screening, PHI).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3695's merge, Feature 07, Users & organizations, pass 12), preserved for history</summary>
+
 None. PR #3695 (Feature 07, Users & organizations, pass 12) merged
 2026-10-25 — confirmed via `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`), 0 matching results,
@@ -24,6 +48,8 @@ review session (`session_011T1ZyyLrD5HagusgK9uDw2`) still unreachable; this
 watchdog picked up row 08 (Membership pipeline) next — see the log entry
 below for its pass 13 review. This row will record that pass's PR number
 once it is opened.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3695, Feature 07, Users & organizations, pass 12, merged), preserved for history</summary>
