@@ -9,8 +9,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import { ArrowLeft, Loader2, Printer } from 'lucide-react';
+import { Loader2, Printer } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import type { Location } from '../../../services/api';
 import type { InventoryCategory, StorageAreaResponse } from '../types';
@@ -120,14 +119,8 @@ export const LabelScopePicker: React.FC<LabelScopePickerProps> = ({ onChoose }) 
   const canContinue = matchCount !== null && matchCount > 0 && !tooMany;
 
   return (
-    <div className="mx-auto max-w-lg p-4 sm:p-6">
-      <Link
-        to="/inventory"
-        className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Inventory
-      </Link>
+    // The page around it supplies the breadcrumb trail, which is the way back.
+    <div className="py-4 sm:py-6">
       <div className="card p-4 sm:p-6">
         <h1 className="text-theme-text-primary mb-1 text-lg font-semibold">Print barcode labels</h1>
         <p className="text-theme-text-secondary mb-4 text-sm">
