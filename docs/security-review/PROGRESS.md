@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)** (branch
+`claude/security-review-core-infrastructure`) — Feature 33 (Core
+infrastructure), pass 9. Watchdog pickup (the dedicated loop session for
+this rotation, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable — no
+agent via `ListAgents` either). PR #3677 (Feature 32, Locations & kiosk,
+pass 9) had already merged with no open rotation PR behind it — confirmed
+via both `search_pull_requests` (`head:claude/security-review-`, state=open)
+and `list_pull_requests` (state=open), 0 results both times, re-checked
+immediately before branching. Row 32 is `✅`. **1 fixed, 0 new findings** —
+the real delta since pass 8 (DB/Redis mutual-TLS client certs with a
+matched-pair boot check, station-kiosk session limits gated on a live
+permission re-check, an MFA enrollment grace period, a step-up
+re-verification window, an operator-level S3-private-endpoint gate, and two
+new `EXPORT_ENDPOINTS` entries) was read in full and found
+clean/already-correct/already-tested, each new setting traced to a real
+reader outside this feature's three files per Pitfall #19. Also fixed a
+repo-wide tooling drift flagged by two earlier passes (SF-04 pass 8): Backend
+Lint's pinned `flake8`/`black`/`isort` had drifted from
+`backend/requirements.txt` a third time; re-verified both version sets clean
+against the full tree, then re-pinned CI to match `requirements.txt`.
+`KNOWN_LIMITATIONS.md`'s CI-1 entry marked resolved.
+
+Full writeup: `docs/security-review/CI9-33-core-infra.md`'s **Pass 9**
+section.
+
+Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared)
+— re-check `search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3677, Feature 32, Locations & kiosk, pass 9, merged), preserved for history</summary>
+
 **PR [#3677](https://github.com/thegspiro/the-logbook/pull/3677)** (branch
 `claude/security-review-locations-kiosk-p9`) —
 Feature 32 (Locations & kiosk), pass 9. Watchdog pickup (the dedicated loop
@@ -41,6 +72,8 @@ Full writeup: `docs/security-review/LOC9-32-locations-kiosk.md`'s
 Row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
 infrastructure) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3672, Feature 31, Scheduled tasks, pass 9, merged), preserved for history</summary>
@@ -21419,7 +21452,7 @@ this iteration's commit" rule.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -38231,3 +38264,60 @@ suite (`npx vitest run src/modules/grants-fundraising`) — 112 passed
 Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
 supplies) — re-check `search_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-10-25 — Feature 33 (Core infrastructure, pass 9) — watchdog pickup, 1 fix (CI lint pin drift), 0 new findings
+
+Scheduled watchdog check-in: the dedicated security-review loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`), and
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 after this same run merged PR #3677 (Feature 32, Locations &
+kiosk, pass 9), which was fully green with no conflicts. Row 33 (Core
+infrastructure) was confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `main`.
+
+Baseline `77ea4c15` (PR #3547's merge, pass 8). `database.py` has zero
+lines of diff since then (confirmed by a dedicated `git diff` on that one
+file). `config.py` (+46/-2) and `security_middleware.py` (+2) carry the
+real delta: DB/Redis mutual-TLS client certificate settings with a new
+matched-pair boot check (both field comments state "both or neither",
+consistent with the check — not a false positive against a combined-PEM
+case); station-kiosk session limits (`SESSION_KIOSK_ABSOLUTE_MAX_HOURS`/
+`SESSION_KIOSK_IDLE_TIMEOUT_MINUTES`), traced end-to-end: self-scoped,
+permission-gated to enable, open to disable, and re-checked live against
+the caller's current permission on every refresh and every token
+validation rather than trusting the stored flag; an MFA enrollment grace
+period (`MFA_GRACE_DAYS`) that correctly treats "never started" as distinct
+from "expired" even when the grace is set to 0 days; a step-up
+re-verification window (`STEPUP_WINDOW_MINUTES`) confirmed by two existing
+guard tests to always run after the route's own permission dependency; a
+new operator-level `S3_ALLOW_PRIVATE_ENDPOINT` risk-acceptance gate, same
+shape as the existing `AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION` pattern; and
+two new `EXPORT_ENDPOINTS` entries, both verified to match real routes with
+no drift. Every new setting was traced to a real reader outside this
+feature's three in-scope files, per Pitfall #19 — none is new code of this
+feature's own, so each reader's existence was checked rather than assumed.
+
+**CI9-33-1 (fixed):** installing the completion gate's linters surfaced
+that `.github/workflows/ci.yml`'s Backend Lint pin (`flake8==7.3.0`/
+`black==26.5.1`/`isort==9.0.1`) had drifted from `backend/requirements.txt`
+(`flake8==7.4.1`/`black==26.10.1`/`isort==9.0.2`) for a third time — first
+flagged (flake8/isort only) during SF-04 pass 8, with `black` added to the
+drift since. Re-ran all three linters against the full `app/ tests/
+alembic/` tree at the `requirements.txt` versions — clean, identically to
+the older pin — then re-pinned the workflow to match `requirements.txt`
+rather than reverting it, so a future version bump doesn't have to fight
+this pin again. `KNOWN_LIMITATIONS.md`'s CI-1 entry marked resolved.
+
+Full writeup: `docs/security-review/CI9-33-core-infra.md`'s **Pass 9**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (re-pinned
+to CI's now-current 7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 651 revisions, single head
+`3d67883cd461`; scoped backend tests (feature-scoped + cross-cutting guard
+suites) — 749 passed, 1 skipped (pre-existing, sandbox-only); frontend
+`npm run typecheck`/`npm run lint` — n/a, no frontend file touched this
+pass.
+
+Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared)
+— re-check `search_pull_requests` fresh rather than trusting this note.
