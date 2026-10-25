@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3687](https://github.com/thegspiro/the-logbook/pull/3687)** (branch
+`claude/security-review-public-surface-webhooks-p12`) — Feature 03
+(Public surface & webhooks), pass 12. PR #3685 (Feature 02, Permissions &
+roles, pass 12) and PR #3686 (an orphaned-fix recovery for Feature 30,
+Onboarding) had both already merged with no open rotation PR behind
+them — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 matching results, checked
+before starting and re-checked immediately before branching. **0 new
+findings, 0 fixed.** One of the eighteen scoped files changed since pass
+11's baseline (`portal.py`, a data-correctness fix unrelated to this
+rotation, re-checked against all seven dimensions regardless). Routes
+re-enumerated by AST (40, unchanged from pass 11 — matches the sum of every
+prior pass's additions). The three webhook handlers were re-read in full
+against Pitfall #36: PayPal's idempotency is confirmed backed by a real DB
+`UniqueConstraint` plus `IntegrityError` handling, not merely the 10-minute
+replay cache; Documenso/Cal.com's is structural (a redelivery after the
+prospect has already advanced finds no matching current step); Salesforce's
+replay check is deliberately ordered after payload-shape validation. See
+`PUB-03-public-surface-webhooks.md`'s **Pass 12** section for the full
+review.
+
+Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
+(Storefront & payments).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3685, Feature 02, Permissions & roles, pass 12, merged), preserved for history</summary>
+
 **PR [#3685](https://github.com/thegspiro/the-logbook/pull/3685)** (branch
 `claude/security-review-permissions-roles-p12`) — Feature 02 (Permissions &
 roles), pass 12. PR #3684 (Feature 01, Auth & session lifecycle, pass 12)
@@ -40,8 +67,10 @@ section for the full review.
 Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
 surface & webhooks).
 
+</details>
+
 <details>
-<summary>Superseded — prior Open PR note (PR #3685, Feature 02, Permissions & roles, pass 12, merged), preserved for history</summary>
+<summary>Superseded — prior Open PR note (PR #3684, Feature 01, Auth & session lifecycle, pass 12, merged), preserved for history</summary>
 
 **None.** PR #3684 (Feature 01, Auth & session lifecycle, pass 12) merged.
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
@@ -21564,7 +21593,7 @@ PR is recorded in the Log, not repeated here.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
@@ -38669,3 +38698,58 @@ pass.
 
 Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared)
 — re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-25 — Feature 03 (Public surface & webhooks, pass 12) — 0 fixed, 0 new findings
+
+Picked up the rotation at its normal Feature-03 slot. `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results after PR
+#3685 (Feature 02, Permissions & roles, pass 12) and PR #3686 (an
+orphaned-fix recovery for Feature 30, Onboarding) both merged minutes
+earlier. Row 03 was confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `main` (`e6da6486`).
+
+One of eighteen scoped files changed since pass 11's baseline (`b06de81f`):
+`portal.py`, a data-correctness fix (W76-2, outside this rotation) that
+publishes a department's physical address from its mailing-address columns
+when "physical address same as mailing" is set, rather than publishing
+`null`. Re-checked against all seven dimensions: still gated by
+`authenticate_api_key`, still org-scoped from the server-resolved API key
+(never a client-supplied id), still passed through
+`filter_data_by_whitelist` before the response model validates it — no new
+field, no new trust boundary.
+
+Routes re-enumerated by AST: **40**, unchanged from pass 11, and matching
+the sum of every prior pass's additions (28 after pass 7, +9 `mcp_oauth.py`,
++1 `calendar.py`'s org feed, +2 `minutes.py`). Every router import was
+cross-checked against `backend/main.py`'s `include_router` calls — all 13
+mounted, none orphaned. `check_route_permissions.py --strict`: 276 routes
+app-wide, 0 errors/warnings, matching SEC-00 pass 12's same-day count.
+
+The three webhook handlers (byte-identical to pass 11) were re-read in full
+against Pitfall #36 rather than assumed sound: PayPal's idempotency is
+backed by a real `UniqueConstraint` on `(organization_id, provider,
+external_id)` plus `IntegrityError` handling that returns the winning row
+on a race, not only the 10-minute replay cache; Documenso/Cal.com's is
+structural (a redelivery after the prospect has already advanced past the
+matched step finds nothing to re-advance); Salesforce's replay check is
+deliberately ordered after payload-shape validation so a rejected delivery
+can't poison the fingerprint. The MCP OAuth metadata endpoints (6 of
+`mcp_oauth.py`'s 9 routes) carry no rate limit — checked and not a finding,
+since they do no DB work and are cache-headered; the three stateful OAuth
+endpoints in the same file still rate-limit first, as pass 8 established.
+
+Full writeup: `docs/security-review/PUB-03-public-surface-webhooks.md`'s
+**Pass 12** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean at CI's pinned versions (7.4.1/26.10.1/9.0.2 —
+the locally-shadowing `black` install was corrected from 26.5.1 before
+running); `validate_migrations.py --strict` — 651 revisions, single head
+`3d67883cd461`; `check_route_permissions.py --strict` — 276 routes, 0
+errors/warnings; scoped backend tests — 1488 passed, 1 skipped
+(pre-existing); standing guard suites — 208 passed; frontend `npm run
+typecheck`/`npm run lint` — 0 errors.
+
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments) — re-check `search_pull_requests` fresh rather than trusting this
+note.
