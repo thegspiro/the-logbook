@@ -23,6 +23,11 @@ OK = None
 GMAIL_QUOTA = smtplib.SMTPDataError(
     550, b"5.4.5 Daily user sending limit exceeded. Learn more at ..."
 )
+MICROSOFT_QUOTA = smtplib.SMTPDataError(
+    554,
+    b"5.2.0 STOREDRV.Submission.Exception:SubmissionQuotaExceededException;"
+    b" Failed to process message due to a permanent exception",
+)
 
 
 def rate_limited() -> smtplib.SMTPDataError:
@@ -97,6 +102,23 @@ class TestRateLimitRetry:
         assert run_batch([first, second, third], 2) == [False, True]
         assert third.sent == ["msg-1"]
 
+    def test_exchange_concurrency_limit_is_resent(self):
+        # Exchange Online refuses a fourth simultaneous submission with 432;
+        # unlike 421, smtplib leaves the connection open.
+        first = FakeServer(
+            [
+                smtplib.SMTPSenderRefused(
+                    432,
+                    b"4.3.2 Concurrent connections limit exceeded",
+                    "dept@example.com",
+                )
+            ]
+        )
+        second = FakeServer([OK])
+
+        assert run_batch([first, second], 1) == [True]
+        assert second.sent == ["msg-0"]
+
     def test_permanent_rejection_is_not_retried(self):
         server = FakeServer([smtplib.SMTPDataError(550, b"5.1.1 No such user"), OK])
 
@@ -118,6 +140,12 @@ class TestSendingQuota:
 
         assert run_batch([server], 4) == [True, False, False, False]
         # Messages after the quota reply are never handed to the server.
+        assert server.attempts == 2
+
+    def test_microsoft_quota_reply_stops_the_batch(self):
+        server = FakeServer([OK, MICROSOFT_QUOTA])
+
+        assert run_batch([server], 4) == [True, False, False, False]
         assert server.attempts == 2
 
     def test_quota_reply_at_rcpt_stops_the_batch(self):
@@ -155,6 +183,20 @@ class TestReplyHelpers:
             (550, "5.4.5 Daily user sending limit exceeded", True),
             (550, "5.1.1 The email account does not exist", False),
             (421, "4.4.5 Server busy", False),
+            (
+                554,
+                "5.2.0 STOREDRV.Submission.Exception:"
+                "SubmissionQuotaExceededException; Failed to process message",
+                True,
+            ),
+            # Exchange Online uses 5.2.0 for submission failures that are
+            # not about quota; one of those must not stop the batch.
+            (
+                554,
+                "5.2.0 STOREDRV.Submission.Exception:"
+                "SendAsDeniedException.MapiExceptionSendAsDenied",
+                False,
+            ),
         ],
     )
     def test_quota_detection(self, code, text, expected):
