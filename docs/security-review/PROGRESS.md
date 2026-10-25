@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
-(branch `claude/security-review-public-surface-webhooks-p12`) — Feature 03
+**PR [#3687](https://github.com/thegspiro/the-logbook/pull/3687)** (branch
+`claude/security-review-public-surface-webhooks-p12`) — Feature 03
 (Public surface & webhooks), pass 12. PR #3685 (Feature 02, Permissions &
 roles, pass 12) and PR #3686 (an orphaned-fix recovery for Feature 30,
 Onboarding) had both already merged with no open rotation PR behind
