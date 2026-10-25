@@ -16,6 +16,7 @@ import {
   Pencil,
   RotateCcw,
 } from 'lucide-react';
+import ListPager from './ListPager';
 import { inputCls, labelCls } from '../constants';
 import { useMaintenanceForm } from '../hooks/useMaintenanceForm';
 import MaintenanceDueLabel from './MaintenanceDueLabel';
@@ -34,6 +35,10 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
   const tz = useTimezone();
   const {
     records: filtered,
+    page,
+    setPage,
+    total,
+    pageSize,
     maintenanceTypes,
     isLoading,
     loadError,
@@ -210,6 +215,7 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
             ))}
           </div>
         )}
+        <ListPager page={page} total={total} pageSize={pageSize} onPageChange={setPage} />
       </div>
 
       {canEdit && showModal && (

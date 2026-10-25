@@ -24,6 +24,8 @@ import {
   CheckCheck,
   Lightbulb,
   PackageCheck,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
@@ -38,6 +40,8 @@ import NotificationCard from '../components/NotificationCard';
 import NotificationStack from '../components/NotificationStack';
 import { groupNotificationsIntoStacks, isStackable, stackUnreadCount } from '../utils/notificationStacks';
 import { useTablist } from '../hooks/useTablist';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { blankToNull } from '../utils/formValues';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -135,6 +139,32 @@ function getTriggerDisplay(trigger: string) {
   );
 }
 
+/**
+ * Whether a trigger's notifications go out, given the rules that exist for it.
+ *
+ * Mirrors NotificationRuleResolver on the backend: no rule at all means the
+ * built-in default, which sends; otherwise any one enabled rule keeps it on.
+ * Deleting or re-pointing a rule can therefore switch a notification on or off
+ * without anybody touching a toggle, and the screen says so before it happens.
+ */
+function triggerSends(rules: NotificationRuleRecord[], trigger: string): boolean {
+  const forTrigger = rules.filter((r) => r.trigger === trigger);
+  return forTrigger.length === 0 || forTrigger.some((r) => r.enabled);
+}
+
+/** What removing `rule` from its trigger would change, or null if nothing. */
+function effectOfRemoving(rules: NotificationRuleRecord[], rule: NotificationRuleRecord): string | null {
+  if (!rule.enforced) return null;
+  const label = getTriggerDisplay(rule.trigger).label;
+  const after = rules.filter((r) => r.id !== rule.id);
+  const before = triggerSends(rules, rule.trigger);
+  const now = triggerSends(after, rule.trigger);
+  if (before === now) return null;
+  return now
+    ? `${label} notifications are switched off by this rule. With no rule left for that trigger, they go out again for the whole department with their default settings.`
+    : `This is the only ${label} rule switched on. The others for that trigger are off, so ${label} notifications stop for the whole department.`;
+}
+
 function formatCategory(category: string): string {
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
@@ -160,6 +190,7 @@ const NotificationsPage: React.FC = () => {
   // requires.
   const canManageTemplates = checkPermission('settings.manage');
   const tz = useTimezone();
+  const { confirm } = useConfirm();
 
   // Shared notification count store
   const myUnreadCount = useNotificationCountStore((s) => s.unreadCount);
@@ -217,6 +248,9 @@ const NotificationsPage: React.FC = () => {
   const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // Set while the rule dialog edits an existing rule rather than creating one.
+  const [editingRule, setEditingRule] = useState<NotificationRuleRecord | null>(null);
+  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
   // All four tabs are addressable, not just the inbox. `?tab=log` used to
   // fall through to the rules tab, so a link to the Send Log — the one tab
   // anyone has cause to send somebody — opened the wrong screen.
@@ -411,7 +445,29 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
-  const handleCreateRule = async () => {
+  const openEditRule = (rule: NotificationRuleRecord) => {
+    setEditingRule(rule);
+    setCreateName(rule.name);
+    setCreateTrigger(rule.trigger);
+    setCreateDescription(rule.description ?? '');
+    setCreateError(null);
+    setShowCreateModal(true);
+  };
+
+  const closeRuleDialog = () => {
+    setShowCreateModal(false);
+    setCreateError(null);
+    // An edit's values must not reappear in the next Create; a create's draft
+    // is kept, as it always was, so closing by mistake loses nothing.
+    if (editingRule) {
+      setEditingRule(null);
+      setCreateName('');
+      setCreateTrigger('event_reminder');
+      setCreateDescription('');
+    }
+  };
+
+  const handleSaveRule = async () => {
     if (!createName.trim()) {
       setCreateError('Enter a rule name.');
       return;
@@ -420,6 +476,23 @@ const NotificationsPage: React.FC = () => {
     setCreateError(null);
     try {
       const category = TRIGGER_CATEGORY_MAP[createTrigger] || 'general';
+      if (editingRule) {
+        // Every field the dialog owns is sent, with an emptied description as
+        // an explicit null so the clear is stored (pitfall #1, update side).
+        const updated = await notificationsService.updateRule(editingRule.id, {
+          name: createName.trim(),
+          trigger: createTrigger,
+          description: blankToNull(createDescription),
+          ...(createTrigger !== editingRule.trigger ? { category } : {}),
+        });
+        setRules((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+        setEditingRule(null);
+        setCreateName('');
+        setCreateTrigger('event_reminder');
+        setCreateDescription('');
+        setShowCreateModal(false);
+        return;
+      }
       const newRule = await notificationsService.createRule({
         name: createName.trim(),
         trigger: createTrigger,
@@ -443,12 +516,73 @@ const NotificationsPage: React.FC = () => {
       setCreateDescription('');
       setShowCreateModal(false);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to create rule');
+      const message = getErrorMessage(err, editingRule ? 'Failed to save the rule' : 'Failed to create rule');
       setCreateError(message);
     } finally {
       setCreating(false);
     }
   };
+
+  const handleDeleteRule = async (rule: NotificationRuleRecord) => {
+    const effect = effectOfRemoving(rules, rule);
+    const ok = await confirm({
+      title: 'Delete this rule?',
+      message: effect ? (
+        <>
+          <p>{effect}</p>
+          <p className="mt-2">To change who receives it without that, edit the rule or switch it on or off instead.</p>
+        </>
+      ) : (
+        `“${rule.name}” is removed. Whether ${getTriggerDisplay(rule.trigger).label} notifications go out does not change.`
+      ),
+      confirmLabel: 'Delete rule',
+      cancelLabel: 'Keep it',
+      variant: effect ? 'warning' : 'danger',
+    });
+    if (!ok) return;
+    setDeletingRuleId(rule.id);
+    try {
+      await notificationsService.deleteRule(rule.id);
+      setRules((prev) => prev.filter((r) => r.id !== rule.id));
+      setSummary((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          total_rules: prev.total_rules - 1,
+          active_rules: rule.enabled ? prev.active_rules - 1 : prev.active_rules,
+        };
+      });
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete the rule'));
+    } finally {
+      setDeletingRuleId(null);
+    }
+  };
+
+  // What saving the open edit would switch on or off, beyond the rule itself.
+  const editEffect = (() => {
+    if (!editingRule || createTrigger === editingRule.trigger) return null;
+    const moved = { ...editingRule, trigger: createTrigger };
+    const after = rules.map((r) => (r.id === editingRule.id ? moved : r));
+    const notes: string[] = [];
+    const oldLabel = getTriggerDisplay(editingRule.trigger).label;
+    const newLabel = getTriggerDisplay(createTrigger).label;
+    if (editingRule.enforced && triggerSends(rules, editingRule.trigger) !== triggerSends(after, editingRule.trigger)) {
+      notes.push(
+        triggerSends(after, editingRule.trigger)
+          ? `${oldLabel} notifications go out again for the whole department, with their default settings.`
+          : `${oldLabel} notifications stop for the whole department.`
+      );
+    }
+    if (triggerSends(rules, createTrigger) !== triggerSends(after, createTrigger)) {
+      notes.push(
+        triggerSends(after, createTrigger)
+          ? `${newLabel} notifications start going out.`
+          : `${newLabel} notifications stop for the whole department, because this rule is switched off.`
+      );
+    }
+    return notes.length ? notes.join(' ') : null;
+  })();
 
   const filteredRules = rules.filter(
     (r) =>
@@ -952,6 +1086,35 @@ const NotificationsPage: React.FC = () => {
                           <span className="text-theme-text-muted text-sm">Disabled</span>
                         )}
                         {canManage && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditRule(rule)}
+                              aria-label={`Edit ${rule.name}`}
+                              title="Edit"
+                              className="btn-icon text-theme-text-muted hover:text-theme-text-primary"
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleDeleteRule(rule);
+                              }}
+                              disabled={deletingRuleId === rule.id}
+                              aria-label={`Delete ${rule.name}`}
+                              title="Delete"
+                              className="btn-icon text-theme-text-muted hover:text-red-700 disabled:opacity-50 dark:hover:text-red-400"
+                            >
+                              {deletingRuleId === rule.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              )}
+                            </button>
+                          </>
+                        )}
+                        {canManage && (
                           <button
                             onClick={() => {
                               void toggleRule(rule.id, rule.enabled);
@@ -1158,21 +1321,21 @@ const NotificationsPage: React.FC = () => {
             aria-modal="true"
             aria-labelledby="create-rule-title"
             onKeyDown={(e) => {
-              if (e.key === 'Escape') setShowCreateModal(false);
+              if (e.key === 'Escape') closeRuleDialog();
             }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
-              <DialogPanel onClose={() => setShowCreateModal(false)} className="relative w-full max-w-lg">
+              <DialogPanel onClose={closeRuleDialog} className="relative w-full max-w-lg">
                 <div className="px-6 pt-5 pb-4">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-theme-text-primary text-lg font-medium">Create Notification Rule</h3>
+                    <h3 id="create-rule-title" className="text-theme-text-primary text-lg font-medium">
+                      {editingRule ? 'Edit Notification Rule' : 'Create Notification Rule'}
+                    </h3>
                     <button
                       data-dialog-close
-                      onClick={() => {
-                        setShowCreateModal(false);
-                        setCreateError(null);
-                      }}
+                      onClick={closeRuleDialog}
+                      aria-label="Close"
                       className="text-theme-text-muted hover:text-theme-text-primary"
                     >
                       <X className="h-5 w-5" />
@@ -1221,6 +1384,14 @@ const NotificationsPage: React.FC = () => {
                             {opt.label}
                           </option>
                         ))}
+                        {/* An existing rule on a trigger nothing reads keeps its
+                            value selectable, so opening it to rename does not
+                            silently move it to the first trigger in the list. */}
+                        {editingRule && !TRIGGER_OPTIONS.some((opt) => opt.value === editingRule.trigger) && (
+                          <option value={editingRule.trigger}>
+                            {getTriggerDisplay(editingRule.trigger).label} (not enforced)
+                          </option>
+                        )}
                       </select>
                     </div>
                     <div>
@@ -1238,6 +1409,17 @@ const NotificationsPage: React.FC = () => {
                         className="form-input"
                       />
                     </div>
+                    {editEffect && (
+                      <div role="status" className="alert-warning flex items-start space-x-2 p-3">
+                        <AlertTriangle
+                          className="text-theme-alert-warning-icon mt-0.5 h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <p className="text-theme-alert-warning-text text-sm">
+                          Saving this changes the trigger. {editEffect}
+                        </p>
+                      </div>
+                    )}
                     <div className="card-secondary p-3">
                       <div className="flex items-start space-x-2">
                         <AlertCircle className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" />
@@ -1257,23 +1439,20 @@ const NotificationsPage: React.FC = () => {
                 </div>
                 <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
                   <button
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setCreateError(null);
-                    }}
+                    onClick={closeRuleDialog}
                     className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => {
-                      void handleCreateRule();
+                      void handleSaveRule();
                     }}
                     disabled={creating}
                     className="flex items-center space-x-2 rounded-lg bg-orange-700 px-4 py-2 text-white transition-colors hover:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creating && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>Create Rule</span>
+                    <span>{editingRule ? 'Save Changes' : 'Create Rule'}</span>
                   </button>
                 </div>
               </DialogPanel>

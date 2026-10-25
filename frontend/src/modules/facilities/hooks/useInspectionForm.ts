@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { InspectionCreate } from '../../../services/facilitiesServices';
@@ -89,6 +89,9 @@ function formToPayload(formData: InspectionFormData, isEdit: boolean): Inspectio
 
 type ResultFilter = 'all' | 'passed' | 'failed' | 'pending';
 
+export const INSPECTIONS_PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 250;
+
 interface UseInspectionFormOptions {
   facilityId?: string;
 }
@@ -97,6 +100,9 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,38 +112,66 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<InspectionFormData>(emptyForm(tz, facilityId));
 
+  // A new filter or search starts again from the first page, in the same
+  // update, so the stale page is never requested.
+  const appliedSearchRef = useRef('');
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const next = searchQuery.trim();
+      if (next === appliedSearchRef.current) return;
+      appliedSearchRef.current = next;
+      setAppliedSearch(next);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery]);
+
+  const changeResultFilter = useCallback((next: ResultFilter) => {
+    setResultFilter(next);
+    setPage(1);
+  }, []);
+
+  // Responses can land out of order; only the latest request may write.
+  const requestSeq = useRef(0);
+
   const loadInspections = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setIsLoading(true);
     setLoadError(false);
     try {
-      const params: { facility_id?: string } = {};
+      // Result, search and paging run on the server (FAC2-5). The list
+      // endpoint could not ask for "pending" at all, and searching the first
+      // 100 rows missed anything older.
+      const params: Parameters<typeof facilitiesService.getInspectionsPage>[0] = {
+        skip: (page - 1) * INSPECTIONS_PAGE_SIZE,
+        limit: INSPECTIONS_PAGE_SIZE,
+      };
       if (facilityId) params.facility_id = facilityId;
-      const data = await facilitiesService.getInspections(params);
-      setInspections(data);
+      if (resultFilter !== 'all') params.result = resultFilter;
+      if (appliedSearch) params.search = appliedSearch;
+      const result = await facilitiesService.getInspectionsPage(params);
+      if (seq !== requestSeq.current) return;
+      setInspections(result.items);
+      setTotal(result.total);
     } catch {
+      if (seq !== requestSeq.current) return;
       setLoadError(true);
       toast.error('Failed to load inspections');
     } finally {
-      setIsLoading(false);
+      if (seq === requestSeq.current) setIsLoading(false);
     }
-  }, [facilityId]);
+  }, [facilityId, resultFilter, appliedSearch, page]);
 
   useEffect(() => {
     void loadInspections();
   }, [loadInspections]);
 
+  // The server already applied the result filter; repeating it keeps a filter
+  // change from showing the previous filter's rows while the request is out.
   const filtered = inspections.filter((i) => {
     if (resultFilter === 'passed' && i.passed !== true) return false;
     if (resultFilter === 'failed' && i.passed !== false) return false;
     if (resultFilter === 'pending' && i.passed !== null && i.passed !== undefined) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return !!(
-        i.title?.toLowerCase().includes(q) ||
-        i.inspectorName?.toLowerCase().includes(q) ||
-        i.inspectorOrganization?.toLowerCase().includes(q)
-      );
-    }
     return true;
   });
 
@@ -210,10 +244,14 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
     isLoading,
     loadError,
     reload: loadInspections,
+    page,
+    setPage,
+    total,
+    pageSize: INSPECTIONS_PAGE_SIZE,
     searchQuery,
     setSearchQuery,
     resultFilter,
-    setResultFilter,
+    setResultFilter: changeResultFilter,
     showModal,
     setShowModal,
     editingInspection,

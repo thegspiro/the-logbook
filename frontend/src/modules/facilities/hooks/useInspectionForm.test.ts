@@ -4,17 +4,17 @@
  * shape: one payload builder for both modes, where a blank box must be omitted
  * on create and sent as an explicit null on edit.
  */
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Inspection } from '../types';
 
-const getInspections = vi.fn();
+const getInspectionsPage = vi.fn();
 const createInspection = vi.fn();
 const updateInspection = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   facilitiesService: {
-    getInspections: (...a: unknown[]) => getInspections(...a) as unknown,
+    getInspectionsPage: (...a: unknown[]) => getInspectionsPage(...a) as unknown,
     createInspection: (...a: unknown[]) => createInspection(...a) as unknown,
     updateInspection: (...a: unknown[]) => updateInspection(...a) as unknown,
     deleteInspection: vi.fn(),
@@ -67,10 +67,10 @@ const cleared = {
 
 describe('useInspectionForm payload contract', () => {
   beforeEach(() => {
-    getInspections.mockReset();
+    getInspectionsPage.mockReset();
     createInspection.mockReset();
     updateInspection.mockReset();
-    getInspections.mockResolvedValue([]);
+    getInspectionsPage.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 50 });
     createInspection.mockResolvedValue(existing);
     updateInspection.mockResolvedValue(existing);
   });
@@ -150,5 +150,39 @@ describe('useInspectionForm payload contract', () => {
     ]) {
       expect(payload[key], `${key} must be omitted on create, not nulled`).toBeUndefined();
     }
+  });
+});
+
+describe('useInspectionForm paging (FAC2-5)', () => {
+  beforeEach(() => {
+    getInspectionsPage.mockReset();
+    getInspectionsPage.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 50 });
+  });
+
+  it.each(['passed', 'failed', 'pending'] as const)('asks the server for %s inspections', async (filter) => {
+    const { result } = renderHook(() => useInspectionForm());
+
+    await act(async () => {
+      result.current.setResultFilter(filter);
+    });
+
+    expect(getInspectionsPage).toHaveBeenLastCalledWith({ result: filter, skip: 0, limit: 50 });
+  });
+
+  it('sends the search to the server', async () => {
+    const { result } = renderHook(() => useInspectionForm({ facilityId: 'fac-1' }));
+
+    await act(async () => {
+      result.current.setSearchQuery('marshal');
+    });
+
+    await waitFor(() =>
+      expect(getInspectionsPage).toHaveBeenLastCalledWith({
+        facility_id: 'fac-1',
+        search: 'marshal',
+        skip: 0,
+        limit: 50,
+      })
+    );
   });
 });

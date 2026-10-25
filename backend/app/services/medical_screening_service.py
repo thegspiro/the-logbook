@@ -9,6 +9,7 @@ import re
 from datetime import date, timedelta
 from typing import Dict, List, Optional, Set, Tuple
 
+from dateutil.relativedelta import relativedelta
 from sqlalchemy import Select, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -125,10 +126,46 @@ _SATISFYING_STATUSES = (
 )
 
 
+def _positive_months(months: Optional[int]) -> Optional[int]:
+    # The column accepts any int32; a zero or negative frequency describes no
+    # recurrence, so it falls back to "no expiration" rather than a past date.
+    return months if months and months > 0 else None
+
+
+def _effective_expiration(
+    record: ScreeningRecord,
+    graded: Optional[ScreeningRequirement],
+    frequency_by_requirement: Dict[str, Optional[int]],
+) -> Tuple[Optional[date], bool]:
+    """When ``record`` lapses, and whether that date came from a frequency.
+
+    A record's own expiration date always wins. A record saved without one
+    falls due ``frequency_months`` after it was completed (W71-1, owner
+    decision): the frequency of the requirement the record is linked to, or,
+    when it is linked to none (or its requirement was deleted), of the
+    requirement it is being graded against. A record with no completed date,
+    or whose requirement has no frequency, stays compliant indefinitely, as
+    before. Months are calendar months, clamped to the month's last day, the
+    same rule as the record form's ``addCalendarMonths``.
+    """
+    if record.expiration_date:
+        return record.expiration_date, False
+    if not record.completed_date:
+        return None, False
+    if record.requirement_id and record.requirement_id in frequency_by_requirement:
+        months = _positive_months(frequency_by_requirement[record.requirement_id])
+    else:
+        months = _positive_months(graded.frequency_months if graded else None)
+    if months is None:
+        return None, False
+    return record.completed_date + relativedelta(months=months), True
+
+
 def _grade(
     requirements: List[ScreeningRequirement],
     records: List[ScreeningRecord],
     today: date,
+    frequency_by_requirement: Optional[Dict[str, Optional[int]]] = None,
 ) -> Tuple[List[ComplianceItem], int, int, int]:
     """Grade one subject's records against the active requirements.
 
@@ -137,7 +174,11 @@ def _grade(
     built from it, so no screen can grade a member differently from another.
     Returns ``(items, compliant_count, expiring_soon_count,
     self_recorded_count)``.
+
+    ``frequency_by_requirement`` maps every requirement id in the organization,
+    active or not, to its ``frequency_months``; see ``_effective_expiration``.
     """
+    frequencies = frequency_by_requirement or {}
     items: List[ComplianceItem] = []
     compliant_count = 0
     expiring_soon_count = 0
@@ -156,11 +197,14 @@ def _grade(
         latest = matching_records[0] if matching_records else None
         is_compliant = False
         days_until_exp = None
+        expires, from_frequency = (
+            _effective_expiration(latest, req, frequencies) if latest else (None, False)
+        )
 
         if latest:
-            if latest.expiration_date:
-                is_compliant = latest.expiration_date >= today
-                days_until_exp = (latest.expiration_date - today).days
+            if expires:
+                is_compliant = expires >= today
+                days_until_exp = (expires - today).days
                 # `0 <=`, not `0 <`: a screening expiring **today** is the
                 # one most in need of flagging, and `get_expiring_soon`
                 # below already returns it (`expiration_date >= today`).
@@ -173,7 +217,8 @@ def _grade(
                 if 0 <= days_until_exp <= 30:
                     expiring_soon_count += 1
             else:
-                # No expiration = compliant indefinitely
+                # No expiration and no frequency to derive one: compliant
+                # indefinitely.
                 is_compliant = True
 
         self_recorded = bool(latest and latest.self_recorded)
@@ -189,7 +234,8 @@ def _grade(
                 screening_type=req.screening_type,
                 is_compliant=is_compliant,
                 last_screening_date=(latest.completed_date if latest else None),
-                expiration_date=(latest.expiration_date if latest else None),
+                expiration_date=expires,
+                expiration_from_frequency=from_frequency,
                 days_until_expiration=days_until_exp,
                 status=latest.status if latest else None,
                 self_recorded=self_recorded,
@@ -591,6 +637,21 @@ class MedicalScreeningService:
             )
         return held
 
+    async def _requirement_frequencies(
+        self, organization_id: str
+    ) -> Dict[str, Optional[int]]:
+        """Every requirement's ``frequency_months``, inactive ones included.
+
+        Inactive ones too: a record linked to a requirement that has since been
+        switched off still falls due by that requirement's frequency.
+        """
+        rows = await self.db.execute(
+            select(
+                ScreeningRequirement.id, ScreeningRequirement.frequency_months
+            ).where(ScreeningRequirement.organization_id == organization_id)
+        )
+        return {str(rid): months for rid, months in rows.all()}
+
     async def get_compliance_status(
         self,
         organization_id: str,
@@ -622,8 +683,9 @@ class MedicalScreeningService:
         )
 
         today = await resolve_org_today(self.db, organization_id)
+        frequencies = await self._requirement_frequencies(organization_id)
         items, compliant_count, expiring_soon_count, self_recorded_count = _grade(
-            requirements, records, today
+            requirements, records, today, frequencies
         )
 
         subject_type = "user" if user_id else "prospect"
@@ -688,6 +750,7 @@ class MedicalScreeningService:
         subjects = await self.list_subjects(organization_id)
         records = await self.list_records(organization_id)
         today = await resolve_org_today(self.db, organization_id)
+        frequencies = await self._requirement_frequencies(organization_id)
 
         by_user: Dict[str, List[ScreeningRecord]] = {}
         by_prospect: Dict[str, List[ScreeningRecord]] = {}
@@ -713,7 +776,7 @@ class MedicalScreeningService:
                     else requirements
                 )
                 _, compliant, expiring, _ = _grade(
-                    applicable, held.get(str(person.id), []), today
+                    applicable, held.get(str(person.id), []), today, frequencies
                 )
                 not_met = len(applicable) - compliant
                 rows.append(
@@ -808,7 +871,13 @@ class MedicalScreeningService:
             .order_by(ScreeningRecord.expiration_date.asc())
         )
         result = await self.db.execute(query)
-        records = list(result.scalars().all())
+        dated = list(result.scalars().all())
+        due: List[Tuple[ScreeningRecord, date, bool]] = [
+            (r, r.expiration_date, False) for r in dated if r.expiration_date
+        ]
+        due.extend(await self._due_by_frequency(organization_id, today, cutoff))
+        due.sort(key=lambda item: item[1])
+        records = [record for record, _, _ in due]
 
         # MS-2: resolve subject and requirement names in one batch each. The
         # response schema carries these fields and the dashboard renders
@@ -822,10 +891,8 @@ class MedicalScreeningService:
         )
 
         expiring: List[ExpiringScreening] = []
-        for record in records:
-            days_left = (
-                (record.expiration_date - today).days if record.expiration_date else 0
-            )
+        for record, expires, from_frequency in due:
+            days_left = (expires - today).days
             expiring.append(
                 ExpiringScreening(
                     record_id=record.id,
@@ -835,14 +902,60 @@ class MedicalScreeningService:
                     user_name=names["users"].get(record.user_id),
                     prospect_id=record.prospect_id,
                     prospect_name=names["prospects"].get(record.prospect_id),
-                    expiration_date=record.expiration_date,
+                    expiration_date=expires,
                     days_until_expiration=days_left,
                     self_recorded=bool(record.self_recorded),
                     status=record.status,
+                    expiration_from_frequency=from_frequency,
                 )
             )
 
         return expiring
+
+    async def _due_by_frequency(
+        self, organization_id: str, today: date, cutoff: date
+    ) -> List[Tuple[ScreeningRecord, date, bool]]:
+        """Records with no expiration date that fall due by frequency in the window.
+
+        The list's half of ``_effective_expiration``, so the expiring count the
+        summary reports and this list agree about a record saved without an
+        expiration (pitfall #29). A record linked to no requirement is measured
+        against the active requirement of its type with the shortest frequency:
+        the first one it falls due for.
+        """
+        frequencies = await self._requirement_frequencies(organization_id)
+        positive = [m for m in map(_positive_months, frequencies.values()) if m]
+        if not positive:
+            return []
+        shortest_by_type: Dict[str, ScreeningRequirement] = {}
+        for req in await self.list_requirements(organization_id, is_active=True):
+            months = _positive_months(req.frequency_months)
+            if months is None:
+                continue
+            current = shortest_by_type.get(req.screening_type)
+            if current is None or months < (current.frequency_months or 0):
+                shortest_by_type[req.screening_type] = req
+
+        # Completed longer ago than the longest frequency has lapsed under any
+        # of them, so the query never reads the whole history.
+        earliest = today - relativedelta(months=max(positive))
+        rows = await self.db.execute(
+            select(ScreeningRecord).where(
+                ScreeningRecord.organization_id == organization_id,
+                ScreeningRecord.expiration_date.is_(None),
+                ScreeningRecord.completed_date.isnot(None),
+                ScreeningRecord.completed_date >= earliest,
+                ScreeningRecord.status.in_(_SATISFYING_STATUSES),
+            )
+        )
+        due: List[Tuple[ScreeningRecord, date, bool]] = []
+        for record in rows.scalars().all():
+            expires, from_frequency = _effective_expiration(
+                record, shortest_by_type.get(record.screening_type), frequencies
+            )
+            if expires and today <= expires <= cutoff:
+                due.append((record, expires, from_frequency))
+        return due
 
     async def _resolve_names(
         self,

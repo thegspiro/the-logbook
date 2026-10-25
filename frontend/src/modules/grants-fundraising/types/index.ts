@@ -332,6 +332,30 @@ export interface GrantOpportunityCreatePayload {
   notes?: string | undefined;
 }
 
+/**
+ * `PUT /grants/{id}`. The update is `exclude_unset`, so every field the form
+ * owns is sent and a cleared one is an explicit null (pitfall #1, update side).
+ */
+export interface GrantOpportunityUpdatePayload {
+  name: string;
+  agency: string | null;
+  category: GrantCategory | null;
+  description: string | null;
+  eligibleUses: string | null;
+  eligibilityCriteria: string | null;
+  typicalAwardMin: string | null;
+  typicalAwardMax: string | null;
+  matchRequired: boolean;
+  matchPercentage: string | null;
+  matchDescription: string | null;
+  deadlineType: DeadlineType | null;
+  deadlineDate: string | null;
+  applicationUrl: string | null;
+  programUrl: string | null;
+  federalProgramCode: string | null;
+  notes: string | null;
+}
+
 // =============================================================================
 // Grant Applications
 // =============================================================================

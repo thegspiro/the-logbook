@@ -46,8 +46,20 @@ def _department_today(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _no_frequencies(monkeypatch):
+    # Grading also reads every requirement's frequency (W71-1); these mocked
+    # requirements carry none, so the fallback has nothing to derive.
+    monkeypatch.setattr(
+        MedicalScreeningService,
+        "_requirement_frequencies",
+        AsyncMock(return_value={}),
+    )
+
+
 def _requirement(roles=None, name="Annual Physical"):
     req = MagicMock(spec=ScreeningRequirement)
+    req.frequency_months = None
     req.id = str(uuid.uuid4())
     req.name = name
     req.screening_type = ScreeningType.PHYSICAL_EXAM

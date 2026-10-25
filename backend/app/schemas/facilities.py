@@ -1436,3 +1436,25 @@ class FacilityComplianceItemResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     model_config = _response_config
+
+
+class FacilityMaintenancePageResponse(BaseModel):
+    """A page of maintenance records plus the organization-wide match count."""
+
+    items: List[FacilityMaintenanceResponse]
+    total: int
+    skip: int
+    limit: int
+
+    model_config = _response_config
+
+
+class FacilityInspectionPageResponse(BaseModel):
+    """A page of inspections plus the organization-wide match count."""
+
+    items: List[FacilityInspectionResponse]
+    total: int
+    skip: int
+    limit: int
+
+    model_config = _response_config

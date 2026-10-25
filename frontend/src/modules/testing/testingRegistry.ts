@@ -1150,6 +1150,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'fundraising.manage',
         module: 'grants',
       },
+      {
+        path: '/grants/opportunities/:id/edit',
+        label: 'Edit grant opportunity',
+        permission: 'fundraising.manage',
+        module: 'grants',
+      },
       { path: '/grants/applications', label: 'Grant applications', permission: 'fundraising.view', module: 'grants' },
       {
         path: '/grants/applications/new',

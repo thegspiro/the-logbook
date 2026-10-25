@@ -79,7 +79,9 @@ export const ComplianceDashboard: React.FC = () => {
                     {screening.days_until_expiration} day{screening.days_until_expiration === 1 ? '' : 's'}
                   </p>
                   <p className="text-theme-text-muted text-xs">
-                    Expires {formatCalendarDate(screening.expiration_date)}
+                    {screening.expiration_from_frequency
+                      ? `Due ${formatCalendarDate(screening.expiration_date)} (by frequency)`
+                      : `Expires ${formatCalendarDate(screening.expiration_date)}`}
                   </p>
                 </div>
               </div>

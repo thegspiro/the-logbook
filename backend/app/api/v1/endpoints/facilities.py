@@ -27,7 +27,7 @@ revoked). Keep new endpoints on the correct side of this line.
 """
 
 from datetime import date
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import (
@@ -85,6 +85,7 @@ from app.schemas.facilities import (  # Facility Type; Facility Status; Main Fac
     FacilityEmergencyContactResponse,
     FacilityEmergencyContactUpdate,
     FacilityInspectionCreate,
+    FacilityInspectionPageResponse,
     FacilityInspectionResponse,
     FacilityInspectionUpdate,
     FacilityInsurancePolicyCreate,
@@ -92,6 +93,7 @@ from app.schemas.facilities import (  # Facility Type; Facility Status; Main Fac
     FacilityInsurancePolicyUpdate,
     FacilityListItem,
     FacilityMaintenanceCreate,
+    FacilityMaintenancePageResponse,
     FacilityMaintenanceResponse,
     FacilityMaintenanceTypeCreate,
     FacilityMaintenanceTypeResponse,
@@ -1573,6 +1575,63 @@ async def list_facility_maintenance_records(
     return records
 
 
+@router.get(
+    "/maintenance/page",
+    response_model=FacilityMaintenancePageResponse,
+    tags=["Facility Maintenance"],
+)
+async def get_facility_maintenance_page(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    maintenance_type_id: str | None = Query(
+        None, description="Filter by maintenance type"
+    ),
+    is_completed: bool | None = Query(None, description="Filter by completion status"),
+    is_overdue: bool | None = Query(None, description="Filter by overdue status"),
+    is_historic: bool | None = Query(None, description="Filter by historic entries"),
+    occurred_after: date | None = Query(
+        None, description="Records that occurred on or after this date"
+    ),
+    occurred_before: date | None = Query(
+        None, description="Records that occurred on or before this date"
+    ),
+    search: str | None = Query(
+        None,
+        min_length=1,
+        max_length=200,
+        description="Search description, vendor, work order number or performer",
+    ),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.view", "facilities.manage")
+    ),
+):
+    """A page of maintenance records with the total number that match.
+
+    Registered before ``/maintenance/{record_id}`` so "page" is not read as an
+    id. FAC2-5: filters and search run on the server, so a screen built on
+    this is not limited to whichever records happened to load first.
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    items, total = await FacilitiesService(db).page_maintenance_records(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        maintenance_type_id=maintenance_type_id,
+        is_completed=is_completed,
+        is_overdue=is_overdue,
+        is_historic=is_historic,
+        occurred_after=occurred_after,
+        occurred_before=occurred_before,
+        search=search,
+        skip=skip,
+        limit=limit,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
 @router.post(
     "/maintenance",
     response_model=FacilityMaintenanceResponse,
@@ -1942,6 +2001,53 @@ async def list_facility_inspections(
         limit=limit,
     )
     return inspections
+
+
+@router.get(
+    "/inspections/page",
+    response_model=FacilityInspectionPageResponse,
+    tags=["Facility Inspections"],
+)
+async def get_facility_inspections_page(
+    facility_id: str | None = Query(None, description="Filter by facility"),
+    inspection_type: InspectionTypeEnum | None = Query(
+        None, description="Filter by inspection type"
+    ),
+    result: Literal["passed", "failed", "pending"] | None = Query(
+        None, description="passed, failed, or pending (no result recorded yet)"
+    ),
+    search: str | None = Query(
+        None,
+        min_length=1,
+        max_length=200,
+        description="Search title, inspector or inspecting organization",
+    ),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.view", "facilities.manage")
+    ),
+):
+    """A page of inspections with the total number that match.
+
+    Registered before ``/inspections/{inspection_id}`` so "page" is not read as
+    an id. ``result=pending`` is what the list endpoint's ``passed`` filter
+    cannot express (FAC2-5).
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    items, total = await FacilitiesService(db).page_inspections(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        inspection_type=inspection_type,
+        result=result,
+        search=search,
+        skip=skip,
+        limit=limit,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.post(

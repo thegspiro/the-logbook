@@ -86,6 +86,7 @@ import GrantDetailPage from './GrantDetailPage';
 import GrantApplicationFormPage from './GrantApplicationFormPage';
 import GrantsDashboardPage from './GrantsDashboardPage';
 import GrantOpportunitiesPage from './GrantOpportunitiesPage';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
 const TESS = { id: 'u-tess', first_name: 'Tess', last_name: 'Park', full_name: 'Tess Park', status: 'active' };
 
@@ -368,13 +369,17 @@ describe('Grant opportunities (W68)', () => {
     matchRequired: false,
     typicalAwardMin: null,
     typicalAwardMax: null,
+    // The API always sends it; a retired opportunity takes no new applications.
+    isActive: true,
   };
 
   it('offers Start Application to a member who can create one', async () => {
     listOpportunities.mockResolvedValue([opportunity]);
     render(
       <MemoryRouter>
-        <GrantOpportunitiesPage />
+        <ConfirmProvider>
+          <GrantOpportunitiesPage />
+        </ConfirmProvider>
       </MemoryRouter>
     );
 
@@ -386,7 +391,9 @@ describe('Grant opportunities (W68)', () => {
     listOpportunities.mockResolvedValue([opportunity]);
     render(
       <MemoryRouter>
-        <GrantOpportunitiesPage />
+        <ConfirmProvider>
+          <GrantOpportunitiesPage />
+        </ConfirmProvider>
       </MemoryRouter>
     );
 
