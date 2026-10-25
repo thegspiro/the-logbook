@@ -16,12 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_(To be filled in by this same branch's follow-up commit, once this
-iteration's PR is opened — Feature 01, Auth & session lifecycle, pass 12.
-PR #3683, Feature 00/Cross-cutting baseline pass 12, merged with no open
-rotation PR behind it, confirmed via `search_pull_requests` re-checked
-immediately before branching; see the Log entry below for this iteration's
-findings.)_
+**PR [#3684](https://github.com/thegspiro/the-logbook/pull/3684)** (branch
+`claude/security-review-auth-session-lifecycle`) — Feature 01 (Auth &
+session lifecycle), pass 12. PR #3683 (Feature 00, Cross-cutting baseline,
+pass 12) had already merged with no open rotation PR behind it —
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
+`list_pull_requests` (`state:open`) both returned 0 matching results,
+checked before starting and re-checked immediately before branching. **1
+new finding (AUTH-23, MED, flagged — not fixed), 0 fixed.** Six of the
+twelve scoped files changed since pass 11's baseline (`auth.py`,
+`dependencies.py`, `auth_service.py`, `schemas/auth.py`, `apiClient.ts`,
+`authService.ts`), all one feature: an MFA enrollment grace period for
+privileged members, station-kiosk session limits, and a step-up
+re-verification gate in front of 24 sensitive handlers. Routes
+re-enumerated by AST (31, up from 28 — three new, all private and
+self-scoped to the caller's own session). `POST /auth/step-up` was found
+to have no account-tied lockout on a failed password/TOTP guess, unlike
+`/login`/`/mfa/login` — flagged (not fixed) as a genuine owner tradeoff
+rather than a mechanical fix, since tying it to the lockout columns would
+let the same attacker who stole a session lock the legitimate owner out of
+signing in at all. See `AUTH-01-auth-session.md`'s **Pass 12** section for
+the full review.
+
+Rotation row 01 → ✅ (pending this PR's merge); next is Feature 02
+(Permissions & roles).
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3683, Feature 00, Cross-cutting baseline, pass 12, merged), preserved for history</summary>
