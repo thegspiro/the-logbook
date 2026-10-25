@@ -1,9 +1,9 @@
 /**
  * Section definitions for the scheduling settings screen.
  *
- * Separate from ShiftSettingsPanel so both the page (which renders the nav and
- * owns the URL) and the panel (which renders one section's body) can read them
- * without the panel exporting non-components alongside itself.
+ * Separate from ShiftSettingsPanel so both the page (which owns the URL) and
+ * the panel (which renders one section's body) can read them without the panel
+ * exporting non-components alongside itself.
  *
  * Each section is its own route under the Scheduling Administration hub rather
  * than a `?tab=` on one page: a settings screen an officer is sent to — from a

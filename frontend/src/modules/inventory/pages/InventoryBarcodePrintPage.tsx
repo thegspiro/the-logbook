@@ -56,7 +56,7 @@ import {
 import type { LabelNames } from '../utils/labelLines';
 import { MAX_LABEL_SETUPS, MAX_SETUP_NAME, usableSetupLines } from '../utils/labelSetups';
 import type { LabelSetup } from '../utils/labelSetups';
-import { PromptDialog } from '../../../components/ux';
+import { Breadcrumbs, PromptDialog } from '../../../components/ux';
 import { SheetStartPicker } from '../../../components/labels/SheetStartPicker';
 import {
   buildLabelFilterPath,
@@ -1280,7 +1280,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
   }
 
   if (printRequest.kind === 'none') {
-    return <LabelScopePicker onChoose={(filters) => void navigate(buildLabelFilterPath(filters))} />;
+    // The hub crumb is the way back: this page is an Inventory Administration
+    // card (Catalog → Print Labels) whose URL does not sit under the hub.
+    return (
+      <div className="mx-auto max-w-lg px-4 pt-4 sm:px-6 sm:pt-6">
+        <Breadcrumbs underHub="/inventory/admin" className="mb-0" />
+        <LabelScopePicker onChoose={(filters) => void navigate(buildLabelFilterPath(filters))} />
+      </div>
+    );
   }
 
   if (error) {
@@ -1415,13 +1422,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
       {/* Screen-only controls */}
       <div className="print-controls min-h-screen">
         <div className="mx-auto max-w-4xl px-4 py-6">
-          <Link
-            to="/inventory"
-            className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Inventory
-          </Link>
+          {/* Inside print-controls, so the trail never reaches the labels. */}
+          <Breadcrumbs underHub="/inventory/admin" />
 
           {/* Header */}
           <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">

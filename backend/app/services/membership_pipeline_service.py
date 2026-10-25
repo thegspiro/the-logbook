@@ -74,7 +74,7 @@ from app.utils.membership import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
-from app.utils.org_timezone import format_in_org_timezone
+from app.utils.org_timezone import format_in_org_timezone, scheduling_timezone
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
 from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
@@ -5006,6 +5006,19 @@ class MembershipPipelineService:
         another organization is never printed, however the event came to
         reference it.
         """
+        name, address = MembershipPipelineService._event_location_parts(
+            event, organization_id
+        )
+        return " — ".join(filter(None, [name, address]))
+
+    @staticmethod
+    def _event_location_parts(event: Any, organization_id: str) -> Tuple[str, str]:
+        """``(name, street address)`` for an event's place, either may be empty.
+
+        The named location wins; the free-text ``location`` stands in as the
+        name when there is none. A location belonging to another organization
+        is never returned, however the event came to reference it.
+        """
         location = getattr(event, "location_obj", None)
         if location is not None and str(location.organization_id) == str(
             organization_id
@@ -5014,8 +5027,8 @@ class MembershipPipelineService:
             if city_state and location.zip:
                 city_state += f" {location.zip}"
             address = ", ".join(filter(None, [location.address, city_state]))
-            return " — ".join(filter(None, [location.name, address]))
-        return getattr(event, "location", None) or ""
+            return location.name or "", address
+        return getattr(event, "location", None) or "", ""
 
     async def _send_stage_email(
         self,
@@ -8201,20 +8214,138 @@ class MembershipPipelineService:
 
         return None
 
-    async def get_prospect_by_token(self, token: str) -> Optional[Dict[str, Any]]:
-        """Look up a prospect by their public status token. Returns limited public-safe fields.
+    async def _status_page_meeting(
+        self,
+        prospect: ProspectiveMember,
+        public_step_ids: AbstractSet[str],
+        show_future: bool,
+    ) -> Optional[Tuple[MembershipPipelineStep, Event]]:
+        """The meeting an applicant should attend next, if the page may say so.
 
-        Returns None if the page is switched off for this applicant (the
-        pipeline setting, or the latest Enable Status Page stage they have
-        reached), if the token has expired, or if no match is found.
-        Only steps with public_visible=True are included in the timeline.
-        When the pipeline's ``public_show_future_stages`` is off, the timeline
-        is limited to completed stages, and the current stage, its action and
-        ``total_stages`` are all None.
+        The first meeting stage from the applicant's current one onward that
+        names an event type and is not yet behind them decides it — so the
+        card appears from the day they apply and goes once they have attended.
+        Within that stage, an open event they are already linked to wins; past
+        that, the next open event of the stage's type. A missed meeting is
+        therefore replaced on the page the moment it ends, while the record of
+        the miss waits for the nightly :meth:`roll_forward_missed_meeting`.
 
-        Successful lookups refresh the token's inactivity timestamp. The
-        bearer token itself is never reflected into the response.
+        The card is withheld when that stage is hidden from applicants, and,
+        for a pipeline hiding stages not yet reached, until the applicant is on
+        it: naming the meeting would announce the stage.
         """
+        if prospect.status != ProspectStatus.ACTIVE or prospect.pipeline is None:
+            return None
+        current = prospect.current_step
+        current_order = current.sort_order if current is not None else None
+        behind = {
+            str(sp.step_id)
+            for sp in prospect.step_progress or []
+            if sp.status in (StepProgressStatus.COMPLETED, StepProgressStatus.SKIPPED)
+        }
+        for step in sorted(prospect.pipeline.steps, key=lambda s: s.sort_order or 0):
+            if current_order is not None and (step.sort_order or 0) < current_order:
+                continue
+            if effective_step_type(step) != PipelineStepType.MEETING:
+                continue
+            config = step.config or {}
+            if not config.get("linked_event_type") or str(step.id) in behind:
+                continue
+            if str(step.id) not in public_step_ids:
+                return None
+            if not show_future and (current is None or str(current.id) != str(step.id)):
+                return None
+            event = await self._linked_open_meeting_event(
+                str(prospect.id), prospect.organization_id, config
+            ) or await self._next_event_for_meeting_config(
+                prospect.organization_id, config
+            )
+            return (step, event) if event is not None else None
+        return None
+
+    async def _public_meeting_payload(
+        self, prospect: ProspectiveMember, event: Event
+    ) -> Dict[str, Any]:
+        """Applicant-safe fields for the status page's meeting card."""
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == prospect.organization_id)
+            )
+        ).scalar_one_or_none()
+        name, address = self._event_location_parts(event, prospect.organization_id)
+
+        def _utc_iso(value: Optional[datetime]) -> Optional[str]:
+            if value is None:
+                return None
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            return value.astimezone(timezone.utc).isoformat()
+
+        return {
+            "title": event.title,
+            "start_datetime": _utc_iso(event.start_datetime),
+            "end_datetime": _utc_iso(event.end_datetime),
+            # The page is public, so it cannot read the department's zone from
+            # a signed-in profile; without this it would show the time in
+            # whatever zone the applicant's browser happens to be in.
+            "timezone": scheduling_timezone(org).key,
+            "location_name": name or None,
+            "location_address": address or None,
+        }
+
+    async def get_next_meeting_ics(self, token: str) -> Optional[Tuple[str, str]]:
+        """``(filename, ics body)`` for the meeting the status page names.
+
+        Served under the same token and the same switches as the page itself:
+        None wherever the page would 404 or show no meeting card. Does not
+        refresh the token's inactivity timestamp — downloading a calendar file
+        is not the applicant checking on their application.
+        """
+        from app.services.integration_services.ical_service import (
+            generate_ical_feed,
+        )
+
+        prospect = await self._load_prospect_for_status_page(token)
+        if prospect is None or prospect.pipeline is None:
+            return None
+        public_step_ids = {
+            str(s.id) for s in prospect.pipeline.steps or [] if s.public_visible
+        }
+        show_future = prospect.pipeline.public_show_future_stages is not False
+        found = await self._status_page_meeting(prospect, public_step_ids, show_future)
+        if found is None:
+            return None
+        _, event = found
+        payload = await self._public_meeting_payload(prospect, event)
+        location = ", ".join(
+            filter(None, [payload["location_name"], payload["location_address"]])
+        )
+        org_name = (
+            await self.db.execute(
+                select(Organization.name).where(
+                    Organization.id == prospect.organization_id
+                )
+            )
+        ).scalar_one_or_none() or "The Logbook"
+        body = generate_ical_feed(
+            [
+                {
+                    "id": str(event.id),
+                    "title": event.title,
+                    "start_time": event.start_datetime,
+                    "end_time": event.end_datetime,
+                    "location": location,
+                }
+            ],
+            org_name=org_name,
+            timezone_name=payload["timezone"],
+        )
+        return "next-meeting.ics", body
+
+    async def _load_prospect_for_status_page(
+        self, token: str
+    ) -> Optional[ProspectiveMember]:
+        """The applicant a status token opens, or None if the page is off."""
         query = (
             select(ProspectiveMember)
             .where(
@@ -8234,6 +8365,25 @@ class MembershipPipelineService:
         result = await self.db.execute(query)
         prospect = result.scalars().first()
         if not prospect or not self._status_token_usable(prospect):
+            return None
+        return prospect
+
+    async def get_prospect_by_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """Look up a prospect by their public status token. Returns limited public-safe fields.
+
+        Returns None if the page is switched off for this applicant (the
+        pipeline setting, or the latest Enable Status Page stage they have
+        reached), if the token has expired, or if no match is found.
+        Only steps with public_visible=True are included in the timeline.
+        When the pipeline's ``public_show_future_stages`` is off, the timeline
+        is limited to completed stages, and the current stage, its action and
+        ``total_stages`` are all None.
+
+        Successful lookups refresh the token's inactivity timestamp. The
+        bearer token itself is never reflected into the response.
+        """
+        prospect = await self._load_prospect_for_status_page(token)
+        if prospect is None:
             return None
 
         # Keep the token stable — it is the credential embedded in the
@@ -8316,6 +8466,13 @@ class MembershipPipelineService:
                 prospect.current_step
             )
 
+        next_meeting = None
+        found = await self._status_page_meeting(prospect, public_step_ids, show_future)
+        if found is not None:
+            meeting_step, meeting_event = found
+            next_meeting = await self._public_meeting_payload(prospect, meeting_event)
+            next_meeting["stage_name"] = meeting_step.name
+
         await self.db.commit()
 
         return {
@@ -8328,6 +8485,7 @@ class MembershipPipelineService:
             ),
             "current_stage_name": current_stage_name,
             "current_stage_action": current_stage_action,
+            "next_meeting": next_meeting,
             "pipeline_name": prospect.pipeline.name if prospect.pipeline else None,
             "total_stages": total_public_stages,
             "stage_timeline": completed_stages,
@@ -9051,11 +9209,71 @@ class MembershipPipelineService:
         await self.db.commit()
         return True
 
+    @staticmethod
+    def _open_meeting_event_conditions(organization_id: str) -> List[Any]:
+        """An event an applicant can still go to: in this org, not over, live.
+
+        "Not over" is ``end_datetime`` rather than the start, so a meeting in
+        progress is still the one to name — an applicant reading the page at
+        7:15 for a 7:00 meeting should be told to come, not sent to next month.
+        """
+        return [
+            Event.organization_id == str(organization_id),
+            Event.end_datetime > datetime.now(timezone.utc),
+            Event.is_cancelled.is_(False),
+            or_(Event.is_draft.is_(None), Event.is_draft.is_(False)),
+        ]
+
+    async def _next_event_for_meeting_config(
+        self, organization_id: str, config: Dict[str, Any]
+    ) -> Optional[Event]:
+        """The next open event a meeting stage's linked type and category accept.
+
+        One definition shared by the stage's auto-link and the applicant's
+        status page, so the page never names a meeting the coordinator's view
+        does not link (CLAUDE.md Pitfall #29).
+        """
+        event_type = config.get("linked_event_type")
+        if not event_type:
+            return None
+        conditions = self._open_meeting_event_conditions(organization_id)
+        conditions.append(Event.event_type == event_type)
+        event_category = config.get("linked_event_category")
+        if event_category:
+            conditions.append(Event.custom_category == event_category)
+        result = await self.db.execute(
+            select(Event)
+            .options(selectinload(Event.location_obj))
+            .where(and_(*conditions))
+            .order_by(Event.start_datetime.asc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _linked_open_meeting_event(
+        self, prospect_id: str, organization_id: str, config: Dict[str, Any]
+    ) -> Optional[Event]:
+        """The earliest open event this applicant is linked to for the stage."""
+        result = await self.db.execute(
+            select(Event)
+            .options(selectinload(Event.location_obj))
+            .join(ProspectEventLink, ProspectEventLink.event_id == Event.id)
+            .where(
+                ProspectEventLink.prospect_id == str(prospect_id),
+                *self._open_meeting_event_conditions(organization_id),
+            )
+            .order_by(Event.start_datetime.asc())
+        )
+        for event in result.scalars():
+            if meeting_config_matches_event(config, event):
+                return event
+        return None
+
     async def _auto_link_event_for_step(
         self,
         prospect: ProspectiveMember,
         step: MembershipPipelineStep,
-    ) -> None:
+    ) -> bool:
         """
         Auto-link the next upcoming event when a prospect enters a meeting
         step that has a linked_event_type configured.
@@ -9063,37 +9281,21 @@ class MembershipPipelineService:
         The event is selected based on the current date (not when the prospect
         entered the pipeline), so even if months have passed, it always finds
         the *next* upcoming event matching the type and optional category.
+        Returns whether a new link was made.
         """
         if not step.config or not isinstance(step.config, dict):
-            return
+            return False
 
         event_type = step.config.get("linked_event_type")
         if not event_type:
-            return
+            return False
 
         event_category = step.config.get("linked_event_category")
-        now = datetime.now(timezone.utc)
-
-        # Build query for next upcoming event matching type (and category)
-        conditions = [
-            Event.organization_id == prospect.organization_id,
-            Event.event_type == event_type,
-            Event.end_datetime > now,
-            Event.is_cancelled.is_(False),
-        ]
-        if event_category:
-            conditions.append(Event.custom_category == event_category)
-
-        query = (
-            select(Event)
-            .where(and_(*conditions))
-            .order_by(Event.start_datetime.asc())
-            .limit(1)
+        event = await self._next_event_for_meeting_config(
+            prospect.organization_id, step.config
         )
-        result = await self.db.execute(query)
-        event = result.scalar_one_or_none()
         if not event:
-            return
+            return False
 
         # Check if already linked
         existing = await self.db.execute(
@@ -9105,7 +9307,7 @@ class MembershipPipelineService:
             )
         )
         if existing.scalar_one_or_none():
-            return
+            return False
 
         link = ProspectEventLink(
             id=generate_uuid(),
@@ -9127,3 +9329,129 @@ class MembershipPipelineService:
             },
             performed_by=None,
         )
+        return True
+
+    async def roll_forward_missed_meeting(
+        self, prospect_id: str, organization_id: str
+    ) -> bool:
+        """Record a missed meeting and link the applicant to the next one.
+
+        A meeting stage links its applicant to one event, once, on arrival
+        (:meth:`_auto_link_event_for_step`). An applicant who misses it was
+        left linked to a meeting in the past, with nothing on their record to
+        say so and nothing pointing them at the next. The status page already
+        names the next meeting the moment the missed one ends; this brings the
+        record into line.
+
+        Missed means: a linked event the stage accepts, over, its attendance
+        **settled** (:func:`~app.services.event_service.attendance_is_settled`),
+        and no check-in by this applicant there. Settled rather than merely
+        over, because an organizer may still add the check-in at the door they
+        forgot — recording a miss before then would put a false mark on the
+        applicant's record. Any check-in at a linked event, settled or not,
+        stops the pass: attending is the advance pass's business, not this one.
+
+        Safe to run twice (CLAUDE.md Pitfall #36): an open linked event means
+        there is nothing to do, a miss is recorded once per event (keyed on the
+        event id in the activity log), and the link itself is unique on
+        ``(prospect_id, event_id)``. Returns whether anything was written.
+        """
+        from app.services.event_service import attendance_is_settled
+
+        prospect = (
+            await self.db.execute(
+                select(ProspectiveMember)
+                .where(
+                    ProspectiveMember.id == str(prospect_id),
+                    ProspectiveMember.organization_id == str(organization_id),
+                )
+                .options(selectinload(ProspectiveMember.current_step))
+                # The nightly pass shares one session across applicants; read
+                # the stage they are on now, not a copy cached earlier in it.
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if prospect is None or prospect.status != ProspectStatus.ACTIVE:
+            return False
+        step = prospect.current_step
+        if step is None or effective_step_type(step) != PipelineStepType.MEETING:
+            return False
+        config = step.config or {}
+        if not config.get("linked_event_type"):
+            return False
+
+        if await self._linked_open_meeting_event(
+            str(prospect.id), str(organization_id), config
+        ):
+            return False
+
+        linked = [
+            event
+            for event in (
+                await self.db.execute(
+                    select(Event)
+                    .join(ProspectEventLink, ProspectEventLink.event_id == Event.id)
+                    .where(
+                        ProspectEventLink.prospect_id == str(prospect.id),
+                        Event.organization_id == str(organization_id),
+                        Event.is_cancelled.is_(False),
+                    )
+                )
+            ).scalars()
+            if meeting_config_matches_event(config, event)
+        ]
+        attended = set(
+            (
+                await self.db.execute(
+                    select(EventExternalAttendee.event_id).where(
+                        EventExternalAttendee.prospect_id == str(prospect.id),
+                        EventExternalAttendee.checked_in.is_(True),
+                    )
+                )
+            ).scalars()
+        )
+        if any(str(event.id) in attended for event in linked):
+            return False
+
+        now = datetime.now(timezone.utc)
+        if not all(attendance_is_settled(event, now) for event in linked):
+            return False
+
+        recorded = {
+            str((log.details or {}).get("event_id"))
+            for log in (
+                await self.db.execute(
+                    select(ProspectActivityLog).where(
+                        ProspectActivityLog.prospect_id == str(prospect.id),
+                        ProspectActivityLog.action == "meeting_missed",
+                    )
+                )
+            ).scalars()
+        }
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+
+        wrote = False
+        for event in sorted(linked, key=lambda e: e.start_datetime):
+            if str(event.id) in recorded:
+                continue
+            when = format_in_org_timezone(
+                event.start_datetime, org, "%B %d, %Y at %I:%M %p"
+            )
+            await self._log_activity(
+                prospect_id=str(prospect.id),
+                action="meeting_missed",
+                details={
+                    "event_id": str(event.id),
+                    "event_title": event.title,
+                    "step_id": str(step.id),
+                    "step_name": step.name,
+                    "notes": f"Not checked in at {event.title} on {when}.",
+                },
+            )
+            wrote = True
+
+        return await self._auto_link_event_for_step(prospect, step) or wrote

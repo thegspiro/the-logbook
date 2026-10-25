@@ -23,6 +23,7 @@ from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.schemas.base import UTCResponseBase
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.utils import membership_numbers
+from app.utils.embed_origins import MAX_EMBED_ORIGINS, normalize_embed_origin
 
 
 class OrganizationTypeEnum(str, Enum):
@@ -1123,6 +1124,32 @@ class AppearanceSettings(BaseModel):
     )
 
 
+class FormsSettings(BaseModel):
+    """Department-wide settings for the Forms module.
+
+    ``embed_allowed_origins`` are the department's own websites, the only pages
+    allowed to show one of its forms in an ``<iframe>`` (and only a form with
+    ``allow_embed`` on). See ``app/utils/embed_origins.py`` for why each entry
+    is an exact https origin.
+    """
+
+    embed_allowed_origins: List[str] = Field(
+        default_factory=list,
+        max_length=MAX_EMBED_ORIGINS,
+        description="Websites (exact https origins) that may embed this department's forms",
+    )
+
+    @field_validator("embed_allowed_origins")
+    @classmethod
+    def _normalize_origins(cls, values: List[str]) -> List[str]:
+        origins: List[str] = []
+        for value in values:
+            origin = normalize_embed_origin(value)
+            if origin not in origins:
+                origins.append(origin)
+        return origins
+
+
 class ModuleSettings(BaseModel):
     """Settings for module enablement across the organization.
 
@@ -1310,6 +1337,10 @@ class OrganizationSettings(BaseModel):
     appearance: AppearanceSettings = Field(
         default_factory=AppearanceSettings,
         description="Department-wide presentation settings",
+    )
+    forms: FormsSettings = Field(
+        default_factory=FormsSettings,
+        description="Forms module settings, including the websites that may embed forms",
     )
 
     # Allow additional settings
@@ -1556,6 +1587,7 @@ class OrganizationSettingsUpdate(BaseModel):
     department_email: Optional[DepartmentEmailSettings] = None
     setup: Optional[SetupProgressSettings] = None
     appearance: Optional[AppearanceSettings] = None
+    forms: Optional[FormsSettings] = None
     inventory: Optional[InventorySettingsUpdate] = None
     apparatus: Optional[ApparatusSettingsUpdate] = None
     admin_hours: Optional[AdminHoursSettingsUpdate] = None
@@ -1631,6 +1663,7 @@ class OrganizationSettingsResponse(BaseModel):
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
     membership_id: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
     appearance: AppearanceSettings = Field(default_factory=AppearanceSettings)
+    forms: FormsSettings = Field(default_factory=FormsSettings)
 
     model_config = ConfigDict(from_attributes=True, extra="allow")
 

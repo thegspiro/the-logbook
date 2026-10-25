@@ -67,6 +67,7 @@ import type {
   TargetMembershipType,
   InactivityAlertLevel,
   CurrentStageAction,
+  NextMeeting,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus, defaultStageConfig } from '../types';
 import { StageType as StageTypeConst } from '../../../constants/enums';
@@ -1191,6 +1192,7 @@ export const publicStatusService = {
     stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
     applied_at?: string | undefined;
     current_stage_action?: CurrentStageAction | undefined;
+    next_meeting?: NextMeeting | null | undefined;
     can_withdraw?: boolean | undefined;
   }> {
     const response = await axios.get<{
@@ -1203,9 +1205,15 @@ export const publicStatusService = {
       stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
       applied_at?: string | undefined;
       current_stage_action?: CurrentStageAction | undefined;
+      next_meeting?: NextMeeting | null | undefined;
       can_withdraw?: boolean | undefined;
     }>(`/api/public/v1/application-status/${token}`);
     return response.data;
+  },
+
+  /** A download link, not a request: the browser fetches the file itself. */
+  nextMeetingCalendarUrl(token: string): string {
+    return `/api/public/v1/application-status/${encodeURIComponent(token)}/next-meeting.ics`;
   },
 
   async withdrawApplication(token: string, reason?: string): Promise<{ status: string; message: string }> {

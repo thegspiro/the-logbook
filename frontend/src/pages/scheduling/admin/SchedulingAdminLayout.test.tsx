@@ -26,6 +26,11 @@ vi.mock('../../../hooks/useEnabledModules', () => ({
   useEnabledModules: () => ({ enabledModules: null, isLoading: false, isModuleOn: () => true }),
 }));
 
+const storeState = { platoonsEnabled: false, loadSettings: vi.fn() };
+vi.mock('../../../modules/scheduling/store/schedulingStore', () => ({
+  useSchedulingStore: (selector: (s: typeof storeState) => unknown) => selector(storeState),
+}));
+
 import { SchedulingAdminLayout } from './SchedulingAdminLayout';
 import { useSchedulingAdminShell } from './schedulingAdminShell';
 
@@ -47,6 +52,9 @@ describe('SchedulingAdminLayout', () => {
   beforeEach(() => {
     mockCheckPermission.mockReset();
     mockCheckPermission.mockImplementation((permission: string) => permission === 'scheduling.manage');
+    storeState.platoonsEnabled = false;
+    storeState.loadSettings.mockReset();
+    storeState.loadSettings.mockResolvedValue(undefined);
     mockGetAdminHubSummary.mockReset();
     mockGetAdminHubSummary.mockResolvedValue({
       moduleKey: 'scheduling',
@@ -109,5 +117,29 @@ describe('SchedulingAdminLayout', () => {
 
     expect(mockGetAdminHubSummary).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Create Shift' })).not.toBeInTheDocument();
+  });
+
+  // Its route falls back to General while platoon scheduling is off, so the
+  // strip offers it only once the department has turned platoons on.
+  it('offers Platoon Rosters in the Settings strip only when platoons are on', () => {
+    const { unmount } = renderAt('/scheduling/admin/settings/general');
+    const strip = () => screen.getByRole('navigation', { name: 'Settings pages' });
+    expect(within(strip()).queryByRole('link', { name: 'Platoon Rosters' })).not.toBeInTheDocument();
+    unmount();
+
+    storeState.platoonsEnabled = true;
+    renderAt('/scheduling/admin/settings/platoons');
+    expect(within(strip()).getByRole('link', { name: 'Platoon Rosters' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('asks for the platoon setting only on behalf of a scheduling officer', () => {
+    const { unmount } = renderAt('/scheduling/admin');
+    expect(storeState.loadSettings).toHaveBeenCalledTimes(1);
+    unmount();
+
+    storeState.loadSettings.mockClear();
+    mockCheckPermission.mockReturnValue(false);
+    renderAt('/scheduling/admin');
+    expect(storeState.loadSettings).not.toHaveBeenCalled();
   });
 });

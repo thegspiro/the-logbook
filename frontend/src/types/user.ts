@@ -248,6 +248,12 @@ export interface AppearanceSettings {
   navigation_layout: 'top' | 'left';
 }
 
+/** Department-wide Forms settings. */
+export interface FormsSettings {
+  /** The department's own websites (exact https origins) allowed to embed its forms. */
+  embed_allowed_origins: string[];
+}
+
 export interface AuthSettings {
   provider: string;
   // Google OAuth

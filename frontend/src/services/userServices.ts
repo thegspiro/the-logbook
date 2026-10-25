@@ -529,6 +529,7 @@ export const organizationService = {
     membership_id?: import('../types/user').MembershipIdSettings;
     department_email?: import('../types/user').DepartmentEmailSettings;
     appearance?: AppearanceSettings;
+    forms?: import('../types/user').FormsSettings;
   }> {
     const response = await api.get<{
       contact_info_visibility: ContactInfoSettings;
@@ -538,6 +539,7 @@ export const organizationService = {
       membership_id?: import('../types/user').MembershipIdSettings;
       department_email?: import('../types/user').DepartmentEmailSettings;
       appearance?: AppearanceSettings;
+      forms?: import('../types/user').FormsSettings;
     }>('/organization/settings');
     return response.data;
   },
@@ -640,6 +642,17 @@ export const organizationService = {
    */
   async updateAppearanceSettings(settings: AppearanceSettings): Promise<AppearanceSettings> {
     const response = await api.patch<AppearanceSettings>('/organization/settings/appearance', settings);
+    return response.data;
+  },
+
+  /**
+   * Update the department's Forms settings — the websites allowed to embed
+   * its forms. The list sent replaces the stored one.
+   */
+  async updateFormsSettings(
+    settings: import('../types/user').FormsSettings
+  ): Promise<import('../types/user').FormsSettings> {
+    const response = await api.patch<import('../types/user').FormsSettings>('/organization/settings/forms', settings);
     return response.data;
   },
 

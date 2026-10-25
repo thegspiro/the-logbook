@@ -1,7 +1,72 @@
 # Application Review — Finance (Tier B)
 
 **Prefix:** `FIN2` · **Iteration:** B20 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-25 (pass 5)
+
+---
+
+## Pass 5 (2026-10-25) — the update routes are clean; one waiver could overwrite another (1 fixed)
+
+Lens for this pass: the update-payload contract (omit = keep, `null` = clear, a value =
+set) driven through the real handlers, the method B18 and B19 used. A test reads each
+`PUT` route's request and response schemas from the application's own OpenAPI document,
+builds a row from the model, and sends `null` for every field the request schema
+accepts. A field must be **refused** (exactly 400 or 422, value unchanged, row still
+readable) when its column is NOT NULL or its response field cannot hold `None`, and must
+**clear** otherwise. Twelve routes: fiscal years, budget categories, budgets, budget
+requests, approval chains and their steps, purchase requests, expense reports and their
+line items, check requests, dues schedules and export mappings. 99 tests (12 baseline, 37
+refused, 50 cleared); **all pass**, so this module needs no change under the lens.
+
+Two things the first run taught, worth keeping for the next module that uses it. Finance
+request and response schemas are camelCase (`alias_generator=to_camel`), so the harness
+built for snake_case modules matched one body field in three and produced 28 cases that
+all passed; it now maps each wire name to its column, which gives the 87 null cases. A
+harness that goes green on a mismatch of that kind has tested nothing, so check how many
+cases it derived before trusting that it passed.
+
+Not in the derived test, because their bodies are whole-object or action requests where a
+null is the documented way to clear: `charge-access` (null inherits the parent's rule),
+the three `functional-class` routes, `export/advance-accounts` and `export/dues-accounts`
+(null or blank clears an account), and `PUT /dues/{id}`, which records a payment.
+
+Also checked: all 136 finance endpoints carry an auth dependency (an AST scan found none
+without `require_permission` or `get_current_user`), and every money state transition
+(`approve_step`, `approve_by_token`, `mark_pr_paid`, `mark_expense_paid`, `issue_check`,
+`record_dues_payment`, `void_check`, the submit paths) takes a row lock and checks status
+before it writes. `waive_dues` was the exception, below.
+
+### FIN2-2 — LOW/MED — waiving already-waived dues replaced the first waiver's record — ✅ FIXED
+
+`waive_dues` set `status`, `waived_by`, `waived_at` and `waive_reason` without checking
+the dues were not already waived, and without locking the row. A second `POST
+/dues/{id}/waive`, from a stale tab, a direct client or a second officer, answered 200 and
+overwrote who granted the waiver, when and why with the second caller's, and wrote a second
+`finance.dues_waived` audit event for a change that did not happen. The UI only offers
+Waive on dues that still owe money, so the app's own screen does not send it. **Fixed:**
+the row is read `FOR UPDATE`, like the payment path it races with, and a repeat is refused
+with 400 "These dues are already waived", which leaves the first record intact. To
+re-record a waiver, reverse it first. Waiving dues that have payments on the ledger is
+unchanged: the unwaive path is built for exactly that case.
+
+### Not done
+
+- **The harness is a third copy** of the one in `test_training_update_endpoints_integration.py`
+  and `test_scheduling_update_endpoints_integration.py`, now alias-aware. It should move to
+  a shared helper that all three import; that is a refactor of merged test code, so it was
+  left alone.
+- The other five checklist dimensions were not re-run beyond the scans above; passes 1–4
+  stand, including the FIN-7 residuals recorded there.
+
+**Completion gate (pass 5):** `flake8 app/ tests/` 0 · `black --check app/ tests/` clean ·
+`isort` clean on the changed files · no frontend change · new
+`test_finance_update_endpoints_integration.py` 99 pass, 0 selected under the unit job's
+marker expression · `test_dues_payment_guards.py` 2 new tests, the repeat-waive one failing
+before the fix · 1,618 tests selected by
+`financ|budget|dues|fiscal|expense|purchase|check_request|money|approval|model_updates`
+pass, 1 skipped (`test_finance_utc_backfill_migration.py`: the sandbox database has no time
+zone tables loaded).
 
 ---
 

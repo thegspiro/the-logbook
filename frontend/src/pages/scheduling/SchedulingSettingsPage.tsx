@@ -6,8 +6,8 @@
  * this page with their own `section`, so a settings screen can be linked to,
  * bookmarked and reached with the back button. Selecting a section navigates.
  *
- * ShiftSettingsPanel renders the section's content and the section list
- * belongs here; the page chrome is the Scheduling Administration header
+ * ShiftSettingsPanel renders the section's content. The section list and the
+ * page chrome are the Scheduling Administration header
  * (`SchedulingAdminLayout`) every one of these routes is drawn inside.
  */
 
@@ -20,7 +20,6 @@ import {
   settingsPathFor,
 } from '../../modules/scheduling/components/schedulingSettingsSections';
 import type { SettingsTab } from '../../modules/scheduling/components/schedulingSettingsSections';
-import { SettingsLayout } from '../../components/settings/SettingsLayout';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 
 interface SchedulingSettingsPageProps {
@@ -79,20 +78,19 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
     }
   }, [section, settingsLoaded, platoonsEnabled, navigate]);
 
+  const sectionLabel = sections.find((s) => s.key === visibleSection)?.label ?? 'General';
+
+  // No SettingsLayout here, unlike the other settings screens. Every section
+  // route is drawn inside the Scheduling Administration header, whose page
+  // strip is the way between sections and whose strip line names the open one;
+  // the shell's own section row, title and narrower centred column drew all of
+  // that a second time beneath it. The body card is what is left of the shell.
   return (
-    <div className="min-h-screen">
-      <SettingsLayout<SettingsTab>
-        sections={sections}
-        activeSection={visibleSection}
-        onSectionChange={handleSectionChange}
-        navLabel="Scheduling settings sections"
-        // Names the page for heading navigation only: inside the
-        // administration header, which already names the module and the area,
-        // `inHub` draws it as a screen-reader <h2> rather than a second title.
-        title="Scheduling Settings"
-        subtitle="Department-wide scheduling defaults"
-        inHub
-      >
+    <div className="py-6">
+      {/* The header names the section visibly; this keeps it in heading
+          navigation, between the header's <h1> and the panel's <h3> cards. */}
+      <h2 className="sr-only">Scheduling settings: {sectionLabel}</h2>
+      <div data-page-main className="card p-3 sm:p-6">
         {!templatesLoaded ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
             <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
@@ -103,7 +101,7 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
               <div className="alert-info mb-4" role="status">
                 <p className="text-sm">
                   Platoon scheduling is turned off, so there are no platoon settings yet. Turn on platoon scheduling
-                  below and a Platoons section appears.
+                  below and Platoon Rosters appears among the Settings pages above.
                 </p>
               </div>
             )}
@@ -116,7 +114,7 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
             />
           </>
         )}
-      </SettingsLayout>
+      </div>
     </div>
   );
 };

@@ -83,6 +83,7 @@ import type { LabelFilterParams } from '../utils/labelPrintQuery';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 import { useInventoryAdminShell } from '../components/inventoryAdminShell';
+import { LabelPrintMenu } from '../components/LabelPrintMenu';
 
 const PAGE_SIZE = 50;
 
@@ -1828,6 +1829,16 @@ const InventoryItemsPage: React.FC = () => {
         )}
     </>
   );
+  // The rows on screen, as the print page can address them. From
+  // `loadedParams`, for the reason Export gives: live filter state can be ahead
+  // of the rows shown. The low-stock filter has no print-page equivalent, so
+  // under it "this list" is not offered rather than quietly labelling more.
+  const listLabelPath = (() => {
+    if (!loadedParams || loadedParams.low_stock) return null;
+    const { group_by: _groupBy, low_stock: _lowStock, ...filters } = loadedParams;
+    return buildLabelFilterPath(filters);
+  })();
+
   const headerActions = (
     <>
       {/* The admin header around this page is already the way there. */}
@@ -1848,6 +1859,13 @@ const InventoryItemsPage: React.FC = () => {
       >
         <Download className="h-4 w-4" /> Export
       </button>
+      {/* Hidden under 640px like the other secondary actions; a phone reaches
+          the label page from the Catalog strip, or from a selection. */}
+      {canManage && (
+        <div className="hidden sm:block">
+          <LabelPrintMenu listPath={listLabelPath} listCount={total} needsLabelCount={needsLabelCount} />
+        </div>
+      )}
       {canManage && (
         <button
           onClick={() => setMemberPickerOpen(true)}
@@ -2240,8 +2258,12 @@ const InventoryItemsPage: React.FC = () => {
                 )}
               </>
             ))}
+          {/* "Print Selected", not "Print Labels": the header's Print Labels menu
+              is on screen at the same time, and two controls with one name
+              that print different sets are indistinguishable to a screen
+              reader. */}
           <button onClick={printLabels} className="btn-secondary btn-sm inline-flex items-center gap-1.5">
-            <Printer className="h-3.5 w-3.5" /> Print Labels
+            <Printer className="h-3.5 w-3.5" /> Print Selected
           </button>
           <button
             onClick={() => setBulkStatusOpen(true)}

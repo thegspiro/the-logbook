@@ -286,6 +286,38 @@ class TestPaymentLedgerAccess:
         )
 
 
+class TestWaive:
+    """A waiver records who granted it and why; a second one must not replace that."""
+
+    async def test_waiving_pending_dues_records_who_and_why(self):
+        dues = _dues()
+        officer = str(uuid.uuid4())
+        service = _service_for(dues)
+
+        result = await service.waive_dues(dues.id, ORG_ID, officer, "Hardship")
+
+        assert result.status == DuesStatus.WAIVED
+        assert result.waived_by == officer
+        assert result.waive_reason == "Hardship"
+
+    async def test_waiving_already_waived_dues_is_refused_and_keeps_the_first(self):
+        first_officer = str(uuid.uuid4())
+        dues = _dues(
+            status=DuesStatus.WAIVED,
+            waived_by=first_officer,
+            waived_at=BASE_TIME,
+            waive_reason="Hardship — approved by the board",
+        )
+        service = _service_for(dues)
+
+        with pytest.raises(ValueError, match="already waived"):
+            await service.waive_dues(dues.id, ORG_ID, str(uuid.uuid4()), "Another")
+
+        assert dues.waived_by == first_officer
+        assert dues.waived_at == BASE_TIME
+        assert dues.waive_reason == "Hardship — approved by the board"
+
+
 class TestUnwaive:
     """The way back out of WAIVED, which payments deliberately no longer are."""
 

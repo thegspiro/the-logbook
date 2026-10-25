@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**321 tables · 5296 columns · 1084 foreign keys**
+**321 tables · 5297 columns · 1084 foreign keys**
 
 ---
 
@@ -290,7 +290,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`form_fields`](#form_fields) | `FormField` | 21 | Form Field model |
 | [`form_integrations`](#form_integrations) | `FormIntegration` | 9 | Form Integration model |
 | [`form_submissions`](#form_submissions) | `FormSubmission` | 15 | Form Submission model |
-| [`forms`](#forms) | `Form` | 19 | Form model |
+| [`forms`](#forms) | `Form` | 20 | Form model |
 
 ### Grants & Fundraising
 
@@ -4516,6 +4516,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notification_emails` | JSON | yes |  |  |  |
 | `public_slug` | VARCHAR(12) | yes | UQ, UQ-IDX | `generate_slug()` |  |
 | `is_public` | BOOL | yes |  | `False` |  |
+| `allow_embed` | BOOL | no |  | `false` |  |
 | `integration_type` | VARCHAR(50) | yes | IDX |  |  |
 | `version` | INTEGER | yes |  | `1` |  |
 | `is_template` | BOOL | yes | IDX | `False` |  |

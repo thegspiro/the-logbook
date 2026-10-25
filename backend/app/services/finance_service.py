@@ -6820,17 +6820,27 @@ class FinanceService:
         waived_by: str,
         reason: str,
     ) -> MemberDues:
+        # Locked like the payment path it races with, so two officers waiving
+        # together serialize and the second sees the first's waiver.
         result = await self.db.execute(
-            select(MemberDues).where(
+            select(MemberDues)
+            .where(
                 MemberDues.id == dues_id,
                 MemberDues.organization_id == org_id,
             )
+            .with_for_update()
         )
         dues: MemberDues | None = result.scalar_one_or_none()
         if not dues:
             raise ValueError("Member dues record not found")
         # SoD (FIN-4): a member must not waive their own dues.
         assert_different_person(waived_by, dues.user_id, action="waive", record="dues")
+
+        # A repeat would replace who granted the waiver, when and why with the
+        # second caller's; reversing it first (unwaive_dues) is the way to
+        # re-record one.
+        if dues.status == DuesStatus.WAIVED:
+            raise ValueError("These dues are already waived.")
 
         dues.status = DuesStatus.WAIVED
         dues.waived_by = waived_by

@@ -63,6 +63,7 @@ const draft: FormDef = {
   require_authentication: true,
   notify_on_submission: false,
   is_public: false,
+  allow_embed: false,
   version: 1,
   is_template: false,
   created_at: '2026-09-01T00:00:00Z',
