@@ -356,7 +356,8 @@ SCHEDULE = {
             "Advance prospective members off a meeting stage once the event "
             "they attended is far enough past its end to count as settled, "
             "for the events nobody finalizes (the finalize flow advances them "
-            "immediately when somebody does)"
+            "immediately when somebody does); also records a missed meeting "
+            "and links the applicant to the next one"
         ),
         "frequency": "daily",
         "recommended_time": "05:30",
@@ -7246,6 +7247,7 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
 
     advanced = 0
     considered = 0
+    rolled_forward = 0
     for org_id in org_ids:
         try:
             # ACTION is in the filter because a pre-typed stage stores a
@@ -7271,6 +7273,12 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
             for prospect_id, step in candidates.all():
                 if effective_step_type(step) != PipelineStepType.MEETING:
                     continue
+                # Every applicant parked on a meeting stage, auto-advancing or
+                # not: one who missed their meeting gets the miss recorded and
+                # is linked to the next. Anyone checked in at a linked event
+                # is left alone here; the advance below is what moves them.
+                if await service.roll_forward_missed_meeting(str(prospect_id), org_id):
+                    rolled_forward += 1
                 if not (step.config or {}).get("auto_advance"):
                     continue
                 considered += 1
@@ -7303,6 +7311,7 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
         "task": "prospect_attendance_advance",
         "considered": considered,
         "advanced": advanced,
+        "rolled_forward": rolled_forward,
     }
 
 

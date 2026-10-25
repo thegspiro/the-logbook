@@ -17,11 +17,13 @@ import {
   CalendarClock,
   FileSignature,
   XCircle,
+  MapPin,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { publicStatusService } from '../services/api';
-import type { CurrentStageAction } from '../types';
-import { formatDate } from '../../../utils/dateFormatting';
+import type { CurrentStageAction, NextMeeting } from '../types';
+import { formatDate, formatDateCustom } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
@@ -38,6 +40,7 @@ interface StatusData {
   stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
   applied_at?: string | undefined;
   current_stage_action?: CurrentStageAction | undefined;
+  next_meeting?: NextMeeting | null | undefined;
   /** Set by the backend: only an application still open may be withdrawn. */
   can_withdraw?: boolean | undefined;
 }
@@ -244,6 +247,72 @@ export const ApplicationStatusPage: React.FC = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* The meeting to attend next. The backend names it, and replaces a
+            missed one with the next as soon as it ends. */}
+        {data.next_meeting && token && (
+          <section className="card mb-4 border-blue-500/30 p-5 shadow-xs" aria-labelledby="next-meeting-heading">
+            <div className="flex items-start gap-3">
+              <CalendarClock className="h-6 w-6 shrink-0 text-blue-700 dark:text-blue-400" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <h2 id="next-meeting-heading" className="text-theme-text-muted text-xs">
+                  Your next step: {data.next_meeting.stage_name}
+                </h2>
+                <p className="text-theme-text-primary text-sm font-medium break-words">{data.next_meeting.title}</p>
+                <p className="text-theme-text-secondary mt-0.5 text-sm">
+                  {/* In the department's zone, labelled, so an applicant
+                      reading from elsewhere is not off by their offset. */}
+                  {formatDateCustom(
+                    data.next_meeting.start_datetime,
+                    {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZoneName: 'short',
+                    },
+                    data.next_meeting.timezone
+                  )}
+                </p>
+                {(data.next_meeting.location_name || data.next_meeting.location_address) && (
+                  <p className="text-theme-text-muted mt-1 flex items-start gap-1 text-xs break-words">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>
+                      {[data.next_meeting.location_name, data.next_meeting.location_address]
+                        .filter(Boolean)
+                        .join(' — ')}
+                    </span>
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a
+                    href={publicStatusService.nextMeetingCalendarUrl(token)}
+                    download="next-meeting.ics"
+                    className="btn-primary inline-flex items-center gap-1.5 text-sm font-medium"
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    Add to calendar
+                  </a>
+                  {(data.next_meeting.location_address || data.next_meeting.location_name) && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        [data.next_meeting.location_name, data.next_meeting.location_address].filter(Boolean).join(', ')
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-secondary inline-flex items-center gap-1.5 text-sm font-medium"
+                    >
+                      <MapPin className="h-4 w-4" aria-hidden="true" />
+                      Get directions
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Timeline */}
