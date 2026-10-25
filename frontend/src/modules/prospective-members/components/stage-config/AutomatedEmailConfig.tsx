@@ -167,7 +167,7 @@ interface AutomatedEmailConfigProps {
   showEmailPreview: boolean;
   setShowEmailPreview: React.Dispatch<React.SetStateAction<boolean>>;
   getNextEventForType: (eventType: string, category?: string) => EventListItem | undefined;
-  renderEventPreview: (eventType: string | undefined, category?: string) => React.ReactNode;
+  renderEventPreview: (eventType: string | undefined, savedEventId: string | undefined) => React.ReactNode;
 }
 
 const EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
@@ -423,7 +423,7 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
                               </option>
                             ))}
                           </select>
-                          {renderEventPreview(emailConfig.next_meeting_event_type)}
+                          {renderEventPreview(emailConfig.next_meeting_event_type, emailConfig.next_meeting_event_id)}
                         </div>
                         <div>
                           <label htmlFor="email-meeting-details" className="text-theme-text-muted mb-1.5 block text-xs">

@@ -458,29 +458,59 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
     });
   };
 
-  /** Render a preview card for the next upcoming event of a given type */
-  const renderEventPreview = (eventType: string | undefined, category?: string) => {
-    if (!eventType) return null;
-    if (eventsLoading) {
-      return (
-        <div className="text-theme-text-muted mt-2 flex items-center gap-2 text-sm">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Loading events...
-        </div>
-      );
-    }
-    const nextEvent = getNextEventForType(eventType, category);
+  const renderEventsLoading = () => (
+    <div className="text-theme-text-muted mt-2 flex items-center gap-2 text-sm">
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      Loading events...
+    </div>
+  );
+
+  const renderNoUpcomingEvents = (eventType: string, category?: string) => {
     const label = category
       ? `${getEventTypeLabel(eventType).toLowerCase()} (${category})`
       : getEventTypeLabel(eventType).toLowerCase();
-    if (!nextEvent) {
-      return <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">No upcoming {label} events found.</p>;
+    return <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">No upcoming {label} events found.</p>;
+  };
+
+  /** Render a preview card for the next upcoming event of a given type */
+  const renderEventPreview = (eventType: string | undefined, category?: string) => {
+    if (!eventType) return null;
+    if (eventsLoading) return renderEventsLoading();
+    const nextEvent = getNextEventForType(eventType, category);
+    if (!nextEvent) return renderNoUpcomingEvents(eventType, category);
+    return renderEventCard(nextEvent, 'Next upcoming event (auto-linked when stage activates):');
+  };
+
+  /**
+   * Preview the event a stage email will name. The email uses the saved
+   * event while it is still upcoming and otherwise falls back to the next
+   * event of the type (see `_fetch_meeting_details` in
+   * membership_pipeline_service.py), so this shows the same choice rather
+   * than the live next event, which the email may not use.
+   */
+  const renderEmailEventPreview = (eventType: string | undefined, savedEventId: string | undefined) => {
+    if (!eventType) return null;
+    if (eventsLoading) return renderEventsLoading();
+    // The email never names a draft, so neither does the preview.
+    const publishedEvents = upcomingEvents.filter((e) => !e.is_draft);
+    const savedEvent = savedEventId ? publishedEvents.find((e) => e.id === savedEventId) : undefined;
+    if (savedEvent) {
+      return renderEventCard(savedEvent, 'Saved event (included in the email while it is upcoming):');
     }
+    const nextEvent = publishedEvents.find((e) => e.event_type === eventType);
+    if (!nextEvent) return renderNoUpcomingEvents(eventType);
+    return renderEventCard(
+      nextEvent,
+      savedEventId
+        ? 'The saved event has passed or was cancelled. The email will include the next one instead:'
+        : 'Next upcoming event (included when the email is sent):'
+    );
+  };
+
+  const renderEventCard = (nextEvent: EventListItem, heading: string) => {
     return (
       <div className="border-theme-surface-border bg-theme-surface-hover mt-2 rounded-md border p-3">
-        <p className="text-theme-text-muted mb-1 text-xs font-medium">
-          Next upcoming event (auto-linked when stage activates):
-        </p>
+        <p className="text-theme-text-muted mb-1 text-xs font-medium">{heading}</p>
         <p className="text-theme-text-primary text-sm font-medium">{nextEvent.title}</p>
         <p className="text-theme-text-muted mt-0.5 text-xs">
           {formatDateTime(nextEvent.start_datetime, tz)}
@@ -1089,7 +1119,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                   showEmailPreview={showEmailPreview}
                   setShowEmailPreview={setShowEmailPreview}
                   getNextEventForType={getNextEventForType}
-                  renderEventPreview={renderEventPreview}
+                  renderEventPreview={renderEmailEventPreview}
                 />
               )}
 
