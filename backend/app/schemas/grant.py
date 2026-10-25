@@ -7,7 +7,7 @@ donations, donors, pledges, and fundraising events.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import (
@@ -750,6 +750,9 @@ class CampaignCreate(CampaignBase):
 
     goal_amount: Decimal = Field(..., ge=0, le=MAX_AMOUNT)
     minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
+    suggested_amounts: Optional[
+        List[Annotated[Decimal, Field(gt=0, le=MAX_GIFT_AMOUNT)]]
+    ] = None
 
     # W69: the form offers a starting status; without this field a campaign
     # created as Active was stored as Draft, and nothing could change it after.
@@ -782,7 +785,9 @@ class CampaignUpdate(BaseModel):
     thank_you_message: Optional[str] = None
     allow_anonymous: Optional[bool] = None
     minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
-    suggested_amounts: Optional[List[Decimal]] = None
+    suggested_amounts: Optional[
+        List[Annotated[Decimal, Field(gt=0, le=MAX_GIFT_AMOUNT)]]
+    ] = None
     is_restricted: Optional[bool] = None
     restriction_purpose: Optional[str] = Field(None, max_length=2000)
 

@@ -1267,7 +1267,7 @@ class BulkImportResponse(BaseModel):
 class HistoricalImportParsedRow(BaseModel):
     """A single parsed row from the CSV with match status"""
 
-    row_number: int
+    row_number: int = Field(..., ge=1, le=INT32_MAX)
     email: Optional[str] = None
     membership_number: Optional[str] = None
     member_name: Optional[str] = None  # Display name from CSV (if available)

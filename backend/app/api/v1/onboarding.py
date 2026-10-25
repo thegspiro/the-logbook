@@ -355,7 +355,7 @@ class NotificationsConfig(BaseModel):
 
     email_enabled: bool = False
     smtp_host: str | None = None
-    smtp_port: int | None = None
+    smtp_port: int | None = Field(None, ge=1, le=65535)
     smtp_user: str | None = None
     smtp_from_email: EmailStr | None = None
 

@@ -399,7 +399,7 @@ class ParticipatingOrganization(BaseModel):
     role: str = Field("participant", pattern=r"^(host|participant|observer|evaluator)$")
     contact_name: Optional[str] = None
     contact_email: Optional[str] = None
-    participant_count: Optional[int] = Field(None, ge=0)
+    participant_count: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
 
 class MultiAgencyTrainingBase(BaseModel):
