@@ -7,7 +7,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.models.error_log import ErrorLog
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
@@ -205,15 +205,18 @@ class TestScheduling:
         assert policy.audience is EmailAudience.OFFICERS
 
 
-async def _member(db_session, org, *, slug=None, permissions=(), status="active"):
-    position = Position(
-        organization_id=org.id,
-        name=f"Pos {uuid4().hex[:6]}",
-        slug=slug or f"pos-{uuid4().hex[:8]}",
-        permissions=list(permissions),
-    )
-    db_session.add(position)
-    await db_session.flush()
+async def _member(
+    db_session, org, *, slug=None, permissions=(), status="active", position=None
+):
+    if position is None:
+        position = Position(
+            organization_id=org.id,
+            name=f"Pos {uuid4().hex[:6]}",
+            slug=slug or f"pos-{uuid4().hex[:8]}",
+            permissions=list(permissions),
+        )
+        db_session.add(position)
+        await db_session.flush()
     user_id = str(uuid4())
     await db_session.execute(
         text(
@@ -537,6 +540,105 @@ class TestSend:
                 == 0
             )
         assert report.read_schedule(org).last_sent_at is None
+
+    async def _two_recipients(self, db_session, org):
+        reached = await _member(db_session, org, slug="it_manager", permissions=["*"])
+        position = (
+            await db_session.execute(
+                select(Position).where(
+                    Position.organization_id == org.id, Position.slug == "it_manager"
+                )
+            )
+        ).scalar_one()
+        missed = await _member(db_session, org, position=position)
+        return f"m-{reached[:8]}@example.org", f"m-{missed[:8]}@example.org", missed
+
+    def _reaching_everyone_but(self, send_email, bad_address):
+        state = {"healthy": False}
+
+        async def send(*args, **kwargs):
+            if kwargs["to_emails"] == [bad_address] and not state["healthy"]:
+                return 0, 1
+            return 1, 0
+
+        send_email.side_effect = send
+        return state
+
+    async def test_a_partial_failure_retries_only_the_recipient_missed(
+        self, db_session, org, send_email, clean_chain
+    ):
+        good, bad, bad_id = await self._two_recipients(db_session, org)
+        state = self._reaching_everyone_but(send_email, bad)
+        moment = await self._due_now(org)
+
+        with patch.object(
+            report, "_is_single_organization", AsyncMock(return_value=False)
+        ):
+            first = await report.send_weekly_security_report(
+                db_session, org, now=moment
+            )
+            stored = report.read_schedule(org)
+            assert first == 1
+            assert stored.last_sent_at is not None
+            assert stored.retry_user_ids == (bad_id,)
+
+            send_email.reset_mock()
+            state["healthy"] = True
+            retried = await report.send_weekly_security_report(
+                db_session, org, now=moment + timedelta(hours=1)
+            )
+            after = await report.send_weekly_security_report(
+                db_session, org, now=moment + timedelta(hours=2)
+            )
+
+        assert retried == 1
+        assert [c.kwargs["to_emails"] for c in send_email.await_args_list] == [[bad]]
+        assert after == 0
+        assert report.read_schedule(org).retry_user_ids == ()
+        assert good not in [
+            c.kwargs["to_emails"][0] for c in send_email.await_args_list
+        ]
+
+    async def test_a_recipient_who_stays_unreachable_is_given_up_on(
+        self, db_session, org, send_email, clean_chain
+    ):
+        _good, bad, _bad_id = await self._two_recipients(db_session, org)
+        self._reaching_everyone_but(send_email, bad)
+        moment = await self._due_now(org)
+
+        with patch.object(
+            report, "_is_single_organization", AsyncMock(return_value=False)
+        ):
+            for hour in range(0, 8):
+                await report.send_weekly_security_report(
+                    db_session, org, now=moment + timedelta(hours=hour)
+                )
+
+        to_bad = [
+            c for c in send_email.await_args_list if c.kwargs["to_emails"] == [bad]
+        ]
+        assert len(to_bad) == 1 + report.MAX_RETRY_ATTEMPTS
+        assert report.read_schedule(org).retry_user_ids == ()
+
+    async def test_a_retry_is_not_attempted_for_a_disabled_report(
+        self, db_session, org, send_email, clean_chain
+    ):
+        _good, bad, _bad_id = await self._two_recipients(db_session, org)
+        self._reaching_everyone_but(send_email, bad)
+        moment = await self._due_now(org)
+
+        with patch.object(
+            report, "_is_single_organization", AsyncMock(return_value=False)
+        ):
+            await report.send_weekly_security_report(db_session, org, now=moment)
+            report.write_schedule(org, enabled=False, weekday=0, hour=7)
+            send_email.reset_mock()
+            sent = await report.send_weekly_security_report(
+                db_session, org, now=moment + timedelta(hours=1)
+            )
+
+        assert sent == 0
+        send_email.assert_not_awaited()
 
     async def test_the_scheduled_task_runs_it_for_each_department(
         self, db_session, org, send_email, clean_chain
