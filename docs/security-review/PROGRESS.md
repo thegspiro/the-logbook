@@ -16,7 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3702 (Feature 08, Membership pipeline, pass 13) merged
+**PR [#3711](https://github.com/thegspiro/the-logbook/pull/3711)** (branch
+`claude/security-review-medical-screening-p12`) — Feature 09 (Medical
+screening, PHI), pass 12. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, PR #3702 (Feature 08, Membership pipeline, pass 13) having
+already merged (`507ae1d0`) with no open rotation PR behind it. Dedicated
+review session (`session_011T1ZyyLrD5HagusgK9uDw2`) still unreachable; this
+is a watchdog pickup. **0 fixed, 0 new findings.** The only non-rotation
+commit since the baseline (pass 11, PR #3577) had already fixed MS-17 and
+MS2-7 outside this rotation; both re-verified against current code and
+tests. MS-14/MS-15 re-confirmed OPEN, unaffected. See
+`MS-09-medical-screening.md`'s **Pass 12** section for the full review.
+
+Rotation row 09 → ✅ (pending this PR's merge); next is Feature 10
+(Documents & legal).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3702's merge, Feature 08, Membership pipeline, pass 13), preserved for history</summary>
+
+None. PR #3702 (Feature 08, Membership pipeline, pass 13) merged
 (`507ae1d0`) — confirmed via `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`), 0 matching results,
 immediately before this iteration started. Rotation row 08 → ✅. Dedicated
@@ -24,6 +43,8 @@ review session (`session_011T1ZyyLrD5HagusgK9uDw2`) still unreachable; this
 watchdog picked up row 09 (Medical screening, PHI) next — see the log entry
 below for its pass 12 review. This row will record that pass's PR number
 once it is opened.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3702, Feature 08, Membership pipeline, pass 13, merged), preserved for history</summary>
