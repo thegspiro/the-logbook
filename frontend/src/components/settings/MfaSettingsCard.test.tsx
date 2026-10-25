@@ -42,7 +42,7 @@ describe('MfaSettingsCard', () => {
 
   it('shows MFA off and offers to enable when not enrolled', async () => {
     render(<MfaSettingsCard />);
-    expect(await screen.findByText(/two-factor authentication is/i)).toBeInTheDocument();
+    expect(await screen.findByText(/authenticator app is/i)).toBeInTheDocument();
     expect(screen.getByText('off')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /enable two-factor authentication/i })).toBeInTheDocument();
   });

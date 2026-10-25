@@ -30,6 +30,7 @@ import {
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
 import { MfaSettingsCard } from '../components/settings/MfaSettingsCard';
+import { PasskeySettingsCard } from '../components/settings/PasskeySettingsCard';
 import { AppVersionSection } from '../components/settings/AppVersionSection';
 import { useAuthStore } from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
@@ -1088,8 +1089,18 @@ export const UserSettingsPage: React.FC = () => {
               <div>
                 <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Two-Factor Authentication</h2>
                 <p className="text-theme-text-secondary mb-4 text-sm">
-                  Add a second step at sign-in using an authenticator app.
+                  Add a second step at sign-in after your password: a passkey on your phone or computer, an
+                  authenticator app, or both. Either one is enough.
                 </p>
+                <h3 className="text-theme-text-primary mb-2 text-base font-semibold">Passkeys</h3>
+                <PasskeySettingsCard
+                  onChange={() => {
+                    void useAuthStore.getState().loadUser();
+                  }}
+                />
+              </div>
+              <div>
+                <h3 className="text-theme-text-primary mb-2 text-base font-semibold">Authenticator app</h3>
                 <MfaSettingsCard
                   onChange={() => {
                     void useAuthStore.getState().loadUser();

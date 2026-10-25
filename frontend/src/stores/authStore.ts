@@ -14,6 +14,7 @@ import { create } from 'zustand';
 import { authService } from '../services/api';
 import { markLoginComplete, clearTempAccessToken } from '../services/apiClient';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
+import type { PasskeyAssertion } from '../utils/passkeys';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
 import { clearCache } from '../utils/apiCache';
 import { clearInFlight } from '../utils/inFlight';
@@ -230,7 +231,7 @@ interface AuthState {
 
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
-  completeMfaLogin: (code?: string, recoveryCode?: string) => Promise<void>;
+  completeMfaLogin: (code?: string, recoveryCode?: string, passkeyCredential?: PasskeyAssertion) => Promise<void>;
   cancelMfa: () => void;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
@@ -421,7 +422,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  completeMfaLogin: async (code?: string, recoveryCode?: string) => {
+  completeMfaLogin: async (code?: string, recoveryCode?: string, passkeyCredential?: PasskeyAssertion) => {
     const { mfaToken } = get();
     if (!mfaToken) {
       set({ error: 'Your sign-in expired. Sign in again.', mfaRequired: false });
@@ -434,6 +435,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         temp_token: mfaToken,
         ...(code ? { code } : {}),
         ...(recoveryCode ? { recovery_code: recoveryCode } : {}),
+        ...(passkeyCredential ? { passkey_credential: passkeyCredential } : {}),
       });
       localStorage.setItem('has_session', '1');
       signInPending = true;
