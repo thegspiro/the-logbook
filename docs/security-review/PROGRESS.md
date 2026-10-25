@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3695](https://github.com/thegspiro/the-logbook/pull/3695)** (branch
+`claude/security-review-users-organizations`) — Feature 07 (Users &
+organizations), pass 12. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, PR #3691 (Feature 06, Elections & ballots, pass 12) having
+already merged docs-only with no open rotation PR behind it. Dedicated
+review session (`session_011T1ZyyLrD5HagusgK9uDw2`) unreachable; this is a
+watchdog pickup. **0 fixed, 1 new finding (USR-11, MED, flagged).** Real
+delta since pass 11's baseline (`60ac18fd`, PR #3569): 6 commits touching the
+declared scope (MFA step-up requirement, Google Drive remote storage, Member
+ID Cards auto-suspend wiring, DOB/emergency-contact encryption, a
+99-column NOT NULL sweep). All 84 routes re-enumerated by AST. USR-11 flags
+that the step-up gate added to `delete_user` does not extend to
+`change_member_status`/`archive_member`, two sibling mutations bound by the
+identical privilege-ceiling check — same disposition this lap already gave
+two sibling gaps in the same mechanism (AUTH-23, PERM-10/PERM-11). USR-5 and
+USR-8 re-confirmed unchanged (owner-accepted). See
+`USR-07-users-organizations.md`'s **Pass 12** section for the full review.
+
+Rotation row 07 → ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3691's merge, Feature 06, Elections & ballots, pass 12), preserved for history</summary>
+
 None. PR #3691 (Feature 06, Elections & ballots, pass 12) merged
 2026-10-25 — docs-only (findings file + this tracker), not independently
 recordable here beyond what follows (confirmed via `pull_request_read`,
@@ -23,6 +48,8 @@ recordable here beyond what follows (confirmed via `pull_request_read`,
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
 matching results. Rotation row 06 → ✅. Next is Feature 07 (Users &
 organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3691, Feature 06, Elections & ballots, pass 12, merged), preserved for history</summary>
