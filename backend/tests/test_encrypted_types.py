@@ -14,10 +14,11 @@ medical-screening PHI-at-rest change (MS-1) relies on:
 """
 
 import json
+from datetime import date, datetime
 
 import pytest
 
-from app.core.encrypted_types import EncryptedJSON, EncryptedText
+from app.core.encrypted_types import EncryptedDate, EncryptedJSON, EncryptedText
 
 
 class TestEncryptedText:
@@ -100,3 +101,74 @@ class TestEncryptedJSON:
         rather than raising during a read."""
         col = EncryptedJSON()
         assert col.process_result_value("not-json", None) == "not-json"
+
+
+class TestEncryptedDate:
+
+    @pytest.mark.unit
+    def test_bind_produces_ciphertext_that_hides_the_date(self):
+        bound = EncryptedDate().process_bind_param(date(1990, 5, 1), None)
+        assert bound is not None
+        assert bound.startswith("$gcm2$")
+        assert "1990" not in bound
+
+    @pytest.mark.unit
+    def test_roundtrip_returns_a_date(self):
+        col = EncryptedDate()
+        bound = col.process_bind_param(date(1990, 5, 1), None)
+        assert col.process_result_value(bound, None) == date(1990, 5, 1)
+
+    @pytest.mark.unit
+    def test_the_same_date_encrypts_differently_each_time(self):
+        """Why SQL equality cannot work on the column, and why callers must
+        compare the decrypted value."""
+        col = EncryptedDate()
+        assert col.process_bind_param(date(1990, 5, 1), None) != (
+            col.process_bind_param(date(1990, 5, 1), None)
+        )
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        ("given", "expected"),
+        [
+            ("1990-05-01", date(1990, 5, 1)),
+            (" 1990-05-01 ", date(1990, 5, 1)),
+            (datetime(1990, 5, 1, 13, 30), date(1990, 5, 1)),
+        ],
+    )
+    def test_strings_and_datetimes_are_normalised_to_a_date(self, given, expected):
+        col = EncryptedDate()
+        assert (
+            col.process_result_value(col.process_bind_param(given, None), None)
+            == expected
+        )
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("value", [None, ""])
+    def test_empty_and_none_store_null(self, value):
+        col = EncryptedDate()
+        assert col.process_bind_param(value, None) is None
+        assert col.process_result_value(value, None) is None
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("value", ["not a date", "1990-13-45", 19900501, 3.5])
+    def test_a_value_that_is_not_a_date_is_refused_not_stored(self, value):
+        with pytest.raises(ValueError, match="EncryptedDate takes"):
+            EncryptedDate().process_bind_param(value, None)
+
+    @pytest.mark.unit
+    def test_a_legacy_date_column_value_reads_as_a_date(self):
+        """A row the DATE column held before the migration's backfill ran."""
+        assert EncryptedDate().process_result_value("1990-05-01", None) == date(
+            1990, 5, 1
+        )
+
+    @pytest.mark.unit
+    def test_tampered_ciphertext_fails_closed(self):
+        from cryptography.exceptions import InvalidTag
+
+        col = EncryptedDate()
+        bound = col.process_bind_param(date(1990, 5, 1), None)
+        tampered = bound[:-4] + ("AAAA" if not bound.endswith("AAAA") else "BBBB")
+        with pytest.raises((InvalidTag, ValueError)):
+            col.process_result_value(tampered, None)

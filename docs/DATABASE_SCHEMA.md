@@ -7345,7 +7345,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `email` | VARCHAR(255) | no |  |  |  |
 | `phone` | VARCHAR(20) | yes |  |  |  |
 | `mobile` | VARCHAR(20) | yes |  |  |  |
-| `date_of_birth` | DATE | yes |  |  |  |
+| `date_of_birth` | TEXT | yes |  |  |  |
 | `address_street` | VARCHAR(255) | yes |  |  |  |
 | `address_city` | VARCHAR(100) | yes |  |  |  |
 | `address_state` | VARCHAR(50) | yes |  |  |  |
@@ -11038,7 +11038,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `phone` | VARCHAR(20) | yes |  |  |  |
 | `mobile` | VARCHAR(20) | yes |  |  |  |
 | `photo_url` | TEXT | yes |  |  |  |
-| `date_of_birth` | DATE | yes |  |  |  |
+| `date_of_birth` | TEXT | yes |  |  |  |
 | `hire_date` | DATE | yes |  |  |  |
 | `rank` | VARCHAR(100) | yes |  |  |  |
 | `station` | VARCHAR(100) | yes |  |  |  |
@@ -11051,7 +11051,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `referral_source` | VARCHAR(255) | yes |  |  |  |
 | `interest_reason` | TEXT | yes |  |  |  |
 | `referred_by_user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `emergency_contacts` | JSON | yes |  | `list()` |  |
+| `emergency_contacts` | TEXT | yes |  | `list()` |  |
 | `notification_preferences` | JSON | yes |  | `dict()` |  |
 | `profile_visibility` | JSON | yes |  |  |  |
 | `bottom_nav_slots` | JSON | yes |  |  |  |

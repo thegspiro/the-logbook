@@ -105,6 +105,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 from sqlalchemy.sql import ColumnElement, and_, func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedDate, EncryptedJSON
 from app.core.permissions import position_mirrors_rank
 from app.core.utils import generate_uuid
 from app.utils.member_badge import generate_badge_code
@@ -370,7 +371,8 @@ class User(Base):
 
     # Profile
     photo_url: Mapped[Optional[str]] = mapped_column(Text)
-    date_of_birth: Mapped[Optional[date]] = mapped_column(Date)
+    # Encrypted at rest (HIPAA): not searchable or sortable in SQL.
+    date_of_birth: Mapped[Optional[date]] = mapped_column(EncryptedDate)
     hire_date: Mapped[Optional[date]] = mapped_column(Date)
 
     # Operational Rank (one per member, has default permissions)
@@ -400,8 +402,10 @@ class User(Base):
 
     # Emergency Contacts (stored as JSON array)
     # Format: [{"name": "...", "relationship": "...", "phone": "...", "email": "...", "is_primary": true}, ...]
+    # Encrypted at rest: names, phone numbers and emails of people who are not
+    # members and never agreed to be in this database.
     emergency_contacts: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
-        JSON, default=list
+        EncryptedJSON, default=list
     )
 
     # Notification Preferences (stored as JSON object)

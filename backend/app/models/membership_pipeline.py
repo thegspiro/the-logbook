@@ -16,7 +16,6 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Computed,
-    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -29,7 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedText
+from app.core.encrypted_types import EncryptedDate, EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -310,7 +309,8 @@ class ProspectiveMember(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(String(20))
     mobile: Mapped[Optional[str]] = mapped_column(String(20))
-    date_of_birth: Mapped[Optional[date]] = mapped_column(Date)
+    # Encrypted at rest (HIPAA): not searchable or sortable in SQL.
+    date_of_birth: Mapped[Optional[date]] = mapped_column(EncryptedDate)
 
     # Address
     address_street: Mapped[Optional[str]] = mapped_column(String(255))
