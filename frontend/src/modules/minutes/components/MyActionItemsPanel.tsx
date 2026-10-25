@@ -15,6 +15,7 @@ import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { minutesService } from '../services/api';
 import type { ActionItemStatus, MyActionItem } from '../types/minutes';
+import { actionItemStatusLabel } from '../utils/actionItemStatus';
 
 export const MyActionItemsPanel: React.FC = () => {
   const [items, setItems] = useState<MyActionItem[]>([]);
@@ -68,7 +69,7 @@ export const MyActionItemsPanel: React.FC = () => {
                   {item.minutes_title}
                 </Link>
                 {item.due_date ? ` · due ${formatCalendarDate(item.due_date)}` : ''}
-                {` · ${item.status.replace('_', ' ')}`}
+                {` · ${actionItemStatusLabel(item.status)}`}
               </p>
             </div>
             <div className="flex gap-2">

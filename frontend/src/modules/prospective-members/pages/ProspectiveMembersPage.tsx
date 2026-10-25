@@ -50,6 +50,7 @@ import type {
   ProspectSourceEvent,
 } from '../types';
 import { isValidEmail, getInitials, isConvertStage } from '../utils';
+import { APPLICANT_STATUS_LABELS } from '../constants';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -763,11 +764,11 @@ export const ProspectiveMembersPage: React.FC = () => {
                         setStatusFilter(status);
                         setShowFilters(false);
                       }}
-                      className={`hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm capitalize ${
+                      className={`hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm ${
                         statusFilter === status ? 'text-red-700 dark:text-red-400' : 'text-theme-text-secondary'
                       }`}
                     >
-                      {status.replace('_', ' ')}
+                      {APPLICANT_STATUS_LABELS[status]}
                     </button>
                   ))}
                   {statusFilter && (

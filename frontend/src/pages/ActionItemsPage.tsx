@@ -20,6 +20,7 @@ import { useAuthStore } from '../stores/authStore';
 import { EmptyState } from '../components/ux';
 import { Modal } from '../components/Modal';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
+import { actionItemStatusLabel } from '../modules/minutes/utils/actionItemStatus';
 
 /** What an assignee may set on their own minutes action item (W52-7). */
 const ASSIGNEE_STATUS_OPTIONS = [
@@ -242,7 +243,7 @@ const ActionItemsPage: React.FC = () => {
                       <span
                         className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}
                       >
-                        {item.status.replace('_', ' ')}
+                        {actionItemStatusLabel(item.status)}
                       </span>
                       {item.priority && (
                         <span

@@ -49,7 +49,7 @@ describe('MyActionItemsPanel', () => {
     const links = screen.getAllByRole('link', { name: 'October business meeting' });
     expect(links).toHaveLength(2);
     expect(links[0]).toHaveAttribute('href', '/minutes/m1');
-    expect(screen.getByText(/due Nov 1, 2026 · pending/)).toBeInTheDocument();
+    expect(screen.getByText(/due Nov 1, 2026 · Pending/)).toBeInTheDocument();
   });
 
   it('renders nothing for a member with no items', async () => {

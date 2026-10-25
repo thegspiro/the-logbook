@@ -160,7 +160,7 @@ describe('MyTrainingHistory', () => {
     expect(screen.queryByText('Awaiting approval')).not.toBeInTheDocument();
     await user.click(header);
     const row = await screen.findByRole('row', { name: /Imported without a date/ });
-    expect(within(row).getByText('completed')).toBeInTheDocument();
+    expect(within(row).getByText('Completed')).toBeInTheDocument();
   });
 
   it('reports a failed load instead of an empty history', async () => {
