@@ -513,23 +513,35 @@ invalidates the token.
 
 ---
 
-### 8. Guest Event Check-In _(2026-08-09)_
+### 8. Guest Event Check-In _(2026-08-09; email-first sign-in 2026-10-25)_
 
-Two unauthenticated endpoints reached by scanning the **guest** QR code on a room
+Unauthenticated endpoints reached by scanning the **guest** QR code on a room
 display. They exist so a non-member at an outreach event can record their own
 attendance. **No API key.**
 
 ```
 GET  /api/public/v1/display/{display_code}/events/{event_id}/guest
 POST /api/public/v1/display/{display_code}/events/{event_id}/guest-check-in
+POST /api/public/v1/display/{display_code}/events/{event_id}/guest-lookup
+POST /api/public/v1/display/{display_code}/events/{event_id}/guest-confirm
 ```
 
 They resolve only when the event has **opted in** (`allow_guest_check_in`) and is
 **held in the room** the display code belongs to. Anything else is a `404`.
 
+**Which sign-in an event uses** depends on `guest_check_in_creates_prospect`
+(reported as `collects_prospect_details`):
+
+| Event                                   | Sign-in                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| Does **not** add guests to the pipeline | `guest-check-in` — the visitor types their name and contact details      |
+| **Adds** guests to the pipeline         | `guest-lookup` then `guest-confirm` — only recognised applicants sign in |
+
 **Why the display code is in the path.** The organization is derived from the
 room's display code, never from the request body — an anonymous caller must not be
 able to name the tenant it writes to.
+
+Response bodies are **snake_case**, as below.
 
 #### `GET …/guest` — event detail for the sign-in page
 
@@ -538,16 +550,16 @@ description is withheld**, matching the kiosk display.
 
 ```json
 {
-  "eventId": "…",
-  "eventName": "Volunteer Interest Night",
-  "eventType": "community_event",
-  "startDatetime": "2026-08-14T23:00:00+00:00",
-  "endDatetime": "2026-08-15T01:00:00+00:00",
-  "locationName": "Station 1 — Community Room",
-  "organizationName": "Example Volunteer Fire Department",
-  "isOpen": true,
-  "closedReason": null,
-  "collectsProspectDetails": true,
+  "event_id": "…",
+  "event_name": "Volunteer Interest Night",
+  "event_type": "community_event",
+  "start_datetime": "2026-08-14T23:00:00+00:00",
+  "end_datetime": "2026-08-15T01:00:00+00:00",
+  "location_name": "Station 1 — Community Room",
+  "organization_name": "Example Volunteer Fire Department",
+  "is_open": true,
+  "closed_reason": null,
+  "collects_prospect_details": false,
   "timezone": "America/New_York"
 }
 ```
@@ -555,13 +567,13 @@ description is withheld**, matching the kiosk display.
 `timezone` is returned so an unauthenticated tablet renders department-local times
 rather than falling back to whatever zone the device is set to.
 
-#### `POST …/guest-check-in` — record attendance
+#### `POST …/guest-check-in` — record attendance (non-pipeline events)
 
 | Field               | Type   | Required | Notes                                                          |
 | ------------------- | ------ | -------- | -------------------------------------------------------------- |
 | `first_name`        | string | yes      | 1–100, must contain a non-whitespace character (`\S`), trimmed |
 | `last_name`         | string | yes      | Same                                                           |
-| `email`             | string | no       | Required for a prospect to be created                          |
+| `email`             | string | no       |                                                                |
 | `phone`             | string | no       | ≤ 50                                                           |
 | `organization_name` | string | no       | ≤ 255                                                          |
 | `interest_reason`   | string | no       | ≤ 2000                                                         |
@@ -572,21 +584,22 @@ rather than falling back to whatever zone the device is set to.
 ```json
 {
   "status": "checked_in",
-  "attendeeId": "…",
-  "eventName": "Volunteer Interest Night",
-  "checkedInAt": "2026-08-14T23:07:11+00:00",
-  "prospectCreated": true,
-  "message": "Thanks for signing in!"
+  "attendee_id": "…",
+  "event_name": "Volunteer Interest Night",
+  "checked_in_at": "2026-08-14T23:07:11+00:00",
+  "message": "You're signed in to Volunteer Interest Night."
 }
 ```
 
-`status` is `checked_in` or `already_checked_in`.
+The response deliberately says nothing about whether a prospect was opened, so
+sign-in cannot be used to probe pipeline membership.
 
 | Condition                                                                              | Response                                                 |
 | -------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | Per-IP rate limit exceeded                                                             | `429`                                                    |
 | Per-event daily cap exceeded (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300; `0` disables) | `429`                                                    |
 | Honeypot populated                                                                     | **`201` with a plausible success body**, nothing written |
+| The event adds guests to the pipeline                                                  | `400` `LB-EVT-006` — "Please see a member of staff"      |
 | Outside the check-in window                                                            | `400` with the reason                                    |
 | Event not in that room, or guest check-in not enabled                                  | `404`                                                    |
 
@@ -596,13 +609,55 @@ rather than falling back to whatever zone the device is set to.
   is identifiable and correctable; an anonymous early write is neither, so guests
   are held to the window the organizer configured.
 - **A repeat sign-in does not create a second row** — matched on email where one
-  was given, on name where it was not, and answered `already_checked_in`.
+  was given, on name where it was not.
 - **A guest pre-registered by staff keeps the details staff entered**; a kiosk
   sign-in only fills blanks.
-- **A prospect is opened only when the event sets `guest_check_in_creates_prospect`
-  and the guest supplied an email.** An existing active prospect with that email is
-  reused and linked to the event rather than duplicated. **A pipeline failure is
-  logged and swallowed** — it never costs a guest their attendance.
+
+#### `POST …/guest-lookup` — recognise an applicant (pipeline events)
+
+| Field        | Type   | Required | Notes                                  |
+| ------------ | ------ | -------- | -------------------------------------- |
+| `email`      | string | yes      | Matched case-insensitively             |
+| `hp_website` | string | no       | **Honeypot** — hidden in the real form |
+
+Writes no attendance. **`200 OK`**, one of:
+
+| `status`    | When                                                      | Body carries                                                  |
+| ----------- | --------------------------------------------------------- | ------------------------------------------------------------- |
+| `prospect`  | An **active** applicant in this department has that email | `display_name` (first name and last initial), `confirm_token` |
+| `member`    | An active or probationary member account has that email   | a message pointing at the member QR code                      |
+| `not_found` | Anything else, including withdrawn or rejected applicants | a message asking the visitor to see a member of staff         |
+
+```json
+{
+  "status": "prospect",
+  "display_name": "Jane S.",
+  "confirm_token": "…",
+  "message": "Welcome back! Please confirm this is you."
+}
+```
+
+An applicant is checked before a member account. A populated honeypot answers
+`not_found` and looks nothing up. Outside the window, after attendance is
+finalized, or at an event that does not add guests to the pipeline, the lookup is
+refused (`400` / `404`) before anything is matched.
+
+#### `POST …/guest-confirm` — sign in a recognised applicant
+
+| Field           | Type   | Required | Notes                         |
+| --------------- | ------ | -------- | ----------------------------- |
+| `confirm_token` | string | yes      | As returned by `guest-lookup` |
+
+**`200 OK`** with the same body as `guest-check-in`; `status` is `checked_in`, or
+`already_checked_in` for an applicant already signed in to this event. The
+attendance is recorded with the name, email and phone on the applicant's record
+and linked to it.
+
+The token is a signed, ten-minute credential naming the applicant, the event, the
+room and the department; the request never names the applicant itself. A token
+that has expired, was issued for another event or room, or is not a confirm token
+answers `400` ("This confirmation has expired…"). An applicant who stopped being
+active between the two calls is refused with `400`.
 
 ---
 
@@ -614,12 +669,17 @@ rather than falling back to whatever zone the device is set to.
    event must be held in that room
 2. **Opt-in per event**, off by default, because enabling it exposes an
    unauthenticated write path
-3. **Rate limiting**: per-IP on both endpoints, plus a per-event daily ceiling
-   (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300)
-4. **Honeypot detection**: a populated `hp_website` receives a plausible success
-   and writes nothing
-5. **Window enforcement** without the member early-arrival grace
-6. **Minimal disclosure**: the event description is never exposed
+3. **Rate limiting**: per-IP on every endpoint, plus a per-event daily ceiling
+   (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300) on sign-ins and, separately, on
+   email lookups
+4. **Lookup disclosure kept small**: an applicant is named by first name and last
+   initial only, nothing is returned about a member account beyond the fact that
+   it is one, every lookup is audited (outcome and applicant id, never the
+   email), and a lookup works only while the event's check-in window is open
+5. **Honeypot detection**: a populated `hp_website` receives a plausible answer
+   and writes or looks up nothing
+6. **Window enforcement** without the member early-arrival grace
+7. **Minimal disclosure**: the event description is never exposed
 
 #### Public Form Protection
 

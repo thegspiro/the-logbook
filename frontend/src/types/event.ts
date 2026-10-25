@@ -542,6 +542,17 @@ export interface GuestCheckInResult {
   message: string;
 }
 
+/**
+ * What the kiosk may say about an email typed into it at a pipeline-linked
+ * event. A prospect is named by first name and last initial only.
+ */
+export interface GuestLookupResult {
+  status: 'prospect' | 'member' | 'not_found';
+  display_name?: string | null | undefined;
+  confirm_token?: string | null | undefined;
+  message: string;
+}
+
 export interface CheckInActivity {
   user_id: string;
   user_name: string;

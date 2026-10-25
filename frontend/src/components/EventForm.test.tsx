@@ -765,7 +765,7 @@ describe('EventForm', () => {
         expect(createsProspect()).toBeChecked();
       });
       // The default is stated, not silent.
-      expect(screen.getByText(/will be added to the prospective members pipeline/i)).toBeInTheDocument();
+      expect(screen.getByText(/will have it recorded on their application/i)).toBeInTheDocument();
     });
 
     it('withdraws its own defaults when the type changes away again', async () => {

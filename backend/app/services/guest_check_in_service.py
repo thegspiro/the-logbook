@@ -6,33 +6,42 @@ via ``Event.allow_guest_check_in`` — typically volunteer interest nights and
 open houses, where the people in the room have no account and no reason to
 create one just to sign the sheet.
 
-Two records can come out of a single sign-in:
+A sign-in always writes an :class:`EventExternalAttendee` row — that *is* the
+attendance. At an event with ``guest_check_in_creates_prospect`` set it is also
+linked to the guest's :class:`ProspectiveMember`, so a recruitment lead is not
+stranded on an attendance list nobody revisits.
 
-* an :class:`EventExternalAttendee` row — always, this *is* the attendance;
-* a :class:`ProspectiveMember` row — only when the event has
-  ``guest_check_in_creates_prospect`` set and the guest supplied an email, so a
-  recruitment lead is not stranded on an attendance list nobody revisits.
+Such an event signs in only applicants it already knows: the guest types an
+email (:meth:`GuestCheckInService.lookup_guest`), confirms the first name and
+last initial shown, and presents the signed token the lookup issued
+(:meth:`GuestCheckInService.check_in_known_prospect`). The endpoint layer
+refuses the typed sign-in at these events, so the prospect-opening branch of
+:meth:`GuestCheckInService.check_in_guest` is not reachable from the kiosk.
 
 Everything here runs for an anonymous caller, so the organization is resolved
 from the room's display code by the endpoint layer and passed in — never taken
 from the request body.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
+import jwt
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.utils import generate_uuid
 from app.models.event import Event, EventExternalAttendee
 from app.models.membership_pipeline import (
     PipelineStepType,
     ProspectEventLink,
     ProspectiveMember,
+    ProspectStatus,
 )
+from app.models.user import User
 from app.services.event_service import EventService, attendance_is_finalized
 from app.services.membership_pipeline_service import (
     MembershipPipelineService,
@@ -46,6 +55,19 @@ class GuestCheckInService:
     # Marks rows created by this path, distinguishing a self-recorded kiosk
     # sign-in from one a staff member typed in on a member's behalf.
     SOURCE_KIOSK_QR = "kiosk_qr"
+
+    # Outcomes of an email lookup at the kiosk.
+    LOOKUP_PROSPECT = "prospect"
+    LOOKUP_MEMBER = "member"
+    LOOKUP_NOT_FOUND = "not_found"
+
+    # The confirm token is what stops "yes, that's me" from being a free
+    # check-in-as-anyone call: the browser never names a prospect id, it
+    # presents the token the lookup issued, which binds that prospect to this
+    # event in this room. Long enough to read the screen and tap, short enough
+    # that a token copied off a phone is useless by the next meeting.
+    CONFIRM_TOKEN_TYPE = "guest_prospect_confirm"
+    CONFIRM_TOKEN_TTL = timedelta(minutes=10)
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -440,3 +462,152 @@ class GuestCheckInService:
         if now > check_in_end:
             return False, "Check-in has closed for this event."
         return True, None
+
+    async def lookup_guest(
+        self, organization_id: str, email: str
+    ) -> Tuple[str, Optional[ProspectiveMember]]:
+        """Classify an email typed at the kiosk.
+
+        Returns ``(outcome, prospect)``; ``prospect`` is set only for
+        :attr:`LOOKUP_PROSPECT`. Only an *active* applicant is recognised,
+        matching what :meth:`_link_prospect` would reuse — a withdrawn or
+        rejected applicant is not reopened from an anonymous tablet. An
+        applicant is checked before a member account, so someone who is both
+        (an applicant re-using a work address) gets the guest path the event
+        exists for.
+        """
+        normalized = email.strip().lower()
+
+        prospect = await MembershipPipelineService(
+            self.db
+        ).find_active_prospect_by_email(organization_id, normalized)
+        if prospect is not None:
+            return self.LOOKUP_PROSPECT, prospect
+
+        member_id = (
+            await self.db.execute(
+                select(User.id)
+                .where(
+                    User.organization_id == organization_id,
+                    func.lower(User.email) == normalized,
+                    User.is_active,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if member_id is not None:
+            return self.LOOKUP_MEMBER, None
+
+        return self.LOOKUP_NOT_FOUND, None
+
+    @staticmethod
+    def short_name(first_name: str, last_name: str) -> str:
+        """First name and last initial — the most the public kiosk shows.
+
+        The same disclosure the room kiosk's badge tap already makes for a
+        member: enough for the person to recognise themselves, not enough to
+        tell a bystander who is applying.
+        """
+        first = (first_name or "").strip()
+        last = (last_name or "").strip()
+        return f"{first} {last[0]}." if last else first
+
+    @classmethod
+    def issue_confirm_token(
+        cls,
+        prospect_id: str,
+        event_id: str,
+        location_id: str,
+        organization_id: str,
+    ) -> str:
+        now = datetime.now(timezone.utc)
+        payload = {
+            "type": cls.CONFIRM_TOKEN_TYPE,
+            "sub": str(prospect_id),
+            "evt": str(event_id),
+            "loc": str(location_id),
+            "org": str(organization_id),
+            "iat": now,
+            "exp": now + cls.CONFIRM_TOKEN_TTL,
+        }
+        return str(jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256"))
+
+    @classmethod
+    def read_confirm_token(
+        cls,
+        token: str,
+        event_id: str,
+        location_id: str,
+        organization_id: str,
+    ) -> Optional[str]:
+        """Return the prospect id a confirm token names, or None.
+
+        None for anything that is not a live token of this type issued for this
+        event, in this room, in this department — an expired one, a session
+        token, or one issued at another event all read the same.
+        """
+        try:
+            payload = jwt.decode(
+                token,
+                settings.SECRET_KEY,
+                algorithms=["HS256"],
+                options={"require": ["exp", "sub"]},
+            )
+        except jwt.PyJWTError:
+            return None
+        if (
+            payload.get("type") != cls.CONFIRM_TOKEN_TYPE
+            or payload.get("evt") != str(event_id)
+            or payload.get("loc") != str(location_id)
+            or payload.get("org") != str(organization_id)
+        ):
+            return None
+        prospect_id = payload.get("sub")
+        return prospect_id if isinstance(prospect_id, str) else None
+
+    async def check_in_known_prospect(
+        self, event: Event, organization_id: str, prospect_id: str
+    ) -> Tuple[Optional[EventExternalAttendee], Optional[str], bool]:
+        """Sign in an applicant the kiosk recognised and they confirmed.
+
+        Returns ``(attendee, error, already_checked_in)``. The prospect is read
+        again rather than trusted from the lookup: it may have been withdrawn
+        in the minutes between the two taps, and an applicant who is no longer
+        active is not one the kiosk recognises. The attendance itself goes
+        through :meth:`check_in_guest` with the details already on file, so a
+        repeat confirm is the same idempotent re-scan a typed sign-in is.
+        """
+        prospect = (
+            await self.db.execute(
+                select(ProspectiveMember).where(
+                    ProspectiveMember.id == prospect_id,
+                    ProspectiveMember.organization_id == organization_id,
+                    ProspectiveMember.status == ProspectStatus.ACTIVE,
+                )
+            )
+        ).scalar_one_or_none()
+        if prospect is None:
+            return (
+                None,
+                "We couldn't confirm your details. Please see a member of staff.",
+                False,
+            )
+
+        email = (prospect.email or "").strip().lower()
+        existing = await self._find_existing_attendee(
+            event_id=str(event.id),
+            organization_id=organization_id,
+            email=email or None,
+            full_name=f"{prospect.first_name} {prospect.last_name}".strip(),
+        )
+        already_checked_in = bool(existing and existing.checked_in)
+
+        attendee, error, _created = await self.check_in_guest(
+            event=event,
+            organization_id=organization_id,
+            first_name=prospect.first_name,
+            last_name=prospect.last_name,
+            email=email or None,
+            phone=prospect.phone,
+        )
+        return attendee, error, already_checked_in

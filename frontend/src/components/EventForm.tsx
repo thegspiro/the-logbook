@@ -874,19 +874,21 @@ export const EventForm: React.FC<EventFormProps> = ({
           {/* A recruitment event only reaches the prospective-members pipeline
               through guest sign-in, and those two switches live in Check-In,
               several sections below the type picker. Without this prompt the
-              usual outcome is an outreach night whose attendees are recorded
-              as external attendees and never become leads. */}
+              usual outcome is an outreach night whose applicants' attendance
+              is recorded as external attendees and never reaches their
+              applications. */}
           {formData.event_type === EventTypeEnum.RECRUITMENT && (
             <div className="mt-2 rounded-lg border border-teal-500/30 bg-teal-500/10 p-3">
               {formData.allow_guest_check_in && formData.guest_check_in_creates_prospect ? (
                 <p className="text-sm text-teal-700 dark:text-teal-300">
-                  Guests who sign in at this event will be added to the prospective members pipeline.
+                  Applicants who sign in at this event will have it recorded on their application. Visitors not yet in
+                  the pipeline are asked to see a member of staff.
                 </p>
               ) : (
                 <>
                   <p className="text-sm text-teal-700 dark:text-teal-300">
-                    Attendees join the prospective members pipeline by signing in as guests. Turn on guest sign-in to
-                    add this event&apos;s guests to the pipeline.
+                    Applicants record their attendance at this event by signing in as guests. Turn on guest sign-in to
+                    link this event to the prospective members pipeline.
                   </p>
                   <button
                     type="button"
@@ -1770,6 +1772,12 @@ export const EventForm: React.FC<EventFormProps> = ({
                   Add guests to the prospective members pipeline
                 </span>
               </label>
+              {formData.guest_check_in_creates_prospect && (
+                <p className="text-theme-text-muted text-xs">
+                  Guests sign in with the email they applied with and confirm their name. Anyone the kiosk does not
+                  recognise as an applicant is asked to see a member of staff.
+                </p>
+              )}
             </div>
           )}
         </section>

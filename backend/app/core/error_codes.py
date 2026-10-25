@@ -71,6 +71,7 @@ class ErrorCode(str, Enum):
     EVT_SIGNIN_DAILY_LIMIT = "LB-EVT-003"
     EVT_DISPLAY_NOT_FOUND = "LB-EVT-004"
     EVT_BADGE_CHECKIN_UNAVAILABLE = "LB-EVT-005"
+    EVT_GUEST_STAFF_REQUIRED = "LB-EVT-006"
 
     # --- File uploads ---------------------------------------------------
     UPLD_TOO_LARGE = "LB-UPLD-001"
@@ -430,6 +431,22 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "NFC ID Cards under Settings → Integrations.",
             "Until then, members check in by tapping the room's NFC tag or "
             "scanning its QR code with their phone.",
+        ),
+    ),
+    ErrorCode.EVT_GUEST_STAFF_REQUIRED: ErrorCodeInfo(
+        title="Guest must be signed in by staff",
+        description=(
+            "The event adds its guests to the prospective members pipeline, "
+            "so the kiosk only signs in visitors it recognises as active "
+            "applicants (by the email they type). A visitor it does not "
+            "recognise is asked to see a member of staff instead of being "
+            "added to the pipeline from an anonymous form."
+        ),
+        resolution=(
+            "Sign the visitor in from the event page, or add them as an "
+            "applicant first and have them scan again.",
+            'If walk-ins should sign themselves in, turn off "Add guests to '
+            'the prospective members pipeline" on the event.',
         ),
     ),
     ErrorCode.UPLD_TOO_LARGE: ErrorCodeInfo(
