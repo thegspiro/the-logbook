@@ -559,20 +559,10 @@ NOT_COLUMN_BACKED = {
         "MembershipIdSettings._pattern_is_usable refuses a number whose formatted id overflows the 50-character column",
     ),
     "app.api.v1.endpoints.elections:ElectionSettingsUpdate.default_quorum_value": _JSON,
-    "app.schemas.compliance_config:ComplianceConfigBase.notify_days_before_deadline": _JSON,
-    "app.schemas.compliance_config:ComplianceConfigUpdate.notify_days_before_deadline": _JSON,
     "app.schemas.course_cohort:CohortShiftRequest.days": (
         "ARITHMETIC",
         "feeds timedelta(days=...); the right limit is how far a class may be shifted, a business rule",
     ),
-    "app.schemas.event:EmailTriggerConfig.days": _JSON,
-    "app.schemas.event:EventBase.reminder_schedule": _JSON,
-    "app.schemas.event:EventDefaultsUpdate.reminder_schedule": _JSON,
-    "app.schemas.event:EventTemplateCreate.reminder_schedule": _JSON,
-    "app.schemas.event:EventTemplateUpdate.reminder_schedule": _JSON,
-    "app.schemas.event:EventUpdate.reminder_schedule": _JSON,
-    "app.schemas.event:RecurringEventCreate.reminder_schedule": _JSON,
-    "app.schemas.training_program:ReminderConditions.days_before_deadline": _JSON,
 }
 
 
@@ -607,8 +597,9 @@ POLICY_BOUNDED = [
 # represent). Each row is ``key: (shape, refused, accepted)`` -- the values the bound must
 # accept at both ends and the ones just past them it must refuse. ``shape`` says how the
 # value sits in the field: alone, as a list element, or as a dict value.
-# Business limits (how many days a class may shift, how far ahead a reminder may be set)
-# are not here: they stay in NOT_COLUMN_BACKED until the owner picks a number.
+# The reminder lead times (30 days, i.e. 30 days or 720 hours; app/schemas/reminder_limits.py)
+# are a department rule the owner chose. The other business limits (how many days a class
+# may shift) stay in NOT_COLUMN_BACKED until the owner picks a number.
 MAX32 = 2**31 - 1
 MIN32 = -(2**31)
 FLOAT32 = 3.4e38
@@ -623,6 +614,8 @@ _RANGES = {
     "nonneg_i32": ("scalar", [0, MAX32], [-1, MAX32 + 1]),
     "count_map": ("dict", [0, MAX32], [-1, MAX32 + 1]),
     "gift_list": ("list", [Decimal("0.01"), MAX_GIFT], [0, MAX_GIFT + Decimal("0.01")]),
+    "lead_days": ("list", [0, 30], [-1, 31]),
+    "lead_hours": ("list", [0, 720], [-1, 721]),
     "float_any": ("scalar", [-FLOAT32, FLOAT32], [-2 * FLOAT32, 2 * FLOAT32]),
     "float_nonneg": ("scalar", [0, FLOAT32], [-1, 2 * FLOAT32]),
     "float_pos": ("scalar", [1, FLOAT32], [0, 2 * FLOAT32]),
@@ -630,6 +623,22 @@ _RANGES = {
 }
 
 DOMAIN_BOUNDED = {
+    "app.schemas.compliance_config:ComplianceConfigCreate.notify_days_before_deadline": _RANGES[
+        "lead_days"
+    ],
+    "app.schemas.compliance_config:ComplianceConfigUpdate.notify_days_before_deadline": _RANGES[
+        "lead_days"
+    ],
+    "app.schemas.event:EmailTriggerConfig.days": _RANGES["lead_days"],
+    "app.schemas.training_program:ReminderConditionsRequest.days_before_deadline": _RANGES[
+        "lead_days"
+    ],
+    "app.schemas.event:EventCreate.reminder_schedule": _RANGES["lead_hours"],
+    "app.schemas.event:EventDefaultsUpdate.reminder_schedule": _RANGES["lead_hours"],
+    "app.schemas.event:EventTemplateCreate.reminder_schedule": _RANGES["lead_hours"],
+    "app.schemas.event:EventTemplateUpdate.reminder_schedule": _RANGES["lead_hours"],
+    "app.schemas.event:EventUpdate.reminder_schedule": _RANGES["lead_hours"],
+    "app.schemas.event:RecurringEventCreate.reminder_schedule": _RANGES["lead_hours"],
     "app.api.v1.endpoints.compliance_officer:AttestationCreate.period_quarter": _RANGES[
         "quarter"
     ],

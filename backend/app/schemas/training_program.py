@@ -16,6 +16,7 @@ from app.schemas.base import RefusesNull, UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX
 from app.schemas.enum_validation import validate_enum_value
+from app.schemas.reminder_limits import ReminderLeadDays
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -194,6 +195,17 @@ class ReminderConditions(BaseModel):
         return value
 
 
+class ReminderConditionsRequest(ReminderConditions):
+    """``ReminderConditions`` as a write accepts it.
+
+    The 30-day limit lives here, not on the base: a stored row can hold the
+    original ``"days_before_deadline": 90`` shape (see the model), and a response
+    that carries it must still serialize.
+    """
+
+    days_before_deadline: Optional[List[ReminderLeadDays]] = None
+
+
 class TrainingProgramBase(BaseModel):
     """Base training program schema"""
 
@@ -224,6 +236,7 @@ class TrainingProgramCreate(TrainingProgramBase):
     prerequisite_program_ids: Optional[List[UUID]] = None
     # Matches the column default and the JSON import's default.
     allows_concurrent_enrollment: bool = True
+    reminder_conditions: Optional[ReminderConditionsRequest] = None
 
 
 class TrainingProgramUpdate(RefusesNull):
@@ -237,7 +250,7 @@ class TrainingProgramUpdate(RefusesNull):
     structure_type: Optional[ProgramStructureTypeStr] = None
     time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     warning_days_before: Optional[int] = Field(None, ge=0, le=INT32_MAX)
-    reminder_conditions: Optional[ReminderConditions] = None
+    reminder_conditions: Optional[ReminderConditionsRequest] = None
     is_template: Optional[bool] = None
     active: Optional[bool] = None
     recert_enabled: Optional[bool] = None
