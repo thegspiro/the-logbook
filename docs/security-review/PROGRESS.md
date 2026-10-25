@@ -16,7 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_(none — PR #3691 merged; see superseded note below)_
+**PR [#3696](https://github.com/thegspiro/the-logbook/pull/3696)** (branch
+`claude/security-review-users-organizations-p12`) —
+Feature 07 (Users & organizations), pass 12. No security-review PR was
+open — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 matching results, PR
+#3691 (Feature 06, Elections & ballots, pass 12) having already merged
+with no open rotation PR behind it. Dedicated review session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) unreachable; this is a watchdog
+pickup. **1 new finding (USR-14, LOW, flagged), 0 fixed.** Real delta
+since pass 11's baseline (`60ac18fd`, PR #3569): 6 commits touching the
+declared scope — DOB/emergency-contact encryption at rest, step-up MFA
+wired onto 8 already permission-gated sensitive routes, a 99-column NOT
+NULL tightening pass, NFC card lifecycle sync wired into the three
+status-changing endpoints, and a platform-neutral remote-storage refactor
+adding Google Drive support. All reviewed end to end and found sound
+except one gap: the new generic file-storage activate/deactivate routes
+don't require step-up re-verification unlike the sibling route that saves
+the credentials they activate — flagged (USR-14) rather than fixed, since
+it is an owner decision whether storage-platform switching belongs in the
+step-up policy's scope. Routes re-enumerated by AST (84, every one
+carrying a recognized auth dependency). Standing findings USR-5 and USR-8
+re-confirmed unchanged at their current dispositions and line numbers.
+See `USR-07-users-organizations.md`'s **Pass 12** section for the full
+review.
+
+Rotation row 07 → ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3691, Feature 06, Elections & ballots, pass 12, merged), preserved for history</summary>
