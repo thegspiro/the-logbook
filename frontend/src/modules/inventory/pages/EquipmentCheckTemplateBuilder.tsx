@@ -178,7 +178,7 @@ const itemCountBadgeClass =
   'inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400';
 
 const rowActionTriggerClass =
-  'text-theme-text-muted hover:bg-theme-surface-secondary flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-md sm:min-h-7 sm:min-w-7 [&::-webkit-details-marker]:hidden';
+  'text-theme-text-muted hover:bg-theme-surface-secondary touch:min-h-[44px] touch:min-w-[44px] flex min-h-7 min-w-7 cursor-pointer list-none items-center justify-center rounded-md [&::-webkit-details-marker]:hidden';
 
 /**
  * A row's secondary actions. From 640px up this is a native details/summary
@@ -5157,15 +5157,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
 
             {selectedCount > 0 && (
-              // Controls sized for the finger on a phone and for density on a
-              // laptop. This bar renders at both widths (the fixed phone
+              // Controls sized for the finger on a phone or touch screen and for
+              // density on a laptop — `touch:`, not `sm:`, so a phone on its side
+              // keeps the finger size. This bar renders at both widths (the fixed phone
               // action bar below carries the same selection but not the
               // required/optional toggle), and `min-h-8` on its own put every
               // control here under the 44px floor the rest of the app keeps.
               <div className="my-2 flex flex-wrap items-center gap-2 rounded-md border border-blue-500/30 bg-blue-500/5 px-2.5 py-1.5">
                 <span className="text-xs font-medium text-blue-700 dark:text-blue-400">{selectedCount} selected</span>
                 <select
-                  className="form-input min-h-11 w-auto py-1 text-xs sm:min-h-8"
+                  className="form-input touch:min-h-11 min-h-8 w-auto py-1 text-xs"
                   aria-label="Set type for selected items"
                   value=""
                   onChange={(e) => {
@@ -5188,7 +5189,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
                     bulkToggleRequired(idx, !allRequired);
                   }}
-                  className="min-h-11 rounded-md border border-blue-300 px-3 text-xs font-medium text-blue-600 sm:min-h-0 sm:px-2 sm:py-1 dark:border-blue-700 dark:text-blue-400"
+                  className="touch:min-h-11 rounded-md border border-blue-300 px-3 text-xs font-medium text-blue-600 sm:px-2 sm:py-1 dark:border-blue-700 dark:text-blue-400"
                 >
                   {(() => {
                     const selected = selectedItems[key];
@@ -5199,7 +5200,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void deleteSelectedItems(idx)}
-                  className="flex min-h-11 items-center gap-1 rounded-md border border-red-300 px-3 text-xs font-medium text-red-600 sm:min-h-0 sm:px-2 sm:py-1 dark:border-red-700 dark:text-red-400"
+                  className="touch:min-h-11 flex items-center gap-1 rounded-md border border-red-300 px-3 text-xs font-medium text-red-600 sm:px-2 sm:py-1 dark:border-red-700 dark:text-red-400"
                   aria-label="Delete selected items"
                 >
                   <Trash2 className="h-3 w-3" aria-hidden="true" /> Delete
@@ -5207,7 +5208,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => deselectAllItems(idx)}
-                  className="text-theme-text-muted hover:text-theme-text-primary min-h-11 rounded-md px-3 text-xs sm:min-h-0 sm:px-2 sm:py-1"
+                  className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 rounded-md px-3 text-xs sm:px-2 sm:py-1"
                 >
                   Clear
                 </button>

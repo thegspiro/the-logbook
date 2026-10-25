@@ -476,8 +476,8 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
   return (
     <div className="py-6">
       {/* Toolbar */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <div className="field-min relative flex-1">
           <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"

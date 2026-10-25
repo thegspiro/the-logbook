@@ -615,7 +615,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                 role="tab"
                 onClick={() => onViewChange(option)}
                 aria-selected={view === option}
-                className={`min-h-[30px] rounded-full px-3.5 text-[13px] font-semibold transition-colors ${
+                className={`touch:min-h-[44px] min-h-[30px] rounded-full px-3.5 text-[13px] font-semibold transition-colors ${
                   view === option ? 'bg-red-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >
@@ -720,8 +720,11 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
             )}
           </div>
 
-          {/* Desktop: calendar beside the day panel. */}
-          <div className="hidden gap-5 md:grid md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_400px]">
+          {/* Desktop: calendar beside the day panel from lg; stacked between md
+              and lg. Beside the side navigation a 768–1023px screen (an iPad in
+              portrait, a phone on its side) has ~550px, and a 360px panel left
+              the calendar ~200px — seven 18px day cells with their dates cut. */}
+          <div className="hidden gap-5 md:grid lg:grid-cols-[1fr_400px]">
             <div className="flex min-h-0 flex-col">
               <div
                 className="card mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3.5 py-2.5"
