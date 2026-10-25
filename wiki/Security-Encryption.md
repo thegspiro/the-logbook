@@ -113,6 +113,15 @@ of a rotation safe: nothing breaks the moment you deploy the new key.
 4. When a `--commit` run reports zero rotated and zero unreadable values,
    remove the drained key from `ENCRYPTION_KEYS_LEGACY` and restart.
 
+### Date of birth and emergency contacts
+
+Members' and applicants' dates of birth and members' emergency contacts (names,
+relationships, phones, emails of people who are not members) are stored as
+AES-256-GCM ciphertext, like screening records. Screens, exports and integrations
+are unchanged; the database cannot search or sort on them. They are covered by
+`scripts/rotate_encryption_key.py`. See
+[`docs/UPGRADING.md`](../docs/UPGRADING.md).
+
 ### Database and cache TLS
 
 The bundled MySQL and Redis can offer TLS with certificates from a private CA

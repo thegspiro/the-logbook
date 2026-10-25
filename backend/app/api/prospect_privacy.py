@@ -26,7 +26,7 @@ import uuid as uuid_lib
 from typing import Optional, Set
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import and_, false, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -36,8 +36,9 @@ from app.models.membership_pipeline import ProspectInterview, ProspectiveMember
 from app.models.user import User
 
 
-def self_prospect_predicate(user: User) -> ColumnElement[bool]:
-    """SQL predicate selecting the prospect records that describe ``user``."""
+def _link_predicate(user: User) -> Optional[ColumnElement[bool]]:
+    """SQL predicate for the identifiers a database can compare directly: the
+    transfer back-link and an email address the user owns."""
     clauses = []
 
     if user.id:
@@ -47,36 +48,7 @@ def self_prospect_predicate(user: User) -> ColumnElement[bool]:
     if emails:
         clauses.append(func.lower(ProspectiveMember.email).in_(emails))
 
-    if user.first_name and user.last_name and user.date_of_birth:
-        clauses.append(
-            and_(
-                func.lower(ProspectiveMember.first_name) == user.first_name.lower(),
-                func.lower(ProspectiveMember.last_name) == user.last_name.lower(),
-                ProspectiveMember.date_of_birth == user.date_of_birth,
-            )
-        )
-
-    if not clauses:
-        return false()
-    return or_(*clauses)
-
-
-async def load_self_prospect_ids(db: AsyncSession, user: User) -> Set[str]:
-    """Return the ids of prospect records in ``user``'s org that describe them.
-
-    Ids are normalized (lowercase, hyphenated) so callers can compare against
-    a client-supplied path value without a case- or format-mismatch bypass.
-    """
-    if not user.organization_id:
-        return set()
-
-    result = await db.execute(
-        select(ProspectiveMember.id).where(
-            ProspectiveMember.organization_id == user.organization_id,
-            self_prospect_predicate(user),
-        )
-    )
-    return {normalize_prospect_id(row) for row in result.scalars().all()}
+    return or_(*clauses) if clauses else None
 
 
 def normalize_prospect_id(value: object) -> str:
@@ -93,6 +65,51 @@ def normalize_prospect_id(value: object) -> str:
         return str(uuid_lib.UUID(text))
     except (ValueError, AttributeError, TypeError):
         return text.lower()
+
+
+async def load_self_prospect_ids(
+    db: AsyncSession, user: User, prospect_id: Optional[str] = None
+) -> Set[str]:
+    """Return the ids of prospect records in ``user``'s org that describe them.
+
+    Ids are normalized (lowercase, hyphenated) so callers can compare against
+    a client-supplied path value without a case- or format-mismatch bypass.
+    ``prospect_id`` narrows the lookup to one record for the by-id guards.
+
+    The date of birth is encrypted at rest, so it cannot be compared in SQL.
+    The name pair is matched in SQL and the date is compared here, on the
+    decrypted value. That is the same set of records as comparing in SQL: a
+    record matches by name AND date of birth, never by either alone.
+    """
+    if not user.organization_id:
+        return set()
+
+    scope = [ProspectiveMember.organization_id == user.organization_id]
+    if prospect_id is not None:
+        scope.append(ProspectiveMember.id == normalize_prospect_id(prospect_id))
+
+    found: Set[str] = set()
+
+    link = _link_predicate(user)
+    if link is not None:
+        linked = await db.execute(select(ProspectiveMember.id).where(*scope, link))
+        found.update(normalize_prospect_id(row) for row in linked.scalars().all())
+
+    if user.first_name and user.last_name and user.date_of_birth:
+        named = await db.execute(
+            select(ProspectiveMember.id, ProspectiveMember.date_of_birth).where(
+                *scope,
+                func.lower(ProspectiveMember.first_name) == user.first_name.lower(),
+                func.lower(ProspectiveMember.last_name) == user.last_name.lower(),
+            )
+        )
+        found.update(
+            normalize_prospect_id(row_id)
+            for row_id, born in named.all()
+            if born == user.date_of_birth
+        )
+
+    return found
 
 
 async def get_hidden_prospect_ids(
@@ -126,14 +143,7 @@ async def block_self_prospect_access(
     if raw_id is None or not current_user.organization_id:
         return
 
-    match = await db.scalar(
-        select(ProspectiveMember.id).where(
-            ProspectiveMember.id == normalize_prospect_id(raw_id),
-            ProspectiveMember.organization_id == current_user.organization_id,
-            self_prospect_predicate(current_user),
-        )
-    )
-    if match is None:
+    if not await load_self_prospect_ids(db, current_user, prospect_id=str(raw_id)):
         return
 
     raise HTTPException(
@@ -161,16 +171,14 @@ async def block_self_interview_access(
     if raw_id is None or not current_user.organization_id:
         return
 
-    match = await db.scalar(
-        select(ProspectInterview.id)
-        .join(ProspectiveMember, ProspectiveMember.id == ProspectInterview.prospect_id)
-        .where(
-            ProspectInterview.id == normalize_prospect_id(raw_id),
-            ProspectiveMember.organization_id == current_user.organization_id,
-            self_prospect_predicate(current_user),
+    owner_id = await db.scalar(
+        select(ProspectInterview.prospect_id).where(
+            ProspectInterview.id == normalize_prospect_id(raw_id)
         )
     )
-    if match is None:
+    if owner_id is None:
+        return
+    if not await load_self_prospect_ids(db, current_user, prospect_id=str(owner_id)):
         return
 
     raise HTTPException(
