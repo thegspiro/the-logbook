@@ -1,6 +1,153 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12)
+
+---
+
+## Pass 13 (2026-10-25) — watchdog pickup: real delta (DOB/emergency-contact encryption, stage-email meeting fallback, 99-column NOT NULL sweep, auto-enrollment prerequisite skip), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
+
+**Step 0/1.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results both before PR #3695 (Feature 07, Users & organizations,
+pass 12) was merged by this watchdog and again immediately after — the
+dedicated review session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable
+throughout. Rotation row 08 (Membership pipeline) was confirmed the next `⬜`
+by reading `PROGRESS.md`'s rotation table directly on freshly fetched `main`
+(`223b4ae7`).
+
+**Scope confirmation.** Rotation table row 08 (`membership_pipeline.py`,
+`membership_pipeline_service.py`) plus this feature's established additional
+scope: `models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, `utils/prospect_fields.py`, and
+`frontend/src/modules/prospective-members/`.
+
+**Last reviewed at:** `aa15ccbb` (pass 12's merge commit, PR #3574). `git log
+--no-merges aa15ccbb..HEAD` over the declared scope: 8 non-merge commits, all
+read in full via `git show` (not sampled, not taken from commit titles alone).
+
+**Two of the eight are already-documented, already-merged follow-up fixes**
+(`4352a019` MP-33, `4ce4dd85` MP-34) that this file's own "Follow-up
+(2026-10-23)" section — written the same day, ahead of pass 12's own section
+in this reverse-chronological file — already covers in full with tests and a
+`KNOWN_LIMITATIONS.md` entry. Re-confirmed present in current code
+(`get_hidden_prospect_ids` now guards `purge_inactive_prospects`,
+`check_existing_members_for_prospect`, and `create_prospect`'s 409, per the
+three new `Depends(get_hidden_prospect_ids)` sites found below) rather than
+re-derived from scratch.
+
+**The real delta, by area (the remaining six commits):**
+
+| Area                              | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Files                                                                                                   |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| DOB/emergency-contact encryption  | `prospective_members.date_of_birth` (and `users.date_of_birth`/`users.emergency_contacts`, outside this feature's scope) now stored as AES-256-GCM ciphertext via `EncryptedDate`. The applicant self-match in `prospect_privacy.py` — the guard that keeps an applicant from reading their own interview notes and votes — could no longer compare the date in SQL, so it was rewritten: `_link_predicate` (transfer id + email) still runs in SQL; the name pair is matched in SQL and the decrypted date is compared in Python, and `load_self_prospect_ids` unions both result sets | model, `prospect_privacy.py`, migration                                                                 |
+| Stage-email meeting fallback      | `_fetch_meeting_details` now falls back to the next upcoming event of the configured type when the stage's saved `next_meeting_event_id` has passed, been cancelled or deleted, instead of silently dropping the Next Meeting section; a named location is now printed only when `location.organization_id` matches the sending org; the HTML and text email bodies resolve the event once so they cannot disagree; the send-log line now carries the prospect's id, not its email address                                                                                              | service                                                                                                 |
+| 99-column NOT NULL sweep          | Three `membership_pipeline` booleans (`public_status_enabled`, `notify_prospect_on_completion`, `public_visible`) tightened from nullable to `NOT NULL` with a `server_default`, as part of a 36-table, repo-wide sweep closing an `apply_updates`-reads-model-nullability gap (CLAUDE.md Pitfall #1's mirror-image bug)                                                                                                                                                                                                                                                                | model (3 columns only; the migration and its own tests are cross-cutting, outside this feature's scope) |
+| Auto-enrollment prerequisite skip | Automatic conversion's auto-enrollment into a probationary training program now checks `TrainingProgramService.missing_prerequisites` before enrolling; an unmet prerequisite skips enrollment (the member conversion still proceeds) and emails `training.manage` holders, after commit, naming the member, program and missing items — the same deferred-send pattern already used for the welcome email and directory provisioning                                                                                                                                                   | endpoint, service                                                                                       |
+
+**Tenant isolation re-derived on every new/changed by-id site:** the
+rewritten `load_self_prospect_ids` still scopes every query to
+`ProspectiveMember.organization_id == user.organization_id` (and, for the
+by-id guards, the specific `prospect_id`) before either the SQL-side link
+predicate or the Python-side date comparison runs — traced line by line, not
+assumed from the docstring. `block_self_interview_access`'s first lookup
+(`ProspectInterview.id -> prospect_id`) intentionally carries no org filter
+of its own, but it only _resolves an id_, never grants access: the
+org-scoped `load_self_prospect_ids(..., prospect_id=owner_id)` call that
+follows returns empty for a cross-org interview id, so the function still
+falls through to "allow" exactly as the original single-query join did —
+re-derived by tracing both branches, not taken from the diff's framing.
+`_format_event_location`'s explicit `location.organization_id ==
+organization_id` check is itself a new tenant-isolation guard, added so a
+stage email can never print another organization's location name or
+address however `event.location_id` came to reference it. The
+auto-enrollment skip's member lookup (`select(User).where(User.id ==
+user_id, User.organization_id == organization_id)`) and the
+`missing_prerequisites` call both carry the explicit `organization_id`.
+
+**No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`, no raw
+`csv.writer`, no `window.confirm`/`alert`/`prompt`** introduced in this
+window's six commits or present anywhere in this feature's current scope
+(grepped fresh over the full scope, not limited to the diff). `grep -n
+"date_of_birth"` over `membership_pipeline_service.py`,
+`membership_pipeline.py` and `schemas/membership_pipeline.py` found no
+remaining SQL-level comparison, sort or filter on the now-encrypted column —
+only plain ORM attribute reads/writes, which the transparent
+encrypt/decrypt type handles correctly; `prospect_privacy.py` was the one
+site that needed rewriting, and it is the only one that was.
+
+**Encryption migration (`3f2593e8071e`) read in full for this feature's
+column:** idempotent (checks a ciphertext prefix before re-encrypting),
+tolerates a table `create_all` would otherwise build (`_has_column` per
+CLAUDE.md Pitfall #26), refuses to run without `ENCRYPTION_KEY` when there
+are rows to encrypt, and its downgrade decrypts. Not specific to this
+feature — `users.date_of_birth`/`users.emergency_contacts` are outside this
+rotation row's scope and belong to Feature 07's own pass.
+
+**Route enumeration (checklist §1/§2), done fresh via AST walk, not diffed:**
+**53 routes** — unchanged from pass 12. `git diff aa15ccbb..HEAD --
+backend/app/api/v1/endpoints/membership_pipeline.py` grepped for
+`@router\.`/`Depends`/`require_permission` lines found exactly three added
+lines, all `Depends(get_hidden_prospect_ids)` — the already-documented
+MP-33/MP-34 fixes — and zero changed `@router.` decorators or
+`require_permission(...)` argument lists. No route added, removed, or had
+its permission gate changed since pass 12.
+
+### Standing items re-verified this pass
+
+- **MP-10 (listing half)** — `list_election_packages` does not appear
+  anywhere in this window's diff (confirmed via `grep` over the diff text,
+  not a line-number assumption). **Still OPEN**, unchanged from pass 12's
+  description; `docs/KNOWN_LIMITATIONS.md`'s entry still matches.
+- **MP-22** — `delete_prospect_document` and `_delete_inactive_prospects`
+  likewise do not appear in this window's diff. **Still OPEN**, unchanged;
+  owner-accepted tradeoff.
+
+No new flags. Both re-confirmed by searching the actual diff text for the
+function names, not copied from the prior write-up.
+
+### Verified good ✅ (pass 13)
+
+- **The applicant self-access guard (`block_self_prospect_access`/
+  `block_self_interview_access`) is unweakened by the DOB-encryption
+  rewrite**: the set of records a caller is hidden from is unchanged — link
+  id OR owned email OR (name pair AND matching decrypted date of birth) —
+  only _where_ the date comparison happens moved from SQL to Python, traced
+  end to end across both call sites.
+- **The stage-email meeting fallback cannot leak another organization's
+  event or location**: `_fetch_meeting_details` filters every event query on
+  the sending org, and the new `_format_event_location` helper additionally
+  refuses to print a location whose own `organization_id` does not match.
+- **The auto-enrollment prerequisite skip fails safe**: a missing
+  prerequisite skips only the training enrollment, never the member
+  conversion itself, and the officer-notification email is deferred to
+  after commit with its own try/except so a mail failure cannot roll back
+  or fail the conversion.
+- **No regression on any previously-closed finding** (MP-1 through MP-9,
+  MP-11 through MP-21, MP-23 through MP-32) — none of their call sites
+  appear in this pass's diff.
+
+### Completion gate (pass 13)
+
+Run against CI's pinned toolchain (`flake8==7.4.1`, `black==26.10.1`,
+`isort==9.0.2`, installed and confirmed at these exact versions before
+running) under `python3.13` (the sandbox's bare `python3` resolves to
+3.11); frontend against the repo's existing `node_modules`.
+
+| Check                                                                         | Result                                                    |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                 | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/`                                          | ✅ 2647 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/`                                     | ✅ clean                                                  |
+| `python3.13 scripts/validate_migrations.py --strict`                          | ✅ 652 revisions, single head `3f2593e8071e`              |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)          | ✅ 276 routes, 0 errors, 0 warnings                       |
+| scoped backend pytest (`-k "membership or prospect or pipeline or election"`) | ✅ 1,916 passed, 1 skipped (environment-only, `py_vapid`) |
+| `cd frontend && npm run typecheck`                                            | ✅ 0 errors                                               |
+| `cd frontend && npm run lint`                                                 | ✅ 0 errors, 0 warnings                                   |
+| scoped frontend suite (`npx vitest run src/modules/prospective-members`)      | ✅ 305 passed (35 files)                                  |
+
+No application source file changed this pass (0 fixes — the real changes
+already landed on `main` via the six commits above, all independently
+tested and already merged). Every check above verifies that the delta which
+landed since pass 12 is sound, not that a new patch applied cleanly.
 
 ---
 
