@@ -865,7 +865,10 @@ class TestMembership:
         from app.services.medical_screening_service import MedicalScreeningService
 
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([])])
+        # The third read is the requirements' frequencies (W71-1). With none,
+        # no record falls due by frequency and nothing more is queried.
+        no_frequencies = MagicMock(all=MagicMock(return_value=[]))
+        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([]), no_frequencies])
 
         await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
 
