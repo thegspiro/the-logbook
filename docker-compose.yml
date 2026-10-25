@@ -19,6 +19,7 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-intranet_db}
       MYSQL_USER: ${DB_USER:-intranet_user}
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      DB_REQUIRE_TLS: ${DB_REQUIRE_TLS:-false}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
       TZ: ${TZ:-UTC}
     # TLS: with certificates in ./tls/mysql (scripts/tls-setup.sh) the wrapper
@@ -86,6 +87,7 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env} --rename-command FLUSHALL "" --rename-command FLUSHDB "" --rename-command DEBUG ""
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
+      REDIS_REQUIRE_TLS: ${REDIS_REQUIRE_TLS:-false}
     # Note: Redis may show warnings about vm.overcommit_memory and net.core.somaxconn.
     # These are informational - set at host level in production if needed.
     # sysctls require kernel namespace privileges not available in all Docker environments.
@@ -96,13 +98,10 @@ services:
     volumes:
       - redis_data:/data
       - ./infrastructure/redis/tls-entrypoint.sh:/tls-entrypoint.sh:ro
+      - ./infrastructure/redis/healthcheck.sh:/healthcheck.sh:ro
       - ${TLS_DIR:-./tls}/redis:/etc/redis/tls:ro
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "redis-cli -a $${REDIS_PASSWORD} --no-auth-warning ping | grep PONG",
-        ]
+      test: ["CMD", "sh", "/healthcheck.sh"]
       interval: 10s
       timeout: 5s
       retries: 5
