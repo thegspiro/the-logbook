@@ -103,14 +103,21 @@ test.describe('scheduling board', () => {
     await expect(page.getByRole('grid', { name: 'Month calendar', exact: true })).toBeHidden();
   });
 
-  test('claiming a seat takes one tap and updates the crew', async ({ page }) => {
+  test('claiming a seat takes one tap and updates the crew', async ({ page, isMobile }) => {
     let signups = 0;
-    await page.setViewportSize(DESKTOP);
+    // A mobile project claims through the phone grid at the device's own
+    // width. Widening an emulated iPhone to a desktop viewport is not a device
+    // anyone holds, and WebKit stops running animation frames in that state,
+    // which leaves every click waiting on Playwright's stability check.
+    if (!isMobile) await page.setViewportSize(DESKTOP);
     await signIn(page);
     await mockBoard(page, { onSignup: () => (signups += 1) });
     await openBoard(page);
 
-    const grid = page.getByRole('grid', { name: 'Month calendar', exact: true });
+    const grid = page.getByRole('grid', {
+      name: isMobile ? 'Month calendar, compact' : 'Month calendar',
+      exact: true,
+    });
     await grid
       .getByRole('gridcell')
       .filter({ hasText: String(target().getDate()) })
@@ -122,8 +129,16 @@ test.describe('scheduling board', () => {
     await claim.click();
 
     await expect.poll(() => signups).toBe(1);
-    // The panel re-reads from the server, so the badge moves without a reload.
-    await expect(page.getByText('1 of 3 seat open')).toBeVisible();
+    if (isMobile) {
+      // The phone sheet confirms instead, listing the crew it re-read: the
+      // second member exists only in the server's answer after the signup.
+      await expect(page.getByRole('heading', { name: 'You’re on the roster' })).toBeVisible();
+      const crew = page.locator('section', { hasText: 'Riding with you' });
+      await expect(crew.getByText('Crew 1', { exact: true })).toBeVisible();
+    } else {
+      // The panel re-reads from the server, so the badge moves without a reload.
+      await expect(page.getByText('1 of 3 seat open')).toBeVisible();
+    }
   });
 
   test('the month legend explains every colour on screen', async ({ page }) => {
