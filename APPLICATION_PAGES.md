@@ -476,7 +476,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
 
-> The **Programs** tab (`pipelines`) lists the department's existing programs. Its New Pipeline button opens the create wizard in the same tab at `&view=new`; selecting Programs in the hub nav returns to the list.
+> The **Programs** tab (`pipelines`) lists the department's existing programs. Its New Pipeline button opens the create wizard in the same tab at `&view=new`; selecting Programs in the hub nav returns to the list. Its views are Programs and Templates. The standalone `/training/programs` page also has a Requirements view, but the hub leaves it out because the hub's own **Requirements** tab covers it, including **Import from Registry** (NFPA, Pro Board, NREMT).
 
 > The **Training Waivers** tab (within Officer Dashboard) shows all training waivers with summary cards, status filtering, and source tracking (Auto LOA vs Manual).
 >

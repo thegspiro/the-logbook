@@ -541,6 +541,16 @@ describe('TrainingProgramsPage', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/training/admin?page=curriculum&tab=pipelines&view=new');
   });
 
+  // The hub has its own Requirements tab, so the embedded view does not
+  // repeat it.
+  it('leaves Requirements out of the views when embedded in the hub', async () => {
+    mockHasPermission = true;
+    renderWithRouter(<TrainingProgramsPage embedded />);
+
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Programs', 'Templates']);
+  });
+
   // Embedded as the hub's Programs tab, the hub supplies the title and trail.
   it('lists programs without its own title or trail when embedded in the hub', async () => {
     mockHasPermission = true;
