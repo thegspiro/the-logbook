@@ -6527,29 +6527,19 @@ Found driving W74 (`docs/workflow-review/W74-ip-security.md`, W74-5).
   (`assert_different_person`, as money approvals use), and if so what a
   single-admin department does.
 
-## RPT2-3 — The QR Check-In Analytics Dashboard Has A Reader And No Writer (2026-10-20)
+## RPT2-3 — The QR Check-In Analytics Dashboard Had A Reader And No Writer (2026-10-20, resolved 2026-10-25)
 
-`/events/:id/analytics` (and the admin route) render `GET /analytics/metrics`, which counts
-`qr_scan`, `check_in_success` and `check_in_failure` rows in `analytics_events`. Nothing
-writes them. `POST /analytics/track` is the only writer in the repository; its only client
-method, `analyticsService.trackEvent`, is reached through `trackQRScan`, `trackCheckInSuccess`,
-`trackCheckInFailure`, `trackQRView` and `trackQRPrint`, and no page or component calls any of
-the five. `self_check_in` and `check_in_attendee` do not write an event either. The screen
-therefore reads zero scans, zero check-ins and an empty error breakdown, which looks like a
-department that has not used QR check-in rather than a feed that was never connected.
-
-**Why not fixed.** Which moments count as a "scan", a "success" and a "failure", and whether
-they are recorded by the browser or by the server, is a metric definition. **Owner decision:**
-
-1. **Record server-side** — `self_check_in` / `check_in_attendee` write the success and
-   failure events (with a bounded reason) and the QR page's load writes the scan. Reliable
-   and not forgeable by a member, at the cost of a write on the check-in path.
-2. **Wire the client calls** — call the five existing methods from the QR and check-in pages.
-   Smallest change, but a member's browser decides what is counted.
-3. **Retire the page** — remove the dashboard and the three analytics routes.
-
-Related: the accepted entry _"Events — There Is No Per-Event Analytics Panel"_ above rests on
-this dashboard covering the need. See `docs/app-review/reports-analytics.md` → Pass 5.
+**Resolved (owner decision: record server-side).** The self-check-in page's
+first load records one `qr_scan` per member per event (the data endpoint is
+polled, and the officer's QR display page polls it too, so the page marks only
+its first load and the server deduplicates). `POST /events/{id}/self-check-in`
+records `check_in_success`, or `check_in_failure` with one of `not_open_yet`,
+`closed`, `event_cancelled` or `attendance_locked`; a check-out, a repeat scan,
+the phase-gate warning and a manual officer check-in are not counted. Rows
+from before this change do not exist, so the dashboard starts from zero on
+upgrade. `POST /analytics/track` and its unused client methods remain. Kept
+only because code and tests cite it by name; history in
+`docs/app-review/reports-analytics.md`.
 
 ## Process
 

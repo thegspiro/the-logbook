@@ -88,6 +88,16 @@ describe('EventSelfCheckInPage', () => {
     });
   });
 
+  describe('QR analytics (RPT2-3)', () => {
+    it('asks the server to record the scan on its first load', async () => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
+
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      await waitFor(() => expect(eventService.getQRCheckInData).toHaveBeenCalledWith('1', { scan: true }));
+    });
+  });
+
   describe('Event Display Before Check-In', () => {
     it('should display event details correctly', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
