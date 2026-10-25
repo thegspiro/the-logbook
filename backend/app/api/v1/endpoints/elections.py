@@ -2695,6 +2695,7 @@ async def delete_candidate(
 
     candidate_name = candidate.name
     candidate_position = candidate.position
+    released = await service.release_merged_write_ins(election_id, candidate.id)
     await db.delete(candidate)
     await db.commit()
 
@@ -2708,6 +2709,7 @@ async def delete_candidate(
             "candidate_id": str(candidate_id),
             "candidate_name": candidate_name,
             "position": candidate_position,
+            "write_in_merges_released": released,
         },
         user_id=str(current_user.id),
     )
