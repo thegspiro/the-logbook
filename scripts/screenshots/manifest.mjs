@@ -3924,10 +3924,10 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 703,
     anchor: "Screenshot of one of the scheduling admin sub-pages",
-    alt: "A scheduling admin sub-page with its back arrow and page header",
+    alt: "A scheduling admin page under the hub's header: the area cards with its area chosen, and the strip naming the open page",
     // Patterns rather than Templates: the guide already pictures Templates
-    // 460 lines above, and the point here is the header the four sub-pages
-    // share, not that particular page.
+    // 460 lines above, and the point here is the header every admin page
+    // shares, not that particular page.
     route: "/scheduling/admin/planning/patterns",
     fullPage: false,
   },
@@ -6065,7 +6065,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 562,
     anchor: "The rebuilt Scheduling Settings screen on a desktop",
-    alt: "Scheduling settings on desktop, with the section list beside the selected section's card",
+    alt: "Scheduling settings on desktop: the Settings area chosen, its page strip, and the selected section's card beneath",
     route: "/scheduling/admin/settings/general",
     fullPage: true,
   },
@@ -6074,12 +6074,12 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 567,
     anchor: "The same screen at phone width, showing the",
-    alt: "Scheduling settings at phone width, the section list replaced by a scrollable tab strip",
+    alt: "Scheduling settings at phone width: the area cards and page strip scroll sideways above the selected section's card",
     route: "/scheduling/admin/settings/general",
     viewport: "mobile",
     // Viewport, not full page: the phone layout pins a bottom tab bar, and a
     // full-page capture paints it across the middle of the settings card. The
-    // tab strip this shot is about is above the fold anyway.
+    // area cards and page strip this shot is about are above the fold anyway.
     fullPage: false,
   },
   {
@@ -19425,7 +19425,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1219,
     anchor: "The `/scheduling/admin` hub",
-    alt: "The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings",
+    alt: "The Scheduling Administration hub: the headline metrics, the seven area cards with Overview chosen, and the Dashboard and Headline Metrics strip above the setup guide",
     route: "/scheduling/admin",
     expect: "To close out",
     fullPage: true,
@@ -19435,10 +19435,13 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1221,
     anchor: "The staffing-gaps view at `/scheduling/admin/planning`",
-    alt: "Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs",
+    alt: "Shift Planning under the Scheduling Administration header, Planning chosen: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control",
     route: "/scheduling/admin/planning",
     viewport: { width: 1440, height: 1100 },
-    expect: "Staffing gaps",
+    // The strip's link, not "Staffing gaps": that phrase is now only the
+    // page's screen-reader heading, which a visible-text check would match
+    // without proving the page drew.
+    expect: "Shift Planning",
   },
   {
     id: "01-41-profile-visibility",
