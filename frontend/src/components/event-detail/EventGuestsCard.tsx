@@ -10,11 +10,17 @@
  * `GET /events/{id}/external-attendees` is gated on events.manage and returns
  * contact details, so the card renders only for event managers; everyone else
  * sees nothing rather than a card that 403s.
+ *
+ * Managers also sign guests in from here — a walk-in the kiosk sent to staff
+ * (Add guest), or a guest entered earlier who has not signed in yet.
  */
 
 import React, { useEffect, useState } from 'react';
-import { Users } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { UserPlus, Users } from 'lucide-react';
 import { eventService } from '../../services/api';
+import { getErrorMessage } from '../../utils/errorHandling';
+import { AddGuestModal } from './AddGuestModal';
 import type { ExternalAttendee } from '../../types/event';
 import { formatDateTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -29,13 +35,23 @@ interface EventGuestsCardProps {
   canManage: boolean;
   /** Whether the event takes guest sign-ins; an empty list still shows then. */
   allowsGuestCheckIn: boolean;
+  /** The event's "Add guests to the prospective members pipeline" switch. */
+  addsGuestsToPipeline?: boolean;
 }
 
-export const EventGuestsCard: React.FC<EventGuestsCardProps> = ({ eventId, canManage, allowsGuestCheckIn }) => {
+export const EventGuestsCard: React.FC<EventGuestsCardProps> = ({
+  eventId,
+  canManage,
+  allowsGuestCheckIn,
+  addsGuestsToPipeline = false,
+}) => {
   const tz = useTimezone();
   const [guests, setGuests] = useState<ExternalAttendee[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const [signingIn, setSigningIn] = useState<string | null>(null);
 
   useEffect(() => {
     if (!canManage) {
@@ -43,7 +59,9 @@ export const EventGuestsCard: React.FC<EventGuestsCardProps> = ({ eventId, canMa
       return;
     }
     let cancelled = false;
-    setLoading(true);
+    // Only the first load hides the card; a reload after a sign-in keeps the
+    // current list on screen until the new one arrives.
+    if (reloadKey === 0) setLoading(true);
     setFailed(false);
     eventService
       .getExternalAttendees(eventId)
@@ -59,7 +77,24 @@ export const EventGuestsCard: React.FC<EventGuestsCardProps> = ({ eventId, canMa
     return () => {
       cancelled = true;
     };
-  }, [eventId, canManage]);
+  }, [eventId, canManage, reloadKey]);
+
+  const reload = () => setReloadKey((key) => key + 1);
+
+  const signIn = async (guest: ExternalAttendee) => {
+    setSigningIn(guest.id);
+    try {
+      const result = await eventService.checkInExternalAttendee(eventId, guest.id);
+      toast.success(
+        result.prospect_id ? `${guest.name} signed in and linked to their application.` : `${guest.name} signed in.`
+      );
+      reload();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, `${guest.name} could not be signed in.`));
+    } finally {
+      setSigningIn(null);
+    }
+  };
 
   if (!canManage || loading) return null;
   if (!failed && guests.length === 0 && !allowsGuestCheckIn) return null;
@@ -68,13 +103,16 @@ export const EventGuestsCard: React.FC<EventGuestsCardProps> = ({ eventId, canMa
 
   return (
     <section className="card p-6" aria-labelledby="event-guests-heading">
-      <h2
-        id="event-guests-heading"
-        className="text-theme-text-primary mb-1 flex items-center gap-2 text-lg font-medium"
-      >
-        <Users className="h-5 w-5" aria-hidden="true" />
-        <span>Guests ({guests.length})</span>
-      </h2>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 id="event-guests-heading" className="text-theme-text-primary flex items-center gap-2 text-lg font-medium">
+          <Users className="h-5 w-5" aria-hidden="true" />
+          <span>Guests ({guests.length})</span>
+        </h2>
+        <button type="button" onClick={() => setAdding(true)} className="btn-secondary flex items-center gap-1.5">
+          <UserPlus className="h-4 w-4" aria-hidden="true" />
+          Add guest
+        </button>
+      </div>
       <p className="text-theme-text-muted mb-4 text-sm">
         People who are not members. Guests are not counted in attendance.
         {guests.length > 0 ? ` ${signedIn} signed in.` : ''}
@@ -112,11 +150,30 @@ export const EventGuestsCard: React.FC<EventGuestsCardProps> = ({ eventId, canMa
                 {guest.source && SOURCE_LABELS[guest.source] && (
                   <p className="text-theme-text-muted text-xs">{SOURCE_LABELS[guest.source]}</p>
                 )}
+                {!guest.checked_in && (
+                  <button
+                    type="button"
+                    onClick={() => void signIn(guest)}
+                    disabled={signingIn !== null}
+                    aria-label={`Sign in ${guest.name}`}
+                    className="btn-secondary mt-1 text-xs"
+                  >
+                    {signingIn === guest.id ? 'Signing in...' : 'Sign in'}
+                  </button>
+                )}
               </div>
             </li>
           ))}
         </ul>
       )}
+
+      <AddGuestModal
+        isOpen={adding}
+        eventId={eventId}
+        addsGuestsToPipeline={addsGuestsToPipeline}
+        onClose={() => setAdding(false)}
+        onSaved={reload}
+      />
     </section>
   );
 };

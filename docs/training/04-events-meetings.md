@@ -698,10 +698,10 @@ Anyone else is stopped with a message rather than signed in:
 > **First-time visitors are not signed in by the kiosk at these events.** A
 > recruitment event's kiosk records the attendance of people already in your
 > pipeline; it does not open new applications from an anonymous phone. For a
-> walk-in, have someone at the door add them on **Prospective Members → Add
-> Applicant** with their email, then let them scan again. If you want walk-ins
-> to sign themselves in, untick **Add guests to the prospective members
-> pipeline** — the page then shows the name form above.
+> walk-in, someone at the door signs them in from the event page with **Add
+> guest** (see below) — with their email, that opens their application. If you
+> want walk-ins to sign themselves in, untick **Add guests to the prospective
+> members pipeline** — the page then shows the name form above.
 
 A guest who confirms a second time sees "You're already checked in, Jane S."
 and nothing changes.
@@ -712,6 +712,7 @@ and nothing changes.
 | ---------------------------------------------- | ---------------------------------------------------------------------- |
 | An entry on the event's guest list             | Always                                                                 |
 | A link on the guest's **prospective members** card | When an applicant signs in by email at an event with the second switch on |
+| A new **prospective members** card                 | When staff sign a walk-in in with **Add guest**, at an event with the second switch on, and give an email |
 
 **Seeing who came.** Officers who manage events see a **Guests (_n_)** card
 on the event page. It lists each guest's name, organization, email and phone,
@@ -720,6 +721,21 @@ event that takes guest sign-ins it shows even when empty ("No guests have
 signed in yet."). Guests are **not** counted in the event's attendance, which
 stays a record of members — the card says so. Other members do not see the
 card.
+
+**Signing a guest in by hand.** **Add guest** on the card takes a first and
+last name, and optionally an email and phone, and signs the guest in straight
+away. A guest who was entered earlier but has not signed in has a **Sign in**
+button on their row. At an event with **Add guests to the prospective members
+pipeline** ticked, signing in a guest who gave an email also files them in the
+pipeline:
+
+| The email belongs to                     | What happens                                       |
+| ---------------------------------------- | -------------------------------------------------- |
+| An active applicant                      | The event is linked to their existing card         |
+| Nobody yet                               | A new card is opened, noting "by staff"            |
+| A member account (active or probationary) | Nothing — a member is not an applicant             |
+
+No card is opened without an email, or for a guest entered with only one name.
 
 An applicant who signs in this way has the event linked to their card. The pipeline
 card's **Linked Events** panel names the open house, its date and its type,

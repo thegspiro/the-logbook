@@ -55,6 +55,8 @@ class GuestCheckInService:
     # Marks rows created by this path, distinguishing a self-recorded kiosk
     # sign-in from one a staff member typed in on a member's behalf.
     SOURCE_KIOSK_QR = "kiosk_qr"
+    # A prospect opened because a staff member signed a walk-in in at the door.
+    SOURCE_STAFF_ENTRY = "staff_entry"
 
     # Outcomes of an email lookup at the kiosk.
     LOOKUP_PROSPECT = "prospect"
@@ -215,12 +217,18 @@ class GuestCheckInService:
         email: str,
         phone: Optional[str],
         interest_reason: Optional[str],
+        source: str = SOURCE_KIOSK_QR,
+        note: Optional[str] = None,
     ) -> Tuple[Optional[ProspectiveMember], bool]:
         """Open or reuse a prospect for this guest and link it to the event.
 
         Returns ``(prospect, created)``. A failure here must not cost the guest
         their attendance — the sign-in is the thing they came to do — so
         pipeline errors are logged and swallowed rather than raised.
+
+        ``source`` and ``note`` say how the attendance was recorded, so a
+        coordinator reading the applicant's history is not told a walk-in
+        scanned the room code when staff signed them in by hand.
         """
         pipeline_service = MembershipPipelineService(self.db)
 
@@ -229,7 +237,7 @@ class GuestCheckInService:
                 organization_id, email
             )
             if existing is not None:
-                await self.link_prospect_to_event(existing.id, event)
+                await self.link_prospect_to_event(existing.id, event, note=note)
                 return existing, False
 
             prospect = await pipeline_service.create_prospect(
@@ -242,14 +250,14 @@ class GuestCheckInService:
                     "interest_reason": interest_reason,
                     "referral_source": f"Attended: {event.title}",
                     "metadata_": {
-                        "source": self.SOURCE_KIOSK_QR,
+                        "source": source,
                         "source_event_id": str(event.id),
                         "source_event_title": event.title,
                         "external_attendee_id": attendee.id,
                     },
                 },
             )
-            await self.link_prospect_to_event(prospect.id, event)
+            await self.link_prospect_to_event(prospect.id, event, note=note)
             return prospect, True
         except Exception as exc:
             logger.error(
@@ -611,3 +619,56 @@ class GuestCheckInService:
             phone=prospect.phone,
         )
         return attendee, error, already_checked_in
+
+    async def open_prospect_for_staff_entry(
+        self,
+        event: Event,
+        organization_id: str,
+        attendee: EventExternalAttendee,
+    ) -> Tuple[Optional[str], bool]:
+        """Open or link an applicant for a walk-in staff signed in by hand.
+
+        Returns ``(prospect_id, failed)``. At an event that adds its guests to
+        the pipeline the kiosk signs in only applicants it already knows and
+        sends everyone else to staff, so this is where a first-time visitor's
+        application is opened. It follows the kiosk's lookup: an active
+        applicant is linked, a member account is left alone (a member is not
+        an applicant, however staff entered them), and anyone else is opened.
+
+        No prospect without an email to follow up on, or without a first and
+        last name to file it under. ``failed`` is True only when the pipeline
+        raised, so the caller knows its session needs a rollback.
+        """
+        if not event.guest_check_in_creates_prospect or not attendee.email:
+            return None, False
+
+        first_name, _, last_name = (attendee.name or "").strip().rpartition(" ")
+        first_name, last_name = first_name.strip(), last_name.strip()
+        if not first_name or not last_name:
+            return None, False
+
+        email = attendee.email.strip().lower()
+        outcome, _prospect = await self.lookup_guest(organization_id, email)
+        if outcome == self.LOOKUP_MEMBER:
+            return None, False
+
+        # The attendee's phone is free text up to 50 characters; the applicant
+        # record holds 20. A longer one is left off the application rather
+        # than cut short — the email is the contact the pipeline uses.
+        phone = attendee.phone if attendee.phone and len(attendee.phone) <= 20 else None
+
+        prospect, _created = await self._link_prospect(
+            event=event,
+            organization_id=organization_id,
+            attendee=attendee,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            interest_reason=None,
+            source=self.SOURCE_STAFF_ENTRY,
+            note=f"Checked in at {event.title} by staff",
+        )
+        if prospect is None:
+            return None, True
+        return str(prospect.id), False

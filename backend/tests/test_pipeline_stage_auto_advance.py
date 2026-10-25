@@ -893,7 +893,10 @@ class TestMeetingAutoAdvanceOnStaffAttendance:
     async def test_attendee_without_prospect_link_only_records_attendance(
         self, db_session: AsyncSession, org
     ):
-        attendee = await self._staff_check_in(db_session, org, _make_event(org), None)
+        # Pipeline switch off: at an event with it on, a staff check-in of a
+        # walk-in now opens their application (test_staff_guest_entry.py).
+        event = _make_event(org, guest_check_in_creates_prospect=False)
+        attendee = await self._staff_check_in(db_session, org, event, None)
 
         assert attendee.checked_in is True
         assert attendee.prospect_id is None

@@ -538,11 +538,11 @@ very visitors the page exists for. The backing endpoints are
 
 ### What gets written
 
-| Record                     | When                                                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `event_external_attendees` | Always. `source = 'kiosk_qr'`, distinguishing a self-recorded sign-in from one a staff member typed in |
-| `prospective_members`      | Never by the kiosk any longer: an email-first sign-in finds an existing active applicant               |
-| `prospect_event_links`     | Links the confirmed applicant to the event                                                             |
+| Record                     | When                                                                                                                          |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `event_external_attendees` | Always. `source = 'kiosk_qr'`, distinguishing a self-recorded sign-in from one a staff member typed in                        |
+| `prospective_members`      | Not by the kiosk: an email-first sign-in finds an existing active applicant. Opened when **staff** check in a walk-in (below) |
+| `prospect_event_links`     | Links the confirmed applicant to the event                                                                                    |
 
 `event_external_attendees.prospect_id` ties the two together with
 `ON DELETE SET NULL`, so purging a prospect never destroys the record of who was
@@ -551,6 +551,23 @@ in the room — that is the event's history, not the prospect's.
 Guests who signed in are listed on the event detail page in a **Guests** card
 (managers only — `GET /events/{id}/external-attendees` returns contact
 details). They are not counted in member attendance.
+
+**Staff entry** _(2026-10-25)_. The card's **Add guest** posts
+`POST /events/{id}/external-attendees` and then
+`PATCH …/external-attendees/{attendee_id}/check-in`; a row entered earlier gets
+a **Sign in** button for the second call alone. The check-in links an existing
+active applicant with that email, as it always has. At an event with
+`guest_check_in_creates_prospect`, it now also **opens** an application for a
+walk-in who is not one — the visitor the email-first kiosk sent to staff —
+following the kiosk's lookup: a member account is left alone, and nothing is
+opened without an email or without a first and last name (split on the last
+space of `name`). The new prospect carries `metadata.source = 'staff_entry'`,
+its event link the note "Checked in at {title} by staff", and a phone longer than
+the applicant record's 20 characters is left off rather than cut. The check-in
+response's `prospect_id` names the applicant linked or opened. The attendance
+is committed first; a pipeline failure is logged and rolled back without
+costing the guest their sign-in, and checking the same guest in again opens
+nothing new.
 
 ### How it is protected
 
@@ -1027,6 +1044,8 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
 - **Analytics' "Avg Attendance Rate"** pools upcoming events with past ones in
   the selected range.
 - **Template Delete** deactivates rather than deletes.
+- **Guest applications opened by staff** land in no pipeline when the
+  department has no default pipeline.
 - **Outreach requesters** are not sent their status link automatically; a
   coordinator copies it from the request.
 - **Kiosk badge check-in** accepts a copied card unattended — see
