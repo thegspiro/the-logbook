@@ -629,7 +629,11 @@ const CreateTrainingSessionPage: React.FC = () => {
 
               {/* Location */}
               <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* Bottom-aligned: the second label carries "(Optional)" and
+                    wraps first in a narrow column, which top alignment turned
+                    into two inputs at different heights. No help text sits
+                    under either field, so the labels are all that can differ. */}
+                <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-2">
                   <div>
                     <label
                       htmlFor="session-location"

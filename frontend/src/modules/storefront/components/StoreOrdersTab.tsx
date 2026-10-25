@@ -349,6 +349,8 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
               </option>
             ))}
           </select>
+        </div>
+        <div>
           {/* Every app settles separately, so reconciling a Zelle batch means
               seeing only the Zelle orders. */}
           <label htmlFor="order-method-filter" className="sr-only">
