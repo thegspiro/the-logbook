@@ -23,7 +23,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import false, func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
@@ -144,6 +144,12 @@ class Form(Base):
         String(12), unique=True, index=True, default=generate_slug
     )
     is_public: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    # Whether /embed/f/<slug> may be framed by the department's own websites
+    # (Organization.settings["forms"]["embed_allowed_origins"]). Opt-in per
+    # form: framing loosens the clickjacking protection every other page keeps.
+    allow_embed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
 
     # Cross-module integration — when set, submission processing uses
     # label-based mapping directly instead of requiring a FormIntegration

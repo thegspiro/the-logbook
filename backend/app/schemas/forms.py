@@ -223,6 +223,7 @@ class FormBase(BaseModel):
     notify_on_submission: bool = False
     notification_emails: Optional[List[str]] = None
     is_public: bool = False
+    allow_embed: bool = False
 
     # Normalize case (tolerate legacy "Operations") AND reject unknowns — the old
     # normalize-only validator still let a bad category 500 at the ENUM column.
@@ -260,6 +261,7 @@ class FormUpdate(BaseModel):
     notify_on_submission: Optional[bool] = None
     notification_emails: Optional[List[str]] = None
     is_public: Optional[bool] = None
+    allow_embed: Optional[bool] = None
     integration_type: Optional[str] = None
 
     _check_flags = field_validator(
@@ -267,6 +269,7 @@ class FormUpdate(BaseModel):
         "require_authentication",
         "notify_on_submission",
         "is_public",
+        "allow_embed",
     )(_reject_null)
     _check_category = field_validator("category")(
         _enum_check(_FORM_CATEGORIES, "category")
@@ -417,6 +420,14 @@ class PublicFormResponse(BaseModel):
     organization_name: Optional[str] = None
 
     model_config = _response_config
+
+
+class EmbedPolicyResponse(BaseModel):
+    """The frame-ancestors source list for a form's embed page."""
+
+    frame_ancestors: str = Field(
+        description="Space-separated https origins, or 'none' when embedding is off"
+    )
 
 
 class PublicFormSubmissionResponse(UTCResponseBase):

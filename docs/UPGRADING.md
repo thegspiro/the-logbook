@@ -134,6 +134,27 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The frontend's nginx config needs the `auth_request` module (2026-10-25)
+
+`frontend/nginx.conf` now uses `auth_request` for the embedded-form page,
+`/embed/f/<slug>`: nginx asks the backend which websites may frame the form
+before serving it. Nothing changes for a Docker deployment — the official
+`nginx:alpine` image the frontend container is built from includes the module.
+
+A **host install** that runs this file on the host's own nginx (`scripts/setup-ssl.sh`
+renders it) needs the module there too. Debian and Ubuntu's `nginx`,
+`nginx-light`, `nginx-core` and `nginx-full` packages include it; an nginx built
+from source without `--with-http_auth_request_module` does not, and `nginx -t`
+then refuses the config with _unknown directive "auth_request"_, so the site
+stops serving. Check before upgrading:
+
+```bash
+nginx -V 2>&1 | grep -o with-http_auth_request_module
+```
+
+No output means the module is missing: install a distribution nginx package,
+or rebuild with that flag.
+
 ### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
 
 `unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`

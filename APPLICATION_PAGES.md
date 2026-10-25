@@ -14,6 +14,7 @@ Complete reference of all pages in the application, organized by module.
 | `/reset-password`                      | Reset Password         | Password reset form                                                                                                                       |
 | `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                            |
 | `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                      |
+| `/embed/f/:slug`                       | Public Form (embedded) | The same form inside an iframe on a department's own website; framing allowed only from the sites it lists _(2026-10-25)_                 |
 | `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                        |
 | `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_      |
 | `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                                  |

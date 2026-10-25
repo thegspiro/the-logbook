@@ -242,3 +242,52 @@ describe('PublicFormPage sign-in notice', () => {
     expect(await screen.findByText('Sign in to submit this form')).toBeInTheDocument();
   });
 });
+
+describe('PublicFormPage embedded in a department website', () => {
+  const renderEmbedded = () =>
+    render(
+      <MemoryRouter initialEntries={['/embed/f/abc123def456']}>
+        <Routes>
+          <Route path="/embed/f/:slug" element={<PublicFormPage embedded />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    mockGetForm.mockReset();
+    mockGetForm.mockResolvedValue({ ...form, organization_name: 'Oakville Fire Department' });
+    useAuthStore.setState({ isAuthenticated: false });
+  });
+
+  it('shows the form title only, without the department header or footer', async () => {
+    renderEmbedded();
+
+    expect(await screen.findByRole('heading', { name: 'Request a Public Event' })).toBeInTheDocument();
+    expect(screen.queryByText('Oakville Fire Department')).not.toBeInTheDocument();
+    expect(screen.queryByText('Powered by The Logbook')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Your Name/)).toBeInTheDocument();
+  });
+
+  it('keeps the department header on the standalone page', async () => {
+    render(
+      <MemoryRouter initialEntries={['/f/abc123def456']}>
+        <Routes>
+          <Route path="/f/:slug" element={<PublicFormPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Oakville Fire Department')).toBeInTheDocument();
+    expect(screen.getByText('Powered by The Logbook')).toBeInTheDocument();
+  });
+
+  it('sends a visitor who must sign in to the standalone form in a new tab', async () => {
+    mockGetForm.mockResolvedValue({ ...form, require_authentication: true });
+    renderEmbedded();
+
+    const link = await screen.findByRole('link', { name: /open the form to sign in/i });
+    expect(link).toHaveAttribute('href', '/f/abc123def456');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+});
