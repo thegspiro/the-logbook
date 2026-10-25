@@ -16,6 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3684](https://github.com/thegspiro/the-logbook/pull/3684)** (branch
+`claude/security-review-auth-session-lifecycle`) — Feature 01 (Auth &
+session lifecycle), pass 12. PR #3683 (Feature 00, Cross-cutting baseline,
+pass 12) had already merged with no open rotation PR behind it —
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
+`list_pull_requests` (`state:open`) both returned 0 matching results,
+checked before starting and re-checked immediately before branching. **1
+new finding (AUTH-23, MED, flagged — not fixed), 0 fixed.** Six of the
+twelve scoped files changed since pass 11's baseline (`auth.py`,
+`dependencies.py`, `auth_service.py`, `schemas/auth.py`, `apiClient.ts`,
+`authService.ts`), all one feature: an MFA enrollment grace period for
+privileged members, station-kiosk session limits, and a step-up
+re-verification gate in front of 24 sensitive handlers. Routes
+re-enumerated by AST (31, up from 28 — three new, all private and
+self-scoped to the caller's own session). `POST /auth/step-up` was found
+to have no account-tied lockout on a failed password/TOTP guess, unlike
+`/login`/`/mfa/login` — flagged (not fixed) as a genuine owner tradeoff
+rather than a mechanical fix, since tying it to the lockout columns would
+let the same attacker who stole a session lock the legitimate owner out of
+signing in at all. See `AUTH-01-auth-session.md`'s **Pass 12** section for
+the full review.
+
+Rotation row 01 → ✅ (pending this PR's merge); next is Feature 02
+(Permissions & roles).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3683, Feature 00, Cross-cutting baseline, pass 12, merged), preserved for history</summary>
+
 **PR [#3683](https://github.com/thegspiro/the-logbook/pull/3683)** (branch
 `claude/security-review-cross-cutting-baseline-p12`) — Feature 00
 (Cross-cutting baseline), pass 12. PR #3682
@@ -44,6 +72,8 @@ entry corrected to say so. See `SEC-00-cross-cutting-baseline.md`'s **Pass
 
 Rotation row 00 → ✅ (pending this PR's merge); next is Feature 01 (Auth &
 session lifecycle).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3682, Feature 34, Frontend shared, pass 11, merged), preserved for history</summary>
@@ -21493,7 +21523,7 @@ PR is recorded in the Log, not repeated here.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -21579,6 +21609,61 @@ covers direct `httpx` connections, not S3/MinIO's `boto3` one.
 No other application-security or security-tooling findings. Full detail in
 `SEC-00-cross-cutting-baseline.md`'s **Pass 12** section. Rotation row 00 →
 ✅ (pending this PR's merge); next is Feature 01 (Auth & session lifecycle).
+
+### 2026-10-25 — Feature 01 (Auth & session lifecycle, pass 12) — 0 fixed, 1 new finding flagged (AUTH-23, MED)
+
+PR #3683 (Feature 00, Cross-cutting baseline, pass 12) had already merged
+with no open rotation PR behind it — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) and `list_pull_requests`
+(`state:open`), 0 matching results both times, re-checked immediately
+before branching. Rotation row 01 was the next `⬜`.
+
+Diffed against pass 11's baseline (`96b0c924` → current `main`, 383 commits
+/ 227 non-merge, repo unshallowed before trusting the count). Six of the
+twelve scoped files changed: `auth.py` (+195/-4), `dependencies.py`
+(+114/-4), `auth_service.py` (+67/-5), `authService.ts` (+25/-3),
+`apiClient.ts` (+15/-1), `schemas/auth.py` (+14) — all one feature: an MFA
+enrollment grace period for privileged members, station-kiosk session
+limits, and a step-up re-verification gate in front of 24 of the app's most
+sensitive handlers. The settings/config half of this same feature was
+already reviewed by `CI9-33-core-infra.md`; this pass reviewed the auth-
+surface half (the three files above) against this feature's own seven
+dimensions, not re-derived from CI9's verdict.
+
+**Routes re-enumerated by AST, not diffed (this skill's repeat-pass
+instruction): 31, up from 28** — three new (`POST /auth/step-up`,
+`POST`/`DELETE /auth/session/kiosk`), all private, all self-scoped to the
+caller's own session (checked by direct ownership comparison, not merely
+inferred from `get_current_user`). Public/private split unchanged at 16/15.
+`PUT /auth/mfa/policy` gained a `require_stepup` dependency on top of its
+existing permission check.
+
+**One new finding, flagged not fixed: AUTH-23 (MED).** `POST /auth/step-up`
+verifies a submitted password or TOTP code but never ties a failed attempt
+to the account-lockout columns (`failed_login_attempts`/`locked_until`) the
+way `/login` and `/mfa/login` do — only the shared per-IP
+`rate_limit_login()` throttles it. An attacker already holding a member's
+live session (stolen cookie, unattended device) but not their password/TOTP
+secret can guess against it at that IP rate indefinitely with no
+account-level consequence, and step-up gates the single largest set of
+sensitive actions in the app (`admin_reset_password`, `delete_user`,
+`anonymize_member`, `set_mfa_policy`, security/role mutations, exports).
+Not a new class — `mfa_disable`/`mfa_verify_setup` have carried the
+identical shape unflagged for 11 prior passes — but step-up is the first of
+that family to accept a bare password guess, and gates far more. **Flagged,
+not fixed:** tying failures to the lockout columns would let the same
+attacker lock the legitimate owner out of signing in at all by failing
+step-up on purpose — a genuine owner tradeoff between two failure modes, not
+a mechanical fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`. Full detail in
+`AUTH-01-auth-session.md`'s **Pass 12** section.
+
+Completion gate: `flake8`/`black`/`isort` clean (`app/ tests/ alembic/`),
+`validate_migrations.py --strict` (651 revisions, single head), AST route
+check against `APPLICATION_PAGES.md` (276 routes, 0 errors/warnings), scoped
+backend tests (1383 passed, 2 environment-only skips), 10 standing guard
+test files run directly (205 passed), frontend `typecheck`/`lint` both
+clean. Rotation row 01 → ✅ (pending this PR's merge); next is Feature 02
+(Permissions & roles).
 
 ### 2026-10-25 — Feature 34 (Frontend shared, pass 11) — 0 fixed, 0 new findings; rotation lap complete, reset to ⬜
 
