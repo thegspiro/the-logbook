@@ -100,7 +100,10 @@ with `alembic stamp`.
 Choices".
 **Re-driven:** the new wording shows at both widths.
 
-### W59-3 — MED — A member cannot record "no" without first saying "yes" — 🚩 FLAGGED
+### W59-3 — MED — A member cannot record "no" without first saying "yes" — ✅ FIXED 2026-10-25
+
+Owner decision: photo use and public roster listing are an explicit Yes / No, with
+neither chosen until the member answers; SMS keeps its switch. Original finding below.
 
 **Did:** as `member2`, opened Privacy Choices with photo use unanswered.
 **Saw:**
