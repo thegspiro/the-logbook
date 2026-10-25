@@ -37,6 +37,7 @@ from app.services.training_waiver_service import (
     total_months_in_period,
     waived_month_keys,
 )
+from app.utils.hours import meets_required_hours
 from app.utils.org_timezone import resolve_org_today
 
 # What a requirement check reads from a completed record; the preload that
@@ -813,7 +814,11 @@ class TrainingService:
 
         # Calculate percentage
         if adjusted_required > 0:
-            pct = min(completed_value / adjusted_required * 100, 100)
+            pct = (
+                100.0
+                if meets_required_hours(completed_value, adjusted_required)
+                else min(completed_value / adjusted_required * 100, 100)
+            )
         else:
             # No positive target (an unset/misconfigured hours target, or a
             # courses requirement with no courses linked): met only if something
@@ -1295,7 +1300,7 @@ class TrainingService:
             # completion counts. Previously "else True" showed a member compliant
             # for, e.g., an annual renewal they had never taken.
             is_complete = (
-                completed_value >= required_value
+                meets_required_hours(completed_value, required_value)
                 if required_value > 0
                 else completed_value > 0
             )
@@ -1454,7 +1459,11 @@ class TrainingService:
                 required_value = 1
 
         if required_value > 0:
-            percentage = completed_value / required_value * 100
+            percentage = (
+                100.0
+                if meets_required_hours(completed_value, required_value)
+                else completed_value / required_value * 100
+            )
         else:
             # No positive target: 100% only if something matching was actually
             # completed, otherwise 0% — never a default "compliant" for a member
