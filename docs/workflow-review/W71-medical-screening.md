@@ -47,7 +47,12 @@ the self-recorded flow (no member holds the permission to record their own).
 
 ## Findings
 
-### W71-1 — MED — A recurring screening recorded without an expiration never fell due — ✅ FIXED (form) · FLAGGED (grading)
+### W71-1 — MED — A recurring screening recorded without an expiration never fell due — ✅ FIXED (form, 2026-10-16; grading, 2026-10-25)
+
+Grading half fixed by owner decision: a record with no expiration date falls due
+`frequency_months` after its completed date, using its linked requirement's frequency,
+else the graded requirement's (`_effective_expiration`). The expiring list applies the
+same rule, and both screens label such a date "by frequency". Original finding below.
 
 **Did:** recorded Jordan's annual physical, completed 20 October 2025, with
 the expiration left blank.

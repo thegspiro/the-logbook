@@ -5251,9 +5251,9 @@ not an enterprise table. Found in
 `docs/security-review/MS-09-medical-screening.md` (feature 09, pass 8,
 MS-15).
 
-## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15)
+## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15, two of three resolved)
 
-**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **`grace_period_days` and `frequency_months` are unchanged and still open**, as described below.
+**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **✅ `frequency_months` resolved 2026-10-25** (W71-1 above): a record with no expiration date falls due that many months after completion. **`grace_period_days` is unchanged and still open**, as described below.
 
 `screening_requirements.grace_period_days` (default 30) and `.applies_to_roles`
 have labelled, editable controls on `ScreeningRequirementForm.tsx`, each with
@@ -6460,27 +6460,33 @@ Found driving W69 (`docs/workflow-review/W69-fundraising.md`, W69-6).
   optional for those types (a schema change, and the list and receipts would
   need to name such a donor by `company_name`).
 
-## Medical Screening — A Screening With No Expiration Date Never Falls Due (2026-10-16)
+## Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)
 
 Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
 
-- **What happens:** `_grade` in `medical_screening_service.py` counts a
-  passed, completed or waived record with no `expiration_date` as compliant
-  indefinitely, and nothing reads a requirement's `frequency_months`. An
-  annual physical recorded without an expiration therefore never lapses,
-  never appears under "Expiring within 30 days", and the requirement card's
-  "Every 12 months" describes nothing.
-- **Since W71:** the record form fills in completed date + frequency, so new
-  records linked to a recurring requirement carry an expiration. Records
-  already saved without one, and records not linked to a requirement, are
-  unchanged.
-- **Also:** records are matched to a requirement by screening _type_, not by
-  `requirement_id`, so two requirements of the same type are satisfied by
-  one record.
-- **Decision:** whether grading should fall back to completed date +
-  `frequency_months` when a record has no expiration (which changes the
-  standing of existing records on upgrade), and whether a record should
-  satisfy only the requirement it is linked to.
+- **Resolved (owner decision):** a passed, completed or waived record with no
+  `expiration_date` falls due `frequency_months` after its completed date —
+  the frequency of the requirement it is linked to (even if that requirement
+  is inactive), else of the requirement it is graded against. Its own
+  expiration date still wins; with no frequency anywhere it stays compliant
+  indefinitely. `_effective_expiration` in `medical_screening_service.py`
+  holds the rule for both the compliance summary and the expiring list, and
+  both screens mark such a date "by frequency". **Upgrade effect, accepted:**
+  existing records saved without an expiration can change standing on the
+  first read after upgrade.
+- **Still open — records are matched to a requirement by screening _type_,
+  not by `requirement_id`,** so two requirements of the same type are
+  satisfied by one record. **Decision:** whether a record should satisfy only
+  the requirement it is linked to.
+- **Still open — the MCP `list_expiring_screenings` tool** pages in SQL on the
+  stored `expiration_date`, so it does not list a record falling due by
+  frequency that the dashboard lists. Bringing it in needs the derived date in
+  SQL, or giving up SQL paging for that tool.
+- **Still open — superseded records on the expiring list.**
+  `get_expiring_soon` lists every satisfying record in the window, including
+  one a newer record of the same type supersedes, while the count grades only
+  the latest; the MCP tool already excludes superseded records. Predates this
+  change, for dated records as well.
 
 ## Integrations — Connecting iCalendar (ICS) Does Nothing (2026-10-17)
 

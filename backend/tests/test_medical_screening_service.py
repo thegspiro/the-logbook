@@ -126,7 +126,11 @@ class TestComplianceStatus:
     def _stub_names(self, service):
         # These tests exercise compliance counting/date math, not the MS-2
         # name resolution (which hits the DB and is covered in TestResolveNames).
-        with patch.object(service, "_resolve_names", return_value=_NO_NAMES):
+        # _requirement_frequencies is a DB read too (W71-1's frequency
+        # fallback); the requirements these tests build carry no frequency.
+        with patch.object(
+            service, "_resolve_names", return_value=_NO_NAMES
+        ), patch.object(service, "_requirement_frequencies", return_value={}):
             yield
 
     async def test_fully_compliant_no_requirements(self, service, org_id, user_id):
@@ -347,7 +351,11 @@ class TestExpiringSoon:
     def _stub_names(self, service):
         # Focus these on the window/day math; name resolution is a separate
         # DB round-trip covered in TestResolveNames.
-        with patch.object(service, "_resolve_names", return_value=_NO_NAMES):
+        # _requirement_frequencies is a DB read too (W71-1's frequency
+        # fallback); the requirements these tests build carry no frequency.
+        with patch.object(
+            service, "_resolve_names", return_value=_NO_NAMES
+        ), patch.object(service, "_requirement_frequencies", return_value={}):
             yield
 
     async def test_returns_empty_when_no_expiring_records(
@@ -671,7 +679,11 @@ class TestMyComplianceSummary:
 
     @pytest.fixture(autouse=True)
     def _stub_names(self, service):
-        with patch.object(service, "_resolve_names", return_value=_NO_NAMES):
+        # _requirement_frequencies is a DB read too (W71-1's frequency
+        # fallback); the requirements these tests build carry no frequency.
+        with patch.object(
+            service, "_resolve_names", return_value=_NO_NAMES
+        ), patch.object(service, "_requirement_frequencies", return_value={}):
             yield
 
     async def test_no_requirements_reports_nothing_outstanding(

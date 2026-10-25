@@ -233,6 +233,11 @@ class ComplianceItem(BaseModel):
     is_compliant: bool
     last_screening_date: Optional[date] = None
     expiration_date: Optional[date] = None
+    expiration_from_frequency: bool = Field(
+        default=False,
+        description="The record has no expiration date of its own; this one is "
+        "its completed date plus the requirement's frequency (W71-1).",
+    )
     days_until_expiration: Optional[int] = None
     status: Optional[str] = None
     self_recorded: bool = Field(
@@ -362,3 +367,5 @@ class ExpiringScreening(BaseModel):
     # A waiver about to lapse is listed beside screenings (MS2-7); the status
     # is what lets the list say which one it is.
     status: Optional[str] = None
+    # No expiration date on the record; due by its requirement's frequency.
+    expiration_from_frequency: bool = False

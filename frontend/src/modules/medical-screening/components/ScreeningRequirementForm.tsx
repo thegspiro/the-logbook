@@ -184,12 +184,11 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
                   aria-describedby="req-frequency-note"
                   className={inputClass + ' w-32'}
                 />
-                {/* W71: grading reads only a record's expiration date, never this
-                    value (medical_screening_service._grade); the record form uses it
-                    to fill that date in. Say so, or "Every 12 months" reads as enforced. */}
-                <p id="req-frequency-note" className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+                {/* W71-1: grading falls back to this when a record has no expiration
+                    date of its own (medical_screening_service._effective_expiration). */}
+                <p id="req-frequency-note" className="text-theme-text-muted mt-1 text-xs">
                   Fills in the expiration date when a record for this requirement is added. A record saved without an
-                  expiration date counts as compliant until it is given one.
+                  expiration date falls due this many months after it was completed.
                 </p>
                 {errors.frequency && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.frequency}</p>}
               </div>

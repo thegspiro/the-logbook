@@ -55,3 +55,22 @@ describe('Lapsing waivers on the expiring list (MS2-7)', () => {
     expect(screen.queryByText('Waived')).not.toBeInTheDocument();
   });
 });
+
+describe('A date derived from the frequency (W71-1)', () => {
+  beforeEach(() => {
+    fetchExpiringScreenings.mockReset();
+    fetchExpiringScreenings.mockResolvedValue(undefined);
+    expiringScreenings = [];
+  });
+
+  it('reads as due by frequency, not as an expiration on the record', () => {
+    expiringScreenings = [
+      row({ record_id: 'r-derived', user_name: 'Jake Thompson', expiration_from_frequency: true }),
+      row({ record_id: 'r-own', user_name: 'Maria Lopez', expiration_from_frequency: false }),
+    ];
+    render(<ComplianceDashboard />);
+
+    expect(screen.getByText(/^Due .* \(by frequency\)$/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Expires /)).toHaveLength(1);
+  });
+});
