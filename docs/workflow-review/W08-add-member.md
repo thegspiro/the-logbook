@@ -83,7 +83,7 @@ Not driven: adding a member **without** a password. Email is off in the review i
 - "← Back to Members" was 20px tall at 390px; it is now 44px on phones.
 - The show-password button had no accessible name; it is now "Show password" / "Hide password".
 
-### W08-6 — LOW — While a password change is required, the app fires 17 refused requests — OPEN
+### W08-6 — LOW — While a password change is required, the app fires 17 refused requests — FIXED (2026-10-25)
 
 **Saw:** on the first sign-in, before the change, the page made 17 requests that each got `403`. The server blocks everything but the password change until it is made. The requests:
 
@@ -97,6 +97,7 @@ Not driven: adding a member **without** a password. Email is off in the review i
 
 That last one means errors from this state cannot be reported. Nothing on the page broke.
 **Why not fixed here:** the requests come from the app shell and half a dozen shared hooks. Quieting them means one rule — make no data request while `must_change_password` is set — applied across the shell, not a change to this form. Added as a lead.
+**Fixed (2026-10-25):** that one rule now lives in the two axios clients rather than in the shell. `services/passwordChangeGate.ts` answers any request outside the server's allowlist (`_MUST_CHANGE_PW_ALLOWED_SUFFIXES`) with the server's own `403 LB-AUTH-004` without sending it, while the signed-in user has `must_change_password` set, and `reportApiError` does not report that refusal. Re-driven on a fresh member: 24 refused requests on `main` (nine of them `POST /errors/log`), 0 with the fix; the change itself, sign-out and sign-in with the new password then sent 57 requests, none refused. Not covered: an expired password past its grace period is still gated by the server only — its refusals are no longer reported, but they are still sent, because the client cannot see that state until a request is refused.
 
 ## Checklist
 
