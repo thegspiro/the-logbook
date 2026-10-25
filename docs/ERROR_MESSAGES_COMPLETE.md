@@ -308,6 +308,7 @@ send through it.
 1. **Gmail**: the account's normal password never works here; only an App Password does, and only with 2-Step Verification on
 2. **Microsoft 365**: Authenticated SMTP is off by default for new tenants — enable it for the mailbox, and check Security Defaults / Conditional Access are not blocking legacy SMTP
 3. **Wrong account**: the From address must be the account the App Password was generated for
+4. **Gmail that used to work**: changing the Google account's password revokes all of its App Passwords. Create a new one and enter it in Settings → Email
 
 **Fix Priority**: NONE - Already good
 
