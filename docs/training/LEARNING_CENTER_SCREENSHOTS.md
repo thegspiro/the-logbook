@@ -158,6 +158,13 @@ Demo states the seeder may need, none of which are made by default:
 - a training submission in `revision_requested` with a reviewer note;
 - items in the offline queue, written into IndexedDB as `10-28` does.
 
+**Re-shooting a seeded database that is days old.** The seeder stamps the
+"Company Drill — In Progress" event relative to the day it ran, so a few days
+later it is no longer live and the `events-check-in-page` and `events-check-out`
+shots cannot find a Check In link. Move that event's start and end back to the
+present, and clear the demo member's check-in and check-out on it, before
+capturing; no reseed is needed.
+
 ## What a capture must not do
 
 Take no shot with malware scanning off (the banner appears on every admin page),
