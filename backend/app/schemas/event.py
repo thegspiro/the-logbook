@@ -1573,6 +1573,10 @@ class ExternalAttendeeCheckInResponse(BaseModel):
 
     status: str
     attendee_id: str
+    prospect_id: Optional[str] = Field(
+        default=None,
+        description="The applicant this guest is linked to, when there is one",
+    )
 
 
 class SendRemindersResponse(BaseModel):

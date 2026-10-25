@@ -222,6 +222,22 @@ export interface ExternalAttendee {
   created_at: string;
 }
 
+/** A guest a staff member enters by hand on the event page. */
+export interface ExternalAttendeeCreate {
+  name: string;
+  email?: string | undefined;
+  phone?: string | undefined;
+  organization_name?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface ExternalAttendeeCheckInResult {
+  status: string;
+  attendee_id: string;
+  /** The applicant the guest is linked to — found, or opened at a pipeline event. */
+  prospect_id?: string | null;
+}
+
 export interface EventListItem {
   id: string;
   title: string;

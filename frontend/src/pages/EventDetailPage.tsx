@@ -1643,6 +1643,7 @@ export const EventDetailPage: React.FC = () => {
               eventId={event.id}
               canManage={canManage}
               allowsGuestCheckIn={event.allow_guest_check_in ?? false}
+              addsGuestsToPipeline={event.guest_check_in_creates_prospect ?? false}
             />
 
             {/* Attachments */}
