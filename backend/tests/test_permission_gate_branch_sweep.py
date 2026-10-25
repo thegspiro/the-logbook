@@ -82,6 +82,13 @@ ALLOWED = {
     # templates, exactly as GET /equipment-checks/templates/{id} does. Tapping
     # a tag during a check is part of performing one, which view alone cannot.
     ("inventory_nfc.py", "POST", "/nfc/resolve-check", "inventory.check_view"),
+    # `admin.access` is required *in addition to* the settings gate to set up
+    # Gmail sending through a domain-wide delegated service account, whose key
+    # can send as anyone in the domain (owner decision, 2026-10-25). It
+    # narrows what a settings.manage holder may write; an admin.access holder
+    # without a settings grant has no business editing settings at all.
+    ("organizations.py", "PATCH", "/settings", "admin.access"),
+    ("organizations.py", "PATCH", "/settings/email", "admin.access"),
 }
 
 
