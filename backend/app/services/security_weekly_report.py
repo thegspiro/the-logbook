@@ -23,7 +23,7 @@ import copy
 import html
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -59,6 +59,11 @@ REPORT_WINDOW_DAYS = 7
 # runs hourly, so two hours covers a late tick without opening the door to a
 # Wednesday deploy emailing last Monday's slot.
 FIRST_SEND_GRACE = timedelta(hours=2)
+# After a send that reached some recipients and not others, the ones missed are
+# tried again on the following hourly ticks, and only them: re-sending to
+# everyone would give the recipients who already have the report a copy an hour.
+# Three more tries bounds a recipient whose address is simply wrong.
+MAX_RETRY_ATTEMPTS = 3
 TOP_ERROR_TYPES_SHOWN = 5
 # A verification pass walks every sealed row in the window; bound it so a very
 # large week cannot hold the task open.
@@ -81,6 +86,8 @@ class ReportSchedule:
     weekday: int
     hour: int
     last_sent_at: Optional[datetime]
+    retry_user_ids: tuple[str, ...] = ()
+    retry_attempts: int = 0
 
 
 @dataclass
@@ -129,6 +136,8 @@ def read_schedule(organization: Organization) -> ReportSchedule:
     weekday = raw.get("weekday")
     hour = raw.get("hour")
     last_sent = raw.get("last_sent_at")
+    retry_ids = raw.get("retry_user_ids")
+    retry_attempts = raw.get("retry_attempts")
 
     parsed_last: Optional[datetime] = None
     if isinstance(last_sent, str):
@@ -154,6 +163,18 @@ def read_schedule(organization: Organization) -> ReportSchedule:
             else DEFAULT_HOUR
         ),
         last_sent_at=parsed_last,
+        retry_user_ids=(
+            tuple(i for i in retry_ids if isinstance(i, str))
+            if isinstance(retry_ids, list)
+            else ()
+        ),
+        retry_attempts=(
+            retry_attempts
+            if isinstance(retry_attempts, int)
+            and not isinstance(retry_attempts, bool)
+            and retry_attempts >= 0
+            else 0
+        ),
     )
 
 
@@ -182,7 +203,14 @@ def write_schedule(
     organization.settings = current
 
 
-def _record_sent(organization: Organization, sent_at: datetime) -> None:
+def _record_sent(
+    organization: Organization,
+    sent_at: datetime,
+    *,
+    retry_user_ids: Sequence[str] = (),
+    retry_attempts: int = 0,
+) -> None:
+    """Stamp the send and keep the members still to be retried (none, usually)."""
     current = copy.deepcopy(organization.settings or {})
     security = current.get(SECURITY_SETTINGS_KEY)
     if not isinstance(security, dict):
@@ -191,6 +219,12 @@ def _record_sent(organization: Organization, sent_at: datetime) -> None:
     if not isinstance(report, dict):
         report = {}
     report["last_sent_at"] = sent_at.astimezone(timezone.utc).isoformat()
+    if retry_user_ids:
+        report["retry_user_ids"] = list(retry_user_ids)
+        report["retry_attempts"] = retry_attempts
+    else:
+        report.pop("retry_user_ids", None)
+        report.pop("retry_attempts", None)
     security[REPORT_SETTINGS_KEY] = report
     current[SECURITY_SETTINGS_KEY] = security
     organization.settings = current
@@ -480,6 +514,89 @@ def build_body(data: ReportData, tz: ZoneInfo) -> str:
     return "".join(parts)
 
 
+async def _send_to_members(
+    db: AsyncSession,
+    members: Sequence[User],
+    subject: str,
+    html_body: str,
+) -> tuple[int, List[str]]:
+    """Email each member on their own; (emails sent, ids of those not reached)."""
+    sent_total = 0
+    missed: List[str] = []
+    for member in members:
+        try:
+            sent, _failed = await EmailService().send_email(
+                to_emails=[member.email],
+                subject=subject,
+                html_body=html_body,
+                db=db,
+                template_type="security_weekly_report",
+            )
+        except Exception as exc:
+            logger.warning(
+                "Weekly security report to member {} failed: {}", member.id, exc
+            )
+            sent = 0
+        sent_total += sent
+        if not sent:
+            missed.append(str(member.id))
+    return sent_total, missed
+
+
+async def _build_report(
+    db: AsyncSession, organization: Organization, moment: datetime, local_tz: Any
+) -> tuple[str, str]:
+    period_end = moment.astimezone(timezone.utc)
+    period_start = period_end - timedelta(days=REPORT_WINDOW_DAYS)
+    data = await gather_report_data(db, organization, period_start, period_end)
+    html_body = wrap_email_body(
+        organization,
+        "Weekly security report",
+        build_body(data, local_tz),
+        header_color=ACCENT_AMBER if data.needs_attention else ACCENT_GREEN,
+        chip="Security",
+    )
+    return build_subject(data, organization), html_body
+
+
+async def _retry_missed_recipients(
+    db: AsyncSession,
+    organization: Organization,
+    schedule: ReportSchedule,
+    moment: datetime,
+    local_tz: Any,
+) -> int:
+    """Send the report to the recipients an earlier tick did not reach."""
+    recipients, _fallback = await resolve_recipients(db, organization)
+    wanted = set(schedule.retry_user_ids)
+    members = [m for m in recipients if str(m.id) in wanted]
+    attempts = schedule.retry_attempts + 1
+    if not members:
+        # Everyone left has since lost the position or their address.
+        _record_sent(organization, schedule.last_sent_at or moment)
+        await db.commit()
+        return 0
+    subject, html_body = await _build_report(db, organization, moment, local_tz)
+    sent_total, missed = await _send_to_members(db, members, subject, html_body)
+    if missed and attempts >= MAX_RETRY_ATTEMPTS:
+        logger.warning(
+            "Weekly security report for organization {} never reached {} "
+            "recipient(s) after {} retries; giving up",
+            organization.id,
+            len(missed),
+            attempts,
+        )
+        missed = []
+    _record_sent(
+        organization,
+        schedule.last_sent_at or moment,
+        retry_user_ids=missed,
+        retry_attempts=attempts,
+    )
+    await db.commit()
+    return sent_total
+
+
 async def send_weekly_security_report(
     db: AsyncSession,
     organization: Organization,
@@ -489,12 +606,17 @@ async def send_weekly_security_report(
 
     Nothing is recorded unless at least one email went out, so a department
     whose mail is failing is tried again on the next hourly tick rather than a
-    week on.
+    week on. When the send reached some recipients and not others, the week is
+    recorded and the ones missed are retried alone on the following ticks.
     """
     schedule = read_schedule(organization)
     local_tz = reporting_timezone(organization)
     moment = (now or datetime.now(timezone.utc)).astimezone(local_tz)
     if not is_due(schedule, moment):
+        if schedule.enabled and schedule.retry_user_ids:
+            return await _retry_missed_recipients(
+                db, organization, schedule, moment, local_tz
+            )
         return 0
 
     recipients, _fallback = await resolve_recipients(db, organization)
@@ -506,36 +628,13 @@ async def send_weekly_security_report(
         )
         return 0
 
-    period_end = moment.astimezone(timezone.utc)
-    period_start = period_end - timedelta(days=REPORT_WINDOW_DAYS)
-    data = await gather_report_data(db, organization, period_start, period_end)
-
-    attention = data.needs_attention
-    html_body = wrap_email_body(
-        organization,
-        "Weekly security report",
-        build_body(data, local_tz),
-        header_color=ACCENT_AMBER if attention else ACCENT_GREEN,
-        chip="Security",
-    )
-    subject = build_subject(data, organization)
-
-    sent_total = 0
-    for member in recipients:
-        try:
-            sent, _failed = await EmailService().send_email(
-                to_emails=[member.email],
-                subject=subject,
-                html_body=html_body,
-                db=db,
-                template_type="security_weekly_report",
-            )
-            sent_total += sent
-        except Exception as exc:
-            logger.warning(
-                "Weekly security report to member {} failed: {}", member.id, exc
-            )
+    subject, html_body = await _build_report(db, organization, moment, local_tz)
+    sent_total, missed = await _send_to_members(db, recipients, subject, html_body)
     if sent_total:
-        _record_sent(organization, period_end)
+        _record_sent(
+            organization,
+            moment.astimezone(timezone.utc),
+            retry_user_ids=missed,
+        )
         await db.commit()
     return sent_total

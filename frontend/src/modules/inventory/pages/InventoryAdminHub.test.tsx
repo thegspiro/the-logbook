@@ -82,6 +82,9 @@ const mockLowStockAlerts = [
 
 describe('InventoryAdminHub', () => {
   beforeEach(() => {
+    // Choosing an area navigates, and BrowserRouter reads the real location,
+    // so a test that clicked one would otherwise hand its URL to the next.
+    window.history.pushState({}, '', '/inventory/admin');
     vi.clearAllMocks();
     mockGetSummary.mockResolvedValue(mockSummary);
     mockGetLowStockItems.mockResolvedValue(mockLowStockAlerts);
@@ -191,51 +194,53 @@ describe('InventoryAdminHub', () => {
     expect(screen.queryByText(/Low Stock Alerts/)).not.toBeInTheDocument();
   });
 
-  it('still badges the reorder card with the number of low categories', async () => {
+  it('badges Requests & Approvals, and its reorder page, with the number of low categories', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('Reorder Requests')).toBeInTheDocument();
-    });
-    expect(within(screen.getByRole('link', { name: /Reorder Requests/ })).getByText('2')).toBeInTheDocument();
+    const area = await screen.findByRole('tab', { name: 'Requests & Approvals' });
+    await waitFor(() => expect(area).toHaveAccessibleDescription(expect.stringContaining('2 need attention')));
+
+    await user.click(area);
+    const reorder = await screen.findByRole('link', { name: /Reorder Requests/ });
+    expect(within(reorder).getByText('2')).toBeInTheDocument();
   });
 
-  it('renders all navigation cards', async () => {
+  it('files every page under an area, listed when the area is chosen', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
-    });
-    const navTitles = [
-      'All Items',
-      'Pool Items',
-      'Categories',
-      'Members',
-      'Maintenance',
-      'Temporary Loans',
-      'Charges',
-      'Return Requests',
-      'Storage Areas',
-      'Import',
-      'Gear Requests',
-      'Write-Offs',
-      'Reorder Requests',
-      'Gear Kits',
-      'Variant Groups',
-    ];
-    for (const title of navTitles) {
-      expect(screen.getByText(title)).toBeInTheDocument();
+    await screen.findByText('PPE & Turnout Gear');
+
+    const pagesByArea: Record<string, string[]> = {
+      Catalog: ['All Items', 'Pool Items', 'Categories', 'Variant Groups', 'Storage Areas', 'Vendors'],
+      'Issuance & Members': ['Members', 'Temporary Loans', 'Gear Kits', 'Issuance Allowances', 'Impact Planner'],
+      'Requests & Approvals': ['Gear Requests', 'Return Requests', 'Reorder Requests', 'Write-Offs', 'Charges'],
+      'Setup & Tools': ['Setup Guide', 'Import'],
+    };
+    for (const [area, pages] of Object.entries(pagesByArea)) {
+      await user.click(screen.getByRole('tab', { name: area }));
+      const strip = screen.getByRole('navigation', { name: `${area} pages` });
+      for (const page of pages) {
+        expect(within(strip).getByRole('link', { name: new RegExp(`^${page}`) })).toBeInTheDocument();
+      }
     }
   });
 
-  it('renders correct links for navigation cards', async () => {
+  it('opens an area on its first page, and links each page to its own route', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
-    });
-    const allLinks = screen.getAllByRole('link');
-    const itemsLink = allLinks.find((l) => l.getAttribute('href') === '/inventory/admin/items');
-    expect(itemsLink).toBeDefined();
-    const poolLink = allLinks.find((l) => l.getAttribute('href') === '/inventory/admin/pool');
-    expect(poolLink).toBeDefined();
+    await screen.findByText('PPE & Turnout Gear');
+
+    await user.click(screen.getByRole('tab', { name: 'Catalog' }));
+    expect(window.location.pathname).toBe('/inventory/admin/items');
+    const strip = screen.getByRole('navigation', { name: 'Catalog pages' });
+    expect(within(strip).getByRole('link', { name: 'All Items' })).toHaveAttribute('href', '/inventory/admin/items');
+    expect(within(strip).getByRole('link', { name: 'All Items' })).toHaveAttribute('aria-current', 'page');
+    expect(within(strip).getByRole('link', { name: 'Pool Items' })).toHaveAttribute('href', '/inventory/admin/pool');
+    // Outside the header's routes, and says so rather than dropping it silently.
+    expect(within(strip).getByRole('link', { name: /Storage Areas.*opens its own page/ })).toHaveAttribute(
+      'href',
+      '/inventory/storage-areas'
+    );
   });
 
   it('refreshes summary when refresh button is clicked', async () => {
@@ -255,7 +260,7 @@ describe('InventoryAdminHub', () => {
     mockGetSummary.mockRejectedValue(new Error('Network error'));
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
+      expect(screen.getByText('PPE & Turnout Gear')).toBeInTheDocument();
     });
     expect(screen.queryByText('available')).not.toBeInTheDocument();
   });
@@ -264,7 +269,7 @@ describe('InventoryAdminHub', () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
+      expect(screen.getByText('PPE & Turnout Gear')).toBeInTheDocument();
     });
     await user.click(screen.getByRole('button', { name: /Assign to Member/ }));
     await waitFor(() => {
@@ -286,7 +291,7 @@ describe('InventoryAdminHub', () => {
 
     expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
     expect(screen.queryByText('All Items')).not.toBeInTheDocument();
-    expect(screen.queryByText('Catalog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Catalog' })).not.toBeInTheDocument();
   });
 
   // The store is its own module with its own grant, and this card used to
@@ -297,7 +302,7 @@ describe('InventoryAdminHub', () => {
     mockIsModuleOn.mockImplementation((key: unknown) => key !== 'storefront');
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
+      expect(screen.getByText('PPE & Turnout Gear')).toBeInTheDocument();
     });
     expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
     expect(screen.queryByText('Store Overview')).not.toBeInTheDocument();
@@ -307,26 +312,34 @@ describe('InventoryAdminHub', () => {
     mockCheckPermission.mockImplementation((p: unknown) => p !== 'storefront.manage');
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
+      expect(screen.getByText('PPE & Turnout Gear')).toBeInTheDocument();
     });
     expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
   });
 
-  it('shows the store section with the module on and the grant held', async () => {
+  it('shows the store area with the module on and the grant held, without leaving the page', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Department Store')).toBeInTheDocument();
+    await screen.findByText('PPE & Turnout Gear');
+
+    // Every store page opens the store's own console, so choosing the area only
+    // lists them rather than navigating away.
+    await user.click(screen.getByRole('tab', { name: 'Department Store' }));
+    expect(window.location.pathname).toBe('/inventory/admin');
     expect(screen.getByRole('link', { name: /Store Overview/ })).toHaveAttribute('href', '/inventory/admin/store');
   });
 
-  it('shows badges on nav cards with counts', async () => {
+  it('badges each area with the work waiting in it', async () => {
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
-    });
-    expect(screen.getAllByText('7').length).toBeGreaterThanOrEqual(1);
+    // maintenance_due_count 7, overdue_checkouts 3 in the summary.
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Readiness & Compliance' })).toHaveAccessibleDescription(
+        expect.stringContaining('7 need attention')
+      )
+    );
+    expect(screen.getByRole('tab', { name: 'Issuance & Members' })).toHaveAccessibleDescription(
+      expect.stringContaining('3 need attention')
+    );
   });
 
   it('prompts to finish setup and names what is still missing', async () => {
@@ -348,7 +361,7 @@ describe('InventoryAdminHub', () => {
   it('hides the setup prompt once every step has records', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
+      expect(screen.getByText('PPE & Turnout Gear')).toBeInTheDocument();
     });
     expect(screen.queryByText('Finish inventory setup')).not.toBeInTheDocument();
   });
@@ -358,7 +371,7 @@ describe('InventoryAdminHub', () => {
     renderWithRouter(<InventoryAdminHub />);
 
     await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
+      expect(screen.getByText('PPE & Turnout Gear')).toBeInTheDocument();
     });
     expect(screen.queryByText('Finish inventory setup')).not.toBeInTheDocument();
   });
@@ -448,6 +461,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
   const grantAll = () => mockCheckPermission.mockReturnValue(true);
 
   beforeEach(() => {
+    window.history.pushState({}, '', '/inventory/admin');
     mockGetSummary.mockReset();
     mockGetSummary.mockResolvedValue(mockSummary);
     mockGetLowStockItems.mockReset();
@@ -555,17 +569,6 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     expect(within(screen.getByRole('link', { name: /Uniforms/ })).getByText('45')).toBeInTheDocument();
   });
 
-  it('counts All Items as the non-medical rows its listing shows', async () => {
-    // total_items is 150 and sums quantities across every type, medical
-    // included; /inventory/admin/items excludes medical and reports rows. A
-    // card that shows 150 over a list of 127 reads as a bug in the list.
-    renderWithRouter(<InventoryAdminHub />);
-    const items = await screen.findByRole('link', { name: /All Items/ });
-
-    expect(within(items).getByText('127')).toBeInTheDocument();
-    expect(within(items).queryByText('150')).not.toBeInTheDocument();
-  });
-
   it('reports what is expiring on the EMS card, not what is on the shelf', async () => {
     // 7 expiring soon, out of 88 items — the number an EMS officer opens the
     // page for is the one with a deadline on it.
@@ -623,8 +626,10 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     mockCheckPermission.mockImplementation(
       (permission: unknown) => permission !== 'inventory.check_manage' && permission !== 'inventory.check_view'
     );
+    const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByText('All Items');
+    await screen.findByText('PPE & Turnout Gear');
+    await user.click(screen.getByRole('tab', { name: 'Readiness & Compliance' }));
 
     expect(screen.queryByText('Equipment Checklists')).not.toBeInTheDocument();
     expect(screen.queryByText('Check Reports')).not.toBeInTheDocument();
@@ -633,8 +638,10 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
   });
 
   it('shows the checklist cards once the check grants are held', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByText('All Items');
+    await screen.findByText('PPE & Turnout Gear');
+    await user.click(screen.getByRole('tab', { name: 'Readiness & Compliance' }));
 
     expect(screen.getByRole('link', { name: /Equipment Checklists/ })).toHaveAttribute(
       'href',
@@ -646,15 +653,15 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     );
   });
 
-  it('drops a section heading when every card under it is hidden', async () => {
-    // A heading over an empty grid tells the reader something is missing
+  it('drops an area whose every page is hidden', async () => {
+    // An area card over an empty strip tells the reader something is missing
     // without saying what.
     mockIsModuleOn.mockImplementation((key: unknown) => key !== 'storefront');
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByText('All Items');
+    await screen.findByText('PPE & Turnout Gear');
 
-    expect(screen.getByText('Catalog')).toBeInTheDocument();
-    expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Catalog' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Department Store' })).not.toBeInTheDocument();
   });
 
   it('sends the maintenance row to the item, not to the dashboard', async () => {
@@ -759,7 +766,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       expect(screen.queryByText('Nothing needs attention. All inventory work is up to date.')).not.toBeInTheDocument();
     });
 
-    it('offers no metrics Settings tab, and refuses it by URL as well', async () => {
+    it('offers no Headline Metrics page, and refuses it by URL as well', async () => {
       // Both the read and the write behind Settings require `inventory.manage`,
       // so the panel would report itself unavailable and could never save.
       // Hiding only the tab leaves `?tab=settings` reaching it anyway.
@@ -769,20 +776,20 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       renderWithRouter(<InventoryAdminHub />);
       expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
-      // With Overview the only tab left, the hub draws no section nav at all.
-      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Headline Metrics' })).not.toBeInTheDocument();
       expect(screen.queryByText('Headline metrics')).not.toBeInTheDocument();
       window.history.pushState({}, '', '/inventory/admin');
     });
 
-    it('keeps the metrics tab for the quartermaster', async () => {
+    it('keeps the Headline Metrics page for the quartermaster', async () => {
       mockCheckPermission.mockReturnValue(true);
 
       renderWithRouter(<InventoryAdminHub />);
       expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
-      expect(screen.getByRole('tab', { name: 'Headline Metrics' })).toHaveAccessibleDescription(
-        'Choose the figures shown at the top of this page'
+      expect(screen.getByRole('link', { name: 'Headline Metrics' })).toHaveAttribute(
+        'href',
+        '/inventory/admin?tab=settings'
       );
     });
 

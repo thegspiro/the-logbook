@@ -82,7 +82,7 @@ export const ForgotPasswordPage: React.FC = () => {
             <p className="text-theme-text-secondary mb-6">{answer.message}</p>
             <Link
               to="/login"
-              className="focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
+              className="focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center space-x-2 rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               <span>Back to sign in</span>
@@ -116,7 +116,7 @@ export const ForgotPasswordPage: React.FC = () => {
             </p>
             <Link
               to="/login"
-              className="focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
+              className="focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center space-x-2 rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               <span>Back to sign in</span>
@@ -253,7 +253,7 @@ export const ForgotPasswordPage: React.FC = () => {
           <div className="mt-6 text-center">
             <Link
               to="/login"
-              className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden"
+              className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center space-x-2 rounded-sm px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               <span>Back to sign in</span>

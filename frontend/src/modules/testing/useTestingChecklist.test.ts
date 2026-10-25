@@ -540,3 +540,38 @@ describe('useTestingChecklist', () => {
     expect(markdown).toContain('- Across 2 testers: 1 of');
   });
 });
+
+describe('useTestingChecklist — workflow review W77', () => {
+  beforeEach(() => {
+    mockGetRun.mockReset();
+    mockSaveEntry.mockReset();
+    mockGetRun.mockResolvedValue(run([]));
+    mockSaveEntry.mockResolvedValue(entry());
+  });
+
+  it('counts the tester who made the first mark of a run without a reload', async () => {
+    // The server's count stayed at 0 until the next load, so "Clear everyone"
+    // offered to delete every mark "from 0 testers".
+    const { result } = await loaded();
+    expect(result.current.testerCount).toBe(0);
+
+    act(() => result.current.setStatus('/dashboard', 'pass'));
+
+    expect(result.current.testerCount).toBe(1);
+  });
+
+  it('gives the gate counts the screen and the report give, in words', async () => {
+    mockGetRun.mockResolvedValue(
+      run([
+        entry({ id: 'a', routePath: '/admin/audit-log', status: 'blocked', expectedAccess: 'denied' }),
+        entry({ id: 'b', routePath: '/learning/:pathId', status: 'blocked', expectedAccess: 'open' }),
+      ])
+    );
+    const { result } = await loaded();
+
+    const markdown = result.current.toMarkdown({ formatTimestamp: () => 'then' });
+
+    expect(markdown).toContain('- Gates: 1 refusal verified, 0 mismatches, 1 to confirm');
+    expect(markdown).not.toContain('(s)');
+  });
+});

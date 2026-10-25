@@ -1,5 +1,18 @@
 # Script currency
 
+## Flagged by the 2026-10-24 → 10-25 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                    | Beat                           | Was                                 | Now                                                                                        |
+| ------------------------- | ------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| **03** (IT), **04**       | Room kiosks and ID cards       | Not scripted                        | Member ID Cards page, Card Readers page and Card Check-ins tab show every tap              |
+| **05** (training), **09** | Programs tab in Training Admin | Showed only the create wizard       | Lists existing programs; New Pipeline opens the wizard; registry import is on Requirements |
+| **Any scheduling beat**   | Patterns                       | No pause; night side used day seats | Pause/Resume a pattern; each side uses its own template; generate lists members not seated |
+| **Any inventory beat**    | Tags                           | Tagged per item only                | NFC Tag Register lists, moves, marks lost and unlinks tags                                 |
+| **03** (IT)               | Database and Redis             | Plaintext accepted                  | Optional TLS with `tls-setup.sh`; `DB_REQUIRE_TLS` / `REDIS_REQUIRE_TLS` refuse plaintext  |
+
 ## Flagged by the 2026-10-23 → 10-24 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).

@@ -476,14 +476,17 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
               setTimeOffForm({ start_date: '', end_date: '', reason: '' });
               setShowTimeOffModal(true);
             }}
-            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors sm:flex-none"
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors sm:flex-none"
           >
             <CalendarOff className="h-4 w-4" /> Request Time Off
           </button>
           <Link
             to="/notifications?filter=schedule_change"
-            className="text-theme-text-muted hover:bg-theme-surface-hover flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors hover:text-violet-600 dark:hover:text-violet-400"
+            className="text-theme-text-muted hover:bg-theme-surface-hover touch-target-phone flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors hover:text-violet-600 dark:hover:text-violet-400"
             title="View scheduling notification history"
+            // On a phone the link is only a bell; a `title` is not a
+            // dependable accessible name there.
+            aria-label="View scheduling notification history"
           >
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Alerts</span>
@@ -953,7 +956,10 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                   {swapBlockedReason}
                 </p>
               )}
-              <button onClick={() => setShowSwapModal(false)} className="text-theme-text-secondary px-4 py-2">
+              <button
+                onClick={() => setShowSwapModal(false)}
+                className="text-theme-text-secondary touch:min-h-11 px-4 py-2"
+              >
                 Cancel
               </button>
               <button
@@ -964,7 +970,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                   submittingSwap || (swapForm.mode === 'exchange' && !selectedExchange) || swapBlockedReason !== null
                 }
                 aria-describedby={swapBlockedReason ? 'swap-blocked-reason' : undefined}
-                className="rounded-lg bg-violet-700 px-4 py-2 text-white hover:bg-violet-800 disabled:opacity-50"
+                className="touch:min-h-11 rounded-lg bg-violet-700 px-4 py-2 text-white hover:bg-violet-800 disabled:opacity-50"
               >
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}
               </button>
@@ -1057,7 +1063,10 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
               )}
             </div>
             <div className="border-theme-surface-border flex justify-end gap-3 border-t p-6">
-              <button onClick={() => setShowTimeOffModal(false)} className="text-theme-text-secondary px-4 py-2">
+              <button
+                onClick={() => setShowTimeOffModal(false)}
+                className="text-theme-text-secondary touch:min-h-11 px-4 py-2"
+              >
                 Cancel
               </button>
               <button
@@ -1065,7 +1074,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                   void handleTimeOffRequest();
                 }}
                 disabled={submittingTimeOff || !timeOffForm.start_date}
-                className="rounded-lg bg-violet-700 px-4 py-2 text-white hover:bg-violet-800 disabled:opacity-50"
+                className="touch:min-h-11 rounded-lg bg-violet-700 px-4 py-2 text-white hover:bg-violet-800 disabled:opacity-50"
               >
                 {submittingTimeOff ? 'Submitting...' : 'Submit Request'}
               </button>

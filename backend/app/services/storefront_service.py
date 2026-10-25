@@ -1902,7 +1902,15 @@ class StorefrontService:
         message: Optional[str] = None,
         notify_member: bool = True,
     ) -> StoreOrder:
-        order = await self.get_order(order_id, organization_id)
+        # A move to PAID may settle the ledger below, a read-modify-write on
+        # amount_paid, so it locks the order like the other settlement paths
+        # (SF8-04-2). A payment landing in between would otherwise be decided
+        # from a stale balance and overwritten with the order total. Every
+        # other transition leaves the money columns alone and stays unlocked,
+        # so routine status changes do not queue behind each other.
+        order = await self.get_order(
+            order_id, organization_id, for_update=status == StoreOrderStatus.PAID
+        )
         if not order:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
@@ -2131,13 +2139,26 @@ class StorefrontService:
         stays where it is and the sales rollup still reports the order's value
         as uncollected rather than inventing revenue.
         """
-        order = await self.get_order(order_id, organization_id)
+        # Locked so the settled check below sees a payment that committed
+        # after the caller loaded the order, not the state it was shown.
+        order = await self.get_order(order_id, organization_id, for_update=True)
         if not order:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot be waived")
         # SoD: a manager must not waive the balance on their own order.
         assert_different_person(actor_id, order.user_id, action="waive", record="order")
+        # SF8-04-3: waiving a paid order would leave the money it collected
+        # beside a WAIVED status, and the sales rollup reads the status, so the
+        # collected amount would be reported as uncollected. A paid order is
+        # refunded instead. Refused rather than skipped, so a stale tab learns
+        # why nothing changed.
+        if order.payment_status == StorePaymentStatus.WAIVED:
+            raise ValueError("This order's payment is already waived")
+        if _is_settled(order):
+            raise ValueError(
+                "This order is already paid. Refund it instead of waiving it."
+            )
 
         order.payment_status = StorePaymentStatus.WAIVED
         order.paid_at = _utcnow()

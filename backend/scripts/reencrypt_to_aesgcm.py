@@ -81,7 +81,13 @@ _PLAIN_COLUMNS = [
             "reviewer_notes",
         ],
     ),
-    ("users", "id", ["mfa_secret"]),
+    ("users", "id", ["mfa_secret", "date_of_birth", "emergency_contacts"]),
+    ("prospective_members", "id", ["date_of_birth"]),
+    (
+        "screening_records",
+        "id",
+        ["provider_name", "result_summary", "notes", "result_data"],
+    ),
     ("integrations", "id", ["encrypted_config"]),
     ("external_training_providers", "id", ["api_key", "api_secret", "client_secret"]),
 ]

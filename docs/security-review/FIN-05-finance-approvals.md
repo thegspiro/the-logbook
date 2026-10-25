@@ -1,6 +1,167 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+
+---
+
+## Pass 12 (2026-10-25) — watchdog pickup: real delta (purchase -> expense report -> reimbursement check flow, budget-category deactivation closing sub-categories, draft withdrawal/cancellation), 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
+
+**Scope.** Pass 11 merged as `f9909b70` (PR #3562). `git diff f9909b70..HEAD`
+over this feature's full established scope (`endpoints/finance.py`,
+`finance_service.py`, `finance_budget_request_service.py`,
+`finance_budget_access.py`, `finance_report_service.py`,
+`finance_reimbursement.py` (new file), `finance_settings.py`,
+`schemas/finance.py`, `models/finance.py`, `public/finance_approvals.py`,
+`frontend/src/modules/finance/`) shows **1,885 insertions / 160 deletions**
+across 8 backend files plus a 2,385-insertion frontend delta across 27
+files — not a near-zero-delta pass. 13 non-merge commits touch this scope;
+each read in full rather than taken on its message. `public/finance_approvals.py`
+is confirmed byte-identical to pass 11 (`git diff` on that one path alone
+returns no lines).
+
+**What's new, by area:**
+
+- **Purchase -> expense report -> reimbursement check** (new module
+  `app/services/finance_reimbursement.py`, 163 lines, plus ~450 combined
+  lines across `finance.py`/`finance_service.py`/`schemas/finance.py`/
+  `models/finance.py`, migration `4250eb8b8378`): lets a member who bought
+  an approved purchase with their own money claim it back. Three new routes,
+  all read in full against the checklist:
+  - `POST /purchase-requests/{pr_id}/reimbursement-report` —
+    `finance.request`/`finance.manage`, but the service additionally
+    requires `pr.requested_by == caller_id` regardless of grant (even a
+    `finance.manage` holder cannot raise this for someone else — "the report
+    pays whoever submits it"). The purchase is resolved org-scoped and
+    locked (`lock_purchase`) before any check.
+  - `POST /expense-reports/{er_id}/reimbursement-check` — `finance.manage`
+    only. Builds the check payable to the _report's_ submitter
+    (`er.submitted_by`), not the caller, so the pre-existing `finance.manage`
+    holder issuing/raising it is never the same identity the SoD checks at
+    `issue_check`/`approve_step` compare against unless they happen to be the
+    same person — in which case the existing `assert_different_person`
+    guards (unchanged by this pass) already block them from approving or
+    issuing their own check, exactly as for any other check request.
+  - `GET /approval-chains/route-preview` — OR-gated
+    `finance.request`/`finance.view`/`finance.manage`; returns only step
+    names/order/auto-approve state via the existing `describe_assignee`
+    (never raw approver configuration — same redaction `preview_approval_chain`
+    already uses), and is proven to agree with what submission would actually
+    do by sharing `_request_chain` with `submit_purchase_request`/
+    `submit_expense_report`/`submit_check_request` (closes the CLAUDE.md
+    Pitfall #29 class — a preview and the real decision computed twice would
+    drift).
+  - Money/state invariants verified by direct read, not inferred from names:
+    `live_report_for_purchase`/`live_check_for_report`/`lock_purchase` are all
+    org-scoped, locking reads (Pitfall #27); `_refuse_while_claimed` is called
+    from both `mark_pr_paid` and `cancel_purchase_request` so a purchase a
+    submitted report already claims cannot be paid or cancelled out from under
+    it; `_settle_report`/`_unsettle_report` release/restore the purchase's
+    encumbrance in the same budget mutation as the line spend, so a
+    near-full budget line is not spuriously refused for counting both
+    halves at once; `_lock_reimbursed_report` documents and takes the
+    report-then-check lock order `request_reimbursement_check`/
+    `mark_expense_paid` also use, so `issue_check`/`void_check` cannot
+    deadlock against them; `qb_export_entry` (new JSON column on
+    `CheckRequest`) is written whole via a bulk `update(...).values(...)`
+    (`finance_service.py:8212`, comment citing Pitfall #12 explicitly), never
+    read-mutated-reassigned.
+  - `_refuse_reimbursement_changes` (on `update_check_request`) refuses a
+    budget/fund/amount change on a reimbursement check — it pays exactly what
+    its report owes, so those fields are fixed at creation; `update_check_request`
+    itself is unchanged (still OR-gated `finance.request`/`finance.manage`
+    with `restrict_to_user` scoping), so the report's own submitter editing
+    the check's `payee_address`/`memo` while it is draft/submitted is the
+    same pre-existing self-service edit any check requester already has, not
+    a new exposure.
+- **Draft editing, withdrawal and cancellation** (`update_expense_line_item`/
+  `delete_expense_line_item`/`cancel_expense_report`/`cancel_check_request`,
+  all new routes): every one resolves its target through the existing
+  org-scoped, `restrict_to_user`-aware `get_expense_report`/`get_check_request`
+  with `for_update=True` before acting, so a non-manager can reach only their
+  own record (confirmed by direct read of `_draft_line`, `cancel_expense_report`,
+  `cancel_check_request`); line edits/deletes are refused once the report
+  leaves `DRAFT`; cancellation is refused once a live reimbursement check or
+  report claims the entity being cancelled (same `_refuse_while_claimed`/
+  `live_check_for_report` guard as above).
+- **Budget-category deactivation now closes sub-categories, not just the
+  category itself** (`CategoryTree.inactive_source`/`is_effectively_active`
+  in `finance_budget_access.py`; consumed by `assert_category_takes_new_lines`,
+  `_assert_budget_open_for_new_charges`, `start_from_last_year`, and the
+  budget-request proposal-options/category list) — a correctness tightening
+  of an existing control, not a new one; every query behind it remains
+  `organization_id`-filtered (`load_category_tree`), confirmed by direct read
+  rather than taken on the diff's own framing.
+- **Reporting fixes** (`finance_report_service.py`, +180/-16): a report paid
+  by a reimbursement check (rather than `mark_expense_paid`) is now counted
+  in the payments register and functional-expense report when its check is
+  issued, and reversed when voided, via a new `_paid_by_check` EXISTS-subquery
+  and `_reports`/`report_parts` helpers — every added query filters
+  `organization_id`, confirmed by direct read of all four new/changed query
+  sites.
+- **Frontend** (27 files, +2,385/-177, including two new test files —
+  `reimbursementFlow.test.tsx` 309 lines, `draftWithdrawal.test.tsx` 339
+  lines): wires the above through the existing shared module `api` axios
+  instance (`services/api.ts` — confirmed no new axios instance created,
+  Pitfall #7 n/a) and the existing route-preview/reimbursement endpoints; no
+  new backend trust boundary.
+
+**Not security-relevant, confirmed by reading each commit:** 1 layout-only
+commit (`ce094e7b9`, icon/label alignment on the expense line "Add line"
+button) and 1 CI-fix-after-merge commit (`39dc1e537`, no logic change beyond
+what the two feature commits it follows already introduced).
+
+**Migration.** One migration landed this window, read in full:
+`4250eb8b8378` — adds `purchase_requests.status = 'reimbursed'`,
+`expense_reports.purchase_request_id` (`SET NULL`, `nullable=True` —
+Pitfall #2), `check_requests.expense_report_id` (`SET NULL`,
+`nullable=True`, `use_alter=True` since the two tables now reference each
+other both ways), and `check_requests.qb_export_entry` (JSON). Every step is
+guarded on `_has_table(...)` first (Pitfall #26 — all three tables are
+`create_all`-built). The downgrade folds any `reimbursed` row back to `paid`
+and says in its own docstring what is lost (which report/check paid it) —
+an irreversible backfill whose cost is stated up front, per Pitfall #20's
+corollary. No seeded-grant or other JSON-column change.
+
+**Route count.** `finance.py` enumerated fresh by AST: **136 routes**
+(up from 124 at pass 9/10/11's unchanged count — 7 new routes this pass:
+the 3 reimbursement-path routes, `update_expense_line_item`,
+`delete_expense_line_item`, `cancel_expense_report`, `cancel_check_request`).
+Every one of the 136 carries an explicit auth dependency (`get_current_user`
+or a `require_permission`/`require_all_permissions` call), checked
+programmatically — zero false negatives after correcting an initial
+substring-matching script bug (the `Depends(\n    require_permission(...)\n)`
+line-wrap shape was being missed by a naive adjacent-text check; re-run with
+a corrected check confirms all 136). `public/finance_approvals.py` unchanged
+at 3 routes, byte-identical to pass 11.
+
+**Standing items re-verified, both unchanged (neither touched by this
+window's delta):**
+
+- **FIN8-05-1 (MED) — still OPEN (flagged).**
+  `finance_budget_request_service.py`'s `decide_request` (now line 659,
+  shifted from 635/660 by this window's unrelated insertions, confirmed same
+  body by direct read) still has no `assert_different_person` check, unlike
+  `review_request`.
+- **FIN-30 (LOW) — still FLAGGED.** `list_dues_payments`
+  (`finance_service.py:6796`, shifted from `:6116`, confirmed same body by
+  direct read) still takes no limit/offset.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 12)
+
+| Check                                                                                                                                                               | Result                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                     | clean                                                                                                                   |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                            | clean, 2642 files unchanged                                                                                             |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                         | clean                                                                                                                   |
+| `validate_migrations.py --strict`                                                                                                                                   | passed, 652 revisions, single head `3f2593e8071e`                                                                       |
+| `check_route_permissions.py --strict` (repo root)                                                                                                                   | 276 routes, 0 errors, 0 warnings                                                                                        |
+| `generate_schema_docs.py` re-run                                                                                                                                    | zero diff against committed `docs/DATABASE_SCHEMA.md`                                                                   |
+| `pytest -k "finance or budget_request or approval_chain or dues or reimburs or quickbooks"` (unit)                                                                  | 1,336 passed, 2 skipped (both environment-only: `pywebpush`, and a time-zone-table fixture unavailable in this sandbox) |
+| Standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, account-status gates) | 171 passed                                                                                                              |
+| `frontend: npm run typecheck`                                                                                                                                       | 0 errors                                                                                                                |
+| `frontend: npm run lint`                                                                                                                                            | 0 errors, 0 warnings                                                                                                    |
 
 ---
 

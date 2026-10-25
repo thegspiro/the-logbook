@@ -37,6 +37,7 @@ import {
 } from "./manifest.mjs";
 import {
   TOTP_PERIOD_SECONDS,
+  codeStepVerdict,
   readAdminTotpSecret,
   totpForStep,
   totpStep,
@@ -545,7 +546,16 @@ async function enterAuthenticatorCode(page, credentials) {
       ),
       verify.click(),
     ]);
-    if (response.ok()) return;
+    const verdict = codeStepVerdict(response.status());
+    if (verdict === "ok") return;
+    if (verdict === "throttled") {
+      // The limiter answered before the code was checked, so no attempt was
+      // spent on the account; `login` waits out the window and signs in again.
+      throw Object.assign(
+        new Error(`the code step for ${credentials.username} was rate-limited`),
+        { throttled: true },
+      );
+    }
   }
   // Not retried by `login`: each refused code counts toward the account
   // lockout, and signing in again would only spend two more.
@@ -657,11 +667,13 @@ async function login(page, credentials) {
       // second capture or seeder running against the same backend spends the
       // same allowance. A refusal says so on the page; waiting out its window
       // is cheaper than losing the run.
-      const throttled = await page
-        .getByText(/too many/i)
-        .first()
-        .isVisible()
-        .catch(() => false);
+      const throttled =
+        error.throttled ||
+        (await page
+          .getByText(/too many/i)
+          .first()
+          .isVisible()
+          .catch(() => false));
       if (attempt >= (throttled ? 6 : 2)) throw error;
       console.log(
         `  … login attempt ${attempt + 1} ${throttled ? "rate-limited" : "timed out"}, retrying`,

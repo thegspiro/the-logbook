@@ -66,8 +66,9 @@ const registered = Object.keys(BREADCRUMB_ROUTES).sort();
 
 /** Each hub's own `title` prop — the name its crumb has to repeat. */
 const HUB_TITLE_SOURCES: Record<string, string> = {
-  '/scheduling/admin': 'pages/scheduling/admin/SchedulingAdminHub.tsx',
-  '/inventory/admin': 'modules/inventory/pages/InventoryAdminHub.tsx',
+  // These two hubs' headers are drawn by the layout every page in the hub shares.
+  '/scheduling/admin': 'pages/scheduling/admin/SchedulingAdminLayout.tsx',
+  '/inventory/admin': 'modules/inventory/components/InventoryAdminLayout.tsx',
   '/members/admin': 'pages/MembersAdminHub.tsx',
   '/training/admin': 'pages/TrainingAdminPage.tsx',
   '/events/admin': 'pages/EventsAdminHub.tsx',

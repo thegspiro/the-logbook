@@ -1758,6 +1758,28 @@ Tags**. Managing inventory alone does not open that setting.
 
 ![Tag Items in Bulk after one typed serial was linked: 1 tagged this session and how many are left, the next item, Bunker Coat, with its serial number, asset tag, category and storage area, Read serials chosen with Write links greyed out on a desktop, the serial box and Skip this item](./images/05-114-nfc-enroll.png)
 
+### NFC Tag Register _(2026-10-25)_
+
+**Inventory Administration → NFC Tag Register** (`/inventory/admin/nfc/tags`)
+lists every tag your department has linked, whether it is on an item, a storage
+area or an equipment-check compartment. Each row shows what the tag names and,
+for item tags, the last time staff tapped it. It needs **Manage gear, uniforms
+and equipment** and NFC tracking turned on.
+
+- **Mark lost** or **Mark found**, for one tag or a ticked selection.
+- **Move** a tag onto another target of the same kind (an item tag to another
+  item). Use it when a tag was stuck on the wrong thing.
+- **Unlink** removes the tag from what it names, after a confirmation.
+- **Download** saves the filtered list as a CSV.
+
+People who manage equipment checklists (**Manage equipment check templates**)
+can open the register too, but see only compartment tags. They cannot list item
+or shelf tags, and a selection of those is refused rather than changed. The
+same goes for the quartermaster in the other direction: managing inventory now
+covers compartment tags as well.
+
+> **Screenshot to create:** NFC Tag Register with a row selected.
+
 ### Identifying a member by their ID card
 
 If your department issues NFC ID cards (**Settings → Integrations → NFC ID
@@ -2638,64 +2660,78 @@ a decision today".
 
 **Who can open it:** officers with the **Manage gear, uniforms and equipment**,
 **Create and edit equipment check templates** or **Manage the store catalog, order windows, orders, and payments**
-permission, in departments with the Inventory module on. Each card on the page
-checks its own permission, so you see only the cards you can open. If none are
-open to you, the page says "Nothing here for your role".
+permission, in departments with the Inventory module on. Each page checks its
+own permission, so you see only the pages you can open. If none are open to
+you, the page says "Nothing here for your role".
 
 ### Layout
 
-From top to bottom:
+The page is laid out like **Training Administration**. From top to bottom:
 
 1. **The header.** **Assign to Member** opens a member picker and then the
    **Distribute Items** window (see [Item Distribution](#item-distribution)).
-   **Refresh inventory counts** reloads the figures.
+   On the Overview, **Refresh inventory counts** reloads the figures.
 2. **Four headline figures.** Three you can choose (the built-in ones are
    **Items tracked**, **Issued to members** and **Out for repair**). The fourth
    is always the number of items needing attention. Choosing the figures is
    covered in [Administration & Reports](./08-admin-reports.md).
-3. **Needs attention** (officers who can manage inventory). One list of work
+3. **Seven area cards.** Select one to see its pages in the strip below it. A
+   red number on a card or a page is work waiting there.
+4. **The page strip**, and a line naming the page you are on and what it is
+   for. A page marked with an arrow (↗) opens on its own, without this header:
+   the kiosk, the NFC scanning tools, Storage Areas, Import, Temporary Loans,
+   EMS Supplies and the store's own console.
+
+The header stays at the top of every administration page, so you move between
+pages with the area cards and the strip rather than going back to the hub.
+
+| Area                       | Pages                                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Overview**               | Dashboard, Headline Metrics                                                                        |
+| **Catalog**                | All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors                          |
+| **Issuance & Members**     | Members, Temporary Loans, Gear Kits, Issuance Allowances, Impact Planner                           |
+| **Requests & Approvals**   | Gear Requests, Return Requests, Reorder Requests, Write-Offs, Charges                              |
+| **Readiness & Compliance** | Maintenance, Equipment Checklists, Check Reports, Expiring on Apparatus, Items Not Seen            |
+| **Department Store**       | Store Overview, Store Catalog, Store Orders, Store Payments                                        |
+| **Setup & Tools**          | Setup Guide, Import, Put Away by NFC, Shelf Audit, Self-Service Kiosk, Tag Items in Bulk, NFC Tags |
+
+An area with no pages you can open is not shown. **Headline Metrics**, where
+you choose the three headline figures, is offered only to officers who can
+manage inventory.
+
+The **Overview** dashboard shows:
+
+1. **Needs attention** (officers who can manage inventory). One list of work
    waiting on you, most urgent first: overdue deliveries, gear requests,
    pending returns, pending write-offs, low-stock items, maintenance due,
    overdue loans and unresolved departure clearances. Each row has an action,
    such as **Review**, **Receive**, **Check in** or **Open item**. When it is
    empty it reads "Nothing needs attention. All inventory work is up to date."
-4. **Finish inventory setup**, until rooms, storage areas, categories and items
+2. **Finish inventory setup**, until rooms, storage areas, categories and items
    all exist (see [First-Run Setup](#first-run-setup)).
-5. **Supply lines**: three large cards for the stock a department appoints
-   somebody to run.
-6. **The other cards, in groups.**
+3. **Supply lines**: three large cards for the stock a department appoints
+   somebody to run. **PPE & Turnout Gear** and **Uniforms** open the item list
+   filtered to that type, with its item count; **EMS Supplies** opens Medical
+   Supplies, with the number expiring soon.
 
-| Group                      | Cards                                                                                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Supply lines**           | **PPE & Turnout Gear**, **Uniforms** (each opens the item list filtered to that type, with its item count), **EMS Supplies** (opens Medical Supplies, with the number expiring soon) |
-| **Catalog**                | All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors                                                                                                            |
-| **Issuance & Members**     | Members, Temporary Loans, Gear Kits, Issuance Allowances, Impact Planner                                                                                                             |
-| **Requests & Approvals**   | Gear Requests, Return Requests, Reorder Requests, Write-Offs, Charges                                                                                                                |
-| **Readiness & Compliance** | Maintenance, Equipment Checklists, Check Reports, Expiring on Apparatus, Items Not Seen                                                                                              |
-| **Department Store**       | Store Overview, Store Catalog, Store Orders, Store Payments                                                                                                                          |
-| **Setup & Tools**          | Setup Guide, Import, Put Away by NFC, Shelf Audit, Self-Service Kiosk, Tag Items in Bulk, NFC Tags                                                                                   |
+The red numbers count:
 
-A group with no cards you can open is not shown. Some cards carry a count:
-
-| Card                 | Count                                 |
+| Page                 | Count                                 |
 | -------------------- | ------------------------------------- |
-| **All Items**        | Items in the catalog (not medical)    |
 | **Temporary Loans**  | Overdue loans                         |
 | **Maintenance**      | Items due for maintenance             |
 | **Gear Requests**    | Requests awaiting review              |
 | **Return Requests**  | Return notices waiting to be received |
+| **Write-Offs**       | Write-offs awaiting a decision        |
 | **Reorder Requests** | Items running low                     |
 
-Officers who can manage inventory also get a **Headline Metrics** tab, where
-they choose the three headline figures.
+![Inventory admin hub with its area cards and page strip](./images/05-25-admin-hub.png)
 
-![Inventory admin hub with its grouped navigation cards](./images/05-25-admin-hub.png)
+![The inventory admin hub with an area chosen and its pages listed](./images/05-60-admin-hub-groups.png)
 
-![The inventory admin hub with its cards grouped into sections](./images/05-60-admin-hub-groups.png)
+### Who sees which pages
 
-### Who sees which cards
-
-A card appears only if you hold the permission the page behind it needs. Three
+A page appears only if you hold the permission it needs. Three
 cases surprise people:
 
 - **Managing inventory does not include the checklist permissions.** The
@@ -2705,7 +2741,7 @@ cases surprise people:
   templates and results**.
 - **EMS Supplies** needs **View medical supplies** and the Medical Supplies
   module.
-- **Department Store** cards need **Manage the store catalog, order windows, orders, and payments** and the Storefront
+- **Department Store** pages need **Manage the store catalog, order windows, orders, and payments** and the Storefront
   module. **NFC Tags** needs a department-settings permission. **Self-Service
   Kiosk** needs its own kiosk permission.
 

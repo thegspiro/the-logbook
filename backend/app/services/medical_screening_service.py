@@ -114,6 +114,17 @@ def _applicable_requirements(
     return applicable
 
 
+# The statuses that satisfy a requirement. One definition for both halves of
+# "expiring soon": `_grade` counts a satisfying screening about to lapse, and
+# `get_expiring_soon` lists the same screenings, so a waiver that is about to
+# run out is both counted and listed (MS2-7). Edit here, never at one caller.
+_SATISFYING_STATUSES = (
+    ScreeningStatus.PASSED.value,
+    ScreeningStatus.COMPLETED.value,
+    ScreeningStatus.WAIVED.value,
+)
+
+
 def _grade(
     requirements: List[ScreeningRequirement],
     records: List[ScreeningRecord],
@@ -138,12 +149,7 @@ def _grade(
             r
             for r in records
             if r.screening_type == req.screening_type
-            and r.status
-            in (
-                ScreeningStatus.PASSED.value,
-                ScreeningStatus.COMPLETED.value,
-                ScreeningStatus.WAIVED.value,
-            )
+            and r.status in _SATISFYING_STATUSES
         ]
         matching_records.sort(key=lambda r: r.completed_date or date.min, reverse=True)
 
@@ -162,8 +168,8 @@ def _grade(
                 # links to disagreed about the same member on that single
                 # day — the count said nothing was due, the list named it.
                 # Keep the two windows in step: this is the other half of
-                # the same "expiring soon" definition, and the WAIVED
-                # divergence between them is recorded as MS2-7.
+                # the same "expiring soon" definition (see
+                # _SATISFYING_STATUSES for the statuses both share).
                 if 0 <= days_until_exp <= 30:
                     expiring_soon_count += 1
             else:
@@ -796,12 +802,7 @@ class MedicalScreeningService:
                     ScreeningRecord.expiration_date.isnot(None),
                     ScreeningRecord.expiration_date >= today,
                     ScreeningRecord.expiration_date <= cutoff,
-                    ScreeningRecord.status.in_(
-                        [
-                            ScreeningStatus.PASSED.value,
-                            ScreeningStatus.COMPLETED.value,
-                        ]
-                    ),
+                    ScreeningRecord.status.in_(_SATISFYING_STATUSES),
                 )
             )
             .order_by(ScreeningRecord.expiration_date.asc())
@@ -837,6 +838,7 @@ class MedicalScreeningService:
                     expiration_date=record.expiration_date,
                     days_until_expiration=days_left,
                     self_recorded=bool(record.self_recorded),
+                    status=record.status,
                 )
             )
 

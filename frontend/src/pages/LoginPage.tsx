@@ -507,7 +507,7 @@ export const LoginPage: React.FC = () => {
                 required
                 aria-invalid={formErrors.username ? 'true' : 'false'}
                 aria-describedby={formErrors.username ? 'username-error' : undefined}
-                className={`relative block w-full appearance-none rounded-none border px-3 py-2 ${
+                className={`touch:min-h-11 relative block w-full appearance-none rounded-none border px-3 py-2 ${
                   formErrors.username ? 'border-red-300' : 'border-theme-input-border'
                 } bg-theme-input-bg placeholder-theme-text-muted text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring rounded-t-md focus:z-10 focus:ring-2 focus:outline-hidden sm:text-sm`}
                 placeholder="Username or Email"
@@ -533,7 +533,7 @@ export const LoginPage: React.FC = () => {
                 required
                 aria-invalid={formErrors.password ? 'true' : 'false'}
                 aria-describedby={formErrors.password ? 'password-error' : undefined}
-                className={`relative block w-full appearance-none rounded-none border px-3 py-2 ${
+                className={`touch:min-h-11 relative block w-full appearance-none rounded-none border px-3 py-2 ${
                   formErrors.password ? 'border-red-300' : 'border-theme-input-border'
                 } bg-theme-input-bg placeholder-theme-text-muted text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring rounded-b-md focus:z-10 focus:ring-2 focus:outline-hidden sm:text-sm`}
                 placeholder="Password"
@@ -553,7 +553,7 @@ export const LoginPage: React.FC = () => {
             <div className="text-sm">
               <a
                 href="/forgot-password"
-                className="focus:ring-theme-focus-ring rounded-sm px-1 font-medium text-red-600 hover:text-red-700 focus:ring-2 focus:outline-hidden dark:hover:text-red-500"
+                className="focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center rounded-sm px-1 font-medium text-red-600 hover:text-red-700 focus:ring-2 focus:outline-hidden dark:hover:text-red-500"
               >
                 Forgot your password?
               </a>
@@ -698,11 +698,11 @@ export const LoginPage: React.FC = () => {
         <p className="text-theme-text-muted mt-1 text-xs">
           Powered by The Logbook
           <span className="mx-2">&middot;</span>
-          <Link to="/privacy" className="hover:underline">
+          <Link to="/privacy" className="touch:min-h-11 inline-flex items-center hover:underline">
             Privacy
           </Link>
           <span className="mx-2">&middot;</span>
-          <Link to="/terms" className="hover:underline">
+          <Link to="/terms" className="touch:min-h-11 inline-flex items-center hover:underline">
             Terms
           </Link>
         </p>

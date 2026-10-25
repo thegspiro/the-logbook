@@ -221,7 +221,10 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4">
+        // One explicit column: an implicit one is sized by its content, and
+        // the details row below does not wrap, so a single category made the
+        // page 929px wide on a phone (W79-2).
+        <div className="grid grid-cols-1 gap-4">
           {categories.map((cat) => (
             <div key={cat.id} className="bg-theme-surface flex min-w-0 items-center gap-4 rounded-lg p-4 shadow-md">
               <div className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: cat.color ?? '#6B7280' }} />

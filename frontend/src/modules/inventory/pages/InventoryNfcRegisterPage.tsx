@@ -23,7 +23,6 @@ import { inventoryService } from '../../../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuthStore } from '../../../stores/authStore';
-import { Breadcrumbs } from '../../../components/ux';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Pagination } from '../../../components/ux/Pagination';
 import { InventoryNfcTagKind, InventoryNfcTagStatus } from '../../../constants/enums';
@@ -209,14 +208,12 @@ export const InventoryNfcRegisterPage: React.FC = () => {
   const filtered = Boolean(kind || status || search.trim());
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6">
-      <Breadcrumbs />
-
+    <div className="max-w-5xl space-y-4 py-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
+          <h2 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
             <Nfc className="h-5 w-5" aria-hidden="true" /> NFC Tag Register
-          </h1>
+          </h2>
           <p className="text-theme-text-secondary mt-1 text-sm">
             {seesEveryKind
               ? 'Every NFC tag on an item, a storage area or a checklist compartment.'

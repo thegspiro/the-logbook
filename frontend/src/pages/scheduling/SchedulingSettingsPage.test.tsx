@@ -46,21 +46,16 @@ describe('SchedulingSettingsPage', () => {
   // Scheduling" — the module's identity — on a screen whose entire subject is
   // that module's settings, which left the tab strip as the only thing saying
   // where you were.
-  it('renders the page header once, naming the page rather than the module', () => {
+  // Every section route is drawn inside the Scheduling Administration header
+  // (SchedulingAdminLayout), whose <h1>, area cards and trail already name the
+  // module and are the way back. A second icon tile, <h1> and back button would
+  // repeat them; the page's title stays for heading navigation only.
+  it('names the page for heading navigation without a second visible header', () => {
     renderWithRouter(<SchedulingSettingsPage section="general" />);
 
-    expect(screen.getByRole('heading', { name: 'Scheduling Settings' })).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(screen.getByText('Department-wide scheduling defaults')).toBeInTheDocument();
-  });
-
-  it('offers a way back to the administration hub it is reached from', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<SchedulingSettingsPage section="general" />);
-
-    await user.click(screen.getByRole('button', { name: 'Back to scheduling administration' }));
-
-    expect(window.location.pathname).toBe('/scheduling/admin');
+    expect(screen.getByRole('heading', { level: 2, name: 'Scheduling Settings' })).toHaveClass('sr-only');
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to scheduling administration' })).not.toBeInTheDocument();
   });
 
   it('renders the section the route mounts, and lists the rest', () => {

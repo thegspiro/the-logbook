@@ -475,3 +475,208 @@ class TestGeneratedSeats:
         )
         assert filled == 1
         assert len(service.last_generation_seat_warnings) == 3
+
+
+DAY_SEATS = [
+    {"position": "driver", "required": True},
+    {"position": "officer", "required": True},
+    {"position": "firefighter", "required": True},
+    {"position": "firefighter", "required": True},
+]
+NIGHT_SEATS = [
+    {"position": "officer", "required": True},
+    {"position": "driver", "required": True},
+    {"position": "firefighter", "required": True},
+]
+
+
+class TestDayAndNightTemplates:
+    """A day/night pattern builds each shift from the template chosen for it.
+
+    The night template used to lend only its times and colour, so a night
+    side staffed with three seats was generated with the day side's four.
+    """
+
+    async def _templates(self, dept):
+        day = await _template(
+            dept,
+            "Day Side",
+            "07:00",
+            "19:00",
+            positions=DAY_SEATS,
+            apparatus_id=str(uuid.uuid4()),
+        )
+        day.min_staffing = 4
+        night = await _template(
+            dept,
+            "Night Side",
+            "19:00",
+            "07:00",
+            positions=NIGHT_SEATS,
+            apparatus_id=str(uuid.uuid4()),
+            open_to_all=True,
+        )
+        night.min_staffing = 2
+        await dept["db"].flush()
+        return day, night
+
+    async def _weekly(self, dept, day, night, weekday_shifts, assigned_members=None):
+        # START is a Monday; weekday keys are JS weekdays (0=Sun).
+        return await _pattern(
+            dept,
+            day,
+            pattern_type=PatternType.WEEKLY,
+            schedule_config={
+                "weekday_shifts": weekday_shifts,
+                "weekdays": [int(k) for k in weekday_shifts],
+                "day_template_id": day.id,
+                "night_template_id": night.id,
+            },
+            assigned_members=assigned_members,
+        )
+
+    @staticmethod
+    def _seats(shift: Shift) -> list[str]:
+        return [str(slot["position"]) for slot in shift.positions or []]
+
+    async def test_night_shifts_are_built_from_the_night_template(self, db_session):
+        dept = await _dept(db_session)
+        service = SchedulingService(db_session)
+        day, night = await self._templates(dept)
+        pattern = await self._weekly(dept, day, night, {"1": ["day", "night"]})
+
+        created, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, START, None
+        )
+        assert error is None
+        day_shift, night_shift = sorted(created, key=lambda s: _utc(s.start_time))
+
+        assert day_shift.template_id == day.id
+        assert self._seats(day_shift) == [
+            "driver",
+            "officer",
+            "firefighter",
+            "firefighter",
+        ]
+        assert day_shift.min_staffing == 4
+        assert day_shift.apparatus_id == day.apparatus_id
+        assert day_shift.open_to_all_members is False
+
+        assert night_shift.template_id == night.id
+        assert self._seats(night_shift) == ["officer", "driver", "firefighter"]
+        assert night_shift.min_staffing == 2
+        assert night_shift.apparatus_id == night.apparatus_id
+        assert night_shift.open_to_all_members is True
+        assert _utc(night_shift.start_time).hour == 19
+
+    async def test_platoon_night_entries_use_the_night_template(self, db_session):
+        dept = await _dept(db_session)
+        service = SchedulingService(db_session)
+        day, night = await self._templates(dept)
+        pattern = await _pattern(
+            dept,
+            day,
+            pattern_type=PatternType.PLATOON,
+            schedule_config={
+                "cycle_pattern": ["day", "night", "off"],
+                "day_template_id": day.id,
+                "night_template_id": night.id,
+            },
+        )
+
+        created, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, END, None
+        )
+        assert error is None
+        by_date = {s.shift_date: s for s in created}
+        assert sorted(by_date) == [START, date(2026, 3, 3)]
+        assert by_date[START].template_id == day.id
+        assert len(self._seats(by_date[START])) == 4
+        assert by_date[date(2026, 3, 3)].template_id == night.id
+        assert self._seats(by_date[date(2026, 3, 3)]) == [
+            "officer",
+            "driver",
+            "firefighter",
+        ]
+
+    async def test_regenerating_does_not_duplicate_either_side(self, db_session):
+        dept = await _dept(db_session)
+        service = SchedulingService(db_session)
+        day, night = await self._templates(dept)
+        pattern = await self._weekly(dept, day, night, {"1": ["day", "night"]})
+
+        first, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, START, None
+        )
+        assert error is None
+        assert len(first) == 2
+        second, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, START, None
+        )
+        assert error is None
+        assert second == []
+
+    async def test_a_night_shift_stamped_with_the_day_template_is_not_duplicated(
+        self, db_session
+    ):
+        # Night shifts generated before this fix carry the main (day)
+        # template's id; regenerating must still treat them as existing.
+        dept = await _dept(db_session)
+        service = SchedulingService(db_session)
+        day, night = await self._templates(dept)
+        pattern = await self._weekly(dept, day, night, {"1": ["night"]})
+        db_session.add(
+            Shift(
+                organization_id=dept["org_id"],
+                shift_date=START,
+                start_time=datetime(2026, 3, 2, 19, 0, tzinfo=timezone.utc),
+                end_time=datetime(2026, 3, 3, 7, 0, tzinfo=timezone.utc),
+                template_id=day.id,
+            )
+        )
+        await db_session.flush()
+
+        created, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, START, None
+        )
+        assert error is None
+        assert created == []
+
+    async def test_a_member_for_a_seat_the_night_side_lacks_is_reported(
+        self, db_session
+    ):
+        dept = await _dept(db_session, open_positions=["firefighter"])
+        service = SchedulingService(db_session)
+        a = await _user(db_session, dept["org_id"], "ff-a", [])
+        b = await _user(db_session, dept["org_id"], "ff-b", [])
+        day, night = await self._templates(dept)
+        # Monday day, Tuesday night: the two never share a calendar slot.
+        pattern = await self._weekly(
+            dept,
+            day,
+            night,
+            {"1": ["day"], "2": ["night"]},
+            assigned_members=[
+                {"user_id": a.id, "position": "firefighter"},
+                {"user_id": b.id, "position": "firefighter"},
+            ],
+        )
+
+        created, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, END, None
+        )
+        assert error is None
+        by_date = {s.shift_date: s for s in created}
+
+        async def seated(shift_id) -> int:
+            return await db_session.scalar(
+                select(func.count(ShiftAssignment.id)).where(
+                    ShiftAssignment.shift_id == shift_id
+                )
+            )
+
+        assert await seated(by_date[START].id) == 2
+        assert await seated(by_date[date(2026, 3, 3)].id) == 1
+        warnings = service.last_generation_seat_warnings
+        assert len(warnings) == 1
+        assert "2026-03-03" in warnings[0]

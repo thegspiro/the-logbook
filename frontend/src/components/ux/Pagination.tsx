@@ -120,7 +120,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               <button
                 key={page}
                 onClick={() => onPageChange(page)}
-                className={`inline-flex h-11 min-w-[44px] items-center justify-center rounded-md text-sm font-medium transition-all duration-150 sm:h-10 sm:min-w-[40px] ${
+                className={`touch:h-11 touch:min-w-[44px] inline-flex h-10 min-w-[40px] items-center justify-center rounded-md text-sm font-medium transition-all duration-150 ${
                   page === currentPage
                     ? 'scale-105 bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover hover:shadow-sm active:scale-95'

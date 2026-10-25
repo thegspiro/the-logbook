@@ -265,6 +265,10 @@ class TestComplianceAutoReports:
             "app.services.compliance_config_service.ComplianceReportService"
             ".generate_report",
             generate,
+        ), patch(
+            "app.services.compliance_config_service.ComplianceReportService"
+            ".find_auto_report",
+            AsyncMock(return_value=None),
         ):
             await run_compliance_auto_reports(db)
 

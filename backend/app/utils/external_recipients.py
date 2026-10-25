@@ -10,7 +10,7 @@ audit write so both the compliance-report path and the scheduled-email path reco
 external sends identically.
 """
 
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 from loguru import logger
 from sqlalchemy import select
@@ -22,6 +22,27 @@ from app.models.user import User
 
 def _norm(email: Optional[str]) -> str:
     return (email or "").strip().lower()
+
+
+def dedupe_addresses(addresses: Optional[Iterable[object]]) -> List[str]:
+    """Trimmed, non-blank addresses with case-insensitive repeats removed.
+
+    The first occurrence keeps its casing and position, so the recipient list
+    a report records is the same on every run. ``set()`` gave neither, and
+    treated ``A@x.org`` and ``a@x.org`` as two people who each got a copy.
+    """
+    seen: set[str] = set()
+    unique: List[str] = []
+    for address in addresses or []:
+        if not isinstance(address, str):
+            continue
+        trimmed = address.strip()
+        key = trimmed.lower()
+        if not trimmed or key in seen:
+            continue
+        seen.add(key)
+        unique.append(trimmed)
+    return unique
 
 
 async def _member_emails(db: AsyncSession, organization_id: str) -> set[str]:

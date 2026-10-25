@@ -1,9 +1,255 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), pass 11 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), pass 12 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 12 (2026-10-25, watchdog pickup) — 0 fixed, 1 new finding (AUTH-23, MED, flagged)
+
+Watchdog pickup (step 0, re-verified immediately before branching): no
+`claude/security-review-*` PR was open (`search_pull_requests`
+`head:claude/security-review-` `is:open` → 0 results; `list_pull_requests`
+`state:open` → the same 4 unrelated PRs, none matching). PR #3683 (Feature 00,
+Cross-cutting baseline, pass 12) had already merged, closing out rotation lap
+"pass 10" and resetting the table to ⬜ for pass 11. Rotation row 01 was the
+next ⬜.
+
+**Baseline:** `96b0c924` (PR #3556's merge, pass 11). **Head:** current
+`main`. Repository was shallow and was unshallowed
+(`git fetch --unshallow`) before trusting any commit count, per the standing
+Pitfall #24 risk note. 383 commits between baseline and head (227 non-merge).
+`git diff --stat` across all twelve scoped files (nine backend, three
+frontend) is non-empty in six: `auth.py` (+195/-4), `dependencies.py`
+(+114/-4), `auth_service.py` (+67/-5), `authService.ts` (+25/-3),
+`apiClient.ts` (+15/-1) and `schemas/auth.py` (+14). The other six
+(`mfa_service.py`, `oauth_service.py`, `consent_service.py`, `security.py`,
+`suspicious_ip.py`, `authStore.ts`) are byte-identical to pass 11.
+
+### Route inventory — re-enumerated by AST, not diffed
+
+**31 routes, up from 28 at pass 11** — three new: `POST /auth/step-up`,
+`POST /auth/session/kiosk`, `DELETE /auth/session/kiosk`. Enumerated with a
+Python AST walk over every `@router.*` decorator and the `Depends(...)` on
+the function immediately below it (not grepped from the diff, per this
+skill's repeat-pass instruction), cross-checked against
+`tests/test_endpoint_auth_coverage.py`'s `ALLOWLISTED_PUBLIC`. Public/private
+split is **16 / 15** (unchanged public set — all three new routes are
+private). Classification:
+
+| Route                        | Auth dependency                                                                                | Permission                      | Notes                                                                                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/step-up`         | `get_current_active_user`                                                                      | none (self re-verification)     | rate-limited (`rate_limit_login()`); writes `stepup_verified_at` only on the caller's **own** session (`session.user_id == current_user.id`, checked explicitly) |
+| `POST /auth/session/kiosk`   | `require_permission("security.kiosk_session")`                                                 | `security.kiosk_session`        | acts on caller's own session only (`_set_session_kiosk` 400s on a mismatched `user_id`)                                                                          |
+| `DELETE /auth/session/kiosk` | `get_current_user`                                                                             | none (narrowing is always safe) | same self-scoping as the `POST`                                                                                                                                  |
+| `PUT /auth/mfa/policy`       | `require_permission("settings.manage", "organization.update_settings")` **+** `require_stepup` | as listed                       | gained the step-up gate this pass (previously permission-only)                                                                                                   |
+
+All other 27 routes unchanged from pass 11's table — re-confirmed by the same
+AST walk rather than assumed carried-forward.
+
+### The new feature, reviewed in full: MFA grace period, kiosk sessions, step-up re-verification
+
+This is the auth-surface half of a feature `CI9-33-core-infra.md` already
+reviewed from the config/settings side (new `app/core/config.py` settings:
+`MFA_GRACE_DAYS`, `STEPUP_WINDOW_MINUTES`, `SESSION_KIOSK_IDLE_TIMEOUT_MINUTES`,
+`SESSION_KIOSK_ABSOLUTE_MAX_HOURS`) and confirmed each has a real reader with a
+safe default. This pass reviews the same feature from its own three files —
+`auth.py`, `auth_service.py`, `dependencies.py` — against all seven checklist
+dimensions, rather than re-deriving CI9's settings-level verdict.
+
+- **`dependencies.py` — `evaluate_mfa_requirement` / `MfaRequirement`.**
+  Extends the existing org-wide `mfa_required` gate with a second path: a
+  member holding any of `mfa_policy.PRIVILEGED_PERMISSIONS` (`*`,
+  `settings.manage`, `security.manage`, `users.create/edit/delete/
+update_positions`, `audit.export/manage`, `medical_screening.view/manage`)
+  must enroll within `MFA_GRACE_DAYS` of first being seen privileged and
+  un-enrolled. **Dimension 2 (permission fit) correct:** the privileged set
+  deliberately excludes `audit.view` and `members.manage` (held broadly by
+  captains/lieutenants/treasurer) and the medical-_inventory_ permissions
+  (expiry dates only, no patient data) — `test_mfa_policy.py`'s
+  `test_the_seeded_positions_that_must_use_mfa` pins the resulting set to
+  exactly 7 seeded positions, so a future broadening of one of those grants
+  fails this test rather than silently widening who must enroll. **Correct
+  "never started" vs "expired" handling:** `grace_expired(None, now)` returns
+  `MFA_GRACE_DAYS == 0` rather than `False`, so a `0`-day install still closes
+  the gate for a never-before-seen privileged member instead of leaving it
+  open forever (re-verified directly; `test_mfa_policy.py`'s `TestGrace`
+  covers both branches). **Losing privilege clears the clock**
+  (`dependencies.py:160-166`) — a demoted-then-repromoted member gets a fresh
+  grace period rather than inheriting an already-expired one, which is the
+  right direction (erring toward re-starting the clock, not toward a
+  permanent gate). The one-time notification (`_announce_mfa_grace`) sends a
+  plain-text-only message built from `settings.MFA_GRACE_DAYS` (an int) with
+  no user-controlled interpolation — dimension 4 (injection/untrusted output)
+  n/a here.
+  - **Considered, not raised:** two concurrent first-privileged requests from
+    the same member could both observe `mfa_grace_started_at is None`, both
+    set it to (nearly) the same `now`, and both call `_announce_mfa_grace` —
+    a duplicate email, not a security weakening (the grace window measured
+    from either timestamp is the same to the second). Not the shape Pitfall
+    #27 exists for (no capacity/limit being raced), and the consequence is a
+    UX nuisance, not a bypass. Not raised as a finding.
+- **`dependencies.py` — `require_stepup`.** A second-factor-style gate
+  ("re-verify, then proceed") for a named set of destructive/sensitive
+  handlers, separate from the route's own permission check. **Dimension 1/2
+  correct and machine-checked, not merely argued:** `test_mfa_policy.py`'s
+  `test_step_up_is_on_exactly_the_documented_handlers` AST-walks every
+  endpoint file and fails if a handler gains or loses the dependency without
+  updating the pinned `STEPUP_HANDLERS` set (24 handlers: exports, security
+  policy changes, `admin_reset_password`/`admin_reset_mfa` — the account-
+  takeover paths — and `delete_user`/`anonymize_member`); a second test,
+  `test_step_up_always_follows_the_permission_check`, asserts the
+  `require_stepup` default is the _last_ positional default on every one of
+  those handlers, so a caller lacking the permission is told that rather than
+  asked to re-verify (FastAPI resolves dependencies in signature order).
+  Re-ran both — pass. The stamp (`session.stepup_verified_at`) is read only
+  off the **caller's own** session (resolved from the same cookie/header
+  `get_current_user` itself authenticated against — `_request_access_token`'s
+  resolution order, cookie-then-header, is identical to `get_current_user`'s,
+  confirmed by reading both side by side, so the two can never resolve to
+  different tokens within one request) and is never trusted across sessions
+  — dimension 3 (tenant/self isolation) correct by construction, not merely
+  asserted.
+- **`auth.py` — `POST /auth/step-up`.** Correct: writes `stepup_verified_at`
+  only after an explicit ownership check
+  (`str(session.user_id) != str(current_user.id)` → 400, confirmed by
+  `test_someone_elses_session_is_refused`), a failed attempt is audited
+  (`stepup_failed`) and never stamps the session, and an SSO-only account
+  (no password hash, no MFA) is told to enroll rather than silently treated
+  as always-false. See **AUTH-23** below for the one gap this review did
+  find.
+- **`auth.py` / `auth_service.py` — kiosk sessions.** `POST
+/auth/session/kiosk` requires `security.kiosk_session` (seeded to **no**
+  position — Pitfall #23's concern directly checked: `grep -n
+'"security.kiosk_session"' app/core/permissions.py` plus
+  `DEFAULT_POSITIONS` shows it granted nowhere by default, so turning this on
+  is a per-department decision, not an inherited one) and, like step-up, acts
+  only on the caller's own session. The flag is **never trusted by itself**:
+  `AuthService.holds_kiosk_session()` re-checks the live permission on every
+  refresh (`auth_service.py:594-598` after this pass's line shift) and every
+  access-token validation (`:1031-1038`), so a revoked permission drops the
+  session to standard limits on its very next use, not at next login —
+  re-confirmed by direct read, matching CI9's independent review of the same
+  mechanism from the config side. `GET /auth/session-settings` (now richer:
+  `session_ends_at`, `is_kiosk`, `kiosk_available`) answers for the request's
+  **own** session only, by the same cookie/header `get_current_user` already
+  authenticated with — not an IDOR surface, since there is no way to name a
+  different session than the one the request is already authenticated by.
+- **`schemas/auth.py` — `StepUpRequest`.** `code` bounded to exactly 6
+  characters, `password` bounded to 1024 — same shape as the existing
+  `MFAVerify`/`UserLogin` schemas, no new unbounded-input surface.
+- **`authService.ts` / `apiClient.ts` / `utils/stepUp.ts` /
+  `contexts/StepUpContext.tsx` (new, read in full though outside this
+  feature's originally-scoped 12 files, since it is the frontend half of the
+  same new auth mechanism `apiClient.ts`'s diff calls into).** The 403
+  `LB-AUTH-013` → prompt → retry flow uses a `Modal` with a password/number
+  input, never `window.prompt` (Pitfall #16 n/a — confirmed, not assumed).
+  Concurrent 403s share one in-flight prompt (`requestStepUp`'s `inFlight`
+  memo) rather than stacking dialogs. The field correctly switches
+  `type="password"` for the no-MFA branch and `inputMode="numeric"` for the
+  TOTP branch; `autoComplete` values are the standard ones for each case, not
+  `"off"` (fighting password-manager autocomplete would be a separate,
+  unrelated finding if attempted and wrong — it was not attempted here).
+  `StepUpProvider` is mounted once at the app root, above the router, inside
+  `ConfirmProvider` — same placement rule as `useConfirm()`'s own provider
+  (Pitfall #16) for the same reason (public routes need it too, in principle,
+  though in practice only an authenticated caller ever reaches a
+  `require_stepup`-gated action).
+
+### AUTH-23 — MED — `POST /auth/step-up` has no account-tied lockout; a stolen live session lets an attacker brute-force the password or TOTP code that gates the most sensitive actions in the app — FLAGGED (not fixed)
+
+**What:** `step_up` (`backend/app/api/v1/endpoints/auth.py:1486-1549`) checks
+a submitted password with `verify_password()` or a submitted TOTP code with
+`_verify_and_consume_totp()` and, on a mismatch, only audits the failure
+(`stepup_failed`) and returns 400 — it never touches
+`user.failed_login_attempts` / `locked_until`, the columns the account-lockout
+control (CLAUDE.md's Attack Protection table, second of four layers) is
+measured against. The only throttle is `rate_limit_login()`
+(`security_middleware.py:1010-1022`): 5 requests/60s per IP, keyed to the
+shared `scope="login"` bucket, then a 30-minute **IP** lockout.
+
+**Where:** `backend/app/api/v1/endpoints/auth.py:1486-1549` (`step_up`), the
+`rate_limit_login()` dependency at line 1486.
+
+**Failure scenario:** an attacker who has obtained a member's **live session**
+(cookie theft via malware or a shared/unattended device, a session fixation
+bug elsewhere, or physical access to an unlocked device) but does not know the
+account's password or TOTP secret cannot use most of the app's destructive or
+security-sensitive actions, because 24 handlers require a fresh step-up first
+— `admin_reset_password`, `admin_reset_mfa`, `delete_user`,
+`anonymize_member`, `set_mfa_policy`, every `ip_security.py`/`roles.py`
+mutation, and several exports. Lacking the account-lockout tie-in, the
+attacker can submit guesses against `/auth/step-up` at the shared per-IP rate
+limit indefinitely (30 minutes idle after each cap, then resume) with **no
+account-level consequence ever recorded against the real owner** — contrast
+`/login` and `/mfa/login`, where the same wrong-password/wrong-code guess
+**does** increment the lockout counter via `authenticate_user`'s
+`.with_for_update()` re-read (AUTH-20, app-review track).
+**This is not a new regression as a class** — `mfa_disable`,
+`mfa_verify_setup` and `mfa_regenerate_recovery_codes` have carried the
+identical shape (TOTP-only, same `rate_limit_login()`, no lockout tie-in)
+since early passes and were never flagged, because a wrong guess there costs
+the attacker a real TOTP search space and gates only the caller's own MFA
+settings. **The delta this pass introduces:** `step_up` is the first member of
+this family to accept a bare **password** guess (a much smaller, often
+human-chosen search space than a TOTP code), and it is the gate in front of
+the single largest set of sensitive actions in the codebase — materially
+raising both the guessability and the blast radius relative to the precedent.
+
+**Impact:** account takeover and destructive-action execution, conditioned on
+an attacker already holding a live, valid session for a privileged account —
+itself a serious prior compromise. Not an unauthenticated attack surface.
+
+**Why flagged, not fixed:** tying step-up failures into the same
+`failed_login_attempts`/`locked_until` columns `authenticate_user` uses is a
+live option, but it is a genuine product tradeoff rather than a mechanical
+fix: it would let the **same attacker** who stole the session deliberately
+lock the legitimate owner out of logging in at all, by repeatedly failing
+step-up on purpose — trading a guessing weakness for a new denial-of-service
+lever against the real account holder, on exactly the privileged accounts
+this feature exists to protect. A narrower per-account (not per-IP) rate
+limit scoped to step-up specifically, with a longer window but no account
+lock, is the other candidate and carries its own DoS-shaped tradeoff at a
+smaller scale. Either choice is an owner decision about which failure mode to
+prefer, not a verifiable one-line change safe to make inside this review.
+
+**Fix:** not applied. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Severity reasoning:** MED — the precondition (a stolen live session) is
+itself already a serious breach, which keeps this below HIGH; but the actions
+gated are the most sensitive in the app (account takeover, destructive
+deletes, security-policy changes) and the guessable secret (a password, for
+an SSO-less account) is materially weaker than the TOTP-only precedent that
+was never flagged, which keeps it above LOW.
+
+**Disposition:** OPEN / FLAGGED. No guard test added — a test asserting
+`step_up` does _not_ increment the lockout counter would freeze the gap
+rather than catch a regression, which is not this suite's purpose.
+
+### Standing items — reconfirmed unchanged from pass 11
+
+AUTH-15, AUTH-17, AUTH-21 and AUTH-22 are all already closed (pass 8's and
+pass 10's fixes, confirmed unchanged at pass 11), and `docs/KNOWN_LIMITATIONS.md`
+carries no entry for any of them beyond the new AUTH-23 added by this pass —
+reconfirmed by grep.
+
+### Completion gate (pass 12)
+
+| Check                                                                                                                                                                                                                                                              | Result                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                                                                                                                    | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                                                                                           | ✅ clean, 2637 files unchanged                                              |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                          | ✅ clean                                                                    |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                  | ✅ single head `3d67883cd461`, 651 revisions                                |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                              | ✅ 276 routes, 0 errors/0 warnings                                          |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification or stepup or kiosk"`)                                                                                  | ✅ 1383 passed, 2 skipped (environment-only — `pywebpush`, Docker registry) |
+| standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`, `mfa_policy`, `session_limits`, `auth_lockout_race`, `auth_refresh_rotation`, `password_expiry_gate`, `sign_in_audit`, `account_status_gates`) run directly | ✅ 205 passed                                                               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                 | ✅ 0 errors                                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings                                                     |
+
+Rotation row 01 moves to `✅`.
 
 ---
 

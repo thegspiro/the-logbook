@@ -16,7 +16,7 @@ from app.core.logging import redact_url_secrets
 from app.models.training import RequirementFrequency as ModelRequirementFrequency
 from app.models.training import TrainingStatus as ModelTrainingStatus
 from app.models.training import TrainingType as ModelTrainingType
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.schemas.enum_validation import validate_enum_value
@@ -78,7 +78,7 @@ class TrainingCategoryCreate(TrainingCategoryBase):
     """Schema for creating a new training category"""
 
 
-class TrainingCategoryUpdate(BaseModel):
+class TrainingCategoryUpdate(RefusesNull):
     """Schema for updating a training category"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -89,6 +89,8 @@ class TrainingCategoryUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     icon: Optional[str] = Field(None, max_length=50)
     active: Optional[bool] = None
+
+    null_refused = frozenset({"active", "name", "sort_order"})
 
 
 class TrainingCategoryResponse(TrainingCategoryBase, UTCResponseBase):
@@ -162,7 +164,7 @@ class TrainingCourseCreate(TrainingCourseBase):
     """Schema for creating a new training course"""
 
 
-class TrainingCourseUpdate(BaseModel):
+class TrainingCourseUpdate(RefusesNull):
     """Schema for updating a training course"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -189,6 +191,8 @@ class TrainingCourseUpdate(BaseModel):
     @classmethod
     def _validate_grants_qualification(cls, v: Optional[str]) -> Optional[str]:
         return _validate_grants_qualification(v)
+
+    null_refused = frozenset({"active", "name", "training_type"})
 
 
 class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):
@@ -277,7 +281,7 @@ class TrainingRecordCreate(TrainingRecordBase):
     attachments: Optional[List[str]] = None
 
 
-class TrainingRecordUpdate(BaseModel):
+class TrainingRecordUpdate(RefusesNull):
     """Schema for updating a training record"""
 
     course_name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -312,6 +316,10 @@ class TrainingRecordUpdate(BaseModel):
     @classmethod
     def _validate_status(cls, v: Optional[str]) -> Optional[str]:
         return validate_enum_value(v, ModelTrainingStatus, "status")
+
+    null_refused = frozenset(
+        {"course_name", "hours_completed", "status", "training_type"}
+    )
 
 
 class CertAlertSettings(BaseModel):
@@ -601,7 +609,7 @@ class RequirementChangeScope(str, Enum):
     NEW_MEMBERS_ONLY = "new_members_only"
 
 
-class TrainingRequirementUpdate(BaseModel):
+class TrainingRequirementUpdate(RefusesNull):
     """Schema for updating a training requirement"""
 
     # Not stored: tells the endpoint whether to edit in place or split. The
@@ -679,6 +687,22 @@ class TrainingRequirementUpdate(BaseModel):
     @classmethod
     def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
         return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    null_refused = frozenset(
+        {
+            "active",
+            "allows_external_credit",
+            "applies_to_all",
+            "due_date_type",
+            "frequency",
+            "is_editable",
+            "name",
+            "period_start_day",
+            "period_start_month",
+            "requirement_type",
+            "source",
+        }
+    )
 
 
 class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):
@@ -926,7 +950,7 @@ class ExternalTrainingProviderCreate(ExternalTrainingProviderBase):
     client_secret: Optional[str] = None
 
 
-class ExternalTrainingProviderUpdate(BaseModel):
+class ExternalTrainingProviderUpdate(RefusesNull):
     """Schema for updating an external training provider"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -947,6 +971,10 @@ class ExternalTrainingProviderUpdate(BaseModel):
     @classmethod
     def validate_api_base_url(cls, value: Optional[str]) -> Optional[str]:
         return _reject_credentials_in_url(value)
+
+    null_refused = frozenset(
+        {"active", "auth_type", "auto_sync_enabled", "sync_interval_hours"}
+    )
 
 
 class ExternalTrainingProviderResponse(ExternalTrainingProviderBase, UTCResponseBase):

@@ -4,20 +4,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { screen } from '@testing-library/react';
 import { renderWithRouter } from '../../../../test/utils';
 
 vi.mock('./StaffingGapsSection', () => ({ default: () => <div>section:gaps</div> }));
 vi.mock('./PlanningSettingsSummary', () => ({ default: () => <div>settings summary</div> }));
 vi.mock('../../../ShiftTemplatesPage', () => ({ default: () => <div>section:templates</div> }));
 vi.mock('../../PatternsTab', () => ({ default: () => <div>section:patterns</div> }));
-// The officer the page is for: the trail's hub crumb is gated on the same
-// grant as the hub.
-vi.mock('../../../../stores/authStore', () => ({
-  useAuthStore: (selector: (state: unknown) => unknown) =>
-    selector({ checkPermission: (permission: string) => permission === 'scheduling.manage' }),
-}));
 
 import SchedulingPlanningPage from './SchedulingPlanningPage';
 
@@ -26,24 +19,21 @@ describe('SchedulingPlanningPage', () => {
     window.history.replaceState({}, '', '/scheduling/admin/planning');
   });
 
-  it('renders the section its route mounts, and lists the rest', async () => {
+  // The sections are pages in the Scheduling Administration header's strip
+  // (SchedulingAdminLayout), which is also what names them and leads back to
+  // the hub. A section nav or title of the page's own would draw them twice.
+  it('renders the section its route mounts, under no header or section nav of its own', async () => {
     renderWithRouter(<SchedulingPlanningPage section="gaps" />);
 
     expect(await screen.findByText('section:gaps')).toBeInTheDocument();
-    for (const label of ['Staffing gaps', 'Templates', 'Patterns']) {
-      expect(screen.getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
-    }
+    expect(screen.queryByRole('navigation', { name: 'Planning sections' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
   });
 
-  // A section is a route, so it can be linked to and bookmarked — the same
-  // reason the settings sections are routes rather than a ?tab=.
-  it('navigates to the chosen section', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<SchedulingPlanningPage section="gaps" />);
+  it('names its section for heading navigation', () => {
+    renderWithRouter(<SchedulingPlanningPage section="patterns" />);
 
-    await user.click((await screen.findAllByRole('button', { name: /Patterns/ }))[0] as HTMLElement);
-
-    expect(window.location.pathname).toBe('/scheduling/admin/planning/patterns');
+    expect(screen.getByRole('heading', { level: 2, name: 'Shift patterns' })).toHaveClass('sr-only');
   });
 
   it('absorbs the templates and patterns screens rather than linking out to them', async () => {
@@ -65,15 +55,5 @@ describe('SchedulingPlanningPage', () => {
 
     renderWithRouter(<SchedulingPlanningPage section="templates" />);
     expect(screen.queryByText('settings summary')).not.toBeInTheDocument();
-  });
-
-  it('offers a way back to the administration hub', () => {
-    renderWithRouter(<SchedulingPlanningPage section="gaps" />);
-
-    const trail = screen.getByRole('navigation', { name: /breadcrumb/i });
-    expect(within(trail).getByRole('link', { name: 'Scheduling Administration' })).toHaveAttribute(
-      'href',
-      '/scheduling/admin'
-    );
   });
 });

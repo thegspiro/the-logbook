@@ -73,7 +73,20 @@ service change stashed (the eight entities, plus `donor.country`, which is the o
 that happens to change a row because of its `server_default`); the other 150 pass either way,
 and 0 are selected under the unit job's marker expression.
 
-### GF2-2 — MEDIUM — the same flush-and-return shape exists in seven services outside this module — 🚩 FLAGGED (for the owning rotation items)
+### GF2-2 — MEDIUM — the same flush-and-return shape exists in seven services outside this module — ✅ CLOSED 2026-10-25, none affected
+
+Traced each of the seven to its endpoint; none answers 500, so no code changed:
+
+| Method                                                           | Why it does not fail                                                              |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `finance_service.update_chain_step`                              | `ApprovalChainStep` has no `updated_at` column                                    |
+| `inventory_service.update_reorder_request`                       | re-fetches with `populate_existing` before returning                              |
+| `label_printer_service.update_printer`                           | `_printer_response` is hand-built and never reads `updated_at`                    |
+| `legal_service.update_draft`                                     | the endpoint refreshes the revision after its commit                              |
+| `medical_screening_service.update_requirement` / `update_record` | refresh after the flush (W71 fix)                                                 |
+| `org_chart_service.update_node`                                  | the endpoint responds with a freshly queried chart, which carries no `updated_at` |
+
+Original finding below.
 
 A static scan of `app/services` for `update_*` methods that write through `apply_updates` /
 `setattr`, flush, and neither refresh nor commit found 17; ten are the ones fixed above (or

@@ -24,3 +24,11 @@ Point `SSL_CERTS_DIR` at a different host directory to keep certificates
 outside the repository.
 
 Certificates are ignored by git; only this file and `.gitignore` are tracked.
+
+## Certificates for the bundled MySQL and Redis
+
+If you run the bundled database and cache, you do not need to bring your own CA:
+`scripts/tls-setup.sh` creates one, with the server and client certificates, in
+`./tls` (mounted at `/etc/ssl/logbook-tls`). See [docs/TLS.md](../../docs/TLS.md).
+This directory (`/etc/ssl/logbook`) remains the place for a CA you bring yourself,
+for example a managed database provider's bundle.

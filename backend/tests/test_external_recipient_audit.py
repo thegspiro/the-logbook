@@ -11,6 +11,7 @@ import pytest
 from app.utils import external_recipients as mod
 from app.utils.external_recipients import (
     audit_external_recipients,
+    dedupe_addresses,
     external_recipients,
 )
 
@@ -100,3 +101,26 @@ class TestAuditExternalRecipients:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+@pytest.mark.unit
+class TestDedupeAddresses:
+    def test_repeats_differing_only_in_case_collapse_to_the_first(self):
+        assert dedupe_addresses(["Chief@dept.gov", "chief@DEPT.gov"]) == [
+            "Chief@dept.gov"
+        ]
+
+    def test_order_is_the_order_given(self):
+        assert dedupe_addresses(["z@x.org", "a@x.org", "m@x.org", "a@x.org"]) == [
+            "z@x.org",
+            "a@x.org",
+            "m@x.org",
+        ]
+
+    def test_blanks_padding_and_non_strings_are_dropped(self):
+        assert dedupe_addresses([" a@x.org ", "", "   ", None, 7, "a@x.org"]) == [
+            "a@x.org"
+        ]
+
+    def test_nothing_in_is_nothing_out(self):
+        assert dedupe_addresses(None) == []

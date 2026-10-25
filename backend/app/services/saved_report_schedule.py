@@ -346,108 +346,186 @@ async def _owner_may_run(db: AsyncSession, saved: SavedReport) -> bool:
     return permission is None or user_has_permission(owner, permission)
 
 
+async def _settle_without_sending(
+    db: AsyncSession, saved: SavedReport, frequency: str, today: date
+) -> None:
+    """Move past an occurrence that can never be sent, so it is not retried."""
+    saved.next_run_date = next_run_on_or_after(
+        frequency, saved.schedule_day, today + timedelta(days=1)
+    )
+    await db.commit()
+
+
+async def _send_one(
+    db: AsyncSession,
+    org: Organization,
+    saved: SavedReport,
+    titles: dict[str, str],
+    today: date,
+) -> bool:
+    """Send one due saved report; True when an email went out.
+
+    ``next_run_date`` moves only after the email is accepted, so a send that
+    fails -- mail down, provider error, a generator that raises -- is tried
+    again on the next daily run rather than skipped until the next occurrence.
+    A crash between the send and the commit therefore sends a second copy: for
+    a summary with a link that is the lesser harm than a report that never
+    arrives (CLAUDE.md pitfall #36). An occurrence that can never succeed (the
+    owner lost access, no allowed recipient, an unknown report type) is settled
+    without a send, because retrying it cannot help.
+    """
+    from app.services.email_service import EmailService
+    from app.services.reports_service import ReportsService
+    from app.utils.external_recipients import (
+        audit_external_recipients,
+        dedupe_addresses,
+    )
+
+    org_id = str(org.id)
+    frequency = str(saved.schedule_frequency)
+    recipients = dedupe_addresses(saved.email_recipients)
+    if not await _owner_may_run(db, saved):
+        logger.warning(
+            "Saved report {}: its owner can no longer run {}; not sent",
+            saved.id,
+            saved.report_type,
+        )
+        await _settle_without_sending(db, saved, frequency, today)
+        return False
+    refused = await disallowed_pii_recipients(db, org_id, saved.report_type, recipients)
+    if refused:
+        logger.warning(
+            "Saved report {}: {} recipient(s) lack the permission {} needs; "
+            "not sent to them",
+            saved.id,
+            len(refused),
+            saved.report_type,
+        )
+        recipients = [r for r in recipients if r not in refused]
+    if not recipients:
+        await _settle_without_sending(db, saved, frequency, today)
+        return False
+    if not EmailService(organization=org).can_send:
+        # Nothing to retry into: generating the report would only be thrown
+        # away every day until mail is configured.
+        logger.warning("Saved report {}: email is not enabled; not sent", saved.id)
+        return False
+
+    period = report_dates(saved.filters, today)
+    report = await ReportsService(db).generate_report(
+        UUID(org_id),
+        saved.report_type,
+        start_date=period[0],
+        end_date=period[1],
+        filters=saved.filters or {},
+        # Only counts reach the email (module docstring), so no
+        # recipient's own applicant record is listed to them.
+        hidden_prospect_ids=set(),
+    )
+    if "error" in report:
+        logger.warning("Saved report {}: {}; not sent", saved.id, report["error"])
+        await _settle_without_sending(db, saved, frequency, today)
+        return False
+
+    if not await _email(
+        db,
+        org,
+        saved,
+        recipients,
+        report,
+        titles.get(saved.report_type, saved.report_type),
+        period,
+        today,
+    ):
+        logger.warning(
+            "Saved report {}: the email was not accepted; retrying on the next run",
+            saved.id,
+        )
+        return False
+
+    # Audited once the email is out: the trail records data that left the
+    # department, and a retried failure must not add a row each day.
+    await audit_external_recipients(
+        db,
+        organization_id=org_id,
+        recipients=recipients,
+        context=f"saved_report:{saved.report_type}",
+        user_id=str(saved.created_by) if saved.created_by else None,
+    )
+    saved.last_run_at = datetime.now(timezone.utc)
+    saved.next_run_date = next_run_on_or_after(
+        frequency, saved.schedule_day, today + timedelta(days=1)
+    )
+    await db.commit()
+    return True
+
+
 async def send_due_saved_reports(db: AsyncSession, org: Organization) -> int:
     """Send one department's saved reports that are due today.
 
-    Returns the number of reports sent. Each report commits on its own, so a
-    failure on one neither loses the others nor leaves the failed one marked
-    as sent.
+    Returns the number of reports sent. Each report commits on its own and is
+    isolated from the rest: one that raises is rolled back, logged to the
+    error monitor and left due for the next run, and the reports after it in
+    the same department are still sent.
     """
-    from app.services.reports_service import ReportsService
-    from app.utils.external_recipients import audit_external_recipients
+    from app.core.error_reporting import persist_task_error_log
     from app.utils.org_timezone import org_today
 
     org_id = str(org.id)
     today = org_today(org)
     result = await db.execute(
-        select(SavedReport).where(
+        select(SavedReport.id).where(
             SavedReport.organization_id == org_id,
             SavedReport.is_active.is_(True),
             SavedReport.is_scheduled.is_(True),
         )
     )
-    scheduled = list(result.scalars().all())
-    if not scheduled:
+    # Ids rather than rows: a rollback after one failure expires every loaded
+    # instance, and reading an expired one outside an await raises
+    # MissingGreenlet, which would end the loop at the first failing report.
+    saved_ids = [str(row) for row in result.scalars().all()]
+    if not saved_ids:
         return 0
     titles = await _report_titles(db)
     sent_count = 0
 
-    for saved in scheduled:
-        frequency = saved.schedule_frequency
-        if frequency not in SCHEDULE_FREQUENCIES:
-            logger.warning(
-                f"Saved report {saved.id}: unknown frequency {frequency!r}; not sent"
+    for saved_id in saved_ids:
+        try:
+            saved = (
+                await db.execute(
+                    select(SavedReport).where(
+                        SavedReport.id == saved_id,
+                        SavedReport.organization_id == org_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if saved is None or not saved.is_scheduled or not saved.is_active:
+                continue
+            frequency = saved.schedule_frequency
+            if frequency not in SCHEDULE_FREQUENCIES:
+                logger.warning(
+                    "Saved report {}: unknown frequency {!r}; not sent",
+                    saved.id,
+                    frequency,
+                )
+                continue
+            if saved.next_run_date is None:
+                # Scheduled before this sender existed: first send at the next
+                # occurrence, not today (module docstring).
+                saved.next_run_date = next_run_on_or_after(
+                    frequency, saved.schedule_day, today + timedelta(days=1)
+                )
+                await db.commit()
+                continue
+            if saved.next_run_date > today:
+                continue
+            if await _send_one(db, org, saved, titles, today):
+                sent_count += 1
+        except Exception as e:
+            logger.error("Saved report {} failed: {}", saved_id, e)
+            await persist_task_error_log(
+                org_id, "saved_report_delivery", e, {"saved_report_id": saved_id}
             )
-            continue
-        if saved.next_run_date is None:
-            # Scheduled before this sender existed: first send at the next
-            # occurrence, not today (module docstring).
-            saved.next_run_date = next_run_on_or_after(
-                frequency, saved.schedule_day, today + timedelta(days=1)
-            )
-            await db.commit()
-            continue
-        if saved.next_run_date > today:
-            continue
-
-        saved.next_run_date = next_run_on_or_after(
-            frequency, saved.schedule_day, today + timedelta(days=1)
-        )
-        recipients = [r for r in (saved.email_recipients or []) if isinstance(r, str)]
-        if not await _owner_may_run(db, saved):
-            logger.warning(
-                f"Saved report {saved.id}: its owner can no longer run "
-                f"{saved.report_type}; not sent"
-            )
-            await db.commit()
-            continue
-        refused = await disallowed_pii_recipients(
-            db, org_id, saved.report_type, recipients
-        )
-        if refused:
-            logger.warning(
-                f"Saved report {saved.id}: {len(refused)} recipient(s) lack the "
-                f"permission {saved.report_type} needs; not sent to them"
-            )
-            recipients = [r for r in recipients if r not in refused]
-        if not recipients:
-            await db.commit()
-            continue
-
-        period = report_dates(saved.filters, today)
-        report = await ReportsService(db).generate_report(
-            UUID(str(org.id)),
-            saved.report_type,
-            start_date=period[0],
-            end_date=period[1],
-            filters=saved.filters or {},
-            # Only counts reach the email (module docstring), so no
-            # recipient's own applicant record is listed to them.
-            hidden_prospect_ids=set(),
-        )
-        if "error" in report:
-            logger.warning(f"Saved report {saved.id}: {report['error']}; not sent")
-            await db.commit()
-            continue
-
-        await audit_external_recipients(
-            db,
-            organization_id=org_id,
-            recipients=recipients,
-            context=f"saved_report:{saved.report_type}",
-            user_id=str(saved.created_by) if saved.created_by else None,
-        )
-        if await _email(
-            db,
-            org,
-            saved,
-            recipients,
-            report,
-            titles.get(saved.report_type, saved.report_type),
-            period,
-            today,
-        ):
-            saved.last_run_at = datetime.now(timezone.utc)
-            sent_count += 1
-        await db.commit()
+            await db.rollback()
+            await db.refresh(org)
     return sent_count

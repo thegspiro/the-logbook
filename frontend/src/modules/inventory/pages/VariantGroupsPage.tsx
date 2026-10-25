@@ -1,18 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router';
-import {
-  ArrowLeft,
-  Ruler,
-  Plus,
-  Pencil,
-  RefreshCw,
-  Eye,
-  EyeOff,
-  Package,
-  DollarSign,
-  Tag,
-  AlertTriangle,
-} from 'lucide-react';
+import { Ruler, Plus, Pencil, RefreshCw, Eye, EyeOff, Package, DollarSign, Tag, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { ItemVariantGroup, ItemVariantGroupCreate, InventoryCategory, InventoryItem } from '../types';
 import { STANDARD_SIZES, styleAttributesLabel } from '../types';
@@ -23,7 +10,6 @@ import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
-import { Breadcrumbs } from '../../../components/ux';
 
 interface GroupFormData {
   name: string;
@@ -346,21 +332,11 @@ const VariantGroupsPage: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
+    <div className="max-w-7xl space-y-6 py-6 sm:py-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Variant Groups</h1>
+          <h2 className="text-theme-text-primary text-2xl font-bold">Variant Groups</h2>
           <p className="text-theme-text-secondary mt-1">Group pool item variants by size, style, and color.</p>
         </div>
         <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">

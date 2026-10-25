@@ -920,6 +920,39 @@ class GuestCheckInRequest(BaseModel):
         return stripped
 
 
+class GuestLookupRequest(BaseModel):
+    """Email a returning prospect types at the kiosk to be recognised."""
+
+    email: EmailStr
+    # Honeypot, as on GuestCheckInRequest.
+    hp_website: Optional[str] = Field(default=None, max_length=255)
+
+
+class GuestLookupResponse(BaseModel):
+    """What the kiosk may say about an email typed into it.
+
+    The page is public, so this carries as little as recognition needs: a
+    prospect is named by first name and last initial only, and nothing at all
+    is returned about a member account beyond the fact that it is one.
+    """
+
+    status: str = Field(description="'prospect', 'member' or 'not_found'")
+    display_name: Optional[str] = Field(
+        default=None, description="First name and last initial, for 'prospect'"
+    )
+    confirm_token: Optional[str] = Field(
+        default=None,
+        description="Short-lived token the confirm call presents, for 'prospect'",
+    )
+    message: str
+
+
+class GuestConfirmRequest(BaseModel):
+    """A recognised prospect confirming "yes, that's me"."""
+
+    confirm_token: str = Field(..., min_length=1, max_length=2048)
+
+
 class GuestCheckInResponse(BaseModel):
     """Confirmation returned to a guest after a kiosk sign-in."""
 

@@ -632,8 +632,10 @@ to the sign-in page. That is the wrong answer at a volunteer interest night,
 where most of the room has no account and no reason to make one.
 
 An event can show a **second QR code** for guests. The two sit side by side
-on the room display. A guest scans theirs, types their name, and is signed
-in.
+on the room display. A guest scans theirs and signs in from their phone —
+by typing their name, or, at an event that feeds the recruitment pipeline, by
+entering the email they applied with (see
+[Recruitment events: sign-in by email](#recruitment-events-sign-in-by-email)).
 
 ![A room display showing the member and guest QR codes side by side under the event name](./images/04-30-room-display-guest-qr.png)
 
@@ -644,7 +646,7 @@ Both settings are on **Edit Event → Check-In Settings**. Both start off.
 | Setting                                            | What it does                                                                                |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | **Allow guest (non-member) sign-in**               | Adds the guest QR code to the room display and opens the public sign-in page for this event |
-| **Add guests to the prospective members pipeline** | Also opens a record in the recruitment pipeline for every guest who leaves an email address |
+| **Add guests to the prospective members pipeline** | Signs guests in by email instead: only active applicants are signed in, onto their application |
 
 The second appears only once the first is ticked. A
 [Recruitment](#the-recruitment-event-type) event switches both on for you.
@@ -659,7 +661,8 @@ The second appears only once the first is ticked. A
 
 ### What the guest fills in
 
-Name is required. Email, phone and why they came are optional. The form is
+This is the form at an event **without** the pipeline switch. Name is
+required. Email, phone and why they came are optional. The form is
 deliberately short: a walk-in should be asked for the minimum needed to follow
 up, not for a membership application. The real application is what your
 follow-up email links to.
@@ -667,16 +670,48 @@ follow-up email links to.
 The form does not ask which department or agency a guest is with. If you need
 that, add it to the guest's entry by hand afterwards.
 
-![The guest sign-in form on a phone, with the event name above the name and contact fields](./images/04-32-guest-sign-in-form.png)
+### Recruitment events: sign-in by email
+
+At an event with **Add guests to the prospective members pipeline** ticked —
+every [Recruitment](#the-recruitment-event-type) event, by default — the guest
+page asks for an email address instead of a name:
+
+1. The guest types the email they applied with and taps **Continue**.
+2. If it belongs to an **active applicant**, the page asks "Is this you,
+   Jane S.?" — first name and last initial only, so a bystander who knows
+   someone's email learns no more than that.
+3. **Yes, check me in** signs them in with the name, email and phone already
+   on their application, and links the event to it. **That's not me** returns
+   them to the email box with a hint to check for typos; nothing is recorded.
+
+![The guest sign-in page on a phone, with the event name above the email field](./images/04-32-guest-sign-in-form.png)
 
 ![The guest sign-in confirmation naming the event and the time signed in](./images/04-33-guest-sign-in-confirmation.png)
 
+Anyone else is stopped with a message rather than signed in:
+
+| The email belongs to                                         | The guest is told                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------ |
+| A member account (active or probationary)                    | To scan the **member** QR code instead                 |
+| Nobody — or a withdrawn, rejected or on-hold applicant       | To see a member of staff                               |
+
+> **First-time visitors are not signed in by the kiosk at these events.** A
+> recruitment event's kiosk records the attendance of people already in your
+> pipeline; it does not open new applications from an anonymous phone. For a
+> walk-in, have someone at the door add them on **Prospective Members → Add
+> Applicant** with their email, then let them scan again. If you want walk-ins
+> to sign themselves in, untick **Add guests to the prospective members
+> pipeline** — the page then shows the name form above.
+
+A guest who confirms a second time sees "You're already checked in, Jane S."
+and nothing changes.
+
 ### Where the guest ends up
 
-| Record                                         | When                                                                       |
-| ---------------------------------------------- | -------------------------------------------------------------------------- |
-| An entry on the event's guest list             | Always                                                                     |
-| A card in the **prospective members** pipeline | Only if the event has the second switch on **and** the guest left an email |
+| Record                                         | When                                                                   |
+| ---------------------------------------------- | ---------------------------------------------------------------------- |
+| An entry on the event's guest list             | Always                                                                 |
+| A link on the guest's **prospective members** card | When an applicant signs in by email at an event with the second switch on |
 
 **Seeing who came.** Officers who manage events see a **Guests (_n_)** card
 on the event page. It lists each guest's name, organization, email and phone,
@@ -686,7 +721,7 @@ signed in yet."). Guests are **not** counted in the event's attendance, which
 stays a record of members — the card says so. Other members do not see the
 card.
 
-A prospect opened this way is linked to the event it came from. The pipeline
+An applicant who signs in this way has the event linked to their card. The pipeline
 card's **Linked Events** panel names the open house, its date and its type,
 so at the next pipeline review you can see where each lead came from.
 
@@ -700,9 +735,9 @@ so at the next pipeline review you can see where each lead came from.
 | **A guest who taps the code twice is not counted twice** — they see "already checked in" | Matched on their email if they gave one, on their name if they did not                                                                        |
 | **Two guests with the same name and no email become one entry**                          | The name match is the weaker fallback, chosen on purpose: a double-tap at a kiosk is far more common than two Chris Smiths at one open house  |
 | **A guest you added in advance keeps the details you typed**                             | The kiosk sign-in only fills in blanks. It never overwrites something a person entered on purpose                                             |
-| **A guest already in your pipeline does not get a second card**                          | Their existing card is linked to the event instead                                                                                            |
-| **A guest with no email is still signed in** — they just get no pipeline card            | There would be no way to follow up                                                                                                            |
-| **If the pipeline card cannot be created, the guest is still signed in**                 | Signing in is what they came to do. The failure is logged for your administrator                                                              |
+| **An applicant who signs in by email does not get a second card**                         | Their existing card is linked to the event instead                                                                                            |
+| **If the link to the pipeline card fails, the applicant is still signed in**             | Signing in is what they came to do. The failure is logged for your administrator                                                              |
+| **"Is this you?" waits only ten minutes** — after that the guest enters their email again | The confirmation is tied to that event, that room and that moment, so it cannot be reused later                                               |
 | **Deleting a prospect does not delete the attendance**                                   | Who was in the room is the event's history, not the prospect's                                                                                |
 | **A busy night can hit the daily limit** — 300 guest sign-ins per event per day          | Sized for an open house, not a stadium. Ask your administrator if you really need it raised                                                   |
 
@@ -798,8 +833,9 @@ membership-pipeline stage can point at "the next recruitment event" without
 also matching every fire-safety talk.
 
 **Choosing Recruitment on a new event switches guest sign-in on**, along with
-**Add guests to the prospective members pipeline**. A recruitment event whose
-guests never reach the pipeline has not recruited anybody.
+**Add guests to the prospective members pipeline**, so applicants who come
+sign in by email and have the event recorded on their application (see
+[Recruitment events: sign-in by email](#recruitment-events-sign-in-by-email)).
 
 ![A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline](./images/19-10-event-recruitment-type.png)
 

@@ -53,18 +53,24 @@ class CacheManager:
                     f"Redis connection attempt {attempt}/{settings.REDIS_CONNECT_RETRIES}..."
                 )
 
-                # Build optional SSL context for TLS connections
+                # TLS options for the rediss:// connection. redis-py's asyncio
+                # SSLConnection takes these keyword arguments; it has no `ssl=`
+                # or SSLContext parameter, so passing one made every REDIS_SSL
+                # connection fail and the cache quietly run in degraded mode.
                 ssl_kwargs: dict = {}
                 if settings.REDIS_SSL:
-                    import ssl as _ssl
-
-                    ssl_ctx = _ssl.create_default_context(
-                        cafile=settings.REDIS_SSL_CA if settings.REDIS_SSL_CA else None,
-                    )
-                    if not settings.REDIS_SSL_CA:
-                        ssl_ctx.check_hostname = False
-                        ssl_ctx.verify_mode = _ssl.CERT_NONE
-                    ssl_kwargs["ssl"] = ssl_ctx
+                    if settings.REDIS_SSL_CA:
+                        ssl_kwargs["ssl_ca_certs"] = settings.REDIS_SSL_CA
+                        ssl_kwargs["ssl_cert_reqs"] = "required"
+                        ssl_kwargs["ssl_check_hostname"] = True
+                    else:
+                        # Encrypted but unverified; see SECURITY_ALLOW_UNVERIFIED_TLS.
+                        ssl_kwargs["ssl_cert_reqs"] = "none"
+                        ssl_kwargs["ssl_check_hostname"] = False
+                    if settings.REDIS_SSL_CERT:
+                        ssl_kwargs["ssl_certfile"] = settings.REDIS_SSL_CERT
+                        if settings.REDIS_SSL_KEY:
+                            ssl_kwargs["ssl_keyfile"] = settings.REDIS_SSL_KEY
 
                 # Create Redis client with timeout (and optional TLS)
                 self.redis_client = redis.Redis.from_url(
@@ -96,7 +102,7 @@ class CacheManager:
             # Clean up failed client
             if self.redis_client:
                 try:
-                    await self.redis_client.close()
+                    await self.redis_client.aclose()
                 except Exception as e:
                     logger.debug(f"Failed to close Redis client during retry: {e}")
                 self.redis_client = None
@@ -126,7 +132,7 @@ class CacheManager:
         """Close Redis connection"""
         if self.redis_client:
             try:
-                await self.redis_client.close()
+                await self.redis_client.aclose()
                 logger.info("Redis connection closed")
             except Exception as e:
                 logger.warning(f"Error closing Redis connection: {e}")

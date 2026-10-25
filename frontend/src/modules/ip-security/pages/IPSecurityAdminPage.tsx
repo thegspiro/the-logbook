@@ -14,7 +14,7 @@ import { BlockedAttemptsTable } from '../components/BlockedAttemptsTable';
 import { BlockedCountriesTable } from '../components/BlockedCountriesTable';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { IPExceptionApprovalStatus } from '../../../constants/enums';
+import { IPExceptionApprovalStatus, IP_EXCEPTION_USE_CASE_LABELS } from '../../../constants/enums';
 import type { CountryBlockRuleCreate } from '../types';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
@@ -61,6 +61,44 @@ const IPSecurityAdminPage: React.FC = () => {
   const [approveModal, setApproveModal] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
   const [rejectModal, setRejectModal] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
   const [revokeModal, setRevokeModal] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
+  // W74: each dialog opened on an id alone — no address, member or reason —
+  // so the approver decided without seeing what they were approving.
+  const exceptionById = (id: string) =>
+    pendingExceptions.find((e) => e.id === id) ?? allExceptions.find((e) => e.id === id);
+  const summary = (id: string) => {
+    const exc = exceptionById(id);
+    if (!exc) return null;
+    return (
+      <dl className="bg-theme-surface-secondary space-y-1 rounded-lg p-3 text-sm">
+        <div className="flex gap-2">
+          <dt className="text-theme-text-muted w-24 shrink-0">Address</dt>
+          <dd className="text-theme-text-primary font-mono">{exc.ipAddress}</dd>
+        </div>
+        {exc.userName && (
+          <div className="flex gap-2">
+            <dt className="text-theme-text-muted w-24 shrink-0">Member</dt>
+            <dd className="text-theme-text-primary">{exc.userName}</dd>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <dt className="text-theme-text-muted w-24 shrink-0">Use case</dt>
+          <dd className="text-theme-text-primary">
+            {IP_EXCEPTION_USE_CASE_LABELS[exc.useCase ?? ''] ?? exc.useCase ?? '—'}
+          </dd>
+        </div>
+        <div className="flex gap-2">
+          <dt className="text-theme-text-muted w-24 shrink-0">Reason</dt>
+          <dd className="text-theme-text-primary">{exc.reason}</dd>
+        </div>
+        {exc.description && (
+          <div className="flex gap-2">
+            <dt className="text-theme-text-muted w-24 shrink-0">Details</dt>
+            <dd className="text-theme-text-primary">{exc.description}</dd>
+          </div>
+        )}
+      </dl>
+    );
+  };
   const [countryModal, setCountryModal] = useState(false);
 
   // Form states
@@ -305,6 +343,7 @@ const IPSecurityAdminPage: React.FC = () => {
           title="Approve Exception"
         >
           <div className="space-y-4">
+            {summary(approveModal.id)}
             <div>
               <label htmlFor="approved-days" className={labelClass}>
                 Duration in days, 1–90 (optional)
@@ -359,6 +398,7 @@ const IPSecurityAdminPage: React.FC = () => {
           title="Reject Exception"
         >
           <div className="space-y-4">
+            {summary(rejectModal.id)}
             <div>
               <label htmlFor="rejection-reason" className={labelClass}>
                 Reason for Rejection
@@ -399,6 +439,7 @@ const IPSecurityAdminPage: React.FC = () => {
           title="Revoke Exception"
         >
           <div className="space-y-4">
+            {summary(revokeModal.id)}
             <div>
               <label htmlFor="revoke-reason" className={labelClass}>
                 Reason for Revocation
