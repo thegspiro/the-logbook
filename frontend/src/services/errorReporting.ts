@@ -34,6 +34,7 @@
 
 import type { AxiosError } from 'axios';
 import { getErrorMapping } from './errorCatalog';
+import { isPasswordChangeRefusal } from './passwordChangeGate';
 import { requestAction } from '../utils/errorContext';
 
 /** Posted directly rather than through `errorLogsService` — see above. */
@@ -785,6 +786,9 @@ export function reportApiError(error: AxiosError): void {
   // Never report a failure of the reporting endpoint itself.
   if (path.includes('/errors')) return;
   if (UNREPORTED_REQUEST.test(path)) return;
+  // Expected while a password change is pending, and the report itself would
+  // be refused by the same gate (W08-6).
+  if (isPasswordChangeRefusal(error)) return;
 
   const classified = classifyApiError(error);
   if (!classified) return;
