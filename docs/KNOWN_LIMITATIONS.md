@@ -6145,17 +6145,6 @@ on each department switching on **Require for every member** for them under
 **Administration → Forms & Comms → Member Emails & Texts** (`settings.manage`
 or `organization.update_settings`).
 
-## Shift Reports — "Your Reporting Summary" Counts the Whole Department (2026-09-30)
-
-An officer's **Written by me** view on **Scheduling → Shift Reports** opens with
-a card headed **Your reporting summary** — **Reports written**, **Shift hours
-covered**, **Calls covered**, the crew summary and **Reports written per
-month**. Its figures come from `GET /training/shift-reports/officer-analytics`,
-which totals every report in the organization, not only the viewer's. The list
-below the card is the viewer's own. Either scope the endpoint to the officer or
-retitle the card; until then an officer in a department with several report
-writers reads the department's numbers as their own.
-
 ## AP2-4 — The EVOC Driver Gate Stops Enforcing On A Deleted Apparatus (2026-10-05)
 
 `EvocLevelService.check_driver_evoc_eligibility` answers "may this member drive
