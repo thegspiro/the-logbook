@@ -65,6 +65,7 @@ _PLAIN_COLUMNS = [
     ),
     ("users", "id", ["mfa_secret", "date_of_birth", "emergency_contacts"]),
     ("prospective_members", "id", ["date_of_birth"]),
+    ("form_submissions", "id", ["sensitive_data"]),
     (
         "screening_records",
         "id",

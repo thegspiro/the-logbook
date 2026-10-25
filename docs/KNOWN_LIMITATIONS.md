@@ -1163,6 +1163,32 @@ encrypts every file written under `/app/uploads`. It does not reach:
   any organization's `settings.manage` holder confirms for the installation,
   because the key is installation-wide.
 
+## Forms — What a Sensitive Field Does Not Reach (2026-10-25)
+
+**Open, each deliberate.** A field marked Sensitive stores its answers
+encrypted in `form_submissions.sensitive_data` and serves them only to holders
+of `sensitive_answers.view` (see "Sensitive Fields" in
+`docs/FORMS_MODULE.md`). Three things fall outside that:
+
+- **Copies an integration made before the field was marked.** Marking an
+  existing field Sensitive moves the answers held on each submission into the
+  encrypted column. It does not reach a value an integration already copied
+  out — an applicant record created from an interest form, or the answers kept
+  on that applicant's pipeline stage. Mark a field Sensitive before the form
+  is published to avoid this; otherwise those records keep what they were
+  given until they are edited, purged or anonymized.
+- **A submission that arrives while the field is being marked.** A request
+  that loaded the form before the flag was saved writes that one answer to the
+  plain `data` column. The submission screens still withhold it — they decide
+  by the field's current flag, not only by where the answer is stored — but
+  the stored copy is not encrypted. Closing it would mean locking the form row
+  on every submission.
+- **Backups taken before the field was marked.** They hold the plaintext
+  answers, as any pre-change backup does.
+
+`sensitive_answers.view` is granted to no seeded position, so a department
+that wants its membership committee to read these answers grants it by hand.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported
