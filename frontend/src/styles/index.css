@@ -291,6 +291,19 @@
     flex-shrink: 0;
   }
 
+  /* A checkbox takes its touch target from the <label> wrapping it (see
+     form-checkbox). Most such labels clear 44px only because their text wraps
+     to a second line at 390px; on a phone held sideways the same label fits on
+     one line and came out 36–40px tall. Height only, and only on a touch or
+     phone-width screen, so desktop density is untouched; in `base`, so a call
+     site's own `min-h-*` still wins. An inline label ignores min-height, which
+     is right for a checkbox inside a sentence. */
+  @media (max-width: 767px), (pointer: coarse) {
+    label:has(> input:is([type='checkbox'], [type='radio'])) {
+      min-height: 44px;
+    }
+  }
+
   /* WebKit (iPad/iPhone, every iOS browser) sizes a native date/time control
      from its own intrinsic box and can ignore `w-full` + border-box, so it
      spills past its grid column by the padding and border and paints over the
@@ -467,6 +480,18 @@
        sticky actions and make the form appear horizontally clipped. */
     font-size: 1rem;
   }
+}
+
+/* A field that takes the rest of its row — a search box beside filters and
+   buttons — and wraps to a line of its own rather than shrink below a readable
+   width. Pair it with `flex-1` in a row that wraps (`flex-wrap`, or
+   `sm:flex-wrap` on a row that is a column on phones). `flex-1`'s zero basis
+   alone means a wrapping row never wraps the field: it shrinks it, and seven
+   search boxes rendered as their icon on a phone or tablet. Only a minimum
+   width, deliberately — a flex-basis here would turn into a 14rem height in
+   the `flex-col` rows these sit in on a phone. */
+@utility field-min {
+  min-width: min(14rem, 100%);
 }
 
 /* Keep native and one-off form controls usable even when a feature has not yet
@@ -1674,6 +1699,27 @@
     height: auto;
     max-width: min(20rem, 88vw);
     padding-top: 0;
+  }
+
+  /* A phone on its side is wider than 767px, so it gets the desktop rail at
+     its full 390px height. The header and the Theme / High contrast / Logout
+     footer keep their size, and the menu list between them — the only part
+     that scrolls — was left ~130px: two items and part of a third. On a
+     screen that short the whole column scrolls instead, so the menu takes the
+     height and the footer follows it. 30rem catches a landscape phone and
+     leaves every tablet, and a desktop window of ordinary height, as it was.
+     The hooks are data attributes in SideNavigation. */
+  @media (min-width: 768px) and (max-height: 30rem) {
+    & [data-nav-column] {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    & [data-nav-region],
+    & [data-nav-list] {
+      flex: none;
+      min-height: auto;
+      overflow-y: visible;
+    }
   }
 }
 

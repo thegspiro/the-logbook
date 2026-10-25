@@ -367,7 +367,7 @@ const AuditLogPage: React.FC = () => {
                             type="button"
                             aria-expanded={expanded}
                             aria-label={`${expanded ? 'Hide' : 'Show'} details for ${entry.event_type}`}
-                            className="touch:min-h-11 text-left"
+                            className="touch:min-h-11 touch:min-w-11 text-left"
                             onClick={(e) => {
                               e.stopPropagation();
                               setExpandedId(expanded ? null : entry.id);
@@ -395,7 +395,7 @@ const AuditLogPage: React.FC = () => {
                               e.stopPropagation();
                               setExpandedId(expanded ? null : entry.id);
                             }}
-                            className="text-left hover:underline"
+                            className="touch:min-h-11 text-left hover:underline"
                           >
                             {entry.event_type}
                           </button>

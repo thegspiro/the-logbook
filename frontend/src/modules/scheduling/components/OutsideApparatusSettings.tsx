@@ -171,7 +171,7 @@ export const OutsideApparatusSettings: React.FC = () => {
         </p>
 
         <div className="mt-4 flex flex-wrap items-end gap-2">
-          <div className="min-w-0 flex-1">
+          <div className="field-min flex-1">
             <label htmlFor="new-outside-agency" className="form-label">
               Add a department
             </label>
