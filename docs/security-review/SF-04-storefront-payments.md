@@ -75,13 +75,21 @@ storefront-related migration landed either.
   rationale (gap-lock deadlocks measured at the product- and window-row
   granularities before landing on the organisation row) still documented
   in-line. Unchanged from every prior pass's citation.
-- **SF8-04-2 — MED — OPEN, unchanged.** `update_order_status`
+- **SF8-04-2 — MED — ✅ FIXED 2026-10-25 (owner-directed, after this pass).**
+  `update_order_status` now reads the order with `for_update=True` when the
+  target status is `PAID` (option 1 below, narrowed to the one transition that
+  can settle); `test_storefront_payment_race.py::test_a_status_update_to_paid_racing_a_payment_does_not_lose_it`.
+  Pass 12's text as found: `update_order_status`
   (`storefront_service.py:1896`) still resolves the order via a plain,
   unlocked `get_order()` (`:1905`), and its `settles_payment` branch still
   writes `order.payment_status = PAID` / `order.amount_paid = _money(order.total)`
   (`:1949`–`:1951`) from that unlocked read. Line numbers match pass 11's
   citation exactly (file byte-identical in this range).
-- **SF8-04-3 — LOW — OPEN, unchanged.** `waive_order_payment`
+- **SF8-04-3 — LOW — ✅ FIXED 2026-10-25 (owner-directed, after this pass).**
+  Owner chose refusal: `waive_order_payment` locks the order and raises
+  `ValueError` (→ 400) on an order already paid or already waived; a partly
+  paid order can still be waived. `test_storefront_waive_settled.py`.
+  Pass 12's text as found: `waive_order_payment`
   (`:2120`) still has no `_is_settled()` guard before unconditionally setting
   `payment_status = WAIVED` (`:2142`) and reads the order unlocked (`:2134`).
   Both remain an owner decision per pass 8's original rationale, already

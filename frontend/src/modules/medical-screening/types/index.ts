@@ -228,4 +228,5 @@ export interface ExpiringScreening {
   expiration_date: string;
   days_until_expiration: number;
   self_recorded: boolean;
+  status?: ScreeningStatus | undefined;
 }

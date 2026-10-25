@@ -1986,7 +1986,11 @@ the mutation response, and it was concretely responsible for the intermittent
 CI failures on `main`, i.e. it already had an observable production-adjacent
 blast radius before this pass.
 
-### MM-19 — LOW — the same method's find-or-create for a new prepared motion has no lock — FLAGGED, not fixed
+### MM-19 — LOW — the same method's find-or-create for a new prepared motion has no lock — ✅ FIXED 2026-10-25
+
+Fixed owner-directed: `ensure_section_motions` locks the minutes row, then
+reads the motions with a locking read (pitfall #27);
+`test_minutes_find_or_create_race.py`. Original finding below.
 
 **What:** `ensure_section_motions`'s loop over `wanted.items()` does a
 plain `select` to check whether a section's motion already exists
@@ -2012,7 +2016,12 @@ data-integrity rather than security concern when nothing it protects is a
 capacity cap or a security decision), left open rather than adding a lock
 this pass did not have a reason to add elsewhere in the same method.
 
-### MM-20 — LOW — `MinutesPublishingService._post_public`'s find-or-create for the public copy has no lock — FLAGGED, not fixed
+### MM-20 — LOW — `MinutesPublishingService._post_public`'s find-or-create for the public copy has no lock — ✅ FIXED 2026-10-25
+
+Fixed owner-directed: `_post_public` locks the minutes row and reads the copy
+with a locking read, so a second publish replaces the first's copy instead of
+failing on the unique key; `test_minutes_find_or_create_race.py`. Original
+finding below.
 
 **What:** `_post_public` looks up an existing `MinutesPublicCopy` by
 `minutes_id` (`_copy_for`), and either updates it or inserts a new one. No

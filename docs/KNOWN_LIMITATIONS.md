@@ -4858,44 +4858,19 @@ First surfaced as an unfiled observation in
 disposition in pass 4, when a related fix (MM-15) touched the same
 validation block.
 
-## MM-19 — A Prepared Motion's Find-or-Create Has No Lock (2026-10-20)
+## MM-19 — A Prepared Motion's Find-or-Create Had No Lock (2026-10-20, resolved 2026-10-25)
 
-**Open — low severity, left for a future pass with a reason to touch this
-method.** `MinuteService.ensure_section_motions` checks whether a section
-already has a motion and, if not, inserts one, with no `.with_for_update()`
-on the parent `MeetingMinutes` row and no unique constraint on
-`(minutes_id, section_key)`. Two `minutes.manage` holders racing a save on
-the same draft (one toggling a section's "needs a motion" flag while another
-applies an agenda sync, say) within the same instant could each see no
-existing motion and both insert one, leaving a duplicate pending motion for
-that section — a secretary would notice and could delete it, not a
-tenant-isolation or privilege gap. Same shape, and the same "not fixed"
-disposition, as the already-documented unlocked find-or-create in
-`AttendanceDashboardService.grant_waiver` (pass 5 of this same review).
-Closing it means adding a locking read to a method four other call sites
-share (`update_minutes`, `recall_minutes`, `apply_outline`, the agenda-sync
-apply path, and `create_minutes` itself), which is a reasonable thing to do
-but wasn't the reason this pass was in the file.
+**Resolved.** `ensure_section_motions` locks the minutes row and reads the
+motions with a locking read, so two saves of one draft cannot each add the
+section's motion. Kept only because code and tests cite it by name; history in
+`docs/security-review/MM-24-meetings-minutes.md`.
 
-Found by `docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass
-8, finding MM-19).
+## MM-20 — Publishing a Public Minutes Copy Had No Lock Either (2026-10-20, resolved 2026-10-25)
 
-## MM-20 — Publishing a Public Minutes Copy Has No Lock Either (2026-10-20)
-
-**Open — low severity.** `MinutesPublishingService._post_public`'s
-find-or-create for the `MinutesPublicCopy` row has no locking read, but
-unlike MM-19 the column it keys on (`minutes_id`) carries a database-level
-`unique=True` constraint, so a genuine race cannot silently duplicate the
-row — the loser's `commit()` raises `IntegrityError` instead, which the app's
-generic exception handler turns into a sanitized 500 rather than a clean
-"already published, try again." Two `minutes.manage` holders would have to
-click "Publish" on the same minutes within the same instant to hit it. The
-database already prevents the corrupted state a lock would prevent; what's
-missing is a graceful retry or message, which is a UX polish rather than a
-data-integrity gap.
-
-Found by `docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass
-8, finding MM-20).
+**Resolved.** `_post_public` locks the minutes row and reads the copy with a
+locking read, so a second publish replaces the first one's copy instead of
+failing on the unique key with a 500. Kept only because code and tests cite it
+by name; history in `docs/security-review/MM-24-meetings-minutes.md`.
 
 ## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
@@ -5302,25 +5277,14 @@ counts as non-compliant (and for `applies_to_roles`, which requirements apply
 to whom) for any organization already holding a non-default value, which is
 a product decision, not a same-day patch.
 
-## MS-17 — `GET /medical-screening/compliance/{user_id}` Returns 200 For a Nonexistent Subject (2026-08-25)
+## MS-17 — `GET /medical-screening/compliance/{user_id}` Returned 200 For a Nonexistent Subject (2026-08-25, resolved 2026-10-25)
 
-The route does not validate `user_id` is a real, in-org member before
-grading it — `get_compliance_status` just filters records and resolves a
-name, both already org-scoped, so a made-up or out-of-org id simply resolves
-no records and no name. The response reads as `subject_name: ""`,
-`subject_type: "user"`, and **non-compliant against every active
-requirement** — and for an org with no active requirements,
-`is_fully_compliant` comes back `true` for a member who does not exist.
-
-**Not an IDOR or an enumeration channel** (re-confirmed each pass since
-pass 1): no cross-org data is returned either way, so there is nothing a
-caller learns about another organization or a real member by probing ids.
-It is a contract looseness — a 404 would be the clearer response — left open
-because it is a behavior change on a PHI read path with no safety upside,
-not because fixing it is risky. `assert_in_org` is already imported in this
-service (MS-3's fix) if this is picked up. Found in
-`docs/security-review/MS-09-medical-screening.md` (feature 09, pass 1, and
-re-confirmed every pass since).
+**Resolved (owner decision: 404).** Both compliance routes, member and
+prospect, now answer 404 for an id that is not a member or prospect of the
+caller's organization, before anything is graded or audited. Kept only because
+`endpoints/medical_screening.py` and
+`tests/test_medical_screening_compliance_subjects.py` cite it by name; history
+in `docs/security-review/MS-09-medical-screening.md`.
 
 ## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)
 
@@ -6390,24 +6354,6 @@ connected — or accept that catalog changes reach new organizations only.
 
 See `docs/app-review/integrations.md` → Pass 5.
 
-## GF2-2 — Seven More Services Flush And Return An Updated Row Without Reloading `updated_at` (2026-10-16)
-
-The grants / fundraising update endpoints answered 500 and discarded the change because a
-server-side `onupdate=func.now()` column expires after the flush and the response model
-cannot lazy-load it in an async session (fixed in that module with
-`reload_updated_at`; see `docs/app-review/grants-fundraising.md` → Pass 5, GF2-1). A
-static scan found seven more `update_*` service methods with the same shape that were not
-driven: `finance_service.update_chain_step`, `inventory_service.update_reorder_request`,
-`label_printer_service.update_printer`, `legal_service.update_draft`,
-`medical_screening_service.update_requirement` and `update_record`,
-`org_chart_service.update_node`.
-
-**Candidates, not confirmed failures.** Each depends on the model carrying `onupdate` and
-on the endpoint not re-fetching before it responds. **Owner decision:** let each
-module's rotation pass drive its own update with a real change (the test pattern is in
-`backend/tests/test_grants_update_endpoints_integration.py`) and apply
-`reload_updated_at` where it fails — or ask for one sweep that drives all seven now.
-
 ## Privacy Choices — A Member Cannot Record "No" Without First Recording "Yes" (2026-10-13)
 
 Found driving W59 (`docs/workflow-review/W59-photo-use-consent.md`, W59-3).
@@ -6778,87 +6724,21 @@ assert_different_person(
 )
 ```
 
-## SF8-04-2 — A Storefront Order Status Update Can Settle A Payment From A Stale Read (2026-10-12)
+## SF8-04-2 — A Storefront Order Status Update Could Settle A Payment From A Stale Read (2026-10-12, resolved 2026-10-25)
 
-`StorefrontService.update_order_status` is a fifth path that can self-settle an
-order's payment (alongside `record_payment`, `mark_order_paid`,
-`waive_order_payment`, `refund_order`): when the caller's target `status` is
-`PAID` and the order is not already paid/waived, it sets
-`order.amount_paid = _money(order.total)` from a plain, **unlocked**
-`get_order()` read.
+**Resolved (option 1, narrowed).** `update_order_status` reads the order with
+`for_update=True` when, and only when, the target status is `PAID` — the one
+transition that can write `amount_paid` — so routine status changes still do
+not queue behind a row lock. Kept only because `storefront_service.py` and
+`tests/test_storefront_payment_race.py` cite it by name; history in
+`docs/security-review/SF-04-storefront-payments.md`.
 
-Security review (pass 8, 2026-10-12) fixed the identical shape in
-`refund_order` (SF8-04-1) once `record_payment`/`mark_order_paid` were found
-already fixed by other work (SF-9, 2026-10-05: both now take
-`get_order(..., for_update=True)` before any read-modify-write on
-`amount_paid`). `update_order_status`'s settlement branch is the one
-remaining unlocked writer of that column.
+## SF8-04-3 — Waiving A Storefront Order's Payment Did Not Check It Was Not Already Settled (2026-10-12, resolved 2026-10-25)
 
-**Why it is lower-severity today than SF-9 was:** this branch always writes
-the _full_ order total rather than an incremental delta, so the specific race
-this review could demonstrate (a webhook auto-apply landing mid-update) does
-not currently lose money — the stale write still lands on the correct total
-in that interleaving. The latent risk is structural: this is the busiest of
-the five settlement paths (the generic order-lifecycle status endpoint, used
-for routine transitions that never touch payment, not a specialized payment
-action), and a future change to its arithmetic — e.g. to record a partial
-settlement instead of always the full total — would silently reintroduce the
-SF-9 class of lost-update on the highest-traffic of the five call sites with
-no new review catching it, because the unlocked read is already there today.
-
-**Why not fixed directly.** Unlike `refund_order` (single-purpose,
-infrequent, locking it has no other effect), `update_order_status` handles
-every order-lifecycle transition, most of which never touch `amount_paid`.
-Taking an unconditional lock here serializes _every_ status change on _every_
-order behind a row lock, not just the ones that settle payment — a broader
-behavior/performance change than a drive-by fix should make. Two
-non-equivalent options for an owner to choose between:
-
-1. Re-read the order with `for_update=True` immediately before the
-   `settles_payment` branch's writes (cheap, reads the order twice on that
-   path only).
-2. Have the `settles_payment` branch delegate to the already-fixed
-   `record_payment(order_id, organization_id, None, ...)`, the way
-   `mark_order_paid` now does — but its post-settlement `status` transition
-   rule differs slightly from this method's own, so reconciling the two needs
-   care.
-
-Found in security-review SF-04 pass 8 (2026-10-12); see
-`docs/security-review/SF-04-storefront-payments.md` → SF8-04-2.
-
-## SF8-04-3 — Waiving A Storefront Order's Payment Does Not Check It Is Not Already Settled (2026-10-12)
-
-`StorefrontService.waive_order_payment` unconditionally sets
-`payment_status = WAIVED` after checking only that the order is not
-cancelled and that the actor is not the order's own member
-(`assert_different_person`). Unlike its sibling `mark_order_paid`, it has no
-`_is_settled(order)` early return.
-
-**No concurrency is required to hit this.** In plain sequential use: a
-payment is recorded on an order (`payment_status = PAID`,
-`amount_paid = 100`), and later a quartermaster calls "waive" on that same
-order — e.g. from a stale admin-hub tab that still showed it unpaid. The
-order ends up with `amount_paid = 100` **and** `payment_status = WAIVED`, an
-internally inconsistent row: the ledger shows money collected on an order
-flagged as comped, and the sales rollup (which keys off `payment_status`,
-per this method's own docstring — "the sales rollup still reports the
-order's value as uncollected") now **under-reports revenue that was, in
-fact, collected.** The same unlocked-read shape SF8-04-2/SF-9 describe makes
-this easier to hit by accident under concurrency too, but the inconsistency
-exists even with no race at all.
-
-**Impact:** a data-integrity/reporting defect, not a money-loss or
-access-control one — no funds move and no unauthorized party gains anything.
-
-**Why not fixed.** This is a business-rule gap, not a mechanical lost-update:
-adding a lock alone does not change the unconditional overwrite, since the
-method never branches on the order's settlement state. A correct fix needs a
-product decision on intended behavior — refuse with a `ValueError` (matching
-`mark_order_paid`'s guard), or silently no-op (matching that same guard's
-choice for its own, already-settled case) — before any code changes.
-
-Found in security-review SF-04 pass 8 (2026-10-12); see
-`docs/security-review/SF-04-storefront-payments.md` → SF8-04-3.
+**Resolved (owner decision: refuse).** `waive_order_payment` locks the order and
+answers 400 on an order already paid ("Refund it instead") or already waived. A
+partly paid order can still be waived. Kept only because code and tests cite it
+by name; history in `docs/security-review/SF-04-storefront-payments.md`.
 
 ## FIN8-05-1 — Deciding A Budget Request Has No Separation-Of-Duties Guard, Unlike Its Own Sibling (2026-10-12)
 
@@ -6991,39 +6871,13 @@ name, building)` would not stop duplicates where `building IS NULL` — which
   migration would have to surface and resolve before the constraint could be
   created.
 
-## MS2-7 — A Lapsing Waiver Is Counted As Expiring Soon But Never Listed (2026-10-05)
+## MS2-7 — A Lapsing Waiver Was Counted As Expiring Soon But Never Listed (2026-10-05, resolved 2026-10-25)
 
-Medical screening defines "expiring soon" in two places, and they disagree about
-a **waived** screening.
-
-`MedicalScreeningService.get_compliance_status` treats `PASSED`, `COMPLETED` and
-`WAIVED` as satisfying a requirement, so a waived screening whose expiration
-date falls inside the 30-day window increments `expiring_soon_count`.
-`get_expiring_soon` — the list that count links to — filters status to `PASSED`
-and `COMPLETED` only, so it never returns one. A waiver about to lapse is
-therefore counted on the summary and absent from the list, with nothing on
-either screen to explain the difference.
-
-(The other divergence between the same two methods — a screening expiring
-_today_ was listed but not counted — was fixed as MS2-6 in the same pass, with
-a comment at both sites naming the other.)
-
-**Why it is here rather than fixed.** Either reading is defensible and they lead
-to opposite one-line changes:
-
-- **List it.** A waiver that is about to lapse is real work coming: somebody has
-  to either renew the waiver or get the member screened, and the expiring list
-  is where that work is surfaced.
-- **Stop counting it.** A waiver is an administrative exemption rather than a
-  screening, so it arguably does not belong on a list of _screenings_ coming
-  due, and the count should match the list by excluding it.
-
-Only the owner can pick, and this is a PHI-adjacent compliance surface where
-guessing changes what a chief is told about a member. Once picked, the right
-shape is CLAUDE.md Pitfall #29's: extract the window-and-status predicate so
-there is a single definition and the other call site is a projection of it,
-rather than editing whichever of the two is being looked at — which is how the
-pair drifted apart twice.
+**Resolved (owner decision: list it).** `_grade` and `get_expiring_soon` read
+one `_SATISFYING_STATUSES` (passed, completed, waived), so the count and the
+list agree; the list now returns each row's `status`, and the Compliance tab
+marks a waiver. Kept only because code and tests cite it by name; history in
+`docs/app-review/medical-screening.md`.
 
 ## DASH-37 — Dashboard Tiles Promise A Filter They Do Not Apply (2026-10-04)
 
