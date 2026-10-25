@@ -312,6 +312,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [hasTimeoutOverride, setHasTimeoutOverride] = useState(false);
   const [timeoutOverrideDays, setTimeoutOverrideDays] = useState<number>(180);
+  const [emailTemplateId, setEmailTemplateId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [availableForms, setAvailableForms] = useState<FormDef[]>([]);
   const [formsLoading, setFormsLoading] = useState(false);
@@ -418,6 +419,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
         setHasTimeoutOverride(false);
         setTimeoutOverrideDays(180);
       }
+      setEmailTemplateId(editingStage.email_template_id ?? '');
       // Validate pre-selected form for pipeline compatibility
       if (
         editingStage.stage_type === StageTypeConst.FORM_SUBMISSION &&
@@ -445,6 +447,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
       setPublicVisible(true);
       setHasTimeoutOverride(false);
       setTimeoutOverrideDays(180);
+      setEmailTemplateId('');
     }
     setErrors({});
   }, [editingStage, isOpen]);
@@ -614,7 +617,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
 
     if (stageType === StageTypeConst.AUTOMATED_EMAIL) {
       const c = config as AutomatedEmailStageConfig;
-      if (!c.email_subject.trim()) newErrors.email_subject = 'Email subject is required';
+      // A linked template supplies its own subject.
+      if (!emailTemplateId && !c.email_subject.trim()) newErrors.email_subject = 'Email subject is required';
       if (c.include_welcome && !c.welcome_message?.trim()) {
         newErrors.welcome_message = 'Welcome message cannot be empty when enabled';
       }
@@ -728,6 +732,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
       ...(editingStage ? { sort_order: editingStage.sort_order } : {}),
       is_required: isRequired,
       inactivity_timeout_days: hasTimeoutOverride ? timeoutOverrideDays : null,
+      // Only an email stage sends, so any other type carries no link.
+      email_template_id: stageType === StageTypeConst.AUTOMATED_EMAIL ? emailTemplateId || null : null,
       notify_prospect_on_completion: notifyProspect,
       public_visible: publicVisible,
     };
@@ -1115,6 +1121,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                 <AutomatedEmailConfig
                   config={config}
                   setConfig={setConfig}
+                  emailTemplateId={emailTemplateId}
+                  setEmailTemplateId={setEmailTemplateId}
                   errors={errors}
                   showEmailPreview={showEmailPreview}
                   setShowEmailPreview={setShowEmailPreview}

@@ -32,7 +32,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG, office_label
 from app.models.election import Election, ElectionStatus
-from app.models.email_template import EmailTemplate
+from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.event import Event, EventExternalAttendee
 from app.models.membership_pipeline import (
     ActionType,
@@ -888,6 +888,21 @@ class MembershipPipelineService:
             allow_none=True,
             label="email template",
         )
+        if not email_template_id:
+            return
+        # Only a custom template is written for an applicant. A system one
+        # (a password reset, a shift reminder) expects its own recipient and
+        # variables, and would reach the prospect with its blanks unfilled.
+        template_type = await self.db.scalar(
+            select(EmailTemplate.template_type).where(
+                EmailTemplate.id == str(email_template_id),
+                EmailTemplate.organization_id == organization_id,
+            )
+        )
+        if template_type != EmailTemplateType.CUSTOM:
+            raise ValueError(
+                "Only a custom email template can be linked to a pipeline stage"
+            )
 
     async def _assert_form_in_org(
         self, config: Optional[Dict[str, Any]], organization_id: str
@@ -5005,16 +5020,74 @@ class MembershipPipelineService:
             return " — ".join(filter(None, [location.name, address]))
         return getattr(event, "location", None) or ""
 
+    async def _resolve_stage_template(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> Optional[EmailTemplate]:
+        """The custom template linked to an email stage, if it can be sent.
+
+        ``None`` when the stage links none, and also when the link can no
+        longer be honoured — the template was switched off, deleted (the FK
+        is SET NULL, but a row written before that can still dangle) or is
+        not a custom one. Those cases fall back to the stage's own sections,
+        so the applicant still hears from the department, and the fallback
+        is recorded on the prospect so a coordinator can see why the email
+        did not look like the template.
+        """
+        if not step.email_template_id:
+            return None
+        result = await self.db.execute(
+            select(EmailTemplate).where(
+                EmailTemplate.id == str(step.email_template_id),
+                EmailTemplate.organization_id == prospect.organization_id,
+            )
+        )
+        template = result.scalar_one_or_none()
+        if template is None:
+            reason = "missing"
+        elif template.template_type != EmailTemplateType.CUSTOM:
+            reason = "not_custom"
+        elif not template.is_active:
+            reason = "inactive"
+        else:
+            return template
+        logger.warning(
+            "Stage {} linked email template {} is {}; sending the stage's"
+            " own sections to prospect {}",
+            step.id,
+            step.email_template_id,
+            reason,
+            prospect.id,
+        )
+        await self._log_activity(
+            prospect_id=prospect.id,
+            action="stage_email_template_unavailable",
+            details={
+                "step_id": str(step.id),
+                "step_name": step.name,
+                "email_template_id": str(step.email_template_id),
+                "reason": reason,
+            },
+        )
+        return None
+
     async def _send_stage_email(
         self,
         prospect: ProspectiveMember,
         step: MembershipPipelineStep,
     ) -> bool:
-        """Send the automated email configured on a pipeline stage."""
+        """Send the automated email configured on a pipeline stage.
+
+        With a usable linked template, the template is the email and the
+        stage's enabled sections follow its body. Without one, the sections
+        are the email, as they always were.
+        """
         try:
             import html as _html
 
             from app.services.email_service import EmailService, wrap_email_body
+            from app.services.email_template_service import EmailTemplateService
             from app.services.email_theme import ACCENT_BLUE, action
 
             config: Dict[str, Any] = step.config or {}
@@ -5028,30 +5101,14 @@ class MembershipPipelineService:
 
             first_name = _html.escape(prospect.first_name or "")
 
-            # Resolve subject, substituting {{organization_name}} if present
-            raw_subject = config.get(
-                "email_subject",
-                "Update on Your Membership Application",
-            )
-            subject = raw_subject.replace(
-                "{{organization_name}}", org.name or "The Logbook"
-            )
+            status_url = ""
+            if prospect.status_token and public_status_enabled_for(prospect):
+                from app.core.config import settings as app_settings
 
-            # Build HTML sections from config, respecting section_order
-            sections: List[str] = []
-
-            # Helpers to build individual section HTML
-            def _build_welcome() -> str | None:
-                if config.get("include_welcome") and config.get("welcome_message"):
-                    return f"<p>{_html.escape(config['welcome_message'])}</p>"
-                return None
-
-            def _build_faq_link() -> str | None:
-                if config.get("include_faq_link") and config.get("faq_url"):
-                    return action(
-                        _html.escape(config["faq_url"]), "View Membership FAQ"
-                    )
-                return None
+                frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+                status_url = (
+                    f"{frontend_url}/application-status/{prospect.status_token}"
+                )
 
             # Resolved once so the HTML and plain-text bodies cannot name
             # different events.
@@ -5087,127 +5144,115 @@ class MembershipPipelineService:
                 if config.get("next_meeting_details"):
                     meeting_lines.append(config["next_meeting_details"])
 
-            def _build_next_meeting() -> str | None:
-                if meeting_lines:
-                    return (
-                        '<div class="details">'
-                        "<strong>Next Meeting</strong><br>"
-                        + "<br>".join(_html.escape(line) for line in meeting_lines)
-                        + "</div>"
-                    )
-                return None
-
-            def _build_status_tracker() -> str | None:
-                if not config.get("include_status_tracker"):
-                    return None
-                if prospect.status_token and public_status_enabled_for(prospect):
-                    from app.core.config import settings as app_settings
-
-                    frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
-                    status_url = (
-                        f"{frontend_url}/application-status" f"/{prospect.status_token}"
-                    )
-                    return action(_html.escape(status_url), "Track Your Application")
-                return None
-
-            def _build_custom_section_html(
-                custom: Dict[str, Any],
-            ) -> str | None:
-                title = _html.escape(custom.get("title", ""))
-                body = _html.escape(custom.get("content", ""))
-                if title or body:
-                    heading = f"<strong>{title}</strong><br>" if title else ""
-                    return f'<div class="details">{heading}{body}</div>'
-                return None
-
-            def _build_custom_section_text(
-                custom: Dict[str, Any],
-            ) -> str | None:
-                title = custom.get("title", "")
-                body = custom.get("content", "")
-                if title or body:
-                    return f"{title}\n{body}" if title else body
-                return None
-
-            # Default section order for backward compatibility
-            default_order = [
-                "welcome",
-                "faq_link",
-                "next_meeting",
-                "status_tracker",
-            ]
             custom_by_id: Dict[str, Dict[str, Any]] = {
                 s["id"]: s for s in config.get("custom_sections", []) if s.get("id")
             }
-            section_order = config.get("section_order")
-            if not section_order:
-                section_order = default_order + list(custom_by_id.keys())
-
-            for sid in section_order:
-                html_part: str | None = None
-                if sid == "welcome":
-                    html_part = _build_welcome()
-                elif sid == "faq_link":
-                    html_part = _build_faq_link()
-                elif sid == "next_meeting":
-                    html_part = _build_next_meeting()
-                elif sid == "status_tracker":
-                    html_part = _build_status_tracker()
-                else:
-                    custom = custom_by_id.get(sid)
-                    if custom:
-                        html_part = _build_custom_section_html(custom)
-                if html_part:
-                    sections.append(html_part)
-
-            body_html = (
-                "\n".join(sections)
-                if sections
-                else ("<p>Your membership application has been updated.</p>")
+            # Default section order for backward compatibility
+            section_order = config.get("section_order") or (
+                ["welcome", "faq_link", "next_meeting", "status_tracker"]
+                + list(custom_by_id.keys())
             )
 
-            html_body = wrap_email_body(
-                org,
-                subject,
-                f"<p>Hi {first_name},</p>{body_html}",
-                footer_text=f"This email was sent by {org.name or 'The Logbook'}.",
-                header_color=ACCENT_BLUE,
-                chip=_APPLICATION_UPDATE_CHIP,
-            )
-
-            # Build plain-text version in the same section_order
-            text_parts = [f"Hi {prospect.first_name},"]
+            # Each enabled section as an (html, text) pair, in section_order.
+            sections: List[Tuple[str, str]] = []
             for sid in section_order:
                 if sid == "welcome":
-                    if config.get("include_welcome") and config.get("welcome_message"):
-                        text_parts.append(config["welcome_message"])
+                    message = config.get("welcome_message")
+                    if config.get("include_welcome") and message:
+                        sections.append((f"<p>{_html.escape(message)}</p>", message))
                 elif sid == "faq_link":
-                    if config.get("include_faq_link") and config.get("faq_url"):
-                        text_parts.append(f"View Membership FAQ: {config['faq_url']}")
+                    faq_url = config.get("faq_url")
+                    if config.get("include_faq_link") and faq_url:
+                        sections.append(
+                            (
+                                action(_html.escape(faq_url), "View Membership FAQ"),
+                                f"View Membership FAQ: {faq_url}",
+                            )
+                        )
                 elif sid == "next_meeting":
                     if meeting_lines:
-                        text_parts.append("Next Meeting:\n" + "\n".join(meeting_lines))
+                        sections.append(
+                            (
+                                '<div class="details">'
+                                "<strong>Next Meeting</strong><br>"
+                                + "<br>".join(
+                                    _html.escape(line) for line in meeting_lines
+                                )
+                                + "</div>",
+                                "Next Meeting:\n" + "\n".join(meeting_lines),
+                            )
+                        )
                 elif sid == "status_tracker":
-                    if config.get("include_status_tracker") and prospect.status_token:
-                        if public_status_enabled_for(prospect):
-                            from app.core.config import settings as app_settings
-
-                            frontend_url = (
-                                getattr(app_settings, "FRONTEND_URL", "") or ""
+                    if config.get("include_status_tracker") and status_url:
+                        sections.append(
+                            (
+                                action(
+                                    _html.escape(status_url), "Track Your Application"
+                                ),
+                                f"Track your application: {status_url}",
                             )
-                            status_url = (
-                                f"{frontend_url}/application-status"
-                                f"/{prospect.status_token}"
-                            )
-                            text_parts.append(f"Track your application: {status_url}")
+                        )
                 else:
                     custom = custom_by_id.get(sid)
-                    if custom:
-                        text = _build_custom_section_text(custom)
-                        if text:
-                            text_parts.append(text)
-            text_parts.append(f"This email was sent by {org.name or 'The Logbook'}.")
-            text_body = "\n\n".join(text_parts)
+                    title = (custom or {}).get("title", "")
+                    content = (custom or {}).get("content", "")
+                    if title or content:
+                        heading = (
+                            f"<strong>{_html.escape(title)}</strong><br>"
+                            if title
+                            else ""
+                        )
+                        sections.append(
+                            (
+                                f'<div class="details">{heading}'
+                                f"{_html.escape(content)}</div>",
+                                f"{title}\n{content}" if title else content,
+                            )
+                        )
+
+            template = await self._resolve_stage_template(prospect, step)
+            text_body: Optional[str]
+            if template is not None:
+                context = {
+                    "first_name": prospect.first_name or "",
+                    "last_name": prospect.last_name or "",
+                    "prospect_name": " ".join(
+                        p for p in (prospect.first_name, prospect.last_name) if p
+                    ),
+                    "stage_name": step.name or "",
+                    "status_url": status_url,
+                }
+                subject, html_body, text_body = EmailTemplateService.render_static(
+                    template,
+                    context,
+                    organization=org,
+                    appendix_html="\n".join(h for h, _ in sections) or None,
+                    appendix_text="\n\n".join(t for _, t in sections) or None,
+                )
+            else:
+                subject = config.get(
+                    "email_subject",
+                    "Update on Your Membership Application",
+                ).replace("{{organization_name}}", org.name or "The Logbook")
+                body_html = (
+                    "\n".join(h for h, _ in sections)
+                    or "<p>Your membership application has been updated.</p>"
+                )
+                html_body = wrap_email_body(
+                    org,
+                    subject,
+                    f"<p>Hi {first_name},</p>{body_html}",
+                    footer_text=(
+                        f"This email was sent by {org.name or 'The Logbook'}."
+                    ),
+                    header_color=ACCENT_BLUE,
+                    chip=_APPLICATION_UPDATE_CHIP,
+                )
+                text_body = "\n\n".join(
+                    [f"Hi {prospect.first_name},"]
+                    + [t for _, t in sections]
+                    + [f"This email was sent by {org.name or 'The Logbook'}."]
+                )
 
             email_svc = EmailService(org)
             success, _ = await email_svc.send_email(
@@ -5224,7 +5269,9 @@ class MembershipPipelineService:
                 )
             return success > 0
         except Exception as e:
-            logger.error(f"Failed to send stage email to {prospect.email}: {e}")
+            logger.error(
+                "Failed to send stage email to prospect {}: {}", prospect.id, e
+            )
             return False
 
     async def _send_step_completion_notification(

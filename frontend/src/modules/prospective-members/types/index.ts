@@ -385,6 +385,12 @@ export interface PipelineStage {
    */
   is_final_step?: boolean | undefined;
   inactivity_timeout_days?: number | null | undefined; // null = use pipeline default
+  /**
+   * The custom email template an automated-email stage sends. Its body goes
+   * first and the stage's enabled sections follow; null sends the sections
+   * alone.
+   */
+  email_template_id?: string | null | undefined;
   notify_prospect_on_completion: boolean;
   public_visible: boolean;
   created_at: string;
@@ -405,6 +411,7 @@ export interface PipelineStageCreate {
   sort_order?: number | undefined;
   is_required?: boolean | undefined;
   inactivity_timeout_days?: number | null | undefined;
+  email_template_id?: string | null | undefined;
   notify_prospect_on_completion?: boolean | undefined;
   public_visible?: boolean | undefined;
 }
@@ -418,6 +425,8 @@ export interface PipelineStageUpdate {
   sort_order?: number | undefined;
   is_required?: boolean | undefined;
   inactivity_timeout_days?: number | null | undefined;
+  /** `null` unlinks the template; omitting the key leaves it untouched. */
+  email_template_id?: string | null | undefined;
   notify_prospect_on_completion?: boolean | undefined;
   public_visible?: boolean | undefined;
 }
@@ -1250,6 +1259,7 @@ export interface BackendStepCreatePayload {
   notify_prospect_on_completion: boolean;
   public_visible: boolean;
   inactivity_timeout_days?: number | undefined;
+  email_template_id?: string | undefined;
 }
 
 /** Payload shape sent to backend when updating a step. */
@@ -1265,6 +1275,7 @@ export interface BackendStepUpdatePayload {
   public_visible?: boolean | undefined;
   /** null clears the per-stage override; omitting the key leaves it untouched. */
   inactivity_timeout_days?: number | null | undefined;
+  email_template_id?: string | null | undefined;
 }
 
 // =============================================================================
