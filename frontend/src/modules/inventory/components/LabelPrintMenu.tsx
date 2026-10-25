@@ -107,7 +107,7 @@ export const LabelPrintMenu: React.FC<LabelPrintMenuProps> = ({ listPath, listCo
       {open && (
         <div
           id={panelId}
-          className="card absolute top-full left-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] p-1 shadow-lg"
+          className="popover-panel absolute top-full left-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] p-1"
         >
           <ul>
             {listPath && (
