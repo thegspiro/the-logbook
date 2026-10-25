@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD]** (branch `claude/security-review-finance-approvals-p12`) —
+**PR [#3689](https://github.com/thegspiro/the-logbook/pull/3689)** (branch
+`claude/security-review-finance-approvals-p12`) —
 Feature 05 (Finance & approvals), pass 12. No security-review PR was
 open — confirmed via `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`), 0 matching results, PR
