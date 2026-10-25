@@ -231,6 +231,14 @@ export const areaPanelId = (area: string) => `training-admin-area-panel-${area}`
 export const tabId = (area: string, tab: string) => `training-admin-tab-${area}-${tab}`;
 export const tabPanelId = (area: string, tab: string) => `training-admin-tabpanel-${area}-${tab}`;
 
+/**
+ * The Programs destination lists the department's existing programs; the
+ * create wizard is a view within it rather than a destination of its own, so
+ * the hub nav still names one Programs tab and a tap on it returns to the list.
+ */
+export const PROGRAM_WIZARD_VIEW = 'new';
+export const NEW_PROGRAM_HREF = `/training/admin?page=curriculum&tab=pipelines&view=${PROGRAM_WIZARD_VIEW}`;
+
 const DEFAULT_LOCATION = { area: 'dashboard', tab: 'overview' } as const;
 
 /** Where the retired section ids land when the URL names no destination. */

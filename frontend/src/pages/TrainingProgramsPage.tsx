@@ -24,6 +24,7 @@ import {
 import { trainingProgramService, trainingService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
+import { NEW_PROGRAM_HREF } from '../components/training/trainingAdminAreas';
 import RegistryImportModal from './RegistryImportModal';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -44,7 +45,9 @@ import { useTablist } from '../hooks/useTablist';
 
 type TabView = 'programs' | 'requirements' | 'templates';
 
-const TrainingProgramsPage: React.FC = () => {
+// `embedded` renders the page as the Programs tab of TrainingAdminPage, which
+// already supplies the page's header, width and side padding.
+const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const tablist = useTablist();
   const navigate = useNavigate();
   const canManage = useAuthStore((s) => s.checkPermission('training.manage'));
@@ -278,77 +281,92 @@ const TrainingProgramsPage: React.FC = () => {
   // the page body, so the role goes with the tabs rather than being orphaned.
   const panelRole = canManage ? 'tabpanel' : undefined;
 
-  return (
-    <div className="min-h-screen">
-      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* The hub is a sibling of this page, not an ancestor, so the trail
-            cannot reach it from the URL. `underHub` splices it in with the
-            registry's own label and gate: a member without training.manage
-            does not see it, and it can no longer drift from the hub's name —
-            this trail used to call the page "Admin". */}
-        <TrainingPageHeader
-          icon={GraduationCap}
-          title="Training Programs"
-          subtitle={
-            canManage
-              ? 'Build programs, import requirements, and track member progress'
-              : "Your department's training programs and what each one covers"
-          }
-          underHub="/training/admin"
-          actions={
-            canManage && visibleTab !== 'templates' ? (
-              <>
-                {/* Every action in this header creates a program or a requirement,
-              and each one is training.manage-gated on the backend. Members get
-              the read-only view rather than affordances that 403 on use. */}
-                {canManage && visibleTab === 'programs' && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      ref={importFileRef}
-                      type="file"
-                      accept=".json"
-                      onChange={(e) => {
-                        void handleImportProgram(e);
-                      }}
-                      className="hidden"
-                      aria-label="Import pipeline JSON file"
-                    />
-                    <button
-                      onClick={() => importFileRef.current?.click()}
-                      className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
-                    >
-                      <Upload className="h-5 w-5" aria-hidden="true" />
-                      <span>Import</span>
-                    </button>
-                    <button
-                      onClick={() => void navigate('/training/programs/new')}
-                      className="btn-primary flex items-center space-x-2"
-                    >
-                      <Plus className="h-5 w-5" aria-hidden="true" />
-                      <span>New Pipeline</span>
-                    </button>
-                  </div>
-                )}
+  const headerActions =
+    canManage && visibleTab !== 'templates' ? (
+      <>
+        {/* Every action in this header creates a program or a requirement,
+        and each one is training.manage-gated on the backend. Members get
+        the read-only view rather than affordances that 403 on use. */}
+        {canManage && visibleTab === 'programs' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".json"
+              onChange={(e) => {
+                void handleImportProgram(e);
+              }}
+              className="hidden"
+              aria-label="Import pipeline JSON file"
+            />
+            <button
+              onClick={() => importFileRef.current?.click()}
+              className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-[44px] flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+            >
+              <Upload className="h-5 w-5" aria-hidden="true" />
+              <span>Import</span>
+            </button>
+            <button onClick={() => void navigate(NEW_PROGRAM_HREF)} className="btn-primary flex items-center space-x-2">
+              <Plus className="h-5 w-5" aria-hidden="true" />
+              <span>New Pipeline</span>
+            </button>
+          </div>
+        )}
 
-                {canManage && visibleTab === 'requirements' && (
-                  <button
-                    onClick={() => {
-                      setEditingRequirement(null);
-                      setShowRequirementModal(true);
-                    }}
-                    className="btn-primary flex items-center space-x-2"
-                  >
-                    <Plus className="h-5 w-5" aria-hidden="true" />
-                    <span>New Requirement</span>
-                  </button>
-                )}
-              </>
-            ) : undefined
-          }
-        />
+        {canManage && visibleTab === 'requirements' && (
+          <button
+            onClick={() => {
+              setEditingRequirement(null);
+              setShowRequirementModal(true);
+            }}
+            className="btn-primary flex items-center space-x-2"
+          >
+            <Plus className="h-5 w-5" aria-hidden="true" />
+            <span>New Requirement</span>
+          </button>
+        )}
+      </>
+    ) : undefined;
+
+  return (
+    <div className={embedded ? '' : 'min-h-screen'}>
+      <div data-page-main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
+        {/* Embedded, this is the Programs tab of Training Administration, under
+            the hub's own header and nav, where a second title and a trail back
+            to the hub would sit inside the very page they point at. */}
+        {embedded ? (
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-theme-text-muted text-sm">
+              Build programs, import requirements, and track member progress
+            </p>
+            {headerActions}
+          </div>
+        ) : (
+          <>
+            {/* The hub is a sibling of this page, not an ancestor, so the trail
+                cannot reach it from the URL. `underHub` splices it in with the
+                registry's own label and gate: a member without training.manage
+                does not see it, and it can no longer drift from the hub's name —
+                this trail used to call the page "Admin". */}
+            <TrainingPageHeader
+              icon={GraduationCap}
+              title="Training Programs"
+              subtitle={
+                canManage
+                  ? 'Build programs, import requirements, and track member progress'
+                  : "Your department's training programs and what each one covers"
+              }
+              underHub="/training/admin"
+              actions={headerActions}
+            />
+          </>
+        )}
 
         {/* Tabs. Requirements and Templates are manager-only views, so a member
-            sees the Programs list on its own with no strip above it. */}
+            sees the Programs list on its own with no strip above it. Below sm
+            the icons drop and the labels and padding shrink: at full size, the three
+            labels ran ~60px past a 320px screen inside the admin hub, leaving
+            Templates off the edge of a scroll strip nothing points to. */}
         {canManage && (
           <div
             className="bg-theme-surface-secondary hscroll mb-6 flex space-x-1 rounded-lg p-1"
@@ -361,13 +379,13 @@ const TrainingProgramsPage: React.FC = () => {
               role="tab"
               aria-selected={visibleTab === 'programs'}
               aria-controls="tab-panel-programs"
-              className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+              className={`touch:min-h-11 flex-1 rounded-md px-2 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
                 visibleTab === 'programs'
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
-              <Target className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              <Target className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
               Programs
             </button>
             <button
@@ -375,13 +393,13 @@ const TrainingProgramsPage: React.FC = () => {
               role="tab"
               aria-selected={visibleTab === 'requirements'}
               aria-controls="tab-panel-requirements"
-              className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+              className={`touch:min-h-11 flex-1 rounded-md px-2 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
                 visibleTab === 'requirements'
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
-              <ListChecks className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              <ListChecks className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
               Requirements
             </button>
             <button
@@ -389,13 +407,13 @@ const TrainingProgramsPage: React.FC = () => {
               role="tab"
               aria-selected={visibleTab === 'templates'}
               aria-controls="tab-panel-templates"
-              className={`touch:min-h-11 flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+              className={`touch:min-h-11 flex-1 rounded-md px-2 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
                 visibleTab === 'templates'
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
-              <Award className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              <Award className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
               Templates
             </button>
           </div>
@@ -531,10 +549,7 @@ const TrainingProgramsPage: React.FC = () => {
                             {searchTerm ? 'No programs found' : `No ${visibleTab} yet`}
                           </p>
                           {!searchTerm && visibleTab === 'programs' && (
-                            <button
-                              onClick={() => void navigate('/training/programs/new')}
-                              className="btn-primary mt-4"
-                            >
+                            <button onClick={() => void navigate(NEW_PROGRAM_HREF)} className="btn-primary mt-4">
                               Create Your First Pipeline
                             </button>
                           )}

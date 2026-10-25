@@ -24,6 +24,7 @@ import {
   areaTabId,
   attentionCountsByTab,
   getTrainingAdminArea,
+  PROGRAM_WIZARD_VIEW,
   resolveTrainingAdminLocation,
   trainingAdminAreasFor,
   tabId,
@@ -50,6 +51,7 @@ const KnowledgeTestsTab = lazyWithRetry(() => import('./training/KnowledgeTestsT
 
 const TrainingRequirementsPage = lazyWithRetry(() => import('./TrainingRequirementsPage'));
 const CreatePipelinePage = lazyWithRetry(() => import('./CreatePipelinePage'));
+const TrainingProgramsPage = lazyWithRetry(() => import('./TrainingProgramsPage'));
 const ExternalTrainingPage = lazyWithRetry(() => import('./ExternalTrainingPage'));
 const HistoricalImportPage = lazyWithRetry(() => import('./HistoricalImportPage'));
 
@@ -74,11 +76,12 @@ const TabLoading = () => (
 // own `px-4 sm:px-6 lg:px-8` container is indented twice, which on a 320px
 // phone costs 32px of an already narrow column.
 
-const TabContent: React.FC<{ area: TrainingAdminAreaId; tab: string; onMetricsSaved: () => void }> = ({
-  area,
-  tab,
-  onMetricsSaved,
-}) => {
+const TabContent: React.FC<{
+  area: TrainingAdminAreaId;
+  tab: string;
+  view: string | null;
+  onMetricsSaved: () => void;
+}> = ({ area, tab, view, onMetricsSaved }) => {
   // These two areas are single components that switch on the destination themselves.
   if (area === 'enhancements') return <TrainingEnhancementsTab activeTab={tab} />;
   if (area === 'compliance') return <ComplianceOfficerDashboard activeTab={tab} />;
@@ -107,7 +110,7 @@ const TabContent: React.FC<{ area: TrainingAdminAreaId; tab: string; onMetricsSa
     case 'courses':
       return <CourseLibraryPage embedded />;
     case 'pipelines':
-      return <CreatePipelinePage />;
+      return view === PROGRAM_WIZARD_VIEW ? <CreatePipelinePage /> : <TrainingProgramsPage embedded />;
     case 'skill-evaluations':
       return <SkillEvaluationsTab />;
     case 'knowledge-tests':
@@ -229,6 +232,7 @@ export const TrainingAdminPage: React.FC = () => {
                     <TabContent
                       area={activeAreaId}
                       tab={destination.id}
+                      view={searchParams.get('view')}
                       onMetricsSaved={() => setFrameToken((token) => token + 1)}
                     />
                   </Suspense>

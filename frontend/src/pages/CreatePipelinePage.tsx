@@ -1632,15 +1632,15 @@ const CreatePipelinePage: React.FC = () => {
   };
 
   return (
-    // Rendered only as the Pipelines tab of Training Administration, whose
-    // content column already supplies the side padding. A page container of
-    // its own here stacked a second 16-32px on each side and left 241px of a
+    // Rendered only as the wizard view of Training Administration's Programs
+    // tab, whose content column already supplies the side padding. A page
+    // container of its own here stacked a second 16-32px on each side and left 241px of a
     // 320px phone for the wizard, which pushed the step bar off screen.
     <div>
       <div data-page-main className="mx-auto max-w-4xl py-6">
         {/* The hub's section nav already names this page, so the title stays for
             heading navigation only. The back link went to the programs list,
-            which the same nav already offers one tap away. */}
+            which the nav's Programs tab already returns to in one tap. */}
         <h2 className="sr-only">Create Training Pipeline</h2>
         <p className="text-theme-text-muted mb-6 text-sm">Step-by-step wizard to build your training program</p>
 
