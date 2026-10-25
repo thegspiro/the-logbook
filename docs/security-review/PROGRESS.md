@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None. PR #3695 (Feature 07, Users & organizations, pass 12) merged
+2026-10-25 — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 matching results,
+immediately before and after the merge. Rotation row 07 → ✅. Dedicated
+review session (`session_011T1ZyyLrD5HagusgK9uDw2`) still unreachable; this
+watchdog picked up row 08 (Membership pipeline) next — see the log entry
+below for its pass 13 review. This row will record that pass's PR number
+once it is opened.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3695, Feature 07, Users & organizations, pass 12, merged), preserved for history</summary>
+
 **PR [#3695](https://github.com/thegspiro/the-logbook/pull/3695)** (branch
 `claude/security-review-users-organizations`) — Feature 07 (Users &
 organizations), pass 12. No security-review PR was open — confirmed via
@@ -37,6 +49,8 @@ USR-8 re-confirmed unchanged (owner-accepted). See
 
 Rotation row 07 → ✅ (pending this PR's merge); next is Feature 08
 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3691's merge, Feature 06, Elections & ballots, pass 12), preserved for history</summary>
@@ -21724,7 +21738,7 @@ PR is recorded in the Log, not repeated here.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -38987,3 +39001,56 @@ lint` — 0 errors.
 Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
 approvals) — re-check `search_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-10-25 — Feature 08 (Membership pipeline, pass 13) — watchdog pickup, 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN
+
+Standing-rotation pickup (`/loop 30m /security-review`, dedicated session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable): PR #3695 (Feature 07,
+Users & organizations, pass 12) merged with no open rotation PR behind it —
+confirmed via `search_pull_requests` (`is:pr is:open
+head:claude/security-review-`), 0 matching results, checked immediately
+before and after merging #3695 and again before branching. Row 08
+(Membership pipeline) was the next pending feature.
+
+Diffed pass 12's own merge (`aa15ccbb`, PR #3574) against current `HEAD`
+across the feature's full established scope (`membership_pipeline.py`,
+`membership_pipeline_service.py`, `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `prospect_privacy.py`,
+`utils/prospect_fields.py`, and the frontend module tree). Eight non-merge
+commits touch that scope; two are already-documented, already-merged
+follow-up fixes this file's own "Follow-up (2026-10-23)" section covers in
+full (MP-33, MP-34). The remaining six are real delta, read in full via
+`git show`: encryption of `prospective_members.date_of_birth` at rest
+(requiring `prospect_privacy.py`'s applicant self-match guard to move its
+date comparison from SQL to Python, traced end to end to confirm the same
+record set is still hidden); a stage-email meeting fallback (uses the next
+upcoming event of the configured type once the saved one has passed, and
+now refuses to print a location belonging to another organization); three
+`membership_pipeline` columns tightened to `NOT NULL` as part of a
+repo-wide 99-column sweep; and an auto-enrollment prerequisite check on
+automatic conversion (skips only the training enrollment, never the
+member conversion, and notifies training officers after commit).
+
+Routes re-enumerated by AST: 53, unchanged from pass 12 — confirmed via a
+`@router\.`/`Depends`/`require_permission` grep over the diff, which found
+only the three already-documented `Depends(get_hidden_prospect_ids)`
+additions and no changed decorator or permission argument. MP-10 (listing
+half) and MP-22 re-confirmed OPEN, unaffected by this window's diff (neither
+function name appears in it).
+
+Full writeup: `docs/security-review/MP-08-membership-pipeline.md`'s
+**Pass 13** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean at CI's pinned versions (7.4.1/26.10.1/9.0.2);
+`validate_migrations.py --strict` — 652 revisions, single head
+`3f2593e8071e`; `check_route_permissions.py --strict` — 276 routes, 0
+errors/warnings; scoped backend tests (`-k "membership or prospect or
+pipeline or election"`) — 1,916 passed, 1 skipped (environment-only,
+`py_vapid`); frontend `npm run typecheck`/`npm run lint` — 0 errors;
+scoped frontend suite (`npx vitest run src/modules/prospective-members`)
+— 305 passed (35 files).
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI) — re-check `search_pull_requests` fresh rather than
+trusting this note.
