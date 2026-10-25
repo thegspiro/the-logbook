@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)** (branch
+**PR [#3688](https://github.com/thegspiro/the-logbook/pull/3688)** (branch
 `claude/security-review-storefront-payments-p12`) — Feature 04 (Storefront &
 payments), pass 12. No security-review PR was open — confirmed via
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
