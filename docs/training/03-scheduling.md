@@ -3466,21 +3466,34 @@ needs **Manage schedules**. A named shift officer still closes out their own
 shift from the shift itself.
 
 The hub shows four headline numbers (**To close out**, **Short-staffed**,
-**Hours this month** and **Needs attention**), a **Needs attention** list, and
-cards in six groups:
+**Hours this month** and **Needs attention**) and a **Needs attention** list.
+Below them are the same navigation cards Training Admin and Inventory Admin
+use _(2026-10-25)_: seven **area cards**, then a strip of the chosen area's
+pages, and a line naming the page you are on and what it is for.
 
-| Group                    | Cards                                                                      |
-| ------------------------ | -------------------------------------------------------------------------- |
-| **Before the shift**     | Shift Planning, Shift Templates, Shift Patterns                            |
-| **On the shift**         | Equipment Checklists, Checklist Timing (both open Inventory)               |
-| **After the shift**      | Shift Close-Out, Shift History Import                                      |
-| **People & eligibility** | Who Can Fill What, Platoons, Eligibility Rules                             |
-| **Reporting**            | Scheduling Reports, Shift Report Options                                   |
-| **Department settings**  | General, Apparatus Defaults, Outside Apparatus, Notifications              |
+| Area                     | Pages in its strip                                                        |
+| ------------------------ | ------------------------------------------------------------------------- |
+| **Overview**             | Dashboard, Headline Metrics                                               |
+| **Planning**             | Shift Planning, Shift Templates, Shift Patterns                           |
+| **On the Shift**         | Equipment Checklists, Checklist Timing (both open Inventory's own pages)  |
+| **Close-Out & History**  | Shift Close-Out, Shift History Import                                     |
+| **People & Eligibility** | Who Can Fill What, Platoons, Eligibility Rules                            |
+| **Reports**              | Scheduling Reports, Shift Report Options                                  |
+| **Settings**             | General, Apparatus Defaults, Outside Apparatus, Notifications             |
 
-You only see the cards your permissions and your department's modules allow.
+Every page in the strip opens under that same header, so the area cards are
+always there to move to another page. Selecting an area card opens its first
+page. **On the Shift** is the exception: both its pages belong to Inventory,
+so the card shows the strip and leaves you on the page you were on. Those two
+links carry an arrow to say they open a page of their own.
 
-![The Scheduling Administration hub: the headline metrics To close out, Short-staffed, Hours this month and Needs attention, the Needs attention queue, and the card grid grouped Before the shift, On the shift, After the shift, People & eligibility, Reporting and Department settings](./images/20-16-scheduling-admin-hub.png)
+The red **Create Shift** button at the top right opens the Create Shift form
+on the Schedule page.
+
+You only see the areas and pages your permissions and your department's
+modules allow.
+
+![The Scheduling Administration hub: the headline metrics, the seven area cards with Overview chosen, and the Dashboard and Headline Metrics strip above the setup guide](./images/20-16-scheduling-admin-hub.png)
 
 **Setting up for the first time.** Until your department has what it needs to
 schedule, the hub opens with **Set up scheduling for your department**, which
@@ -3512,9 +3525,9 @@ over the dates you choose, with an assign control on each row. You can fill
 ten gaps without opening ten shifts. Assigning from a row works exactly like
 assigning from the shift: you get the same EVOC and overtime warnings, and the
 same **Driver qualification required** window (see
-[Position Eligibility](#position-eligibility)). Templates and patterns are tabs
-of the same screen, because the reason to open a template is usually a shift
-that keeps coming up short.
+[Position Eligibility](#position-eligibility)). Shift Templates and Shift
+Patterns sit beside it in the **Planning** strip, because the reason to open a
+template is usually a shift that keeps coming up short.
 
 > **Why does the hub's Short-staffed number not match Shift Planning?** A
 > shift with neither seats nor a minimum crew size reads **Crew size not set**
@@ -3522,16 +3535,20 @@ that keeps coming up short.
 > its crew should be. The hub's **Short-staffed** number does count it. To make
 > the two agree, give every template a crew size.
 
-![Shift Planning on its Staffing gaps tab: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control, beside the Templates and Patterns tabs](./images/20-17-staffing-gaps.png)
+![Shift Planning under the Scheduling Administration header, Planning chosen: a date range, the count of short shifts and open seats, and each short shift with its empty seats and an assign control](./images/20-17-staffing-gaps.png)
 
 **Shift Close-Out** lists every ended shift not yet closed out, oldest first,
 beside the close-out settings.
 
 ![The shift close-out queue — ended shifts that were never closed out, oldest first, beside the close-out settings](./images/20-06-scheduling-closeout-queue.png)
 
-Every page in Scheduling Admin has a back arrow to the hub.
+Every page in Scheduling Admin opens under the hub's header, with the area
+cards and page strip above it, in place of the back arrow and page title each
+one used to carry. The one exception is the review screen for a history
+import, which you reach from an import in the list and which keeps its own
+trail back to it.
 
-![A scheduling admin sub-page with its back arrow and page header](./images/03-51-admin-subpage-header.png)
+![A scheduling admin page under the hub's header: the area cards with its area chosen, and the strip naming the open page](./images/03-51-admin-subpage-header.png)
 
 ---
 

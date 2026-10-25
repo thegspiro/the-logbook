@@ -933,6 +933,7 @@ Compliance box.
 | `03-47-settings-desktop.png` | **CURRENT** 2026-10-17 | Seven sections including **Outside Apparatus**; General reads "Shift defaults, overtime, and close-out" |
 | `03-48-settings-phone.png` | **CURRENT** 2026-10-17 | Seven-section strip; settings use full width on phones |
 | `20-16-scheduling-admin-hub.png` | **REPLACE** | **Outside Apparatus** card added; Shift Templates / Shift Patterns / Who Can Fill What descriptions reworded. Shoot on a department with shifts so the setup guide is hidden |
+| `20-16-scheduling-admin-hub.png`, `20-17-staffing-gaps.png`, `03-51-admin-subpage-header.png` | **REPLACE** (2026-10-25) | Scheduling Admin's card grid became Training/Inventory-style navigation: seven area cards (Overview, Planning, On the Shift, Close-Out & History, People & Eligibility, Reports, Settings) above a page strip, and a red **Create Shift** button in the header. Every admin page now sits under that header, without its own title, back arrow or trail, and Shift Planning no longer has its own Staffing gaps / Templates / Patterns tabs. Re-shoot `20-16` on the Overview, `20-17` with Planning chosen, and `03-51` on any other page |
 | `03-31-shift-edit-times.png` | **CHECK** | The shift form may have changed since it was taken |
 | `03-61-review-queue-batch.png` | **CURRENT** 2026-10-17 | **New report** is a separate button beside the view strip (was **+ New** inside it) |
 | `03-62-flagged-queue.png` | **CURRENT** 2026-10-17 | Same strip change; the expanded card shows only the reviewer's comment box |
