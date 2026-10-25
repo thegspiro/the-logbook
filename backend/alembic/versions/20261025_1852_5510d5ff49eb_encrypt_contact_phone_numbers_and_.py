@@ -36,7 +36,7 @@ longer than its original ``VARCHAR`` (possible only if something wrote one
 after the upgrade) stops it under strict SQL mode rather than being truncated.
 
 Revision ID: 5510d5ff49eb
-Revises: 3f2593e8071e
+Revises: 0a8d11fcada1
 Create Date: 2026-10-25 18:52:01.449986
 
 """
@@ -47,7 +47,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "5510d5ff49eb"
-down_revision: Union[str, None] = "3f2593e8071e"
+down_revision: Union[str, None] = "0a8d11fcada1"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
