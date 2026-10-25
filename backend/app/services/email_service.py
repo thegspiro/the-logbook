@@ -81,9 +81,11 @@ def _redact_email(address: str) -> str:
     return "***"
 
 
-# 421 = service unavailable / too many connections, 451 = local error or
-# temporary rate limit, 452 = insufficient system storage. All are transient.
-_SMTP_RATE_LIMIT_CODES = (421, 451, 452)
+# 421 = service unavailable / too many connections, 432 = Exchange Online's
+# "4.3.2 Concurrent connections limit exceeded" (more than three submissions
+# from one mailbox at once), 451 = local error or temporary rate limit,
+# 452 = insufficient system storage. All are transient.
+_SMTP_RATE_LIMIT_CODES = (421, 432, 451, 452)
 
 
 def _smtp_replies(exc: smtplib.SMTPException) -> List[Tuple[int, str]]:
@@ -109,11 +111,18 @@ def _is_sending_quota_reply(code: int, text: str) -> bool:
     """Whether a reply means the sending account has exhausted its quota.
 
     Gmail and Google Workspace answer a sender over its daily limit with
-    ``550 5.4.5 Daily user sending limit exceeded``. The limit belongs to the
-    account, not the recipient, so every later message in the batch would be
-    refused the same way.
+    ``550 5.4.5 Daily user sending limit exceeded``; Exchange Online answers a
+    mailbox over its daily SMTP AUTH recipient limit with
+    ``554 5.2.0 STOREDRV.Submission.Exception:SubmissionQuotaExceededException``.
+    The limit belongs to the account, not the recipient, so every later
+    message in the batch would be refused the same way.
+
+    Exchange Online is matched on the exception name rather than on 5.2.0,
+    which it also uses for submission failures that are not about quota.
     """
-    return 500 <= code < 600 and "5.4.5" in text
+    if not 500 <= code < 600:
+        return False
+    return "5.4.5" in text or "submissionquotaexceeded" in text.lower()
 
 
 # One address, nothing else: no display name, no list, no whitespace. Deliberately
@@ -862,8 +871,9 @@ class EmailService:
         * ``RSET`` between messages to cleanly reset the envelope
         * 0.25 s pause between sends to stay within provider rate limits
         * Automatic reconnection, and one resend of the same message, if the
-          server drops the connection or answers 421/451/452
-        * The batch stops at a sending-quota reply (``5.4.5``) or a failed
+          server drops the connection or answers 421/432/451/452
+        * The batch stops at a sending-quota reply (Gmail's ``5.4.5``,
+          Exchange Online's ``SubmissionQuotaExceeded``) or a failed
           reconnect; the messages not attempted are reported failed
 
         Returns one result per message, in order. It does not raise once the

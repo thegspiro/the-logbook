@@ -20,6 +20,10 @@ vi.mock('../services/api', () => ({
     }),
     updateForm: (...args: unknown[]) => mockUpdateForm(...args) as unknown,
   },
+  // The dialog's embedding block reads the department's websites; none here.
+  organizationService: {
+    getSettings: vi.fn().mockResolvedValue({ contact_info_visibility: {}, forms: { embed_allowed_origins: [] } }),
+  },
 }));
 
 vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -43,6 +47,7 @@ const baseForm: FormDef = {
   require_authentication: true,
   notify_on_submission: false,
   is_public: true,
+  allow_embed: false,
   public_slug: 'abcdef123456',
   version: 1,
   is_template: false,

@@ -44,6 +44,7 @@ from app.schemas.organization import (
     EnabledModulesResponse,
     FileStorageSettings,
     FileStorageStatusResponse,
+    FormsSettings,
     MembershipIdSettings,
     ModuleSettingsUpdate,
     OrganizationProfileUpdate,
@@ -889,6 +890,50 @@ async def update_appearance_settings(
         )
 
         return appearance_settings
+
+
+@router.patch("/settings/forms", response_model=FormsSettings)
+async def update_forms_settings(
+    forms_settings: FormsSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Update the department's Forms settings
+
+    Currently the websites allowed to show the department's forms in an
+    iframe. Each must be an exact https origin; the list replaces the stored
+    one.
+
+    **Authentication and admin permission required**
+    """
+    org_service = OrganizationService(db)
+
+    settings_dict = {"forms": forms_settings.model_dump(exclude_unset=False)}
+
+    async with handle_service_errors("Failed to update forms settings"):
+        await org_service.update_organization_settings(
+            current_user.organization_id, settings_dict
+        )
+
+        # Which sites may frame the department's forms is a security setting,
+        # so the list itself is recorded, not just the fact of a change.
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "settings_changed": ["forms"],
+                "embed_allowed_origins": forms_settings.embed_allowed_origins,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return forms_settings
 
 
 @router.patch("/settings/membership-id", response_model=MembershipIdSettings)

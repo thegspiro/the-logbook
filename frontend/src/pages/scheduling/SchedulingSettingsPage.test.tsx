@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../../test/utils';
 
 const storeState = {
@@ -30,8 +29,6 @@ vi.mock('../../modules/scheduling/components/ShiftSettingsPanel', async () => {
 
 import SchedulingSettingsPage from './SchedulingSettingsPage';
 
-const settingsNav = () => screen.getAllByRole('navigation', { name: 'Scheduling settings sections' })[0] as HTMLElement;
-
 describe('SchedulingSettingsPage', () => {
   beforeEach(() => {
     // Reset, not clear — implementations and queued one-shot results survive
@@ -42,60 +39,25 @@ describe('SchedulingSettingsPage', () => {
     window.history.replaceState({}, '', '/scheduling/admin/settings/general');
   });
 
-  // The header names the page, not the module. It used to read "Shift
-  // Scheduling" — the module's identity — on a screen whose entire subject is
-  // that module's settings, which left the tab strip as the only thing saying
-  // where you were.
   // Every section route is drawn inside the Scheduling Administration header
-  // (SchedulingAdminLayout), whose <h1>, area cards and trail already name the
-  // module and are the way back. A second icon tile, <h1> and back button would
-  // repeat them; the page's title stays for heading navigation only.
-  it('names the page for heading navigation without a second visible header', () => {
+  // (SchedulingAdminLayout). Its page strip is the way between sections and its
+  // strip line names the open one, so the page draws neither: SettingsLayout's
+  // section row, title and back button repeated all three beneath it. The
+  // section's name stays for heading navigation only.
+  it('names its section for heading navigation without a visible header of its own', () => {
     renderWithRouter(<SchedulingSettingsPage section="general" />);
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Scheduling Settings' })).toHaveClass('sr-only');
+    expect(screen.getByRole('heading', { level: 2, name: 'Scheduling settings: General' })).toHaveClass('sr-only');
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Back to scheduling administration' })).not.toBeInTheDocument();
   });
 
-  it('renders the section the route mounts, and lists the rest', () => {
+  it('draws no section nav of its own beneath the header’s', () => {
     renderWithRouter(<SchedulingSettingsPage section="general" />);
 
     expect(screen.getByText('section:general')).toBeInTheDocument();
-    const nav = settingsNav();
-    // Anchored: "Apparatus" is also the tail of "Outside Apparatus".
-    for (const label of [
-      'General',
-      'Apparatus',
-      'Eligibility',
-      'Notifications',
-      'Shift Reports',
-      'Outside Apparatus',
-    ]) {
-      expect(within(nav).getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
-    }
-  });
-
-  // The Equipment section is gone: nothing on it was ever edited there, and its
-  // two links now sit on the administration hub, where an officer looks for a
-  // link rather than behind a settings tab.
-  it('no longer offers an Equipment section', () => {
-    renderWithRouter(<SchedulingSettingsPage section="general" />);
-
-    expect(within(settingsNav()).queryByRole('button', { name: /Equipment/ })).not.toBeInTheDocument();
-  });
-
-  // A section is a route, not a `?tab=` that only client state reads: the
-  // previous screen could not be linked to, bookmarked, or reached with the
-  // back button, because selecting a section changed nothing the router saw.
-  it('navigates to the chosen section rather than mirroring it into a query param', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<SchedulingSettingsPage section="general" />);
-
-    await user.click(within(settingsNav()).getByRole('button', { name: /Notifications/ }));
-
-    expect(window.location.pathname).toBe('/scheduling/admin/settings/notifications');
-    expect(window.location.search).not.toContain('tab=');
+    expect(screen.queryByRole('navigation', { name: 'Scheduling settings sections' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Eligibility/ })).not.toBeInTheDocument();
   });
 
   it('renders whichever section its route mounts', () => {
@@ -146,15 +108,5 @@ describe('SchedulingSettingsPage', () => {
     renderWithRouter(<SchedulingSettingsPage section="general" />);
 
     expect(screen.queryByText(/Platoon scheduling is turned off/)).not.toBeInTheDocument();
-  });
-
-  it('hides Platoons until platoon scheduling is enabled', () => {
-    const { unmount } = renderWithRouter(<SchedulingSettingsPage section="general" />);
-    expect(within(settingsNav()).queryByRole('button', { name: /Platoons/ })).not.toBeInTheDocument();
-    unmount();
-
-    storeState.platoonsEnabled = true;
-    renderWithRouter(<SchedulingSettingsPage section="general" />);
-    expect(within(settingsNav()).getByRole('button', { name: /Platoons/ })).toBeInTheDocument();
   });
 });

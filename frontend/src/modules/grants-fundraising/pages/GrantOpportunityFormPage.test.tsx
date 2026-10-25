@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
@@ -28,23 +28,31 @@ vi.mock('../../../stores/authStore', () => ({
 
 const createOpportunity = vi.fn();
 const listOpportunities = vi.fn();
+const getOpportunity = vi.fn();
+const updateOpportunity = vi.fn();
 vi.mock('../services/api', () => ({
   grantsService: {
     createOpportunity: (...args: unknown[]) => createOpportunity(...args) as unknown,
     listOpportunities: (...args: unknown[]) => listOpportunities(...args) as unknown,
+    getOpportunity: (...args: unknown[]) => getOpportunity(...args) as unknown,
+    updateOpportunity: (...args: unknown[]) => updateOpportunity(...args) as unknown,
   },
 }));
 
 import GrantOpportunityFormPage from './GrantOpportunityFormPage';
 import GrantOpportunitiesPage from './GrantOpportunitiesPage';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
 const renderAt = (path: string) =>
   render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/grants/opportunities" element={<GrantOpportunitiesPage />} />
-        <Route path="/grants/opportunities/new" element={<GrantOpportunityFormPage />} />
-      </Routes>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/grants/opportunities" element={<GrantOpportunitiesPage />} />
+          <Route path="/grants/opportunities/new" element={<GrantOpportunityFormPage />} />
+          <Route path="/grants/opportunities/:id/edit" element={<GrantOpportunityFormPage />} />
+        </Routes>
+      </ConfirmProvider>
     </MemoryRouter>
   );
 
@@ -52,6 +60,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   createOpportunity.mockReset();
   listOpportunities.mockReset();
+  getOpportunity.mockReset();
+  updateOpportunity.mockReset();
   createOpportunity.mockResolvedValue({ id: 'opp-1' });
   listOpportunities.mockResolvedValue([]);
   granted = new Set(['fundraising.view', 'fundraising.manage']);
@@ -168,5 +178,120 @@ describe('GrantOpportunityFormPage', () => {
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Only http and https links are allowed'));
     expect(screen.getByRole('heading', { name: 'Add Grant Opportunity' })).toBeInTheDocument();
+  });
+});
+
+const saved = {
+  id: 'opp-9',
+  organizationId: 'org-1',
+  name: 'State Fire Equipment Grant',
+  agency: 'State Fire Marshal',
+  description: 'Turnout gear and SCBA',
+  eligibleUses: null,
+  typicalAwardMin: 1000,
+  typicalAwardMax: 50000,
+  eligibilityCriteria: null,
+  applicationUrl: null,
+  programUrl: null,
+  matchRequired: true,
+  matchPercentage: 10,
+  matchDescription: 'Cash or in-kind',
+  deadlineType: 'fixed',
+  deadlineDate: '2027-02-15',
+  recurringSchedule: null,
+  requiredDocuments: [],
+  tags: [],
+  category: 'equipment',
+  federalProgramCode: null,
+  isActive: true,
+  notes: null,
+  createdBy: null,
+  createdAt: '2026-10-01T00:00:00Z',
+  updatedAt: '2026-10-01T00:00:00Z',
+};
+
+describe('Editing an opportunity (W68-10)', () => {
+  it('opens the saved values and sends every field, clears as null', async () => {
+    getOpportunity.mockResolvedValue(saved);
+    updateOpportunity.mockResolvedValue(saved);
+    const user = userEvent.setup();
+    renderAt('/grants/opportunities/opp-9/edit');
+
+    expect(await screen.findByRole('heading', { name: 'Edit Grant Opportunity' })).toBeInTheDocument();
+    expect(getOpportunity).toHaveBeenCalledWith('opp-9');
+    expect(screen.getByLabelText('Program name')).toHaveValue('State Fire Equipment Grant');
+    await user.clear(screen.getByLabelText(/deadline date/i));
+    await user.type(screen.getByLabelText(/deadline date/i), '2027-03-01');
+    await user.clear(screen.getByLabelText(/agency or funder/i));
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(updateOpportunity).toHaveBeenCalledWith('opp-9', {
+        name: 'State Fire Equipment Grant',
+        agency: null,
+        category: 'equipment',
+        description: 'Turnout gear and SCBA',
+        eligibleUses: null,
+        eligibilityCriteria: null,
+        typicalAwardMin: '1000',
+        typicalAwardMax: '50000',
+        matchRequired: false,
+        matchPercentage: null,
+        matchDescription: null,
+        deadlineType: 'fixed',
+        deadlineDate: '2027-03-01',
+        applicationUrl: null,
+        programUrl: null,
+        federalProgramCode: null,
+        notes: null,
+      })
+    );
+    expect(createOpportunity).not.toHaveBeenCalled();
+    expect(toastSuccess).toHaveBeenCalledWith('Opportunity saved');
+  });
+
+  it('is reached from the library by a fundraising manager only', async () => {
+    listOpportunities.mockResolvedValue([saved]);
+    renderAt('/grants/opportunities');
+    expect(await screen.findByRole('link', { name: `Edit ${saved.name}` })).toHaveAttribute(
+      'href',
+      '/grants/opportunities/opp-9/edit'
+    );
+  });
+});
+
+describe('Retiring an opportunity (W68-10)', () => {
+  it('asks first, then marks it inactive and drops it from the library', async () => {
+    listOpportunities.mockResolvedValue([saved]);
+    updateOpportunity.mockResolvedValue({ ...saved, isActive: false });
+    const user = userEvent.setup();
+    renderAt('/grants/opportunities');
+
+    await user.click(await screen.findByRole('button', { name: `Retire ${saved.name}` }));
+    const dialog = await screen.findByRole('dialog', { name: 'Retire this opportunity?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Retire' }));
+
+    await waitFor(() => expect(updateOpportunity).toHaveBeenCalledWith('opp-9', { isActive: false }));
+    await waitFor(() => expect(screen.queryByText(saved.name)).not.toBeInTheDocument());
+  });
+
+  it('lists retired ones on request, without Start Application, and reinstates them', async () => {
+    listOpportunities.mockResolvedValue([]);
+    updateOpportunity.mockResolvedValue(saved);
+    const user = userEvent.setup();
+    renderAt('/grants/opportunities');
+    await waitFor(() => expect(listOpportunities).toHaveBeenCalledWith({ activeOnly: true }));
+
+    listOpportunities.mockResolvedValue([{ ...saved, isActive: false }]);
+    await user.click(screen.getByRole('checkbox', { name: 'Show retired' }));
+
+    await waitFor(() => expect(listOpportunities).toHaveBeenCalledWith({ activeOnly: false }));
+    expect(await screen.findByText('Retired')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /start application/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: `Reinstate ${saved.name}` }));
+
+    await waitFor(() => expect(updateOpportunity).toHaveBeenCalledWith('opp-9', { isActive: true }));
+    expect(await screen.findByRole('link', { name: /start application/i })).toBeInTheDocument();
   });
 });

@@ -175,6 +175,8 @@ export interface ComplianceItem {
   days_until_expiration?: number | undefined;
   status?: ScreeningStatus | undefined;
   self_recorded: boolean;
+  /** No expiration on the record: the date is its completed date plus the requirement's frequency (W71-1). */
+  expiration_from_frequency?: boolean | undefined;
 }
 
 export interface ComplianceSummary {
@@ -229,4 +231,6 @@ export interface ExpiringScreening {
   days_until_expiration: number;
   self_recorded: boolean;
   status?: ScreeningStatus | undefined;
+  /** No expiration on the record: due by its requirement's frequency (W71-1). */
+  expiration_from_frequency?: boolean | undefined;
 }

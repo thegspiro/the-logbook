@@ -125,7 +125,13 @@ recorded in the flag below.
 **Tests:** 4 cases assert the server-side parameter for each tab; mutation-tested
 (removing the forwarding fails 3 of 4, `all` correctly still passing).
 
-### FAC2-5 — LOW/MED — the inspections list cannot express "awaiting result" server-side — 🚩 FLAGGED
+### FAC2-5 — LOW/MED — the inspections list cannot express "awaiting result" server-side — ✅ FIXED 2026-10-25
+
+New `GET /facilities/maintenance/page` and `GET /facilities/inspections/page` return a
+page plus the organization-wide total, with text search and (inspections) a tri-state
+`result=passed|failed|pending` applied in SQL. Both cross-facility screens and both
+facility-detail sections now page through them; the old list endpoints are unchanged.
+Original finding below.
 
 `InspectionsListPage`'s four tabs are all / passed / failed / pending, filtered
 client-side over a `limit=100` page. `GET /facilities/inspections` accepts

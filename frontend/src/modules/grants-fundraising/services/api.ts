@@ -8,6 +8,7 @@ import { createApiClient } from '../../../utils/createApiClient';
 import type {
   GrantOpportunity,
   GrantOpportunityCreatePayload,
+  GrantOpportunityUpdatePayload,
   GrantApplication,
   GrantApplicationPage,
   GrantApplicationQuery,
@@ -42,7 +43,8 @@ export const grantsService = {
 
   async listOpportunities(params?: {
     category?: string;
-    isActive?: boolean;
+    /** `false` includes retired opportunities. The backend defaults to `true`. */
+    activeOnly?: boolean;
     search?: string;
     skip?: number;
     limit?: number;
@@ -50,7 +52,7 @@ export const grantsService = {
     const response = await api.get<GrantOpportunity[]>('/grants', {
       params: {
         category: params?.category,
-        is_active: params?.isActive,
+        active_only: params?.activeOnly,
         search: params?.search,
         skip: params?.skip ?? 0,
         limit: params?.limit ?? 100,
@@ -69,7 +71,10 @@ export const grantsService = {
     return response.data;
   },
 
-  async updateOpportunity(id: string, data: Partial<GrantOpportunity>): Promise<GrantOpportunity> {
+  async updateOpportunity(
+    id: string,
+    data: GrantOpportunityUpdatePayload | { isActive: boolean }
+  ): Promise<GrantOpportunity> {
     const response = await api.put<GrantOpportunity>(`/grants/${id}`, data);
     return response.data;
   },

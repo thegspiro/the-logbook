@@ -582,6 +582,10 @@ task loop.
   own (an `sr-only` `<h2>` keeps heading navigation). The header's
   **Create Shift** links to `/scheduling?create=shift`, which `SchedulingPage`
   reads once to open its Create Shift dialog.
+  `SchedulingSettingsPage` does not use `SettingsLayout`: the header's
+  Settings strip is its section nav, and a card with `requiresPlatoons`
+  (Platoon Rosters) is offered only while platoon scheduling is on — the
+  layout reads `platoonsEnabled` from the scheduling store.
 - **Settings components** — `ShiftSettingsPanel` composed of
   `ApparatusTypeDefaultsCard`, `DepartmentDefaultsCard`, `PositionNamesCard`,
   `ResourceTypeDefaultsCard`, `TemplatesOverviewCard`, `PositionListEditor`,

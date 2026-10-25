@@ -165,7 +165,13 @@ free text; nothing reads it as structured. W68-4 makes the text save. Whether
 contacts should become structured (name, role, phone, email — so a report
 could list them) is a product decision. Mirrored to KNOWN_LIMITATIONS.
 
-### W68-10 — LOW — Opportunities cannot be edited or retired from the screen — FLAGGED
+### W68-10 — LOW — Opportunities cannot be edited or retired from the screen — ✅ FIXED 2026-10-25
+
+Each opportunity now has Edit (`/grants/opportunities/:id/edit`, the add form in
+edit mode) and Retire, which the owner chose to be `is_active = false` rather than a
+delete, so applications started from it keep their program. **Show retired** lists
+them and reinstates one. The Federal Programs cards are unchanged. Original finding
+below.
 
 `PUT` and `DELETE /grants/{opportunity_id}` exist (the PUT was a 500 until
 W68-3); no control reaches either, so a mistyped deadline or an expired

@@ -1,9 +1,9 @@
 /**
  * Shift Settings Panel
  *
- * Body of one department-wide scheduling settings section. The section list,
- * the nav that selects between them, and the page chrome belong to
- * SchedulingSettingsPage — this holds the settings state the sections share and
+ * Body of one department-wide scheduling settings section. The nav that selects
+ * between sections, and the section's title, belong to the Scheduling
+ * Administration header; the URL to SchedulingSettingsPage — this holds the settings state the sections share and
  * delegates rendering to focused card components.
  */
 
@@ -18,8 +18,7 @@ import type { ShiftSettings } from '../types/shiftSettings';
 import { BUILTIN_POSITIONS } from '../types/shiftSettings';
 import { getCachedShiftSettings, loadShiftSettings, shiftSettingsService } from '../services/shiftSettingsApi';
 import type { SettingsTab } from './schedulingSettingsSections';
-import { LOCALLY_SAVED_SECTIONS, SCHEDULING_SETTINGS_SECTIONS } from './schedulingSettingsSections';
-import SettingsPanelHead from '../../../components/settings/SettingsPanelHead';
+import { LOCALLY_SAVED_SECTIONS } from './schedulingSettingsSections';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { SchedulingNotificationsPanel } from './SchedulingNotificationsPanel';
 import { TemplatesOverviewCard } from './TemplatesOverviewCard';
@@ -241,20 +240,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     }
   };
 
-  const section = SCHEDULING_SETTINGS_SECTIONS.find((s) => s.key === activeTab);
-
   return (
     <div className="space-y-6">
-      {/* SettingsLayout renders the page's <h1> and nothing else, so a body that
-          opens on a card's <h3> leaves the document going h1 → h3, which is a
-          heading level skipped for anyone navigating by headings.
-
-          The h2 is what every other settings screen puts here — SettingsPage and
-          ElectionsSettingsPage both open each panel with this same component —
-          and it is not a duplicate of the shell's subtitle, which is the fixed
-          "Department-wide scheduling defaults". */}
-      {section && <SettingsPanelHead title={section.label} description={section.description} />}
-
       {/* ─── General Tab ─── */}
       {activeTab === 'general' && (
         <div className="space-y-6">

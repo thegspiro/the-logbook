@@ -45,6 +45,11 @@ vi.mock('../../../modules/scheduling/services/api', () => ({
   },
 }));
 
+const storeState = { platoonsEnabled: false, loadSettings: vi.fn() };
+vi.mock('../../../modules/scheduling/store/schedulingStore', () => ({
+  useSchedulingStore: (selector: (s: typeof storeState) => unknown) => selector(storeState),
+}));
+
 import SchedulingAdminHub from './SchedulingAdminHub';
 
 const grant = (...held: string[]) =>
@@ -89,6 +94,9 @@ describe('SchedulingAdminHub', () => {
     mockGetAdminHubSummary.mockReset();
     mockGetMetricSettings.mockReset();
     mockGetSchedulingSummary.mockReset();
+    storeState.platoonsEnabled = false;
+    storeState.loadSettings.mockReset();
+    storeState.loadSettings.mockResolvedValue(undefined);
     localStorage.removeItem('scheduling_setup_guide_hidden');
 
     mockModulesLoading.mockReturnValue(false);

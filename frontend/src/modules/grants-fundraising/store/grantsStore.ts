@@ -40,7 +40,7 @@ interface GrantsState {
   error: string | null;
 
   // Actions
-  fetchOpportunities: (params?: { category?: string; isActive?: boolean; search?: string }) => Promise<void>;
+  fetchOpportunities: (params?: { category?: string; activeOnly?: boolean; search?: string }) => Promise<void>;
   fetchApplications: (params?: {
     status?: string;
     priority?: string;

@@ -42,7 +42,11 @@ the key is omitted. Reachability is low — the UI toggles through
 `POST /rules/{id}/toggle`, which sends a real boolean — so it needs a direct API
 client; the cost of one was an org-wide screen failure.
 
-### NOTIF2-6 — LOW — the rules screen can create and toggle a rule, but not edit or delete one — 🚩 FLAGGED (owner decision)
+### NOTIF2-6 — LOW — the rules screen can create and toggle a rule, but not edit or delete one — ✅ FIXED 2026-10-25
+
+Owner chose option 1 with a warning: Edit and Delete on each rule, and the delete
+confirmation says when removing it switches the trigger on or off
+(`NotificationsPage.ruleEdit.test.tsx`). Original finding below.
 
 `NotificationsPage` calls `getRules`, `createRule` and `toggleRule`.
 `updateRule`, `deleteRule` and `getRule` exist in `communicationsServices.ts` and the

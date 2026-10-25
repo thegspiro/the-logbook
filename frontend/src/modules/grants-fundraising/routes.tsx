@@ -79,6 +79,18 @@ export const getGrantsFundraisingRoutes = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/grants/opportunities/:id/edit"
+        element={
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.manage"
+          >
+            <GrantOpportunityFormPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Grant Applications */}
       <Route

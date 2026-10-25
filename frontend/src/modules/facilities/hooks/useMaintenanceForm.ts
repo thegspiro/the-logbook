@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { MaintenanceRecordCreate } from '../../../services/facilitiesServices';
@@ -77,6 +77,9 @@ function formToPayload(formData: MaintenanceFormData, isEdit: boolean): Maintena
 
 type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue';
 
+export const MAINTENANCE_PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 250;
+
 interface UseMaintenanceFormOptions {
   facilityId?: string;
   initialStatusFilter?: StatusFilter;
@@ -86,6 +89,11 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  // What the server is asked to search for: the box, settled for a moment, so
+  // typing a word is one request rather than one per letter.
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [maintenanceTypes, setMaintenanceTypes] = useState<MaintenanceType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -96,59 +104,83 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<MaintenanceFormData>(emptyForm(facilityId));
 
+  // A new filter or search starts again from the first page, so nobody is
+  // left on page 4 of a result set that now has one page. Set in the same
+  // update as the filter, so the stale page is never requested.
+  const appliedSearchRef = useRef('');
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const next = searchQuery.trim();
+      if (next === appliedSearchRef.current) return;
+      appliedSearchRef.current = next;
+      setAppliedSearch(next);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery]);
+
+  const changeStatusFilter = useCallback((next: StatusFilter) => {
+    setStatusFilter(next);
+    setPage(1);
+  }, []);
+
+  // Responses can land out of order; only the latest request may write.
+  const requestSeq = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void facilitiesService
+      .getMaintenanceTypes()
+      .then((types) => {
+        if (!cancelled) setMaintenanceTypes(types);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const loadRecords = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setIsLoading(true);
     setLoadError(false);
     try {
-      // The status filter is applied by the server, not just in the browser.
-      // The endpoint returns the 100 most recently *created* records, and an
-      // overdue record is by nature an old one — so filtering a loaded page
-      // client-side systematically hid the longest-overdue work, and the
-      // dashboard's org-wide overdue count could point at a list rendering
-      // "no records". The client-side pass below still runs, over the right
-      // set, so a filter change shows no stale rows while the fetch is in
-      // flight. Text search remains client-side: the endpoint has no search
-      // parameter, so it matches within the returned page.
-      const params: {
-        facility_id?: string;
-        is_completed?: boolean;
-        is_overdue?: boolean;
-      } = {};
+      // Status, search and paging are all applied by the server (FAC2-5). The
+      // old list endpoint returned the 100 most recently created records and
+      // the screen filtered those, so an old overdue record or a vendor named
+      // only on an older record was missing with no sign the list was partial.
+      const params: Parameters<typeof facilitiesService.getMaintenancePage>[0] = {
+        skip: (page - 1) * MAINTENANCE_PAGE_SIZE,
+        limit: MAINTENANCE_PAGE_SIZE,
+      };
       if (facilityId) params.facility_id = facilityId;
       if (statusFilter === 'completed') params.is_completed = true;
       if (statusFilter === 'pending') params.is_completed = false;
       if (statusFilter === 'overdue') params.is_overdue = true;
-      const [data, types] = await Promise.all([
-        facilitiesService.getMaintenanceRecords(params),
-        facilitiesService.getMaintenanceTypes(),
-      ]);
-      setRecords(data);
-      setMaintenanceTypes(types);
+      if (appliedSearch) params.search = appliedSearch;
+      const result = await facilitiesService.getMaintenancePage(params);
+      if (seq !== requestSeq.current) return;
+      setRecords(result.items);
+      setTotal(result.total);
     } catch {
+      if (seq !== requestSeq.current) return;
       setLoadError(true);
       toast.error('Failed to load maintenance records');
     } finally {
-      setIsLoading(false);
+      if (seq === requestSeq.current) setIsLoading(false);
     }
-  }, [facilityId, statusFilter]);
+  }, [facilityId, statusFilter, appliedSearch, page]);
 
   useEffect(() => {
     void loadRecords();
   }, [loadRecords]);
 
+  // The server already filtered by status; repeating it here keeps a filter
+  // change from showing the previous filter's rows while the request is out.
   const filtered = records.filter((r) => {
     if (statusFilter === 'completed' && !r.isCompleted) return false;
     if (statusFilter === 'pending' && r.isCompleted) return false;
     if (statusFilter === 'overdue' && !r.isOverdue) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return !!(
-        r.description?.toLowerCase().includes(q) ||
-        r.vendor?.toLowerCase().includes(q) ||
-        r.workOrderNumber?.toLowerCase().includes(q) ||
-        r.performedBy?.toLowerCase().includes(q)
-      );
-    }
     return true;
   });
 
@@ -237,10 +269,14 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
     isLoading,
     loadError,
     reload: loadRecords,
+    page,
+    setPage,
+    total,
+    pageSize: MAINTENANCE_PAGE_SIZE,
     searchQuery,
     setSearchQuery,
     statusFilter,
-    setStatusFilter,
+    setStatusFilter: changeStatusFilter,
     showModal,
     setShowModal,
     editingRecord,

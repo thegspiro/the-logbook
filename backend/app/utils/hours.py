@@ -15,7 +15,9 @@ hoursFormatting.ts` draws:
 * **Grading never reads a rounded figure.** Whether a requirement is met is
   decided on raw minutes. Rounding first turns a shortfall under an eighth of
   an hour into zero and marks a member compliant while they are short, which is
-  the failure this rule exists to avoid rather than to cause.
+  the failure this rule exists to avoid rather than to cause. The raw figure
+  is compared through :func:`meets_required_hours`, which absorbs only the
+  drift of binary floating point.
 
 Stored columns are likewise untouched: ``hours_completed`` on a training record
 and ``duration_minutes`` on an attendance row keep what actually happened.
@@ -26,6 +28,17 @@ from typing import Iterable, Optional
 
 #: The reporting increment for logged time.
 QUARTER_HOUR = 0.25
+
+#: How far below its target, as a fraction of the target, a total may sit and
+#: still meet it. Large enough for summation drift: ``hours_completed`` is a
+#: MySQL ``FLOAT``, whose ``SUM()`` is off by up to one part in ten million
+#: (ten records of 0.7 sum to 6.99999988), and records added one at a time
+#: land a few ulps under (0.1, 4.1 and 0.8 accumulate to 4.999999999999999;
+#: the built-in ``sum()`` is compensated and does not). Small enough that no
+#: entered time is affected:
+#: on a 1,000-hour requirement it is 3.6 seconds, while a single minute is
+#: 0.0167 hours.
+HOURS_TARGET_TOLERANCE = 1e-6
 
 
 def round_hours_to_quarter(hours: Optional[float]) -> float:
@@ -66,6 +79,20 @@ def sum_minutes_to_quarter(minutes: Iterable[Optional[float]]) -> float:
     return sum_hours_to_quarter(
         None if value is None else float(value) / 60.0 for value in minutes
     )
+
+
+def meets_required_hours(total: Optional[float], required: Optional[float]) -> bool:
+    """Whether a raw total of hours meets a target, ignoring float drift.
+
+    Every hours requirement is graded through this, so a member who logged
+    exactly the required hours never reads as short on one screen and met on
+    another (CLAUDE.md pitfall 29). A whole-number count (shifts, calls,
+    courses) can be passed too: the tolerance is far below one, so a count
+    meets its target exactly when it reaches it.
+    """
+    value = float(total or 0)
+    target = float(required or 0)
+    return value >= target - HOURS_TARGET_TOLERANCE * max(target, 1.0)
 
 
 def round_hours_exact(hours: Optional[float]) -> float:

@@ -23,6 +23,7 @@ from app.schemas.organization import (
     EmailServiceSettings,
     EnabledModulesResponse,
     FileStorageSettings,
+    FormsSettings,
     MembershipIdSettings,
     ModuleSettings,
     OrganizationSettings,
@@ -45,6 +46,7 @@ from app.utils.email_providers import (
     normalize_stored_platform,
     required_field_message,
 )
+from app.utils.embed_origins import valid_embed_origins
 from app.utils.org_timezone import org_today
 
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
@@ -388,6 +390,20 @@ class OrganizationService:
             else SchedulingNotificationSettings()
         )
 
+        # Parse forms settings. Rebuilt from the valid entries only: the list
+        # is free-form JSON underneath, and a stored entry that is not an exact
+        # https origin would otherwise make this whole read raise, for every
+        # setting of the organization, not just the embed list.
+        forms = settings_dict.get("forms")
+        embed_origins = (
+            forms.get("embed_allowed_origins") if isinstance(forms, dict) else None
+        )
+        forms_settings = FormsSettings(
+            embed_allowed_origins=valid_embed_origins(
+                embed_origins if isinstance(embed_origins, list) else []
+            )
+        )
+
         # Collect extra/custom settings (e.g. station_mode) that aren't
         # covered by a dedicated sub-schema so they round-trip through the API.
         known_keys = {
@@ -403,6 +419,7 @@ class OrganizationService:
             "department_email",
             "setup",
             "scheduling",
+            "forms",
         }
         extra_settings = {k: v for k, v in settings_dict.items() if k not in known_keys}
 
@@ -416,6 +433,7 @@ class OrganizationService:
             department_email=dept_email_settings,
             setup=setup_settings,
             scheduling=scheduling_settings,
+            forms=forms_settings,
             **extra_settings,
         )
 

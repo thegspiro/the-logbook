@@ -203,7 +203,12 @@ export default defineConfig({
         globIgnores: ['push-sw.js'],
         // Prevent the service worker from caching API responses
         // containing sensitive/PII data (HIPAA §164.312).
-        navigateFallbackDenylist: [/^\/api/],
+        //
+        // /embed/ is answered from the network every time: its framing
+        // policy is written per request by nginx, and the precached
+        // index.html carries DENY, so serving that copy would block the
+        // embed with nothing in the console naming why.
+        navigateFallbackDenylist: [/^\/api/, /^\/embed\//],
         runtimeCaching: [
           {
             urlPattern: /^.*\/api\/.*/,

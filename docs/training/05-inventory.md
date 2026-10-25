@@ -1917,9 +1917,14 @@ Print barcode labels to stick on equipment.
 
 Needs the **Manage gear, uniforms and equipment** permission.
 
-1. Open the **Print Barcode Labels** page one of four ways (see
+1. Open the **Print Barcode Labels** page one of five ways (see
    [Choosing which items to label](#choosing-which-items-to-label)):
-   - Tick items on the item list and select **Print Labels** in the bar that
+   - On the item list, select **Print Labels** beside **Export**. Choose
+     **This list** for every item your filters match, **Items that need a
+     label**, or **Choose by category or location**. **This list** is not
+     offered while the low-stock filter is on, because the print page cannot
+     narrow to it.
+   - Tick items on the item list and select **Print Selected** in the bar that
      appears. Or tick one, then **Select all _N_ matching** to take every item
      your filters match.
    - Open a single item and select **Print Barcode**.
@@ -2006,7 +2011,7 @@ and for this part of The Logbook. See
 want (a category, a location, **Needs a Label**), tick any one row, and the bar
 that appears offers **Select all _N_ matching**. That takes every item the
 filters match, not just the rows loaded on screen. The bar then reads **All _N_
-matching selected**. Select **Print Labels**. Unticking any row turns the
+matching selected**. Select **Print Selected**. Unticking any row turns the
 selection back into an ordinary hand-picked set.
 
 - **Selecting holds at most 500 items**, because the same selection also drives
@@ -2016,7 +2021,7 @@ selection back into an ordinary hand-picked set.
 - A selection made this way is carried to the print page as your filters, not
   as a list of items, so the page survives a refresh.
 
-![The inventory items list filtered to Structural PPE and Needs a Label, one row ticked, and the bulk bar reading All 11 matching selected beside the Print Labels button](./images/05-83-items-select-all-matching.png)
+![The inventory items list filtered to Structural PPE and Needs a Label, one row ticked, and the bulk bar reading All 11 matching selected beside the Print Selected button](./images/05-83-items-select-all-matching.png)
 
 **Or open the print page with nothing selected.** It opens **Print barcode
 labels**:
@@ -2094,7 +2099,7 @@ page:
 
 | Module                  | What the label shows                    | Where to start                           |
 | ----------------------- | --------------------------------------- | ---------------------------------------- |
-| **Inventory**           | Item name, barcode, serial or asset tag | Select items → **Print Labels**          |
+| **Inventory**           | Item name, barcode, serial or asset tag | **Print Labels** on the item list        |
 | **Apparatus**           | Unit number, asset tag, apparatus type  | **Print Label** on a row                 |
 | **Facilities**          | Facility name and number                | **Print Labels** at the top              |
 | **Members**             | Member name and membership number       | **Print Badges** for selected members    |
@@ -2718,7 +2723,7 @@ The page is laid out like **Training Administration**. From top to bottom:
    red number on a card or a page is work waiting there.
 4. **The page strip**, and a line naming the page you are on and what it is
    for. A page marked with an arrow (↗) opens on its own, without this header:
-   the kiosk, the NFC scanning tools, Storage Areas, Import, Temporary Loans,
+   the kiosk, the NFC scanning tools, Storage Areas, Print Labels, Import, Temporary Loans,
    EMS Supplies and the store's own console.
 
 The header stays at the top of every administration page, so you move between
@@ -2727,7 +2732,7 @@ pages with the area cards and the strip rather than going back to the hub.
 | Area                       | Pages                                                                                              |
 | -------------------------- | -------------------------------------------------------------------------------------------------- |
 | **Overview**               | Dashboard, Headline Metrics                                                                        |
-| **Catalog**                | All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors                          |
+| **Catalog**                | All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors, Print Labels            |
 | **Issuance & Members**     | Members, Temporary Loans, Gear Kits, Issuance Allowances, Impact Planner                           |
 | **Requests & Approvals**   | Gear Requests, Return Requests, Reorder Requests, Write-Offs, Charges                              |
 | **Readiness & Compliance** | Maintenance, Equipment Checklists, Check Reports, Expiring on Apparatus, Items Not Seen            |

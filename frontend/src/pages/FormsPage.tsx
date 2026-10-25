@@ -42,6 +42,7 @@ import {
   type FormIntegrationCreate,
 } from '../services/api';
 import { FormBuilder, FormRenderer, SubmissionViewer, FormResultsPanel } from '../components/forms';
+import { FormEmbedShare } from '../components/forms/FormEmbedShare';
 import { FormStatus, FieldType } from '../constants/enums';
 import {
   INTEGRATION_HINT_LABELS,
@@ -293,6 +294,15 @@ const FormsPage: React.FC = () => {
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to update form');
       setError(message);
+    }
+  };
+
+  const handleToggleEmbed = async (form: FormDef) => {
+    try {
+      await formsService.updateForm(form.id, { allow_embed: !form.allow_embed });
+      await loadData();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update form'));
     }
   };
 
@@ -1500,6 +1510,13 @@ const FormsPage: React.FC = () => {
                                 Print this code and post it where people can scan it to open the form.
                               </p>
                             </div>
+
+                            <FormEmbedShare
+                              form={form}
+                              onToggleEmbed={(f) => {
+                                void handleToggleEmbed(f);
+                              }}
+                            />
 
                             {form.status !== FormStatus.PUBLISHED && (
                               <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">

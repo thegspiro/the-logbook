@@ -430,6 +430,39 @@ form afterwards.
 > anyway** and **Not yet**. You see the warning even without access to Events
 > settings. A form with no such problem publishes straight away.
 
+### Embedding a form on your website _(2026-10-25)_
+
+If your department already has a website, a public form can sit **inside one
+of its pages** instead of sending visitors to The Logbook. Two switches are
+needed, at two levels:
+
+1. **Once, for the department** — someone with access to Organization Settings
+   opens **Settings → Forms** and lists your website, one address per line,
+   such as `https://www.oakvillefire.org`. Use `https://` and leave off any page
+   path such as `/apply`. Only the sites listed here can show your forms.
+2. **For each form** — in the form's **Share** window, with **Public Access**
+   on, tick **Allow embedding on your website**. The window shows the **Embed
+   code** and which sites it works on. Select **Copy embed code** and paste it
+   into the page on your website, where your web host's editor accepts HTML.
+
+The embedded form shows its title and questions only; your website already
+carries the department's name and logo. It grows to fit as visitors answer.
+
+- **A form that needs a signed-in member cannot be sent from inside your
+  website.** Signing in cannot happen inside another site's page, so the
+  embedded form offers **Open the form to sign in**, which opens it in a new
+  tab. Embedding suits forms with **Allow submissions without signing in**
+  ticked.
+- **"Your department has not listed its website yet"** in the Share window
+  means step 1 is missing. Until it is done the form will not show anywhere.
+- **The form shows a blank box on your website.** Check that the address in
+  Settings → Forms matches the one in your browser's address bar exactly,
+  including `www.` and `https://`. If whoever runs your server put another
+  reverse proxy in front of The Logbook, it may be adding its own "do not
+  frame" header; see the deployment guide.
+- **The same limits apply.** The daily limit, robot checks and one submission
+  per person work exactly as they do on the public link.
+
 ### One submission per person
 
 Tick **One submission per person** when creating a form, or at the top of the

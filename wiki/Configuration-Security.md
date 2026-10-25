@@ -395,6 +395,22 @@ The application automatically sets these security headers in production:
 - `Content-Security-Policy: default-src 'self'`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 
+**One page is the exception to `DENY`** _(2026-10-25)_: `/embed/f/<slug>`, a
+public form a department shows inside its own website. Its `frame-ancestors`
+is the department's own list of websites (Organization Settings → Forms), and
+only for a form with **Allow embedding** on; otherwise `'none'`. nginx asks the
+backend on every load (`auth_request` to
+`GET /api/public/v1/forms/<slug>/embed-policy`) and writes the answer in place
+of `DENY`. That needs nginx's `auth_request` module, which the official
+`nginx:alpine` image and Debian/Ubuntu's nginx packages include. If the backend
+cannot be asked, the page fails with a 500 rather than being served unguarded.
+
+**A reverse proxy of your own in front of the app must leave `/embed/` alone.**
+A browser enforces every framing policy it receives, so a proxy that adds
+`X-Frame-Options` or its own `Content-Security-Policy` to every response blocks
+embedded forms whatever the department allowed. Exclude `/embed/` from those
+headers. The bundled configs (`infrastructure/nginx/*.conf`) already do.
+
 ---
 
 ## Client IP Resolution & GeoIP _(2026-05-29)_

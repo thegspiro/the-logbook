@@ -1,6 +1,6 @@
 /**
  * Locks the create/update payload contract (CLAUDE.md pitfall #1) and the
- * server-side status filter.
+ * server-side status filter, search and paging (FAC2-5).
  *
  * The hook builds one payload for both modes, so the mode is the only thing
  * deciding what a blank box means: omitted on create so `""` never reaches a
@@ -8,18 +8,18 @@
  * writes the clear through instead of leaving the old value behind a success
  * toast.
  */
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MaintenanceRecord } from '../types';
 
-const getMaintenanceRecords = vi.fn();
+const getMaintenancePage = vi.fn();
 const getMaintenanceTypes = vi.fn();
 const createMaintenanceRecord = vi.fn();
 const updateMaintenanceRecord = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   facilitiesService: {
-    getMaintenanceRecords: (...a: unknown[]) => getMaintenanceRecords(...a) as unknown,
+    getMaintenancePage: (...a: unknown[]) => getMaintenancePage(...a) as unknown,
     getMaintenanceTypes: (...a: unknown[]) => getMaintenanceTypes(...a) as unknown,
     createMaintenanceRecord: (...a: unknown[]) => createMaintenanceRecord(...a) as unknown,
     updateMaintenanceRecord: (...a: unknown[]) => updateMaintenanceRecord(...a) as unknown,
@@ -68,11 +68,11 @@ const cleared = {
 
 describe('useMaintenanceForm payload contract', () => {
   beforeEach(() => {
-    getMaintenanceRecords.mockReset();
+    getMaintenancePage.mockReset();
     getMaintenanceTypes.mockReset();
     createMaintenanceRecord.mockReset();
     updateMaintenanceRecord.mockReset();
-    getMaintenanceRecords.mockResolvedValue([]);
+    getMaintenancePage.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 50 });
     getMaintenanceTypes.mockResolvedValue([]);
     createMaintenanceRecord.mockResolvedValue(existing);
     updateMaintenanceRecord.mockResolvedValue(existing);
@@ -126,10 +126,10 @@ describe('useMaintenanceForm payload contract', () => {
   });
 
   it.each([
-    { filter: 'overdue' as const, expected: { facility_id: 'fac-1', is_overdue: true } },
-    { filter: 'completed' as const, expected: { facility_id: 'fac-1', is_completed: true } },
-    { filter: 'pending' as const, expected: { facility_id: 'fac-1', is_completed: false } },
-    { filter: 'all' as const, expected: { facility_id: 'fac-1' } },
+    { filter: 'overdue' as const, expected: { facility_id: 'fac-1', is_overdue: true, skip: 0, limit: 50 } },
+    { filter: 'completed' as const, expected: { facility_id: 'fac-1', is_completed: true, skip: 0, limit: 50 } },
+    { filter: 'pending' as const, expected: { facility_id: 'fac-1', is_completed: false, skip: 0, limit: 50 } },
+    { filter: 'all' as const, expected: { facility_id: 'fac-1', skip: 0, limit: 50 } },
   ])('asks the server for the $filter records rather than filtering a loaded page', async ({ filter, expected }) => {
     const { result } = renderHook(() => useMaintenanceForm({ facilityId: 'fac-1' }));
 
@@ -137,7 +137,7 @@ describe('useMaintenanceForm payload contract', () => {
       result.current.setStatusFilter(filter);
     });
 
-    expect(getMaintenanceRecords).toHaveBeenLastCalledWith(expected);
+    expect(getMaintenancePage).toHaveBeenLastCalledWith(expected);
   });
 
   it('omits blank optional fields on create, so "" never reaches a validator', async () => {
@@ -158,5 +158,53 @@ describe('useMaintenanceForm payload contract', () => {
     for (const key of ['scheduled_date', 'due_date', 'performed_by', 'cost', 'vendor', 'work_order_number', 'notes']) {
       expect(payload[key], `${key} must be omitted on create, not nulled`).toBeUndefined();
     }
+  });
+});
+
+describe('useMaintenanceForm paging (FAC2-5)', () => {
+  beforeEach(() => {
+    getMaintenancePage.mockReset();
+    getMaintenanceTypes.mockReset();
+    getMaintenanceTypes.mockResolvedValue([]);
+    getMaintenancePage.mockResolvedValue({ items: [existing], total: 120, skip: 0, limit: 50 });
+  });
+
+  it('reports the server total and asks for the page it is on', async () => {
+    const { result } = renderHook(() => useMaintenanceForm());
+    await waitFor(() => expect(result.current.total).toBe(120));
+
+    await act(async () => {
+      result.current.setPage(3);
+    });
+
+    expect(getMaintenancePage).toHaveBeenLastCalledWith({ skip: 100, limit: 50 });
+  });
+
+  it('sends the search to the server and goes back to the first page', async () => {
+    const { result } = renderHook(() => useMaintenanceForm());
+    await act(async () => {
+      result.current.setPage(2);
+    });
+
+    await act(async () => {
+      result.current.setSearchQuery('  acme ');
+    });
+
+    await waitFor(() => expect(getMaintenancePage).toHaveBeenLastCalledWith({ search: 'acme', skip: 0, limit: 50 }));
+    expect(result.current.page).toBe(1);
+  });
+
+  it('a filter change goes back to the first page', async () => {
+    const { result } = renderHook(() => useMaintenanceForm());
+    await act(async () => {
+      result.current.setPage(2);
+    });
+
+    await act(async () => {
+      result.current.setStatusFilter('overdue');
+    });
+
+    expect(getMaintenancePage).toHaveBeenLastCalledWith({ is_overdue: true, skip: 0, limit: 50 });
+    expect(getMaintenancePage).not.toHaveBeenCalledWith({ is_overdue: true, skip: 50, limit: 50 });
   });
 });

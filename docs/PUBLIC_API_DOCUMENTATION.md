@@ -435,6 +435,40 @@ curl -X POST \
 
 ---
 
+### 6a. Form Embed Policy _(2026-10-25)_
+
+```
+GET /api/public/v1/forms/{slug}/embed-policy
+```
+
+Which websites may show a form in an iframe. nginx asks this (`auth_request`)
+each time it serves the embed page, `/embed/f/{slug}`, and copies the answer
+into that page's `Content-Security-Policy: frame-ancestors`. Every other page of
+the app sends `X-Frame-Options: DENY`.
+
+**`200 OK`**, always, with the answer in both the header and the body:
+
+```
+X-Embed-Frame-Ancestors: https://www.oakvillefire.org https://join.oakvillefire.org
+```
+
+```json
+{
+  "frame_ancestors": "https://www.oakvillefire.org https://join.oakvillefire.org"
+}
+```
+
+The answer is the department's own websites (**Organization Settings →
+Forms**) only when the form is published, has Public Access on and has **Allow
+embedding** on, and the department has listed at least one website. Anything
+else, including a slug that matches no form, is `'none'`: the page still loads
+when opened directly and simply cannot be framed. Each stored website is checked
+again as an exact `https` origin before it is sent, because it is written into a
+response header. Shares the 60-a-minute view limit of
+[Get Public Form](#5-get-public-form).
+
+---
+
 ### 7. Personal Shift Calendar (ICS Feed)
 
 Return a member's own upcoming shifts as an RFC 5545 iCalendar feed, so they can

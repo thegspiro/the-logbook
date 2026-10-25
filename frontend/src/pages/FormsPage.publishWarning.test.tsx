@@ -52,6 +52,7 @@ const draft: FormDef = {
   require_authentication: false,
   notify_on_submission: false,
   is_public: true,
+  allow_embed: false,
   public_slug: 'abcdef123456',
   integration_type: 'event_request',
   version: 1,
