@@ -1,6 +1,143 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 12 (2026-10-25) — watchdog pickup: true zero-delta, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed open, unchanged
+
+Standing-rotation pickup (`/loop 30m /security-review`): PR #3687 (Feature 03,
+Public surface & webhooks, pass 12) had already merged with no open
+rotation PR behind it — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 matching results, checked
+before starting and re-checked immediately before branching. Row 04
+(Storefront & payments) was the next `⬜` row in `PROGRESS.md`'s rotation
+table.
+
+**Scope.** Diffed pass 11's own merge (`6b85bc33`, PR #3559) against current
+`HEAD` across the full established domain: `storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `email_templates_storefront.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, the
+entire `frontend/src/modules/storefront/` tree, and every migration under
+`alembic/versions/` whose filename or content matches
+storefront/embroidery/personalization/thread/grant.
+
+**Unshallowed before trusting the delta** (`git rev-parse
+--is-shallow-repository` → `true`; `git fetch --unshallow` resolved it —
+same precaution passes 9–11 each had to take).
+
+**True zero-delta on the backend.** `git log --no-merges 6b85bc33..origin/main`
+across the entire file list above returns exactly **one** commit
+(`8d5764549`, "Fix form fields squeezed and misaligned on iPad/tablet," a
+134-route Playwright tablet-layout sweep), and its only line inside this
+feature's scope is a 2-line, CSS-only change in
+`frontend/src/modules/storefront/components/StoreOrdersTab.tsx` — the order
+method `<select>` moved into its own grid cell so it no longer splits a
+column with the search box on an iPad-width screen beside the side nav. Read
+in full: no logic, data-fetching, auth, or org-scoping content. No backend
+file in the declared scope changed at all. A `--diff-filter=A` scan of new
+migration files between the two commits, checked by content for
+storefront/embroidery/personalization keywords, found zero matches — no new
+storefront-related migration landed either.
+
+**Re-verified unchanged, by direct read (not merely by the empty diff):**
+
+- **Route inventory, by AST, not spot-check.** `ast.walk` over every
+  `FunctionDef`/`AsyncFunctionDef` decorated with
+  `@router.{get,post,put,patch,delete}` in `storefront.py` counts **48**
+  routes — identical to pass 11's count. All 48 were read against their
+  `Depends(...)` line directly: 47 carry `require_permission(...)` (the
+  member self-service surface — `/orders/mine*`, payment-method update,
+  `report_payment`, order cancellation — gated `storefront.view`; order
+  creation gated the dedicated `storefront.order`; every catalog/window/
+  order-admin/payment-admin route gated `storefront.manage`, including both
+  refund (`POST /orders/{order_id}/refund`, `:1412`) and payout/settlement
+  routes (`record_payment`, `mark_order_paid`, `waive_order_payment`,
+  `bulk_mark_orders_paid`)); the 48th (`GET /permissions`, `:1534`) carries
+  only `Depends(get_current_user)` — a self-introspection endpoint returning
+  the caller's own permission flags, no data exposure, unchanged from every
+  prior pass's classification.
+- **Price/amount integrity.** `StoreOrderItemInput` (`schemas/storefront.py:662`)
+  still carries no price field — only `product_id`, `variant_id`, `quantity`,
+  `personalization_text`. `StoreOrderCreate`'s own docstring states the
+  invariant directly ("Prices are deliberately absent: the server recomputes
+  every line from the catalog so a tampered client cannot set its own
+  price"), and `_price_lines` (`storefront_service.py:1529`) still derives
+  every line's price from the org-scoped `StoreProduct`/`StoreWindowProduct`
+  rows read under lock, never from client input.
+- **Capacity locking (Pitfall #27).** `_price_lines` still takes the lock
+  order documented in its own comment — organisation row
+  (`StoreSettings`, `:1588`) → window row (`:1592`) → products
+  (`_lock_products`, `:1600`) → per-window/per-member ordered-quantity
+  tallies, all `with_for_update()` — before computing any cap, with the
+  rationale (gap-lock deadlocks measured at the product- and window-row
+  granularities before landing on the organisation row) still documented
+  in-line. Unchanged from every prior pass's citation.
+- **SF8-04-2 — MED — OPEN, unchanged.** `update_order_status`
+  (`storefront_service.py:1896`) still resolves the order via a plain,
+  unlocked `get_order()` (`:1905`), and its `settles_payment` branch still
+  writes `order.payment_status = PAID` / `order.amount_paid = _money(order.total)`
+  (`:1949`–`:1951`) from that unlocked read. Line numbers match pass 11's
+  citation exactly (file byte-identical in this range).
+- **SF8-04-3 — LOW — OPEN, unchanged.** `waive_order_payment`
+  (`:2120`) still has no `_is_settled()` guard before unconditionally setting
+  `payment_status = WAIVED` (`:2142`) and reads the order unlocked (`:2134`).
+  Both remain an owner decision per pass 8's original rationale, already
+  mirrored in `KNOWN_LIMITATIONS.md` (confirmed present, no edit needed this
+  pass).
+- **Separation of duties.** All five self-settlement guards
+  (`record_payment` `:2018`, `mark_order_paid` `:2098`, `waive_order_payment`
+  `:2140`, `refund_order` `:2337`, `update_order_status`'s `settles_payment`
+  branch `:1932`) still call `assert_different_person` before any ledger
+  mutation — confirmed by direct read of each, none touched this window.
+- **PayPal webhook.** `paypal_webhook.py` is byte-identical to pass 11
+  (file outside this window's one-commit delta); signature verification and
+  the replay/idempotency guard (the DB `UniqueConstraint` on
+  `(organization_id, provider, external_id)` plus `IntegrityError` handling in
+  `record_external_payment`) are unchanged. This mechanism was independently
+  re-read in full by `PUB-03-public-surface-webhooks.md`'s own Pass 12 (the
+  rotation's immediately-prior PR, #3687) three days before this pass, which
+  confirmed the same thing from the webhook-handler side; nothing in this
+  pass's zero backend delta gives any reason that has changed.
+
+**0 fixed, 0 new findings.**
+
+## Guard tests added (pass 12)
+
+None. Nothing changed in a way that needed a new guard; the existing suite
+(`test_storefront_payment_race.py`, `test_storefront_order_deadlock.py`,
+`test_storefront_schemas.py`, `test_paypal_backfill.py`, plus the repo-wide
+`test_org_scoping_ratchet.py` / `test_capacity_locking.py` /
+`test_csv_writer_sweep.py` / `test_like_escaping.py` /
+`test_migration_create_all_tables.py` / `test_baseline_member_grants.py` /
+`test_account_status_gates.py`) was re-run, not re-written.
+
+## Completion gate (pass 12)
+
+| Check                                                                                                                                                                                                                        | Result                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                                                                              | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                                                     | ✅ 2638 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                                                                  | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                            | ✅ 651 revisions, single head (`3d67883cd461`)           |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                            | ✅ 276 routes, 0 errors, 0 warnings                      |
+| backend tests (scoped: `-k "storefront or stripe or payment or refund or checkout"`)                                                                                                                                         | ✅ 887 passed, 1 skipped (environment-only: `pywebpush`) |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, account-status gates, storefront-specific race/deadlock/schema/backfill tests) | ✅ 227 passed                                            |
+| backend tests (full suite, `pytest tests/ -m "not integration and not slow and not docker"`)                                                                                                                                 | ✅ 17,491 passed, 5 skipped, 0 failed                    |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                           | ✅ 0 errors                                              |
+| `npm run lint` (`eslint --max-warnings 10`)                                                                                                                                                                                  | ✅ 0 errors, 0 warnings                                  |
+
+Note on tooling: this sandbox resolves a bare `python3`/`pytest` to an
+isolated interpreter (3.11, and a `uv`-tool-installed pytest venv
+respectively) that lacks the app's own dependencies; `/usr/bin/python3`
+(3.13) is the interpreter with `sqlalchemy`/`fastapi`/`pytest` all installed
+at matching versions, and is what every command above actually ran under.
+Recorded here because the next pass's sandbox may differ and this is the
+failure mode to check for first (`ModuleNotFoundError: No module named
+'sqlalchemy'` at `conftest.py` import) rather than assuming the dependency
+is actually missing.
 
 ---
 
