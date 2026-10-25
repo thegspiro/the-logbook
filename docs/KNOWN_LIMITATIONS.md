@@ -6483,11 +6483,11 @@ Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
   stored `expiration_date`, so it does not list a record falling due by
   frequency that the dashboard lists. Bringing it in needs the derived date in
   SQL, or giving up SQL paging for that tool.
-- **Still open — superseded records on the expiring list.**
-  `get_expiring_soon` lists every satisfying record in the window, including
-  one a newer record of the same type supersedes, while the count grades only
-  the latest; the MCP tool already excludes superseded records. Predates this
-  change, for dated records as well.
+- **Resolved 2026-10-25 — superseded records on the expiring list.**
+  `get_expiring_soon` now leaves out a record a newer one of the same type
+  supersedes for the same member or prospect, using the same
+  `superseded_record_clause` the MCP tool uses, so the list and the count
+  agree.
 
 ## Integrations — Connecting iCalendar (ICS) Does Nothing (2026-10-17)
 
