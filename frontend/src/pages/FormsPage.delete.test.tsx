@@ -64,6 +64,7 @@ const form: FormDef = {
   require_authentication: true,
   notify_on_submission: false,
   is_public: false,
+  allow_embed: false,
   version: 1,
   is_template: false,
   field_count: 3,

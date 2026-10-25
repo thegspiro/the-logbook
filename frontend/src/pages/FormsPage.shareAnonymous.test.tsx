@@ -47,6 +47,7 @@ const baseForm: FormDef = {
   require_authentication: true,
   notify_on_submission: false,
   is_public: true,
+  allow_embed: false,
   public_slug: 'abcdef123456',
   version: 1,
   is_template: false,
