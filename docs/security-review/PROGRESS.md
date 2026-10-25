@@ -16,6 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3685](https://github.com/thegspiro/the-logbook/pull/3685)** (branch
+`claude/security-review-permissions-roles-p12`) — Feature 02 (Permissions &
+roles), pass 12. PR #3684 (Feature 01, Auth & session lifecycle, pass 12)
+had already merged with no open rotation PR behind it — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
+`list_pull_requests` (`state:open`), both 0 matching results, checked before
+starting and re-checked immediately before branching. **2 new findings
+(PERM-10, PERM-11, both MED, flagged — not fixed), 0 fixed.** Five of the
+eleven scoped files changed since pass 11's baseline (`dependencies.py`,
+`core/permissions.py`, `roles.py`, `operational_ranks.py`,
+`operational_rank_service.py`, `users.py`). Routes re-enumerated by AST (28,
+unchanged from pass 11). The new step-up re-verification gate (Feature 01's
+own mechanism) was applied to `roles.py`'s mutating routes and three
+role-assignment handlers in `users.py`, but not to the structurally parallel,
+equally ceiling-bound rank-granting paths — `operational_ranks.py`'s rank CRUD
+(PERM-11) and `update_user_profile`'s rank branch / `create_member` (PERM-10).
+Both bounded by the existing grant ceiling, not an escalation beyond it; both
+flagged because expanding `STEPUP_HANDLERS` is Feature 01's own pinned,
+test-checked decision. See `PERM-02-permissions-roles.md`'s **Pass 12**
+section for the full review.
+
+Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
+surface & webhooks).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3685, Feature 02, Permissions & roles, pass 12, merged), preserved for history</summary>
+
+**None.** PR #3684 (Feature 01, Auth & session lifecycle, pass 12) merged.
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
+`list_pull_requests` (`state:open`) both returned 0 matching results,
+checked before starting this iteration. Rotation row 01 is ✅. Next is
+Feature 02 (Permissions & roles).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3684, Feature 01, Auth & session lifecycle, pass 12, merged), preserved for history</summary>
+
 **PR [#3684](https://github.com/thegspiro/the-logbook/pull/3684)** (branch
 `claude/security-review-auth-session-lifecycle`) — Feature 01 (Auth &
 session lifecycle), pass 12. PR #3683 (Feature 00, Cross-cutting baseline,
@@ -38,8 +76,9 @@ let the same attacker who stole a session lock the legitimate owner out of
 signing in at all. See `AUTH-01-auth-session.md`'s **Pass 12** section for
 the full review.
 
-Rotation row 01 → ✅ (pending this PR's merge); next is Feature 02
-(Permissions & roles).
+Rotation row 01 → ✅ (merged); next is Feature 02 (Permissions & roles).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3683, Feature 00, Cross-cutting baseline, pass 12, merged), preserved for history</summary>
@@ -21524,7 +21563,7 @@ PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -21564,6 +21603,54 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-25 — Feature 02 (Permissions & roles, pass 12) — 0 fixed, 2 new findings flagged (PERM-10, PERM-11, both MED)
+
+PR #3684 (Feature 01, Auth & session lifecycle, pass 12) merged with no open
+rotation PR behind it — `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) and `list_pull_requests`
+(`state:open`) both returned 0 matching results, checked before starting and
+re-checked immediately before branching. Rotation row 01 was already ✅; row
+02 (Permissions & roles) was the next ⬜.
+
+Re-enumerated all 28 routes across `roles.py`/`operational_ranks.py`/
+`officers.py`/`org_chart.py` by AST (unchanged from pass 11; no route gained
+or lost a permission string). `git diff --stat` against all eleven tracked
+files found five changed since the pass-11 baseline (`dependencies.py`,
+`core/permissions.py`, `roles.py`, `operational_ranks.py`,
+`operational_rank_service.py`, `users.py`) — the auth feature's new MFA-grace/
+kiosk-session/step-up machinery (reviewed from its own files by Feature 01;
+not re-derived here) plus two pieces squarely in this feature's own scope: a
+built-in rank's code can no longer be renamed (closes a real permission-
+dropping bug, already shipped with its own tests — verified good, not a new
+finding), and `roles.py`'s four mutating routes gained the new step-up gate.
+
+**Two new findings, both flagged not fixed, both MED:**
+
+- **PERM-10** — the step-up gate covers `users.py`'s role-assignment handlers
+  (`assign_user_roles`/`add_role_to_user`/`remove_role_from_user`) but not the
+  equally ceiling-bound rank-granting ones in the same file
+  (`update_user_profile`'s rank branch, `create_member`).
+- **PERM-11** — `operational_ranks.py`'s rank CRUD
+  (`create_rank`/`update_rank`/`delete_rank`) has no step-up gate, unlike the
+  structurally parallel `roles.py` CRUD that gained one this pass.
+
+Both are bounded by the existing grant-ceiling checks (not an escalation
+beyond the caller's own permissions) but are gaps in the new step-up
+control's coverage. Expanding `STEPUP_HANDLERS` is Feature 01's own pinned,
+test-checked decision, so neither was mechanically fixed here. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`. See `docs/security-review/PERM-02-permissions-
+roles.md`'s Pass 12 section for the full review.
+
+**Completion gate:** flake8/black/isort (backend `app/`, `tests/`,
+`alembic/`) clean; `validate_migrations.py --strict` single head (651
+revisions); `check_route_permissions.py --strict` 276 routes, 0 errors/0
+warnings; scoped backend tests (`-k "permission or role or rank or officer
+or org_chart"`) 1512 passed, 1 skipped (environment-only `pywebpush`);
+frontend `typecheck` 0 errors; frontend `lint` 0 errors/0 warnings.
+
+Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
+surface & webhooks).
 
 ### 2026-10-25 — Feature 00 (Cross-cutting baseline, pass 12) — 0 fixed, 1 new finding flagged (SEC12-1, LOW/MED)
 
