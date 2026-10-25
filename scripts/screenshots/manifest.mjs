@@ -15573,6 +15573,49 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
+    id: "15-30-duplicate-applicant",
+    doc: "15-prospective-members.md",
+    line: 300,
+    anchor:
+      "The Add Applicant dialog warning that the email belongs to an active applicant",
+    alt: "The Already an applicant warning: the person is already an active applicant with this email, naming their pipeline and stage, with Go back and Open existing applicant",
+    route: "/prospective-members",
+    expect: "Already an applicant",
+    fullPage: false,
+    // Nothing is created: the warning answers before the create request,
+    // and the cleanup takes Go back.
+    prepare: async (page) => {
+      const { body } = await apiFromPage(
+        page,
+        "GET",
+        "/prospective-members/prospects?limit=100",
+      );
+      const rows = Array.isArray(body)
+        ? body
+        : body?.items || body?.prospects || [];
+      const applicant = rows.find(
+        (row) => row.email && (row.status ?? "active") === "active",
+      );
+      if (!applicant)
+        throw new Error("15-30: no active applicant with an email");
+      await clickByName(/add applicant/i)(page);
+      await page
+        .locator("#new-applicant-first-name")
+        .fill(applicant.first_name);
+      await page.locator("#new-applicant-last-name").fill(applicant.last_name);
+      await page.locator("#new-applicant-email").fill(applicant.email);
+      await page.getByRole("button", { name: "Add to Pipeline" }).click();
+      await page.getByText("Already an applicant").waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const back = page.getByRole("button", { name: "Go back" });
+      if (await back.isVisible().catch(() => false)) await back.click();
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     id: "15-09-bulk-action-result",
     doc: "15-prospective-members.md",
     line: 495,
@@ -17384,6 +17427,64 @@ export const SHOTS = [
     selector:
       "xpath=//h3[contains(.,'New station walkthrough')]/ancestor::*[contains(@class,'card')][1]",
     allowEmptyState: true,
+  },
+  {
+    id: "04-90-event-card-taps",
+    doc: "04-events-meetings.md",
+    line: 590,
+    anchor: "The Card taps section on an event page",
+    alt: "The Card taps section of the in-progress drill's event page, listing each ID card tap with its time, member, outcome and the check-in station it was made at",
+    route: "/events",
+    expect: { selector: "#event-card-taps-heading" },
+    prepare: async (page, helpers) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (e) => e.title === "Company Drill — In Progress",
+      )(page, helpers);
+      const section = page.locator(
+        "section[aria-labelledby='event-card-taps-heading']",
+      );
+      await section
+        .getByText("Unknown card")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await section.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='event-card-taps-heading']",
+  },
+  {
+    id: "04-91-card-checkins-tab",
+    doc: "04-events-meetings.md",
+    line: 592,
+    anchor: "The Card Check-ins tab of Events Admin",
+    alt: "The Card Check-ins tab of Events Admin: filters for outcome, reader and dates above every ID card tap across events, from the check-in station and the Volunteer Office kiosk",
+    route: "/events/admin?tab=card_checkins",
+    expect: "Room kiosk",
+    fullPage: false,
+    prepare: async (page) => {
+      await page.getByText("Room kiosk").first().waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "04-92-card-readers",
+    doc: "04-events-meetings.md",
+    line: 594,
+    anchor: "The Card Readers page with the Volunteer Office reader on",
+    alt: "The Card Readers page filtered to rooms with a reader on: the Volunteer Office marked Reader on, with its taps, refusals and last tap over the last 7 days",
+    route: "/locations/card-readers",
+    expect: "Volunteer Office",
+    fullPage: false,
+    prepare: async (page) => {
+      await page
+        .getByLabel("Only rooms with a reader on")
+        .check({ timeout: 20_000 });
+      await page.getByText("Reader on").first().waitFor({ timeout: 10_000 });
+      await hideScanNotice(page);
+    },
   },
   {
     // Signed-in member, not the guest kiosk -- the marker is explicit that a
@@ -23016,6 +23117,240 @@ export const SHOTS = [
     cleanup: async (page) => {
       await page.evaluate(() => sessionStorage.removeItem("shots:web-nfc"));
       await disableInventoryNfc(page);
+    },
+  },
+
+  // ---- Queued by the October 24 (afternoon) documentation pass ----------
+  // The card shots read taps `seed_card_taps` records through the station
+  // and kiosk endpoints; nothing on these pages is stubbed.
+  {
+    id: "01-53-id-cards-roster",
+    doc: "01-membership.md",
+    line: 2440,
+    anchor: "The Member ID Cards page on the Cards tab with two cards ticked",
+    alt: "The Member ID Cards page on the Cards tab: the search and filters, two cards ticked, and the bar offering Suspend, Reactivate, Report lost and Revoke for them",
+    route: "/members/admin/id-cards",
+    expect: "Member ID Cards",
+    fullPage: false,
+    prepare: async (page) => {
+      const boxes = page.getByRole("checkbox", {
+        name: /^Select card ending /,
+      });
+      await boxes.first().waitFor({ timeout: 20_000 });
+      await boxes.nth(0).check();
+      await boxes.nth(1).check();
+      await page
+        .getByRole("region", { name: "Actions for selected cards" })
+        .waitFor({ timeout: 10_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "01-54-id-cards-coverage",
+    doc: "01-membership.md",
+    line: 2442,
+    anchor: "The Coverage tab of Member ID Cards",
+    alt: "The Coverage tab of Member ID Cards: how many current members have a working card, the members without one with Issue card on each row, and the cards-held-by-former-members and unused-cards sections",
+    route: "/members/admin/id-cards?tab=coverage",
+    expect: "Current members without a working card",
+    // "None" under Cards held by former members is a real answer, not an
+    // empty page.
+    allowEmptyState: true,
+    fullPage: false,
+    prepare: async (page) => {
+      await page
+        .getByText("Current members without a working card")
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "01-55-id-cards-tap-log",
+    doc: "01-membership.md",
+    line: 2444,
+    anchor: "The Tap log tab of Member ID Cards",
+    alt: "The Tap log tab of Member ID Cards: taps at the check-in station for the in-progress drill, one checked in, one already checked in, one card not active and one unknown card, with the outcome and reader filters and Export CSV",
+    route: "/members/admin/id-cards?tab=taps",
+    expect: "Unknown card",
+    fullPage: false,
+    prepare: async (page) => {
+      await page.getByText("Unknown card").first().waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "05-140-nfc-tag-register",
+    doc: "05-inventory.md",
+    line: 1870,
+    anchor: "The NFC Tag Register as a quartermaster",
+    alt: "The NFC Tag Register as a quartermaster: tags on coats, a cylinder and a shelf with what each names, its status (one Lost) and the last time it was tapped, with the kind, status and search filters and CSV",
+    route: "/inventory/admin/nfc/tags",
+    expect: "NFC Tag Register",
+    fullPage: false,
+    prepare: withInventoryNfc(async (page) => {
+      await page
+        .getByRole("checkbox", { name: /^Select tag ending / })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-141-nfc-move-tag",
+    doc: "05-inventory.md",
+    line: 1872,
+    anchor: "The Move tag dialog from the NFC Tag Register",
+    alt: "The Move tag dialog for an item tag: a search for another item and the matching items to move the tag onto, with Move tag and Cancel",
+    route: "/inventory/admin/nfc/tags",
+    expect: "A tag moves to another",
+    fullPage: false,
+    prepare: withInventoryNfc(async (page) => {
+      await page
+        .getByRole("button", { name: /^Move tag …/ })
+        .first()
+        .click({ timeout: 20_000 });
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Move tag" }).waitFor({
+        timeout: 10_000,
+      });
+      await page.waitForTimeout(800);
+      await hideScanNotice(page);
+    }),
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await disableInventoryNfc(page);
+    },
+  },
+  {
+    id: "05-142-find-lot-recall",
+    doc: "05-inventory.md",
+    line: 3196,
+    anchor: "Find a lot on the Medical Supplies Expiring tab",
+    alt: "Find a lot on the Medical Supplies Expiring tab: the lot number GZ-9910 typed, the shelf lot it found, and the Recall lot button for it",
+    route: "/medical-supplies",
+    expect: "with a lot number containing",
+    fullPage: false,
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Expiring/ })
+        .click({ timeout: 15_000 });
+      await page.getByLabel("Find a lot").fill("GZ-9910");
+      await page.getByRole("button", { name: "Find", exact: true }).click();
+      const recall = page.getByRole("button", { name: /^Recall lot GZ-9910/ });
+      await recall.waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page
+        .getByRole("region", { name: "Lot lookup" })
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-143-recall-lot-dialog",
+    doc: "05-inventory.md",
+    line: 3200,
+    anchor: "The Recall this lot dialog with a reason typed",
+    alt: "The Recall this lot dialog for Gauze lot GZ-9910, saying the units stop counting as stock and cannot be swapped onto a truck, with a reason typed and Recall lot",
+    route: "/medical-supplies",
+    expect: "stops counting as stock",
+    fullPage: false,
+    // Photographed with the reason typed and never submitted: Cancel in the
+    // cleanup, so the gauze lot the other medical shots count stays stock.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Expiring/ })
+        .click({ timeout: 15_000 });
+      await page.getByLabel("Find a lot").fill("GZ-9910");
+      await page.getByRole("button", { name: "Find", exact: true }).click();
+      await page
+        .getByRole("button", { name: /^Recall lot GZ-9910/ })
+        .click({ timeout: 15_000 });
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Reason").fill("Manufacturer notice 2026-121");
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const cancel = page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Cancel" });
+      if (await cancel.isVisible().catch(() => false)) await cancel.click();
+    },
+  },
+  {
+    id: "05-144-recalled-lots-panel",
+    doc: "05-inventory.md",
+    line: 3225,
+    anchor: "The Recalled lots panel on the Expiring tab",
+    alt: "The Recalled lots panel on the Medical Supplies Expiring tab: Normal Saline lot NS-4471, the date it was recalled, how many are still to pull and Lift recall",
+    route: "/medical-supplies",
+    expect: { selector: "section[aria-label='Recalled lots'] h3" },
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Expiring/ })
+        .click({ timeout: 15_000 });
+      const panel = page.getByRole("region", { name: "Recalled lots" });
+      await panel.getByText("NS-4471").waitFor({ timeout: 15_000 });
+      await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-label='Recalled lots']",
+  },
+  {
+    id: "05-145-medical-not-yet-counted",
+    doc: "05-inventory.md",
+    line: 3105,
+    anchor: "The Not yet counted tab of Medical Supplies",
+    alt: "The Not yet counted tab of Medical Supplies: supplies whose truck positions nobody has counted, each naming the apparatus and compartment and linking to that truck's inventory",
+    route: "/medical-supplies",
+    expect: { selector: "[aria-label^='Uncounted positions for']" },
+    fullPage: false,
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Not yet counted/ })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(1200);
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "03-129-template-reactivate",
+    doc: "03-scheduling.md",
+    line: 3135,
+    anchor:
+      "The Templates tab with an inactive template and its Reactivate button",
+    alt: "The Templates tab with the Reserve Engine — Out of Service template marked inactive and its Reactivate button",
+    route: "/scheduling/admin/planning/templates",
+    expect: "Reserve Engine — Out of Service",
+    fullPage: false,
+    prepare: async (page) => {
+      const button = page.getByRole("button", {
+        name: "Reactivate Reserve Engine — Out of Service",
+      });
+      await button.waitFor({ timeout: 20_000 });
+      await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-130-pattern-paused",
+    doc: "03-scheduling.md",
+    line: 3137,
+    anchor: "The Patterns tab with a pattern reading Paused",
+    alt: "The Patterns tab with the Summer Reserve Rotation pattern reading Paused, its Generate button disabled and Resume beside it",
+    route: "/scheduling/admin/planning/patterns",
+    expect: "Summer Reserve Rotation",
+    fullPage: false,
+    prepare: async (page) => {
+      const button = page.getByRole("button", {
+        name: "Resume Summer Reserve Rotation",
+      });
+      await button.waitFor({ timeout: 20_000 });
+      await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
     },
   },
 ];

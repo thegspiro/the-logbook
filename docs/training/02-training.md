@@ -1795,6 +1795,14 @@ place. A member taken off the roster has their record marked **Cancelled**,
 with the hours it had noted. Reopening cancels an approval link that was still
 waiting; finalizing again sends a new one.
 
+**A session built on a library course** _(2026-10-21)_. Choose **Use a course
+from the Course Library** on the first step. The **Credit Hours** field shows
+in both modes and can be edited. Left alone, it takes the course's credit
+hours, or the course's duration when the course has no credit hours, so a
+course saved with only a duration no longer gives a session worth 0 hours. A
+library session with no course chosen is refused. The review step shows times
+in your department's time zone and names the course.
+
 ### Linking a Session to What It Counts Toward
 
 What finalizing credits depends on the session's links. Set them on the create
@@ -2348,6 +2356,18 @@ A shift report moves through these stages:
 - Submitting moves the draft to approved, or to pending review.
 - A draft credits no program progress. Progress is credited when it is
   submitted.
+- **Status moves only through review** _(2026-10-24)_. Submitting a draft is
+  the only way its filing officer changes its status. **Require report review
+  before trainee visibility** decides whether it goes to pending review
+  or straight to approved. A filing officer cannot approve their own report,
+  clear a reviewer's flag, or send an approved report round again. Content
+  edits still work as before.
+- **A report signs its skills off once.** Approving the same report again does
+  not add another sign-off or move the trainee up another competency level.
+  Competency moves only with a new sign-off from a new report.
+- If the officer who filed a draft has been permanently deleted, someone who
+  can **Manage training records** can complete it. **Complete Draft** appears
+  only on drafts you are allowed to complete.
 
 **For reviewers:**
 
