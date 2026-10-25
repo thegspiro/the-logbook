@@ -32,6 +32,9 @@ that silently stops being written is a data-loss defect no endpoint test sees.
       the `firefighter` rank is a permission every volunteer holds.
 - [ ] Self-scoped routes (`/mine`, `/me`, inbox) filter on the caller's own id,
       not merely the org.
+      `tests/permissionless_route_baseline.txt` lists every route gated only by
+      sign-in. Read the feature's entries there for this item: each one is
+      open to every member, so its handler alone decides what they see.
 - [ ] Separation of duties: the approver cannot be the requester; the reviewer
       cannot be the subject.
 
