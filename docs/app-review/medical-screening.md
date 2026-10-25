@@ -68,7 +68,11 @@ used `days=15`, comfortably inside the window, so neither edge had a test.
 
 ## Pass 5 flagged
 
-### MS2-7 — LOW — The same two surfaces also disagree about a waived screening — 🚩 FLAGGED
+### MS2-7 — LOW — The same two surfaces also disagree about a waived screening — ✅ FIXED 2026-10-25
+
+Owner decision: list it. `get_expiring_soon` and `_grade` now read one
+`_SATISFYING_STATUSES`, the list returns each row's `status`, and the
+Compliance tab badges a waiver. Original finding below.
 
 The second divergence between `get_compliance_status` and `get_expiring_soon`,
 found while fixing the first. The compliance path treats
