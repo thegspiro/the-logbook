@@ -31,10 +31,14 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.events import check_in_external_attendee
+from app.api.v1.endpoints.membership_pipeline import (
+    advance_prospect as advance_prospect_endpoint,
+)
 from app.core.config import settings
 from app.models.event import (
     CheckInWindowType,
@@ -1618,6 +1622,70 @@ class TestAttendanceSettlesWithoutAFinalize:
 
         assert result["advanced"] == 0
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestTheRefusalReachesTheCoordinator:
+    """The /advance endpoint passes these refusals through safe_error_detail,
+    which swaps any message over 300 characters for a generic "unexpected
+    error". Both attendance refusals once ran past that cap, so a coordinator
+    clicking Advance saw only "An unexpected error occurred" and no remedy.
+    These go through the endpoint so the cap is exercised, not just the
+    service's wording."""
+
+    @staticmethod
+    async def _advance_through_endpoint(
+        db_session: AsyncSession, org: str, prospect_id: str
+    ) -> HTTPException:
+        caller = SimpleNamespace(id=None, organization_id=org)
+        with pytest.raises(HTTPException) as refusal:
+            await advance_prospect_endpoint(
+                prospect_id=uuid.UUID(str(prospect_id)),
+                data=None,
+                db=db_session,
+                current_user=caller,
+            )
+        return refusal.value
+
+    async def test_no_attendance_refusal_is_shown_in_full(
+        self, db_session: AsyncSession, org
+    ):
+        _svc, prospect, _gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={"linked_event_type": "business_meeting"},
+        )
+
+        error = await self._advance_through_endpoint(db_session, org, prospect.id)
+
+        assert error.status_code == 409
+        assert error.detail.startswith("No attendance has been recorded")
+        assert "Check them in on the event" in error.detail
+
+    async def test_awaiting_finalization_refusal_is_shown_in_full(
+        self, db_session: AsyncSession, org
+    ):
+        """With the longest title an event can carry, so a long name cannot
+        push the message back over the cap."""
+        now = datetime.now(timezone.utc)
+        yesterday = _make_event(
+            org,
+            title="R" * 200,
+            start_datetime=now - timedelta(days=1, hours=2),
+            end_datetime=now - timedelta(days=1),
+        )
+        _svc, prospect, _gate = (
+            await TestAttendanceSettlesWithoutAFinalize._parked_with_attendance(
+                db_session, org, yesterday
+            )
+        )
+
+        error = await self._advance_through_endpoint(db_session, org, prospect.id)
+
+        assert error.status_code == 409
+        assert "has not been finalized" in error.detail
+        assert "End Event" in error.detail
+        assert "R" * 49 + "…" in error.detail
 
 
 class TestLegacyActionStagesKeepTheirBehaviour:
