@@ -258,6 +258,34 @@ Screenshots to create or replace are in
 
 ---
 
+# October 25, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
+**Before upgrading,** read the `docs/UPGRADING.md` entries for embedded forms
+(host installs need nginx's `auth_request`) and medical screening (records with
+no expiration date now fall due by frequency). Screenshots to create or replace
+are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been
+re-captured.
+
+| Topic                                                                                                    | Now in                                                                                                   |
+| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Recruitment-event guest sign-in by email; staff **Add guest** and **Sign in**                            | [04 — Events & Meetings](./04-events-meetings.md) (Recruitment events: sign-in by email; Guest Check-In) |
+| Events Administration area navigation                                                                    | [04 — Events & Meetings](./04-events-meetings.md)                                                        |
+| Embedding a form on the department's website; notification rules edit and delete                         | [07 — Documents, Forms & Communications](./07-documents-forms.md)                                        |
+| Applicant status page **Your next step**; Advance refusal wording; automated-email Next Meeting fallback | [15 — Prospective Members](./15-prospective-members.md)                                                  |
+| Grant opportunities edit, retire, reinstate                                                              | [12 — Grants & Fundraising](./12-grants-fundraising.md)                                                  |
+| Screening records due by frequency; lapsing waivers listed                                               | [13 — Medical Screening](./13-medical-screening.md)                                                      |
+| Facilities maintenance and inspections paged and searched in full                                        | [06 — Apparatus & Facilities](./06-apparatus-facilities.md)                                              |
+| Repeat dues waiver refused                                                                               | [11 — Finance](./11-finance.md)                                                                          |
+| Waiving a paid store order refused                                                                       | [18 — Storefront](./18-storefront.md)                                                                    |
+| Gmail notes; daily sending limits; compliance report "not emailed" message                               | [08 — Admin & Reports](./08-admin-reports.md), [14 — Elections](./14-elections.md)                       |
+| Scheduling settings layout; day panel below the calendar under 1280px                                    | [03 — Scheduling](./03-scheduling.md)                                                                    |
+| **Print Labels** on the Items list                                                                       | [05 — Inventory](./05-inventory.md)                                                                      |
+| Landscape phone side menu scrolls                                                                        | [10 — Mobile & PWA](./10-mobile-pwa.md)                                                                  |
+
+---
+
 # October 24–25, 2026 workflow updates
 
 Index for the latest window. Audit:

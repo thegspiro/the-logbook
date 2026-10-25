@@ -221,6 +221,17 @@ Required, and the button is disabled with an explanation. To bypass one, untick
 that everyone can see, not a quiet exception for one applicant. Stages are
 Required by default.
 
+**The email's Next Meeting stays current.** On an Automated Email stage, **Next
+Meeting Details** with **Pull from upcoming event** saves the event that is next
+when you set the stage up. The email uses that event while it is still
+upcoming. Once it has passed or been cancelled, the email names the next event
+of the same type instead. The preview under the dropdown shows the event the
+email will use. When the saved one has passed, it says so: "The saved event has
+passed or was cancelled. The email will include the next one instead". Drafts
+are never named. If no event of the type is coming up, the email goes out with
+only your **Additional details**, and the applicant's activity log records that
+the meeting was missing.
+
 ### Using Cal.com and Documenso in Stages
 
 If your department has connected the **Cal.com** or **Documenso**
@@ -980,6 +991,28 @@ Applicants get a private link to check their application without signing in.
   it reads **Status Unavailable** with **Try again**. Only a link that really
   matches no application reads **Application Not Found**.
 
+### The next meeting to attend
+
+When the pipeline has a Meeting stage with an **Auto-Link Event Type**, the page
+shows a **Your next step** card naming the meeting the applicant should attend.
+It gives the title, the date and time in the department's time zone (labelled,
+such as "7:00 PM EST") and the location with its street address. **Add to
+calendar** downloads the meeting as a calendar file. **Get directions**, shown when
+the meeting has a location, opens it in Google Maps.
+
+- The card shows from the day they apply, and goes once the meeting stage is
+  behind them.
+- If the applicant is already linked to an upcoming event, that is the one
+  shown. Otherwise it is the next event of the stage's type. Cancelled and draft
+  events are never shown.
+- If the meeting stage is hidden from applicants, there is no card. If the
+  pipeline hides upcoming stages, the card waits until the applicant reaches the
+  meeting stage.
+- **A missed meeting is replaced.** As soon as it ends, the card names the next
+  one. Once the missed meeting's attendance is settled with no check-in, a
+  nightly job records the miss in the applicant's activity log and links them to
+  the next event. A check-in at the linked event stops this.
+
 ### Turning the page on for one applicant
 
 The pipeline switch decides for everyone by default. An **Enable Status Page**
@@ -1186,6 +1219,12 @@ work differently from what they may say.
 - **Meeting stages wait for the event to be finalized**, not for the door
   sign-in, and the stage decides for every button — single, drag and bulk
   alike.
+- **A refused Advance on a meeting stage says why.** At one time a single
+  **Advance** showed only "An unexpected error occurred" there. It now names
+  the stage, the event if there is one, and what to do.
+- **A stage email's Next Meeting no longer drops out.** At one time, once the
+  event saved on the stage had passed, every later email left the section out.
+  It now names the next event of the same type.
 - **Older audit entries may show advances that did not happen.** At one time an
   advance with nowhere to go was still logged. When reviewing old membership
   decisions, check the applicant's stage history, not the audit entry alone.

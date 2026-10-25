@@ -1,5 +1,27 @@
 # Screenshot currency
 
+## Queued by the October 25 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
+Nothing was captured by this pass. The Events Administration, Scheduling
+settings and Inventory Items shots were queued by their own PRs (rows dated
+2026-10-25 below).
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 04 | `04-32-guest-sign-in-form`, `04-33-guest-sign-in-confirmation`: the guest page at a recruitment event now asks for an email, then "Is this you, Jane S.?"; the confirmation can read "You're already checked in" | Replace (manifest updated by #3693) |
+| 04 | Event page **Guests** card with **Add guest** and a row's **Sign in**; the **Add guest** dialog | Create |
+| 07 | `07-05-form-sharing`: Share window with **Allow embedding on your website** and the **Embed code** | Replace |
+| 07 | **Settings → Forms** with a website listed; a form embedded on a host page | Create |
+| 07 | `07-08-notification-rules`: edit and delete icons on each row; the **Edit Notification Rule** dialog with its trigger-change warning; **Delete this rule?** | Replace / create |
+| 15 | `15-13-application-status` with the **Your next step** card; `15-28-status-page-withdraw` (card now above the withdraw area) | Replace / re-check |
+| 15 | Automated Email stage → **Next Meeting Details** with the preview heading ("The saved event has passed …") | Create |
+| 12 | `12-03-opportunities`: edit and retire icons, **Show retired**; a **Retired** card; **Edit Grant Opportunity** | Replace / create |
+| 13 | `13-05-add-requirement` (frequency note reworded); `13-06-expiring-screenings` ("Due … (by frequency)", a **Waived** row) | Replace / re-check |
+| 06 | `06-13-facility-maintenance`, `06-14-facility-inspections` (page controls past 50 records) | Re-check |
+| 08 | `08-38-email-configuration` with Gmail selected (the "Before you rely on it:" notes) | Re-check / create |
+| 03 | `03-02-shift-detail-panel`, `19-34-schedule-board-desktop`: under 1280px the day panel is below the calendar | Re-check |
+
 ## Queued by the October 24 – 25 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).

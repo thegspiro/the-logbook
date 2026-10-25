@@ -593,6 +593,13 @@ Two things report the result:
 - A **banner** stays on the page and names each skipped member with the
   reason. That is the part you act on.
 
+**"Failed" can mean the email account's daily limit** _(2026-10-25)_. Gmail and
+Microsoft 365 cap how many messages one account sends a day. When the
+department's account reaches it partway through, the send stops there and
+counts every remaining voter as failed, rather than trying each one in turn.
+Send again once the limit resets; see
+[Admin & Reports → Gmail and Microsoft 365](./08-admin-reports.md#gmail-and-microsoft-365).
+
 After a send, the button reads **Resend Ballot Emails** and the page shows
 **Ballots sent** with the time.
 

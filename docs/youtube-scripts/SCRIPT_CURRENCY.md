@@ -1,5 +1,20 @@
 # Script currency
 
+## Flagged by the 2026-10-25 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+| Script                              | Beat                                         | Was                                          | Now                                                                                                            |
+| ----------------------------------- | -------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Any events beat**, **04** (chief) | Guest sign-in at a recruitment event         | Typed name and contact details               | Applicant enters their email and confirms; others are sent to staff, who use **Add guest** on the Guests card  |
+| **Any forms beat**                  | Sharing a form                               | Link and QR code only                        | Also **Allow embedding** and **Embed code**, once the website is listed under **Settings → Forms**             |
+| **Any notifications beat**          | Rules list                                   | Create and switch only                       | Rules can be edited and deleted; a warning says what changes                                                   |
+| **Any prospective-members beat**    | Applicant status page; automated-email stage | No meeting shown; email used the saved event | **Your next step** card with Add to calendar; the email falls back to the next event and the editor says which |
+| **Any medical-screening beat**      | Record with no expiration date               | Compliant for good                           | Falls due by the requirement's frequency; shown as "Due … (by frequency)"                                      |
+| **Any grants beat**                 | Opportunities library                        | Add only                                     | Edit, retire, **Show retired**, **Reinstate**                                                                  |
+| **Any scheduling beat on a tablet** | Day panel                                    | Beside the calendar                          | Below the calendar under 1280px                                                                                |
+
 ## Flagged by the 2026-10-24 → 10-25 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).

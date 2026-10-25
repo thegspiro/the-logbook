@@ -623,6 +623,21 @@ Each rule has its own on/off switch. A switched-off rule keeps its settings.
 
 ![Create Notification Rule named Gear request notices with the trigger Equipment Request Update, and the note under it about switching off every rule for that trigger](./images/07-30-rule-equipment-request.png)
 
+### Changing or deleting a rule _(2026-10-25)_
+
+Members who manage notifications see an edit (pencil) and a delete (bin) icon on
+each rule's row.
+
+- **Edit** opens **Edit Notification Rule** with the same fields. Select
+  **Save Changes**. If changing the **Trigger Event** would switch a
+  notification on or off for the whole department — the rule stops counting
+  toward its old trigger and starts counting toward the new one — a warning in
+  the window says which, before you save.
+- **Delete** asks **Delete this rule?**. When the rule is the one keeping a
+  notification switched off, or the last one switched on for its trigger, the
+  window says what deleting it changes and suggests editing or switching the
+  rule instead. Select **Delete rule**, or **Keep it** to leave it as it is.
+
 ### Send Log
 
 The **Send Log** tab shows **your own** delivery history — the email and in-app
