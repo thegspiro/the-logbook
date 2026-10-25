@@ -558,7 +558,6 @@ NOT_COLUMN_BACKED = {
         "SERVICE_VALIDATED",
         "MembershipIdSettings._pattern_is_usable refuses a number whose formatted id overflows the 50-character column",
     ),
-    "app.api.v1.endpoints.elections:ElectionSettingsUpdate.default_quorum_value": _JSON,
     "app.schemas.course_cohort:CohortShiftRequest.days": (
         "ARITHMETIC",
         "feeds timedelta(days=...); the right limit is how far a class may be shifted, a business rule",
@@ -623,6 +622,9 @@ _RANGES = {
 }
 
 DOMAIN_BOUNDED = {
+    "app.api.v1.endpoints.elections:ElectionSettingsUpdate.default_quorum_value": _RANGES[
+        "pos_i32"
+    ],
     "app.schemas.compliance_config:ComplianceConfigCreate.notify_days_before_deadline": _RANGES[
         "lead_days"
     ],
