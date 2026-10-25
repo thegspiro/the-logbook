@@ -3381,16 +3381,19 @@ When a shift has fewer people than it needs:
 
 **Who can do this:** officers who can manage schedules.
 
-Open **Administration → Scheduling Admin**, then any settings card, or the
-**Settings** link in the breadcrumb trail. Scheduling Settings looks like
-Organization Settings: a list of sections down the left on a computer, and a
-tab strip you can scroll across the top on a phone.
+Open **Administration → Scheduling Admin** and choose the **Settings** area
+card. Its strip lists **General**, **Apparatus Defaults**, **Platoon Rosters**
+(only once platoon scheduling is on), **Outside Apparatus** and
+**Notifications**. The other two settings sections sit with the work they
+govern: **Eligibility Rules** under **People & Eligibility**, and **Shift
+Report Options** under **Reports**. Each opens under the hub's header, with no
+second list of sections below it _(2026-10-25)_.
 
 | Section               | What it holds                                                                                                                         |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | **General**           | Platoon switch, overtime advisory, automatic shift generation, close-out rules, the EVOC switch, department defaults and seat names  |
 | **Apparatus**         | Default seats and minimum crew for each vehicle type and resource type                                                                 |
-| **Platoons**          | Platoon rosters and assignments. Only shown once platoon scheduling is on                                                              |
+| **Platoon Rosters**   | Platoon rosters and assignments. Only shown once platoon scheduling is on                                                              |
 | **Eligibility**       | Who may sign themselves up for a shift, and how late                                                                                   |
 | **Notifications**     | Shift reminders and alerts                                                                                                             |
 | **Shift Reports**     | End-of-shift reporting options                                                                                                         |
@@ -3399,9 +3402,9 @@ tab strip you can scroll across the top on a phone.
 Equipment-check checklists and their timing are not here. They are managed in
 **Inventory Admin**, from the checklist console.
 
-![Scheduling settings on desktop, with the section list beside the selected section's card](./images/03-47-settings-desktop.png)
+![Scheduling settings on desktop: the Settings area chosen, its page strip, and the selected section's card beneath](./images/03-47-settings-desktop.png)
 
-![Scheduling settings at phone width, the section list replaced by a scrollable tab strip](./images/03-48-settings-phone.png)
+![Scheduling settings at phone width: the area cards and page strip scroll sideways above the selected section's card](./images/03-48-settings-phone.png)
 
 **Each section has its own web address.** You can bookmark it, reload it, and
 use your browser's **Back** button to return to the section you came from.
@@ -3506,7 +3509,7 @@ pages, and a line naming the page you are on and what it is for.
 | **Close-Out & History**  | Shift Close-Out, Shift History Import                                     |
 | **People & Eligibility** | Who Can Fill What, Platoons, Eligibility Rules                            |
 | **Reports**              | Scheduling Reports, Shift Report Options                                  |
-| **Settings**             | General, Apparatus Defaults, Outside Apparatus, Notifications             |
+| **Settings**             | General, Apparatus Defaults, Platoon Rosters (once platoons are on), Outside Apparatus, Notifications |
 
 Every page in the strip opens under that same header, so the area cards are
 always there to move to another page. Selecting an area card opens its first
@@ -3591,8 +3594,8 @@ Platoons are off unless you turn them on.
 
 1. Open **Scheduling Admin → Settings → General**.
 2. Turn on **Platoon Scheduling**.
-3. The **Platoons** settings section appears, and platoon details show across
-   scheduling.
+3. **Platoon Rosters** appears in the **Settings** strip, and platoon details
+   show across scheduling.
 
 ![Scheduling settings with the platoons toggle and related options](./images/03-15-scheduling-settings.png)
 
