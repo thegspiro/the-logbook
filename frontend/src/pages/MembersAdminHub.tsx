@@ -3,7 +3,7 @@
  *
  * Consolidated admin page for member management, rendered in the shared
  * administration frame: header, four headline metrics, the "Needs attention"
- * queue, then the area cards and page strip (`MembersAdminNav`) Training,
+ * queue, then the area cards and page strip (`AdminHubAreaNav`) Training,
  * Events, Inventory and Scheduling Administration also draw, and the page's
  * own body.
  *
@@ -19,7 +19,7 @@ import { CreditCard, ScanLine, Upload, UserPlus } from 'lucide-react';
 import { AdminHubFrame, AdminMetricsSettings } from '../components/admin';
 import type { AdminHubAction } from '../components/admin';
 import { attentionCountsForTabs } from '../components/admin/attentionCounts';
-import MembersAdminNav from '../components/members/MembersAdminNav';
+import { AdminHubAreaNav } from '../components/admin/AdminHubAreaNav';
 import type { AdminHubSummary } from '../types/adminHub';
 import { useAuthStore } from '../stores/authStore';
 import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
@@ -179,13 +179,18 @@ export const MembersAdminHub: React.FC = () => {
           : undefined
       }
       nav={
-        <MembersAdminNav
+        <AdminHubAreaNav
           areas={areas}
           activeArea={activeArea}
           activeTab={activeTab}
           onAreaChange={handleAreaChange}
           onTabChange={handleTabChange}
           attentionCounts={attentionCounts}
+          hintOf={(destination) => destination.description}
+          label="Members admin areas"
+          idPrefix={MEMBERS_ADMIN_AREA_ID_PREFIX}
+          tabId={(_area, tab) => membersAdminTabId(tab)}
+          tabPanelId={(_area, tab) => membersAdminTabPanelId(tab)}
         />
       }
       refreshToken={frameToken}

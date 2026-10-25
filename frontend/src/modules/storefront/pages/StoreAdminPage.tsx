@@ -5,7 +5,7 @@
  * uniforms the inventory module tracks, so it lives at
  * /inventory/admin/store rather than beside it. Its pages (overview, order
  * windows, catalog, orders, inbound payments, settings) are grouped under area
- * cards by `StoreAdminNav`, the two-level navigation every administration hub
+ * cards by `AdminHubAreaNav`, the two-level navigation every administration hub
  * draws.
  *
  * Renders through `AdminHubFrame` like every other administration page, which
@@ -32,7 +32,7 @@ import { StoreSettingsTab } from '../components/StoreSettingsTab';
 import { StoreWindowsTab } from '../components/StoreWindowsTab';
 import { attentionCountsForTabs } from '../../../components/admin/attentionCounts';
 import type { AdminHubSummary } from '../../../types/adminHub';
-import { StoreAdminNav } from '../components/StoreAdminNav';
+import { AdminHubAreaNav } from '../../../components/admin/AdminHubAreaNav';
 import {
   STORE_ADMIN_AREA_ID_PREFIX,
   STORE_ADMIN_AREAS,
@@ -561,13 +561,18 @@ const StoreAdminPage: React.FC = () => {
         </div>
       }
       nav={
-        <StoreAdminNav
+        <AdminHubAreaNav
           areas={STORE_ADMIN_AREAS}
           activeArea={activeArea}
           activeTab={activeTab}
           onAreaChange={handleAreaChange}
           onTabChange={setActiveTab}
           attentionCounts={attentionCounts}
+          hintOf={(destination) => destination.description}
+          label="Store admin areas"
+          idPrefix={STORE_ADMIN_AREA_ID_PREFIX}
+          tabId={(_area, tab) => storeAdminTabId(tab)}
+          tabPanelId={(_area, tab) => storeAdminTabPanelId(tab)}
         />
       }
       refreshToken={frameToken}

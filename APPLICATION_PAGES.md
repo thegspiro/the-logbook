@@ -176,7 +176,7 @@ Complete reference of all pages in the application, organized by module.
 
 ### Members Admin Hub (`/members/admin`)
 
-Requires `members.manage` permission. Drawn with the same two-level navigation as Training, Events, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (MembersAdminNav, with the areas declared in membersAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
+Requires `members.manage` permission. Drawn with the same two-level navigation as Training, Events, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (the shared AdminHubAreaNav, with the areas declared in membersAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
 
 | Area         | `?tab=`          | Label                 | Additional Permission |
 | ------------ | ---------------- | --------------------- | --------------------- |
@@ -333,7 +333,7 @@ Set per event on **Edit Event → Check-In Settings**. Both default to off.
 
 ### Events Admin Hub (`/events/admin`)
 
-Requires `events.manage` permission. Drawn with the same two-level navigation as Training, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (EventsAdminNav, with the areas declared in eventsAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
+Requires `events.manage` permission. Drawn with the same two-level navigation as Training, Scheduling and Inventory Administration: area cards above a strip of the chosen area's pages (the shared AdminHubAreaNav, with the areas declared in eventsAdminTabs). The URL is `?tab=<page>`; the area is derived from the page, so a link never names it.
 
 | Area               | `?tab=`         | Label                |
 | ------------------ | --------------- | -------------------- |
@@ -1390,7 +1390,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/inventory/admin/store` | Store Administration                  | `storefront.manage` |
 | `/store/admin`           | Redirects to `/inventory/admin/store` | —                   |
 
-Store Administration is drawn with the same two-level navigation as the other administration hubs (StoreAdminNav, with the areas declared in storeAdminTabs). The URL is `?tab=<page>`, with none for Overview; the area is derived from the page, so a link never names it.
+Store Administration is drawn with the same two-level navigation as the other administration hubs (the shared AdminHubAreaNav, with the areas declared in storeAdminTabs). The URL is `?tab=<page>`, with none for Overview; the area is derived from the page, so a link never names it.
 
 | Area              | `?tab=`    | Label         |
 | ----------------- | ---------- | ------------- |
