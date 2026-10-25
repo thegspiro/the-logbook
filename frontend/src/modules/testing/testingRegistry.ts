@@ -147,6 +147,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         isPublic: true,
       },
       {
+        path: '/event-guest/:token',
+        label: 'Guest check-in (event QR code)',
+        note: "Reached from an event's own guest QR code; only works while the event allows guests",
+        isPublic: true,
+      },
+      {
         path: '/finance/approvals/:token',
         label: 'External approver page',
         note: 'Token-authenticated, for a non-member approver',

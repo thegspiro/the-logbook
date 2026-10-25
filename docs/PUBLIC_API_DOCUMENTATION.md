@@ -529,6 +529,32 @@ POST /api/public/v1/display/{display_code}/events/{event_id}/guest-confirm
 They resolve only when the event has **opted in** (`allow_guest_check_in`) and is
 **held in the room** the display code belongs to. Anything else is a `404`.
 
+**Through the event's own guest QR code** _(2026-10-25)_. An event held where
+there is no room kiosk — an outside venue, a parking-lot open house — has a
+second entrance to the same four endpoints, addressed by a token instead of a
+display code and event id:
+
+```
+GET  /api/public/v1/event-guest/{guest_token}/guest
+POST /api/public/v1/event-guest/{guest_token}/guest-check-in
+POST /api/public/v1/event-guest/{guest_token}/guest-lookup
+POST /api/public/v1/event-guest/{guest_token}/guest-confirm
+```
+
+- The token is 43 URL-safe characters and names exactly one event; the
+  organization is derived from that event. A malformed token is a `422`; an
+  unknown or rotated one, or one whose event is cancelled, unpublished or has
+  guest check-in switched off, is a `404`.
+- An `events.manage` holder issues it from the event's QR code or detail page
+  (`GET`/`POST /api/v1/events/{event_id}/guest-check-in-link`) and resets it
+  with `POST …/guest-check-in-link/rotate`, which stops the old code at once.
+  It is never included in the event detail any member can read.
+- Request and response bodies, the check-in window, the per-IP rate limits and
+  the per-event daily ceilings are the kiosk endpoints' own — the ceilings are
+  shared between the two entrances. A `guest-lookup` confirm token works only
+  through the entrance that issued it.
+- Sign-ins are recorded with `source: "event_qr"` rather than `"kiosk_qr"`.
+
 **Which sign-in an event uses** depends on `guest_check_in_creates_prospect`
 (reported as `collects_prospect_details`):
 

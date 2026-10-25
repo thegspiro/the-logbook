@@ -294,6 +294,38 @@ describe('eventService', () => {
     });
   });
 
+  // --- guest check-in link ---
+  describe('guest check-in link', () => {
+    const link = { event_id: 'e1', allow_guest_check_in: true, guest_token: 't'.repeat(43) };
+
+    it('reads the token past the GET cache, since it is a credential that can be reset', async () => {
+      mockGet.mockResolvedValueOnce({ data: link });
+
+      const result = await eventService.getGuestCheckInLink('e1');
+
+      expect(mockGet).toHaveBeenCalledWith('/events/e1/guest-check-in-link', { _skipCache: true });
+      expect(result).toEqual(link);
+    });
+
+    it('POSTs to issue the code', async () => {
+      mockPost.mockResolvedValueOnce({ data: link });
+
+      const result = await eventService.issueGuestCheckInLink('e1');
+
+      expect(mockPost).toHaveBeenCalledWith('/events/e1/guest-check-in-link');
+      expect(result).toEqual(link);
+    });
+
+    it('POSTs to rotate the code', async () => {
+      mockPost.mockResolvedValueOnce({ data: link });
+
+      const result = await eventService.rotateGuestCheckInLink('e1');
+
+      expect(mockPost).toHaveBeenCalledWith('/events/e1/guest-check-in-link/rotate');
+      expect(result).toEqual(link);
+    });
+  });
+
   // --- getCheckInMonitoring ---
   describe('getCheckInMonitoring', () => {
     it('should GET /events/:id/check-in-monitoring', async () => {

@@ -79,6 +79,7 @@ from app.schemas.event import (
     EventUpdate,
     ExternalAttendeeCheckInResponse,
     FinalizeAttendanceResponse,
+    GuestCheckInLinkResponse,
     ManagerAddAttendee,
     QRCheckInData,
     RecordActualTimes,
@@ -2724,6 +2725,119 @@ async def get_qr_check_in_data(
         raise _event_error(error or "An unexpected error occurred")
 
     return QRCheckInData(**data)
+
+
+async def _event_for_guest_link(
+    db: AsyncSession, event_id: UUID, organization_id: str
+) -> Event:
+    event = (
+        await db.execute(
+            select(Event).where(
+                Event.id == str(event_id),
+                Event.organization_id == organization_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
+
+
+def _guest_link_response(event: Event) -> GuestCheckInLinkResponse:
+    return GuestCheckInLinkResponse(
+        event_id=str(event.id),
+        allow_guest_check_in=bool(event.allow_guest_check_in),
+        guest_token=event.guest_check_in_token,
+    )
+
+
+@router.get("/{event_id}/guest-check-in-link", response_model=GuestCheckInLinkResponse)
+async def get_guest_check_in_link(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get the event's own guest QR code, if one has been issued.
+
+    Gated on events.manage rather than open to every member like the member
+    QR code: the token is a credential for an unauthenticated write, and the
+    member QR page is reachable by anyone signed in.
+    """
+    event = await _event_for_guest_link(db, event_id, current_user.organization_id)
+    return _guest_link_response(event)
+
+
+@router.post("/{event_id}/guest-check-in-link", response_model=GuestCheckInLinkResponse)
+async def issue_guest_check_in_link(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Issue the event's guest QR code, or return the one it already has.
+
+    Idempotent, so a code already printed keeps working. Refused with a 400
+    while guest check-in is off for the event.
+    """
+    try:
+        event, changed = await GuestCheckInService(db).issue_link_token(
+            str(event_id), current_user.organization_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if changed:
+        await log_audit_event(
+            db=db,
+            event_type="event_guest_link_issued",
+            event_category="events",
+            severity="info",
+            event_data={"event_id": str(event.id)},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=current_user.organization_id,
+        )
+    return _guest_link_response(event)
+
+
+@router.post(
+    "/{event_id}/guest-check-in-link/rotate",
+    response_model=GuestCheckInLinkResponse,
+)
+async def rotate_guest_check_in_link(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Replace the event's guest QR code; the previous one stops working at once.
+
+    The way to revoke a code that was printed on a flyer or shared too widely.
+    Allowed while guest check-in is off, since revoking is always safe.
+    """
+    try:
+        event, _changed = await GuestCheckInService(db).issue_link_token(
+            str(event_id), current_user.organization_id, rotate=True
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    await log_audit_event(
+        db=db,
+        event_type="event_guest_link_rotated",
+        event_category="events",
+        severity="warning",
+        event_data={"event_id": str(event.id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=current_user.organization_id,
+    )
+    return _guest_link_response(event)
 
 
 @router.post("/{event_id}/self-check-in", response_model=RSVPResponse)

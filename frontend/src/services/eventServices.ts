@@ -322,6 +322,35 @@ export const eventService = {
   },
 
   /**
+   * The event's own guest QR code token, or null when none is issued yet
+   * (events.manage). `_skipCache` because the token is a credential: a stale
+   * copy would keep showing a code for up to 90s after a manager reset it.
+   */
+  async getGuestCheckInLink(eventId: string): Promise<import('../types/event').GuestCheckInLink> {
+    const response = await api.get<import('../types/event').GuestCheckInLink>(
+      `/events/${eventId}/guest-check-in-link`,
+      { _skipCache: true }
+    );
+    return response.data;
+  },
+
+  /** Issue the event's guest QR code, or return the one it has (idempotent). */
+  async issueGuestCheckInLink(eventId: string): Promise<import('../types/event').GuestCheckInLink> {
+    const response = await api.post<import('../types/event').GuestCheckInLink>(
+      `/events/${eventId}/guest-check-in-link`
+    );
+    return response.data;
+  },
+
+  /** Replace the event's guest QR code; the previous one stops working at once. */
+  async rotateGuestCheckInLink(eventId: string): Promise<import('../types/event').GuestCheckInLink> {
+    const response = await api.post<import('../types/event').GuestCheckInLink>(
+      `/events/${eventId}/guest-check-in-link/rotate`
+    );
+    return response.data;
+  },
+
+  /**
    * Check in to or out of an event (self-check-in/out via QR code)
    */
   async selfCheckIn(

@@ -449,6 +449,9 @@ describe('sanitizePath', () => {
       '/api/public/v1/display/A1B2C3D4/events/evt-1/guest-check-in',
       '/api/public/v1/display/[REDACTED]/events/evt-1/guest-check-in',
     ],
+    // An event's own guest QR code token: the page and the public API.
+    ['/event-guest/guest-secret', '/event-guest/[REDACTED]'],
+    ['/api/public/v1/event-guest/guest-secret/guest-check-in', '/api/public/v1/event-guest/[REDACTED]/guest-check-in'],
   ])('redacts tokenized path %s', (path, expected) => {
     expect(sanitizePath(path)).toBe(expected);
   });

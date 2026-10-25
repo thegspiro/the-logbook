@@ -534,6 +534,16 @@ export interface QRCheckInData {
   user_checked_out_at?: string | null | undefined;
 }
 
+/**
+ * An event's own guest QR code, returned only to events.manage holders.
+ * `guest_token` is a credential for the public guest sign-in page.
+ */
+export interface GuestCheckInLink {
+  event_id: string;
+  allow_guest_check_in: boolean;
+  guest_token: string | null;
+}
+
 /** Public event detail shown on the unauthenticated guest sign-in page. */
 export interface GuestCheckInEventInfo {
   event_id: string;

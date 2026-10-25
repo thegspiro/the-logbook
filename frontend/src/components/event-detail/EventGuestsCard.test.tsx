@@ -60,6 +60,14 @@ describe('EventGuestsCard', () => {
     expect(screen.getByText('Not signed in')).toBeInTheDocument();
   });
 
+  it("says a guest signed in with the event's own guest QR code", async () => {
+    mockGetExternalAttendees.mockResolvedValue([guest({ source: 'event_qr' })]);
+    render(<EventGuestsCard eventId="ev-1" canManage allowsGuestCheckIn />);
+
+    expect(await screen.findByText("Signed in with the event's guest QR code")).toBeInTheDocument();
+    expect(screen.queryByText('Signed in at the kiosk')).not.toBeInTheDocument();
+  });
+
   it('asks for nothing and renders nothing without events.manage', () => {
     const { container } = render(<EventGuestsCard eventId="ev-1" canManage={false} allowsGuestCheckIn />);
 

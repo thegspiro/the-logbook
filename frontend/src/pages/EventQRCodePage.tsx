@@ -12,6 +12,7 @@ import { NfcTapHint } from '../components/nfc/NfcTapHint';
 import { useAuthStore } from '../stores/authStore';
 import { buildEventCheckInUrl } from '../constants/nfc';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
+import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 
 /**
  * Event QR Code Page
@@ -20,7 +21,12 @@ import { EventsPageHeader } from '../components/events/EventsPageHeader';
  * within a specific time window (1 hour before event start until event end).
  *
  * Any member can access this page to display the QR code at the event venue.
+ * An events.manage holder also sees the event's guest QR code, for visitors who
+ * are not members (see GuestCheckInQRCard).
  */
+
+/** Which code a Print button asked for; the other one is left off the sheet. */
+type PrintTarget = 'member' | 'guest';
 const EventQRCodePage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
   // Any member may open this page; writing a tag for the event is the
@@ -31,6 +37,7 @@ const EventQRCodePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qrData, setQrData] = useState<QRCheckInData | null>(null);
+  const [printTarget, setPrintTarget] = useState<PrintTarget | null>(null);
 
   // Prefer the organization timezone from the API response so times display
   // correctly even when viewed on a kiosk/shared device whose system clock
@@ -71,6 +78,14 @@ const EventQRCodePage: React.FC = () => {
     }, 30000);
     return () => clearInterval(interval);
   }, [eventId, fetchQRData]);
+
+  // Printing waits for the render that hides the other code, so a sheet taped
+  // up at the door holds only the code its readers are meant to scan.
+  useEffect(() => {
+    if (!printTarget) return;
+    window.print();
+    setPrintTarget(null);
+  }, [printTarget]);
 
   if (loading) {
     return (
@@ -158,7 +173,10 @@ const EventQRCodePage: React.FC = () => {
         </div>
 
         {/* QR Code Section */}
-        <div className="bg-theme-surface rounded-lg p-8 shadow-md backdrop-blur-xs">
+        <div
+          className={`bg-theme-surface rounded-lg p-8 shadow-md backdrop-blur-xs ${printTarget === 'guest' ? 'print:hidden' : ''}`}
+          data-testid="member-qr-section"
+        >
           {/* can_check_in, not is_valid: a Flexible/Window event admits a tap up
             to an hour before its official window with a notice, so a code
             withheld on is_valid alone would be withheld while the backend was
@@ -275,9 +293,24 @@ const EventQRCodePage: React.FC = () => {
         {/* Print Button */}
         {qrData.can_check_in && (
           <div className="mt-6 text-center">
-            <button onClick={() => window.print()} className="btn-info px-6 transition">
+            <button onClick={() => setPrintTarget('member')} className="btn-info px-6 transition">
               Print QR Code
             </button>
+          </div>
+        )}
+
+        {/* Always offered to a manager, window or not: the guest code is meant
+            to be printed for the venue ahead of time, and the guest page
+            itself says when sign-in opens. */}
+        {eventId && (
+          <div className={`mt-6 ${printTarget === 'member' ? 'print:hidden' : ''}`} data-testid="guest-qr-section">
+            <GuestCheckInQRCard
+              eventId={eventId}
+              eventName={qrData.event_name}
+              allowGuestCheckIn={qrData.allow_guest_check_in ?? false}
+              showOffHint
+              onPrint={() => setPrintTarget('guest')}
+            />
           </div>
         )}
       </div>
