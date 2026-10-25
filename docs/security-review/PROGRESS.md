@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3672](https://github.com/thegspiro/the-logbook/pull/3672)** (branch
+`claude/security-review-scheduled-tasks-p9`) — Feature 31 (Scheduled
+tasks), pass 9. Watchdog pickup (the dedicated loop session for this
+rotation, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable — no
+agent via `ListAgents` either). PR #3658 (Feature 30, Onboarding, pass 9)
+had already merged, confirmed via both `search_pull_requests`
+(`head:claude/security-review-`, state=open) and `list_pull_requests`
+(state=open), 0 results both times, re-checked immediately before
+branching. Row 30 is `✅`. **0 fixed, 0 new findings** — the real delta
+since pass 8 (one new task, `nfc_card_tap_purge`, plus four changed
+delegates: two new `DirectoryAccountService` retry methods, a gear-specific
+low-stock email link, a medical-supplies "not yet counted" section, and a
+same-day idempotency fix to `compliance_auto_reports`) was read in full and
+found clean/already-correct/already-tested. `SCHEDULE`/`TASK_RUNNERS`
+re-verified 1:1 by AST at 68/68 (up from pass 8's 67). All standing OPEN
+items re-verified unchanged at current line numbers. One cross-feature note
+left for Apparatus & NFC's (feature 13) own next pass: the new Member ID
+Cards admin surface (`POST /nfc-tags/bulk-status`, tap log export,
+auto-suspend sweep) has not yet been re-reviewed since it landed — out of
+this feature's scope, so not read in full here.
+
+Full writeup: `docs/security-review/CRON9-31-scheduled-tasks.md`'s
+**Pass 9** section.
+
+Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
+kiosk) — re-check `search_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3658, Feature 30, Onboarding, pass 9, merged), preserved for history</summary>
+
 **PR [#3658](https://github.com/thegspiro/the-logbook/pull/3658)** (branch
 `claude/security-review-onboarding-p9`) — Feature 30 (Onboarding), pass 9.
 Watchdog pickup (the dedicated loop session for this rotation was
@@ -42,6 +73,8 @@ section.
 
 Row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled tasks)
 — re-check `search_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3647, Feature 29, Reports & analytics, pass 11, merged), preserved for history</summary>
@@ -21353,7 +21386,7 @@ this iteration's commit" rule.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
@@ -21364,6 +21397,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-24 — Feature 31 (Scheduled tasks, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+The dedicated loop session for this rotation (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable (no agent via `ListAgents`). PR #3658 (Feature 30,
+Onboarding, pass 9) had already merged with no open rotation PR behind it —
+confirmed via both `search_pull_requests` and `list_pull_requests`
+(`head:claude/security-review-`, state=open), 0 results both times,
+re-checked immediately before branching. Row 31 (Scheduled tasks) was
+confirmed the next `⬜` row against a freshly-fetched `main`.
+
+Diffed pass 8's baseline (`da17a8da`) against current `HEAD`: `scheduled.py`
+unchanged; `scheduled_tasks.py` +138/−9 lines across five non-security-review
+commits — one new task (`nfc_card_tap_purge`, purging aged NFC ID-card tap
+records per org retention setting) and four changed delegates (two new
+`DirectoryAccountService` retry methods for group removals and name syncs; a
+gear-specific low-stock email link alongside the existing medical one; a
+medical-supplies "not yet counted" digest section; and a same-day
+idempotency fix — PR #3664, merged after this pass's own Step 0 check — that
+makes `compliance_auto_reports` skip a period a completed scheduled report
+already covers, under a locked read matching CLAUDE.md Pitfall #27). Every
+delegate was checked against its owning feature's last review date and read
+in full where it was newer; all read clean, org-scoped where applicable, and
+already tested. `SCHEDULE`/`TASK_RUNNERS` re-verified 1:1 by AST at 68/68
+(up from pass 8's 67); the one key absent from `TASK_INTERVALS_SECONDS`
+(`scheduled_emails`) is a pre-existing, deliberately-manual entry in
+`_MANUAL_ONLY_TASKS`, not a new gap — `test_scheduled_task_coverage.py`
+already guards against exactly this class of "registered but never
+auto-run" defect and passes 5/5.
+
+Both standing items (`CRON4-31-2`, no per-task lock on `/run-task`;
+app-review's `CRON-4`, raw exception text in failed per-org results)
+re-verified unchanged at current line numbers, 0 diff in `scheduled.py`
+since pass 4. Left a cross-feature note for Apparatus & NFC (feature 13)'s
+own next pass: the new Member ID Cards admin surface (`POST
+/nfc-tags/bulk-status`, tap log export, auto-suspend sweep) has not been
+re-reviewed since it landed on 2026-10-23 — out of this feature's scope, so
+not read in full here, but worth that feature's own look rather than
+assuming its `✅` still covers it.
+
+Full writeup: `docs/security-review/CRON9-31-scheduled-tasks.md`'s **Pass
+9** section.
 
 ### 2026-10-24 — Feature 30 (Onboarding, pass 9) — watchdog pickup, 0 fixed, 0 new findings, 1 documentation correction
 
