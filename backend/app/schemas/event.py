@@ -6,7 +6,7 @@ Request and response schemas for event-related endpoints.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import (
@@ -98,14 +98,14 @@ class RequestPipelineUpdate(BaseModel):
     form was "now closed".
     """
 
-    min_lead_time_days: Optional[int] = Field(None, ge=0)
+    min_lead_time_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     default_assignee_id: Optional[str] = None
     public_progress_visible: Optional[bool] = None
     accept_public_requests: Optional[bool] = None
     # ge=1, not ge=0: a zero ceiling would accept nothing while the intake
     # toggle still read as open, which is a confusing way to spell the thing
     # `accept_public_requests: false` already says plainly.
-    public_daily_limit: Optional[int] = Field(None, ge=1)
+    public_daily_limit: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     tasks: Optional[List[RequestPipelineTask]] = None
     email_triggers: Optional[Dict[str, EmailTriggerConfig]] = None
 
@@ -1308,7 +1308,7 @@ class RecurringEventCreate(BaseModel):
         default=False,
         description="Auto-extend series on a rolling 12-month window",
     )
-    recurrence_custom_days: Optional[List[int]] = Field(
+    recurrence_custom_days: Optional[List[Annotated[int, Field(ge=0, le=6)]]] = Field(
         None, description="For custom: weekday numbers (0=Mon, 6=Sun)"
     )
     recurrence_weekday: Optional[int] = Field(

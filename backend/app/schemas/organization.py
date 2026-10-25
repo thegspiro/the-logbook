@@ -256,7 +256,7 @@ class EmailServiceSettings(BaseModel):
     )
     # Self-hosted SMTP
     smtp_host: Optional[str] = Field(None, description="SMTP server hostname")
-    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_port: int = Field(default=587, ge=1, le=65535, description="SMTP server port")
     smtp_user: Optional[str] = Field(None, description="SMTP username")
     smtp_password: Optional[str] = Field(None, description="SMTP password")
     smtp_encryption: str = Field(
@@ -771,6 +771,7 @@ class MembershipTier(BaseModel):
     years_required: int = Field(
         default=0,
         ge=0,
+        le=INT32_MAX,
         description="Minimum credited years of service to reach this tier (time away between stints is not counted)",
     )
     sort_order: int = Field(

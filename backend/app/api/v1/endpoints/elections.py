@@ -936,7 +936,7 @@ class ElectionSettingsUpdate(BaseModel):
 
     default_voting_method: Optional[str] = None
     default_victory_condition: Optional[str] = None
-    default_victory_percentage: Optional[int] = None
+    default_victory_percentage: Optional[int] = Field(None, ge=1, le=100)
     default_anonymous_voting: Optional[bool] = None
     default_allow_write_ins: Optional[bool] = None
     default_quorum_type: Optional[str] = None

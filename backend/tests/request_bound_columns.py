@@ -20,6 +20,8 @@ are equal. Request schemas only: the ``*Base`` a response inherits keeps the col
 range, so a row written before a policy bound still serializes.
 """
 
+from decimal import Decimal
+
 COLUMN_BACKED = [
     # app.api.v1.endpoints.compliance_officer
     "app.api.v1.endpoints.compliance_officer:AnnualReportExportRequest.year=Apparatus.year",
@@ -548,66 +550,29 @@ _JSON = (
     "stored inside a JSON column or settings document; no numeric column limit",
 )
 NOT_COLUMN_BACKED = {
-    "app.api.v1.endpoints.compliance_officer:AttestationCreate.period_quarter": (
+    "app.schemas.organization:MembershipIdSettings.next_number": (
         "SERVICE_VALIDATED",
-        "compliance_officer_service rejects anything but 1-4 before it is used",
+        "MembershipIdSettings._pattern_is_usable refuses a number whose formatted id overflows the 50-character column",
+    ),
+    "app.schemas.organization:MembershipIdSettings.start_number": (
+        "SERVICE_VALIDATED",
+        "MembershipIdSettings._pattern_is_usable refuses a number whose formatted id overflows the 50-character column",
     ),
     "app.api.v1.endpoints.elections:ElectionSettingsUpdate.default_quorum_value": _JSON,
-    "app.api.v1.endpoints.elections:ElectionSettingsUpdate.default_victory_percentage": _JSON,
-    "app.api.v1.onboarding:NotificationsConfig.smtp_port": _JSON,
     "app.schemas.compliance_config:ComplianceConfigBase.notify_days_before_deadline": _JSON,
     "app.schemas.compliance_config:ComplianceConfigUpdate.notify_days_before_deadline": _JSON,
-    "app.schemas.course_cohort:CohortScheduleConfig.meeting_days": _JSON,
     "app.schemas.course_cohort:CohortShiftRequest.days": (
         "ARITHMETIC",
         "feeds timedelta(days=...); the right limit is how far a class may be shifted, a business rule",
     ),
-    "app.schemas.course_cohort:CohortShiftRequest.from_sequence": (
-        "COMPARED",
-        "compared with each class's position; never stored",
-    ),
-    "app.schemas.course_cohort:CourseClassAutofill.meeting_days": _JSON,
-    "app.schemas.election:BallotItem.required_for_approval": _JSON,
-    "app.schemas.election:PositionEligibility.min_votes_required": _JSON,
     "app.schemas.event:EmailTriggerConfig.days": _JSON,
     "app.schemas.event:EventBase.reminder_schedule": _JSON,
     "app.schemas.event:EventDefaultsUpdate.reminder_schedule": _JSON,
     "app.schemas.event:EventTemplateCreate.reminder_schedule": _JSON,
     "app.schemas.event:EventTemplateUpdate.reminder_schedule": _JSON,
     "app.schemas.event:EventUpdate.reminder_schedule": _JSON,
-    "app.schemas.event:RecurringEventCreate.recurrence_custom_days": _JSON,
     "app.schemas.event:RecurringEventCreate.reminder_schedule": _JSON,
-    "app.schemas.event:RequestPipelineUpdate.min_lead_time_days": _JSON,
-    "app.schemas.event:RequestPipelineUpdate.public_daily_limit": _JSON,
-    "app.schemas.grant:CampaignBase.suggested_amounts": _JSON,
-    "app.schemas.grant:CampaignUpdate.suggested_amounts": _JSON,
-    "app.schemas.organization:EmailServiceSettings.smtp_port": _JSON,
-    "app.schemas.organization:MembershipIdSettings.next_number": _JSON,
-    "app.schemas.organization:MembershipIdSettings.start_number": _JSON,
-    "app.schemas.organization:MembershipTier.years_required": _JSON,
-    "app.schemas.scheduling:CloseoutCallsRequest.reported_call_types": _JSON,
-    "app.schemas.scheduling:SchedulingFeatureSettings.call_type_usage": _JSON,
-    "app.schemas.scheduling:ShiftFinalizeRequest.reported_call_types": _JSON,
-    "app.schemas.skills_testing:CriterionResultSchema.time_seconds": _JSON,
-    "app.schemas.skills_testing:SectionResultSchema.section_score": _JSON,
-    "app.schemas.skills_testing:SkillCriterionSchema.deduction_points": _JSON,
-    "app.schemas.skills_testing:SkillCriterionSchema.max_score": _JSON,
-    "app.schemas.skills_testing:SkillTestCreate.expected_template_version": (
-        "COMPARED",
-        "compared with the template's version; never stored",
-    ),
-    "app.schemas.skills_testing:SkillTestUpdate.expected_version": (
-        "COMPARED",
-        "compared with the test's version; never stored",
-    ),
-    "app.schemas.training:HistoricalImportParsedRow.row_number": (
-        "TRANSIENT",
-        "echoed back in import results; never stored",
-    ),
-    "app.schemas.training_enhancements:ParticipatingOrganization.participant_count": _JSON,
     "app.schemas.training_program:ReminderConditions.days_before_deadline": _JSON,
-    "app.schemas.training_session:AttendeeApprovalData.calculated_duration_minutes": _JSON,
-    "app.schemas.training_session:RecurringTrainingSessionCreate.recurrence_custom_days": _JSON,
 }
 
 
@@ -634,3 +599,91 @@ POLICY_BOUNDED = [
     "app.schemas.grant:PledgeUpdate.fulfilled_amount=Pledge.fulfilled_amount",
     "app.schemas.grant:PledgeUpdate.pledged_amount=Pledge.pledged_amount",
 ]
+
+
+# Request fields with no column behind them whose valid range is fixed by what they mean
+# (a TCP port, a calendar quarter, a weekday number, a percentage) or by a technical ceiling
+# (a count or score stored in JSON can still exceed what a client or the database can
+# represent). Each row is ``key: (shape, refused, accepted)`` -- the values the bound must
+# accept at both ends and the ones just past them it must refuse. ``shape`` says how the
+# value sits in the field: alone, as a list element, or as a dict value.
+# Business limits (how many days a class may shift, how far ahead a reminder may be set)
+# are not here: they stay in NOT_COLUMN_BACKED until the owner picks a number.
+MAX32 = 2**31 - 1
+MIN32 = -(2**31)
+FLOAT32 = 3.4e38
+MAX_GIFT = Decimal("1000000")
+
+_RANGES = {
+    "quarter": ("scalar", [1, 4], [0, 5]),
+    "pct": ("scalar", [1, 100], [0, 101]),
+    "port": ("scalar", [1, 65535], [0, 65536]),
+    "weekday": ("list", [0, 6], [-1, 7]),
+    "pos_i32": ("scalar", [1, MAX32], [0, MAX32 + 1]),
+    "nonneg_i32": ("scalar", [0, MAX32], [-1, MAX32 + 1]),
+    "count_map": ("dict", [0, MAX32], [-1, MAX32 + 1]),
+    "gift_list": ("list", [Decimal("0.01"), MAX_GIFT], [0, MAX_GIFT + Decimal("0.01")]),
+    "float_any": ("scalar", [-FLOAT32, FLOAT32], [-2 * FLOAT32, 2 * FLOAT32]),
+    "float_nonneg": ("scalar", [0, FLOAT32], [-1, 2 * FLOAT32]),
+    "float_pos": ("scalar", [1, FLOAT32], [0, 2 * FLOAT32]),
+    "i32_any": ("scalar", [MIN32, MAX32], [MIN32 - 1, MAX32 + 1]),
+}
+
+DOMAIN_BOUNDED = {
+    "app.api.v1.endpoints.compliance_officer:AttestationCreate.period_quarter": _RANGES[
+        "quarter"
+    ],
+    "app.api.v1.endpoints.elections:ElectionSettingsUpdate.default_victory_percentage": _RANGES[
+        "pct"
+    ],
+    "app.api.v1.onboarding:NotificationsConfig.smtp_port": _RANGES["port"],
+    "app.schemas.organization:EmailServiceSettings.smtp_port": _RANGES["port"],
+    "app.schemas.course_cohort:CohortScheduleConfig.meeting_days": _RANGES["weekday"],
+    "app.schemas.course_cohort:CourseClassAutofill.meeting_days": _RANGES["weekday"],
+    "app.schemas.event:RecurringEventCreate.recurrence_custom_days": _RANGES["weekday"],
+    "app.schemas.training_session:RecurringTrainingSessionCreate.recurrence_custom_days": _RANGES[
+        "weekday"
+    ],
+    "app.schemas.course_cohort:CohortShiftRequest.from_sequence": _RANGES["pos_i32"],
+    "app.schemas.election:BallotItem.required_for_approval": _RANGES["pos_i32"],
+    "app.schemas.election:PositionEligibility.min_votes_required": _RANGES[
+        "nonneg_i32"
+    ],
+    "app.schemas.organization:MembershipTier.years_required": _RANGES["nonneg_i32"],
+    "app.schemas.event:RequestPipelineUpdate.public_daily_limit": _RANGES["pos_i32"],
+    "app.schemas.event:RequestPipelineUpdate.min_lead_time_days": _RANGES["nonneg_i32"],
+    "app.schemas.grant:CampaignUpdate.suggested_amounts": _RANGES["gift_list"],
+    "app.schemas.scheduling:CloseoutCallsRequest.reported_call_types": _RANGES[
+        "count_map"
+    ],
+    "app.schemas.scheduling:ShiftFinalizeRequest.reported_call_types": _RANGES[
+        "count_map"
+    ],
+    "app.schemas.scheduling:SchedulingFeatureSettings.call_type_usage": _RANGES[
+        "count_map"
+    ],
+    "app.schemas.skills_testing:CriterionResultSchema.time_seconds": _RANGES[
+        "nonneg_i32"
+    ],
+    "app.schemas.skills_testing:SectionResultSchema.section_score": _RANGES[
+        "float_any"
+    ],
+    "app.schemas.skills_testing:SkillCriterionSchema.max_score": _RANGES[
+        "float_nonneg"
+    ],
+    "app.schemas.skills_testing:SkillCriterionSchema.deduction_points": _RANGES[
+        "float_pos"
+    ],
+    "app.schemas.skills_testing:SkillTestCreate.expected_template_version": _RANGES[
+        "pos_i32"
+    ],
+    "app.schemas.skills_testing:SkillTestUpdate.expected_version": _RANGES["pos_i32"],
+    "app.schemas.training:HistoricalImportParsedRow.row_number": _RANGES["pos_i32"],
+    "app.schemas.training_enhancements:ParticipatingOrganization.participant_count": _RANGES[
+        "nonneg_i32"
+    ],
+    "app.schemas.training_session:AttendeeApprovalData.calculated_duration_minutes": _RANGES[
+        "i32_any"
+    ],
+    "app.schemas.grant:CampaignCreate.suggested_amounts": _RANGES["gift_list"],
+}

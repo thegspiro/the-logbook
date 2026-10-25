@@ -51,6 +51,8 @@ class AttestationCreate(BaseModel):
     )
     period_quarter: Optional[int] = Field(
         None,
+        ge=1,
+        le=4,
         description="Quarter number (1-4) if period_type is quarterly",
     )
     notes: str = Field("", description="Additional notes or observations")

@@ -202,7 +202,7 @@ class BallotItem(BaseModel):
         default="approval", description="approval, candidate_selection"
     )
     required_for_approval: Optional[int] = Field(
-        None, ge=1, description="Number of yes votes required"
+        None, ge=1, le=INT32_MAX, description="Number of yes votes required"
     )
     require_attendance: bool = Field(
         default=False,
@@ -318,7 +318,7 @@ class PositionEligibility(BaseModel):
         ..., description="Role slugs that can vote for this position"
     )
     min_votes_required: Optional[int] = Field(
-        None, description="Minimum votes needed for approval"
+        None, ge=0, le=INT32_MAX, description="Minimum votes needed for approval"
     )
 
 
