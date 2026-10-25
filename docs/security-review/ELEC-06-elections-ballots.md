@@ -110,6 +110,111 @@ eligibility`'s "already voted in this election" applies only to a ballot
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
 
+## Pass 12 (2026-10-25)
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 matches,
+immediately after PR #3689 (Feature 05, Finance & approvals, pass 12) merged
+— confirmed via `pull_request_read` (`merged: true`,
+`2026-10-25T13:17:15Z`). Row 05 is `✅`; row 06 (Elections & ballots) is the
+next `⬜` row, matching PR #3689's own "Next" note. Checked again
+immediately before branching. **Watchdog pickup:** the dedicated review
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`
+returned no reachable peer on this machine), the same condition PR #3689's
+own write-up recorded a few hours earlier for Feature 05.
+
+**Baseline and delta.** Baseline is pass 11's merge (`da233695`, PR #3564,
+2026-10-22). `git diff --stat da233695..origin/main` across the feature's
+full established scope — `api/v1/endpoints/elections.py`,
+`services/election_service.py`, `services/minutes_election_filing.py`,
+`schemas/election.py`, `models/election.py`, `utils/election_ballot_pdf.py`,
+`utils/election_pdf_style.py`, `mcp/tools/elections.py`, and
+`frontend/src/modules/elections` — is **empty**: not one byte changed in any
+of these files since pass 11 merged. The migrations that landed in that
+window (`4250eb8b8378` purchase/reimbursement, three directory-account
+migrations, NFC card-tap auto-suspend, inventory lot recalls, a
+not-null-on-upgrade sweep, a head merge, and date-of-birth/emergency-contact
+encryption) touch unrelated tables; none alters any of the 7 election
+tables (`saved_ballot_templates`, `elections`, `candidates`,
+`voting_tokens`, `votes`, `manual_ballot_batches`,
+`manual_ballot_attestations`). **True zero delta.**
+
+**Re-enumeration.** `elections.py` re-walked by AST rather than trusted from
+the empty diff alone: **73 routes**, every one carrying a `Depends(...)` in
+its signature. The 4 intentionally-public, token-scoped routes are
+unchanged at their current lines: `POST /ballot/lookup`
+(`lookup_ballot_by_token`, `:667-668`), `POST /ballot/vote`
+(`cast_vote_with_token`, `:824-826`), `POST /ballot/vote/bulk`
+(`cast_bulk_votes`, `:881.../:2918`), and `GET /{election_id}/verify-receipt`
+(`verify_vote_receipt`, `:4805-4809`; the POST variant added for ELEC-14,
+`verify_vote_receipt_post`, is now at `:4785-4786`). Every other route is
+gated — spot-checked against the permission strings documented across
+passes 7-11 (`elections.view` / `elections.manage` / the two OR-gated
+self-service read routes), none of which this pass's zero-delta diff could
+have touched.
+
+**Verified good (re-confirmed, not re-derived):** the five headline
+mechanisms restated in pass 11 — 512-bit tokens hashed at rest (ELEC-5),
+anonymous-ballot IP purge at close (ELEC-6), the eligibility gate on
+`cast_vote` (ELEC-1), method-aware vote-dedup hash (ELEC-3), and token-write
+row locking (ELEC2-5) — plus pass 11's own additions (ranked paper ballots,
+IRV counting by `voter_hash`/`voter_id`/`paper_ballot_id`, send-job
+org-scoped locking, PDF filename sanitization, auto-filing's org-scoped,
+non-raising `capture_election_result` path) are all unchanged, because the
+files implementing every one of them are unchanged.
+
+**App-review cross-check (Step 2).** `docs/app-review/elections.md`'s one
+still-open item not already mirrored into this file or
+`KNOWN_LIMITATIONS.md` is **ELEC2-8** (LOW, `ElectionService.has_user_voted`
+has no production caller) — re-verified: still called only from
+`tests/test_election_voting_flow.py`, no endpoint or service invokes it.
+Unchanged, and out of this rotation's seven dimensions (dead code, not a
+security defect); left to the app-review rotation rather than duplicated
+here.
+
+**Standing findings re-confirmed unchanged (zero file diff, so unchanged by
+construction):**
+
+- **ELEC-12** — fixed (`MAX_SAVED_BALLOT_TEMPLATES_PER_ORG = 200`,
+  `elections.py:159`, enforced under a lock at `:566`). Still in place.
+- **ELEC-14** — fixed (`POST /{election_id}/verify-receipt` at `:4785`); the
+  deprecated `GET` variant (`:4805`) is still kept for external callers.
+- **ELEC-16** — accepted as is (owner decision); `list_manual_ballot_batches`
+  still has no cap or pagination.
+- **ELEC-28** — OPEN. The in-app ballot still cannot render a ballot-item or
+  multi-seat contest; converges with W50-10/W50-11.
+- **ELEC-40** — FLAGGED. New-ballot collision made unreachable by
+  `_validate_ballot_item_identities`; the pre-existing-ballot residual is
+  unchanged and still mirrored in `KNOWN_LIMITATIONS.md`.
+- **ELEC-48** — LOW, FLAGGED. The synchronous send endpoints still race
+  each other with no job-row lock for either side.
+- **ELEC-49** — MEDIUM, FLAGGED. `rollback_election` still does not touch a
+  circulated/adopted minutes filing; the stale-addendum gap from pass 11 is
+  unchanged (`KNOWN_LIMITATIONS.md:3194-3196`).
+- **ELEC-50** — fixed (guard). `tests/test_election_response_viewer_convention.py`
+  (pass 11's AST guard) is unchanged and still passes.
+
+**0 new findings, 0 fixed this pass** — nothing to fix because nothing in
+scope changed. No source file needed a touch; only this findings file and
+`PROGRESS.md` were updated.
+
+## Guard tests added (pass 12)
+
+None. No behavior changed, so there is no new class of regression to guard.
+
+## Completion gate (pass 12)
+
+| Check                                                       | Result                                         |
+| ----------------------------------------------------------- | ---------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                               | ✅ 0 violations (no Python file changed)       |
+| `black --check app/ tests/ alembic/`                        | ✅ 2642 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/`                   | ✅ clean                                       |
+| `validate_migrations.py --strict`                           | ✅ 652 revisions, single head `3f2593e8071e`   |
+| `check_route_permissions.py --strict` (repo root)           | ✅ 276 routes, 0 errors, 0 warnings            |
+| `pytest tests/ -k "election or ballot or minutes_election"` | ✅ 999 passed, 1 skipped (env-only `py_vapid`) |
+| `cd frontend && npm run typecheck`                          | ✅ 0 errors                                    |
+| `cd frontend && npm run lint`                               | ✅ 0 errors, 0 warnings                        |
+
 ## Pass 11 (2026-10-22)
 
 **Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests`
