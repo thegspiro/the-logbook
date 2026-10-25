@@ -69,6 +69,7 @@ from app.models.user import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.membership_pipeline_service import prospect_document_path
+from app.services.passkey_service import delete_all_passkeys
 from app.utils.sql_results import rows_affected
 
 _DEPARTED_STATUSES = {
@@ -165,6 +166,7 @@ class MemberAnonymizationService:
             delete(PasswordHistory).where(PasswordHistory.user_id == user.id)
         )
         counts["password_history_deleted"] = rows_affected(result) or 0
+        counts["passkeys_deleted"] = await delete_all_passkeys(self.db, str(user.id))
 
         # --- body measurements -----------------------------------------
         result = await self.db.execute(
