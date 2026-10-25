@@ -56,7 +56,7 @@ from its open list.
 | B15 | admin-hours                | AH2    | ✅     |
 | B16 | reports & analytics        | RPT2   | ✅     |
 | B17 | events                     | EV2    | ✅     |
-| B18 | training                   | TR2    | ⬜     |
+| B18 | training                   | TR2    | ✅     |
 | B19 | scheduling                 | SCH2   | ⬜     |
 | B20 | finance                    | FIN2   | ⬜     |
 | B21 | orgs, roles & users        | ORU2   | ⬜     |
@@ -3365,3 +3365,20 @@ secrets redacted for non-admins. See
   · 28 related suites **818 passed** · new tests 72 pass, 30 fail without the fixes, 0 under
   the unit job's marker expression · route-permission check 0 errors · no frontend change.
   See events.md → Pass 5. Next: B18 training.
+- **B18 training ✅ (pass 5) — 13 update schemas accepted `null` on 45 required fields, and the
+  program edit modal could send one (TR2-2, TR2-3).** The update-payload contract driven through
+  the real handlers: a test derives its cases from each route's request schema and model
+  (15 routes, 212 cases) and sends `null` for every field. 46 failed, all in the "must be
+  refused" group — a NOT NULL column answered 500 at the flush, and a nullable column behind a
+  non-Optional response field was stored and then made the row unreadable. **Fixed** with a
+  `RefusesNull` base class (`schemas/base.py`) naming the fields per schema; a null on one is
+  now a 422 on that field, an omitted key is untouched. `prerequisite_program_ids` stays
+  clearable on purpose (nullable column, response turns NULL into `[]`; an existing test pins
+  it). **Fixed (TR2-3)** — blanking "First warning" in the program edit modal sent
+  `warning_days_before: null`; the modal now requires a value, the update type no longer admits
+  null, and the old test that pinned the null is corrected. **Open (TR2-4):** 15 other
+  training update schemas are not in the derived test (listed in training.md), including
+  `ProgramRequirementUpdate`, which answers 422 on nullable fields. **Not re-run:** the other
+  five checklist dimensions; passes 1–4 stand. Gate: flake8 / black / isort / mypy (changed
+  schema modules) clean · typecheck and lint 0 · 1,613 backend tests pass, 26 modal tests pass ·
+  new file is all `integration`. See training.md → Pass 5. Next: B19 scheduling.
