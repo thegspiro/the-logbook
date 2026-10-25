@@ -3216,8 +3216,13 @@ The four basic pattern types in **Manual Setup**:
 Setup, choose **Weekly**, then tick **Separate day and night shifts**. Each weekday
 you pick carries **Day**, **Night** or both, so one weekday (Saturday) can
 generate both shifts. Day and night shift templates are required for whichever
-shift types you use, so a night shift can no longer take the day template's
-hours. The **Weekend Only** preset under **Fire Dept Presets** builds the common
+shift types you use. Each shift is built from the template chosen for its side
+_(2026-10-25)_: its hours and colour, its positions, minimum staffing,
+apparatus, whether it is open to all members, and its equipment checklists. A
+night side staffed with three positions generates night shifts with three
+seats, even when the day side has four. Night shifts generated before this
+change carry the day template's positions; delete them and generate again to
+rebuild them from the night template. The **Weekend Only** preset under **Fire Dept Presets** builds the common
 case: Friday night, Saturday day and night, Sunday day. In the pattern list, a
 weekly pattern shows sun and moon glyphs on the covered weekdays, and its expanded
 details list the shifts per weekday.
