@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 # ---------------------------------------------------------------------------
@@ -1069,14 +1070,14 @@ class Donor(Base):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     # Address
-    address_line1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    address_line2: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    state: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    postal_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    address_line1: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    address_line2: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     country: Mapped[Optional[str]] = mapped_column(
         String(100), server_default="USA", nullable=True
     )

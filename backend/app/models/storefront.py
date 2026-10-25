@@ -45,6 +45,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -732,7 +733,7 @@ class StoreOrder(Base):
     # after the user row is anonymized or the FK is nulled.
     customer_name: Mapped[str] = mapped_column(String(200), nullable=False)
     customer_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    customer_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    customer_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     status: Mapped[StoreOrderStatus] = mapped_column(
         SQLEnum(StoreOrderStatus, values_callable=_enum_values),
@@ -787,7 +788,9 @@ class StoreOrder(Base):
         default=StoreFulfillmentMethod.PICKUP,
         server_default="pickup",
     )
-    shipping_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    shipping_address: Mapped[Optional[str]] = mapped_column(
+        EncryptedText, nullable=True
+    )
 
     member_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
