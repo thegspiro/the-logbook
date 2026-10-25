@@ -60,6 +60,7 @@ import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
 import { WeeklySecurityReportCard } from '../components/settings/WeeklySecurityReportCard';
 import LabelPrintersSection from '../components/settings/LabelPrintersSection';
 import DepartmentEmailSection from '../components/settings/DepartmentEmailSection';
+import FormsEmbedSection from '../components/settings/FormsEmbedSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
@@ -72,7 +73,8 @@ import { useEmailConnectionTest } from '../hooks/useEmailConnectionTest';
 // than derived from `sections`, so removing the entry above does not remove the
 // key here — and a stale key makes the render switch non-exhaustive, which is
 // how a removed section becomes a blank panel instead of a compile error.
-type SectionKey = 'general' | 'modules' | 'email' | 'departmentEmail' | 'storage' | 'labelPrinters' | 'authentication';
+type SectionKey =
+  'general' | 'modules' | 'email' | 'departmentEmail' | 'storage' | 'labelPrinters' | 'authentication' | 'forms';
 
 /**
  * Sub-pages across every section. One flat union rather than one per section:
@@ -137,6 +139,12 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
       { key: 'mfa', label: 'MFA Policy', hint: 'Who must enroll' },
       { key: 'securityReport', label: 'Security Report', hint: 'Weekly email to IT' },
     ],
+  },
+  {
+    key: 'forms',
+    label: 'Forms',
+    icon: ClipboardList,
+    description: 'Websites that may embed your public forms',
   },
 ];
 
@@ -1325,6 +1333,12 @@ export const SettingsPage: React.FC = () => {
       // ════════════════════════════════════════════
       case 'departmentEmail':
         return <DepartmentEmailSection />;
+
+      // ════════════════════════════════════════════
+      // FORMS
+      // ════════════════════════════════════════════
+      case 'forms':
+        return <FormsEmbedSection />;
 
       // ════════════════════════════════════════════
       // STORAGE

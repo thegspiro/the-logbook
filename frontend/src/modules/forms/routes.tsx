@@ -62,6 +62,16 @@ export const getFormsPublicRoutes = () => {
           </Suspense>
         }
       />
+      {/* The one page another site may frame — see the /embed/ locations in
+          the nginx configs, which set its frame-ancestors per department. */}
+      <Route
+        path="/embed/f/:slug"
+        element={
+          <Suspense fallback={null}>
+            <PublicFormPage embedded />
+          </Suspense>
+        }
+      />
     </React.Fragment>
   );
 };

@@ -297,6 +297,12 @@ server {
 
 3. Restart Swag. Access at `https://logbook.yourdomain.com`.
 
+> **Embedded forms.** A department can show a public form inside its own
+> website from `/embed/f/<slug>`. If your proxy is set to add `X-Frame-Options`
+> or a `Content-Security-Policy` to every response, exclude `/embed/` from
+> those headers, or every embedded form shows as a blank box. See
+> [Configuration — Security Headers](../../wiki/Configuration-Security.md#security-headers).
+
 ### Using Nginx Proxy Manager
 
 1. Add a Proxy Host.
