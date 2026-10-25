@@ -1390,6 +1390,19 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/inventory/admin/store` | Store Administration                  | `storefront.manage` |
 | `/store/admin`           | Redirects to `/inventory/admin/store` | —                   |
 
+Store Administration is drawn with the same two-level navigation as the other administration hubs (StoreAdminNav, with the areas declared in storeAdminTabs). The URL is `?tab=<page>`, with none for Overview; the area is derived from the page, so a link never names it.
+
+| Area              | `?tab=`    | Label         |
+| ----------------- | ---------- | ------------- |
+| At a Glance       | (none)     | Overview      |
+| Selling           | `windows`  | Order Windows |
+| Selling           | `catalog`  | Catalog       |
+| Orders & Payments | `orders`   | Orders        |
+| Orders & Payments | `payments` | Payments      |
+| Store Settings    | `settings` | Settings      |
+
+A missing or unknown `?tab=` opens Overview.
+
 > Recording an order payment is subject to the same separation-of-duties rule as
 > finance disbursement — see **Finance** above.
 

@@ -3,8 +3,10 @@
  *
  * The department store, run from inside Inventory Administration — it sells the
  * uniforms the inventory module tracks, so it lives at
- * /inventory/admin/store rather than beside it. Tabbed: overview, order
- * windows, catalog, orders, inbound payments, and settings.
+ * /inventory/admin/store rather than beside it. Its pages (overview, order
+ * windows, catalog, orders, inbound payments, settings) are grouped under area
+ * cards by `StoreAdminNav`, the two-level navigation every administration hub
+ * draws.
  *
  * Renders through `AdminHubFrame` like every other administration page, which
  * is where the headline metrics and the "Needs attention" queue come from —
@@ -28,7 +30,18 @@ import { StoreOrdersTab } from '../components/StoreOrdersTab';
 import { StorePaymentsTab } from '../components/StorePaymentsTab';
 import { StoreSettingsTab } from '../components/StoreSettingsTab';
 import { StoreWindowsTab } from '../components/StoreWindowsTab';
-import { STORE_ADMIN_TABS, type StoreAdminTab } from './storeAdminTabs';
+import { attentionCountsForTabs } from '../../../components/admin/attentionCounts';
+import type { AdminHubSummary } from '../../../types/adminHub';
+import { StoreAdminNav } from '../components/StoreAdminNav';
+import {
+  STORE_ADMIN_AREA_ID_PREFIX,
+  STORE_ADMIN_AREAS,
+  resolveStoreAdminLocation,
+  storeAdminTabId,
+  storeAdminTabPanelId,
+  type StoreAdminAreaId,
+  type StoreAdminTab,
+} from './storeAdminTabs';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { storefrontService } from '../services/api';
 import {
@@ -40,9 +53,8 @@ import {
 } from '../types';
 
 type TabId = StoreAdminTab;
-const TABS = STORE_ADMIN_TABS;
 
-const isTabId = (value: string | null): value is TabId => TABS.some((tab) => tab.id === value);
+const STORE_ADMIN_PATH = '/inventory/admin/store';
 
 const StatTile: React.FC<{
   label: string;
@@ -100,8 +112,7 @@ const StoreAdminPage: React.FC = () => {
   // Mirrored into `?tab=` like every other admin page, so the inventory hub
   // can link at a tab rather than dropping the reader on Overview to find it.
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab');
-  const activeTab: TabId = isTabId(tabParam) ? tabParam : 'overview';
+  const { area: activeArea, tab: activeTab } = resolveStoreAdminLocation(searchParams.get('tab'));
   const setActiveTab = useCallback(
     (tab: TabId) => {
       setSearchParams(tab === 'overview' ? {} : { tab });
@@ -184,6 +195,20 @@ const StoreAdminPage: React.FC = () => {
     void loadDashboard();
   }, [loadDashboard]);
 
+  const handleAreaChange = (areaId: StoreAdminAreaId) => {
+    const landing = STORE_ADMIN_AREAS.find((candidate) => candidate.id === areaId)?.destinations[0];
+    if (landing) setActiveTab(landing.id);
+  };
+
+  // Badges come from the frame's own summary, so a count on the nav can never
+  // disagree with the "Needs attention" queue above it.
+  const [attentionCounts, setAttentionCounts] = useState<Record<string, number>>({});
+  const handleSummaryChange = useCallback(
+    (summary: AdminHubSummary | null) =>
+      setAttentionCounts(attentionCountsForTabs(summary?.attention ?? [], STORE_ADMIN_PATH)),
+    []
+  );
+
   const actions: AdminHubAction[] = [
     {
       key: 'refresh',
@@ -194,8 +219,299 @@ const StoreAdminPage: React.FC = () => {
     },
   ];
 
+  // Rendered only inside the selected page's panel, below.
+  const tabBody = (
+    <>
+      {activeTab === 'overview' &&
+        (loading ? (
+          <div className="flex justify-center py-12" role="status" aria-live="polite">
+            <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+          </div>
+        ) : dashboard ? (
+          <div className="space-y-6">
+            {/* Open orders, awaiting payment, outstanding, to verify, ready
+                  for pickup and active items all left this strip: each is a
+                  metric the frame above can show, and two panels restating one
+                  number is the duplication the shared frame exists to remove.
+                  What stays is the pair the metric registry has no entry for,
+                  and both keep their click-through into a filtered Orders tab.
+                  The queues that lost a tile are still one click away — from
+                  the workflow grid below, the attention queue above, or the
+                  Orders tab's own filters. */}
+            <div className="grid grid-cols-2 gap-3">
+              <StatTile
+                label="New (24 hours)"
+                value={dashboard.newOrderCount}
+                tone="text-blue-800 dark:text-blue-400"
+                onClick={() => openOrders({ recentHours: 24 })}
+              />
+              <StatTile
+                label="Collected (open window)"
+                value={formatCurrency(Number(dashboard.collectedThisWindow))}
+                tone="text-green-800 dark:text-green-400"
+              />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="card-secondary p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="text-theme-text-primary font-semibold">Order workflow</h2>
+                  <div className="flex items-center gap-2">
+                    {/* The Orders tab can clear this filter but has no
+                          control to set it, so the entry point has to live
+                          somewhere — here, beside the status buttons it reads
+                          with, rather than on a tile restating a headline
+                          metric. */}
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => openOrders({ openOnly: true })}
+                    >
+                      Open only
+                    </button>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => openOrders()}>
+                      View all
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {Object.entries(ORDER_STATUS_LABELS).map(([status, label]) => (
+                    <button
+                      type="button"
+                      key={status}
+                      onClick={() => openOrders({ status })}
+                      className="border-theme-surface-border hover:bg-theme-surface-hover rounded-lg border p-3 text-left"
+                    >
+                      <span className="text-theme-text-muted block text-xs">{label}</span>
+                      <span className="text-theme-text-primary text-xl font-bold">
+                        {dashboard.statusCounts[status] ?? 0}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="card-secondary p-4">
+                <h2 className="text-theme-text-primary mb-3 font-semibold">Current order window</h2>
+                {dashboard.activeWindow ? (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-theme-text-primary font-medium">{dashboard.activeWindow.name}</p>
+                      <p className="text-theme-text-muted mt-1 text-sm">
+                        {dashboard.activeWindow.description || 'Open for orders.'}
+                      </p>
+                    </div>
+                    {/* The window being open is not enough: ordering also
+                          needs the store switched on (create_order refuses
+                          otherwise), and until it is, members are shown "The
+                          store is closed" while this card says the opposite. */}
+                    {!dashboard.isEnabled && (
+                      <p className="alert-warning text-sm">
+                        Members can&apos;t order yet — the store is switched off, so they see &ldquo;The store is
+                        closed&rdquo;.{' '}
+                        <button
+                          type="button"
+                          className="font-medium underline"
+                          onClick={() => setActiveTab('settings')}
+                        >
+                          Turn it on in Settings
+                        </button>
+                      </p>
+                    )}
+                    <dl className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <dt className="text-theme-text-muted">Orders</dt>
+                        <dd className="text-theme-text-primary font-semibold">{dashboard.activeWindow.orderCount}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-theme-text-muted">Sales</dt>
+                        <dd className="text-theme-text-primary font-semibold">
+                          {formatCurrency(Number(dashboard.activeWindow.totalSales))}
+                        </dd>
+                      </div>
+                      <div className="col-span-2">
+                        <dt className="text-theme-text-muted">Closes</dt>
+                        <dd className="text-theme-text-primary">
+                          {dashboard.activeWindow.closesAt
+                            ? formatDateTime(dashboard.activeWindow.closesAt, tz)
+                            : 'No closing time set'}
+                        </dd>
+                      </div>
+                    </dl>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => setActiveTab('windows')}>
+                      Manage window
+                    </button>
+                  </div>
+                ) : (
+                  <div className="py-5 text-center">
+                    <CalendarClock className="text-theme-text-muted mx-auto mb-2 h-7 w-7" />
+                    <p className="text-theme-text-secondary text-sm">No order window is open.</p>
+                    <button type="button" className="btn-secondary btn-sm mt-3" onClick={() => setActiveTab('windows')}>
+                      Manage windows
+                    </button>
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-theme-text-primary text-sm font-semibold">Updates from the last 7 days</h2>
+                  <p className="text-theme-text-muted text-xs">Newest first</p>
+                </div>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => openOrders()}>
+                  View orders
+                </button>
+              </div>
+              {dashboard.recentActivity.length > 0 ? (
+                <ol className="card-secondary divide-theme-surface-border divide-y">
+                  {dashboard.recentActivity.map((activity) => (
+                    <li key={activity.id} className="flex flex-wrap items-start justify-between gap-3 p-3">
+                      <div className="min-w-0">
+                        <p className="text-theme-text-primary text-sm font-medium">
+                          {activity.orderNumber} — {activity.customerName}
+                        </p>
+                        <p className="text-theme-text-secondary text-sm">{activityDescription(activity)}</p>
+                        <p className="text-theme-text-muted mt-1 text-xs">
+                          {formatDateTime(activity.createdAt, tz)}
+                          {activity.authorName ? ` · ${activity.authorName}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {activity.toStatus && (
+                          <span className={`badge ${ORDER_STATUS_BADGES[activity.toStatus] ?? ''}`}>
+                            {ORDER_STATUS_LABELS[activity.toStatus] ?? activity.toStatus}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => openOrders({ orderId: activity.orderId })}
+                        >
+                          Open order
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="card-secondary text-theme-text-muted py-8 text-center text-sm">
+                  No order updates in the last 7 days.
+                </div>
+              )}
+            </section>
+
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-theme-text-primary text-sm font-semibold">Recent orders</h2>
+                <button
+                  type="button"
+                  className="btn-ghost btn-sm flex items-center gap-1"
+                  onClick={() => void loadDashboard()}
+                  disabled={loading}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" /> Refresh
+                </button>
+              </div>
+              {dashboard.recentOrders.length > 0 ? (
+                <ul className="space-y-2">
+                  {dashboard.recentOrders.map((order) => (
+                    <li key={order.id} className="card-secondary flex flex-wrap items-center justify-between gap-2 p-3">
+                      <div className="min-w-0">
+                        <p className="text-theme-text-primary text-sm">
+                          {order.orderNumber} — {order.customerName}
+                        </p>
+                        <p className="text-theme-text-muted text-xs">
+                          {order.windowName ?? 'No order window'} · {formatDateTime(order.submittedAt, tz)} ·{' '}
+                          {order.items.length} {order.items.length === 1 ? 'item' : 'items'} ·{' '}
+                          {formatCurrency(Number(order.total))}
+                        </p>
+                        {order.events.length > 0 && (
+                          <p className="text-theme-text-secondary mt-1 flex items-center gap-1 text-xs">
+                            <Clock3 className="h-3 w-3 shrink-0" />
+                            Latest update:{' '}
+                            {order.events[order.events.length - 1]?.message ||
+                              (order.events[order.events.length - 1]?.toStatus
+                                ? `Status changed to ${
+                                    ORDER_STATUS_LABELS[order.events[order.events.length - 1]?.toStatus ?? ''] ??
+                                    order.events[order.events.length - 1]?.toStatus
+                                  }`
+                                : 'Order activity recorded')}
+                            {order.events[order.events.length - 1]?.createdAt
+                              ? ` · ${formatDateTime(order.events[order.events.length - 1]?.createdAt, tz)}`
+                              : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`badge ${ORDER_STATUS_BADGES[order.status] ?? ''}`}>
+                          {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                        </span>
+                        <span className={`badge ${PAYMENT_STATUS_BADGES[order.paymentStatus] ?? ''}`}>
+                          {PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => openOrders({ status: order.status })}
+                        >
+                          Manage
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="card-secondary text-theme-text-muted py-8 text-center text-sm">
+                  No orders yet. New orders appear here.
+                </div>
+              )}
+            </section>
+          </div>
+        ) : null)}
+
+      {activeTab === 'windows' && (
+        <StoreWindowsTab
+          onChanged={handleChanged}
+          storeIsLive={dashboard?.isEnabled}
+          onOpenSettings={() => setActiveTab('settings')}
+        />
+      )}
+      {activeTab === 'catalog' && <StoreCatalogTab />}
+      {activeTab === 'orders' && (
+        <StoreOrdersTab
+          key={`${ordersStatusFilter}:${ordersPaymentFilter || urlPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
+          onChanged={handleChanged}
+          initialStatusFilter={ordersStatusFilter}
+          initialPaymentFilter={ordersPaymentFilter || urlPaymentFilter}
+          initialOrderId={ordersDetailId}
+          initialSubmittedWithinHours={ordersRecentHours}
+          initialOpenOnly={ordersOpenOnly}
+        />
+      )}
+      {activeTab === 'payments' && <StorePaymentsTab onChanged={handleChanged} />}
+      {activeTab === 'settings' && (
+        <div className="space-y-8">
+          <StoreSettingsTab onChanged={handleChanged} />
+          {/* The frame's three open headline slots. The store's registry
+                offers six metrics and defaults to three, so without this an
+                admin could never reach Pending verification, Ready for pickup
+                or Active items — every other module's admin page carries the
+                same control. */}
+          <AdminMetricsSettings
+            moduleKey="storefront"
+            moduleLabel="Department Store"
+            permission="storefront.manage"
+            onSaved={() => setFrameToken((token) => token + 1)}
+          />
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <AdminHubFrame<TabId>
+    <AdminHubFrame
       moduleKey="storefront"
       title="Department Store"
       description="Order windows, catalog, orders, and payment reconciliation"
@@ -244,304 +560,42 @@ const StoreAdminPage: React.FC = () => {
           )}
         </div>
       }
-      tabs={TABS}
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
+      nav={
+        <StoreAdminNav
+          areas={STORE_ADMIN_AREAS}
+          activeArea={activeArea}
+          activeTab={activeTab}
+          onAreaChange={handleAreaChange}
+          onTabChange={setActiveTab}
+          attentionCounts={attentionCounts}
+        />
+      }
       refreshToken={frameToken}
+      onSummaryChange={handleSummaryChange}
     >
-      <div className="mx-auto max-w-7xl py-6 sm:py-8">
-        {activeTab === 'overview' &&
-          (loading ? (
-            <div className="flex justify-center py-12" role="status" aria-live="polite">
-              <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
-            </div>
-          ) : dashboard ? (
-            <div className="space-y-6">
-              {/* Open orders, awaiting payment, outstanding, to verify, ready
-                  for pickup and active items all left this strip: each is a
-                  metric the frame above can show, and two panels restating one
-                  number is the duplication the shared frame exists to remove.
-                  What stays is the pair the metric registry has no entry for,
-                  and both keep their click-through into a filtered Orders tab.
-                  The queues that lost a tile are still one click away — from
-                  the workflow grid below, the attention queue above, or the
-                  Orders tab's own filters. */}
-              <div className="grid grid-cols-2 gap-3">
-                <StatTile
-                  label="New (24 hours)"
-                  value={dashboard.newOrderCount}
-                  tone="text-blue-800 dark:text-blue-400"
-                  onClick={() => openOrders({ recentHours: 24 })}
-                />
-                <StatTile
-                  label="Collected (open window)"
-                  value={formatCurrency(Number(dashboard.collectedThisWindow))}
-                  tone="text-green-800 dark:text-green-400"
-                />
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <section className="card-secondary p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h2 className="text-theme-text-primary font-semibold">Order workflow</h2>
-                    <div className="flex items-center gap-2">
-                      {/* The Orders tab can clear this filter but has no
-                          control to set it, so the entry point has to live
-                          somewhere — here, beside the status buttons it reads
-                          with, rather than on a tile restating a headline
-                          metric. */}
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() => openOrders({ openOnly: true })}
-                      >
-                        Open only
-                      </button>
-                      <button type="button" className="btn-secondary btn-sm" onClick={() => openOrders()}>
-                        View all
-                      </button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {Object.entries(ORDER_STATUS_LABELS).map(([status, label]) => (
-                      <button
-                        type="button"
-                        key={status}
-                        onClick={() => openOrders({ status })}
-                        className="border-theme-surface-border hover:bg-theme-surface-hover rounded-lg border p-3 text-left"
-                      >
-                        <span className="text-theme-text-muted block text-xs">{label}</span>
-                        <span className="text-theme-text-primary text-xl font-bold">
-                          {dashboard.statusCounts[status] ?? 0}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="card-secondary p-4">
-                  <h2 className="text-theme-text-primary mb-3 font-semibold">Current order window</h2>
-                  {dashboard.activeWindow ? (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-theme-text-primary font-medium">{dashboard.activeWindow.name}</p>
-                        <p className="text-theme-text-muted mt-1 text-sm">
-                          {dashboard.activeWindow.description || 'Open for orders.'}
-                        </p>
-                      </div>
-                      {/* The window being open is not enough: ordering also
-                          needs the store switched on (create_order refuses
-                          otherwise), and until it is, members are shown "The
-                          store is closed" while this card says the opposite. */}
-                      {!dashboard.isEnabled && (
-                        <p className="alert-warning text-sm">
-                          Members can&apos;t order yet — the store is switched off, so they see &ldquo;The store is
-                          closed&rdquo;.{' '}
-                          <button
-                            type="button"
-                            className="font-medium underline"
-                            onClick={() => setActiveTab('settings')}
-                          >
-                            Turn it on in Settings
-                          </button>
-                        </p>
-                      )}
-                      <dl className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <dt className="text-theme-text-muted">Orders</dt>
-                          <dd className="text-theme-text-primary font-semibold">{dashboard.activeWindow.orderCount}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-theme-text-muted">Sales</dt>
-                          <dd className="text-theme-text-primary font-semibold">
-                            {formatCurrency(Number(dashboard.activeWindow.totalSales))}
-                          </dd>
-                        </div>
-                        <div className="col-span-2">
-                          <dt className="text-theme-text-muted">Closes</dt>
-                          <dd className="text-theme-text-primary">
-                            {dashboard.activeWindow.closesAt
-                              ? formatDateTime(dashboard.activeWindow.closesAt, tz)
-                              : 'No closing time set'}
-                          </dd>
-                        </div>
-                      </dl>
-                      <button type="button" className="btn-secondary btn-sm" onClick={() => setActiveTab('windows')}>
-                        Manage window
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="py-5 text-center">
-                      <CalendarClock className="text-theme-text-muted mx-auto mb-2 h-7 w-7" />
-                      <p className="text-theme-text-secondary text-sm">No order window is open.</p>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm mt-3"
-                        onClick={() => setActiveTab('windows')}
-                      >
-                        Manage windows
-                      </button>
-                    </div>
-                  )}
-                </section>
-              </div>
-
-              <section>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-theme-text-primary text-sm font-semibold">Updates from the last 7 days</h2>
-                    <p className="text-theme-text-muted text-xs">Newest first</p>
-                  </div>
-                  <button type="button" className="btn-secondary btn-sm" onClick={() => openOrders()}>
-                    View orders
-                  </button>
-                </div>
-                {dashboard.recentActivity.length > 0 ? (
-                  <ol className="card-secondary divide-theme-surface-border divide-y">
-                    {dashboard.recentActivity.map((activity) => (
-                      <li key={activity.id} className="flex flex-wrap items-start justify-between gap-3 p-3">
-                        <div className="min-w-0">
-                          <p className="text-theme-text-primary text-sm font-medium">
-                            {activity.orderNumber} — {activity.customerName}
-                          </p>
-                          <p className="text-theme-text-secondary text-sm">{activityDescription(activity)}</p>
-                          <p className="text-theme-text-muted mt-1 text-xs">
-                            {formatDateTime(activity.createdAt, tz)}
-                            {activity.authorName ? ` · ${activity.authorName}` : ''}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {activity.toStatus && (
-                            <span className={`badge ${ORDER_STATUS_BADGES[activity.toStatus] ?? ''}`}>
-                              {ORDER_STATUS_LABELS[activity.toStatus] ?? activity.toStatus}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
-                            onClick={() => openOrders({ orderId: activity.orderId })}
-                          >
-                            Open order
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <div className="card-secondary text-theme-text-muted py-8 text-center text-sm">
-                    No order updates in the last 7 days.
-                  </div>
-                )}
-              </section>
-
-              <section>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h2 className="text-theme-text-primary text-sm font-semibold">Recent orders</h2>
-                  <button
-                    type="button"
-                    className="btn-ghost btn-sm flex items-center gap-1"
-                    onClick={() => void loadDashboard()}
-                    disabled={loading}
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" /> Refresh
-                  </button>
-                </div>
-                {dashboard.recentOrders.length > 0 ? (
-                  <ul className="space-y-2">
-                    {dashboard.recentOrders.map((order) => (
-                      <li
-                        key={order.id}
-                        className="card-secondary flex flex-wrap items-center justify-between gap-2 p-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-theme-text-primary text-sm">
-                            {order.orderNumber} — {order.customerName}
-                          </p>
-                          <p className="text-theme-text-muted text-xs">
-                            {order.windowName ?? 'No order window'} · {formatDateTime(order.submittedAt, tz)} ·{' '}
-                            {order.items.length} {order.items.length === 1 ? 'item' : 'items'} ·{' '}
-                            {formatCurrency(Number(order.total))}
-                          </p>
-                          {order.events.length > 0 && (
-                            <p className="text-theme-text-secondary mt-1 flex items-center gap-1 text-xs">
-                              <Clock3 className="h-3 w-3 shrink-0" />
-                              Latest update:{' '}
-                              {order.events[order.events.length - 1]?.message ||
-                                (order.events[order.events.length - 1]?.toStatus
-                                  ? `Status changed to ${
-                                      ORDER_STATUS_LABELS[order.events[order.events.length - 1]?.toStatus ?? ''] ??
-                                      order.events[order.events.length - 1]?.toStatus
-                                    }`
-                                  : 'Order activity recorded')}
-                              {order.events[order.events.length - 1]?.createdAt
-                                ? ` · ${formatDateTime(order.events[order.events.length - 1]?.createdAt, tz)}`
-                                : ''}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`badge ${ORDER_STATUS_BADGES[order.status] ?? ''}`}>
-                            {ORDER_STATUS_LABELS[order.status] ?? order.status}
-                          </span>
-                          <span className={`badge ${PAYMENT_STATUS_BADGES[order.paymentStatus] ?? ''}`}>
-                            {PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus}
-                          </span>
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
-                            onClick={() => openOrders({ status: order.status })}
-                          >
-                            Manage
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="card-secondary text-theme-text-muted py-8 text-center text-sm">
-                    No orders yet. New orders appear here.
-                  </div>
-                )}
-              </section>
-            </div>
-          ) : null)}
-
-        {activeTab === 'windows' && (
-          <StoreWindowsTab
-            onChanged={handleChanged}
-            storeIsLive={dashboard?.isEnabled}
-            onOpenSettings={() => setActiveTab('settings')}
-          />
-        )}
-        {activeTab === 'catalog' && <StoreCatalogTab />}
-        {activeTab === 'orders' && (
-          <StoreOrdersTab
-            key={`${ordersStatusFilter}:${ordersPaymentFilter || urlPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
-            onChanged={handleChanged}
-            initialStatusFilter={ordersStatusFilter}
-            initialPaymentFilter={ordersPaymentFilter || urlPaymentFilter}
-            initialOrderId={ordersDetailId}
-            initialSubmittedWithinHours={ordersRecentHours}
-            initialOpenOnly={ordersOpenOnly}
-          />
-        )}
-        {activeTab === 'payments' && <StorePaymentsTab onChanged={handleChanged} />}
-        {activeTab === 'settings' && (
-          <div className="space-y-8">
-            <StoreSettingsTab onChanged={handleChanged} />
-            {/* The frame's three open headline slots. The store's registry
-                offers six metrics and defaults to three, so without this an
-                admin could never reach Pending verification, Ready for pickup
-                or Active items — every other module's admin page carries the
-                same control. */}
-            <AdminMetricsSettings
-              moduleKey="storefront"
-              moduleLabel="Department Store"
-              permission="storefront.manage"
-              onSaved={() => setFrameToken((token) => token + 1)}
-            />
+      <div
+        id={`${STORE_ADMIN_AREA_ID_PREFIX}-panel-${activeArea.id}`}
+        role="tabpanel"
+        aria-labelledby={`${STORE_ADMIN_AREA_ID_PREFIX}-tab-${activeArea.id}-label`}
+        className="mx-auto max-w-7xl"
+      >
+        {/*
+          One panel per page of the area, not one for the selected page: every
+          page tab advertises its panel through `aria-controls`, so each id must
+          be in the document. Only the selected panel holds content — mounting
+          all of them would have each page fetch its data on arrival.
+        */}
+        {activeArea.destinations.map((destination) => (
+          <div
+            key={destination.id}
+            id={storeAdminTabPanelId(destination.id)}
+            role="tabpanel"
+            aria-labelledby={storeAdminTabId(destination.id)}
+            hidden={destination.id !== activeTab}
+          >
+            {destination.id === activeTab && <div className="py-6 sm:py-8">{tabBody}</div>}
           </div>
-        )}
+        ))}
       </div>
     </AdminHubFrame>
   );
