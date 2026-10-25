@@ -41,7 +41,8 @@ import {
 } from 'lucide-react';
 
 /**
- * Section headings, in render order.
+ * Card sections. Each is exactly one area of the header's navigation
+ * (`schedulingAdminAreas.ts`), which decides the order they are drawn in.
  *
  * Grouped by what the officer is doing rather than by which screen the setting
  * used to be a tab on — "Before the shift" is one job whether the thing being
@@ -57,10 +58,6 @@ export const SCHEDULING_HUB_SECTIONS = [
 ] as const;
 export type SchedulingHubSection = (typeof SCHEDULING_HUB_SECTIONS)[number];
 
-/** Icon tint. A union rather than a class string so Tailwind's scanner sees
- *  every literal in one place (`SchedulingAdminHub`'s TONE_CLASSES map). */
-export type SchedulingHubTone = 'blue' | 'purple' | 'orange' | 'cyan' | 'green' | 'indigo' | 'amber' | 'sky' | 'slate';
-
 export interface SchedulingHubCard {
   /** Stable id — React key, and how the hub attaches live counts. */
   id: string;
@@ -69,7 +66,6 @@ export interface SchedulingHubCard {
   path: string;
   icon: LucideIcon;
   section: SchedulingHubSection;
-  tone: SchedulingHubTone;
   /** Required permission (exact match plus module wildcard). */
   permission?: string;
   /** Any one of these grants access (OR), mirroring the route's own. */
@@ -87,7 +83,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/planning',
     icon: CalendarRange,
     section: 'Before the shift',
-    tone: 'blue',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -98,7 +93,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/planning/templates',
     icon: ClipboardList,
     section: 'Before the shift',
-    tone: 'purple',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -109,7 +103,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/planning/patterns',
     icon: Repeat,
     section: 'Before the shift',
-    tone: 'indigo',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -128,7 +121,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/inventory/admin/checklists',
     icon: ClipboardCheck,
     section: 'On the shift',
-    tone: 'sky',
     permission: 'inventory.check_manage',
     requiresModule: 'inventory',
   },
@@ -139,7 +131,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/inventory/admin/checklists/settings',
     icon: SlidersHorizontal,
     section: 'On the shift',
-    tone: 'cyan',
     anyPermission: ['settings.manage', 'organization.update_settings'],
     requiresModule: 'inventory',
   },
@@ -155,7 +146,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/closeout',
     icon: ClipboardCheck,
     section: 'After the shift',
-    tone: 'amber',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -166,7 +156,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/history-import',
     icon: History,
     section: 'After the shift',
-    tone: 'slate',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -179,7 +168,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/positions',
     icon: ShieldCheck,
     section: 'People & eligibility',
-    tone: 'green',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -190,7 +178,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/platoons',
     icon: Users,
     section: 'People & eligibility',
-    tone: 'indigo',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -201,7 +188,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/settings/eligibility',
     icon: Shield,
     section: 'People & eligibility',
-    tone: 'amber',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -214,7 +200,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/reports',
     icon: BarChart3,
     section: 'Reporting',
-    tone: 'orange',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -225,7 +210,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/settings/shift-reports',
     icon: FileBarChart,
     section: 'Reporting',
-    tone: 'slate',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -238,7 +222,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/settings/general',
     icon: LayoutTemplate,
     section: 'Department settings',
-    tone: 'blue',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -249,7 +232,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/settings/apparatus',
     icon: Truck,
     section: 'Department settings',
-    tone: 'purple',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -260,7 +242,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/settings/outside-apparatus',
     icon: Handshake,
     section: 'Department settings',
-    tone: 'slate',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
@@ -271,7 +252,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     path: '/scheduling/admin/settings/notifications',
     icon: Bell,
     section: 'Department settings',
-    tone: 'amber',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },

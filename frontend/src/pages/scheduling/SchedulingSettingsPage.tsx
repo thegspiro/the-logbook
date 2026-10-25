@@ -6,8 +6,9 @@
  * this page with their own `section`, so a settings screen can be linked to,
  * bookmarked and reached with the back button. Selecting a section navigates.
  *
- * ShiftSettingsPanel renders the section's content; the section list and the
- * page chrome belong here.
+ * ShiftSettingsPanel renders the section's content and the section list
+ * belongs here; the page chrome is the Scheduling Administration header
+ * (`SchedulingAdminLayout`) every one of these routes is drawn inside.
  */
 
 import React, { useCallback, useEffect, useMemo } from 'react';
@@ -85,17 +86,12 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
         activeSection={visibleSection}
         onSectionChange={handleSectionChange}
         navLabel="Scheduling settings sections"
-        // Names the page, not the module: the module header said "Shift
-        // Scheduling" on a screen whose subject is its settings.
+        // Names the page for heading navigation only: inside the
+        // administration header, which already names the module and the area,
+        // `inHub` draws it as a screen-reader <h2> rather than a second title.
         title="Scheduling Settings"
         subtitle="Department-wide scheduling defaults"
-        onBack={() => void navigate('/scheduling/admin')}
-        backLabel="Back to scheduling administration"
-        // Six section routes sit three levels down, so the trail is the only
-        // thing on the page that says so. The "Settings" crumb between the hub
-        // and the section is a link: `/scheduling/admin/settings` redirects to
-        // the General section rather than falling through to the dashboard.
-        showBreadcrumbs
+        inHub
       >
         {!templatesLoaded ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">

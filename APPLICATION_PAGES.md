@@ -756,6 +756,20 @@ section had no scheduling entry at all. That row is gone.
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
 > `/scheduling/qualifications` and `/scheduling/settings` no longer resolve.
 
+Navigation matches Training and Inventory Administration _(2026-10-25)_:
+seven **area cards** — Overview, Planning, On the Shift, Close-Out & History,
+People & Eligibility, Reports, Settings — above a strip of the chosen area's
+pages and a line naming the open page, with a red **Create Shift** in the
+header (it opens the Create Shift dialog on `/scheduling` via
+`?create=shift`). The tool-card grid that sat under the setup guide is gone;
+the areas replace it. Each page keeps its own route: the routes listed in
+`SCHEDULING_ADMIN_SHELL_PATHS` (`pages/scheduling/admin/schedulingAdminAreas.ts`)
+wrap their element in `SchedulingAdminLayout`, inside their `ProtectedRoute`,
+and draw no title, back arrow or trail of their own. The history-import review
+screen is the exception: it is reached from the list and keeps its own trail.
+On the Shift's two pages open Inventory's own screens, and the strip marks them
+so.
+
 > **One grant runs the whole area** _(2026-09-05)_: `scheduling.manage`, on the
 > hub's route, on every page behind it, and on the nav rows that offer it. The
 > hub and the position roster briefly accepted `training.view_all` /

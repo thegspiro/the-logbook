@@ -31,7 +31,6 @@ import {
   Truck,
   Unlock,
   Users,
-  ShieldCheck,
 } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { PositionRosterMember, PositionRosterResponse } from '../../modules/scheduling/types';
@@ -40,7 +39,6 @@ import { calendarDaysFromToday, formatCalendarDate, formatDate } from '../../uti
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { EmptyState } from '../../components/ux/EmptyState';
-import { SchedulingPageHeader } from '../../components/scheduling/SchedulingPageHeader';
 import DriverExceptionsPanel from './DriverExceptionsPanel';
 import { useTablist } from '../../hooks/useTablist';
 
@@ -179,13 +177,8 @@ const PositionRosterPage: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-      <SchedulingPageHeader
-        icon={ShieldCheck}
-        title="Who Can Fill What"
-        subtitle="Who is cleared for each shift position, and why"
-        underHub="/scheduling/admin"
-      />
+    <div className="max-w-6xl py-6">
+      <h2 className="sr-only">Who Can Fill What</h2>
 
       <div className="tab-scroll mb-4" role="tablist" {...tablist} aria-label="Qualification views">
         {TABS.map((tab) => (

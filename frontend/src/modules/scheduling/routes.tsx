@@ -21,6 +21,11 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 
 const SchedulingPage = lazyWithRetry(() => import('../../pages/SchedulingPage'));
 
+// The header every page in `SCHEDULING_ADMIN_SHELL_PATHS` is drawn inside. The
+// hub draws it itself; the routes below wrap their page in it, inside their
+// ProtectedRoute so each keeps exactly its own gate.
+const SchedulingAdminLayout = lazyWithRetry(() => import('../../pages/scheduling/admin/SchedulingAdminLayout'));
+
 const SchedulingAdminHub = lazyWithRetry(() => import('../../pages/scheduling/admin/SchedulingAdminHub'));
 
 const SchedulingPlanningPage = lazyWithRetry(
@@ -91,7 +96,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingPlanningPage section="gaps" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingPlanningPage section="gaps" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -101,7 +110,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingPlanningPage section="templates" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingPlanningPage section="templates" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -111,7 +124,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingPlanningPage section="patterns" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingPlanningPage section="patterns" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -125,7 +142,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingCloseoutPage />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingCloseoutPage />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -138,7 +159,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <ShiftHistoryImportPage />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <ShiftHistoryImportPage />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -158,7 +183,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingAdminReportsPage />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingAdminReportsPage />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -168,7 +197,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingPlatoonsPage />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingPlatoonsPage />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -184,7 +217,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <PositionRosterPage />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <PositionRosterPage />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -208,7 +245,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingSettingsPage section="general" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingSettingsPage section="general" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -218,7 +259,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingSettingsPage section="apparatus" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingSettingsPage section="apparatus" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -228,7 +273,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingSettingsPage section="platoons" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingSettingsPage section="platoons" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -238,7 +287,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingSettingsPage section="eligibility" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingSettingsPage section="eligibility" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -248,7 +301,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingSettingsPage section="notifications" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingSettingsPage section="notifications" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -258,7 +315,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingSettingsPage section="shift-reports" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingSettingsPage section="shift-reports" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }
@@ -268,7 +329,11 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingSettingsPage section="outside-apparatus" />
+              <SchedulingAdminLayout>
+                <Suspense fallback={null}>
+                  <SchedulingSettingsPage section="outside-apparatus" />
+                </Suspense>
+              </SchedulingAdminLayout>
             </ProtectedRoute>
           </Suspense>
         }

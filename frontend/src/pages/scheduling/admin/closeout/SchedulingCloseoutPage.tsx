@@ -19,21 +19,14 @@
  */
 
 import React from 'react';
-import { ClipboardCheck } from 'lucide-react';
-import { SchedulingPageHeader } from '../../../../components/scheduling/SchedulingPageHeader';
 import CloseoutQueueSection from './CloseoutQueueSection';
 import CloseoutSettingsSummary from './CloseoutSettingsSummary';
 import PreShiftWorkQueueSection from './PreShiftWorkQueueSection';
 
 const SchedulingCloseoutPage: React.FC = () => (
   <div className="min-h-screen">
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-      <SchedulingPageHeader
-        icon={ClipboardCheck}
-        title="Shift Close-Out"
-        subtitle="Shifts that have ended and were never closed"
-        underHub="/scheduling/admin"
-      />
+    <div className="py-6">
+      <h2 className="sr-only">Shift Close-Out</h2>
 
       <div className="space-y-6">
         <CloseoutQueueSection />
