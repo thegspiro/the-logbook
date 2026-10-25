@@ -6,15 +6,17 @@ Handles first-time system setup and configuration.
 
 import asyncio
 import copy
+import json
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Iterable, Optional
+from typing import Annotated, Any, Iterable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from loguru import logger
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -164,7 +166,6 @@ def _incomplete_session_email(session_data: Optional[dict]) -> Optional[str]:
     anything, so the admin is sent back to the email step instead. A session
     with no email data, or one that chose "Other / Skip", is fine.
     """
-    import json
 
     from app.core.security import decrypt_data
 
@@ -392,6 +393,26 @@ class DatabaseCheckResponse(BaseModel):
     error: str | None = None
 
 
+# The free-form config dicts below are stored, encrypted, in the onboarding
+# session's JSON ``data`` column by a caller who holds nothing but a session
+# cookie. The global request ceiling (MAX_REQUEST_BODY_SIZE, 60 MB) is the only
+# other bound, so without this cap one request could park tens of megabytes in
+# the session row and spend CPU encrypting it. The largest honest value is a
+# Google service-account key at about 2.5 KB.
+ONBOARDING_CONFIG_MAX_BYTES = 64 * 1024
+
+
+def _bounded_config(value: dict[str, Any]) -> dict[str, Any]:
+    if len(json.dumps(value)) > ONBOARDING_CONFIG_MAX_BYTES:
+        raise ValueError(
+            f"Configuration is too large (limit {ONBOARDING_CONFIG_MAX_BYTES} bytes)"
+        )
+    return value
+
+
+BoundedConfig = Annotated[dict[str, Any], AfterValidator(_bounded_config)]
+
+
 class EmailTestRequest(BaseModel):
     """Request model for testing email configuration"""
 
@@ -399,7 +420,7 @@ class EmailTestRequest(BaseModel):
         ...,
         description="Email platform: gmail, microsoft, selfhosted, cloudflare, other",
     )
-    config: dict[str, Any] = Field(..., description="Email configuration")
+    config: BoundedConfig = Field(..., description="Email configuration")
 
     @field_validator("platform")
     @classmethod
@@ -463,7 +484,7 @@ class EmailConfigRequest(BaseModel):
         ...,
         description="Email platform: gmail, microsoft, selfhosted, cloudflare, other",
     )
-    config: dict[str, Any] = Field(..., description="Email configuration")
+    config: BoundedConfig = Field(..., description="Email configuration")
 
 
 class FileStorageConfigRequest(BaseModel):
@@ -472,7 +493,7 @@ class FileStorageConfigRequest(BaseModel):
     platform: str = Field(
         ..., description="Platform: googledrive, onedrive, s3, local, other"
     )
-    config: dict[str, Any] = Field(..., description="Storage configuration")
+    config: BoundedConfig = Field(..., description="Storage configuration")
 
 
 class AuthConfigRequest(BaseModel):
@@ -507,7 +528,7 @@ class ITTeamRequest(BaseModel):
         max_length=50,
         description="IT team members",
     )
-    backup_access: dict[str, Any] = Field(..., description="Backup access information")
+    backup_access: BoundedConfig = Field(..., description="Backup access information")
 
 
 class StationRequest(BaseModel):
@@ -598,6 +619,20 @@ class RoleSetupItem(BaseModel):
     is_custom: bool = Field(default=False, description="Whether this is a custom role")
 
 
+def _reject_duplicate_ids(items: list["RoleSetupItem"]) -> list["RoleSetupItem"]:
+    """A position id is its slug, which is unique per organization.
+
+    Two new rows sharing one id fail at flush with an IntegrityError, which the
+    client saw as a 500; refusing the payload up front answers 422 instead.
+    """
+    seen: set[str] = set()
+    for item in items:
+        if item.id in seen:
+            raise ValueError(f"Position id {item.id!r} appears more than once")
+        seen.add(item.id)
+    return items
+
+
 class RolesSetupRequest(BaseModel):
     """Request model for role setup during onboarding"""
 
@@ -609,6 +644,11 @@ class RolesSetupRequest(BaseModel):
         max_length=200,
         description="List of roles to create for the organization",
     )
+
+    @field_validator("roles")
+    @classmethod
+    def _ids_are_unique(cls, roles: list["RoleSetupItem"]) -> list["RoleSetupItem"]:
+        return _reject_duplicate_ids(roles)
 
 
 class RolesSetupResponse(BaseModel):
@@ -636,6 +676,11 @@ class PositionsSetupRequest(BaseModel):
         max_length=200,
         description="List of positions to create for the organization",
     )
+
+    @field_validator("positions")
+    @classmethod
+    def _ids_are_unique(cls, positions: list["RoleSetupItem"]) -> list["RoleSetupItem"]:
+        return _reject_duplicate_ids(positions)
 
 
 class PositionsSetupResponse(BaseModel):
@@ -1023,7 +1068,6 @@ async def _persist_session_data_to_org(
     email_data = session_data.get("email")
     if email_data and email_data.get("config_encrypted"):
         try:
-            import json
 
             from app.core.security import decrypt_data
             from app.schemas.organization import encrypt_settings_secrets
@@ -1069,7 +1113,6 @@ async def _persist_session_data_to_org(
     storage_data = session_data.get("file_storage")
     if storage_data and storage_data.get("platform"):
         try:
-            import json
 
             from app.core.security import decrypt_data
             from app.schemas.organization import encrypt_settings_secrets
@@ -1457,6 +1500,15 @@ async def create_organization(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except HTTPException:
+        # The logo scan refuses with its own 400; a blanket 500 would bury why.
+        raise
+    except Exception as e:
+        logger.error(f"Error creating organization during onboarding: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create organization. Please check the server logs for details.",
         )
 
 
@@ -1948,7 +2000,6 @@ async def save_email_config(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=invalid)
 
     # Encrypt sensitive config data (contains passwords, API keys, etc.)
-    import json
 
     encrypted_config = encrypt_data(json.dumps(data.config))
 
@@ -2001,7 +2052,6 @@ async def save_file_storage_config(
         )
 
     # Encrypt sensitive config data (contains API keys, AWS credentials, etc.)
-    import json
 
     encrypted_config = encrypt_data(json.dumps(data.config))
 
@@ -2469,6 +2519,9 @@ async def save_session_organization(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
+    except HTTPException:
+        # The logo scan refuses with its own 400; a blanket 500 would bury why.
+        raise
     except Exception as e:
         logger.error(f"Error creating organization during onboarding: {e}")
         raise HTTPException(

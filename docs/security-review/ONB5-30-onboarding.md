@@ -211,6 +211,85 @@ fresh rather than trusting this note.
 
 ---
 
+## Pass 9 addendum (2026-10-25) — 3 fixes recovered from an orphaned pre-merge branch (ONB6-30-1/2/3)
+
+**Not a new rotation pass.** A separate session had already written and
+committed these three fixes (single commit `2e48054e`, dated 2026-10-24) on
+branch `claude/security-review-onboarding-p12`, cut from `main` before this
+feature's pass 9 above (PR #3658) merged. That branch was never turned into a
+pull request, so pass 9 ran against `main` without it, independently
+re-confirmed two of these three as still-open gaps (see pass 9's "Standing
+findings" above — the duplicate `role.id`/position-id 500 and `POST
+/organization`'s missing `except Exception`), and merged with 0 fixes. This PR
+(`claude/security-review-onboarding-p12-recovered`) reapplies the orphaned
+branch's three fixes on top of current `main`; it is a recovery of
+already-written work, not a fresh review. `onboarding.py` had not changed
+between the orphaned branch's cut point and this recovery, so the fixes
+applied with no adaptation needed.
+
+### ONB6-30-1 — LOW — FIXED — Free-form config dicts had only the 60 MB request ceiling
+
+`EmailTestRequest.config`, `EmailConfigRequest.config`,
+`FileStorageConfigRequest.config` and `ITTeamRequest.backup_access`
+(`onboarding.py`) were bare `dict[str, Any]`. `/session/email`,
+`/session/file-storage` and `/session/it-team` encrypt and store them in the
+session's JSON `data` column for a caller holding only a session cookie, so
+one request could park up to `MAX_REQUEST_BODY_SIZE` (60 MB) in the row and
+spend CPU encrypting it. **Fix:** a `BoundedConfig` type caps the serialized
+value at 64 KiB (`ONBOARDING_CONFIG_MAX_BYTES`; the largest honest value is a
+~2.5 KB service-account key). Over the cap is a 422. **Guard:**
+`tests/test_onboarding_request_caps.py::TestFreeFormConfigCap`, including an
+AST check that no `*Request` model in `onboarding.py` declares a bare
+`dict[str, Any]`.
+
+### ONB6-30-2 — LOW — FIXED — A rejected logo was reported as "Failed to create organization" (500)
+
+`/session/organization` runs `scan_and_validate_logo` inside its `try`; a bad
+or malicious image makes it raise `HTTPException(400, "Invalid image: …")`,
+which the route's `except Exception` caught and turned into a generic 500
+whose text sends the administrator to the server logs instead of telling them
+what was wrong. The same blanket handler was missing entirely from `POST
+/organization` (pass 9's "missing `except Exception`" standing item), and
+adding one naively would have copied the same bug. **Fix:** both routes now
+re-raise `HTTPException` before the generic handler, and `POST /organization`
+has a generic handler for the first time. **Guard:**
+`tests/test_onboarding_organization_error_handling.py` (6 tests across both
+routes: a rejected logo keeps its 400, an unexpected error is a generic 500
+that does not echo the exception text, a `ValueError` is a 400). Verified
+against the pre-fix code as part of this recovery: `test_a_rejected_logo_keeps_its_own_400[session]`
+and `test_an_unexpected_failure_is_a_generic_500[organization]` fail without
+the fix (the latter with an unhandled `RuntimeError`, confirming `POST
+/organization` truly had no blanket handler) and pass with it.
+
+### ONB6-30-3 — LOW — FIXED — A repeated position id in one payload was a 500
+
+The id is the stored slug, unique per organization, so two new entries
+sharing one id fail at flush with an `IntegrityError` — this is exactly the
+duplicate-`role.id` gap pass 9 re-confirmed as OPEN above. **Fix:**
+`RolesSetupRequest` and `PositionsSetupRequest` now refuse a repeated id with
+a 422 via a shared `_reject_duplicate_ids` validator. The wizard cannot
+produce one (`positionsConfig` is a record keyed by id), so this changes only
+what a hand-built request sees. **Guard:**
+`tests/test_onboarding_request_caps.py::TestDuplicatePositionIds`.
+
+### Completion gate (this recovery)
+
+| Check                                                                                                  | Result                                                        |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/`                                                            | ✅ 0 violations                                               |
+| `python3.13 -m black --check app/ tests/ alembic/`                                                     | ✅ clean, 2,638 files unchanged                               |
+| `python3.13 -m isort --check-only app/ tests/ alembic/`                                                | ✅ clean                                                      |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices"`   | ✅ 336 passed, 1 skipped (pywebpush, env-only)                |
+| `pytest tests/test_onboarding_organization_error_handling.py tests/test_onboarding_request_caps.py -v` | ✅ 21/21 passed                                               |
+| Pre-fix regression check (fix reverted, tests re-run)                                                  | ✅ 2 of 21 fail exactly as expected, pass again once restored |
+
+No frontend files are touched by this recovery, so no frontend verification
+is needed. `docs/security-review/PROGRESS.md`'s rotation table is left
+untouched by this PR — row 30 already reflects the normal rotation's own
+state, and this recovery does not advance or re-run the rotation.
+
+---
+
 ## Pass 8 (2026-10-21) — watchdog pickup, 1 independently-landed fix re-confirmed, 0 new findings
 
 **Step 0.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
