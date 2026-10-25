@@ -14,7 +14,6 @@ import {
   Award,
   Calendar,
   AlertCircle,
-  ExternalLink,
   Sparkles,
   Layers,
   Loader2,
@@ -25,13 +24,12 @@ import { trainingProgramService, trainingService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { NEW_PROGRAM_HREF } from '../components/training/trainingAdminAreas';
-import RegistryImportModal from './RegistryImportModal';
+import { RegistryImportPanel } from '../components/training/RegistryImportPanel';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { ProgramImportSummaryView } from '../components/training/ProgramImportSummaryView';
 import { enumLabel } from '@/utils/displayValue';
-import { isSafeExternalUrl } from '@/utils/safeUrl';
 import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
@@ -56,7 +54,10 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
   // rendered for a member. Deriving the shown tab rather than trusting the
   // state keeps a member on Programs even if the permission is revoked while
   // they sit on another tab — there would be no tab strip left to leave it.
-  const visibleTab: TabView = canManage ? activeTab : 'programs';
+  //
+  // Embedded in the Training Administration hub, Requirements is not offered:
+  // the hub has its own Requirements tab, which carries the registry import.
+  const visibleTab: TabView = !canManage || (embedded && activeTab === 'requirements') ? 'programs' : activeTab;
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
   const [registries, setRegistries] = useState<RegistryInfo[]>([]);
@@ -69,7 +70,6 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
   const [showInactive, setShowInactive] = useState(false);
   const includeInactive = canManage && showInactive;
   const [reactivatingId, setReactivatingId] = useState<string | null>(null);
-  const [registryModal, setRegistryModal] = useState<{ key: string; name: string } | null>(null);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<TrainingRequirementEnhanced | null>(null);
@@ -388,20 +388,22 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
               <Target className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
               Programs
             </button>
-            <button
-              onClick={() => setActiveTab('requirements')}
-              role="tab"
-              aria-selected={visibleTab === 'requirements'}
-              aria-controls="tab-panel-requirements"
-              className={`touch:min-h-11 flex-1 rounded-md px-2 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
-                visibleTab === 'requirements'
-                  ? 'bg-red-800 text-white'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
-              }`}
-            >
-              <ListChecks className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
-              Requirements
-            </button>
+            {!embedded && (
+              <button
+                onClick={() => setActiveTab('requirements')}
+                role="tab"
+                aria-selected={visibleTab === 'requirements'}
+                aria-controls="tab-panel-requirements"
+                className={`touch:min-h-11 flex-1 rounded-md px-2 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
+                  visibleTab === 'requirements'
+                    ? 'bg-red-800 text-white'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+                }`}
+              >
+                <ListChecks className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden="true" />
+                Requirements
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('templates')}
               role="tab"
@@ -649,58 +651,10 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
               </div>
             ) : (
               <div id="tab-panel-requirements" role={panelRole}>
-                {/* Registry Import Section. Listing and importing a registry are
-                    both training.manage-gated, so members never see the panel —
-                    and loadData skips the listing call that would 403. */}
-                {canManage && (
-                  <div className="bg-theme-surface-secondary mb-6 rounded-lg p-6">
-                    <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Import from Registry</h3>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      {(registries.length > 0
-                        ? registries
-                        : [
-                            { key: 'nfpa', name: 'NFPA', description: '', requirement_count: 0 },
-                            { key: 'proboard', name: 'Pro Board', description: '', requirement_count: 0 },
-                            { key: 'emr', name: 'NREMT — EMR', description: '', requirement_count: 0 },
-                            { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 0 },
-                            { key: 'aemt', name: 'NREMT — Advanced EMT (AEMT)', description: '', requirement_count: 0 },
-                            { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 0 },
-                          ]
-                      ).map((registry) => (
-                        <button
-                          key={registry.key}
-                          onClick={() => setRegistryModal({ key: registry.key, name: registry.name })}
-                          className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex flex-col items-center rounded-lg px-4 py-3"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Download className="h-5 w-5" aria-hidden="true" />
-                            <span>Import {registry.name}</span>
-                          </div>
-                          {registry.last_updated && (
-                            <span className="text-theme-text-muted mt-1 text-xs">Updated {registry.last_updated}</span>
-                          )}
-                          {registry.requirement_count > 0 && (
-                            <span className="text-theme-text-muted text-xs">
-                              {registry.requirement_count} requirements
-                            </span>
-                          )}
-                          {registry.source_url && isSafeExternalUrl(registry.source_url) && (
-                            <a
-                              href={registry.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="mt-1 flex items-center space-x-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
-                            >
-                              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                              <span>Source</span>
-                            </a>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Listing and importing a registry are both training.manage-gated,
+                    so members never see the panel — and loadData skips the
+                    listing call that would 403. */}
+                {canManage && <RegistryImportPanel registries={registries} onImported={() => void loadData()} />}
 
                 {/* Requirements List */}
                 <div className="grid gap-4">
@@ -794,20 +748,10 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
         )}
       </div>
 
-      {/* Both dialogs only ever perform training.manage actions, so losing the
-          permission with one open closes it rather than leaving Import or Save
-          on screen to fail with a 403. */}
-      {canManage && registryModal && (
-        <RegistryImportModal
-          registryKey={registryModal.key}
-          registryName={registryModal.name}
-          onClose={() => setRegistryModal(null)}
-          onImported={() => {
-            void loadData();
-          }}
-        />
-      )}
-
+      {/* The dialog only performs training.manage actions, so losing the
+          permission with it open closes it rather than leaving Save on screen
+          to fail with a 403. The registry import dialog goes the same way: it
+          lives inside RegistryImportPanel, which unmounts with the permission. */}
       {canManage && showRequirementModal && (
         <RequirementModal
           requirement={editingRequirement}
