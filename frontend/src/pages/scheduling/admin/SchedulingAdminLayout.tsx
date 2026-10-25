@@ -13,13 +13,14 @@
  * there is no viewer who passes a page's gate and fails the header's.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Plus, RefreshCw } from 'lucide-react';
 import { AdminHubFrame } from '../../../components/admin';
 import type { AdminHubAction } from '../../../components/admin';
 import { useAuthStore } from '../../../stores/authStore';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
+import { useSchedulingStore } from '../../../modules/scheduling/store/schedulingStore';
 import { SCHEDULING_HUB_CARDS } from './schedulingHubCards';
 import { CREATE_SHIFT_PATH, resolveSchedulingAdminLocation, schedulingAdminAreasFor } from './schedulingAdminAreas';
 import type { SchedulingAdminAreaId } from './schedulingAdminAreas';
@@ -36,6 +37,15 @@ export const SchedulingAdminLayout: React.FC<{ children: React.ReactNode }> = ({
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const { pathname, search } = useLocation();
 
+  // Platoon Rosters is a Settings page only once platoon scheduling is on. The
+  // store holds the answer for the whole session and dedupes the request, so
+  // moving between admin pages does not refetch it.
+  const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
+  const loadSettings = useSchedulingStore((s) => s.loadSettings);
+  useEffect(() => {
+    if (canManage) void loadSettings();
+  }, [canManage, loadSettings]);
+
   // Every card resolves its own gate here rather than inheriting the page's.
   // Two cards point into Inventory, whose grants `scheduling.manage` does not
   // imply — `checkPermission` is exact match plus module wildcard — so a card
@@ -47,10 +57,11 @@ export const SchedulingAdminLayout: React.FC<{ children: React.ReactNode }> = ({
         ? []
         : SCHEDULING_HUB_CARDS.filter((card) => {
             if (card.requiresModule && !isModuleOn(card.requiresModule)) return false;
+            if (card.requiresPlatoons && !platoonsEnabled) return false;
             if (card.anyPermission) return card.anyPermission.some((permission) => checkPermission(permission));
             return card.permission ? checkPermission(card.permission) : true;
           }),
-    [checkPermission, isModuleOn, modulesLoading]
+    [checkPermission, isModuleOn, modulesLoading, platoonsEnabled]
   );
 
   // Bumped by the refresh action and when the metrics settings save, so the

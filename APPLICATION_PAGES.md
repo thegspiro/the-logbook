@@ -923,6 +923,17 @@ to sign up as a driver with no EVOC certification behind it.
 > below is still current; only where it is reached has moved. See
 > **Scheduling Administration** above.
 
+> **No longer drawn in `SettingsLayout`** _(2026-10-25)_. Inside the
+> Scheduling Administration header the shell's section row, title and narrower
+> column repeated what the header's Settings strip already shows, so
+> `SchedulingSettingsPage` now renders only the body card. The header is the
+> section nav: General, Apparatus Defaults, Platoon Rosters (only while
+> platoon scheduling is on, via `requiresPlatoons` on its card), Outside
+> Apparatus and Notifications under Settings; Eligibility under People &
+> Eligibility; Shift Reports under Reports. The panel no longer opens on its
+> own `SettingsPanelHead`; the page's `sr-only` `<h2>` names the section. The
+> history below is kept as written.
+
 `/scheduling/settings` used the **shared settings layout**
 (`components/settings/SettingsLayout.tsx`) — the same shell as Organization
 Settings and Event Settings: a section sidebar with descriptions on desktop, a

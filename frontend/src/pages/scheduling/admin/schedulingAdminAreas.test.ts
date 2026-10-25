@@ -147,8 +147,25 @@ describe('resolveSchedulingAdminLocation', () => {
     });
   });
 
+  it('finds Platoon Rosters under Settings when the department offers it', () => {
+    expect(resolve('/scheduling/admin/settings/platoons')).toEqual({
+      areaId: 'settings',
+      destinationId: 'settings-platoons',
+    });
+  });
+
+  // With platoon scheduling off, the layout filters the card away while the
+  // route still answers (it falls back to General): the header must still say
+  // the officer is in Settings rather than on the Overview.
   it('keeps a settings section with no card of its own under Settings', () => {
-    expect(resolve('/scheduling/admin/settings/platoons')).toEqual({ areaId: 'settings', destinationId: null });
+    const withoutPlatoons = SCHEDULING_HUB_CARDS.filter((card) => !card.requiresPlatoons);
+    expect(
+      resolveSchedulingAdminLocation(
+        '/scheduling/admin/settings/platoons',
+        '',
+        schedulingAdminAreasFor(withoutPlatoons, true)
+      )
+    ).toEqual({ areaId: 'settings', destinationId: null });
   });
 
   it('falls back to Overview, with no page, for a path no destination names', () => {

@@ -803,8 +803,10 @@ export const ALL_ROUTES: RouteCheck[] = [
   // what stood between them and a budget of 0. That is done, and they are
   // listed.
   //
-  // The six /scheduling/admin/settings sections below are the fourth, and they
-  // are the screen this note used to describe as unlistable. Every number it
+  // The six /scheduling/admin/settings sections below were the fourth, and they
+  // are the screen this note used to describe as unlistable. Since 2026-10-25
+  // they no longer reach the shell: they render inside the Scheduling
+  // Administration header, whose page strip is their section nav. Every number it
   // carried was a guess and the guess was low: "17 controls under 44px, mostly
   // toggle-track". Measuring it once the two ErrorBoundary crashes and the one
   // overflow were fixed — earlier categories mask the tap budget — gave 80,
