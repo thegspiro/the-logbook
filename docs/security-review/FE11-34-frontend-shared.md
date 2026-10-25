@@ -1,6 +1,6 @@
 # Security Review — Feature 34: Frontend Shared (pass 11)
 
-**Prefix:** `FE11` · **Iteration:** 34 · **Reviewed:** 2026-10-25 · **PR:** (opening)
+**Prefix:** `FE11` · **Iteration:** 34 · **Reviewed:** 2026-10-25 · **PR:** #3682
 
 **Frontend:** `utils/apiCache.ts`, `services/apiClient.ts`, `utils/createApiClient.ts`,
 `utils/errorHandling.ts`, `services/errorTracking.ts`/`services/errorReporting.ts`,

@@ -16,10 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook)** (branch
+**PR [#3682](https://github.com/thegspiro/the-logbook/pull/3682)** (branch
 `claude/security-review-frontend-shared-p11`) — Feature 34 (Frontend
-shared), pass 11, closing out this rotation lap (00–34 all `✅` once this
-merges). `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+shared), pass 11, closing out this rotation lap. It was the last `⬜` row,
+so this PR's own commit also resets all 35 rows (00–34) to `⬜` for the next
+lap. `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
 returned 0 results, checked before starting and re-checked immediately
 before branching/pushing. PR #3681 (Feature 33, Core infrastructure, pass 9)
 had already merged (`8ae42b51`) with no open rotation PR behind it, leaving
@@ -21449,7 +21450,7 @@ entry). Row 00's own pass-10 review (`SEC-00-cross-cutting-baseline.md`'s
 **Pass 11** section) rides along in this same reset, per the "folded into
 this iteration's commit" rule.
 
-**Pass 10 complete (2026-10-22 → 2026-10-25, PRs #3555–#TBD):** every row
+**Pass 10 complete (2026-10-22 → 2026-10-25, PRs #3555–#3682):** every row
 below went ✅ again, see the Log for detail on each — row 34 (Frontend
 shared) was the last to close out this lap, with this PR
 (`FE11-34-frontend-shared.md`). Reset to ⬜ for pass 11 — each row's prior
