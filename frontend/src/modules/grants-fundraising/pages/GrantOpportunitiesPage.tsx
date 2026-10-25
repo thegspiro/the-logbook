@@ -20,7 +20,11 @@ import {
   Shield,
   Loader2,
   Landmark,
+  Pencil,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
 import type { GrantOpportunity, GrantCategory } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -29,6 +33,8 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { useAuthStore } from '../../../stores/authStore';
 import { GRANT_CATEGORY_LABELS } from '../utils/labels';
+import { useConfirm } from '../../../contexts/ConfirmContext';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 const CATEGORY_LABELS: Record<string, string> = GRANT_CATEGORY_LABELS;
 
@@ -137,6 +143,9 @@ export const GrantOpportunitiesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [showRetired, setShowRetired] = useState(false);
+  const [retiringId, setRetiringId] = useState<string | null>(null);
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     // One request per keystroke, and the server is free to answer them out of
@@ -147,7 +156,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
     const loadOpportunities = async () => {
       try {
         setIsLoading(true);
-        const params: { isActive: true; search?: string; category?: string } = { isActive: true };
+        const params: { activeOnly: boolean; search?: string; category?: string } = { activeOnly: !showRetired };
         if (search) params.search = search;
         if (categoryFilter) params.category = categoryFilter;
         const data = await grantsService.listOpportunities(params);
@@ -162,7 +171,34 @@ export const GrantOpportunitiesPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [search, categoryFilter]);
+  }, [search, categoryFilter, showRetired]);
+
+  // W68-10: retiring keeps the record, so applications started from it still
+  // name their program; it only leaves the library, and can be reinstated.
+  const setRetired = async (opp: GrantOpportunity, retire: boolean) => {
+    if (retire) {
+      const ok = await confirm({
+        title: 'Retire this opportunity?',
+        message: `“${opp.name}” leaves the opportunity library, so nobody can start a new application from it. Applications already started from it are not affected, and it can be reinstated from Show retired.`,
+        confirmLabel: 'Retire',
+        cancelLabel: 'Keep it',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    setRetiringId(opp.id);
+    try {
+      const updated = await grantsService.updateOpportunity(opp.id, { isActive: !retire });
+      setOpportunities((prev) =>
+        showRetired ? prev.map((o) => (o.id === updated.id ? updated : o)) : prev.filter((o) => o.id !== opp.id)
+      );
+      toast.success(retire ? 'Opportunity retired' : 'Opportunity reinstated');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, retire ? 'Could not retire the opportunity' : 'Could not reinstate it'));
+    } finally {
+      setRetiringId(null);
+    }
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -238,6 +274,15 @@ export const GrantOpportunitiesPage: React.FC = () => {
             </option>
           ))}
         </select>
+        <label className="text-theme-text-secondary touch:min-h-11 inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={showRetired}
+            onChange={(e) => setShowRetired(e.target.checked)}
+          />
+          Show retired
+        </label>
       </div>
 
       {/* Error */}
@@ -299,6 +344,11 @@ export const GrantOpportunitiesPage: React.FC = () => {
                   <div className="mb-3 flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{opp.name}</h3>
+                      {!opp.isActive && (
+                        <span className="bg-theme-surface-secondary text-theme-text-secondary mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium">
+                          Retired
+                        </span>
+                      )}
                       <p className="text-theme-text-secondary text-xs">{opp.agency}</p>
                     </div>
                     <span
@@ -348,9 +398,10 @@ export const GrantOpportunitiesPage: React.FC = () => {
                   )}
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    {/* The application route needs fundraising.manage (W68). */}
-                    {canManage && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* The application route needs fundraising.manage (W68).
+                        A retired program takes no new applications. */}
+                    {canManage && opp.isActive && (
                       <Link
                         to={`/grants/applications/new?opportunity_id=${opp.id}`}
                         className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
@@ -375,6 +426,34 @@ export const GrantOpportunitiesPage: React.FC = () => {
                         </>
                       )}
                     </button>
+                    {canManage && (
+                      <>
+                        <Link
+                          to={`/grants/opportunities/${opp.id}/edit`}
+                          aria-label={`Edit ${opp.name}`}
+                          title="Edit"
+                          className="btn-icon text-theme-text-muted hover:text-theme-text-primary"
+                        >
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => void setRetired(opp, opp.isActive)}
+                          disabled={retiringId === opp.id}
+                          aria-label={opp.isActive ? `Retire ${opp.name}` : `Reinstate ${opp.name}`}
+                          title={opp.isActive ? 'Retire' : 'Reinstate'}
+                          className="btn-icon text-theme-text-muted hover:text-theme-text-primary disabled:opacity-50"
+                        >
+                          {retiringId === opp.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                          ) : opp.isActive ? (
+                            <Archive className="h-4 w-4" aria-hidden="true" />
+                          ) : (
+                            <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   {/* Expanded Details */}

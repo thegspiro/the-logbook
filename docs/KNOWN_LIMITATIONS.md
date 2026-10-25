@@ -6463,18 +6463,18 @@ Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
   and how long it lasts, against an order window that closes.
 - **Decision:** whether to keep the cart, and where.
 
-## Grants — Opportunities Cannot Be Edited (2026-10-15)
+## Grants — Opportunities Could Not Be Edited (2026-10-15, edit and retire resolved 2026-10-25)
 
-Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10). W68-9, key
-contacts edited as free text, was closed by the structured contacts editor on
-the application form.
+Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10).
 
-- **What happens:** `PUT` and `DELETE /grants/{opportunity_id}` exist, but no
-  control on the opportunities page reaches either, so a mistyped deadline or
-  a program that has closed stays as entered. The four Federal Programs cards
-  are fixed text with no way to start an application from them.
-- **Decision:** whether opportunities get edit and retire controls, and whether
-  the federal programs become real, seeded opportunities.
+- **Resolved:** each opportunity has Edit (`/grants/opportunities/:id/edit`) and
+  Retire. Owner decision: retiring sets `is_active = false` and keeps the
+  record, so applications started from it still name their program; **Show
+  retired** lists retired ones and reinstates them. Retired opportunities offer
+  no Start Application.
+- **Still open:** the four Federal Programs cards are fixed text with no way to
+  start an application from them. **Decision:** whether they become real,
+  seeded opportunities.
 
 ## Fundraising — A Donor Must Have a Person's Name (2026-10-15)
 

@@ -1351,22 +1351,23 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Grants & Fundraising _(documented 2026-08-10)_
 
-| URL                             | Page                | Permission           |
-| ------------------------------- | ------------------- | -------------------- |
-| `/grants`                       | Grants Dashboard    | `fundraising.view`   |
-| `/grants/opportunities`         | Grant Opportunities | `fundraising.view`   |
-| `/grants/opportunities/new`     | New Opportunity     | `fundraising.manage` |
-| `/grants/applications`          | Grant Applications  | `fundraising.view`   |
-| `/grants/applications/new`      | New Application     | `fundraising.manage` |
-| `/grants/applications/:id`      | Grant Detail        | `fundraising.view`   |
-| `/grants/applications/:id/edit` | Edit Application    | `fundraising.manage` |
-| `/grants/campaigns`             | Campaigns           | `fundraising.view`   |
-| `/grants/donors`                | Donors              | `fundraising.view`   |
-| `/grants/donations`             | Donations           | `fundraising.view`   |
-| `/grants/donations/new`         | Record Donation     | `fundraising.manage` |
-| `/grants/pledges`               | Pledges             | `fundraising.view`   |
-| `/grants/events`                | Fundraising Events  | `fundraising.view`   |
-| `/grants/reports`               | Fundraising Reports | `fundraising.view`   |
+| URL                              | Page                | Permission           |
+| -------------------------------- | ------------------- | -------------------- |
+| `/grants`                        | Grants Dashboard    | `fundraising.view`   |
+| `/grants/opportunities`          | Grant Opportunities | `fundraising.view`   |
+| `/grants/opportunities/new`      | New Opportunity     | `fundraising.manage` |
+| `/grants/opportunities/:id/edit` | Edit Opportunity    | `fundraising.manage` |
+| `/grants/applications`           | Grant Applications  | `fundraising.view`   |
+| `/grants/applications/new`       | New Application     | `fundraising.manage` |
+| `/grants/applications/:id`       | Grant Detail        | `fundraising.view`   |
+| `/grants/applications/:id/edit`  | Edit Application    | `fundraising.manage` |
+| `/grants/campaigns`              | Campaigns           | `fundraising.view`   |
+| `/grants/donors`                 | Donors              | `fundraising.view`   |
+| `/grants/donations`              | Donations           | `fundraising.view`   |
+| `/grants/donations/new`          | Record Donation     | `fundraising.manage` |
+| `/grants/pledges`                | Pledges             | `fundraising.view`   |
+| `/grants/events`                 | Fundraising Events  | `fundraising.view`   |
+| `/grants/reports`                | Fundraising Reports | `fundraising.view`   |
 
 ---
 
