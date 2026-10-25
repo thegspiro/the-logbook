@@ -16,11 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3685](https://github.com/thegspiro/the-logbook/pull/3685)** (branch
+`claude/security-review-permissions-roles-p12`) — Feature 02 (Permissions &
+roles), pass 12. PR #3684 (Feature 01, Auth & session lifecycle, pass 12)
+had already merged with no open rotation PR behind it — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
+`list_pull_requests` (`state:open`), both 0 matching results, checked before
+starting and re-checked immediately before branching. **2 new findings
+(PERM-10, PERM-11, both MED, flagged — not fixed), 0 fixed.** Five of the
+eleven scoped files changed since pass 11's baseline (`dependencies.py`,
+`core/permissions.py`, `roles.py`, `operational_ranks.py`,
+`operational_rank_service.py`, `users.py`). Routes re-enumerated by AST (28,
+unchanged from pass 11). The new step-up re-verification gate (Feature 01's
+own mechanism) was applied to `roles.py`'s mutating routes and three
+role-assignment handlers in `users.py`, but not to the structurally parallel,
+equally ceiling-bound rank-granting paths — `operational_ranks.py`'s rank CRUD
+(PERM-11) and `update_user_profile`'s rank branch / `create_member` (PERM-10).
+Both bounded by the existing grant ceiling, not an escalation beyond it; both
+flagged because expanding `STEPUP_HANDLERS` is Feature 01's own pinned,
+test-checked decision. See `PERM-02-permissions-roles.md`'s **Pass 12**
+section for the full review.
+
+Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
+surface & webhooks).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3685, Feature 02, Permissions & roles, pass 12, merged), preserved for history</summary>
+
 **None.** PR #3684 (Feature 01, Auth & session lifecycle, pass 12) merged.
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
 `list_pull_requests` (`state:open`) both returned 0 matching results,
 checked before starting this iteration. Rotation row 01 is ✅. Next is
 Feature 02 (Permissions & roles).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3684, Feature 01, Auth & session lifecycle, pass 12, merged), preserved for history</summary>
