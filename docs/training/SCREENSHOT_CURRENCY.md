@@ -1,5 +1,23 @@
 # Screenshot currency
 
+## Queued by the October 24 – 25 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
+Nothing was captured by this pass. Guides 01, 05 and 06 carry a
+"screenshot to create" note where the first picture goes.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 01 | Member ID Cards with Cards, Coverage, Tap log and Settings tabs; the Coverage lists | Create |
+| 06 | Card Readers: room list with taps, refusals and the Badge check-in switch | Create |
+| 04 | Events → Card Check-ins; the event page **Card taps** section | Create |
+| 05 | NFC Tag Register with a selection and Mark lost / Move / Unlink | Create |
+| 03 | Shift Patterns with a paused pattern and **Resume**; the generate message listing members not seated | Create |
+| 02 | Training Admin → Curriculum → Programs listing existing programs; Requirements tab with the registry import panel | Create / replace any shot of the old Programs tab |
+| 03, 05 | Scheduling Administration and Inventory Administration hubs with the area cards | Re-check any full-page shot |
+| All | Any form shot taken on a tablet (field grids and sub-page rail changed at 768–1023px) | Re-check |
+| 02, 04, 05 | Badges that showed raw statuses (training history, action items, minutes) | Re-check wording in shots |
+
 ## Queued by the October 23 – 24 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).

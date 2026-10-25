@@ -5,6 +5,29 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 24 – 25, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
+
+- **Member ID Cards page** for card clerks: every card, members with no card,
+  a tap log, and how long taps are kept. Cards of members who leave are
+  suspended automatically and return with them.
+- **Card Readers page** and a **Card Check-ins** tab on Events show where cards
+  were tapped.
+- **NFC Tag Register** lists every inventory tag; mark lost or found, move, unlink,
+  download.
+- **Scheduling:** pause a pattern, reactivate a template, and night shifts are built
+  from the night template. Generating tells you who could not be seated.
+- **Scheduling and Inventory Administration** share Training's area-card header.
+- **Training Admin Programs tab** shows the programs you already have.
+- **Report emails** that fail are retried the next day, and the dialog says why.
+- **Date of birth and emergency contacts are encrypted at rest.** Operators:
+  see `docs/UPGRADING.md` before upgrading.
+- **MySQL and Redis can require TLS** (`DB_REQUIRE_TLS`, `REDIS_REQUIRE_TLS`).
+- Screenshots to create or re-check are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 23 – 24, 2026
 
 The engineering audit is

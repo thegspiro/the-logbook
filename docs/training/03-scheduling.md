@@ -3268,6 +3268,28 @@ Automatic shift generation**, active patterns keep generating shifts ahead by
 themselves. It is off unless you turn it on. **Weeks ahead** sets how far
 (1 to 52; 4 when first turned on).
 
+#### Pausing a pattern and reactivating a template _(2026-10-25)_
+
+- **Pause** on a pattern stops it generating shifts, by schedule or by hand;
+  **Resume** starts it again. Manual **Generate** is disabled on a paused
+  pattern, or on one whose template is deactivated.
+- A template deactivated because it was in use shows **Reactivate**. Creating a
+  shift from an inactive template is refused.
+- A pattern with separate day and night templates builds each side from its
+  own template: seats, minimum staffing, apparatus, open-to-all setting, colour
+  and times. Before, a night shift took only the night hours and colour, so a
+  night side set up with three seats came out with the day side's four.
+- Generated shifts are checked against each member's seat, eligibility, leave and
+  overlapping shifts. A platoon member who cannot take a seat is left off, and the
+  message after **Generate** lists who was not seated and why.
+- An open-to-all shift that names no seats now lets anyone sign up for the
+  built-in seats. It used to offer nobody anything.
+- Shift dates are calendar days. They no longer shift by one day when your
+  device's time zone is far from the department's.
+
+> **Screenshot to create:** Shift Patterns with a paused pattern and Resume;
+> the generate message listing members who were not seated.
+
 ### Understanding Platoon Rotations
 
 A platoon pattern repeats a fixed on/off cycle:

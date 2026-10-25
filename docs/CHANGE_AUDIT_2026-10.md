@@ -5,6 +5,37 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 24 – 25, 2026
+
+Merged to `main` since `adf1d463` (2026-10-24 13:15 UTC) through `4f27e679`
+(2026-10-25 11:14 UTC). Security-review passes (locations-kiosk, scheduled-tasks,
+frontend-shared, core-infrastructure, cross-cutting-baseline, auth-session,
+permissions-roles, onboarding recovery ONB6-30-1/2/3, public-surface-webhooks,
+storefront-payments) are in `docs/security-review/PROGRESS.md`. `CHANGELOG.md`
+stays closed.
+
+| Change                                                                                                                                                                                                                                    | Guide                                   | Disposition                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
+| Member ID Cards admin page (Cards, Coverage, Tap log, Settings); bulk status; tap retention; leavers' cards suspended and restored; `nfc_card_taps` table                                                                                 | 01                                      | Added (new section); screenshot queued          |
+| Card Readers page, event **Card taps** section, **Events → Card Check-ins** tab; Room QR Codes opens with Facilities off                                                                                                                  | 06, 04                                  | Added; screenshot queued                        |
+| Inventory **NFC Tag Register**; checklist managers see compartment tags; quartermaster now manages compartment tags                                                                                                                       | 05                                      | Added (new section); screenshot queued          |
+| Date of birth and emergency contacts encrypted at rest (migration converts columns to TEXT and encrypts rows; needs `ENCRYPTION_KEY`); key-rotation scripts now cover them and `screening_records`                                        | `UPGRADING`, wiki Security-Encryption   | Written with the change                         |
+| MySQL and Redis TLS: `tls-setup.sh`, `DB_REQUIRE_TLS`, `REDIS_REQUIRE_TLS`, `tls-enforce.sh`, certificate-expiry warning; `REDIS_SSL=true` now connects                                                                                   | `TLS`, `UPGRADING`, wiki Security pages | Written with the change                         |
+| Scheduling Administration and Inventory Administration use the area-card header (seven areas each)                                                                                                                                        | 03, 05                                  | Written with the change; full-page shots queued |
+| Scheduling: pause/resume patterns, reactivate templates, per-side day/night templates, seat checks and **not seated** warnings on generate, DST-correct overnight shifts, calendar-day dates, open-to-all seats                           | 03                                      | Added                                           |
+| Shifts: seat changes, attendance and calls checked under the shift lock (no duplicate attendance; finalized/cancelled shifts refuse edits); shift report status moves only through review; trainee view no longer blanks stored narrative | `KNOWN_LIMITATIONS`, 03                 | Backend; no screen change                       |
+| Training Admin **Programs** tab lists existing programs; registry import moved to **Requirements**; tabs fit 320px                                                                                                                        | 02                                      | Added                                           |
+| Saved and compliance report email: retry-safe, failed sends recorded, specific error in the dialog                                                                                                                                        | 08                                      | Added                                           |
+| Status words (not stored codes) on nine more screens; member picker error text AA contrast; tablet form-grid and 16px field fixes                                                                                                         | 02, 04, 05                              | No wording change; tablet shots queued          |
+| Getting Started lesson says two-factor is required for privileged roles; 05-139 re-shot without the grace banner                                                                                                                          | 00, Learning Center                     | Written with the change                         |
+| Fixes: first checklist item add under MySQL (500), medical-supply lot recalls (`3d67883cd461`)                                                                                                                                            | `MEDICAL_SUPPLIES_MODULE`               | Written with the change                         |
+
+**Screenshots to create:** Member ID Cards (four tabs), Card Readers, Events
+Card Check-ins, NFC Tag Register, paused pattern with Resume and the not-seated
+message, Training Admin Programs tab. **Re-check:** Scheduling and Inventory
+Administration hub shots (new header), any form shot taken on a tablet. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 23 – 24, 2026
 
 Merged to `main` since `b92a4add` (2026-10-23 12:31 UTC) through `c1fc4894`

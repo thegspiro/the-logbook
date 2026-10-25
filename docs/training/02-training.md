@@ -578,6 +578,12 @@ If each meeting covers a different subject, you want a cohort.
 ## Training Programs
 
 Select **Training > Programs** to see your department's training programs.
+In **Training Administration**, the **Curriculum → Programs** tab shows the
+same list, so an officer sees the programs that already exist first. **New
+Pipeline** (or **Create Your First Pipeline**) opens the wizard in the same
+tab, and choosing **Programs** in the hub returns to the list. _(2026-10-25)_
+**Import from Registry** (NFPA, Pro Board, NREMT) now lives on **Curriculum →
+Requirements**; the standalone Training Programs page keeps it too.
 For training officers, the page's breadcrumb starts at **Training
 Administration**, one tap back to the admin page. Other members do not see that
 link.
