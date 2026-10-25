@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3702 (Feature 08, Membership pipeline, pass 13) merged
+(`507ae1d0`) — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 matching results,
+immediately before this iteration started. Rotation row 08 → ✅. Dedicated
+review session (`session_011T1ZyyLrD5HagusgK9uDw2`) still unreachable; this
+watchdog picked up row 09 (Medical screening, PHI) next — see the log entry
+below for its pass 12 review. This row will record that pass's PR number
+once it is opened.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3702, Feature 08, Membership pipeline, pass 13, merged), preserved for history</summary>
+
 **PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702)** (branch
 `claude/security-review-membership-pipeline-p13`) — Feature 08 (Membership
 pipeline), pass 13. No security-review PR was open — confirmed via
@@ -36,6 +48,8 @@ re-confirmed OPEN, unaffected. See
 
 Rotation row 08 → ✅ (pending this PR's merge); next is Feature 09
 (Medical screening, PHI).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3695's merge, Feature 07, Users & organizations, pass 12), preserved for history</summary>
@@ -21765,7 +21779,7 @@ PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -21798,6 +21812,58 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-25 — Feature 09 (Medical screening, PHI, pass 12) — watchdog pickup, 0 fixed, 0 new findings; re-verified a fix that landed outside the rotation
+
+PR #3702 (Feature 08, Membership pipeline, pass 13) had already merged
+(`507ae1d0`) with no `claude/security-review-*` PR open anywhere
+(`search_pull_requests`, 0 matching results, re-checked immediately before
+branching). Dedicated review session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+still unreachable; this watchdog picked up row 09 (Medical screening, PHI)
+next, confirmed the next `⬜` from the Rotation table directly.
+
+Baseline `ca2233e5` (PR #3577's merge, pass 11). Only **one** non-merge
+commit touches the declared scope since then (`2f2b8cc6`), and it was not
+made through this rotation — no `claude/security-review-*` branch, no PR
+merge bubble, a different session id in its co-author line. It is the
+owner-directed resolution of two items this rotation had already flagged:
+MS-17 (`GET /compliance/{user_id}`/`.../prospect/{id}` answered 200 for a
+subject that does not exist or belongs to another org — now 404, checked
+before anything is graded or audited) and MS2-7 (a waived screening lapsing
+soon was counted but never listed — the count and the list now read one
+shared `_SATISFYING_STATUSES`). Both were re-verified against current code
+and tests rather than taken on the commit message or the doc's own
+"✅ FIXED" annotation (which that commit had already written into this
+file's pass 7/pass 9 sections before this pass started). All 16 routes
+re-enumerated by decorator (unchanged count and permission strings from
+pass 11); tenant isolation (every by-id query org-filtered, all three
+client-supplied FKs on `create_record` validated via `assert_in_org`) and
+PHI encryption at rest (`provider_name`/`result_summary`/`notes` as
+`EncryptedText`, `result_data` as `EncryptedJSON`, real AES-256-GCM, no
+encrypted column compared or sorted on in SQL) re-confirmed by direct read.
+**MS-14** (no finer-grained read tier under `.view`) and **MS-15** (the
+compliance roster loads every screening record in the org, unbounded), both
+standing flagged/accepted items, re-confirmed OPEN/unchanged — neither site
+touched by this window's one commit. `KNOWN_LIMITATIONS.md`'s MS-17 and
+MS2-7 entries already read "resolved 2026-10-25" (written by the same
+outside commit); MS-14/MS-15 entries re-checked accurate, no edit needed.
+See `MS-09-medical-screening.md`'s **Pass 12** section for the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+`flake8==7.4.1`/`black==26.10.1`/`isort==9.0.2`, invoked as
+`/usr/local/bin/{flake8,black,isort}` — a `~/.local/bin/black` uv-tool
+install shadows the CI version on `PATH` with a stale `26.5.1` and was
+bypassed) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 652 revisions, single head `3f2593e8071e`; `check_route_
+permissions.py --strict` (repo root) — 276 routes, 0 errors/warnings; scoped
+backend tests (`-k "medical_screening or screening"`) — 154 passed, 1 skipped
+(environment-only, `pywebpush`); frontend `npm run typecheck` clean; `npm run
+lint` clean (0 warnings); scoped frontend suite (`npx vitest run
+src/modules/medical-screening`) — 61 passed (11 files).
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-10-25 — Feature 07 (Users & organizations, pass 12) — 0 fixed, 1 new finding flagged (USR-11, MED)
 
