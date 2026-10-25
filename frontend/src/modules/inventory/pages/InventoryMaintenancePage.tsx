@@ -4,9 +4,8 @@
  * and provides a modal to log new maintenance records.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import {
-  ArrowLeft,
   Wrench,
   RefreshCw,
   AlertTriangle,
@@ -26,7 +25,6 @@ import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 import { formatDate, formatNumber, getTodayLocalDate } from '../../../utils/dateFormatting';
-import { Breadcrumbs } from '../../../components/ux';
 
 const MAINTENANCE_TYPES = [
   { value: 'inspection', label: 'Inspection' },
@@ -386,17 +384,7 @@ const InventoryMaintenancePage: React.FC = () => {
     `touch:min-h-11 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${active ? 'border-orange-500 text-orange-700 dark:text-orange-400' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
+    <div className="max-w-5xl space-y-6 py-6 sm:py-8">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -404,7 +392,7 @@ const InventoryMaintenancePage: React.FC = () => {
             <Wrench className="h-6 w-6 text-orange-700 dark:text-orange-400" />
           </div>
           <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Maintenance &amp; Inspections</h1>
+            <h2 className="text-theme-text-primary text-2xl font-bold">Maintenance &amp; Inspections</h2>
             <p className="text-theme-text-secondary mt-0.5 text-sm">
               Track due items, log records, and schedule inspections
             </p>

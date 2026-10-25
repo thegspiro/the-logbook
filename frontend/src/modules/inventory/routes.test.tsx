@@ -13,6 +13,12 @@ vi.mock('./pages/MyEquipmentPage', () => ({
 vi.mock('./pages/InventoryAdminHub', () => ({
   InventoryAdminHub: () => <div data-testid="admin-hub">AdminHub</div>,
 }));
+// The header the admin pages are drawn inside. A pass-through here, like the
+// pages: this suite is about which page each path renders, and the real layout
+// loads the hub's stores and services on its first lazy import.
+vi.mock('./components/InventoryAdminLayout', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 vi.mock('../../pages/InventoryCheckoutsPage', () => ({
   default: () => <div data-testid="checkouts-page">Checkouts</div>,
 }));

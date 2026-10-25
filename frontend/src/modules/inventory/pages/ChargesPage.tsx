@@ -6,31 +6,19 @@
  */
 
 import React, { Suspense } from 'react';
-import { Link } from 'react-router';
-import { ArrowLeft, DollarSign, Loader2 } from 'lucide-react';
-import { Breadcrumbs } from '../../../components/ux';
+import { DollarSign, Loader2 } from 'lucide-react';
 
 const ChargeManagementPanel = React.lazy(() => import('../../../components/ChargeManagementPanel'));
 
 const ChargesPage: React.FC = () => (
   <div className="min-h-screen">
-    <div className="mx-auto max-w-5xl py-6 sm:py-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 mb-6 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
+    <div className="max-w-5xl py-6 sm:py-8">
       <div className="mb-6 flex items-center gap-3">
         <div className="rounded-lg bg-amber-600 p-2">
           <DollarSign className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-theme-text-primary text-xl font-bold">Charge Management</h1>
+          <h2 className="text-theme-text-primary text-xl font-bold">Charge Management</h2>
           <p className="text-theme-text-muted text-sm">Cost recovery for lost or damaged items</p>
         </div>
       </div>

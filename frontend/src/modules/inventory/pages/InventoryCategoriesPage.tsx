@@ -7,20 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
-import {
-  ArrowLeft,
-  Tag,
-  Plus,
-  Pencil,
-  RefreshCw,
-  Settings,
-  Shield,
-  Wrench,
-  Hash,
-  AlertTriangle,
-  Nfc,
-} from 'lucide-react';
+import { Tag, Plus, Pencil, RefreshCw, Settings, Shield, Wrench, Hash, AlertTriangle, Nfc } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryCategory, InventoryCategoryCreate } from '../types';
 import { ITEM_TYPES } from '../types';
@@ -29,7 +16,6 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
-import { Breadcrumbs } from '../../../components/ux';
 
 const ITEM_TYPE_COLORS: Record<string, string> = {
   uniform: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
@@ -201,21 +187,11 @@ const InventoryCategoriesPage: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
+    <div className="max-w-7xl space-y-6 py-6 sm:py-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Categories</h1>
+          <h2 className="text-theme-text-primary text-2xl font-bold">Categories</h2>
           <p className="text-theme-text-secondary mt-1">
             Organize inventory items by type and configure tracking requirements.
           </p>
