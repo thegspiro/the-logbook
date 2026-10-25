@@ -113,7 +113,19 @@ class MinutesPublishingService:
             else minutes.meeting_type.value
         )
 
-        copy = await self._copy_for(minutes.id, organization_id)
+        # MM-20: a find-or-create on a unique minutes_id, so two publishes at
+        # once could each find no copy and the second would fail its commit on
+        # the constraint. Lock the minutes row to serialize them; the copy is
+        # then read with a locking read, which sees one the other publish
+        # committed while this one waited (pitfall #27). Locking the copy alone
+        # is not enough: a locking read of a missing row takes a gap lock that
+        # both publishes can hold, and their inserts would then deadlock.
+        await self.db.execute(
+            select(MeetingMinutes.id)
+            .where(MeetingMinutes.id == str(minutes.id))
+            .with_for_update()
+        )
+        copy = await self._copy_for(minutes.id, organization_id, for_update=True)
         if copy is None:
             copy = MinutesPublicCopy(
                 organization_id=str(organization_id),
@@ -211,16 +223,17 @@ class MinutesPublishingService:
         }
 
     async def _copy_for(
-        self, minutes_id: str, organization_id: UUID | str
+        self, minutes_id: str, organization_id: UUID | str, for_update: bool = False
     ) -> Optional[MinutesPublicCopy]:
-        return (
-            await self.db.execute(
-                select(MinutesPublicCopy).where(
-                    MinutesPublicCopy.minutes_id == str(minutes_id),
-                    MinutesPublicCopy.organization_id == str(organization_id),
-                )
-            )
-        ).scalar_one_or_none()
+        query = select(MinutesPublicCopy).where(
+            MinutesPublicCopy.minutes_id == str(minutes_id),
+            MinutesPublicCopy.organization_id == str(organization_id),
+        )
+        if for_update:
+            # populate_existing: a copy already in this session's identity map
+            # from an earlier plain read must be replaced by what was committed.
+            query = query.with_for_update().execution_options(populate_existing=True)
+        return (await self.db.execute(query)).scalar_one_or_none()
 
     # ----------------------------------------------------------------
     # What the public page reads
