@@ -32,6 +32,7 @@ from app.services.training_waiver_service import (
     fetch_org_waivers,
     get_rolling_period_months,
 )
+from app.utils.hours import meets_required_hours
 from app.utils.org_timezone import resolve_org_today
 
 
@@ -711,7 +712,7 @@ def _grade_member_requirement(
                     exp_exp = newest_cert.expiration_date.isoformat()
                     return _ev("expired", exp_comp, exp_exp, **progress)
 
-        if required > 0 and total_hours >= required:
+        if required > 0 and meets_required_hours(total_hours, required):
             return _ev("completed", latest_comp, latest_exp, **progress)
         elif total_hours > 0:
             return _ev("in_progress", latest_comp, latest_exp, **progress)
