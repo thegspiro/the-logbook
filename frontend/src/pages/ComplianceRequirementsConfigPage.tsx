@@ -404,11 +404,17 @@ export default function ComplianceRequirementsConfigPage() {
         additional_recipients: additionalList.length > 0 ? additionalList : undefined,
       };
 
-      await complianceConfigService.generateReport(data);
-      toast.success('Report generated');
+      const generated = await complianceConfigService.generateReport(data);
+      // The backend stores the report before it emails it and only logs a
+      // failed send, so a 200 does not mean the email went out.
+      if (reportSendEmail && !generated.emailedAt) {
+        toast.error('Report generated, but it was not emailed. Check the recipients and the email settings.');
+      } else {
+        toast.success('Report generated');
+      }
       await loadReports();
-    } catch {
-      toast.error('Failed to generate report');
+    } catch (err: unknown) {
+      toast.error(getSaveFailureMessage(err, 'generate the report'));
     } finally {
       setIsGenerating(false);
     }
