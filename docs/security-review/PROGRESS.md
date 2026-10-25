@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3677](https://github.com/thegspiro/the-logbook/pull/3677)** (branch
+`claude/security-review-locations-kiosk-p9`) —
+Feature 32 (Locations & kiosk), pass 9. Watchdog pickup (the dedicated loop
+session for this rotation, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable — no agent via `ListAgents` either). PR #3672 (Feature 31,
+Scheduled tasks, pass 9) had already merged with no open rotation PR behind
+it — confirmed via both `search_pull_requests` (`head:claude/security-review-`,
+state=open) and `list_pull_requests` (state=open), 0 results both times,
+re-checked immediately before branching. Row 31 is `✅`. **0 fixed, 0 new
+findings** — the real delta since pass 8 (a repo-wide numeric-bounds sweep
+adding `le=INT32_MAX` to `capacity`, an a11y contrast-only fix, and two new
+"Card Readers" links gated by the same three permissions as their
+destination route) was read in full and found clean/already-correct. Route
+inventory re-enumerated from the live app's OpenAPI schema plus each
+route's live dependencies: 15/15, no drift from pass 8. One standing
+finding's scope widened by a change outside this feature (a new, unrelated
+`ON DELETE SET NULL` FK from Apparatus & NFC's `nfc_card_taps` table), not
+by a defect in this feature; mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+Full writeup: `docs/security-review/LOC9-32-locations-kiosk.md`'s
+**Pass 9** section.
+
+Row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
+infrastructure) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3672, Feature 31, Scheduled tasks, pass 9, merged), preserved for history</summary>
+
 **PR [#3672](https://github.com/thegspiro/the-logbook/pull/3672)** (branch
 `claude/security-review-scheduled-tasks-p9`) — Feature 31 (Scheduled
 tasks), pass 9. Watchdog pickup (the dedicated loop session for this
@@ -43,6 +72,8 @@ Full writeup: `docs/security-review/CRON9-31-scheduled-tasks.md`'s
 Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
 kiosk) — re-check `search_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3658, Feature 30, Onboarding, pass 9, merged), preserved for history</summary>
@@ -21387,7 +21418,7 @@ this iteration's commit" rule.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -21397,6 +21428,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-25 — Feature 32 (Locations & kiosk, pass 9) — watchdog pickup, 0 fixed, 0 new findings
+
+The dedicated loop session for this rotation (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable (no agent via `ListAgents`). PR #3672 (Feature 31,
+Scheduled tasks, pass 9) had already merged with no open rotation PR behind
+it — confirmed via both `search_pull_requests` and `list_pull_requests`
+(`head:claude/security-review-`, state=open), 0 results both times,
+re-checked immediately before branching. Row 32 (Locations & kiosk) was
+confirmed the next `⬜` row against a freshly-fetched `main`.
+
+Diffed pass 8's baseline (PR #3530, tip `47fbdce7`) against current `HEAD`,
+scoped to this feature's full file list: one backend file and three
+frontend files changed. `schemas/location.py` picked up the repo-wide
+numeric-bounds sweep (`capacity` gained `le=INT32_MAX` alongside its
+existing `ge=1`); `LocationKioskPage.tsx` got an a11y contrast-only fix; and
+`LocationsPage.tsx`/`RoomQRCodesPage.tsx` each gained a "Card Readers" link
+to `/locations/card-readers`, gated by the identical three permissions
+(`locations.manage_nfc_tags` OR `locations.manage` OR `facilities.manage`)
+as that route's own `ProtectedRoute` guard — verified by reading both
+sides, not assumed. `endpoints/locations.py`, `location_service.py`,
+`api/public/display.py`, `endpoints/admin_hub.py`, `admin_hub_service.py`
+and both model files were byte-identical to the baseline.
+
+Route inventory re-enumerated from the live FastAPI app's merged OpenAPI
+schema plus each route's live `dependant.dependencies` (not a grep): 15/15,
+identical paths, methods, and permission strings to pass 8's table — no
+drift.
+
+One migration outside this feature (Apparatus & NFC's
+`nfc_card_taps_and_auto_suspend`, reviewed for its scheduled-task caller by
+Feature 31's own pass 9) added a new `ON DELETE SET NULL` FK to
+`locations.id` (`nullable=True`, correct per Pitfall #2). This doesn't
+trigger `tests/test_location_restrict_references.py` (SET NULL is
+non-blocking, re-ran the guard test directly to confirm: 3 passed) but
+widens LOC8-2's open decision — hard-deleting a location silently nulls it
+on every `SET NULL` reference — from 8 tables to 9. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`; no code change, same disposition as pass 8.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` over
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` single
+head; `pytest tests/test_location_restrict_references.py` 3 passed; scoped
+`pytest -k "location or admin_hub or display or facilit or
+restrict_references or live_schema_drift or account_status_gates"` 883
+passed, 1 skipped (optional `pywebpush` dependency); `npm run typecheck`
+and `npm run lint` both clean.
+
+Full writeup: `docs/security-review/LOC9-32-locations-kiosk.md`'s **Pass 9**
+section. Row 32 → ✅. Next: Feature 33 (Core infrastructure).
 
 ### 2026-10-24 — Feature 31 (Scheduled tasks, pass 9) — watchdog pickup, 0 fixed, 0 new findings
 
