@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #(opening)** — Feature 00 (Cross-cutting baseline), pass 12. PR #3682
+(Feature 34, Frontend shared, pass 11) merged, closing out rotation lap
+"pass 10" (every row ✅) and resetting the table to `⬜` for pass 11 in that
+PR's own commit. `search_pull_requests` (`is:pr is:open
+head:claude/security-review-`) returned 0 results, checked before starting
+and re-checked immediately before branching/pushing — confirming this
+iteration continues straight into Feature 00's own review in the same turn,
+per the "rides along in the first feature PR of the next pass, together
+with the reset" rule. **1 new finding (SEC12-1, LOW/MED, flagged — not
+fixed), 0 security-tooling findings.** Delta re-swept all 13 established
+sweep classes against 386 commits (229 non-merge) since the pass-11
+baseline: formula injection, SET NULL nullability, proxy-IP attribution,
+Alembic chain integrity, LIKE-wildcard escaping, BaseHTTPMiddleware usage,
+unbounded in-memory trackers, window.confirm/alert/prompt, JSON
+shallow-copy mutation, org-scoping/IDOR ratchet, capacity-check locking,
+route auth coverage, and raw exception text reaching the client — all
+clean. The one new finding: a new remote-storage connector
+(`app/services/s3_storage.py`, S3/MinIO) reproduces the pre-SCH-10
+DNS-rebinding TOCTOU because it is built on `boto3`, which
+`SSRFSafeAsyncTransport` (an `httpx` transport) cannot wrap; flagged rather
+than fixed, and `KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests"
+entry corrected to say so. See `SEC-00-cross-cutting-baseline.md`'s **Pass
+12** section for the full review.
+
+Rotation row 00 → ✅ (pending this PR's merge); next is Feature 01 (Auth &
+session lifecycle).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3682, Feature 34, Frontend shared, pass 11, merged), preserved for history</summary>
+
 **PR [#3682](https://github.com/thegspiro/the-logbook/pull/3682)** (branch
 `claude/security-review-frontend-shared-p11`) — Feature 34 (Frontend
 shared), pass 11, closing out this rotation lap. It was the last `⬜` row,
@@ -43,6 +73,8 @@ Full writeup: `docs/security-review/FE11-34-frontend-shared.md`.
 **This was the last `⬜` row.** Per the skill's Step 1 rule, all 35 rows
 (00–34) are reset to `⬜` in this same commit for a fresh rotation lap — see
 the Log entry below and the feature table.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3681, Feature 33, Core infrastructure, pass 9, merged), preserved for history</summary>
@@ -21458,7 +21490,7 @@ PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⬜     |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
@@ -21500,6 +21532,51 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-25 — Feature 00 (Cross-cutting baseline, pass 12) — 0 fixed, 1 new finding flagged (SEC12-1, LOW/MED)
+
+PR #3682 (Feature 34, Frontend shared, pass 11) merged, closing out rotation
+lap "pass 10" (every row ✅) and resetting the table to ⬜ for pass 11 in
+that PR's own commit — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 results, checked before
+starting and re-checked immediately before branching/pushing. Per the
+"rides along in the first feature PR of the next pass" rule, this iteration
+continued straight into Feature 00's own review in the same turn.
+
+Delta re-swept all 13 established sweep classes against 386 commits (229
+non-merge) since the pass-11 baseline (`7485cfa7` → `e007f1f5`): formula
+injection, SET NULL nullability, proxy-IP attribution, Alembic chain
+integrity (651 revisions, single head), LIKE-wildcard escaping,
+BaseHTTPMiddleware usage, unbounded in-memory trackers, window.confirm/
+alert/prompt, JSON shallow-copy mutation, org-scoping/IDOR ratchet,
+capacity-check locking, route auth coverage (276 routes, 0 errors/warnings),
+and raw exception text reaching the client (751 broad bound handlers, 0
+unwrapped) — all clean.
+
+**One new finding, flagged not fixed: SEC12-1 (LOW/MED).** The delta's new
+remote-storage feature (S3/MinIO and Google Drive backends for org file
+storage) added a new outbound-HTTP-capable connector,
+`app/services/s3_storage.py`. Its admin-configurable endpoint is checked
+with the same `assert_outbound_url_safe()` the other integrations use, but
+the actual connection goes through `boto3`/`botocore`, not `httpx` —
+`SSRFSafeAsyncTransport`, the shared fix that closed the DNS-rebinding
+TOCTOU for the other six connectors (SCH-10, resolved 2026-10-05), is an
+`httpx` transport and cannot wrap it. So this connector reproduces the
+pre-SCH-10 shape: a check-then-connect window, narrowed to a 30-second
+per-org config cache rather than closed by pinning. `google_drive_storage.py`
+(the delta's other new connector) was checked and is not a finding — its
+Drive API endpoint is hardcoded to Google's own domain, never read from org
+settings. Closing SEC12-1 needs a `botocore`-specific transport-pinning
+mechanism, which is new engineering, not a mechanical reuse of the existing
+fix — flagged for an owner decision, same disposition this feature has used
+for the egress-proxy case every pass since SCH-10.
+`docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry is
+corrected in this pass (title and body) to say the DNS-rebinding closure
+covers direct `httpx` connections, not S3/MinIO's `boto3` one.
+
+No other application-security or security-tooling findings. Full detail in
+`SEC-00-cross-cutting-baseline.md`'s **Pass 12** section. Rotation row 00 →
+✅ (pending this PR's merge); next is Feature 01 (Auth & session lifecycle).
 
 ### 2026-10-25 — Feature 34 (Frontend shared, pass 11) — 0 fixed, 0 new findings; rotation lap complete, reset to ⬜
 

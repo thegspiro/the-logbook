@@ -4050,7 +4050,7 @@ reason. (Security review EC-14 residual,
 **Accepted by the owner (2026-10-05):** the read keeps its `.view` gate, one
 tier looser than the write, so no existing viewer's screen starts refusing.
 
-## Outbound Integration Requests — DNS Rebinding Is Closed for Direct Connections; a Proxied Deployment Relies on Its Proxy (SCH-10, resolved 2026-10-05)
+## Outbound Integration Requests — DNS Rebinding Is Closed for Direct `httpx` Connections; a Proxied Deployment and the `boto3`-Based S3/MinIO Connector Rely on the Up-Front Check Alone (SCH-10, resolved 2026-10-05 for `httpx`; S3/MinIO gap noted 2026-10-25)
 
 **Resolved for every sender this entry tracked, on a direct connection.**
 `assert_outbound_url_safe()` (`app/utils/url_validator.py`) resolves an
@@ -4109,6 +4109,30 @@ destination policy (deny RFC 1918, loopback, link-local and metadata
 addresses). **Owner decision, if this matters for a deployment:** accept the
 proxy as the control, or refuse integrations through a proxy that cannot be
 trusted to enforce it.
+
+**What also remains — the S3/MinIO remote-storage connector
+(`app/services/s3_storage.py`), added 2026-10 and not part of the original
+six.** An org administrator's configured bucket endpoint is checked with the
+same `assert_outbound_url_safe()` (`check_endpoint`, line 188) before a
+`boto3.client("s3", endpoint_url=…)` is built — but `boto3`/`botocore` resolve
+the hostname themselves, on their own `urllib3`-based stack, independently on
+every `put_object`/`get_object`/`head_object`/`delete_object` call.
+`SSRFSafeAsyncTransport` is an `httpx` transport and cannot wrap a `boto3`
+client, so this connector never received the pinning fix above — it sits at
+the same narrowed-but-not-closed point the other six were at before SCH-10.
+The window is bounded by `file_storage_service.py`'s 30-second per-org config
+cache (`_ORG_STORAGE_TTL_SECONDS`), which re-runs the check on every rebuild,
+but a rebind inside that window — or a hostname that resolves safely at
+config time and unsafely by the time `boto3` connects — reaches the internal
+address unpinned. Closing it needs a `botocore`-specific mechanism (a custom
+endpoint resolver or connection pool), not a reuse of `SSRFSafeAsyncTransport`.
+**Owner decision, if this matters for a deployment:** restrict which
+administrators can set a custom S3 endpoint (the risk does not apply to
+AWS's own endpoints, only to a self-hosted MinIO/S3-compatible one with an
+operator-chosen hostname), or accept the same narrowed check the pre-SCH-10
+integrations ran under until a `botocore`-specific pin is built. Not guarded
+by `tests/test_integration_dns_pinning.py`, which covers the `httpx` path
+only. (Security review SEC-00 pass 12, SEC12-1.)
 
 A related behaviour change worth knowing: the five factory connectors that
 never called `assert_outbound_url_safe()` (`salesforce`, `salesforce_oauth`,
