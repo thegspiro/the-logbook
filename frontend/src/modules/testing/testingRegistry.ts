@@ -131,6 +131,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/public/minutes/:copyId', label: 'Public minutes (one set)', isPublic: true },
       { path: '/f/:slug', label: 'Public form submission', isPublic: true },
+      {
+        path: '/embed/f/:slug',
+        label: 'Public form (embedded)',
+        note: "Framed by the department's own website; open it directly to check the compact layout",
+        isPublic: true,
+      },
       { path: '/ballot', label: 'Ballot voting', note: 'Token-based; reached from a ballot email', isPublic: true },
       { path: '/application-status/:token', label: 'Application status', isPublic: true },
       { path: '/event-request/status/:token', label: 'Event request status', isPublic: true },
@@ -1147,6 +1153,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/grants/opportunities/new',
         label: 'New grant opportunity',
+        permission: 'fundraising.manage',
+        module: 'grants',
+      },
+      {
+        path: '/grants/opportunities/:id/edit',
+        label: 'Edit grant opportunity',
         permission: 'fundraising.manage',
         module: 'grants',
       },

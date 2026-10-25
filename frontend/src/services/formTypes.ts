@@ -111,6 +111,8 @@ export interface FormDef {
   notify_on_submission: boolean;
   notification_emails?: string[];
   is_public: boolean;
+  /** Whether /embed/f/<slug> may be framed by the department's listed websites. */
+  allow_embed: boolean;
   public_slug?: string;
   integration_type?: string;
   version: number;
@@ -157,6 +159,7 @@ export interface FormUpdate {
   notify_on_submission?: boolean;
   notification_emails?: string[];
   is_public?: boolean;
+  allow_embed?: boolean;
 }
 
 export interface FormsListResponse {

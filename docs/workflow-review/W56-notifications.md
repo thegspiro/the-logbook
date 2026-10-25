@@ -92,7 +92,11 @@ from the first notification's header.
 tall on a phone.
 **Fix:** the buttons carry `aria-pressed` and are 44px on touch screens.
 
-### W56-4 — MED — A rule cannot be renamed or deleted from the screen — FLAGGED
+### W56-4 — MED — A rule cannot be renamed or deleted from the screen — ✅ FIXED 2026-10-25
+
+Edit and Delete added to each rule; deleting warns when it turns the trigger back
+on (no rule left) or off (the last enabled one among disabled ones). Original
+finding below.
 
 **Saw:**
 

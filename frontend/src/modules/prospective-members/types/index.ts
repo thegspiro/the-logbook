@@ -820,6 +820,18 @@ export interface CurrentStageAction {
   message?: string | undefined;
 }
 
+/** The meeting an applicant's public status page tells them to attend. */
+export interface NextMeeting {
+  stage_name: string;
+  title: string;
+  start_datetime: string;
+  end_datetime?: string | null | undefined;
+  /** The department's IANA zone: the public page has no signed-in profile to read it from. */
+  timezone: string;
+  location_name?: string | null | undefined;
+  location_address?: string | null | undefined;
+}
+
 export interface ApplicationStatus {
   first_name: string;
   last_name: string;
@@ -834,6 +846,7 @@ export interface ApplicationStatus {
   }[];
   applied_at?: string | undefined;
   current_stage_action?: CurrentStageAction | undefined;
+  next_meeting?: NextMeeting | null | undefined;
 }
 
 // =============================================================================

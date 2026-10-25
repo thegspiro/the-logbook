@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.public.responses import CONFLICT
+from app.api.public.responses import CONFLICT, TOKEN_ADDRESSED
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.public_portal_security import (
@@ -624,6 +624,55 @@ async def get_application_status(
         )
 
     return result
+
+
+@router.get(
+    "/application-status/{token}/next-meeting.ics",
+    response_class=Response,
+    responses={
+        200: {"content": {"text/calendar": {}}},
+        **TOKEN_ADDRESSED,
+    },
+)
+async def get_application_next_meeting_ics(
+    request: Request,
+    token: str = Path(
+        ...,
+        min_length=10,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Unique application-status token emailed to the prospect.",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Calendar file for the meeting the applicant's status page names.
+
+    Unlocked by the same token as the status page and refused wherever that
+    page would show no meeting card, so it discloses nothing the page does not.
+    """
+    from app.services.membership_pipeline_service import MembershipPipelineService
+
+    await validate_ip_rate_limit(request)
+
+    found = await MembershipPipelineService(db).get_next_meeting_ics(token)
+    if found is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No upcoming meeting"
+        )
+    filename, body = found
+    return Response(
+        content=body,
+        media_type="text/calendar; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # Same reasons as the status page: the URL carries a bearer token.
+            "Cache-Control": "no-store, private",
+            "Pragma": "no-cache",
+            "Referrer-Policy": "no-referrer",
+            "X-Robots-Tag": "noindex, nofollow, noarchive",
+        },
+    )
 
 
 class WithdrawApplicationRequest(BaseModel):

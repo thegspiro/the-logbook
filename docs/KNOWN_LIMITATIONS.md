@@ -5252,9 +5252,9 @@ not an enterprise table. Found in
 `docs/security-review/MS-09-medical-screening.md` (feature 09, pass 8,
 MS-15).
 
-## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15)
+## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15, two of three resolved)
 
-**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **`grace_period_days` and `frequency_months` are unchanged and still open**, as described below.
+**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **✅ `frequency_months` resolved 2026-10-25** (W71-1 above): a record with no expiration date falls due that many months after completion. **`grace_period_days` is unchanged and still open**, as described below.
 
 `screening_requirements.grace_period_days` (default 30) and `.applies_to_roles`
 have labelled, editable controls on `ScreeningRequirementForm.tsx`, each with
@@ -6197,77 +6197,40 @@ affected shift the moment it deployed.
 Either way the gate stops depending on a reference nothing maintains. Until one
 is chosen, the log line is the only signal.
 
-## FAC2-5 — The Cross-Facility Maintenance And Inspection Lists Show At Most 100 Records (2026-10-11)
+## FAC2-5 — The Cross-Facility Maintenance And Inspection Lists Showed At Most 100 Records (2026-10-11, resolved 2026-10-25)
 
-`GET /facilities/maintenance` and `GET /facilities/inspections` both default to
-`limit=100` (max 500) and neither accepts a `search` parameter. The two
-cross-facility screens — `/facilities/maintenance` and
-`/facilities/inspections` — load one such page and then filter it in the browser.
+**Resolved.** `GET /facilities/maintenance/page` and `GET /facilities/inspections/page`
+return a page and the organization-wide total, with search and the tri-state
+inspection `result` (`passed` / `failed` / `pending`) applied by the server. The
+two cross-facility screens and the two facility-detail sections page through
+them. The original `GET /facilities/maintenance` and `/inspections` list
+endpoints are unchanged for other callers. Kept only because code and tests cite
+it by name; history in `docs/app-review/facilities.md`.
 
-**One half of this was a live defect and is fixed** (FAC2-4, app-review B4 pass
-5). The maintenance endpoint already accepted `is_overdue` and `is_completed`
-and the screen simply was not forwarding them, so the dashboard's org-wide
-"Overdue maintenance" count could deep-link to a list that rendered "No
-maintenance records found" — the endpoint orders by `desc(created_at)`, and an
-overdue record is by nature an old one, so the truncation preferentially
-discarded exactly what the filter was looking for. The screen now asks the
-server for the filtered set.
+## W56-4 / NOTIF2-6 — Notification Rules Could Not Be Edited or Deleted From the Screen (2026-10-12, resolved 2026-10-25)
 
-**What remains is an owner decision, because it needs an API change:**
+**Resolved (owner decision: delete, with a warning).** Each rule on Notifications
+→ Rules now has Edit and Delete. Because a trigger with no rule sends with its
+defaults, and one with rules sends while any is on, the delete confirmation
+says when removing the rule switches that notification back on or off for the
+whole department, and the edit dialog says the same when the trigger changes.
+Kept only because `NotificationsPage.ruleEdit.test.tsx` cites it; history in
+`docs/workflow-review/W56-notifications.md` and `docs/app-review/notifications.md`.
 
-1. **The inspections "pending" tab cannot be resolved server-side at all.** The
-   endpoint takes `passed: bool | None`, where `None` means _no filter_ — so
-   "passed" and "failed" are expressible and "awaiting a result"
-   (`passed IS NULL`) is not. Forwarding two of the three and leaving the third
-   on a loaded page would make the screen's correctness vary by tab, so none of
-   them was changed. The fix is a tri-state `result` parameter
-   (`passed` / `failed` / `pending`) or a documented null sentinel.
-2. **Text search is still client-side on both screens**, so it matches within
-   the returned page rather than the organization. Searching a vendor name that
-   appears only on an older record finds nothing, with no indication that the
-   search was partial.
-3. **Neither screen paginates.** Even with the filter forwarded, an
-   organization with more than 100 overdue records sees a silently truncated
-   list. Maintenance records accumulate permanently and include back-dated
-   historic entries, so this is a matter of time rather than of scale.
+## MM5-4 — Two People Editing One Set of Minutes Silently Overwrite Each Other's Sections (2026-10-13)
 
-The shape of the fix is the one `GET /facilities/page` already uses for the
-facility grid: total metadata plus pages, with filters and search applied by the
-server. Doing it for these two endpoints would close all three items at once.
-Until then the two screens are reliable for small organizations and quietly
-partial for large ones.
-
-## Notifications — Rules Cannot Be Renamed or Deleted From the Screen (2026-10-12)
-
-Found driving W56 (`docs/workflow-review/W56-notifications.md`, W56-4).
-
-- **What the screen offers:** the rules tab creates a rule and switches it on
-  or off, and nothing else. A rule with a typo in its name, or on the wrong
-  trigger, stays on the list for good.
-- **What the API already supports:** `PATCH /notifications/rules/{id}` and
-  `DELETE /notifications/rules/{id}`, both behind `notifications.manage`.
-- **Why it is not simply a Delete button:** with no rule for a trigger, that
-  trigger's notifications go out with their default settings (pitfall 19). So
-  deleting the one switched-off rule for, say, event reminders turns the
-  reminders back on, with nothing on the screen to say so.
-- **Decisions needed before building it:**
-  - whether to offer edit only, or delete as well;
-  - if delete, whether it warns that the trigger reverts to sending.
-
-- **MM5-4 — Two people editing one set of minutes silently overwrite each
-  other's sections.** _(app-review B6, 2026-10-13)_ The minutes page saves,
-  reorders, adds and deletes a section by sending the **entire** `sections` list
-  built from its local copy, and `MinuteService.update_minutes` replaces the stored
-  list wholesale. There is no version or precondition, so if two secretaries have
-  the same draft open, the second save writes back the first one's stale text for
-  every section the second did not touch, behind a success toast. **Why not
-  fixed.** The cure is an API change — a per-section update endpoint, or an
-  `If-Match` / `updated_at` precondition on `PUT /minutes-records/{id}` — plus a
-  decision on how a conflict is shown ("reload and re-apply" versus a merge).
-  **Owner decision:** whether concurrent editing of one draft is a supported
-  workflow (the per-section endpoint) or is to be refused with a conflict message
-  (the precondition). Same lost-update class as SF-9. See
-  `docs/app-review/meetings-minutes.md` → Pass 5.
+_(app-review B6.)_ The minutes page saves, reorders, adds and deletes a section
+by sending the **entire** `sections` list built from its local copy, and
+`MinuteService.update_minutes` replaces the stored list wholesale. There is no
+version or precondition, so if two secretaries have the same draft open, the
+second save writes back the first one's stale text for every section the second
+did not touch, behind a success toast. **Why not fixed.** The cure is an API
+change — a per-section update endpoint, or an `If-Match` / `updated_at`
+precondition on `PUT /minutes-records/{id}` — plus a decision on how a conflict
+is shown ("reload and re-apply" versus a merge). **Owner decision:** whether
+concurrent editing of one draft is a supported workflow (the per-section
+endpoint) or is to be refused with a conflict message (the precondition). Same
+lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
 
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
 
@@ -6309,27 +6272,6 @@ public API or add a feature:
    the API reference. Cheapest, and it leaves the trap in place.
 
 Until one is chosen, the fields are harmless to set and useless.
-
-## NOTIF2-6 — Notification Rules Can Be Created And Toggled But Not Edited Or Deleted In The UI (2026-10-15)
-
-The Notifications → Rules screen calls `getRules`, `createRule` and `toggleRule` and
-nothing else. `PATCH /notifications/rules/{id}` and `DELETE /notifications/rules/{id}`
-work, and `updateRule` / `deleteRule` / `getRule` exist in
-`frontend/src/services/communicationsServices.ts`, but no screen calls them. A rule
-created with the wrong trigger, or a duplicate, can therefore only be switched off,
-never removed or corrected — and because the resolver keeps a notification on if
-**any** rule for its trigger is enabled, every stray rule has to be remembered and
-switched off one by one.
-
-**Why not fixed.** It is a missing screen, not a defect in what ships, and it needs a
-design call. **Owner decision:**
-
-1. **Add edit and delete to the rules list** — the endpoints and client wrappers
-   are already there; the work is a row menu and a confirm dialog (`useConfirm`).
-2. **Leave as is** — rules stay append-and-toggle, and the wrappers are documented
-   as reserved.
-
-See `docs/app-review/notifications.md` → Pass 5.
 
 ## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16)
 
@@ -6492,18 +6434,18 @@ Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
   and how long it lasts, against an order window that closes.
 - **Decision:** whether to keep the cart, and where.
 
-## Grants — Opportunities Cannot Be Edited (2026-10-15)
+## Grants — Opportunities Could Not Be Edited (2026-10-15, edit and retire resolved 2026-10-25)
 
-Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10). W68-9, key
-contacts edited as free text, was closed by the structured contacts editor on
-the application form.
+Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10).
 
-- **What happens:** `PUT` and `DELETE /grants/{opportunity_id}` exist, but no
-  control on the opportunities page reaches either, so a mistyped deadline or
-  a program that has closed stays as entered. The four Federal Programs cards
-  are fixed text with no way to start an application from them.
-- **Decision:** whether opportunities get edit and retire controls, and whether
-  the federal programs become real, seeded opportunities.
+- **Resolved:** each opportunity has Edit (`/grants/opportunities/:id/edit`) and
+  Retire. Owner decision: retiring sets `is_active = false` and keeps the
+  record, so applications started from it still name their program; **Show
+  retired** lists retired ones and reinstates them. Retired opportunities offer
+  no Start Application.
+- **Still open:** the four Federal Programs cards are fixed text with no way to
+  start an application from them. **Decision:** whether they become real,
+  seeded opportunities.
 
 ## Fundraising — A Donor Must Have a Person's Name (2026-10-15)
 
@@ -6519,27 +6461,33 @@ Found driving W69 (`docs/workflow-review/W69-fundraising.md`, W69-6).
   optional for those types (a schema change, and the list and receipts would
   need to name such a donor by `company_name`).
 
-## Medical Screening — A Screening With No Expiration Date Never Falls Due (2026-10-16)
+## Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)
 
 Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
 
-- **What happens:** `_grade` in `medical_screening_service.py` counts a
-  passed, completed or waived record with no `expiration_date` as compliant
-  indefinitely, and nothing reads a requirement's `frequency_months`. An
-  annual physical recorded without an expiration therefore never lapses,
-  never appears under "Expiring within 30 days", and the requirement card's
-  "Every 12 months" describes nothing.
-- **Since W71:** the record form fills in completed date + frequency, so new
-  records linked to a recurring requirement carry an expiration. Records
-  already saved without one, and records not linked to a requirement, are
-  unchanged.
-- **Also:** records are matched to a requirement by screening _type_, not by
-  `requirement_id`, so two requirements of the same type are satisfied by
-  one record.
-- **Decision:** whether grading should fall back to completed date +
-  `frequency_months` when a record has no expiration (which changes the
-  standing of existing records on upgrade), and whether a record should
-  satisfy only the requirement it is linked to.
+- **Resolved (owner decision):** a passed, completed or waived record with no
+  `expiration_date` falls due `frequency_months` after its completed date —
+  the frequency of the requirement it is linked to (even if that requirement
+  is inactive), else of the requirement it is graded against. Its own
+  expiration date still wins; with no frequency anywhere it stays compliant
+  indefinitely. `_effective_expiration` in `medical_screening_service.py`
+  holds the rule for both the compliance summary and the expiring list, and
+  both screens mark such a date "by frequency". **Upgrade effect, accepted:**
+  existing records saved without an expiration can change standing on the
+  first read after upgrade.
+- **Still open — records are matched to a requirement by screening _type_,
+  not by `requirement_id`,** so two requirements of the same type are
+  satisfied by one record. **Decision:** whether a record should satisfy only
+  the requirement it is linked to.
+- **Still open — the MCP `list_expiring_screenings` tool** pages in SQL on the
+  stored `expiration_date`, so it does not list a record falling due by
+  frequency that the dashboard lists. Bringing it in needs the derived date in
+  SQL, or giving up SQL paging for that tool.
+- **Still open — superseded records on the expiring list.**
+  `get_expiring_soon` lists every satisfying record in the window, including
+  one a newer record of the same type supersedes, while the count grades only
+  the latest; the MCP tool already excludes superseded records. Predates this
+  change, for dated records as well.
 
 ## Integrations — Connecting iCalendar (ICS) Does Nothing (2026-10-17)
 

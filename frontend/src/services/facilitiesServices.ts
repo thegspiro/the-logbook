@@ -107,6 +107,17 @@ export interface FacilityPage {
   limit: number;
 }
 
+/** A page of records and the organization-wide count matching the filters. */
+export interface RecordPage<T> {
+  items: T[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+/** `passed`, `failed`, or `pending` — an inspection with no result recorded yet. */
+export type InspectionResultFilter = 'passed' | 'failed' | 'pending';
+
 /**
  * Serves both create and update (the service's update methods take a
  * `Partial` of this), so a field whose column is nullable accepts an explicit
@@ -668,6 +679,18 @@ export const facilitiesService = {
     const response = await api.get<MaintenanceRecord[]>('/facilities/maintenance', { params });
     return asArray(response.data);
   },
+  /** Server-side filters, search and paging (FAC2-5). */
+  async getMaintenancePage(params: {
+    facility_id?: string;
+    is_completed?: boolean;
+    is_overdue?: boolean;
+    search?: string;
+    skip: number;
+    limit: number;
+  }): Promise<RecordPage<MaintenanceRecord>> {
+    const response = await api.get<RecordPage<MaintenanceRecord>>('/facilities/maintenance/page', { params });
+    return { ...response.data, items: asArray(response.data?.items) };
+  },
   async getMaintenanceRecord(recordId: string): Promise<MaintenanceRecord> {
     const response = await api.get<MaintenanceRecord>(`/facilities/maintenance/${recordId}`);
     return response.data;
@@ -688,6 +711,17 @@ export const facilitiesService = {
   async getInspections(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Inspection[]> {
     const response = await api.get<Inspection[]>('/facilities/inspections', { params });
     return asArray(response.data);
+  },
+  /** Server-side filters, search and paging (FAC2-5). */
+  async getInspectionsPage(params: {
+    facility_id?: string;
+    result?: InspectionResultFilter;
+    search?: string;
+    skip: number;
+    limit: number;
+  }): Promise<RecordPage<Inspection>> {
+    const response = await api.get<RecordPage<Inspection>>('/facilities/inspections/page', { params });
+    return { ...response.data, items: asArray(response.data?.items) };
   },
   async getInspection(inspectionId: string): Promise<Inspection> {
     const response = await api.get<Inspection>(`/facilities/inspections/${inspectionId}`);

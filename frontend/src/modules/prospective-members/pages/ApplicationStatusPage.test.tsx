@@ -12,6 +12,7 @@ vi.mock('../services/api', () => ({
   publicStatusService: {
     getApplicationStatus: (...args: unknown[]) => mockGetApplicationStatus(...args) as unknown,
     withdrawApplication: (...args: unknown[]) => mockWithdrawApplication(...args) as unknown,
+    nextMeetingCalendarUrl: (token: string) => `/api/public/v1/application-status/${token}/next-meeting.ics`,
   },
 }));
 
@@ -111,6 +112,68 @@ describe('ApplicationStatusPage current-stage action', () => {
     await screen.findByText('Application Status');
     expect(screen.queryByText('Documents Sent for Signature')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Schedule/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('ApplicationStatusPage next meeting', () => {
+  const meeting = {
+    stage_name: 'Interest Meeting',
+    title: 'Prospective Members Interest Meeting',
+    // 00:00 UTC on Nov 10 is 7:00 PM Eastern on Nov 9.
+    start_datetime: '2026-11-10T00:00:00+00:00',
+    end_datetime: '2026-11-10T01:00:00+00:00',
+    timezone: 'America/New_York',
+    location_name: 'Station 6',
+    location_address: '1 Main St, Falls Church, VA 22046',
+  };
+
+  beforeEach(() => {
+    mockGetApplicationStatus.mockReset();
+    mockGetApplicationStatus.mockResolvedValue({ ...baseStatus, next_meeting: meeting });
+  });
+
+  it('names the meeting in the department timezone, with where it is', async () => {
+    renderPage();
+
+    expect(await screen.findByText('Prospective Members Interest Meeting')).toBeInTheDocument();
+    expect(screen.getByText(/Your next step: Interest Meeting/)).toBeInTheDocument();
+    expect(screen.getByText(/Monday, November 9, 2026 at 7:00 PM EST/)).toBeInTheDocument();
+    expect(screen.getByText('Station 6 — 1 Main St, Falls Church, VA 22046')).toBeInTheDocument();
+  });
+
+  it('offers the calendar file and directions to the location', async () => {
+    renderPage();
+
+    const calendar = await screen.findByRole('link', { name: /Add to calendar/i });
+    expect(calendar).toHaveAttribute('href', '/api/public/v1/application-status/tok123/next-meeting.ics');
+    const directions = screen.getByRole('link', { name: /Get directions/i });
+    expect(directions).toHaveAttribute(
+      'href',
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        'Station 6, 1 Main St, Falls Church, VA 22046'
+      )}`
+    );
+  });
+
+  it('offers no directions when the meeting has no location', async () => {
+    mockGetApplicationStatus.mockResolvedValue({
+      ...baseStatus,
+      next_meeting: { ...meeting, location_name: null, location_address: null },
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: /Add to calendar/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Get directions/i })).not.toBeInTheDocument();
+  });
+
+  it('shows no meeting card when the backend names none', async () => {
+    mockGetApplicationStatus.mockResolvedValue({ ...baseStatus, next_meeting: null });
+
+    renderPage();
+
+    expect(await screen.findByText('Jane Doe', { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText(/Your next step/)).not.toBeInTheDocument();
   });
 });
 

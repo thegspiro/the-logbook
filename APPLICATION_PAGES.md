@@ -14,6 +14,7 @@ Complete reference of all pages in the application, organized by module.
 | `/reset-password`                      | Reset Password         | Password reset form                                                                                                                       |
 | `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                            |
 | `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                      |
+| `/embed/f/:slug`                       | Public Form (embedded) | The same form inside an iframe on a department's own website; framing allowed only from the sites it lists _(2026-10-25)_                 |
 | `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                        |
 | `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_      |
 | `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                                  |
@@ -578,7 +579,7 @@ its own route: the admin pages listed in `INVENTORY_ADMIN_SHELL_PATHS`
 (`modules/inventory/pages/inventoryAdminAreas.ts`) wrap their element in
 `InventoryAdminLayout`, inside their `ProtectedRoute`, so every route keeps its
 own gate and URL. A page outside that list (the kiosk, the NFC scanning tools,
-Storage Areas, Import, Temporary Loans, EMS Supplies, the store console) still
+Storage Areas, Print Labels, Import, Temporary Loans, EMS Supplies, the store console) still
 sits in the strip, marked as opening its own page. A viewer who passes a page's
 gate but not the hub's gets that page with a breadcrumb trail and no header.
 Area cards and pages are badged with the work waiting in them.
@@ -922,6 +923,17 @@ to sign up as a driver with no EVOC certification behind it.
 > original `/scheduling/settings` no longer resolves. The layout described
 > below is still current; only where it is reached has moved. See
 > **Scheduling Administration** above.
+
+> **No longer drawn in `SettingsLayout`** _(2026-10-25)_. Inside the
+> Scheduling Administration header the shell's section row, title and narrower
+> column repeated what the header's Settings strip already shows, so
+> `SchedulingSettingsPage` now renders only the body card. The header is the
+> section nav: General, Apparatus Defaults, Platoon Rosters (only while
+> platoon scheduling is on, via `requiresPlatoons` on its card), Outside
+> Apparatus and Notifications under Settings; Eligibility under People &
+> Eligibility; Shift Reports under Reports. The panel no longer opens on its
+> own `SettingsPanelHead`; the page's `sr-only` `<h2>` names the section. The
+> history below is kept as written.
 
 `/scheduling/settings` used the **shared settings layout**
 (`components/settings/SettingsLayout.tsx`) — the same shell as Organization
@@ -1357,22 +1369,23 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Grants & Fundraising _(documented 2026-08-10)_
 
-| URL                             | Page                | Permission           |
-| ------------------------------- | ------------------- | -------------------- |
-| `/grants`                       | Grants Dashboard    | `fundraising.view`   |
-| `/grants/opportunities`         | Grant Opportunities | `fundraising.view`   |
-| `/grants/opportunities/new`     | New Opportunity     | `fundraising.manage` |
-| `/grants/applications`          | Grant Applications  | `fundraising.view`   |
-| `/grants/applications/new`      | New Application     | `fundraising.manage` |
-| `/grants/applications/:id`      | Grant Detail        | `fundraising.view`   |
-| `/grants/applications/:id/edit` | Edit Application    | `fundraising.manage` |
-| `/grants/campaigns`             | Campaigns           | `fundraising.view`   |
-| `/grants/donors`                | Donors              | `fundraising.view`   |
-| `/grants/donations`             | Donations           | `fundraising.view`   |
-| `/grants/donations/new`         | Record Donation     | `fundraising.manage` |
-| `/grants/pledges`               | Pledges             | `fundraising.view`   |
-| `/grants/events`                | Fundraising Events  | `fundraising.view`   |
-| `/grants/reports`               | Fundraising Reports | `fundraising.view`   |
+| URL                              | Page                | Permission           |
+| -------------------------------- | ------------------- | -------------------- |
+| `/grants`                        | Grants Dashboard    | `fundraising.view`   |
+| `/grants/opportunities`          | Grant Opportunities | `fundraising.view`   |
+| `/grants/opportunities/new`      | New Opportunity     | `fundraising.manage` |
+| `/grants/opportunities/:id/edit` | Edit Opportunity    | `fundraising.manage` |
+| `/grants/applications`           | Grant Applications  | `fundraising.view`   |
+| `/grants/applications/new`       | New Application     | `fundraising.manage` |
+| `/grants/applications/:id`       | Grant Detail        | `fundraising.view`   |
+| `/grants/applications/:id/edit`  | Edit Application    | `fundraising.manage` |
+| `/grants/campaigns`              | Campaigns           | `fundraising.view`   |
+| `/grants/donors`                 | Donors              | `fundraising.view`   |
+| `/grants/donations`              | Donations           | `fundraising.view`   |
+| `/grants/donations/new`          | Record Donation     | `fundraising.manage` |
+| `/grants/pledges`                | Pledges             | `fundraising.view`   |
+| `/grants/events`                 | Fundraising Events  | `fundraising.view`   |
+| `/grants/reports`                | Fundraising Reports | `fundraising.view`   |
 
 ---
 

@@ -40,6 +40,7 @@ import {
   Nfc,
   Package,
   PackageCheck,
+  Printer,
   Ruler,
   ShoppingBag,
   SlidersHorizontal,
@@ -219,6 +220,20 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     icon: Building2,
     section: 'Catalog',
     tone: 'cyan',
+    permission: 'inventory.manage',
+    requiresModule: 'inventory',
+  },
+  {
+    // Its only other ways in were a selection on the items list and a banner
+    // that "Not now" dismisses, so reprinting a worn label meant knowing to
+    // tick rows first. Opens the label page's own chooser.
+    id: 'print-labels',
+    label: 'Print Labels',
+    description: 'Barcode labels by category, location, or what still needs one',
+    path: '/inventory/print-labels',
+    icon: Printer,
+    section: 'Catalog',
+    tone: 'slate',
     permission: 'inventory.manage',
     requiresModule: 'inventory',
   },

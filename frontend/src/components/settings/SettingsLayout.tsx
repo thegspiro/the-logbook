@@ -56,7 +56,7 @@ interface SettingsLayoutProps<K extends string, S extends string> {
   activeSubPage?: S | null;
   onSubPageChange?: (key: S) => void;
   /**
-   * aria-label for the section nav landmark. Names the page ("Scheduling
+   * aria-label for the section nav landmark. Names the page ("Election
    * settings sections") so a screen reader announces which settings screen it
    * is on, not merely that it found some settings.
    */
@@ -85,8 +85,8 @@ interface SettingsLayoutProps<K extends string, S extends string> {
    * Opt-in rather than automatic: several settings screens are reached at a
    * path that does not describe where they sit (Organization Settings is
    * `/settings`, a top-level route), and a one-crumb trail there restates the
-   * `<h1>` and nothing else. A screen nested under an administration hub —
-   * Scheduling Settings under `/scheduling/admin` — has a real trail to show.
+   * `<h1>` and nothing else. A screen nested under an administration hub has
+   * a real trail to show.
    */
   showBreadcrumbs?: boolean;
   /**

@@ -13,7 +13,7 @@ Security measures:
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,12 +27,14 @@ from app.core.security_middleware import (
 )
 from app.models.user import Organization, User
 from app.schemas.forms import (
+    EmbedPolicyResponse,
     PublicFormFieldResponse,
     PublicFormResponse,
     PublicFormSubmissionCreate,
     PublicFormSubmissionResponse,
 )
 from app.services.forms_service import FormsService
+from app.utils.embed_origins import valid_embed_origins
 
 router = APIRouter(prefix="/public/v1/forms", tags=["public-forms"])
 
@@ -134,6 +136,59 @@ async def get_public_form(
         fields=fields,
         organization_name=org_name,
     )
+
+
+# The header nginx copies into ``frame-ancestors`` for /embed/f/<slug>.
+EMBED_ANCESTORS_HEADER = "X-Embed-Frame-Ancestors"
+NO_EMBED = "'none'"
+
+
+@router.get(
+    "/{slug}/embed-policy",
+    response_model=EmbedPolicyResponse,
+    dependencies=[Depends(_rate_limit_view)],
+)
+async def get_embed_policy(
+    slug: str,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Which websites may show this form in an iframe (public, no auth).
+
+    Asked by nginx (``auth_request``) each time ``/embed/f/<slug>`` is served,
+    and copied into that page's ``Content-Security-Policy: frame-ancestors``.
+    The answer is the department's own websites only when the form is
+    published, public and has ``allow_embed`` on, and the department has listed
+    at least one; anything else — including a slug that matches nothing — is
+    ``'none'``, still with a 200, so the page renders and simply cannot be
+    framed rather than nginx turning a refusal into a 500.
+    """
+    origins: list[str] = []
+    if SLUG_PATTERN.match(slug):
+        form = await FormsService(db).get_form_by_slug(slug)
+        if form is not None and form.allow_embed:
+            org_settings = (
+                await db.execute(
+                    select(Organization.settings).where(
+                        Organization.id == form.organization_id
+                    )
+                )
+            ).scalar_one_or_none()
+            forms_settings = (org_settings or {}).get("forms")
+            stored = (
+                forms_settings.get("embed_allowed_origins")
+                if isinstance(forms_settings, dict)
+                else None
+            )
+            # Re-checked on the way out: the stored list is free-form JSON,
+            # and this value is written into a response header.
+            origins = valid_embed_origins(stored if isinstance(stored, list) else [])
+
+    frame_ancestors = " ".join(origins) if origins else NO_EMBED
+    response.headers[EMBED_ANCESTORS_HEADER] = frame_ancestors
+    response.headers["Cache-Control"] = "no-store"
+    return EmbedPolicyResponse(frame_ancestors=frame_ancestors)
 
 
 @router.post(

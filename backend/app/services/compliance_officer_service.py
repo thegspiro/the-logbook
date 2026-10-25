@@ -50,7 +50,11 @@ from app.services.training_compliance import (
     tally_standing,
 )
 from app.services.training_waiver_service import fetch_org_waivers
-from app.utils.hours import hours_from_minutes, round_hours_exact
+from app.utils.hours import (
+    hours_from_minutes,
+    meets_required_hours,
+    round_hours_exact,
+)
 from app.utils.org_timezone import resolve_org_today
 
 
@@ -312,7 +316,9 @@ class ISOReadinessService:
             total_hours = sum(member_hours.values())
             avg_hours = total_hours / total_members
             members_meeting = sum(
-                1 for h in member_hours.values() if h >= cat["required_hours"]
+                1
+                for h in member_hours.values()
+                if meets_required_hours(h, cat["required_hours"])
             )
             compliance_pct = round(members_meeting / total_members * 100, 1)
             category_compliance_pcts.append(compliance_pct)

@@ -134,6 +134,27 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The frontend's nginx config needs the `auth_request` module (2026-10-25)
+
+`frontend/nginx.conf` now uses `auth_request` for the embedded-form page,
+`/embed/f/<slug>`: nginx asks the backend which websites may frame the form
+before serving it. Nothing changes for a Docker deployment — the official
+`nginx:alpine` image the frontend container is built from includes the module.
+
+A **host install** that runs this file on the host's own nginx (`scripts/setup-ssl.sh`
+renders it) needs the module there too. Debian and Ubuntu's `nginx`,
+`nginx-light`, `nginx-core` and `nginx-full` packages include it; an nginx built
+from source without `--with-http_auth_request_module` does not, and `nginx -t`
+then refuses the config with _unknown directive "auth_request"_, so the site
+stops serving. Check before upgrading:
+
+```bash
+nginx -V 2>&1 | grep -o with-http_auth_request_module
+```
+
+No output means the module is missing: install a distribution nginx package,
+or rebuild with that flag.
+
 ### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
 
 `unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`
@@ -3238,11 +3259,12 @@ out, along with everyone else who was there — or, if nobody closes it out, a
 week later. Trying to advance one by hand in between names the event and says
 what is missing:
 
-> This applicant is checked in at 'Recruitment Night', but that event's
-> attendance has not been finalized, so 'Chief Interview' is not ready yet. A
-> sign-in at the door is not the final roster — finalize the event (End Event,
-> record its actual end time, or Finalize Attendance) and they advance on their
-> own.
+> Checked in at 'Recruitment Night', but that event's attendance has not been
+> finalized, so 'Chief Interview' cannot advance yet. Finalize the event (End
+> Event or Finalize Attendance) and they advance on their own.
+
+(Wording shortened on 2026-10-25 so a single Advance shows it in full — a
+longer message was replaced with "An unexpected error occurred".)
 
 **The stage checkbox was relabelled** from "Auto-advance when attendance is
 recorded" to "Auto-advance when the event's attendance is finalized". The
@@ -3290,10 +3312,8 @@ attendance recorded since their application was opened can no longer be
 advanced, and the refusal names what to do:
 
 > No attendance has been recorded for 'Chief Interview' since this application
-> was opened. This stage names the event its applicants must attend, so it
-> advances once they are checked in there. Add them to that event's attendees
-> and check them in if they attended and it was not recorded; otherwise un-tick
-> Required on the stage to skip it, or clear its Auto-Link Event Type.
+> was opened. Check them in on the event and finalize its attendance; otherwise
+> un-tick Required on the stage to skip it, or clear its Auto-Link Event Type.
 
 Those are the three ways out, in the order to reach for them. Recording the
 attendance is the one to prefer — it is how the applicant is meant to clear the

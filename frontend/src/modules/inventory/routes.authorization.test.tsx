@@ -14,6 +14,7 @@
  * door widened, and what is behind the door did not.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes } from 'react-router';
 
@@ -39,6 +40,13 @@ vi.mock('../../hooks/useEnabledModules', () => ({
 
 vi.mock('./pages/InventoryAdminHub', () => ({
   InventoryAdminHub: () => <div data-testid="admin-hub">AdminHub</div>,
+}));
+// A pass-through, like the pages: this suite is about which gate admits whom,
+// and the layout sits inside each route's gate. The real one is lazy and loads
+// the hub's stores and services, which under a loaded machine pushed the
+// first wrapped route past findBy's one-second wait.
+vi.mock('./components/InventoryAdminLayout', () => ({
+  default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock('./pages/InventorySetupPage', () => ({
   default: () => <div data-testid="setup-page">Setup</div>,

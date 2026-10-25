@@ -51,6 +51,7 @@ from app.services.training_waiver_service import (
     fetch_org_waivers,
     get_rolling_period_months,
 )
+from app.utils.hours import meets_required_hours
 from app.utils.org_timezone import resolve_org_today
 
 
@@ -412,7 +413,7 @@ class CompetencyMatrixService:
             exp_date = most_recent.expiration_date
             details: Optional[str] = f"{total_hours:.1f}/{required:.1f} hrs"
 
-            if required > 0 and total_hours >= required:
+            if required > 0 and meets_required_hours(total_hours, required):
                 status = "current"
             elif total_hours > 0:
                 status = "expiring_soon"  # partial progress shown as yellow

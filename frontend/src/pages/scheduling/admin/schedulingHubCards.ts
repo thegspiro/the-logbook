@@ -72,6 +72,12 @@ export interface SchedulingHubCard {
   anyPermission?: string[];
   /** Hidden unless the organization has this module enabled. */
   requiresModule?: string;
+  /**
+   * Hidden unless the department has platoon scheduling turned on. The page
+   * it opens exists only then: with platoons off, its route falls back to
+   * General, so a link to it would land somewhere else.
+   */
+  requiresPlatoons?: true;
 }
 
 export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
@@ -234,6 +240,17 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     section: 'Department settings',
     permission: 'scheduling.manage',
     requiresModule: 'scheduling',
+  },
+  {
+    id: 'settings-platoons',
+    label: 'Platoon Rosters',
+    description: 'Platoon rosters and assignments',
+    path: '/scheduling/admin/settings/platoons',
+    icon: Users,
+    section: 'Department settings',
+    permission: 'scheduling.manage',
+    requiresModule: 'scheduling',
+    requiresPlatoons: true,
   },
   {
     id: 'settings-outside-apparatus',

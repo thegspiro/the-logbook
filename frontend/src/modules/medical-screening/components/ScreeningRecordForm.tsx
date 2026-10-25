@@ -52,9 +52,9 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
   // completed date or requirement.
   const [suggestedExpiration, setSuggestedExpiration] = useState('');
 
-  // W71: a record with no expiration grades as compliant indefinitely, so a
-  // recurring requirement saved without one never fell due. Suggest the date
-  // the requirement's frequency implies; the officer can still change it.
+  // W71: suggest the date the requirement's frequency implies, so the record
+  // carries its own expiration; the officer can still change it. (One saved
+  // without a date falls due by the same frequency when graded, W71-1.)
   const suggestExpiration = (nextRequirementId: string, nextCompletedDate: string) => {
     const req = requirements.find((r) => r.id === nextRequirementId);
     const months = req?.frequency_months;

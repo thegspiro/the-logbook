@@ -127,7 +127,12 @@ export const SubjectCompliancePanel: React.FC<SubjectCompliancePanelProps> = ({ 
                           {SCREENING_TYPE_LABELS[item.screening_type] ?? item.screening_type}
                           {item.status ? ` · ${SCREENING_STATUS_LABELS[item.status] ?? item.status}` : ''}
                           {item.last_screening_date ? ` · last ${formatCalendarDate(item.last_screening_date)}` : ''}
-                          {item.expiration_date ? ` · expires ${formatCalendarDate(item.expiration_date)}` : ''}
+                          {item.expiration_date
+                            ? ` · ${item.expiration_from_frequency ? 'due' : 'expires'} ${formatCalendarDate(item.expiration_date)}`
+                            : ''}
+                          {/* The record carries no expiration date; this one is the
+                              requirement's frequency counted from its completed date. */}
+                          {item.expiration_from_frequency ? ' (by frequency)' : ''}
                         </p>
                       </div>
                     </div>

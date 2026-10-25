@@ -10,6 +10,7 @@ import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { useCaptcha } from '../hooks/useCaptcha';
 import { getVisibleFieldIds } from '../utils/formVisibility';
+import { useEmbedHeight } from '../hooks/useEmbedHeight';
 
 // Sanitize any text content that came from the server
 const clean = (text: string | null | undefined): string => {
@@ -19,8 +20,23 @@ const clean = (text: string | null | undefined): string => {
 
 const fieldInputId = (fieldId: string): string => `public-field-${fieldId}`;
 
-const PublicFormPage = () => {
+interface PublicFormPageProps {
+  /**
+   * Rendered at /embed/f/:slug, inside an iframe on a department's own
+   * website: the form title only (the host page carries the department's
+   * branding), no full-screen backdrop, and a height report to the host.
+   */
+  embedded?: boolean;
+}
+
+const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
   const { slug } = useParams<{ slug: string }>();
+  useEmbedHeight(embedded, slug);
+  // The loading, unavailable and received states fill the window on the
+  // standalone page; inside a host page's iframe they sit in the frame.
+  const statusScreenClass = embedded
+    ? 'flex items-center justify-center p-4'
+    : 'from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4';
   const [form, setForm] = useState<PublicFormDef | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -317,10 +333,7 @@ const PublicFormPage = () => {
 
   if (loading) {
     return (
-      <main
-        id="main-content"
-        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br"
-      >
+      <main id="main-content" className={statusScreenClass}>
         <div className="text-center">
           <div className="mb-4 inline-block h-10 w-10 animate-spin rounded-full border-t-3 border-b-3 border-blue-500"></div>
           <p className="text-theme-text-secondary">Loading form...</p>
@@ -331,10 +344,7 @@ const PublicFormPage = () => {
 
   if (error && !form) {
     return (
-      <main
-        id="main-content"
-        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
-      >
+      <main id="main-content" className={statusScreenClass}>
         <div className="bg-theme-surface max-w-md rounded-xl p-8 text-center shadow-lg">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
             <svg
@@ -360,10 +370,7 @@ const PublicFormPage = () => {
 
   if (submitted) {
     return (
-      <main
-        id="main-content"
-        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
-      >
+      <main id="main-content" className={statusScreenClass}>
         <div className="bg-theme-surface max-w-md rounded-xl p-8 text-center shadow-lg">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
             <svg
@@ -403,16 +410,27 @@ const PublicFormPage = () => {
   const showSignInNotice = signInRefused || (formNeedsSignIn && sessionChecked && !isAuthenticated);
 
   return (
-    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 py-8">
+    <div
+      className={
+        embedded ? 'p-2' : 'from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 py-8'
+      }
+    >
       <main id="main-content" className="mx-auto max-w-2xl">
         {/* Header */}
-        <div className="bg-theme-surface mb-6 overflow-hidden rounded-xl shadow-lg">
-          <div className="bg-linear-to-r from-blue-600 to-blue-700 px-8 py-6">
-            {form.organization_name && <p className="mb-1 text-sm text-blue-100">{clean(form.organization_name)}</p>}
-            <h1 className="text-2xl font-bold text-white">{clean(form.name)}</h1>
-            {form.description && <p className="mt-2 text-blue-100">{clean(form.description)}</p>}
+        {embedded ? (
+          <div className="mb-4">
+            <h1 className="text-theme-text-primary text-xl font-bold">{clean(form.name)}</h1>
+            {form.description && <p className="text-theme-text-secondary mt-1">{clean(form.description)}</p>}
           </div>
-        </div>
+        ) : (
+          <div className="bg-theme-surface mb-6 overflow-hidden rounded-xl shadow-lg">
+            <div className="bg-linear-to-r from-blue-600 to-blue-700 px-8 py-6">
+              {form.organization_name && <p className="mb-1 text-sm text-blue-100">{clean(form.organization_name)}</p>}
+              <h1 className="text-2xl font-bold text-white">{clean(form.name)}</h1>
+              {form.description && <p className="mt-2 text-blue-100">{clean(form.description)}</p>}
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form
@@ -430,13 +448,28 @@ const PublicFormPage = () => {
                 {form.organization_name ? clean(form.organization_name) : 'This department'} accepts responses to this
                 form from signed-in members only. Sign in before you start, and you will come back to this page.
               </p>
-              <Link
-                to="/login"
-                state={{ from: { pathname: `/f/${slug ?? ''}` } }}
-                className="btn-primary mobile-touch-target mt-3 inline-flex items-center"
-              >
-                Sign in
-              </Link>
+              {embedded ? (
+                // Signing in cannot happen inside another site's frame: the
+                // sign-in page refuses to be framed, and the session cookie is
+                // a third-party cookie here. The standalone form, in a tab of
+                // its own, can do both.
+                <a
+                  href={`/f/${slug ?? ''}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary mobile-touch-target mt-3 inline-flex items-center"
+                >
+                  Open the form to sign in
+                </a>
+              ) : (
+                <Link
+                  to="/login"
+                  state={{ from: { pathname: `/f/${slug ?? ''}` } }}
+                  className="btn-primary mobile-touch-target mt-3 inline-flex items-center"
+                >
+                  Sign in
+                </Link>
+              )}
             </div>
           )}
           {error && (
@@ -539,7 +572,7 @@ const PublicFormPage = () => {
         </form>
 
         {/* Footer */}
-        <p className="text-theme-text-muted mt-6 text-center text-xs">Powered by The Logbook</p>
+        {!embedded && <p className="text-theme-text-muted mt-6 text-center text-xs">Powered by The Logbook</p>}
       </main>
     </div>
   );
