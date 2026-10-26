@@ -33,14 +33,16 @@ written before encryption existed) to AES-256-GCM.
 
 ### Fields covered
 
-| Table                         | Column(s)                                                                           | Format                           |
-| ----------------------------- | ----------------------------------------------------------------------------------- | -------------------------------- |
-| `shift_completion_reports`    | `areas_of_strength`, `areas_for_improvement`, `officer_narrative`, `reviewer_notes` | single ciphertext                |
-| `users`                       | `mfa_secret`                                                                        | single ciphertext                |
-| `users`                       | `mfa_backup_codes`                                                                  | JSON array of ciphertext strings |
-| `integrations`                | `encrypted_config`                                                                  | single ciphertext (JSON blob)    |
-| `external_training_providers` | `api_key`, `api_secret`, `client_secret`                                            | single ciphertext                |
-| `organizations`               | `settings` → any `enc:`-prefixed value (recursive)                                  | nested secrets                   |
+| Table                                       | Column(s)                                                                                                                                                   | Format                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `shift_completion_reports`                  | `areas_of_strength`, `areas_for_improvement`, `officer_narrative`, `reviewer_notes`                                                                         | single ciphertext                |
+| `users`                                     | `mfa_secret`                                                                                                                                                | single ciphertext                |
+| `users`                                     | `mfa_backup_codes`                                                                                                                                          | JSON array of ciphertext strings |
+| `users`, `prospective_members`, `prospects` | `date_of_birth` (not `prospects`), `emergency_contacts` (`users` only), `phone`, `mobile`, `address_street`, `address_city`, `address_state`, `address_zip` | single ciphertext                |
+| contact tables                              | every column listed for them in the script's `_PLAIN_COLUMNS` (donors, store orders, event requests, facility contacts, …)                                  | single ciphertext                |
+| `integrations`                              | `encrypted_config`                                                                                                                                          | single ciphertext (JSON blob)    |
+| `external_training_providers`               | `api_key`, `api_secret`, `client_secret`                                                                                                                    | single ciphertext                |
+| `organizations`                             | `settings` → any `enc:`-prefixed value (recursive)                                                                                                          | nested secrets                   |
 
 > If new `EncryptedText` columns or manually-encrypted fields are added later,
 > extend `_PLAIN_COLUMNS` (or the JSON handlers) in the script before running.

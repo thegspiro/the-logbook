@@ -271,8 +271,12 @@ BACKEND_SCRIPTS_PATH="/app/scripts"
 report_bucket_files() {
     [[ "$UPLOADS_SOURCE" == "container" ]] || return 0
     local inventory summary
+    # The command was migrate_uploads_to_s3.py --buckets until 2026-10-25. A
+    # backend image older than that has only the old name, so fall back to it.
     if ! inventory="$(docker exec "$UPLOADS_CONTAINER" \
-        python "$BACKEND_SCRIPTS_PATH/migrate_uploads_to_s3.py" --buckets 2>/dev/null)"; then
+        python "$BACKEND_SCRIPTS_PATH/migrate_uploads_to_remote.py" --stores 2>/dev/null)" &&
+        ! inventory="$(docker exec "$UPLOADS_CONTAINER" \
+            python "$BACKEND_SCRIPTS_PATH/migrate_uploads_to_s3.py" --buckets 2>/dev/null)"; then
         print_info "Could not check for files kept in departments' own storage (S3 buckets, Shared Drives); see docs/BACKUP.md"
         return 0
     fi

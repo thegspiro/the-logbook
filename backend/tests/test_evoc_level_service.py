@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from loguru import logger
 
+from app.core.utils import safe_error_detail
 from app.schemas.apparatus import EvocLevelCreate, EvocLevelUpdate
 from app.services.evoc_level_service import EvocLevelService
 
@@ -103,6 +104,16 @@ class TestDeleteLevel:
         db = _db([_one(_level(1)), _one("ap1")])  # get_level, apparatus_using
         with pytest.raises(ValueError, match="assigned to apparatus"):
             await EvocLevelService(db).delete_level("l1", "o")
+
+    async def test_in_use_refusal_reaches_the_client(self):
+        """The refusal once read "Cannot delete ... from those apparatus",
+        which safe_error_detail took for a leaked DELETE ... FROM statement
+        and replaced with a generic error."""
+        db = _db([_one(_level(1)), _one("ap1")])
+        with pytest.raises(ValueError, match="assigned to apparatus") as refusal:
+            await EvocLevelService(db).delete_level("l1", "o")
+
+        assert safe_error_detail(refusal.value) == str(refusal.value)
 
     async def test_delete_succeeds(self):
         db = _db([_one(_level(1)), _one(None)])

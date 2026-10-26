@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import toast from 'react-hot-toast';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -301,11 +301,16 @@ describe('StoreAdminPage — tabs in the URL', () => {
     renderAt('/inventory/admin/store');
     await screen.findByText('Order workflow');
 
+    // Payments sits under the Orders & Payments area: choosing the area lands
+    // on its first page, and the page strip under it reaches the second.
+    await user.click(screen.getByRole('tab', { name: 'Orders & Payments' }));
+    expect(await screen.findByText(/Orders filter: all/)).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Payments' }));
 
-    // The frame owns the tab bar; selecting one is what writes ?tab=, which is
-    // what makes a deep link possible in the first place.
+    // Selecting a page is what writes ?tab=, which is what makes a deep link
+    // possible in the first place.
     expect(screen.getByRole('tab', { name: 'Payments' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Orders & Payments' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('offers the headline-metric picker on the settings tab', async () => {
@@ -316,7 +321,7 @@ describe('StoreAdminPage — tabs in the URL', () => {
     renderAt('/inventory/admin/store');
     await screen.findByText('Order workflow');
 
-    await user.click(screen.getByRole('tab', { name: 'Settings' }));
+    await user.click(screen.getByRole('tab', { name: 'Store Settings' }));
 
     expect(await screen.findByText('metrics-settings')).toBeInTheDocument();
   });
@@ -334,9 +339,11 @@ describe('StoreAdminPage — tabs in the URL', () => {
     expect(await screen.findByText(/Orders filter: ordered/)).toBeInTheDocument();
   });
 
-  // The backend links its "payments to match" item to this tab; the card for
-  // that tab carries the count, read from the same queue the frame shows.
-  it('describes each section and badges the one the attention queue points at', async () => {
+  // The backend links its "payments to match" item to this tab; the area card
+  // and the page tab both carry the count, read from the same queue the frame
+  // shows.
+  it('describes each area and badges the page the attention queue points at', async () => {
+    const user = userEvent.setup();
     mockGetAdminHubSummary.mockResolvedValue({
       moduleKey: 'storefront',
       generatedAt: '2026-09-01T12:00:00Z',
@@ -361,14 +368,22 @@ describe('StoreAdminPage — tabs in the URL', () => {
       </MemoryRouter>
     );
 
-    const payments = screen.getByRole('tab', { name: 'Payments' });
-    expect(payments).toHaveAccessibleDescription('Payments that need matching by hand');
+    const fulfilment = screen.getByRole('tab', { name: 'Orders & Payments' });
+    expect(fulfilment).toHaveAccessibleDescription('Move orders along and match payments');
     await waitFor(() =>
-      expect(payments).toHaveAccessibleDescription('Payments that need matching by hand. 2 need attention')
+      expect(fulfilment).toHaveAccessibleDescription('Move orders along and match payments. 2 need attention')
     );
-    expect(screen.getByRole('tab', { name: 'Orders' })).toHaveAccessibleDescription(
-      'Move orders along and export them for the vendor'
+    expect(screen.getByRole('tab', { name: 'Selling' })).toHaveAccessibleDescription(
+      'When members can order, and what'
     );
+
+    await user.click(fulfilment);
+    // The count rides inside the page tab, so it is part of that tab's name;
+    // Orders has nothing waiting and keeps its bare name.
+    const paymentsTab = screen.getByRole('tab', { name: /^Payments/ });
+    expect(within(paymentsTab).getByText('2')).toBeInTheDocument();
+    expect(within(paymentsTab).getByText('need attention')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Orders' })).toBeInTheDocument();
   });
 });
 

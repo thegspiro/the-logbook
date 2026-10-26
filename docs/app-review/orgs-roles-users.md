@@ -1,7 +1,8 @@
 # Application Review — Orgs / Roles / Users (Tier B)
 
 **Prefix:** `ORU2` · **Iteration:** B21 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-25 (pass 5)
 
 **Backend:** the privilege-management surface — `endpoints/roles.py` +
 `role_service.py` + `core/permissions.py`, `endpoints/organizations.py` +
@@ -11,6 +12,91 @@
 (create-member escalation), ORU-2/3/5 (settings secret leaks), ORU-4 (cross-tenant
 module read), ORU-6, ORU-8 (PII), ORU-9 fixed; ORU-7 (role-edit ceiling, last-admin,
 member-role guard) left open.
+
+---
+
+## Pass 5 (2026-10-25) — seven fields acknowledged a null and ignored it (7 fixed)
+
+Lens for this pass: the update-payload contract (omit = keep, `null` = clear, a value =
+set) driven through the real handlers, the method of B18–B20, on the four update routes
+that write a model row: `PATCH /roles/{id}`, `PATCH /users/{id}/profile`,
+`PATCH /users/{id}/contact-info` and `PATCH /users/leaves-of-absence/{id}`. The
+organization settings routes write JSON blobs rather than columns and are out of the
+test's reach. A test reads each route's schemas from the application's OpenAPI document,
+builds a row from the model, and sends `null` for every field. A field must be refused
+(exactly 400 or 422, value unchanged) when its column is NOT NULL or its response cannot
+hold `None`, and must clear otherwise.
+
+**The test was made stricter for this module, and the stricter half found most of it.**
+Until now the "may be cleared" half asserted a 200 and a readable row. A handler that
+skips a null answers 200 too, so it passed. The half now seeds the column with a value
+first and asserts it is empty afterwards. That is what exposed the role description, and
+it should be applied to the training, scheduling and finance tests, which still assert only
+the status for clearable fields (not done here; see below). It cannot seed encrypted or
+JSON columns, so those are read from the handler instead.
+
+This is the privilege-management surface, so to be explicit: none of these changes alters
+who may do what. Each refuses a request that previously did nothing, and the frontend
+sends none of the nulls (its update types exclude them, and the role form sends a field
+only when it changed).
+
+### ORU2-2 — LOW — a null on four role fields answered 200 and changed nothing — ✅ FIXED
+
+`RoleService.update_role` takes keyword arguments and reads `None` as "not provided", so
+`PATCH /roles/{id}` with `name`, `description`, `permissions` or `priority` as `null`
+returned 200 and left the role as it was. `name`, `permissions` and `priority` are NOT NULL
+columns, so there was nothing a null could mean. `description` is nullable, and an
+acknowledged request that does not clear it is the failure the contract is meant to
+prevent. **Fixed:** `RoleUpdate` inherits `RefusesNull` and answers 422; to empty a
+description, send an empty string, which is what the role form already does.
+
+### ORU2-3 — LOW — a null email or notification preferences on contact-info answered 200 and changed nothing — ✅ FIXED
+
+`update_contact_info` guards both with `is not None`. `email` is NOT NULL, and preferences
+are merged, never cleared. The test found `email`; `notification_preferences` has the same
+guard and was added by reading it, the encrypted/JSON seeding gap above hid it from the
+test. **Fixed** with `RefusesNull` on `ContactInfoUpdate`. `phone` and `mobile` are
+untouched: a null clears them, as the handler's comment says and the test confirms.
+
+### ORU2-4 — LOW — a null on the profile's emergency contacts answered 200 and changed nothing — ✅ FIXED
+
+`update_user_profile` pops `emergency_contacts` and writes it only if it is not None, so
+a null was dropped behind a 200; an empty list is how contacts are removed. **Fixed** with
+`RefusesNull` on `UserUpdate`.
+
+### Checked and left alone
+
+- `member_class` and `member_status` accept a null and do not end up empty: the
+  reconciliation listener on `User` re-derives them from `membership_type`, so the stored
+  value is the default. The test names this in `_REDERIVED` rather than treating it as a
+  failure.
+- All 90 endpoints in `roles.py`, `organizations.py`, `users.py` and `member_status.py`
+  (13, 29, 32 and 16) carry an auth dependency (an AST scan).
+
+### Not done
+
+- **The seeded-clear assertion is not yet in the training, scheduling or finance tests.**
+  It is cheap and should be tried on each; an ignored null in those modules would not have
+  been seen.
+- **Organization settings routes** (`PATCH /organization/settings*`, `/profile`,
+  `/modules`) and the `PUT /users/{id}/roles` / `service-periods` / `qualifications`
+  whole-object routes are not in the test.
+- **The harness is a fourth copy** and should move to a shared helper.
+- The other five checklist dimensions were not re-run beyond the scan above; passes 1–4
+  stand, including the ceiling guards recorded in pass 4.
+
+**Completion gate (pass 5):** `flake8 app/ tests/` 0 · `black --check app/ tests/` clean ·
+`isort` clean on the changed files · `mypy` on `schemas/role.py` and `schemas/user.py` clean ·
+no frontend change · new `test_roles_users_update_endpoints_integration.py` 42 pass, 0
+selected under the unit job's marker expression; 8 cases failed before the schema changes
+(5 refused, 3 not cleared, one of which was the finding above and two the re-derived fields
+now named in the test) · 2,329 tests selected by
+`role|user|member|permission|position|privilege|contact|rank|leave|organization|org_|model_updates|ceiling`
+pass. **Environment note:** the first full run of that group showed 248 failures, all
+`CONSTRAINT users.emergency_contacts failed`; they reproduce on a clean `main` and were the
+sandbox database sitting one revision behind (`3d67883cd461` against head `3f2593e8071e`,
+today's encrypt-date-of-birth migration). `alembic upgrade head` cleared them, and the
+248 plus the new file pass: 595 passed.
 
 ---
 

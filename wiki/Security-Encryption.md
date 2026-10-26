@@ -51,17 +51,26 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 ### What Is Encrypted
 
 Field-level encryption covers the columns and settings below. Everything else
-in the database — names, contact details, addresses, dates of birth — is
-stored in plain columns and protected by access control, not by field
-encryption; encrypt the database volume or disk if you need those covered at
-rest. The application stores no Social Security numbers.
+in the database — names and email addresses among it — is stored in plain
+columns and protected by access control, not by field encryption. Encrypting
+the database volume or disk covers a stolen drive, but **not** a `mysqldump` or
+a backup: the server decrypts its own storage to answer the dump, so only a
+field-encrypted column stays unreadable in one. The application stores no
+Social Security numbers.
+
+A department's own published details — the organization's address and phone,
+station and location addresses, vendor and utility company details, the org
+chart's office lines — are deliberately left plain; they identify no private
+person, and some are searched.
 
 | Where                              | What                                                                                                                                                                                                                                                                                                                                                                             |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `screening_records`                | Medical-screening PHI: `provider_name`, `result_summary`, `result_data`, `notes` (see below)                                                                                                                                                                                                                                                                                     |
 | `shift_completion_reports`         | Officer evaluation narrative: `areas_of_strength`, `areas_for_improvement`, `officer_narrative`, `reviewer_notes`                                                                                                                                                                                                                                                                |
 | `prospective_members.status_token` | The applicant's status-page credential                                                                                                                                                                                                                                                                                                                                           |
-| `users`                            | MFA (TOTP) secret and MFA recovery codes                                                                                                                                                                                                                                                                                                                                         |
+| `users`                            | MFA (TOTP) secret and MFA recovery codes; `date_of_birth`, `emergency_contacts`; `phone`, `mobile` and the home address (`address_street`, `address_city`, `address_state`, `address_zip`)                                                                                                                                                                                       |
+| `prospective_members`, `prospects` | `date_of_birth` (applicants); `phone`, `mobile` and the home address, as for `users`                                                                                                                                                                                                                                                                                             |
+| Other people's contact details     | `event_external_attendees.phone`; `store_orders.customer_phone`, `shipping_address`; `donors` phone and address; `check_requests.payee_address`; `organization_officers.phone`; facility emergency contacts, contractors, insurance agents and occupant contacts; `inventory_vendor_contacts.phone`; `event_requests.contact_phone`, `venue_address`                             |
 | `external_training_providers`      | `api_key`, `api_secret`, `client_secret`                                                                                                                                                                                                                                                                                                                                         |
 | Integrations                       | Each integration's secrets (`encrypted_config`)                                                                                                                                                                                                                                                                                                                                  |
 | Organization settings JSON         | Email secrets (`smtp_password`, `google_app_password`, `google_service_account_key`, `microsoft_app_password`, `microsoft_client_secret`, `cloudflare_api_token`), file-storage secrets (`google_drive_client_secret`, `onedrive_client_secret`, `s3_secret_access_key`) and OAuth client secrets (`google_client_secret`, `microsoft_client_secret`, `authentik_client_secret`) |

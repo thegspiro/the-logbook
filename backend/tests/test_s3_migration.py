@@ -315,7 +315,7 @@ class TestRollbackAndFinalize:
     ):
         other = tmp_path / "relocation.json"
         other.write_text(json.dumps({"version": 1, "moves": []}))
-        with pytest.raises(ValueError, match="not an S3 migration manifest"):
+        with pytest.raises(ValueError, match="not a storage migration manifest"):
             await remote_migration.rollback(db_session, str(other))
 
 

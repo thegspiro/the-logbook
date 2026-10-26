@@ -1,6 +1,240 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), pass 11 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), pass 12 (this PR)
+
+---
+
+## Pass 12 (2026-10-26) — watchdog pickup, real delta (19 commits: NFC tag register, variant-group rename, Medical Supplies lot recalls), 1 cross-cutting fix (migration fork, not this feature's code), 0 findings
+
+**Watchdog pickup.** No PR with a `claude/security-review-` head branch was
+open (`search_pull_requests`, 0 results, re-confirmed fresh at the start of
+this iteration). PR #3734 (Feature 10, Documents & legal, pass 12) had
+already merged, docs-only (`DOC-10-documents-legal.md` + `PROGRESS.md` only),
+so there was nothing to record per Step 0's "docs-only PR" rule. Per
+`PROGRESS.md`'s rotation table, row 11 (Inventory) was the next pending
+feature.
+
+**Backend:** same five endpoint files as pass 11 — `inventory.py` (150
+routes, unchanged), `inventory_nfc.py` (29 routes, **+5**), `labels.py` (12,
+unchanged), `inventory_kiosk.py` (4, unchanged), `inventory_last_seen.py` (2,
+unchanged) — plus `inventory_service.py`, `schemas/inventory.py`,
+`models/inventory.py`. **Frontend:** `modules/inventory/*` (unchanged scope,
+plus a new `InventoryAdminLayout` wrapper and `InventoryNfcRegisterPage`).
+**Migrations:** one new table in this feature's scope,
+`3d67883cd461_inventory_lot_recalls.py`; see Schema & migration notes.
+
+### Scope
+
+Baseline is pass 11's own merge commit, `5871258c` (PR #3580) — confirmed an
+ancestor of `HEAD` via `git merge-base --is-ancestor`. `git log --no-merges
+5871258c..HEAD -- <every scope file>` returns **19** commits. Several are
+phone-layout/a11y fixes and one checklist-overdue timing fix; the real
+backend delta is three features:
+
+1. **NFC Tag Register** (`aa3c2b77`, `df92e6eb`) — a department-wide
+   register of every inventory NFC tag (on items, storage areas, and
+   equipment-check compartments), with search, bulk lost/found, move, and a
+   CSV export. Five new routes in `inventory_nfc.py`.
+2. **Variant-group rename carried onto every size** (`6ba0a552`, `8c47a1e7`)
+   — renaming a folded product now rewrites the matching name segment of
+   every member item, not just the group row.
+3. **Medical Supplies lot recalls, truck-lot export, "not yet counted"
+   positions** (`4808afbd`, `4e1ff7ac`, `54a04340`) — primarily Feature 23's
+   (Medical supplies) own rotation row, but it lands in `inventory_service.py`
+   and `schemas/inventory.py`, both declared scope for this feature, so it is
+   reviewed here rather than deferred.
+
+Route decorators diffed directly across all five endpoint files: **+5**
+(`GET /nfc-tags`, `GET /nfc-tags/export`, `GET /nfc-tags/move-targets`,
+`POST /nfc-tags/bulk-status`, `POST /nfc-tags/{tag_id}/move`), 0 removed —
+confirmed by a direct AST-style grep recount (`grep -cE
+'^\s*@router\.(get|post|put|patch|delete)\('` against both the pass-11
+baseline revision and `HEAD`: `inventory.py` 150 → 150, `inventory_nfc.py`
+24 → 29). `check_route_permissions.py --strict`: **279** routes repo-wide
+(up from 273 at pass 11; the other +1 belongs to an unrelated rotation row),
+0 errors, 0 warnings.
+
+### New real delta reviewed, all clean
+
+- **NFC Tag Register — `GET /nfc-tags`, `GET /nfc-tags/export`, `GET
+/nfc-tags/move-targets`, `POST /nfc-tags/bulk-status`, `POST
+/nfc-tags/{tag_id}/move`, all in `inventory_nfc.py`, backed by the new
+  `InventoryNfcRegisterService`.** Read the service and every route handler
+  in full:
+  - **Permission split matches the owner's stated decision exactly.** All
+    five routes are gated `require_permission("inventory.manage",
+"inventory.check_manage")` (OR), and `_register_kinds()` then narrows
+    what a `check_manage`-only caller may request: a kind other than
+    `compartment` (or unset) is a 403, never a silently empty result, so a
+    checklist manager cannot mistake "not permitted" for "none exist."
+    `bulk_update_status`'s `allowed_kinds` mirrors the same split
+    server-side per tag, independent of what the caller requested.
+  - **Every query in `list_tags`, `move_targets` and `move_tag` filters
+    `organization_id`** on each of the three joined target types (item,
+    storage area, compartment-via-template — Pitfall #14a shape (b) for the
+    one without its own column) — read directly in
+    `inventory_nfc_register_service.py`, not inferred from a comment. Tests
+    (`test_inventory_nfc_register.py`, `test_inventory_nfc_register_endpoints.py`,
+    392 + 418 lines) include an `other_org` fixture exercised against list,
+    move-target, move, and bulk-status paths.
+  - **`move_tag` cannot redirect a tag cross-org or across kinds.** It
+    resolves the target through the same org-scoped `_get_item` /
+    `_get_storage_area` / `_get_compartment` helpers `InventoryNfcService`
+    already uses for linking, and refuses a kind change with a `ValueError`
+    (400) before touching the row.
+  - **The CSV export uses `SafeCsvWriter`** (Pitfall #15), is capped at
+    `MAX_EXPORT_ROWS` (10,000), and audits the export (`inventory_nfc_tags_
+exported`) with row/kind/status counts, not tag contents.
+  - **`list_tags`'s search is `like_pattern(...).ilike(..., escape=
+LIKE_ESCAPE_CHAR)`** (Pitfall #25) against `target_name`, `label` and
+    `template_name` — confirmed present on the one `.ilike()` call site in
+    the new service.
+  - **`InventoryNfcTagBulkStatusRequest.tag_ids` is bounded at the schema
+    layer** (`max_length=200`, matching `MAX_BULK_TAGS`), not just in the
+    service loop, and each id is length-checked (`<= 36` chars) before any
+    query runs.
+  - Frontend: the new `/inventory/admin/nfc/tags` route gates on
+    `requiredAnyPermission: ['inventory.manage', 'inventory.check_manage']`,
+    matching the backend OR exactly, and is registered in all three
+    registries (`APPLICATION_PAGES.md`, `testingRegistry.ts`,
+    `mobile-route-inventory.ts` — Pitfall #30a; all three checks pass, see
+    Completion gate).
+- **Variant-group rename (`update_variant_group` →
+  `_rename_variant_members`).** Reads every `InventoryItem` by a fresh
+  `organization_id`-scoped query (not the group's possibly-stale `.items`
+  relationship), matches only members whose name segment casefold-equals the
+  group's **current** name, and raises `ValueError` before mutating anything
+  if any resulting name would exceed the 255-character column — all-or-
+  nothing, not a partial rename. `update_variant_group` itself resolves the
+  group through `get_variant_group_by_id(group_id, organization_id)`, already
+  org-scoped; the endpoint is `inventory.manage`-gated, matching every other
+  group-mutating route, and the mypy follow-up (`8c47a1e7`) only narrows a
+  type the service already guaranteed — no behavior change.
+- **Medical Supplies lot recalls — `inventory_lot_recalls` table,
+  `record_lot_recall`/`lift_lot_recall`/`list_lot_recalls`/
+  `get_recalled_shelf_lots` in `inventory_service.py`, routed through
+  `medical_supplies.py`.** Reviewed because it lands in this feature's
+  declared scope files, even though the rotation row is Feature 23:
+  - `record_lot_recall` takes the item row `with_for_update()` before the
+    duplicate-recall check, closing the same race Pitfall #27 describes —
+    two officers recording the same recall at once cannot both pass the
+    check and leave two active rows. `lift_lot_recall` locks the recall row
+    itself for the same reason.
+  - Both endpoint handlers call `_require_medical_item(service, item_id,
+org_id)` (org- **and** domain-scoped — 404, not 403, for a uniform item,
+    so a medical-only officer cannot distinguish "not medical" from "not
+    yours") before reaching the service, and `lift_medical_lot_recall`
+    additionally checks the `recall_id` against the caller's own
+    domain-filtered list before lifting.
+  - The new `_usable_lot`/`_lot_not_recalled` filter is applied at every
+    on-hand/low-stock/reorder/issuing/truck-figure site that already existed
+    (confirmed by grepping both helpers across the file — 5 call sites,
+    matching the commit's own claim), so a recalled lot cannot count as
+    stock in one place while reading recalled in another.
+- **`InventoryLotRecall`'s `recalled_by`/`lifted_by` FKs are `ondelete="SET
+NULL"` and correctly `nullable=True`** (Pitfall #2).
+
+### New migration reviewed: `3d67883cd461_inventory_lot_recalls`
+
+- **Guarded against `create_all`** (Pitfall #26): `upgrade()` returns
+  immediately if the table already exists, so a fresh install (which builds
+  it from the model) and a re-run both no-op.
+- **New table, no existing row changes** — nothing behaves differently until
+  a recall is recorded, so there is no backfill correctness question (Pitfall
+  #35 does not apply to a `CREATE TABLE`).
+- `downgrade()` does real work (`DROP TABLE IF EXISTS`) and documents why it
+  is destructive (every recall and lift recorded is lost) rather than being a
+  bare `pass`.
+- Verified against a real database, not just read: `alembic upgrade head`
+  from a stale revision (see cross-cutting fix below) applied this revision
+  and every later one cleanly, in order.
+
+### Cross-cutting fix (not this feature's code): forked migration chain
+
+While bringing up a database to run this feature's tests,
+`scripts/validate_migrations.py --strict` failed with **two heads**:
+`0a8d11fcada1` (forms `allow_embed`, Feature 26) and `b7e4c2a91d35` (event
+guest check-in token, Feature 16) — both independently revising
+`3f2593e8071e` on 2026-10-25, neither touching an inventory table. Per
+CLAUDE.md's "no acceptable pre-existing errors" rule, fixed rather than
+flagged: generated a merge revision with `alembic merge` (the repo's own
+tool, matching the shape of the chain's existing merge revisions such as
+`7dba2d6d2dbb`), hand-fixed its `black`/`isort`/`flake8` formatting and gave
+`downgrade()` a real (if no-op) docstring rather than a bare `pass`. Single
+head confirmed (`9ab7b4276c22`), and `alembic upgrade head` run end-to-end
+against a real database applied all 15 pending revisions, including this
+one, without error. Also regenerated `docs/DATABASE_SCHEMA.md`
+(`--check` was stale — a repo-wide check belonging to whichever commit
+last changed a model without regenerating it; the diff is one line, a
+column count bump).
+
+### Re-verified: INV-22, still OPEN, owner-accepted, unchanged
+
+`get_fulfillment_options` / `get_requestable_categories` are untouched —
+neither function's definition appears in this window's diff of
+`inventory_service.py` (confirmed via `git diff ... | grep` on both
+definitions, as every prior pass has). `docs/KNOWN_LIMITATIONS.md`'s entry
+recording the owner's 2026-10-05 decision is unchanged; nothing new to add.
+
+### Verified good ✅ (pass 12)
+
+- **All 5 new routes are gated `inventory.manage` or `inventory.check_manage`
+  (OR), with the kind a `check_manage`-only caller may act on narrowed to
+  `compartment` server-side** — enumerated and read in full, not spot-checked.
+- **Every new query in the NFC register service org-scopes its target**
+  (item, storage area, or compartment-via-template), confirmed by reading
+  `inventory_nfc_register_service.py` end to end; cross-org isolation is also
+  covered by new tests exercising an `other_org` fixture against list, move,
+  move-target and bulk-status.
+- **The variant-group rename is all-or-nothing and org-scoped**, matching
+  members by a fresh query rather than a possibly-stale relationship.
+- **The new medical-supplies recall paths are org- and domain-scoped,
+  row-locked against the race Pitfall #27 describes, and the "not stock"
+  filter is applied everywhere stock is counted or issued** — confirmed by
+  grepping every call site of the new filter helpers.
+- **No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`, no new
+  bare `csv.writer`** (the new CSV export uses `SafeCsvWriter`), **no new
+  JSON-column shallow-copy mutation, and no new `window.confirm`/`alert`/
+  `prompt` or `dangerouslySetInnerHTML`** anywhere in this window's diff of
+  this feature's scope files (`grep` swept all 65 changed frontend files:
+  zero matches).
+- **The one new migration in this feature's scope is `create_all`-tolerant,
+  reversible, and verified against a real upgrade**, not merely read.
+- **INV-22's "leave as is" owner decision is unchanged** in code and in
+  `KNOWN_LIMITATIONS.md`.
+
+### Completion gate {#completion-gate-pass-12}
+
+| Check                                                                                          | Result                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (pinned 7.4.1)                                                   | ✅ 0 violations                                                                                                                                                                                                                         |
+| `black --check app/ tests/ alembic/` (pinned 26.10.1)                                          | ✅ clean                                                                                                                                                                                                                                |
+| `isort --check-only app/ tests/ alembic/` (pinned 9.0.2)                                       | ✅ clean                                                                                                                                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                              | ✅ single head (`9ab7b4276c22`), 655 revisions (after the merge fix)                                                                                                                                                                    |
+| `python3 -m pytest tests/test_alembic_migrations.py tests/test_migration_create_all_tables.py` | ✅ 80 passed                                                                                                                                                                                                                            |
+| `alembic upgrade head` against a real database                                                 | ✅ 15 pending revisions applied cleanly, in order                                                                                                                                                                                       |
+| `python3 scripts/check_route_permissions.py --strict`                                          | ✅ 279 routes, 0 errors, 0 warnings                                                                                                                                                                                                     |
+| `python3 scripts/generate_schema_docs.py --check`                                              | was stale (unrelated model changes); regenerated, re-checked ✅                                                                                                                                                                         |
+| `pytest tests/ -k "inventory or label or nfc or kiosk"`                                        | ✅ 2035 passed, 1 pre-existing skip (`pywebpush`) — first run hit 106 failures on a stale test database (pre-dating this window's migrations); `alembic upgrade head` resolved it, confirming the failures were environmental, not code |
+| `npm run typecheck` (`tsc-native.mjs --noEmit`)                                                | ✅ clean                                                                                                                                                                                                                                |
+| `npm run lint` (`eslint --max-warnings 10`)                                                    | ✅ clean                                                                                                                                                                                                                                |
+| `npx vitest run src/modules/testing/testingRegistry.test.ts`                                   | ✅ 12 passed                                                                                                                                                                                                                            |
+| `npx playwright test src/e2e/mobile-route-integrity.spec.ts --project=chromium`                | ✅ 1 passed                                                                                                                                                                                                                             |
+| `npx vitest run src/modules/inventory`                                                         | ✅ 1868 passed (126 files)                                                                                                                                                                                                              |
+
+**1 cross-cutting fix** (the forked migration chain and the stale schema
+doc — neither in this feature's own code; both repo-wide hygiene gates this
+pass happened to be the one to trip). **0 findings** in this feature's own
+code this pass: the three new features (NFC tag register, variant-group
+rename, medical-supplies lot recalls) were reviewed fresh against all seven
+checklist dimensions and found sound throughout — every new route is
+permission-gated and org-scoped, the one new client-influenced write path
+with cross-org reach (NFC tag move) is bounded to the same organization and
+kind before use, the new migration is `create_all`-tolerant and reversible,
+and no unsafe pattern was introduced anywhere in the frontend diff. INV-22 is
+the only standing item and remains unchanged.
+
+Rotation row 11 → ✅ (pending this PR merge). Next: Feature 12 (Facilities).
 
 ---
 
