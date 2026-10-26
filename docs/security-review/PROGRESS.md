@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**(this PR)** (branch `claude/security-review-facilities`) — Feature 12
+(Facilities), pass 12. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, checked both at the start of this iteration and again
+immediately before committing (the prior pass hit a genuine two-session
+race on the same check). No Claude session was reachable via `ListAgents`
+(the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, is still unreachable). PR #3738
+(Feature 11, Inventory, pass 12) had already merged. **0 fixed, 0 new
+findings.** Real delta since pass 11's baseline (`b627b7ad`, PR #3585): two
+new server-side paginated/search list endpoints (`GET
+/facilities/maintenance/page`, `GET /facilities/inspections/page`) closing
+app-review finding FAC2-5 — org-scoped via the existing unchanged
+condition-builder helpers, `LIKE`-escaped search, count and page queries
+built from the same filter list — plus a frontend rewiring that removes the
+old client-side search filter entirely rather than running both. FAC-30
+re-confirmed the only standing item, unaffected. See
+`FAC-12-facilities.md`'s **Pass 12** section for the full review.
+
+Rotation row 12 → ✅ (pending this PR's merge); next is Feature 13
+(Apparatus & NFC).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3738, Feature 11, Inventory, pass 12, merged), preserved for history</summary>
+
 **PR [#3738](https://github.com/thegspiro/the-logbook/pull/3738)** (branch
 `claude/security-review-inventory-p12`) — Feature 11 (Inventory), pass 12.
 No security-review PR was open — confirmed via `search_pull_requests`
@@ -35,6 +60,8 @@ for the full review.
 
 Rotation row 11 → ✅ (pending this PR's merge); next is Feature 12
 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3734, Feature 10, Documents & legal, pass 12, merged, docs-only), preserved for history</summary>
@@ -21853,7 +21880,7 @@ PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -21883,6 +21910,69 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 12 (Facilities, pass 12) — watchdog pickup, 0 fixed, 0 new findings; a real, non-trivial delta reviewed end to end
+
+No `claude/security-review-*` PR was open (`search_pull_requests`, 0
+matching results, checked at the start of this iteration and again
+immediately before committing — the prior pass hit a genuine race between
+two watchdog sessions picking up the same feature within minutes of each
+other, resolved by the repo owner closing the duplicate PR). No Claude
+session was reachable via `ListAgents` (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, is still
+unreachable). PR #3738 (Feature 11, Inventory, pass 12) had already merged.
+Row 12 (Facilities) confirmed the next `⬜` from the Rotation table directly.
+
+Baseline `b627b7ad` (PR #3585's merge, pass 11). Unlike the last several
+near-no-op passes, this one's delta was real and substantial: **15 files,
++659/−126**. Two brand-new server-side paginated/search list endpoints,
+`GET /facilities/maintenance/page` and `GET /facilities/inspections/page`,
+registered ahead of their `/{id}` siblings and gated identically
+(`require_permission("facilities.view", "facilities.manage")`, unchanged).
+This closes app-review finding **FAC2-5** (already marked fixed
+2026-10-25 by the same owner-direct commit) — the inspections list could
+not express "pending" (`passed IS NULL`) server-side at all, and both
+cross-facility screens searched/filtered only the first 100-row page
+client-side.
+
+The two new `FacilitiesService` methods were read in full: both reuse the
+existing, unchanged `_maintenance_conditions`/`_inspection_conditions`
+condition-builder helpers, so the org filter is the same base condition the
+pre-existing list methods already use — no separately-written, divergent
+org check. Every search term is escaped (`like_pattern(...)`,
+`escape=LIKE_ESCAPE_CHAR`, already imported in this file); the count query
+and the page query build from the identical filter list, so `total` cannot
+drift from the page itself; `skip`/`limit` reach real SQL `.offset()`/
+`.limit()` with a `desc(id)` tiebreaker. The frontend hooks were rewritten
+to remove the old client-side search filter entirely (not layered
+alongside the new server-side one), add request-sequencing against
+out-of-order responses, and reset to page 1 on every filter/search change.
+A new shared `ListPager` component is used identically at all 4 call sites.
+A separate, unrelated real change in the same scope file (`routes.tsx`)
+drops a module-enablement gate (not the permission gate) from an existing
+Locations-adjacent route and adds one new route with the same unchanged
+permission gate — reviewed for the gate only; the page itself
+(`CardReadersPage`) is Feature 32's (Locations & kiosk) scope.
+
+Routes re-enumerated: **102**, exactly +2 over the header's recorded 100.
+`check_route_permissions.py --strict`: 279 routes repo-wide, 0 errors.
+**FAC-30** (the only standing item) re-confirmed OPEN/unaffected — none of
+the files or functions it concerns changed this window.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+`flake8==7.4.1`/`black==26.10.1`/`isort==9.0.2`) on `app/ tests/ alembic/`
+all clean; `validate_migrations.py --strict` — 655 revisions, single head
+`9ab7b4276c22` (already single-headed by the prior pass's fix);
+`check_route_permissions.py --strict` (repo root) — 279 routes, 0
+errors/warnings; `generate_schema_docs.py --check` — up to date; scoped
+backend tests (`-k "facilit or maintenance or inspection"`) — 431 passed, 1
+skipped (environment-only, `py_vapid`); frontend `npm run typecheck`/`npm
+run lint` — 0 errors; scoped frontend suite (`npx vitest run
+src/modules/facilities`) — 147 passed (19 files).
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-10-26 — Feature 11 (Inventory, pass 12) — watchdog pickup, 1 cross-cutting fix (migration fork + stale schema doc, not this feature's code), 0 findings
 
