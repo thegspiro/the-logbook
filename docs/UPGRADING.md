@@ -525,6 +525,22 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### The command that moves files to a remote store is `migrate_uploads_to_remote.py` (2026-10-25)
+
+`scripts/migrate_uploads_to_s3.py` is now `scripts/migrate_uploads_to_remote.py`,
+since it moves files to a Google Shared Drive as well as to a bucket, and its
+`--buckets` option is now `--stores`. **Both old names still work**, so
+runbooks, shell history and scheduled jobs need no change. The old script runs
+the new one with the same options, and gives the same output and exit codes.
+
+- `scripts/backup.sh` asks for the new name first and falls back to the old
+  one, so a host script and a backend image may be updated in either order.
+- A manifest written by an earlier run still rolls back and finalizes. Their
+  directory, `/app/uploads/.s3-migration/`, keeps its name.
+- An error now begins `Storage migration failed:` rather than
+  `S3 migration failed:`. Anything that matches on that text needs the new
+  wording.
+
 ### Google Drive's connection test passes with the Content manager role (2026-10-25)
 
 The Google Drive backend from 2026-10-23 deleted a file permanently. On a
