@@ -137,7 +137,10 @@ at 3 routes, byte-identical to pass 11.
 **Standing items re-verified, both unchanged (neither touched by this
 window's delta):**
 
-- **FIN8-05-1 (MED) — still OPEN (flagged).**
+- **FIN8-05-1 (MED) — ✅ FIXED 2026-10-26 (owner-directed, after this pass).**
+  `decide_request` now refuses a decider who submitted the request or owns its line
+  (`BudgetRequestForbiddenError`, 403), the same guard `review_request` applies; no
+  exception for a one-person department. Pass 12's text as found, still OPEN (flagged):
   `finance_budget_request_service.py`'s `decide_request` (now line 659,
   shifted from 635/660 by this window's unrelated insertions, confirmed same
   body by direct read) still has no `assert_different_person` check, unlike

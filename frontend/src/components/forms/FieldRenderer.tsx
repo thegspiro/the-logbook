@@ -9,7 +9,7 @@
  * file, signature, section_header, member_lookup.
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, User, Upload, FileText, X, Trash2 } from 'lucide-react';
+import { Search, User, Upload, FileText, X, Trash2, Lock } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { MemberLookupResult } from '../../services/api';
 import { FieldType } from '../../constants/enums';
@@ -182,6 +182,7 @@ export interface FieldDefinition {
   condition_value?: string | undefined;
   sort_order: number;
   width: string;
+  is_sensitive?: boolean | undefined;
 }
 
 export interface FieldRendererProps {
@@ -663,6 +664,12 @@ const FieldRenderer = ({
         {field.required && <span className="ml-1 text-red-700 dark:text-red-400">*</span>}
       </label>
       {field.help_text && <p className={`mb-2 text-xs ${sectionSubClass}`}>{field.help_text}</p>}
+      {field.is_sensitive && (
+        <p className={`mb-2 flex items-center gap-1 text-xs ${sectionSubClass}`}>
+          <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
+          This answer is stored encrypted and is visible only to authorized staff.
+        </p>
+      )}
       {renderInput()}
       {error && (
         <p id={errorId} className="mt-1 text-xs text-red-700 dark:text-red-400" role="alert" aria-live="assertive">

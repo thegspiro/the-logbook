@@ -168,13 +168,20 @@ export const EventEditPage: React.FC = () => {
     reminder_target: event.reminder_target,
     reminder_schedule: event.reminder_schedule,
     check_in_window_type: event.check_in_window_type ?? 'flexible',
-    check_in_minutes_before: event.check_in_minutes_before ?? 60,
+    // A missing lead time means what the backend reads it as: 15 minutes on a
+    // window-type event, 60 otherwise (event_service._validate_check_in_window).
+    // Showing 60 for every event saved that 60 on the first edit and moved an
+    // open window event's check-in start without anyone touching the field.
+    check_in_minutes_before: event.check_in_minutes_before ?? (event.check_in_window_type === 'window' ? 15 : 60),
     check_in_minutes_after: event.check_in_minutes_after ?? 15,
     require_checkout: event.require_checkout ?? false,
     allow_guest_check_in: event.allow_guest_check_in ?? false,
     guest_check_in_creates_prospect: event.guest_check_in_creates_prospect ?? false,
     custom_fields: event.custom_fields ?? undefined,
     attachments: event.attachments ?? undefined,
+    // The form defaults is_draft to false, so leaving it out made every save
+    // of a draft publish it.
+    is_draft: event.is_draft ?? false,
   };
 
   // Build initial recurrence state when editing a recurring event

@@ -482,6 +482,18 @@ FORMS_VIEW = Permission(
 FORMS_MANAGE = Permission(
     "forms.manage", "Create, edit, and manage forms", PermissionCategory.FORMS
 )
+# Answers to form fields marked Sensitive. Deliberately outside the `forms.`
+# namespace: the onboarding wizard's Forms "manage" checkbox writes `forms.*`,
+# and a module wildcard matches every action under its prefix, so a
+# `forms.view_sensitive` would reach every forms manager. No position is
+# seeded with this grant and no checkbox writes `sensitive_answers.*`, so out
+# of the box only the global `*` (System Owner) holds it; anyone else is
+# granted it by hand.
+SENSITIVE_ANSWERS_VIEW = Permission(
+    "sensitive_answers.view",
+    "View answers to form fields marked Sensitive",
+    PermissionCategory.FORMS,
+)
 
 # Admin
 ADMIN_ACCESS = Permission(
@@ -833,6 +845,7 @@ ALL_PERMISSIONS: list[Permission] = [
     # Forms
     FORMS_VIEW,
     FORMS_MANAGE,
+    SENSITIVE_ANSWERS_VIEW,
     # Admin
     ADMIN_ACCESS,
     SYSTEM_RUN_TASKS,

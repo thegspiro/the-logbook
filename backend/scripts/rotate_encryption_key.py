@@ -89,6 +89,7 @@ _PLAIN_COLUMNS = [
             "address_city",
             "address_state",
             "address_zip",
+            "status_token",
         ],
     ),
     (
@@ -118,6 +119,7 @@ _PLAIN_COLUMNS = [
     ("facility_occupants", "id", ["contact_phone"]),
     ("inventory_vendor_contacts", "id", ["phone"]),
     ("event_requests", "id", ["contact_phone", "venue_address"]),
+    ("form_submissions", "id", ["sensitive_data"]),
     (
         "screening_records",
         "id",

@@ -95,7 +95,11 @@ Re-driven. `ipSecurity.w74.test.tsx`.
 - A member's rejected request read "Rejected" with no reason; the rejection
   (or revocation) reason now shows under the status.
 
-### W74-5 — LOW — An admin can approve their own exception — FLAGGED
+### W74-5 — LOW — An admin can approve their own exception — ✅ FIXED 2026-10-26
+
+Owner decision: a second person approves. `approve_exception` refuses an approver who
+is the exception's member or filed it (`assert_different_person`, 400); no exception for
+a one-admin department. Original finding below.
 
 **Did:** as `admin`, requested 198.51.100.7 for themselves, then approved it.
 **Saw:** 200, approved. Nothing stops the approver being the requester. The

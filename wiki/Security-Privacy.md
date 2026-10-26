@@ -7,7 +7,7 @@ this page covers the **rights members have over their own data** and the
 **retention rules** governing how long records are kept.
 
 Aligned with ISO/IEC 27701 and the HIPAA right of access. The full control
-inventory lives in [`docs/COMPLIANCE.md`](../docs/COMPLIANCE.md).
+inventory lives in [`docs/COMPLIANCE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/COMPLIANCE.md).
 
 ---
 
@@ -376,7 +376,7 @@ The software implements controls; it cannot adopt policy on your behalf:
   — see [Security Overview → Incident Response](Security-Overview#incident-response)
 
 Policy skeletons for all of this, pre-filled with what the platform enforces,
-are in [`docs/policies/`](../docs/policies/).
+are in [`docs/policies/`](https://github.com/thegspiro/the-logbook/tree/main/docs/policies).
 
 ---
 

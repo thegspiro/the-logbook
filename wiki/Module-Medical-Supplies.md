@@ -7,7 +7,7 @@ into the gear catalog.
 Added 2026-08-16. **Off by default.**
 
 > The deeper engineering reference lives in the source repository at
-> [`docs/MEDICAL_SUPPLIES_MODULE.md`](../docs/MEDICAL_SUPPLIES_MODULE.md).
+> [`docs/MEDICAL_SUPPLIES_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/MEDICAL_SUPPLIES_MODULE.md).
 
 ## Why it is separate from the gear and uniform pages
 

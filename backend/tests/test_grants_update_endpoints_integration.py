@@ -136,6 +136,19 @@ def _required_value(column: Any, organization_id: str) -> Any:
     raise AssertionError(f"no bench value for {column.table.name}.{column.key}")
 
 
+# Nullable columns a service still requires by rule, so a null is neither
+# always accepted nor always refused. A donor's names are required for an
+# individual and optional for an organization (W69-6); the cases for them live
+# in test_donor_organization_names.py, where the donor type is known.
+_REQUIRED_BY_RULE = {("donor", "first_name"), ("donor", "last_name")}
+
+# Values a row needs to be valid beyond its NOT NULL columns: the bench donor
+# is an individual (the default type), which needs both names.
+_VALID_EXTRAS: dict[str, dict[str, Any]] = {
+    "donor": {"first_name": "Bench", "last_name": "Bench"},
+}
+
+
 def _build(model: Any, organization_id: str, **extra: Any) -> Any:
     values = {
         c.key: _required_value(c, organization_id)
@@ -169,6 +182,7 @@ class _Bench:
             self.db.add(parent)
             await self.db.flush()
             extra["application_id"] = parent.id
+        extra.update(_VALID_EXTRAS.get(kind, {}))
         row = _build(model, self.organization_id, **extra)
         self.db.add(row)
         await self.db.flush()
@@ -267,7 +281,7 @@ def _null_cases(index: int):
         columns = {c.key: c for c in model.__table__.columns}
         for name in sorted(update.model_fields):
             column = columns.get(name)
-            if column is None:
+            if column is None or (kind, name) in _REQUIRED_BY_RULE:
                 continue
             if (not column.nullable) == (index == 0):
                 cases.append(pytest.param(kind, name, id=f"{kind}.{name}"))

@@ -106,6 +106,7 @@ class FormFieldBase(BaseModel):
     condition_value: Optional[str] = Field(None, max_length=500)
     sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     width: str = Field(default="full", pattern="^(full|half|third)$")
+    is_sensitive: bool = False
 
 
 class FormFieldCreate(FormFieldBase):
@@ -145,9 +146,11 @@ class FormFieldUpdate(BaseModel):
     condition_value: Optional[str] = Field(None, max_length=500)
     sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     width: Optional[str] = None
+    is_sensitive: Optional[bool] = None
 
     _check_required = field_validator("required")(_reject_null)
     _check_width = field_validator("width")(_reject_null)
+    _check_is_sensitive = field_validator("is_sensitive")(_reject_null)
 
 
 class FormFieldResponse(FormFieldBase):
@@ -365,6 +368,14 @@ class FormSubmissionResponse(UTCResponseBase):
     integration_processed: bool = False
     integration_result: Optional[Dict[str, Any]] = None
     created_at: datetime
+    # Answers to Sensitive fields. Named differently from the ORM's
+    # `sensitive_data` on purpose: this schema is built with from_attributes,
+    # so a same-named field would be filled from the row on every response.
+    # It stays None unless an endpoint has checked `sensitive_answers.view`
+    # and set it.
+    sensitive_answers: Optional[Dict[str, Any]] = None
+    # True when the submission holds sensitive answers this response left out.
+    sensitive_withheld: bool = False
 
     model_config = _response_config
 
@@ -403,6 +414,7 @@ class PublicFormFieldResponse(BaseModel):
     condition_value: Optional[str] = None
     sort_order: int = 0
     width: str = "full"
+    is_sensitive: bool = False
 
     model_config = _response_config
 

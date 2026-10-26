@@ -70,7 +70,7 @@ All organization data is scoped by `organization_id`:
   organization before they are stored.
 
 The rules and their enforcement are in
-[docs/rules/tenancy.md](../docs/rules/tenancy.md).
+[docs/rules/tenancy.md](https://github.com/thegspiro/the-logbook/blob/main/docs/rules/tenancy.md).
 
 ### Example: `organizations.settings.email_service`
 
@@ -127,7 +127,7 @@ some tables are built only by `create_all` â€” no migration ever creates them â€
 so a migration that reflects or alters one must first check that the table
 exists, or `alembic upgrade head` against an empty database fails. CI enforces
 this (`tests/test_migration_create_all_tables.py`); see
-[docs/rules/migrations.md](../docs/rules/migrations.md#a-migration-must-tolerate-a-table-only-create_all-builds).
+[docs/rules/migrations.md](https://github.com/thegspiro/the-logbook/blob/main/docs/rules/migrations.md#a-migration-must-tolerate-a-table-only-create_all-builds).
 
 ### Commands
 
