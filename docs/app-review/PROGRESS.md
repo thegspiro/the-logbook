@@ -59,7 +59,7 @@ from its open list.
 | B18 | training                   | TR2    | ✅     |
 | B19 | scheduling                 | SCH2   | ✅     |
 | B20 | finance                    | FIN2   | ✅     |
-| B21 | orgs, roles & users        | ORU2   | ⬜     |
+| B21 | orgs, roles & users        | ORU2   | ✅     |
 | B22 | compliance & skills        | CS2    | ⬜     |
 | B23 | security, audit & IP       | SEC2   | ⬜     |
 | B24 | core infra                 | CI2    | ⬜     |
@@ -3413,3 +3413,20 @@ secrets redacted for non-admins. See
   five checklist dimensions. Gate: flake8 / black / isort clean · 1,618 related tests pass,
   1 skipped for a missing time-zone table · new file all `integration`. See finance.md →
   Pass 5. Next: B21 orgs, roles & users.
+- **B21 orgs, roles & users ✅ (pass 5) — seven fields acknowledged a null and ignored it
+  (ORU2-2 to ORU2-4).** The B18–B20 method on the four row-backed update routes (roles,
+  user profile, contact-info, leaves of absence), with the "may be cleared" half made
+  stricter: it now seeds a value and checks it is actually gone, since a handler that skips a
+  null still answers 200. **Fixed** — `PATCH /roles/{id}` answered 200 and changed nothing for
+  a null `name`, `description`, `permissions` or `priority`; contact-info did the same for
+  `email` and `notification_preferences`, and the profile for `emergency_contacts`. All are
+  now 422 through `RefusesNull`. No permission or ceiling behaviour changes, and the frontend
+  sends none of these nulls. **Verified good:** `member_class` / `member_status` re-derive by
+  design; all 90 endpoints in the four files carry an auth dependency. **Not covered:** org
+  settings routes and the whole-object role/service-period/qualification routes. **Follow-up:**
+  apply the seeded-clear assertion to the training, scheduling and finance tests; the harness is
+  a fourth copy. **Environment:** the sandbox database was one revision behind head (248 false
+  failures on a clean `main`) until `alembic upgrade head`. **Not re-run:** the other five
+  checklist dimensions. Gate: flake8 / black / isort / mypy (changed schemas) clean · 595
+  related tests pass after the migration · new file 42 pass, all `integration`. See
+  orgs-roles-users.md → Pass 5. Next: B22 compliance & skills.
