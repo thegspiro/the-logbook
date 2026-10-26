@@ -107,6 +107,7 @@ _PLAIN_COLUMNS = [
             "address_city",
             "address_state",
             "address_zip",
+            "status_token",
         ],
     ),
     (
