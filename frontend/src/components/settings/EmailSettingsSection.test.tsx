@@ -138,7 +138,7 @@ describe('EmailSettingsSection — Microsoft 365 authentication method', () => {
     expect(screen.getByRole('button', { name: /app registration \(oauth\)/i })).toBeInTheDocument();
   });
 
-  it('offers no method choice for Gmail', () => {
+  it("does not offer Microsoft's app registration for Gmail", () => {
     renderSection(settings({ platform: 'gmail' }));
     expect(screen.queryByRole('button', { name: /app registration \(oauth\)/i })).not.toBeInTheDocument();
   });
