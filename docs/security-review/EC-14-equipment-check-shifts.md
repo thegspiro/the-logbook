@@ -3,12 +3,13 @@
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
-2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11) · **PR:**
+2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26
+(pass 12) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings)
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), pass 12 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged from
 pass 10), `api/v1/endpoints/shift_completion.py` (21 routes),
@@ -17,6 +18,160 @@ pass 10), `api/v1/endpoints/shift_completion.py` (21 routes),
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration (no schema change to this feature's own
 tables)
+
+---
+
+## Pass 12 (2026-10-26) — real delta (trainee-visibility data-integrity fix, future-date rejection, submit-routing hardening on `update_report`), 0 fixed, 1 new finding flagged (EC-17, MED, pre-existing)
+
+**Watchdog pickup.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results, re-checked
+immediately before pushing — this rotation has hit genuine concurrent-
+watchdog races on two of the last four features, neither recurred here).
+PR #3740 (Feature 13, Apparatus & NFC, pass 19) had already merged. The
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via `ListAgents`.
+Rotation row 14 (Equipment check & shifts) was confirmed the next `⬜`.
+
+**Baseline** `8475c902` (PR #3602's merge, pass 11). `git diff --stat`
+against it, across the full declared scope, found **3 files, +258/−32** —
+`equipment_check.py` (the endpoint file) is byte-identical; all of the
+delta is in the two services plus `shift_completion.py`'s handler bodies
+(no route or permission-string change — route counts re-enumerated by grep,
+unchanged at 54/21).
+
+### `shift_completion_service.py` — three changes, all read in full
+
+- **A genuine data-integrity bug, already fixed, re-verified end to end.**
+  The old `_apply_trainee_visibility(report, visibility)` set fields
+  directly on the SQLAlchemy-tracked `report` object
+  (`report.officer_narrative = None`, and unconditionally
+  `report.reviewer_notes = None`) to hide them from a trainee's own view.
+  `get_db`'s session commits at the end of every request — including a
+  GET — so the first time a trainee viewed their own report under a
+  visibility config that hides a field, that field's real value was
+  permanently erased from the database. The fix (`_trainee_view`) builds a
+  `ShiftCompletionReportResponse.model_validate(report).model_copy(update=hidden)`
+  — a detached serialized copy — and both call sites
+  (`get_my_shift_reports`, `get_shift_report`) now return that instead of
+  the mutated tracked row. **A dedicated regression test already exists**
+  (`tests/test_shift_report_trainee_view.py`,
+  `test_my_reports_hides_fields_without_erasing_them` and
+  `test_single_report_hides_fields_without_erasing_them`): both assert the
+  trainee-facing response hides the fields _and_ that a fresh fetch of the
+  same row afterward still has the real values — exactly the shape that
+  would have caught the original bug. No further test needed.
+- **`reject_future_shift_date(db, organization_id, shift_date)`** — a new
+  module-level helper, called from `create_shift_report` and
+  `batch_create_shift_reports` before the service call. Resolves "today"
+  via `resolve_org_today(db, organization_id)` (the organization's own
+  configured timezone, not the server's UTC day — the docstring is
+  explicit that a bare UTC check would reject today's report from an
+  ahead-of-UTC department until midnight UTC while accepting a US
+  department's tomorrow every evening) and raises when the submitted date
+  is later. Org-scoped by construction (takes the id, not a client object).
+  Not a finding — correct.
+- **`update_report`'s submit-time hardening.** Once a report is no longer
+  a draft, a status change is refused unless it goes through
+  `review_report` (`"A submitted report's status is changed through
+review, not by its filing officer"`) — closing a real hole: before this,
+  the filing officer's own `review_status` value in the update payload
+  would have been trusted, so an officer could have set their own report
+  straight to `approved` (skipping review) or reset an `approved` report
+  back through the approval path to re-run sign-offs. When a draft _is_
+  being submitted, the destination (`pending_review` vs `approved`) is now
+  read from `TrainingModuleConfigService.get_config(organization_id)`
+  (`report_review_required`) and **overwrites** whatever the client sent —
+  confirmed by reading the code: `updates = {**updates, "review_status":
+...}` unconditionally replaces the client's value, so a crafted payload
+  cannot choose its own destination. The new deleted-officer carve-out
+  (`orphaned_for_manager = report.officer_id is None and manages_training`)
+  only fires when `report.officer_id` is truly `None` — the `SET NULL`
+  state left by a deleted account (`78a6a57eb`, reviewed pass 11) — not
+  whenever the caller merely holds `training.manage`, so it cannot be used
+  to edit a report whose officer still has an account. All three correct.
+
+### EC-17 — MED — FLAGGED — a non-draft report's substantive fields stay editable by its filing officer indefinitely; pre-existing, not introduced by this delta
+
+`update_report`'s hardening above only restricts the **`review_status`**
+field itself. The `UPDATABLE_FIELDS` loop that writes `performance_rating`,
+`officer_narrative`, `areas_of_strength`, `areas_for_improvement`,
+`skills_observed`, `tasks_performed`, `hours_on_shift`, `calls_responded`,
+`call_types`, and `enrollment_id` onto the row (`shift_completion_service.py:1660-1662`)
+runs for **any** update, with no `was_draft` gate — confirmed unchanged
+from pass 11's baseline (`git show 8475c902:...` shows the identical loop
+with no status check). The filing officer can therefore edit a report's
+narrative, rating, or recorded skills after it has been reviewed and
+`approved`, through the same `PUT /shift-reports/{id}` endpoint, with no
+re-review triggered.
+
+This contradicts the endpoint's own docstring, which this pass's delta
+just rewrote to say "The service allows only drafts" (`shift_completion.py`
+pass-12 diff) — true for the `review_status` field as of this pass, not
+true for every other field the loop writes. Consequence, concretely: an
+officer could soften a negative narrative or inflate a trainee's
+`skills_observed` on an already-approved, already-reviewed report, weeks
+later, with nothing surfacing it to the training officer who approved the
+original version beyond the generic `shift_report_updated` audit-log entry
+(which does record which fields changed, but not that the report had
+already cleared review). Confirmed this does **not** re-run training
+credit: `_trigger_deferred_progress` only fires when
+`not was_released and report.review_status == "approved"`, and
+`was_released` is captured before the edit, so a plain field edit on an
+already-approved report does not re-grant or re-run skill checkoffs — the
+integrity risk is to the record itself (what the trainee's history shows),
+not to double-counted credit.
+
+**Not fixed this pass.** Closing it is a product decision this pass should
+not make unilaterally: block all `UPDATABLE_FIELDS` writes once
+`review_status != "draft"` entirely (narrowest, but removes the ability to
+fix a typo after approval), or require passing back through review on any
+edit to an approved/pending report (more correct, but is a workflow
+change), or accept the status quo and rely on the audit log (current
+behavior). Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+### `equipment_check_service.py` — lot-recall integration, reviewed for org-scoping
+
+The larger share of this file's diff (+114) is Medical Supplies' own lot-
+recall feature (Feature 23's rotation row) landing in this feature's shared
+service — reviewed here only for the dimensions this feature's declared
+scope covers, per the scoping discipline prior passes use for cross-feature
+landings:
+
+- `apparatus_expiring_stock`'s new `include_undated`/`include_recalled`
+  parameters and the new `uncounted_supply_positions` method all thread
+  `organization_id` through to every query (`InventoryItem.organization_id
+== organization_id`, `InventoryService.recalled_lot_keys(organization_id,
+...)`, `item_ids_with_uncounted_positions(organization_id, ...)`) — no
+  by-id query bypasses the organization filter.
+- `swap_item_lot`'s new recalled-lot refusal (`ValueError("This stock lot
+is recalled and cannot be deployed")`) calls `recalled_lot_keys` with the
+  same `organization_id` already governing the rest of the method.
+- The unrelated `_create_lots` fix (an explicit `db.refresh(item)` per
+  created row after commit, working around MySQL having no `INSERT ...
+RETURNING` so server-default `created_at`/`updated_at` stay unloaded and
+  raise `MissingGreenlet` if read before a refresh) is a correctness fix,
+  not a security-relevant change — reviewed, not a finding.
+
+No by-id query, client-supplied FK, or LIKE pattern in this file's diff
+lacks the scoping the rest of the file already uses.
+
+## Completion gate
+
+| Check                                                                    | Result                                          |
+| ------------------------------------------------------------------------ | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI-pinned 7.4.1)                          | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/` (CI-pinned 26.10.1)                 | ✅ clean, 2671 files unchanged                  |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.2)              | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                        | ✅ single head `9ab7b4276c22`, 655 revisions    |
+| `python3 scripts/check_route_permissions.py --strict`                    | ✅ 279 routes, 0 errors, 0 warnings             |
+| `python3 scripts/generate_schema_docs.py --check`                        | ✅ up to date                                   |
+| `pytest tests/ -k "shift_completion or equipment_check or shift_report"` | ✅ 677 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                       | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                            | ✅ 0 errors, 0 warnings                         |
+
+## Next
+
+Feature 15 (Scheduling).
 
 ---
 
