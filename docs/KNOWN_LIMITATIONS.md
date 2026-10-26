@@ -6677,39 +6677,15 @@ answers 400 on an order already paid ("Refund it instead") or already waived. A
 partly paid order can still be waived. Kept only because code and tests cite it
 by name; history in `docs/security-review/SF-04-storefront-payments.md`.
 
-## FIN8-05-1 — Deciding A Budget Request Has No Separation-Of-Duties Guard, Unlike Its Own Sibling (2026-10-12)
+## FIN8-05-1 — Deciding A Budget Request Had No Separation-Of-Duties Guard (2026-10-12, resolved 2026-10-26)
 
-`FinanceBudgetRequestService.decide_request` — the Treasurer's
-`finance.manage`-gated approve/adjust/decline on a submitted budget
-request — has no `assert_different_person` check against the request's
-`submitted_by`. `review_request`, the leadership-review step one stage
-later in the same new feature, explicitly has one:
-
-```python
-if str(request.submitted_by or "") == str(reviewer_id) or (
-    await self._acts_as_owner(request, org_id, reviewer_id)
-):
-    raise BudgetRequestForbiddenError(...)
-```
-
-A `finance.manage` holder who also holds a position that owns a budget
-line can create a request for that line (`create_request` lets a manager
-create one for any line, bypassing the ownership check it enforces on
-everyone else) and then decide it themselves — approving their own
-requested amount into the draft-year budget with no second person
-involved at the Treasurer-decision step. A department that uses the
-leadership-review planning stage still gets `review_request`'s guard as a
-backstop; one that doesn't has no check on this path at all.
-
-**Why it is here rather than fixed.** The same tension this page already
-records for FIN-4 (disbursement SoD) and OPS-8 (`record_dues_payment`):
-an unconditional guard would also block the only-finance-officer
-department from ever deciding a request they raised themselves. Whether
-to accept that cost, add a narrow override, or treat leadership review as
-the sole intended backstop is an owner decision, not a drive-by fix.
-
-Found in security-review FIN-05 pass 8 (2026-10-12); see
-`docs/security-review/FIN-05-finance-approvals.md` → FIN8-05-1.
+**Resolved (owner decision: refuse, no single-officer exception).**
+`FinanceBudgetRequestService.decide_request` refuses a decider who submitted
+the request or owns its line, with the same check `review_request` already
+made; another `finance.manage` holder has to decide it. A department with one
+finance officer grants the permission to a second member. Kept only because
+code and tests cite it by name; history in
+`docs/security-review/FIN-05-finance-approvals.md`.
 
 ## CI-1 — Backend Lint's Pinned `flake8`/`isort` Have Drifted From `requirements.txt` Again (2026-10-12) — ✅ FIXED (2026-10-25)
 

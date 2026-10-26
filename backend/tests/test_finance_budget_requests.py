@@ -878,6 +878,53 @@ class TestDecision:
         line = await _line(db_session, dept["lines"]["training_next"])
         assert line.amount_budgeted == Decimal("0.00")
 
+    # FIN8-05-1: review_request already refused a reviewer who submitted or
+    # owns the request; the Treasurer's decision one stage earlier did not, so
+    # a finance manager could raise a request and approve it alone. Owner
+    # decision: no exception for a one-person department.
+    async def test_the_treasurer_cannot_decide_their_own_request(
+        self, db_session, dept
+    ):
+        request_id = await _submitted(db_session, dept, user="treasurer")
+
+        refused = await self._decide(
+            db_session, dept, request_id, {"decision": "approve"}
+        )
+        assert refused.status_code == 403, refused.text
+        assert "Another finance manager" in refused.json()["detail"]
+
+        deputy_pos = await _position(
+            db_session, dept["org_id"], "Deputy Treasurer", ["finance.*"]
+        )
+        dept["deputy"] = await _user(db_session, dept["org_id"], "deputy", [deputy_pos])
+        resp = await self._decide(
+            db_session, dept, request_id, {"decision": "approve"}, user="deputy"
+        )
+        assert resp.status_code == 200, resp.text
+
+    async def test_a_finance_manager_who_owns_the_line_cannot_decide_it(
+        self, db_session, dept
+    ):
+        request_id = await _submitted(db_session, dept)
+        owner_manager = await _position(
+            db_session, dept["org_id"], "Training Treasurer", ["finance.*"]
+        )
+        dept["owning_manager"] = await _user(
+            db_session,
+            dept["org_id"],
+            "owningmgr",
+            [dept["training_pos"], owner_manager],
+        )
+
+        resp = await self._decide(
+            db_session,
+            dept,
+            request_id,
+            {"decision": "approve"},
+            user="owning_manager",
+        )
+        assert resp.status_code == 403, resp.text
+
     async def test_only_finance_manage_decides(self, db_session, dept):
         request_id = await _submitted(db_session, dept)
         resp = await self._decide(
