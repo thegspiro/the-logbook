@@ -1,17 +1,23 @@
 # Security Review 17 — Training Core
 
 **Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9),
-2026-10-24 (pass 10) · **PR:** see `PROGRESS.md`'s **Open PR** row
+2026-10-24 (pass 10), 2026-10-26 (pass 11) · **PR:** see `PROGRESS.md`'s
+**Open PR** row
 
-**Backend:** `api/v1/endpoints/training.py` (3,162 L),
-`api/v1/endpoints/training_programs.py` (2,142 L),
-`api/v1/endpoints/training_sessions.py` (528 L),
-`services/training_service.py` (1,034 L),
-`services/training_program_service.py` (5,482 L — grew from 4,027 L, +36%),
-`services/training_session_service.py` (1,801 L),
-`services/training_compliance.py` (771 L)
-**Frontend:** `modules/training` (not read line-by-line this iteration)
-**Migrations:** none this iteration (no schema change)
+**Backend:** `api/v1/endpoints/training.py`,
+`api/v1/endpoints/training_programs.py`,
+`api/v1/endpoints/training_sessions.py`, `services/training_service.py`,
+`services/training_program_service.py`,
+`services/training_session_service.py`, `services/training_compliance.py`,
+`services/training_requirement_removal.py`, `services/training_course_names.py`,
+`services/cert_alert_service.py`, `mcp/tools/training.py`,
+`models/training.py`, `schemas/training_program.py` (the last two added to
+the declared list in pass 11 — see that pass's scope-correction note)
+**Frontend:** `modules/training`, and the pipeline/program pages under
+`src/pages/` and `src/components/training/` (spot-checked, not read
+line-by-line, in pass 11)
+**Migrations:** `a0195b397bf3` (pass 11, `program_enrollments.
+completion_reason`)
 
 ---
 
@@ -2616,6 +2622,201 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 11 (2026-10-26) — 0 fixed, 0 new findings; real delta (9 of 210 commits), TR7-1 re-confirmed unchanged
+
+**Watchdog pickup.** PR #3748 (Feature 16, Events & requests, pass 11) had
+already merged (`e8e0e075`). No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). Rotation row 17 (Training core) was confirmed the
+next `⬜` by reading the rotation table directly on a freshly fetched `main`.
+
+### Scope
+
+Baseline `0676a090` (pass 10's own landing commit — training-core has no
+merge-PR commit on `main`, it was squash-landed). Of 210 non-merge commits
+repo-wide in the window, 9 touch this feature's declared files, all read in
+full via `git show`. **Scope correction found and fixed while reviewing:**
+this pass's own first diff pass used a file list copied from the backend
+header above (endpoints + services only) and missed
+`backend/app/models/training.py` and `backend/app/schemas/training_program.py`
+— both squarely training-core's own models/schemas (`ProgramEnrollment`,
+`TrainingProgram`, `TrainingProgramUpdate`), not the misleadingly-named
+shared files pass 3 found at the same two paths. Re-ran the diff with both
+added, which is what raised the count from 7 to 9 and surfaced the two
+commits below. The backend header at the top of this file now includes
+both.
+
+### Commits reviewed
+
+- **`e1f24b83`** (new action) — `POST /training/programs/enrollments/{id}/
+complete`, `training.manage`-gated, completes an ACTIVE/ON_HOLD enrollment
+  by hand with a required reason. Resolved through an org-scoped join
+  (`ProgramEnrollment` ⋈ `TrainingProgram.organization_id ==
+organization_id`) under `with_for_update`, then claimed by the same
+  compare-and-set `_claim_completion` automatic completion already used
+  (Pitfall #27) — two officers, or an officer and the rollup, cannot
+  double-complete. Audited with the reason and the unmet-required count.
+- **`57624c9c`** (completion reason) — new nullable
+  `program_enrollments.completion_reason` column
+  (`a0195b397bf3_program_enrollment_completion_reason.py`: idempotent,
+  skips a missing table or existing column, `create_all`-tolerant per
+  Pitfall #26, `down_revision` chains to pass 10's own merge revision,
+  `downgrade()` drops the column). Written by the same conditional UPDATE
+  that claims the completion (no separate write, no lost-race mislabel);
+  cleared on every exit from COMPLETED (reopen, reset, recert reset,
+  withdrawal). **Masked for members**: `_member_enrollment()` nulls it on
+  `/enrollments/me` and the member-facing progress read
+  (`can_view_officer_training_data`/`can_view_officer_data` gate,
+  confirmed at both call sites) — it is an officer's note, not a message to
+  the member. Confirmed every other route returning
+  `ProgramEnrollmentResponse` unmasked (`enroll_member_in_program`,
+  `advance_enrollment_phase`, `reset_enrollment_progress`,
+  `reopen_enrollment`, `complete_enrollment`) is itself `training.manage`-
+  gated, so no leak through those; `withdraw_enrollment` is the one
+  pre-existing, already-reviewed member-scoped exception (pass 3's route
+  inventory) and carries zero diff this window.
+- **`e411a100`, `94e3d2e0`** (inactive-aware completion) — a deactivated
+  requirement no longer counts toward pipeline/phase completion
+  (`get_required_requirement_ids` now joins `TrainingRequirement.active.
+is_(True)`; `link_counts_toward_completion` mirrors it for callers
+  holding the links already), a deactivated prerequisite pipeline no
+  longer blocks enrollment (`_counts_as_prerequisite`), and a phase/program
+  whose required items are all inactive is correctly treated as **not**
+  complete rather than vacuously passing (Pitfall #29 — `_has_required_links`
+  distinguishes "nothing required" from "everything required is inactive").
+  Deactivating a program from its edit form now withdraws in-progress
+  enrollments the same way deleting it does (`_withdraw_in_progress_enrollments`,
+  a refactor of the existing delete-path code, not new behavior there).
+  `recalculate_enrollments_for_requirement` (new) re-rolls affected
+  enrollments on an active-flag change, scoped by
+  `TrainingProgram.organization_id == organization_id` in its own join —
+  org-scoping confirmed by reading the query, not assumed. The new officer-
+  notification email (`notify_officers_enrollment_skipped`, sent when
+  probationary auto-enrollment skips a pipeline for a missing prerequisite)
+  `html.escape`s every interpolated string before building the HTML body
+  and collapses the subject line's whitespace (header-injection guard);
+  recipients come through the already-reviewed `training_officers`/
+  `recipients_for` resolver (Pitfall #18 — email, not SMS, for an
+  operational notice); never raises, so a mail failure cannot undo the
+  conversion it is reporting on.
+- **`a1f8b83d`** (float-drift fix) — `meets_required_hours()` (new,
+  `app/utils/hours.py`) replaces every raw `total_hours >= required`/
+  `completed_value >= required_value` hours comparison in
+  `training_compliance.py`/`training_service.py` with a tolerance of one
+  part in a million of the target — correctness only (a `FLOAT` column's
+  `SUM()` drift), no new query shape, no scoping change.
+- **`f7e86b3e`** (credit-reversal fix) — `revoke_requirement_credit`'s phase
+  restore now checks the recorded `phase_before_id` still exists in the
+  enrollment's own (already org-resolved) program before restoring it,
+  via a new `_phase_still_in_program` helper scoped by `program_id` —
+  correctness only, no new by-id surface.
+- **`59fd4508`** (app-review B18 fix, null-handling) — a new `RefusesNull`
+  mixin (`app/schemas/base.py`) makes an update schema answer 422 for an
+  explicit `null` on a field whose column is `NOT NULL` or whose response
+  cannot hold `None`, instead of a 500 at flush or a silently-corrupted row
+  on the next read — the mechanism is a plain `field_validator("*")`
+  checking membership in a per-schema `null_refused` set, with no
+  injection or scoping surface. Applied to `TrainingProgramUpdate` and two
+  out-of-scope schemas (`training.py`, `training_enhancements.py` —
+  feature 18's own files, not re-reviewed here). Pure validation
+  hardening, already documented by the app-review rotation
+  (`docs/app-review/training.md`); re-verified the claim rather than
+  re-deriving it.
+- **`0b18dc3f`** (app-review fix, business-rule bound) — caps
+  `TrainingProgramUpdate`/`TrainingProgramCreate`'s `reminder_conditions.
+days_before_deadline` at 30 days on the request side only (a new
+  `ReminderLeadDays` constrained type in `schemas/reminder_limits.py`,
+  shared with Events/Compliance's own reminder fields, out of scope here).
+  A bound on an input value, not an authz/tenancy change; a stored value
+  from before the cap still serializes on read, by design (no migration,
+  nothing to backfill).
+- **`ed2d07a4`** (frontend routing) — the Training Admin hub's Programs tab
+  now lists existing programs instead of only the create wizard; the
+  wizard moved to `&view=new` on the same route rather than a new path.
+  `/training/programs/new`'s redirect target changed consistently across
+  all three registries (`APPLICATION_PAGES.md`, `testingRegistry.ts`,
+  `mobile-routes.ts`) — no new route, so this is not a Pitfall #30a case,
+  but checked anyway. No permission change: still behind the hub's
+  existing `training.manage` gate.
+
+### Route inventory
+
+`training.py` 37 (unchanged), `training_programs.py` **47** (+1: the new
+`/enrollments/{id}/complete` route), `training_sessions.py` 11 (unchanged)
+— confirmed via `grep -c '^@router\.'` on each file, cross-checked by an
+AST-equivalent per-route-block scan confirming every one of the 47+37+11
+blocks carries a `Depends(...)` in its signature (no bare route).
+`check_route_permissions.py --strict` — 279 routes repo-wide, 0 errors, 0
+warnings. The one new route is `training.manage`-gated (confirmed above).
+
+### Re-verified standing items
+
+- **TR7-1 — still OPEN/FLAGGED, unchanged.** `enroll_member_in_program`
+  (`training_programs.py`) and `TrainingProgramService.enroll_member`
+  (`training_program_service.py`) carry zero diff this window — neither
+  function appears among the 9 in-scope commits above; the one `enroll_
+member` hit in a `git diff` grep is a docstring cross-reference added
+  elsewhere, not a change to the function itself (confirmed by line-level
+  diff). The defect pass 8 found and widened still applies exactly as
+  described there.
+- TR-4's `year`-default semantics (owner-decision, acknowledged) —
+  unchanged.
+- `training_requirement_removal.py`, `training_course_names.py`,
+  `cert_alert_service.py`, and `app/mcp/tools/training.py` (the pass-3
+  scope addition) are all byte-identical to pass 10 — confirmed via the
+  scoped `git diff --stat`, not assumed.
+
+### Verified good ✅ (pass 11)
+
+- The new manual-completion path reuses the existing row-locked
+  compare-and-set completion claim rather than a parallel write path — no
+  new double-completion surface.
+- `completion_reason` is masked for members at both read sites that serve
+  them, and every officer-only route returning the raw enrollment is
+  itself permission-gated — no path found where a member receives it.
+- The new migration is nullable, idempotent, and chains correctly onto the
+  prior pass's own merge revision.
+- No new unbounded query, no new CSV export, no new `.like()`/`.ilike()`
+  usage, no new JSON-column shallow-copy mutation, no new unauthenticated
+  route.
+- The new outbound email escapes every interpolated value and never raises
+  into the conversion flow it is reporting on.
+
+## Schema & migration notes (pass 11)
+
+One new migration, `a0195b397bf3` (`program_enrollments.completion_reason`,
+nullable `TEXT`) — reviewed above under the `57624c9c` commit. Idempotent,
+`create_all`-tolerant, single-parent chain onto pass 10's merge revision.
+
+## Guard tests added (pass 11)
+
+None new for this feature's security posture — all guard tests this window
+(`test_training_pipeline_deactivation_rules.py`,
+`test_training_enrollment_manual_completion.py`,
+`test_hours_float_drift.py`, `test_progress_credit_ledger.py` extensions)
+were added by the reviewed commits themselves for their own correctness
+claims, not by this pass for a new finding.
+
+## Completion gate (pass 11)
+
+| Check                                                                            | Result                                              |
+| -------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (pinned 7.4.1)                                     | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (pinned 26.10.1)                            | ✅ clean (2681 files unchanged)                     |
+| `isort --check-only app/ tests/ alembic/` (pinned 9.0.2)                         | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                                | ✅ single head `1ad0b594f3fb`, 658 revisions        |
+| `python3 scripts/check_route_permissions.py --strict`                            | ✅ 279 routes, 0 errors, 0 warnings                 |
+| `python3 scripts/generate_schema_docs.py --check`                                | ✅ up to date                                       |
+| `pytest tests/ -q -k "training or compliance or hours_float or progress_credit"` | ✅ 2359 passed, 1 pre-existing skip (`pywebpush`)   |
+| `npm run typecheck`                                                              | ✅ 0 errors                                         |
+| `npm run lint`                                                                   | ✅ clean (`--max-warnings 10`, exit 0, zero output) |
+
+Rotation row 17 → ✅ (pending this PR's merge). Next: Feature 18 (Training
+extended).
 
 ---
 
