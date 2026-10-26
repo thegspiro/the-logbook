@@ -22012,7 +22012,7 @@ PR is recorded in the Log, not repeated here.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
@@ -22038,6 +22038,95 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 16 (Events & requests, pass 11) — watchdog pickup, real delta (9 real commits of 202 in scope), new public guest-link surface found outside declared scope and reviewed clean, 0 fixed, 0 flagged
+
+PR #3744 (Feature 15, Scheduling, pass 11) had already merged (`1157a464`,
+the fetched `origin/main` tip), with no `claude/security-review-*` PR open
+anywhere (`search_pull_requests`, `is:pr is:open
+head:claude/security-review-`, 0 matching results, re-checked both before
+starting and again immediately before pushing). The dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (this was a one-off
+watchdog pickup, not a `ListAgents` check). Row 16 (Events & requests)
+confirmed the next `⬜` by reading the Rotation table directly on a
+freshly fetched `main`.
+
+Baseline `31f24bf7` (pass 10's own commit, landed via PR #3625 without a
+distinct merge commit). 202 non-merge commits touched the repo in the
+window; real diff in 4 of the 9 primary declared files (`events.py`
++196/-4, `models/event.py` +12/-1, `models/event_request.py` +5/-2,
+`schemas/event.py` +81/-6) plus `frontend/src/modules/events/routes.tsx`
+(+12). The other 8 declared files are byte-identical to pass 10.
+
+**Scope gap found and closed, the same shape pass 7 found and fixed for
+the attendance-petition files.** A brand-new public, unauthenticated
+endpoint file landed this window — `backend/app/api/public/event_guest.py`
+(417 lines, 4 routes) — giving an event its own guest-link QR code for
+sign-in at a venue with no room kiosk, alongside its backing service
+additions in `services/guest_check_in_service.py` (a file this findings
+doc had read as a _callee_ in earlier passes but never added to its
+declared scope) and two frontend files, `components/GuestEmailSignIn.tsx`
+(241 lines, new) and an extended `pages/GuestCheckInPage.tsx`. Also found:
+`services/qr_check_in_analytics.py` (143 lines, new, reached from
+`events.py`'s check-in routes). All four are read in full this pass and
+now added to the feature's declared scope.
+
+The new public surface was checked against every one of CHECKLIST.md's
+seven dimensions: the path token (256-bit, unique+indexed) is the sole
+credential and is validated before any other gate, resolving the
+organization itself rather than trusting a client-supplied one (XC-3);
+the three manager-side issue/get/rotate routes are `events.manage`-gated
+and org-scoped by id (not merely `require_permission`-gated), confirmed
+by a dedicated cross-org 404 test; the token itself is never serialized
+on the ordinary event-detail response (asserted by test against
+`EventResponse.model_fields`, not merely read); every write route reuses
+the kiosk path's own per-IP rate limits (10/min + 10-min lockout) and
+spends the **same** per-event daily cap key the room-kiosk path does, so
+alternating between a room code and an event's own link buys no extra
+allowance; the confirm-token mechanism is a signed, channel-scoped JWT
+that a kiosk-issued token cannot be replayed through the link path or vice
+versa (tested); audit events carry ids only, never the guest's email or
+name; and a repeat sign-in through the same link is proven idempotent
+(one attendee row) against a real database. A companion commit
+(`dd034161`) adds an email-first lookup/confirm flow for pipeline-linked
+events that re-verifies the applicant is still active at confirm time
+rather than trusting the lookup's answer from a minute earlier (closing a
+TOCTOU window). A repo-wide phone/address encryption-at-rest migration
+(`fde3d647`/`5510d5ff49eb`) landed in the same window and touches two of
+this feature's columns (`event_requests.contact_phone`/`venue_address`,
+`event_external_attendees.phone`) — reviewed in full: guarded for the
+`create_all`-only-table case, requires the encryption key before writing
+ciphertext, idempotent both directions, and breaks no existing `LIKE`
+search (none existed on either column). All three frontend route
+registries already carried `/event-guest/:token` →
+`GuestCheckInPage` before this pass touched anything
+(`APPLICATION_PAGES.md`, `testingRegistry.ts`,
+`mobile-route-inventory.ts`), confirmed by direct grep.
+
+EV-23 and EV-26 re-verified unregressed (zero diff on either's code this
+window). Routes: `events.py` 58 → 61 (the new guest-check-in-link
+issue/get/rotate trio); `event_requests.py` 23 and
+`event_attendance_petitions.py` 7 unchanged; `event_guest.py` 4 new.
+Full-repo count 279, up from 273 at pass 10.
+
+Full writeup: `docs/security-review/EV-16-events-requests.md`'s
+**Pass 11** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only`
+(7.4.1/26.10.1/9.0.2, matching CI's pins) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — single head `1ad0b594f3fb`,
+658 revisions; `check_route_permissions.py --strict` — 279 routes, 0
+errors/warnings; `pytest tests/ -k "event or guest or rsvp"` (via
+`python3.13`, the interpreter this sandbox's `pip` actually installs
+into — `python3` itself resolves to 3.11 with no project dependencies
+installed, flagged per the skill's own rule rather than silently
+switching binaries) — 1829 passed, 1 pre-existing skip (`pywebpush`);
+`npm ci` run fresh (no `node_modules` pre-existed in this sandbox) then
+`npm run typecheck` — 0 errors; `npm run lint` (`eslint --max-warnings
+10`) — exit 0, zero output.
+
+Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core)
+— re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-26 — Feature 15 (Scheduling, pass 11) — watchdog pickup, real delta (15 non-merge commits), 0 fixes needed in Scheduling itself, 0 new findings; an unrelated alembic triple-fork found, independently fixed twice by concurrent sessions, resolved by merging in the one that landed first (#3742); a duplicate PR for this same row (#3745) closed
 
