@@ -220,6 +220,123 @@ class FormsService:
         self._post_commit: List[Callable[[], Awaitable[Any]]] = []
 
     # ============================================
+    # Sensitive Answers
+    # ============================================
+
+    SENSITIVE_UNSEAL_REFUSED_ERROR = (
+        "This field already has answers stored as sensitive. It cannot be "
+        "un-marked, because that would decrypt those answers into plain text."
+    )
+
+    SENSITIVE_INTEGRATION_WARNING = (
+        "Answers to the fields marked Sensitive ({labels}) are kept only on "
+        "the encrypted submission. This form feeds another module, which "
+        "receives none of them."
+    )
+
+    @staticmethod
+    def _split_sensitive(
+        data: Dict[str, Any], fields: Iterable[Any]
+    ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+        """Separate sanitized answers into ``(plain, sensitive)``.
+
+        ``sensitive`` is ``None`` when no answer belongs to a sensitive field,
+        so a submission without any leaves ``sensitive_data`` NULL.
+        """
+        sensitive_ids = {str(f.id) for f in fields if getattr(f, "is_sensitive", False)}
+        plain = {k: v for k, v in data.items() if k not in sensitive_ids}
+        sensitive = {k: v for k, v in data.items() if k in sensitive_ids}
+        return plain, (sensitive or None)
+
+    async def sensitive_field_ids(self, form_id: UUID | str) -> Set[str]:
+        """Ids of the fields on *form_id* currently marked sensitive."""
+        result = await self.db.execute(
+            select(FormField.id).where(
+                FormField.form_id == str(form_id),
+                FormField.is_sensitive.is_(True),
+            )
+        )
+        return {str(fid) for fid in result.scalars().all()}
+
+    @staticmethod
+    def partition_answers(
+        submission: FormSubmission, sensitive_ids: Set[str]
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """A submission's answers as ``(plain, sensitive)`` for a response.
+
+        Judged by the fields' *current* flags as well as by where the answer
+        is stored. Marking a field sensitive moves the answers already stored
+        (``_seal_existing_answers``), but a submission committed by a request
+        that had loaded the field before the flag was set still lands in
+        ``data``; reading by the current flag keeps that answer out of a
+        response for a viewer who may not see it.
+        """
+        data = submission.data if isinstance(submission.data, dict) else {}
+        stored = (
+            submission.sensitive_data
+            if isinstance(submission.sensitive_data, dict)
+            else {}
+        )
+        plain = {k: v for k, v in data.items() if k not in sensitive_ids}
+        sensitive = {k: v for k, v in data.items() if k in sensitive_ids}
+        sensitive.update(stored)
+        return plain, sensitive
+
+    async def _lock_form_submissions(self, form: Form) -> List[FormSubmission]:
+        """Lock *form* and every submission to it, newest data included.
+
+        The form row serializes concurrent flag changes on its fields; the
+        submissions are read with ``FOR UPDATE`` so the read is current rather
+        than the transaction's earlier snapshot (CLAUDE.md pitfall #27).
+        """
+        await self.db.execute(
+            select(Form.id)
+            .where(
+                Form.id == str(form.id),
+                Form.organization_id == str(form.organization_id),
+            )
+            .with_for_update()
+        )
+        result = await self.db.execute(
+            select(FormSubmission)
+            .where(
+                FormSubmission.form_id == str(form.id),
+                FormSubmission.organization_id == str(form.organization_id),
+            )
+            .with_for_update()
+        )
+        return list(result.scalars().all())
+
+    async def _seal_existing_answers(self, form: Form, field_id: str) -> int:
+        """Move *field_id*'s stored answers from ``data`` into the encrypted
+        ``sensitive_data``. Returns how many submissions were changed.
+
+        Copies an integration already made from an answer — an applicant record
+        created from an interest form, the answers kept on its pipeline stage —
+        are not reached from here and keep the value they were given.
+        """
+        moved = 0
+        for submission in await self._lock_form_submissions(form):
+            data = submission.data if isinstance(submission.data, dict) else {}
+            if field_id not in data:
+                continue
+            sealed = dict(submission.sensitive_data or {})
+            sealed[field_id] = data[field_id]
+            # New top-level objects: neither column tracks in-place mutation
+            # (CLAUDE.md pitfall #12).
+            submission.sensitive_data = sealed
+            submission.data = {k: v for k, v in data.items() if k != field_id}
+            moved += 1
+        return moved
+
+    async def _has_sealed_answers(self, form: Form, field_id: str) -> bool:
+        return any(
+            isinstance(submission.sensitive_data, dict)
+            and field_id in submission.sensitive_data
+            for submission in await self._lock_form_submissions(form)
+        )
+
+    # ============================================
     # Input Sanitization & Validation
     # ============================================
 
@@ -976,28 +1093,52 @@ class FormsService:
     ) -> Optional[List[Dict[str, str]]]:
         """What publishing this form will not do, for the publish confirmation.
 
-        ``None`` when the form is not in the organization. The one warning today
-        is public intake: a public form that files event requests stores each
-        submission but files no request while
-        ``events.request_pipeline.accept_public_requests`` is off — the same
-        condition ``_process_event_request`` refuses on, read from the same
-        settings, so the warning and the refusal cannot drift apart.
+        ``None`` when the form is not in the organization. Two warnings:
+
+        - Sensitive fields on a form that feeds an integration: integrations
+          read the plain ``data`` only, so those answers reach no other module
+          — an interest form whose name or email field is marked sensitive
+          creates no applicant.
+        - Public intake: a public form that files event requests stores each
+          submission but files no request while
+          ``events.request_pipeline.accept_public_requests`` is off — the same
+          condition ``_process_event_request`` refuses on, read from the same
+          settings, so the warning and the refusal cannot drift apart.
         """
         form = await self.get_form_by_id(form_id, organization_id)
         if form is None:
             return None
+        warnings: List[Dict[str, str]] = []
+        sensitive_labels = [f.label for f in form.fields if f.is_sensitive]
+        if sensitive_labels and self._has_integration(form):
+            warnings.append(
+                {
+                    "code": "sensitive_not_integrated",
+                    "message": self.SENSITIVE_INTEGRATION_WARNING.format(
+                        labels=", ".join(sensitive_labels)
+                    ),
+                }
+            )
         if not form.is_public or not self._files_event_requests(form):
-            return []
+            return warnings
         from app.services.event_request_service import get_pipeline_settings
 
         org = await self.db.scalar(
             select(Organization).where(Organization.id == str(organization_id))
         )
         if get_pipeline_settings(org).get("accept_public_requests", False):
-            return []
-        return [
+            return warnings
+        warnings.append(
             {"code": "public_intake_off", "message": self.PUBLIC_INTAKE_OFF_WARNING}
-        ]
+        )
+        return warnings
+
+    @staticmethod
+    def _has_integration(form: Form) -> bool:
+        """Whether a submission to *form* is handed to any integration."""
+        return bool(getattr(form, "integration_type", None)) or any(
+            i.is_active for i in (form.integrations or [])
+        )
 
     @staticmethod
     def _files_event_requests(form: Form) -> bool:
@@ -1184,6 +1325,22 @@ class FormsService:
                         "condition_operator": None,
                         "condition_value": None,
                     }
+
+            if "is_sensitive" in update_data and bool(
+                update_data["is_sensitive"]
+            ) != bool(field.is_sensitive):
+                if update_data["is_sensitive"]:
+                    moved = await self._seal_existing_answers(form, str(field.id))
+                    logger.info(
+                        "Field {} on form {} marked sensitive; sealed answers on "
+                        "{} submission(s)",
+                        field.id,
+                        form.id,
+                        moved,
+                    )
+                elif await self._has_sealed_answers(form, str(field.id)):
+                    await self.db.rollback()
+                    return None, self.SENSITIVE_UNSEAL_REFUSED_ERROR
 
             apply_updates(field, update_data, skip={"id", "form_id"})
 
@@ -1390,11 +1547,13 @@ class FormsService:
         if sanitize_error:
             return None, None, sanitize_error
 
+        plain_data, sensitive_data = self._split_sensitive(sanitized_data, form.fields)
         submission = FormSubmission(
             organization_id=organization_id,
             form_id=form_id,
             submitted_by=submitted_by,
-            data=sanitized_data,
+            data=plain_data,
+            sensitive_data=sensitive_data,
             ip_address=ip_address,
             user_agent=user_agent,
         )
@@ -1576,10 +1735,14 @@ class FormsService:
                         return None, None, self.PUBLIC_DAILY_CAP_ERROR
                     cap_reserved = True
 
+                plain_data, sensitive_data = self._split_sensitive(
+                    sanitized_data, form.fields
+                )
                 submission = FormSubmission(
                     organization_id=form.organization_id,
                     form_id=form.id,
-                    data=sanitized_data,
+                    data=plain_data,
+                    sensitive_data=sensitive_data,
                     submitter_name=clean_name,
                     submitter_email=clean_email,
                     is_public_submission=True,

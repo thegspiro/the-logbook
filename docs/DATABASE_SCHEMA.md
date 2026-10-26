@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**319 tables · 5278 columns · 1081 foreign keys**
+**319 tables · 5280 columns · 1081 foreign keys**
 
 ---
 
@@ -287,9 +287,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`form_fields`](#form_fields) | `FormField` | 21 | Form Field model |
+| [`form_fields`](#form_fields) | `FormField` | 22 | Form Field model |
 | [`form_integrations`](#form_integrations) | `FormIntegration` | 9 | Form Integration model |
-| [`form_submissions`](#form_submissions) | `FormSubmission` | 15 | Form Submission model |
+| [`form_submissions`](#form_submissions) | `FormSubmission` | 16 | Form Submission model |
 | [`forms`](#forms) | `Form` | 20 | Form model |
 
 ### Grants & Fundraising
@@ -4429,6 +4429,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `condition_value` | VARCHAR(500) | yes |  |  |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `width` | VARCHAR(20) | yes |  | `'full'` |  |
+| `is_sensitive` | BOOL | no |  | `false` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -4472,6 +4473,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `submitted_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `submitted_at` | DATETIME | yes |  | `now()` |  |
 | `data` | JSON | no |  |  |  |
+| `sensitive_data` | TEXT | yes |  |  |  |
 | `submitter_name` | VARCHAR(255) | yes |  |  |  |
 | `submitter_email` | VARCHAR(255) | yes |  |  |  |
 | `is_public_submission` | BOOL | yes |  | `False` |  |

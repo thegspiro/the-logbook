@@ -27,6 +27,7 @@ import {
   XCircle,
   RotateCcw,
   Plug,
+  Lock,
 } from 'lucide-react';
 import { formsService } from '../../services/api';
 import { FieldType } from '../../constants/enums';
@@ -201,6 +202,8 @@ const SubmissionViewer = ({
   const exportCsv = () => {
     if (submissions.length === 0) return;
 
+    // `data` only: answers to Sensitive fields arrive in `sensitive_answers`
+    // and stay out of a file that is saved, forwarded and opened elsewhere.
     // Collect all unique field IDs
     const allFieldIds = new Set<string>();
     submissions.forEach((s) => {
@@ -362,7 +365,24 @@ const SubmissionViewer = ({
                         <p className="text-theme-text-primary text-sm wrap-break-word">{formatValue(fieldId, value)}</p>
                       </div>
                     ))}
+                    {Object.entries(sub.sensitive_answers ?? {}).map(([fieldId, value]) => (
+                      <div key={fieldId} className="bg-theme-surface-secondary rounded-lg px-3 py-2">
+                        <p className="text-theme-text-muted mb-0.5 flex items-center gap-1 text-xs font-medium">
+                          <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          {getFieldLabel(fieldId)}
+                          <span className="sr-only">(sensitive)</span>
+                        </p>
+                        <p className="text-theme-text-primary text-sm wrap-break-word">{formatValue(fieldId, value)}</p>
+                      </div>
+                    ))}
                   </div>
+                  {sub.sensitive_withheld && (
+                    <p className="text-theme-text-muted mt-3 flex items-center gap-1.5 text-xs">
+                      <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      Restricted: this submission has answers to sensitive questions, which you do not have permission
+                      to view.
+                    </p>
+                  )}
 
                   {/* Integration Results */}
                   {sub.integration_processed && sub.integration_result && (
