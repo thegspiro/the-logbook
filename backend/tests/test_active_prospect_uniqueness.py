@@ -13,17 +13,23 @@ RECONCILE = VERSIONS / "20260814_0003_reconcile_active_prospect_emails.py"
 def test_active_prospect_email_has_database_uniqueness_guard():
     table = ProspectiveMember.__table__
 
-    active_email = table.c.active_email
-    assert active_email.computed is not None
-    assert "status = 'active'" in str(active_email.computed.sqltext)
+    # The address is encrypted at rest, so uniqueness is enforced over its
+    # fingerprint: ciphertext differs on every write and would never collide.
+    active_email_hash = table.c.active_email_hash
+    assert active_email_hash.computed is not None
+    sqltext = str(active_email_hash.computed.sqltext)
+    assert "status = 'active'" in sqltext
+    assert "email_hash" in sqltext
 
     unique_index = next(
-        index for index in table.indexes if index.name == "uq_prospect_org_active_email"
+        index
+        for index in table.indexes
+        if index.name == "uq_prospect_org_active_email_hash"
     )
     assert unique_index.unique
     assert [column.name for column in unique_index.columns] == [
         "organization_id",
-        "active_email",
+        "active_email_hash",
     ]
 
 

@@ -18,6 +18,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.events import check_in_external_attendee
+from app.core.security import email_fingerprint
 from app.models.event import (
     CheckInWindowType,
     Event,
@@ -97,7 +98,7 @@ async def _check_in(db_session, org_id, event, attendee):
 async def _applicants(db_session, email) -> list[ProspectiveMember]:
     result = await db_session.execute(
         select(ProspectiveMember).where(
-            func.lower(ProspectiveMember.email) == email.lower()
+            ProspectiveMember.email_hash == email_fingerprint(email)
         )
     )
     return list(result.scalars().all())
@@ -253,10 +254,17 @@ class TestNoApplication:
         await db_session.execute(
             text(
                 "INSERT INTO users (id, organization_id, username, first_name, "
-                "last_name, email, password_hash, status) "
-                "VALUES (:id, :org, :un, 'Mo', 'Member', :em, 'hashed', 'active')"
+                "last_name, email, email_hash, password_hash, status) "
+                "VALUES (:id, :org, :un, 'Mo', 'Member', :em, :fp, 'hashed', "
+                "'active')"
             ),
-            {"id": user_id, "org": org, "un": f"m-{user_id[:8]}", "em": email},
+            {
+                "id": user_id,
+                "org": org,
+                "un": f"m-{user_id[:8]}",
+                "em": email,
+                "fp": email_fingerprint(email),
+            },
         )
         attendee = await _attendee(
             db_session, org, event, name="Mo Member", email=email

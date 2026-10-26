@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
 from app.api.v1.endpoints import membership_pipeline as endpoints
+from app.core.security import email_fingerprint
 from app.models.membership_pipeline import (
     ProspectiveMember,
     ProspectStatus,
@@ -128,7 +129,7 @@ async def _count_with_email(db: AsyncSession, org_id: str, email: str) -> int:
             .select_from(ProspectiveMember)
             .where(
                 ProspectiveMember.organization_id == org_id,
-                ProspectiveMember.email == email,
+                ProspectiveMember.email_hash == email_fingerprint(email),
             )
         )
     ).scalar_one()
