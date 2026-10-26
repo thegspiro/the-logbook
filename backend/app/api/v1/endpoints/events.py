@@ -19,6 +19,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -123,6 +124,11 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
+from app.services.qr_check_in_analytics import (
+    device_type_from_user_agent,
+    record_check_in_outcome,
+    record_qr_scan,
+)
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
@@ -2700,6 +2706,12 @@ async def end_event(
 @router.get("/{event_id}/qr-check-in-data", response_model=QRCheckInData)
 async def get_qr_check_in_data(
     event_id: UUID,
+    request: Request,
+    scan: bool = Query(
+        False,
+        description="Set by the self-check-in page on its first load, so the "
+        "member's scan is recorded for QR analytics (once per member per event)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -2723,12 +2735,24 @@ async def get_qr_check_in_data(
     if error or data is None:
         raise _event_error(error or "An unexpected error occurred")
 
+    # RPT2-3: only the self-check-in page's first load asks; the page polls
+    # this endpoint afterwards, as does the officer's QR display page.
+    if scan and await record_qr_scan(
+        db,
+        str(current_user.organization_id),
+        str(event_id),
+        str(current_user.id),
+        device_type_from_user_agent(request.headers.get("user-agent")),
+    ):
+        await db.commit()
+
     return QRCheckInData(**data)
 
 
 @router.post("/{event_id}/self-check-in", response_model=RSVPResponse)
 async def self_check_in(
     event_id: UUID,
+    request: Request,
     check_in_data: SelfCheckInRequest | None = None,
     override: bool = Query(
         False, description="Proceed despite a training-pipeline phase warning"
@@ -2756,6 +2780,26 @@ async def self_check_in(
         is_checkout=is_checkout,
         override=override,
     )
+
+    # RPT2-3: record the outcome for QR analytics. Committed here, before a
+    # refusal raises below: the request's session rolls back on an error, and
+    # a failure that is never stored is the one the dashboard exists to show.
+    # A check-out, a repeat scan and the overridable phase-gate warning are not
+    # check-in outcomes.
+    if (
+        not is_checkout
+        and error != "ALREADY_CHECKED_IN"
+        and not (error and error.startswith(PHASE_GATE_PREFIX))
+    ):
+        record_check_in_outcome(
+            db,
+            str(current_user.organization_id),
+            str(event_id),
+            str(current_user.id),
+            device_type_from_user_agent(request.headers.get("user-agent")),
+            error,
+        )
+        await db.commit()
 
     if error:
         # Soft pipeline phase gate — 409 the client can override (proceed anyway)

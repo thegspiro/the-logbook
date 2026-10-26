@@ -6,12 +6,13 @@ records, and compliance tracking.
 """
 
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set, Tuple
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import Select, and_, select
+from sqlalchemy import Select, and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.utils import generate_uuid
 from app.models.medical_screening import (
@@ -124,6 +125,55 @@ _SATISFYING_STATUSES = (
     ScreeningStatus.COMPLETED.value,
     ScreeningStatus.WAIVED.value,
 )
+
+
+def superseded_record_clause():
+    """SQL: a newer satisfying record of the same type, for the same subject, exists.
+
+    The compliance summary grades each requirement on the subject's most
+    recent satisfying record of that screening type: latest completed date,
+    an undated record ranking lowest, the newer-created winning a same-day
+    tie. A record something later supersedes is therefore not an impending
+    lapse however soon it expires, and a list of expiring screenings must
+    leave it out to agree with the count (pitfall #29). The one definition,
+    shared by ``get_expiring_soon`` and the MCP ``list_expiring_screenings``
+    tool. The subject is the member when the record names one, else the
+    prospect.
+    """
+    later = aliased(ScreeningRecord)
+    floor = date.min
+    completed = func.coalesce(ScreeningRecord.completed_date, floor)
+    later_completed = func.coalesce(later.completed_date, floor)
+    created_floor = datetime(1, 1, 1, tzinfo=timezone.utc)
+    created = func.coalesce(ScreeningRecord.created_at, created_floor)
+    later_created = func.coalesce(later.created_at, created_floor)
+    return exists(
+        select(later.id).where(
+            later.organization_id == ScreeningRecord.organization_id,
+            or_(
+                and_(
+                    ScreeningRecord.user_id.isnot(None),
+                    later.user_id == ScreeningRecord.user_id,
+                ),
+                and_(
+                    ScreeningRecord.user_id.is_(None),
+                    later.prospect_id == ScreeningRecord.prospect_id,
+                ),
+            ),
+            later.screening_type == ScreeningRecord.screening_type,
+            later.status.in_(_SATISFYING_STATUSES),
+            later.id != ScreeningRecord.id,
+            or_(
+                later_completed > completed,
+                and_(later_completed == completed, later_created > created),
+                and_(
+                    later_completed == completed,
+                    later_created == created,
+                    later.id > ScreeningRecord.id,
+                ),
+            ),
+        )
+    )
 
 
 def _positive_months(months: Optional[int]) -> Optional[int]:
@@ -866,6 +916,7 @@ class MedicalScreeningService:
                     ScreeningRecord.expiration_date >= today,
                     ScreeningRecord.expiration_date <= cutoff,
                     ScreeningRecord.status.in_(_SATISFYING_STATUSES),
+                    ~superseded_record_clause(),
                 )
             )
             .order_by(ScreeningRecord.expiration_date.asc())
@@ -946,6 +997,7 @@ class MedicalScreeningService:
                 ScreeningRecord.completed_date.isnot(None),
                 ScreeningRecord.completed_date >= earliest,
                 ScreeningRecord.status.in_(_SATISFYING_STATUSES),
+                ~superseded_record_clause(),
             )
         )
         due: List[Tuple[ScreeningRecord, date, bool]] = []

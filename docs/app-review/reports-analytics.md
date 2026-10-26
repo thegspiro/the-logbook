@@ -60,7 +60,12 @@ Tests: `tests/test_analytics_endpoints_integration.py` (8) and
 stashed, 4 of the 8 analytics cases fail (dict, list, long reason, oversized metadata); the
 other 13 pass either way. 0 of the 17 are selected under the unit job's marker expression.
 
-### RPT2-3 — MEDIUM — nothing in the application writes an analytics event, so the dashboard reads zeros — 🚩 FLAGGED (owner decision)
+### RPT2-3 — MEDIUM — nothing in the application writes an analytics event, so the dashboard reads zeros — ✅ FIXED 2026-10-25
+
+Owner chose option 1, recorded server-side (`app/services/qr_check_in_analytics.py`): the
+self-check-in page's first load records one `qr_scan` per member per event, and
+`POST /events/{id}/self-check-in` records `check_in_success`, or `check_in_failure` with one
+of four fixed reasons. Manual officer check-ins are not counted. Original finding below.
 
 `/analytics/metrics` and `/analytics/export` read the `analytics_events` table, and the
 `AnalyticsDashboardPage` (per-event at `/events/:id/analytics`, and the admin route) renders
