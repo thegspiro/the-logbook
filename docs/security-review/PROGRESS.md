@@ -40,9 +40,23 @@ remains the one OPEN item. 0 new routes (112/112 by AST walk). Ride-along:
 this pass's own completion gate found the Alembic chain forked into 3
 heads — three concurrent sessions had each independently rejoined the same
 pair of parents within a few hours of each other, unrelated to Scheduling
-but blocking regardless of cause — fixed with one more pure-join merge
-revision, verified against a live database with `alembic upgrade head`. See
+but blocking regardless of cause. This pass's own join of those three
+heads was dropped in favor of a different concurrent session's join
+([#3742](https://github.com/thegspiro/the-logbook/pull/3742)), which
+reached `main` first — landing both would have re-forked the same pair;
+this branch merged `main` in to pick up #3742's fix instead, then
+re-verified `alembic upgrade head` against a live database. See
 `SCH-15-scheduling.md`'s **Pass 11** section for the full review.
+
+A second, independently-opened review of this same row — PR #3745
+(`claude/security-review-scheduling-p11`), opened six minutes after this
+one by another watchdog session that also found row 15 as the next `⬜`
+— was closed as a duplicate once this PR covered the same pass; see that
+PR for the closing note. The race is the mechanism this file's own opening
+paragraph (`search_pull_requests` / `ListAgents` checks, re-checked
+"immediately before pushing") is meant to catch, and here it fired anyway
+because both sessions passed those checks within the same few-minute
+window, before either had pushed.
 
 Rotation row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events
 & requests) — re-check `search_pull_requests` fresh rather than trusting
@@ -22025,7 +22039,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-10-26 — Feature 15 (Scheduling, pass 11) — watchdog pickup, real delta (15 non-merge commits), 0 fixes needed in Scheduling itself, 0 new findings; an unrelated alembic triple-fork found and fixed as this pass's ride-along commit
+### 2026-10-26 — Feature 15 (Scheduling, pass 11) — watchdog pickup, real delta (15 non-merge commits), 0 fixes needed in Scheduling itself, 0 new findings; an unrelated alembic triple-fork found, independently fixed twice by concurrent sessions, resolved by merging in the one that landed first (#3742); a duplicate PR for this same row (#3745) closed
 
 PR #3741 (Feature 14, Equipment check & shifts, pass 12) had already merged,
 with no `claude/security-review-*` PR open anywhere (`search_pull_requests`,
@@ -22064,10 +22078,15 @@ into **3 heads**, all three themselves merge revisions independently
 rejoining the _same_ pair of parents within a few hours of each other —
 three concurrent sessions each closed the same fork, and each merged clean
 on GitHub because the per-PR fork check cannot see sibling PRs doing the
-same join at the same time. Fixed with one more pure-join merge revision
-(`f6a0362deaaa`), verified against this sandbox's own database with
-`alembic upgrade head` (not just the static parser) to a clean single head.
-This also explains an initial test failure
+same join at the same time. This pass opened its own pure-join merge
+revision for the three heads, but a separate concurrent watchdog session's
+join of the same three parents
+([#3742](https://github.com/thegspiro/the-logbook/pull/3742),
+`1ad0b594f3fb`) merged to `main` first; landing this pass's own join on top
+would have re-forked the same pair, so it was dropped and this branch
+merged `main` in to pick up #3742's fix instead. Verified against this
+sandbox's own database with `alembic upgrade head` (not just the static
+parser) to a clean single head. This also explains an initial test failure
 (`test_data_export.py::test_shift_reports_respect_trainee_visibility`,
 MySQL 1406 "Data too long for column 'phone'"): the sandbox's long-lived
 database predated the unrelated contact-encryption migration this fork was
@@ -22079,8 +22098,8 @@ section.
 
 Completion gate: `flake8`/`black --check`/`isort --check-only` (CI-pinned
 7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean;
-`validate_migrations.py --strict` — single head `f6a0362deaaa` after this
-pass's fix (3 heads before); `alembic upgrade head` against this sandbox's
+`validate_migrations.py --strict` — single head `1ad0b594f3fb` (fixed by
+#3742, merged first) after merge; `alembic upgrade head` against this sandbox's
 own database — clean, single head reached; `check_route_permissions.py
 --strict` — 279 routes, 0 errors/warnings; `generate_schema_docs.py
 --check` — up to date; scoped backend tests (18-term `-k` filter) — 2784
