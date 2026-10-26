@@ -16,6 +16,10 @@ docs/KEY_ROTATION.md):
 Covers the same encrypted-field inventory as reencrypt_to_aesgcm.py:
 single-value ciphertext columns, the users.mfa_backup_codes JSON list, and
 `enc:`-prefixed secrets nested in organizations.settings.
+It also recomputes the email fingerprint columns (users.email_hash and
+the rest of _FINGERPRINT_COLUMNS) under the current key; they are keyed
+HMACs, not ciphertext, and lookups stop finding a row once its fingerprint's
+key leaves the ring.
 
 Safety:
 - Idempotent: values already readable with the current key are skipped.
@@ -45,6 +49,7 @@ from app.core.database import async_session_factory, database_manager  # noqa: E
 from app.core.security import (  # noqa: E402
     decrypt_data,
     decrypts_with_current_key,
+    email_fingerprint,
     encrypt_data,
 )
 
@@ -76,6 +81,8 @@ _PLAIN_COLUMNS = [
             "address_city",
             "address_state",
             "address_zip",
+            "email",
+            "personal_email",
         ],
     ),
     (
@@ -89,6 +96,7 @@ _PLAIN_COLUMNS = [
             "address_city",
             "address_state",
             "address_zip",
+            "email",
         ],
     ),
     (
@@ -101,34 +109,55 @@ _PLAIN_COLUMNS = [
             "address_city",
             "address_state",
             "address_zip",
+            "email",
         ],
     ),
-    ("event_external_attendees", "id", ["phone"]),
-    ("store_orders", "id", ["customer_phone", "shipping_address"]),
+    ("event_external_attendees", "id", ["phone", "email"]),
+    ("store_orders", "id", ["customer_phone", "shipping_address", "customer_email"]),
     (
         "donors",
         "id",
-        ["phone", "address_line1", "address_line2", "city", "state", "postal_code"],
+        [
+            "phone",
+            "address_line1",
+            "address_line2",
+            "city",
+            "state",
+            "postal_code",
+            "email",
+        ],
     ),
     ("check_requests", "id", ["payee_address"]),
-    ("organization_officers", "id", ["phone"]),
-    ("facility_emergency_contacts", "id", ["phone", "alt_phone"]),
-    ("facility_capital_projects", "id", ["contractor_phone"]),
-    ("facility_insurance_policies", "id", ["agent_phone"]),
+    ("organization_officers", "id", ["phone", "email"]),
+    ("facility_emergency_contacts", "id", ["phone", "alt_phone", "email"]),
+    ("facility_capital_projects", "id", ["contractor_phone", "contractor_email"]),
+    ("facility_insurance_policies", "id", ["agent_phone", "agent_email"]),
     ("facility_occupants", "id", ["contact_phone"]),
-    ("inventory_vendor_contacts", "id", ["phone"]),
-    ("event_requests", "id", ["contact_phone", "venue_address"]),
+    ("inventory_vendor_contacts", "id", ["phone", "email"]),
+    ("event_requests", "id", ["contact_phone", "venue_address", "contact_email"]),
     (
         "screening_records",
         "id",
         ["provider_name", "result_summary", "notes", "result_data"],
     ),
     ("integrations", "id", ["encrypted_config"]),
-    (
-        "external_training_providers",
-        "id",
-        ["api_key", "api_secret", "client_secret"],
-    ),
+    ("external_training_providers", "id", ["api_key", "api_secret", "client_secret"]),
+    ("apparatus_report_configs", "id", ["email_recipients"]),
+    ("approval_chain_steps", "id", ["notification_emails"]),
+    ("compliance_configs", "id", ["report_email_recipients"]),
+    ("compliance_reports", "id", ["emailed_to"]),
+    ("directory_account_provisions", "id", ["primary_email"]),
+    ("donations", "id", ["donor_email"]),
+    ("external_user_mappings", "id", ["external_email"]),
+    ("form_submissions", "id", ["submitter_email"]),
+    ("forms", "id", ["notification_emails"]),
+    ("message_history", "id", ["bcc_emails", "cc_emails", "to_email"]),
+    ("notification_logs", "id", ["recipient_email"]),
+    ("onboarding_status", "id", ["admin_email"]),
+    ("saved_reports", "id", ["email_recipients"]),
+    ("scheduled_emails", "id", ["bcc_emails", "cc_emails", "to_emails"]),
+    ("store_payment_events", "id", ["payer_email"]),
+    ("xapi_statements", "id", ["actor_email"]),
 ]
 
 
@@ -168,6 +197,87 @@ async def _rotate_plain_columns(session, stats, commit: bool) -> None:
                     text(f"UPDATE {table} SET {sets} WHERE {pk} = :pk"),
                     {**updates, "pk": row[pk]},
                 )
+
+
+# (table, address column, fingerprint column). A fingerprint is an HMAC under
+# a key derived from ENCRYPTION_KEY, so it has to be recomputed under the new
+# key too: lookups only try legacy keys while they stay in the ring, and every
+# sign-in by email would fail the day the drained key is removed.
+_FINGERPRINT_COLUMNS = [
+    ("users", "email", "email_hash"),
+    ("prospective_members", "email", "email_hash"),
+    ("event_external_attendees", "email", "email_hash"),
+    ("store_orders", "customer_email", "customer_email_hash"),
+    ("donors", "email", "email_hash"),
+]
+
+
+def _summary_addresses(summary: str) -> list[str]:
+    head = summary.split("\u2026", 1)[0]
+    return [part.strip() for part in head.split(",") if "@" in part]
+
+
+async def _rotate_fingerprints(session, stats, commit: bool) -> None:
+    for table, address, fingerprint in _FINGERPRINT_COLUMNS:
+        rows = (
+            await session.execute(
+                text(
+                    f"SELECT id, {address}, {fingerprint} FROM {table} "
+                    f"WHERE {address} IS NOT NULL"
+                )
+            )
+        ).all()
+        for row_id, stored, current in rows:
+            try:
+                plain = decrypt_data(stored) if stored.startswith("$gcm") else stored
+            except (InvalidTag, InvalidToken, ValueError):
+                stats["unreadable"] += 1
+                continue
+            expected = email_fingerprint(plain)
+            if expected == current:
+                stats["current"] += 1
+                continue
+            stats["rotated"] += 1
+            if commit:
+                await session.execute(
+                    text(f"UPDATE {table} SET {fingerprint} = :fp WHERE id = :pk"),
+                    {"fp": expected, "pk": row_id},
+                )
+
+    # Message history keeps one fingerprint per To address, but only the
+    # addresses in the to_email summary can be recovered, so a rotated batch
+    # is searchable by those alone once the legacy key is removed.
+    rows = (
+        await session.execute(
+            text("SELECT id, to_email, recipient_fingerprints FROM message_history")
+        )
+    ).all()
+    for row_id, stored, prints in rows:
+        if not stored:
+            continue
+        try:
+            summary = decrypt_data(stored) if stored.startswith("$gcm") else stored
+        except (InvalidTag, InvalidToken, ValueError):
+            stats["unreadable"] += 1
+            continue
+        held = set(json.loads(prints) if isinstance(prints, str) else prints or [])
+        expected = [
+            fp
+            for fp in (email_fingerprint(a) for a in _summary_addresses(summary))
+            if fp
+        ]
+        if set(expected) <= held:
+            stats["current"] += 1
+            continue
+        stats["rotated"] += 1
+        if commit:
+            await session.execute(
+                text(
+                    "UPDATE message_history SET recipient_fingerprints = :fps "
+                    "WHERE id = :pk"
+                ),
+                {"fps": json.dumps(list(dict.fromkeys(expected))), "pk": row_id},
+            )
 
 
 async def _rotate_backup_codes(session, stats, commit: bool) -> None:
@@ -263,6 +373,7 @@ async def main() -> int:
     await database_manager.connect()
     try:
         async with async_session_factory() as session:
+            await _rotate_fingerprints(session, stats, args.commit)
             await _rotate_plain_columns(session, stats, args.commit)
             await _rotate_backup_codes(session, stats, args.commit)
             await _rotate_org_settings(session, stats, args.commit)
