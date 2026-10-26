@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3759 (Feature 18, Training extended, pass 11) merged —
+confirmed via `search_pull_requests` (`is:pr is:open head:claude/security-review-`),
+0 matching results. That PR hit a real merge conflict (its branch was cut
+from a stale point and missed PR #3754's own merge to `PROGRESS.md`),
+resolved by merging `main` in; while resolving it, a defect in an earlier
+watchdog edit was found and fixed — the prior tick had deleted the "#3748
+Events & requests" superseded-history block outright instead of wrapping it
+in `<details>` like every other entry, and it was restored from `origin/main`
+during the conflict resolution. After merging, its CI then hit the Mobile
+Safari job's `Install WebKit system libraries` step timing out twice against
+a slow Ubuntu package mirror (external, unrelated to this docs-only PR,
+confirmed by the other 21 jobs in the same run all passing) — the standing
+one-re-run budget was spent, a comment was posted naming the cause, and a
+third attempt (triggered independently, not by this session) succeeded once
+the mirror recovered. Rotation row 18 → ✅ (merged); next is Feature 19
+(Skills testing) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 11, PR #3759, merged after a merge conflict and a transient CI mirror timeout), preserved for history</summary>
+
 **PR [#3759](https://github.com/thegspiro/the-logbook/pull/3759)** (branch
 `claude/security-review-training-extended-p11`) — Feature 18 (Training
 extended), pass 11. **Watchdog pickup** — the dedicated
@@ -34,9 +55,9 @@ already used the bare `claude/security-review-training-extended` name, so
 this pass's branch carries a `-p11` suffix. See
 `TRX-18-training-extended.md`'s **Pass 11** section for the full review.
 
-Rotation row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills
-testing) — re-check `search_pull_requests` fresh rather than trusting this
-note.
+Rotation row 18 → ✅ (merged); next was Feature 19 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 11, PR #3754, merged — docs-only, plus a mid-flight CI fix ported into it), preserved for history</summary>
@@ -22113,7 +22134,7 @@ PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -40040,3 +40061,59 @@ warnings.
 
 Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing)
 — re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-26 — Feature 18 (Training extended, pass 11) — merge conflict resolved, transient CI mirror timeout, 0 fixed, 0 flagged
+
+PR #3759 merged after two watchdog ticks' worth of attention beyond the
+review itself. First, a real merge conflict (the branch was cut from a
+stale point and missed PR #3754's own `PROGRESS.md` merge) — resolved by
+merging `main` in. While resolving it, a defect in an earlier watchdog edit
+was found and fixed: a prior tick had deleted the "#3748 Events & requests"
+superseded-history block outright instead of wrapping it in `<details>`
+like every other entry; restored from `origin/main` during the conflict
+resolution. Second, after the conflict resolved, CI's `Frontend E2E (Mobile
+Safari)` job failed twice identically — `Install WebKit system libraries`
+timing out against a slow Ubuntu package mirror, dying before any test ran,
+confirmed unrelated to this docs-only PR by the other 21 jobs in the same
+run all passing. The standing one-re-run budget was spent on the second
+failure; a comment named the cause and stood down. A third attempt,
+triggered independently (not by this session), succeeded once the mirror
+recovered, and the PR was merged once CI was fully green.
+
+Row 18 → ✅ (merged); next is Feature 19 (Skills testing).
+
+### 2026-10-26 — Feature 19 (Skills testing, pass 11) — watchdog pickup, real delta, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable). No open security-review PR
+— confirmed via `search_pull_requests`, 0 results, after Feature 18 pass
+11's own PR (#3759) merged. Row 19 (Skills testing) confirmed the next
+pending feature by reading the rotation table on a freshly fetched `main`.
+
+Real delta since pass 10's own merge (`28410795`): of the four-file
+declared backend scope, only `schemas/skills_testing.py` changed — a
+`RefusesNull` fix on `SkillTemplateUpdate` (closing a stored-NULL-then-
+unserializable bug on `visibility`/`require_all_critical`) and the same
+repo-wide numeric-bounds sweep TRX-18 pass 11 saw on the sibling training
+schemas. On the frontend, a 28-file substring search for this feature's
+service/store imports found 8 changed files; 6 are false positives
+belonging to other features (Apparatus & NFC's new ID-cards nav entries,
+a Training-admin-area-wide nav-component rollout, Equipment check &
+shifts' own `ShiftReportsTab.tsx`), each traced to confirm. The 2 genuinely
+this feature's own are a cosmetic status-label-map cleanup, nothing
+behavioral. Routes re-enumerated by AST: 29, unchanged, all gated. All
+standing SKT findings (SKT-1 through SKT-4, SKT2-1, SKT3-1) re-verified at
+their current citation; no OPEN or FLAGGED item exists.
+
+Full write-up: `docs/security-review/SKT-19-skills-testing.md`'s **Pass 11**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 658
+revisions, single head `1ad0b594f3fb`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
+"skill or skt"`) — 635 passed, 1 skipped (environment-only, `pywebpush`);
+frontend `npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `search_pull_requests` fresh rather than trusting this note.
