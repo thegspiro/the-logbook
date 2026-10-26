@@ -21,6 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.models.membership_pipeline import PipelineStepType
+from app.models.user import Organization
+from app.services.email_service import EmailService
 from app.services.membership_pipeline_service import (
     MembershipPipelineService,
     public_status_enabled_for,
@@ -275,24 +277,27 @@ class TestStatusTokenUsable:
 
 class TestLinkEmail:
     async def _send(self, config, send=None):
+        # Only the transport is replaced: the email is rendered for real, from
+        # the Application Status Link template's code default (the second
+        # lookup, for a stored template, finds none).
         db = MagicMock()
         org_result = MagicMock()
-        org_result.scalar_one_or_none.return_value = SimpleNamespace(
-            id="org1", name="Oak & Ash FD"
-        )
+        org_result.scalar_one_or_none.side_effect = [
+            Organization(id="org1", name="Oak & Ash FD"),
+            None,
+        ]
         db.execute = AsyncMock(return_value=org_result)
         svc = MembershipPipelineService(db)
-        email_cls = MagicMock()
-        email_cls.return_value.send_email = send or AsyncMock(return_value=(1, 0))
+        send = send or AsyncMock(return_value=(1, 0))
         step = _toggle("s2", 1, name="Interview scheduled")
         step.config = config
-        prospect = _prospect([step], "s2", first_name="<Jane>")
+        prospect = _prospect([step], "s2", first_name="<Jane>", last_name="Doe")
         with (
-            patch("app.services.email_service.EmailService", email_cls),
+            patch.object(EmailService, "send_email", send),
             patch("app.core.config.settings.FRONTEND_URL", "https://fd.example"),
         ):
             sent = await svc._send_status_page_link_email(prospect, step)
-        return sent, email_cls.return_value.send_email
+        return sent, send
 
     async def test_sends_the_link_to_the_applicant(self):
         sent, send = await self._send({"enable_public_status": True})

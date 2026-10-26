@@ -626,7 +626,9 @@ Each rule has its own on/off switch. A switched-off rule keeps its settings.
 ### Changing or deleting a rule _(2026-10-25)_
 
 Members who manage notifications see an edit (pencil) and a delete (bin) icon on
-each rule's row.
+each rule's row. Either can switch a notification back **on** or **off** for
+the whole department: a trigger with no rules sends as normal, and one with
+rules sends while any of them is on.
 
 - **Edit** opens **Edit Notification Rule** with the same fields. Select
   **Save Changes**. If changing the **Trigger Event** would switch a

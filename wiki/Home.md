@@ -73,11 +73,19 @@ docker compose up -d
 - **[Communications](Module-Communications)** - Department messages with acknowledgment tracking, email/SMS escalation, and scheduled send
 - **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates, pattern presets & reports
 - **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out, bulk approve, CSV export
-- **[Member ID Card](../docs/TROUBLESHOOTING.md#member-id-card-issues)** - Digital member identification with QR code, barcode, and print support
+- **[Member ID Card](Member-ID-Cards)** - Digital member identification with QR code, barcode, and print support
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Inventory](Module-Inventory)** - Gear, uniforms and EMS supplies: tracking, assignments, pool items, thermal labels
 - **[Medical Supplies](Module-Medical-Supplies)** - EMS consumables as dated lots, domain-scoped permissions, EMS Supply Officer role
 - **[Compliance](Module-Compliance)** - Compliance tracking
+- **[Compliance Configuration](Compliance-Configuration)** - Thresholds, profiles and report settings
+- **[Training Compliance Calculations](Training-Compliance-Calculations)** - How a member's compliance figure is worked out
+- **[Skills Testing](Module-Skills-Testing)** - Skill evaluations, scorecards and officer sign-off
+- **[Medical Screening](Module-Medical-Screening)** - Physicals, fit tests and other screenings (PHI)
+- **[Prospective Members](Module-Prospective-Members)** - Applicant pipeline from inquiry to membership
+- **[Meeting Minutes](Module-Meeting-Minutes)** - Agendas, minutes, circulation and adoption
+- **[Finance](Module-Finance)** - Budgets, purchase requests, approvals, dues
+- **[Label Printing](Module-Label-Printing)** - Thermal and sheet labels for inventory and equipment
 - **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync _(2026-04-11)_
 
 ### 🔐 Security
@@ -87,7 +95,9 @@ docker compose up -d
 - **[Encryption](Security-Encryption)** - AES-256-GCM encryption
 - **[Audit Logging](Security-Audit-Logging)** - Tamper-proof audit trails
 - **[Privacy & Data Rights](Security-Privacy)** - Data export, anonymization, consent, retention
-- **[Compliance Hub](../docs/COMPLIANCE.md)** - Framework alignment and control inventory
+- **[Compliance Hub](Compliance-Hub)** - Framework alignment and control inventory
+- **[Key Rotation](Security-Key-Rotation)** - Rotating signing and encryption keys
+- **[Backup & Disaster Recovery](Backup-Recovery)** - Backups, restores and drills
 - **[HIPAA Security Features](Security-HIPAA)** - Security features aligned with HIPAA requirements
 
 ### 🛠️ Troubleshooting
@@ -390,12 +400,12 @@ See [Communications](Module-Communications#email-footer-library-2026-08-10).
 
 ### July 2026 — Security Audit Remediation & Encryption Upgrade
 
-- **Field encryption upgraded to AES-256-GCM**: at-rest encryption of sensitive fields (PHI, MFA secrets, integration/SSO credentials) now uses AES-256-GCM authenticated encryption — a tampered value fails to decrypt. Legacy Fernet (AES-128-CBC) values remain readable; `backend/scripts/reencrypt_to_aesgcm.py` backfills them (see the [backfill runbook](../docs/AES256_GCM_BACKFILL_RUNBOOK.md))
+- **Field encryption upgraded to AES-256-GCM**: at-rest encryption of sensitive fields (PHI, MFA secrets, integration/SSO credentials) now uses AES-256-GCM authenticated encryption — a tampered value fails to decrypt. Legacy Fernet (AES-128-CBC) values remain readable; `backend/scripts/reencrypt_to_aesgcm.py` backfills them (see the [backfill runbook](https://github.com/thegspiro/the-logbook/blob/main/docs/AES256_GCM_BACKFILL_RUNBOOK.md))
 - **Audit hash chain is keyed (HMAC-SHA256)** and the rehash recovery op is now break-glass: disabled unless the operator sets `AUDIT_ALLOW_CHAIN_REHASH`, repairs only legacy rows, and fails closed (409) on a keyed-row mismatch. Audit-log **export redacts `session_id`** to a non-reversible fingerprint
 - **Security alerts are per-department**: the `security_alerts` table is now org-scoped, so an org admin only sees/acknowledges/resolves their own department's alerts
 - **Geo-blocking is configurable and platform-scoped**: new `GEOIP_FAIL_CLOSED` blocks IPs with an unresolvable country (incl. a missing MaxMind DB); runtime country block/unblock via the API is gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` (off by default — the blocklist is set at deploy via `BLOCKED_COUNTRIES`)
 - **Public-portal API keys**: IP rate limiting now runs before the (slow) bcrypt verification to remove a CPU-exhaustion vector, and keys carry a selective lookup prefix so a lookup checks a single candidate
-- A rotating, module-by-module tenant-isolation audit closed cross-tenant read/write gaps across modules — see [`docs/module-audit/`](../docs/module-audit/PROGRESS.md) and [`CHANGELOG.md`](../CHANGELOG.md)
+- A rotating, module-by-module tenant-isolation audit closed cross-tenant read/write gaps across modules — see [`docs/module-audit/`](https://github.com/thegspiro/the-logbook/blob/main/docs/module-audit/PROGRESS.md) and [`CHANGELOG.md`](https://github.com/thegspiro/the-logbook/blob/main/CHANGELOG.md)
 
 ### May 2026 (May 1-28) — OAuth Sign-In, IP/GeoIP Hardening, Compliance Evaluation Period, Shift Follow-Up, Audit Log Admin & Training Exports
 

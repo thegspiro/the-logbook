@@ -1171,6 +1171,47 @@ export const UserSettingsPage: React.FC = () => {
                   {consents.map((consent) => {
                     const label = CONSENT_LABELS[consent.consent_type];
                     if (!label) return null;
+                    // W59-3: a checkbox left unticked records nothing, so a
+                    // member could reach "no" only by ticking (recording a
+                    // yes the consent ledger keeps) and unticking. Photo use
+                    // and roster listing are an explicit Yes / No instead,
+                    // with neither chosen until the member answers. SMS
+                    // keeps its switch: it is the TCPA record and also sets
+                    // the text-message preference (handleSmsToggle).
+                    if (consent.consent_type !== 'sms_notifications') {
+                      const saving = savingConsent === consent.consent_type;
+                      return (
+                        <fieldset key={consent.consent_type} disabled={saving}>
+                          <legend className="text-theme-text-primary block text-sm font-medium">
+                            {label.title}
+                            {consent.granted === null && (
+                              <span className="text-theme-text-muted ml-2 text-xs font-normal">(not answered)</span>
+                            )}
+                          </legend>
+                          <span className="text-theme-text-secondary block text-sm">{label.description}</span>
+                          <div className="mt-1 flex flex-wrap gap-x-6">
+                            {[
+                              { value: true, text: 'Yes' },
+                              { value: false, text: 'No' },
+                            ].map((option) => (
+                              <label
+                                key={option.text}
+                                className="text-theme-text-primary touch:min-h-11 flex cursor-pointer items-center gap-2 text-sm"
+                              >
+                                <input
+                                  type="radio"
+                                  name={`consent-${consent.consent_type}`}
+                                  className="form-checkbox"
+                                  checked={consent.granted === option.value}
+                                  onChange={() => void handleConsentToggle(consent.consent_type, option.value)}
+                                />
+                                {option.text}
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                      );
+                    }
                     return (
                       <label key={consent.consent_type} className="flex cursor-pointer items-start gap-3">
                         <input

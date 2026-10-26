@@ -67,6 +67,21 @@ The console is also reached from **Inventory Administration**, which has a
 Catalog**, **Store Orders** and **Store Payments**. Each opens the console on
 that tab.
 
+**How the console is laid out.** Like Training, Events and Members
+Administration, the console has four area cards, and under them a strip of the
+chosen area's pages with a line naming the open one. Choosing an area card
+opens its first page.
+
+| Area                  | Pages                          |
+| --------------------- | ------------------------------ |
+| **At a Glance**       | **Overview**                   |
+| **Selling**           | **Order Windows**, **Catalog** |
+| **Orders & Payments** | **Orders**, **Payments**       |
+| **Store Settings**    | **Settings**                   |
+
+An area card and the page under it carry a red count when the **Needs
+attention** list has items there.
+
 The sidebar entry says **Store Admin** but the page it opens is headed
 **Department Store**. Say so when you train people, because the two names
 differ.
@@ -108,7 +123,7 @@ nothing, and you keep everything.
 
 ## Store Settings
 
-Open the console and select the **Settings** tab.
+Open the console and select **Store Settings**.
 
 ### Identity
 
@@ -372,7 +387,7 @@ an answer.
 
 ## Building the Catalog
 
-Open the console's **Catalog** tab and select **New item**.
+Open the console's **Catalog** page (under **Selling**) and select **New item**.
 
 The screens call catalog entries _items_ and their size or colour choices
 _options_. This guide does too.
@@ -451,7 +466,7 @@ Members shop by picture. A catalog of text sells nothing.
 
 ## Order Windows
 
-Open the console's **Order Windows** tab and select **New order window**.
+Open the console's **Order Windows** page (under **Selling**) and select **New order window**.
 
 A window is an ordering period. You open it, members order, you close it, and
 you place one bulk order with the vendor.

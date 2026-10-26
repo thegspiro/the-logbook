@@ -59,8 +59,8 @@ from its open list.
 | B18 | training                   | TR2    | ✅     |
 | B19 | scheduling                 | SCH2   | ✅     |
 | B20 | finance                    | FIN2   | ✅     |
-| B21 | orgs, roles & users        | ORU2   | ⬜     |
-| B22 | compliance & skills        | CS2    | ⬜     |
+| B21 | orgs, roles & users        | ORU2   | ✅     |
+| B22 | compliance & skills        | CS2    | ✅     |
 | B23 | security, audit & IP       | SEC2   | ⬜     |
 | B24 | core infra                 | CI2    | ⬜     |
 | B25 | onboarding                 | ONB2   | ⬜     |
@@ -3413,3 +3413,34 @@ secrets redacted for non-admins. See
   five checklist dimensions. Gate: flake8 / black / isort clean · 1,618 related tests pass,
   1 skipped for a missing time-zone table · new file all `integration`. See finance.md →
   Pass 5. Next: B21 orgs, roles & users.
+- **B21 orgs, roles & users ✅ (pass 5) — seven fields acknowledged a null and ignored it
+  (ORU2-2 to ORU2-4).** The B18–B20 method on the four row-backed update routes (roles,
+  user profile, contact-info, leaves of absence), with the "may be cleared" half made
+  stricter: it now seeds a value and checks it is actually gone, since a handler that skips a
+  null still answers 200. **Fixed** — `PATCH /roles/{id}` answered 200 and changed nothing for
+  a null `name`, `description`, `permissions` or `priority`; contact-info did the same for
+  `email` and `notification_preferences`, and the profile for `emergency_contacts`. All are
+  now 422 through `RefusesNull`. No permission or ceiling behaviour changes, and the frontend
+  sends none of these nulls. **Verified good:** `member_class` / `member_status` re-derive by
+  design; all 90 endpoints in the four files carry an auth dependency. **Not covered:** org
+  settings routes and the whole-object role/service-period/qualification routes. **Follow-up:**
+  apply the seeded-clear assertion to the training, scheduling and finance tests; the harness is
+  a fourth copy. **Environment:** the sandbox database was one revision behind head (248 false
+  failures on a clean `main`) until `alembic upgrade head`. **Not re-run:** the other five
+  checklist dimensions. Gate: flake8 / black / isort / mypy (changed schemas) clean · 595
+  related tests pass after the migration · new file 42 pass, all `integration`. See
+  orgs-roles-users.md → Pass 5. Next: B22 compliance & skills.
+- **B22 compliance & skills ✅ (pass 5) — a null on two skill-template fields made the template
+  unreadable (CS2-2).** The B18–B21 method on the three row-backed update routes this module
+  owns (skill templates, skill tests, compliance profiles): 39 derived cases. **Fixed** — a null
+  `visibility` or `require_all_critical` on `PUT /templates/{id}` was committed and every later read of
+  the template failed response validation; `SkillTemplateUpdate` now refuses it with a 422 through
+  `RefusesNull`, and the builder never sends one. **Verified good:** compliance profiles clean; a skill
+  test's `overall_score` / `result` / `status` are refused for any value by owner decision SKT4-7 (named
+  in the test); all 55 endpoints in the four files carry an auth dependency. **Not covered:**
+  `PUT /compliance/config` and the `compliance-exempt` action. **Follow-up:** the harness is a fifth
+  copy. **Environment:** `main` has two Alembic heads (`b7e4c2a91d35` and `0a8d11fcada1`), so
+  `alembic upgrade head` refuses; three open PRs each add a join (see the PR). **Not re-run:** the other
+  five checklist dimensions. Gate: flake8 / black / isort / mypy (changed schema) clean · 1,079 related
+  tests pass · new file 40 pass, all `integration`. See compliance-skills.md → Pass 5. Next: B23 security,
+  audit & IP.

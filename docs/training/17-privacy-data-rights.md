@@ -42,6 +42,15 @@ Go to **My Account → Privacy → Privacy Choices**.
 | **Public roster listing**      | Your name and rank may appear on the department's public website roster                          |
 | **Text message notifications** | The department may send you notifications by text message at your mobile number                  |
 
+**Photo use** and **Public roster listing** are a **Yes / No** pair with
+neither chosen until you answer _(2026-10-25)_. Choosing **No** records your
+decline; leaving both blank means "not answered", so the department can still
+ask you. **Text message notifications** stays a switch, because it is also the
+text-message consent record.
+
+> **Screenshot to replace:** 17-01 shows checkboxes for photo use and roster
+> listing; re-shoot with the Yes / No pairs.
+
 The same tab holds **Profile visibility**. There you choose which contact
 details other members can see: work email, personal email, phone, mobile and
 mailing address. Leadership can always see everything. Your date of birth and

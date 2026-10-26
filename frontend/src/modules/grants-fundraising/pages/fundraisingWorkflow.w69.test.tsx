@@ -201,6 +201,47 @@ describe('Donors (W69)', () => {
     });
   });
 
+  describe('an organization by its name alone (W69-6)', () => {
+    it('saves a business with no contact name', async () => {
+      const user = userEvent.setup();
+      renderAt(<DonorsPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Add Donor' }));
+      await user.selectOptions(screen.getByLabelText('Donor Type'), 'foundation');
+      await user.type(screen.getByLabelText('Organization Name'), 'County Fire Foundation');
+      await user.click(screen.getByRole('button', { name: 'Save Donor' }));
+
+      await waitFor(() => expect(createDonor).toHaveBeenCalled());
+      expect(createDonor.mock.calls[0]?.[0]).toMatchObject({
+        firstName: null,
+        lastName: null,
+        donorType: 'foundation',
+        companyName: 'County Fire Foundation',
+      });
+    });
+
+    it('still needs both names for an individual', async () => {
+      const user = userEvent.setup();
+      renderAt(<DonorsPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Add Donor' }));
+      expect(screen.queryByLabelText('Organization Name')).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/First Name/)).toBeRequired();
+      await user.selectOptions(screen.getByLabelText('Donor Type'), 'business');
+      expect(screen.getByLabelText(/First Name/)).not.toBeRequired();
+    });
+
+    it('lists the organization by its own name', async () => {
+      listDonors.mockResolvedValue([
+        { ...DONOR, firstName: null, lastName: null, companyName: 'Main Street Bakery', email: 'hi@bakery.test' },
+      ]);
+      renderAt(<DonorsPage />);
+
+      expect(await screen.findByText('Main Street Bakery')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Email Main Street Bakery' })).toBeInTheDocument();
+    });
+  });
+
   it('names the email link after the donor', async () => {
     listDonors.mockResolvedValue([{ ...DONOR, email: 'dale@example.com' }]);
     renderAt(<DonorsPage />);

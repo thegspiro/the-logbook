@@ -15,6 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -253,6 +254,15 @@ class Event(Base):
     # sign-in sheet and the membership pipeline.
     guest_check_in_creates_prospect: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Bearer credential for the event's own guest QR code, for an event held
+    # somewhere with no room kiosk (an outside venue, a parking lot open house).
+    # Issued on demand by a manager and rotated to revoke a printed code; it
+    # opens nothing unless allow_guest_check_in is also on. Never serialized in
+    # the event detail any member can read — only the events.manage endpoint
+    # returns it (see GuestCheckInService.issue_link_token).
+    guest_check_in_token: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
     )
 
     # Recurrence
@@ -642,7 +652,7 @@ class EventExternalAttendee(Base):
     # Attendee info
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Check-in tracking

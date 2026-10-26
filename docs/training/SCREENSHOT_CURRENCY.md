@@ -1,22 +1,42 @@
 # Screenshot currency
 
+## Queued by the October 25 – 26 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 04 | Event QR page with the guest check-in QR code, Reset, and print-one-code choice; event Guests card with Add guest | Create |
+| 17 | 17-01 My Account → Privacy with Yes / No pairs for photo use and roster listing | Replace |
+| 12 | Edit opportunity form; opportunities list with Show retired | Create |
+| 07 | Notification rule delete warning; Edit dialog | Create |
+| 05 | Items list **Print Labels** menu | Create |
+| 15 | Stage editor Email Template picker; applicant status page next-meeting card | Create |
+| 07 | Share dialog embed code and Organization Settings → Forms allowed sites | Create |
+| 01, 04, 18 | Members, Events and Department Store administration with area cards | Re-check any full-page or flat-tab-row shot (01-22, 08-91, 18-02, 19-06, 19-08 already marked) |
+| 13 | Compliance tab showing a **by frequency** row and a waiver | Create |
+| All | Any form or toolbar shot on desktop or an iPad (input borders darker; toolbar buttons match field height) | Re-check |
+
 ## Queued by the October 25 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
 Nothing was captured by this pass. The Events Administration, Scheduling
 settings and Inventory Items shots were queued by their own PRs (rows dated
-2026-10-25 below).
+2026-10-25 below). The October 25 – 26 pass above overlaps this window, so the
+new screens it queues (the Guests card, embed code and allowed sites, the
+notification-rule dialogs, the grant edit form, the next-meeting card) are not
+repeated here; these rows are the existing images to replace and the screens
+it does not list.
 
 | Guide | Screen | Action |
 | --- | --- | --- |
 | 04 | `04-32-guest-sign-in-form`, `04-33-guest-sign-in-confirmation`: the guest page at a recruitment event now asks for an email, then "Is this you, Jane S.?"; the confirmation can read "You're already checked in" | Replace (manifest updated by #3693) |
-| 04 | Event page **Guests** card with **Add guest** and a row's **Sign in**; the **Add guest** dialog | Create |
-| 07 | `07-05-form-sharing`: Share window with **Allow embedding on your website** and the **Embed code** | Replace |
-| 07 | **Settings → Forms** with a website listed; a form embedded on a host page | Create |
-| 07 | `07-08-notification-rules`: edit and delete icons on each row; the **Edit Notification Rule** dialog with its trigger-change warning; **Delete this rule?** | Replace / create |
+| 07 | `07-05-form-sharing`: Share window with **Allow embedding on your website** | Replace |
+| 07 | `07-08-notification-rules`: edit and delete icons on each row | Replace |
 | 15 | `15-13-application-status` with the **Your next step** card; `15-28-status-page-withdraw` (card now above the withdraw area) | Replace / re-check |
 | 15 | Automated Email stage → **Next Meeting Details** with the preview heading ("The saved event has passed …") | Create |
-| 12 | `12-03-opportunities`: edit and retire icons, **Show retired**; a **Retired** card; **Edit Grant Opportunity** | Replace / create |
+| 12 | `12-03-opportunities`: edit and retire icons; a **Retired** card | Replace |
 | 13 | `13-05-add-requirement` (frequency note reworded); `13-06-expiring-screenings` ("Due … (by frequency)", a **Waived** row) | Replace / re-check |
 | 06 | `06-13-facility-maintenance`, `06-14-facility-inspections` (page controls past 50 records) | Re-check |
 | 08 | `08-38-email-configuration` with Gmail selected (the "Before you rely on it:" notes) | Re-check / create |
@@ -571,6 +591,8 @@ unchanged. The notes it carried are kept here, unchanged in substance.
 | `04-04-event-qr-code.png` | **CURRENT** 2026-10-17 | The page's copy was rewritten on 2026-09-29: the line under the title now reads "Members scan this code to check themselves in", and the steps read "Members sign in if they aren't already" and "Members tap Check In to record their attendance". Re-shoot the same open-window state so those lines are in frame |
 | `04-05-create-event.png` | **CURRENT** 2026-10-17 | The form gained the **Organizer** (showing "Me (default)") and **Alternate (optional)** pickers with the line "Attendance requests for this event go to the organizer and the alternate." (2026-10-03); the template hint now reads "Pick a template to pre-fill common settings, or start blank."; the check-in window options read "Flexible - Opens before the start, closes when the event ends" etc.; and the attachments note reads "Files can't be attached from the app yet." Re-shoot the full blank create form |
 | `04-05-create-event.png` | **REPLACE** (2026-10-25) | Events Administration's seven section cards became Training/Scheduling/Inventory-style navigation: four area cards (Events, Community Outreach, Check-ins, Settings) above a page strip and a line naming the open page. Re-shoot the blank create form with the header in frame |
+| `01-22-member-lifecycle.png`, `08-91-members-admin-hub-phone.png` | **REPLACE** (2026-10-25) | Members Administration's five section cards became Training/Events-style navigation: three area cards (Roster, Add & Import, Settings) above a page strip and a line naming the open page. Re-shoot `01-22` on Member Management at desktop width, and `08-91` at 390px with the area chips and the page strip in frame |
+| `18-02-store-admin.png`, `19-06-store-admin-orders.png`, `19-08-store-admin-activity.png` | **REPLACE** (2026-10-25) | The Department Store console's six section cards became Training/Events-style navigation: four area cards (At a Glance, Selling, Orders & Payments, Store Settings) above a page strip and a line naming the open page. Re-shoot `18-02` on Store Settings, `19-06` on Orders and `19-08` on Overview, each with the area cards and strip in frame |
 | `04-35-recurring-event-form.png` | **CURRENT** 2026-10-17 | The note under the recurrence controls now reads "Each occurrence is created as its own event, which you can edit or cancel on its own." (2026-09-29), and the series end date, date-to-skip field and reminder control are now labelled. Re-shoot the same weekly pattern with a series end date |
 | `04-08-event-analytics.png` | **CURRENT** 2026-10-17 | The subtitle under the page title now reads "Attendance and check-in rates across your events" (2026-09-29). Re-shoot the same date range. The page title is **Attendance Trends** and it has four summary cards |
 | `04-09-event-templates.png` | **CURRENT** 2026-10-17 | The page's description now reads "Save common event settings to reuse when you create an event." (2026-09-29). Re-shoot the same list |

@@ -1,35 +1,59 @@
 import React, { useRef } from 'react';
-import AdminHubCardTabs from '../admin/AdminHubCardTabs';
+import type { LucideIcon } from 'lucide-react';
+import AdminHubCardTabs from './AdminHubCardTabs';
 import { ScrollCueRow } from '../ux/ScrollCueRow';
-import {
-  EVENTS_ADMIN_AREA_ID_PREFIX,
-  eventsAdminTabId,
-  eventsAdminTabPanelId,
-  type EventsAdminArea,
-  type EventsAdminAreaId,
-  type EventsAdminTab,
-} from '../../pages/eventsAdminTabs';
 
 /**
- * Events Administration's two-level navigation, drawn the way Training,
- * Inventory and Scheduling Administration draw theirs: area cards above a card
- * holding the area's pages, with a strip naming the open page and what it is
- * for.
+ * An administration hub's two-level navigation: area cards above a card
+ * holding the chosen area's pages, with a strip naming the open page and what
+ * it is for.
  *
- * This mirrors `TrainingAdminNav`: the pages are tabs of one route rather than
- * routes of their own, so both levels are tablists with roving focus. The
- * panels they control are rendered by the hub, under the ids
- * `eventsAdminTabPanelId` returns.
+ * Every area is on screen at once, each with a line saying what it holds, so
+ * an officer looking for the CSV import or the payment queue does not have to
+ * open sections to find out. The area cards are the shared `AdminHubCardTabs`;
+ * the page strip under them is the second level. Both are tablists with roving
+ * focus, for hubs whose pages are tabs of one route (Training, Events, Members,
+ * the Department Store). Scheduling and Inventory draw link strips of their
+ * own instead, because each of their pages is a route.
+ *
+ * The page renders the panels these tabs control. The area cards' panel ids
+ * follow `AdminHubCardTabs` (`${idPrefix}-panel-${area}`); the page tabs'
+ * come from `tabPanelId`, which the hub shares with its own panels so the two
+ * cannot disagree.
  */
 
-interface EventsAdminNavProps {
-  areas: EventsAdminArea[];
-  activeArea: EventsAdminArea;
-  activeTab: EventsAdminTab;
-  onAreaChange: (area: EventsAdminAreaId) => void;
-  onTabChange: (tab: EventsAdminTab) => void;
-  /** Open attention items per tab id, from the hub summary. */
+export interface AdminHubAreaNavDestination<T extends string = string> {
+  id: T;
+  label: string;
+  icon: LucideIcon;
+}
+
+export interface AdminHubAreaNavArea<A extends string, D> {
+  id: A;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  destinations: D[];
+}
+
+interface AdminHubAreaNavProps<A extends string, T extends string, D extends AdminHubAreaNavDestination<T>> {
+  /** The areas this viewer sees, already filtered by the hub. */
+  areas: AdminHubAreaNavArea<A, D>[];
+  activeArea: AdminHubAreaNavArea<A, D>;
+  activeTab: T;
+  onAreaChange: (area: A) => void;
+  onTabChange: (tab: T) => void;
+  /** Open attention items per page id, from the hub summary. */
   attentionCounts: Record<string, number>;
+  /** The line under the strip saying what a page is for. */
+  hintOf: (destination: D) => string;
+  /** Names the area tablist ("Training admin areas"). */
+  label: string;
+  /** Prefix for the area cards' ids, unique on the page. */
+  idPrefix: string;
+  /** Element id of a page tab, and of the panel the hub renders for it. */
+  tabId: (area: A, tab: T) => string;
+  tabPanelId: (area: A, tab: T) => string;
 }
 
 const CountBadge: React.FC<{ count: number }> = ({ count }) => (
@@ -39,21 +63,26 @@ const CountBadge: React.FC<{ count: number }> = ({ count }) => (
   </span>
 );
 
-export const EventsAdminNav: React.FC<EventsAdminNavProps> = ({
+export function AdminHubAreaNav<A extends string, T extends string, D extends AdminHubAreaNavDestination<T>>({
   areas,
   activeArea,
   activeTab,
   onAreaChange,
   onTabChange,
   attentionCounts,
-}) => {
+  hintOf,
+  label,
+  idPrefix,
+  tabId,
+  tabPanelId,
+}: AdminHubAreaNavProps<A, T, D>) {
   const destinationRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const destinationIds = activeArea.destinations.map((destination) => destination.id);
   const activeDestination =
     activeArea.destinations.find((destination) => destination.id === activeTab) ?? activeArea.destinations[0];
   const ActiveIcon = activeDestination?.icon;
 
-  const areaCount = (area: EventsAdminArea) =>
+  const areaCount = (area: AdminHubAreaNavArea<A, D>) =>
     area.destinations.reduce((total, destination) => total + (attentionCounts[destination.id] ?? 0), 0);
 
   /**
@@ -61,7 +90,7 @@ export const EventsAdminNav: React.FC<EventsAdminNavProps> = ({
    * browser back/forward changes the selection without moving focus, and
    * stepping from the selection would skip the tab the user was actually on.
    */
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, focusedId: EventsAdminTab) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, focusedId: T) => {
     const focusedIndex = destinationIds.indexOf(focusedId);
     let nextIndex: number | undefined;
     if (event.key === 'ArrowRight') nextIndex = (focusedIndex + 1) % destinationIds.length;
@@ -79,7 +108,7 @@ export const EventsAdminNav: React.FC<EventsAdminNavProps> = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <AdminHubCardTabs<EventsAdminAreaId>
+      <AdminHubCardTabs<A>
         tabs={areas.map((area) => ({
           id: area.id,
           label: area.label,
@@ -89,15 +118,17 @@ export const EventsAdminNav: React.FC<EventsAdminNavProps> = ({
         }))}
         activeTab={activeArea.id}
         onTabChange={onAreaChange}
-        label="Events admin areas"
-        idPrefix={EVENTS_ADMIN_AREA_ID_PREFIX}
+        label={label}
+        idPrefix={idPrefix}
         // The strip under the pages already says where the user is.
         showActiveDescription={false}
       />
 
       <div className="card overflow-hidden">
-        {/* An intentional scroll region on a phone, declared so the mobile
-            pass does not read off-screen pages as an overflow bug. The border
+        {/* Declared an intentional scroll region so the mobile pass stops
+            reading off-screen pages as an overflow bug. No tabIndex: a tablist
+            using roving tabindex stays out of the tab order (ARIA APG), and
+            arrowing through its tabs scrolls the far end into view. The border
             sits on a wrapper so the edge fade does not erase it. */}
         <div className="border-theme-surface-border border-b">
           <ScrollCueRow
@@ -114,14 +145,14 @@ export const EventsAdminNav: React.FC<EventsAdminNavProps> = ({
               return (
                 <button
                   key={destination.id}
-                  id={eventsAdminTabId(destination.id)}
+                  id={tabId(activeArea.id, destination.id)}
                   ref={(element) => {
                     destinationRefs.current[destination.id] = element;
                   }}
                   type="button"
                   role="tab"
                   aria-selected={isActive}
-                  aria-controls={eventsAdminTabPanelId(destination.id)}
+                  aria-controls={tabPanelId(activeArea.id, destination.id)}
                   tabIndex={isActive ? 0 : -1}
                   onClick={() => onTabChange(destination.id)}
                   onKeyDown={(event) => handleKeyDown(event, destination.id)}
@@ -140,8 +171,8 @@ export const EventsAdminNav: React.FC<EventsAdminNavProps> = ({
           </ScrollCueRow>
         </div>
 
-        {/* Says where the coordinator is and what the page is for. The live
-            region announces that on a change without reading out the body. */}
+        {/* Says where the officer is and what the page is for. The live region
+            announces that on a change without reading out the page body. */}
         {activeDestination && (
           <div
             className="bg-theme-surface-secondary flex items-center gap-3 px-4 py-3"
@@ -158,13 +189,13 @@ export const EventsAdminNav: React.FC<EventsAdminNavProps> = ({
               <span className="text-theme-text-primary font-semibold">{activeDestination.label}</span>
               <span aria-hidden="true"> — </span>
               <span className="sr-only">: </span>
-              {activeDestination.description}
+              {hintOf(activeDestination)}
             </p>
           </div>
         )}
       </div>
     </div>
   );
-};
+}
 
-export default EventsAdminNav;
+export default AdminHubAreaNav;

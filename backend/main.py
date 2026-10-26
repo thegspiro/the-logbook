@@ -28,6 +28,7 @@ from app.api.public import responses as public_responses
 from app.api.public.branding import router as public_branding_router
 from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
+from app.api.public.event_guest import router as public_event_guest_router
 from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
@@ -2430,6 +2431,15 @@ app.include_router(
 # and finance-approval routers, which also take bodies, already declare 400.
 app.include_router(
     public_display_router,
+    prefix="/api",
+    responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
+)
+
+# Include the event guest QR code API (no auth — the path's token, issued by an
+# events.manage holder, is the credential). The kiosk guest path's twin for an
+# event held where there is no room display, so it declares the same codes.
+app.include_router(
+    public_event_guest_router,
     prefix="/api",
     responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
 )

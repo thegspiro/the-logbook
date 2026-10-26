@@ -547,6 +547,64 @@ with no expiration date now reads as overdue, and one due soon appears on the
 See [Medical Screening](training/13-medical-screening.md) for how the date is
 worked out.
 
+### Gmail can send through a Google Workspace service account (2026-10-25)
+
+Gmail departments can now send through the Gmail API with a domain-wide
+delegated service account instead of an App Password, so email no longer stops
+when someone changes the sending account's password. **Nothing changes on
+upgrade**: every existing Gmail configuration has no method saved, which means
+App Password, and keeps signing in to `smtp.gmail.com` exactly as before.
+
+- Choosing it needs `admin.access`, not only `settings.manage`, because the key
+  can send as any user in the Workspace domain
+  (`docs/KNOWN_LIMITATIONS.md`, "Gmail — Sending Through a Service Account").
+- The service account's client ID must be authorized in the Google Admin
+  console under **Security > API controls > Domain-wide delegation** for
+  `https://www.googleapis.com/auth/gmail.send`, and the Gmail API must be
+  enabled in its Google Cloud project.
+- The server needs outbound HTTPS to `gmail.googleapis.com` and
+  `oauth2.googleapis.com`.
+- **Before downgrading** to a release from before this change, switch any
+  department on the service account back to an App Password. An older release
+  does not know the method, reads the row as App Password, finds none, and
+  that department's email stops.
+
+### The command that moves files to a remote store is `migrate_uploads_to_remote.py` (2026-10-25)
+
+`scripts/migrate_uploads_to_s3.py` is now `scripts/migrate_uploads_to_remote.py`,
+since it moves files to a Google Shared Drive as well as to a bucket, and its
+`--buckets` option is now `--stores`. **Both old names still work**, so
+runbooks, shell history and scheduled jobs need no change. The old script runs
+the new one with the same options, and gives the same output and exit codes.
+
+- `scripts/backup.sh` asks for the new name first and falls back to the old
+  one, so a host script and a backend image may be updated in either order.
+- A manifest written by an earlier run still rolls back and finalizes. Their
+  directory, `/app/uploads/.s3-migration/`, keeps its name.
+- An error now begins `Storage migration failed:` rather than
+  `S3 migration failed:`. Anything that matches on that text needs the new
+  wording.
+
+### Google Drive's connection test passes with the Content manager role (2026-10-25)
+
+The Google Drive backend from 2026-10-23 deleted a file permanently. On a
+Shared Drive that needs the **Manager** role, and the setup asks for **Content
+manager**. So **Test and switch to Google Drive** could not delete its probe
+file and failed every time, with a message saying to check the role that was
+already granted. No department could switch, so no stored file is affected.
+
+A delete now moves the file to the Shared Drive's **trash**, which Content
+manager may do, and Google empties the trash after 30 days. Nothing to change
+on upgrade: press **Test and switch to Google Drive** again.
+
+- A file the Logbook deletes stays in the drive's trash for those 30 days.
+  It is encrypted like every stored file. A drive Manager can restore it there
+  or empty the trash sooner.
+- Trashed files still count against the Shared Drive's storage until they are
+  removed.
+- Granting **Manager** instead is not needed and gives the account more than
+  it uses: it could also change who belongs to the drive.
+
 ### A department can keep its files in a Google Shared Drive (2026-10-23)
 
 Google Drive under **Organization Settings > Storage** (and in onboarding) now
@@ -679,6 +737,40 @@ What an operator needs to know:
   the volume that time is truncated to noon of the day so an anonymous
   submission cannot be matched to a login. Whoever can list the bucket or read
   its access logs can see the exact time (owner decision, 2026-10-22).
+
+### Phone numbers and addresses are encrypted at rest (2026-10-25)
+
+A migration (`5510d5ff49eb`) runs on the next start. **It encrypts every existing
+value in place**, so the first start after upgrading takes a moment longer on a
+large roster, and it needs `ENCRYPTION_KEY` set, as the backend already does. With
+the key missing and data on file, the migration stops with a clear error and
+changes nothing.
+
+- **What changes:** personal phone numbers and postal addresses become `TEXT`
+  holding AES-256-GCM ciphertext — members' and applicants' `phone`, `mobile`
+  and home address, plus the contact details of people who are not members
+  (external event attendees, storefront customers, donors, check-request
+  payees, officer overrides, facility emergency contacts, contractors,
+  insurance agents, occupant contacts, vendor contact people, public event
+  requesters). The API, screens and exports see the same values as before. A
+  department's own published details (organization, stations, locations,
+  vendor companies, org-chart office lines) are unchanged.
+- **Take the database backup first.** The downgrade decrypts and restores the
+  original column types, but only the same `ENCRYPTION_KEY` and
+  `ENCRYPTION_SALT` can read the ciphertext: **losing them loses these values.**
+  Keep them with the backup keys but not inside the backup itself (see
+  [BACKUP.md](./BACKUP.md)).
+- **Older backups still hold the plain values.** Encrypting the live database
+  does not reach dumps taken before the upgrade. They keep the plain-text
+  phone numbers and addresses for as long as you retain them
+  (`BACKUP_RETENTION_DAYS`, 30 by default, and however long your offsite copy
+  keeps them). Expire or re-encrypt them on the schedule your data-protection
+  policy calls for.
+- **No longer searchable in SQL.** Nothing in the application filtered or sorted
+  on these columns. Custom reports or database queries of your own that read
+  them directly will see ciphertext.
+- **Key rotation:** `scripts/rotate_encryption_key.py` and
+  `scripts/reencrypt_to_aesgcm.py` cover the new columns.
 
 ### Date of birth and emergency contacts are encrypted at rest (2026-10-25)
 

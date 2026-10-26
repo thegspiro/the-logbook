@@ -76,6 +76,22 @@ describe('TemplateList', () => {
     expect(screen.getByRole('button', { name: /Off the Waitlist/ })).toHaveAttribute('title', 'Off the Waitlist');
   });
 
+  it('files the applicant and pipeline emails under Prospective Members', () => {
+    const templates = [
+      makeTemplate({ id: '1', name: 'Prospect Inactivity Warning', template_type: 'inactivity_warning' }),
+      makeTemplate({ id: '2', name: 'Duplicate Application', template_type: 'duplicate_application' }),
+      makeTemplate({ id: '3', name: 'Application Withdrawn', template_type: 'application_withdrawn' }),
+      makeTemplate({ id: '4', name: 'Application Step Completed', template_type: 'application_step_completed' }),
+      makeTemplate({ id: '5', name: 'Application Status Link', template_type: 'application_status_link' }),
+    ];
+
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
+
+    expect(screen.getByText('Prospective Members')).toBeInTheDocument();
+    expect(screen.queryByText('Members & Accounts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Other')).not.toBeInTheDocument();
+  });
+
   it('files an unrecognised template type under Other', () => {
     const templates = [makeTemplate({ id: '1', name: 'Ad-hoc Notice', template_type: 'custom' })];
 

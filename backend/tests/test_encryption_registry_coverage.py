@@ -6,7 +6,7 @@ upgrades legacy ciphertext. Each walks a hand-written list of columns. A column
 that has an encrypted type in the models but is missing from that list keeps
 its old-key ciphertext through every rotation, and becomes unreadable the day
 the old key is removed. ``screening_records`` was in exactly that state until
-this test existed.
+this test existed, and ``prospective_members.status_token`` until 2026-10-26.
 """
 
 import ast
@@ -21,12 +21,6 @@ from app.core.encrypted_types import EncryptedDate, EncryptedJSON, EncryptedText
 pytestmark = pytest.mark.unit
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-
-# Encrypted types the models use but a rotation does not need to visit, with the
-# reason. ``prospective_members.status_token`` holds a one-way hash since
-# 20261005_2326_f7c09cfec5b0; rotating it would be meaningless, and its own
-# script (rotate_applicant_status_tokens.py) owns it.
-NOT_ROTATED = {("prospective_members", "status_token")}
 
 
 def _registry(script: str) -> set[tuple[str, str]]:
@@ -49,7 +43,7 @@ def _encrypted_model_columns() -> set[tuple[str, str]]:
         for table in Base.metadata.tables.values()
         for column in table.columns
         if isinstance(column.type, (EncryptedDate, EncryptedJSON, EncryptedText))
-    } - NOT_ROTATED
+    }
 
 
 @pytest.mark.parametrize(
@@ -69,7 +63,7 @@ def test_every_encrypted_column_is_in_the_script(script):
 )
 def test_the_script_names_no_column_that_is_not_encrypted(script):
     """Rotating a plaintext column would encrypt it in place and break readers."""
-    encrypted = _encrypted_model_columns() | NOT_ROTATED
+    encrypted = _encrypted_model_columns()
     columns = {
         (table.name, column.name)
         for table in Base.metadata.tables.values()
@@ -89,3 +83,18 @@ def test_the_script_names_no_column_that_is_not_encrypted(script):
 
     assert not unknown, f"{script} lists columns that are not encrypted: {unknown}"
     assert all(entry in columns for entry in _registry(script))
+
+
+def test_status_token_is_rotated_because_it_is_ciphertext_not_a_hash():
+    """The hash lives in ``status_token_hash``; ``status_token`` is decrypted.
+
+    20261005_2326_f7c09cfec5b0 added the hash column and kept ``status_token``
+    as ``EncryptedText`` so later pipeline emails can re-send the link. This
+    test once excluded it as "a one-way hash". An unrotated token decrypts to
+    nothing once its key is retired, and ``EncryptedText`` passes the
+    ciphertext through as legacy plaintext, so applicants would be emailed a
+    status link that does not resolve.
+    """
+    assert ("prospective_members", "status_token") in _encrypted_model_columns()
+    for script in ("rotate_encryption_key.py", "reencrypt_to_aesgcm.py"):
+        assert ("prospective_members", "status_token") in _registry(script)

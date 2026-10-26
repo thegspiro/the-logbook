@@ -58,19 +58,45 @@ describe('form grids beside the side navigation', () => {
   });
 });
 
+describe('four-across form grids beside the side navigation, 1024–1279px', () => {
+  const block = ruleContaining('@media (min-width: 1024px) and (max-width: 1279px)');
+
+  it('exists, scoped like the tablet rule', () => {
+    expect(block).toMatch(/\.has-side-nav\s+main\s+:is\(/);
+    expect(block).toContain(":not(:is(.modal-overlay, .modal-panel, [role='dialog']) *)");
+    expect(block).toMatch(/:has\(\s*input:not\(/);
+  });
+
+  it('holds four-, five- and six-column field grids at three', () => {
+    expect(block).toContain('.lg\\:grid-cols-4');
+    expect(block).toContain('.md\\:grid-cols-4');
+    expect(block).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
+  });
+
+  it('leaves a grid that already steps down at lg alone', () => {
+    expect(block).toContain(':not(.lg\\:grid-cols-1, .lg\\:grid-cols-2, .lg\\:grid-cols-3)');
+  });
+
+  it('turns spans wider than three into full rows', () => {
+    expect(block).toMatch(/\.lg\\:col-span-4[\s\S]*grid-column: 1 \/ -1;/);
+  });
+});
+
 describe('settings rail', () => {
-  it('stays a strip above the panel until lg', () => {
-    expect(settingsLayout).toContain('lg:flex-row');
-    expect(settingsLayout).toContain('lg:w-52');
-    expect(settingsLayout).not.toMatch(/md:(flex-row|w-52)/);
+  // xl, not lg: at 1024px beside the side navigation a rail beside the panel
+  // left it ~390px. Neither md nor lg may come back.
+  it('stays a strip above the panel until xl', () => {
+    expect(settingsLayout).toContain('xl:flex-row');
+    expect(settingsLayout).toContain('xl:w-52');
+    expect(settingsLayout).not.toMatch(/(?:md|lg):(flex-row|w-52)/);
   });
 
   it('switches its item treatment at the same breakpoint as the layout', () => {
     const item = ruleContaining('@utility settings-subnav-item {');
     const active = ruleContaining('@utility settings-subnav-item-active');
-    expect(item).toContain('lg:border-l-3');
-    expect(item).not.toMatch(/\bmd:/);
-    expect(active).toContain('lg:border-l-red-800');
+    expect(item).toContain('xl:border-l-3');
+    expect(item).not.toMatch(/\b(?:md|lg):/);
+    expect(active).toContain('xl:border-l-red-800');
   });
 });
 

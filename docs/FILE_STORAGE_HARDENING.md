@@ -196,7 +196,8 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | done (#3561) |
 | 8     | Decision 31, step 3 of 3: moving existing files into a bucket, rewrap on S3, backup notice                                                      | done (#3567) |
 | 9     | Decision 32, step 1 of 3: the connection test, status, migration and rewrap made platform-neutral (S3 unchanged)                                | done (#3611) |
-| 10    | Decision 32, step 2 of 3: the Google Drive backend (service account, Shared Drive) and its settings                                             | this change  |
+| 10    | Decision 32, step 2 of 3: the Google Drive backend (service account, Shared Drive) and its settings                                             | done (#3623) |
+| 11    | Decision 32, step 3 of 3: the migration command renamed for every platform, and the Shared Drive backup documentation                           | this change  |
 
 ### Phase 1 — what changed
 
@@ -417,8 +418,8 @@ new layout; before this it reported one as missing on disk.
 references by scheme carrying the org-first key, a configuration with a keyed
 fingerprint, a check, and a backend that encrypts on `put` and decrypts on
 every read. `remote_storage.platforms()` lists the platforms this
-installation can connect to; S3 is the only one so far (`S3Platform` in
-`s3_storage`).
+installation can connect to: S3 (`S3Platform` in `s3_storage`) and, since
+phase 10, Google Drive (`GoogleDrivePlatform` in `google_drive_storage`).
 
 | Was (S3 only)                                        | Now                                                                                   |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -444,7 +445,7 @@ fingerprint did not change.
 | A stored reference | `gdrive://<shared_drive_id>/<file_id>/<org>/<area>/<record>/<name>`; `resolve()` confines it by the key after the id, as for a bucket                  |
 | A new file's id    | Reserved at Drive (`files.generateIds`, 20 at a time) before the upload, so a retried upload replaces the file it made rather than making a second one |
 | Settings           | `google_drive_service_account_key` (encrypted, never returned), `google_drive_shared_drive_id`, optional `google_drive_folder_id`                      |
-| Connection test    | The shared Test and switch: write, read back and delete a probe in the chosen folder; the account needs the Content manager role so it can delete      |
+| Connection test    | The shared Test and switch: write, read back and delete a probe in the chosen folder; the account needs the Content manager role so it can trash       |
 
 `RemoteBackend.ref_for` may now ask the store, so it runs off the event loop
 with the upload, and the migration assigns each file's reference when it
@@ -454,6 +455,28 @@ cover Drive. Step 3 renames the S3-named command and finishes the docs.
 
 The old OAuth client ID and secret fields were read by nothing; the API still
 accepts them, the screens no longer ask for them.
+
+**Corrected 2026-10-25: a delete moves the file to the Shared Drive's trash.**
+As shipped, a delete was `files.delete`, which Google allows on a Shared Drive
+only to the Manager role. The Content manager role the setup asks for may only
+trash, so the connection test could not remove its probe and failed every
+time; the in-memory Drive in the tests accepted the delete, which is why
+nothing caught it. The fake now refuses `files.delete` to a Content manager as
+Drive does, and a delete is `files.update` with `trashed: true`, which Google
+empties after 30 days.
+
+### Phase 11 — one command for every platform, and backing up a Shared Drive (2026-10-25)
+
+| Piece                | Where                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| The move             | `scripts/migrate_uploads_to_remote.py`; `migrate_uploads_to_s3.py` stays as a one-line alias that runs it, for runbooks and old hosts |
+| Inventory            | `--stores`, with `--buckets` still accepted; the JSON it prints is unchanged, `bucket` naming the bucket or the drive                 |
+| Backups              | `backup.sh` asks for the new name and falls back to the old one, so an updated host works against an older backend image              |
+| Shared Drive backups | `docs/BACKUP.md`: the drive's trash restores a file with its id; a copy kept elsewhere is a new file, so a reference cannot find it   |
+
+The manifest directory and kind keep their S3-era names, so a manifest from an
+earlier run still rolls back and finalizes. That a Drive copy cannot simply be
+restored is recorded in `docs/KNOWN_LIMITATIONS.md`, not solved here.
 
 ### Found in passing, not in this change
 

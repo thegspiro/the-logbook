@@ -17,8 +17,8 @@ import type { GuestCheckInResult, GuestLookupResult } from '../types/event';
  */
 
 interface GuestEmailSignInProps {
-  code: string;
-  eventId: string;
+  /** The guest QR code's public API base: a room display's, or an event's own. */
+  apiBase: string;
   onSignedIn: (result: GuestCheckInResult, displayName: string) => void;
 }
 
@@ -32,7 +32,7 @@ const errorDetail = (body: unknown, fallback: string): string => {
   return typeof detail === 'string' ? detail : fallback;
 };
 
-export const GuestEmailSignIn: React.FC<GuestEmailSignInProps> = ({ code, eventId, onSignedIn }) => {
+export const GuestEmailSignIn: React.FC<GuestEmailSignInProps> = ({ apiBase, onSignedIn }) => {
   const [email, setEmail] = useState('');
   // Honeypot. Hidden from real users, so anything here came from a bot.
   const [website, setWebsite] = useState('');
@@ -53,8 +53,6 @@ export const GuestEmailSignIn: React.FC<GuestEmailSignInProps> = ({ code, eventI
     }
   }, [step]);
 
-  const base = `/api/public/v1/display/${code}/events/${eventId}`;
-
   const backToEmail = (nextHint: string | null, nextError: string | null = null) => {
     setStep({ kind: 'email' });
     setHint(nextHint);
@@ -71,7 +69,7 @@ export const GuestEmailSignIn: React.FC<GuestEmailSignInProps> = ({ code, eventI
     setError(null);
     setHint(null);
     try {
-      const response = await fetch(`${base}/guest-lookup`, {
+      const response = await fetch(`${apiBase}/guest-lookup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: typed, hp_website: website || undefined }),
@@ -100,7 +98,7 @@ export const GuestEmailSignIn: React.FC<GuestEmailSignInProps> = ({ code, eventI
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`${base}/guest-confirm`, {
+      const response = await fetch(`${apiBase}/guest-confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirm_token: token }),

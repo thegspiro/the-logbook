@@ -273,7 +273,7 @@ reopening, correcting and re-finalizing updates that row in place. `/finalize`
 and `/reopen` on a session run the event's own finalize/reopen under the event
 lock. A member's check-in record is promoted to their completed record rather
 than duplicated. Training events do not credit admin hours. Officer guide:
-[Finalizing a Training Session](../docs/training/02-training.md#finalizing-a-training-session).
+[Finalizing a Training Session](https://github.com/thegspiro/the-logbook/blob/main/docs/training/02-training.md#finalizing-a-training-session).
 
 **Sign-off is governed by `require_completion_confirmation`.** When `false`
 (the default), finalizing completes the records immediately with no officer
@@ -644,7 +644,7 @@ third of the course by an hour.
 
 The syllabus is a **template**; a cohort is a **materialized copy**. Nearly every
 surprise comes from that distinction. The full table lives in
-[docs/TRAINING_PROGRAMS.md](../docs/TRAINING_PROGRAMS.md#edge-cases--things-that-surprise-people);
+[docs/TRAINING_PROGRAMS.md](https://github.com/thegspiro/the-logbook/blob/main/docs/TRAINING_PROGRAMS.md#edge-cases--things-that-surprise-people);
 the ones that come up most:
 
 - **Reordering changes the order, not the dates.** `sequence` and `day_offset`
@@ -770,7 +770,7 @@ A candidate **fails** if ANY of the following are true:
 
 Autosave covers a locked phone or killed tab while the device has signal; the
 offline queue covers an evaluation run with **no connectivity at all** (see
-[SKILLS_TESTING_OFFLINE_PLAN.md](../docs/SKILLS_TESTING_OFFLINE_PLAN.md)):
+[SKILLS_TESTING_OFFLINE_PLAN.md](https://github.com/thegspiro/the-logbook/blob/main/docs/SKILLS_TESTING_OFFLINE_PLAN.md)):
 
 - **Queue** — `frontend/src/utils/skillsTestOffline.ts`, its own IndexedDB
   database `logbook-offline-skills`, one entry per test. On reconnect each
@@ -972,7 +972,7 @@ key, and the credentials are redacted from logs, Sentry and officer-facing
 errors. Its scheduled sync is an hourly pull plus a daily 30-day **review** at
 `config.review_time` (default 02:00, department time); the review ledger is the
 sync log (`sync_type = "review"`). Detail:
-[16-integrations › Setting up Target Solutions](../docs/training/16-integrations.md#setting-up-target-solutions).
+[16-integrations › Setting up Target Solutions](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#setting-up-target-solutions).
 
 ---
 
@@ -1193,11 +1193,11 @@ should not have been able to open.
 
 ## Related Documentation
 
-- **[Skills Testing Training Guide](../docs/training/09-skills-testing.md)** — Skills testing user guide with realistic NREMT example
-- **[Skills Testing Feature Spec](../docs/SKILLS_TESTING_FEATURE.md)** — Full requirements and data model
-- **[Skills Testing Offline Support](../docs/SKILLS_TESTING_OFFLINE_PLAN.md)** — Design and build record for offline scoring
-- **[Training User Guide](../docs/training/02-training.md)** — End-user training guide
-- **[Training Compliance Calculations](../docs/training-compliance-calculations.md)** — Formula details and edge cases
-- **[Training Waivers & LOA](../backend/app/docs/TRAINING_WAIVERS.md)** — Waiver system documentation
-- **[Training Programs](../docs/TRAINING_PROGRAMS.md)** — Comprehensive training programs guide
-- **[Training Integrations](../docs/training/16-integrations.md)** — External provider setup
+- **[Skills Testing Training Guide](https://github.com/thegspiro/the-logbook/blob/main/docs/training/09-skills-testing.md)** — Skills testing user guide with realistic NREMT example
+- **[Skills Testing Feature Spec](https://github.com/thegspiro/the-logbook/blob/main/docs/SKILLS_TESTING_FEATURE.md)** — Full requirements and data model
+- **[Skills Testing Offline Support](https://github.com/thegspiro/the-logbook/blob/main/docs/SKILLS_TESTING_OFFLINE_PLAN.md)** — Design and build record for offline scoring
+- **[Training User Guide](https://github.com/thegspiro/the-logbook/blob/main/docs/training/02-training.md)** — End-user training guide
+- **[Training Compliance Calculations](https://github.com/thegspiro/the-logbook/blob/main/docs/training-compliance-calculations.md)** — Formula details and edge cases
+- **[Training Waivers & LOA](https://github.com/thegspiro/the-logbook/blob/main/backend/app/docs/TRAINING_WAIVERS.md)** — Waiver system documentation
+- **[Training Programs](https://github.com/thegspiro/the-logbook/blob/main/docs/TRAINING_PROGRAMS.md)** — Comprehensive training programs guide
+- **[Training Integrations](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md)** — External provider setup

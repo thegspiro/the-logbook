@@ -797,13 +797,13 @@ The election system uses database-level constraints to prevent double-voting:
 ### Authentication & Token Security
 
 - **Token Storage**: Auth tokens live in **httpOnly cookies** set by the backend and are never readable by JavaScript. Only a non-sensitive `has_session` flag is kept in localStorage, to decide whether a page refresh should attempt to restore the session. CSRF is handled by double-submit (`csrf_token` cookie echoed as an `X-CSRF-Token` header on state-changing requests)
-- **Onboarding session storage**: The onboarding identifier is kept in **`sessionStorage`** (`onboarding_session_id`), not localStorage. It is a bearer credential — sent as `X-Session-ID`, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs on a shared or station-kiosk machine. Identifiers written by older clients are deleted on load and on clear. Its CSRF companion (`onboarding_csrf_token`) is a `SameSite=Strict` cookie, and the server-side session carries a 30-minute sliding expiry. The wizard's non-sensitive answers (`onboarding-storage`) remain in localStorage by design, which is why a restarted browser can repaint the form while the session behind it is gone — see [`docs/ONBOARDING_FLOW.md`](../docs/ONBOARDING_FLOW.md)
+- **Onboarding session storage**: The onboarding identifier is kept in **`sessionStorage`** (`onboarding_session_id`), not localStorage. It is a bearer credential — sent as `X-Session-ID`, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs on a shared or station-kiosk machine. Identifiers written by older clients are deleted on load and on clear. Its CSRF companion (`onboarding_csrf_token`) is a `SameSite=Strict` cookie, and the server-side session carries a 30-minute sliding expiry. The wizard's non-sensitive answers (`onboarding-storage`) remain in localStorage by design, which is why a restarted browser can repaint the form while the session behind it is gone — see [`docs/ONBOARDING_FLOW.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/ONBOARDING_FLOW.md)
 - **Concurrent Refresh Protection**: Multiple simultaneous 401 responses share a single token refresh promise — prevents replay detection from invalidating the session
 - **Account Lockout**: Failed login counter persists correctly via explicit database commit (not rolled back by HTTPException)
 - **Session Revocation**: Logout properly invalidates the server-side session record
 
 For a comprehensive security review of this module, see
-[`docs/module-audit/elections.md`](../docs/module-audit/elections.md).
+[`docs/module-audit/elections.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/module-audit/elections.md).
 
 ---
 
@@ -841,7 +841,7 @@ All API endpoints follow a strict policy of **never exposing internal details** 
 ## Privacy & Data Subject Rights
 
 Aligned with ISO/IEC 27701 and the HIPAA right of access. See
-[docs/COMPLIANCE.md](../docs/COMPLIANCE.md) for the full control inventory.
+[docs/COMPLIANCE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/COMPLIANCE.md) for the full control inventory.
 
 ### Personal data export (portability)
 

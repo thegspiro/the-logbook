@@ -2207,15 +2207,24 @@ There is no single "lifecycle" page. Each task in a member's life — leave,
 leaving, coming back, returning gear — has its own screen, in the place people
 already look. The table below shows where each one lives.
 
-**Members Administration** has four tabs: **Member Management**, **Add
-Member**, **Import Members** and **Settings**. Adding and importing members
-need their own permission.
+**Members Administration** is laid out like Training, Events, Scheduling and
+Inventory Administration: three area cards, and under them a strip of the
+chosen area's pages with a line naming the open one.
+
+| Area             | Pages                                                         |
+| ---------------- | ------------------------------------------------------------- |
+| **Roster**       | **Member Management**                                         |
+| **Add & Import** | **Add Member**, **Import Members**, **Import Qualifications** |
+| **Settings**     | **Settings**                                                  |
+
+Adding and importing members need their own permission; without it, **Add &
+Import** holds only **Import Qualifications**.
 
 ![The Members Admin hub, captured before its Settings tab was added](./images/01-22-member-lifecycle.png)
 
 **What sits above the tabs.** Members Administration opens like the Training,
 Inventory and Events administration pages. It has a header, **four headline
-numbers**, a **Needs attention** list, then the tabs. Your department chooses
+numbers**, a **Needs attention** list, then the area cards. Your department chooses
 three of the numbers on the hub's **Settings** tab. The fourth is always the
 count the **Needs attention** list is about. See
 [Choosing the metrics](./08-admin-reports.md#choosing-the-metrics).

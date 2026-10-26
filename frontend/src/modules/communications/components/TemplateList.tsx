@@ -49,6 +49,8 @@ import {
   Store,
   Lightbulb,
   PackageCheck,
+  BadgeCheck,
+  Link2,
 } from 'lucide-react';
 import { formatNumber } from '../../../utils/dateFormatting';
 import type { EmailTemplate } from '../types';
@@ -86,6 +88,16 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   },
   duplicate_application: { icon: Copy, label: 'Duplicate Application', color: 'text-slate-500' },
   application_withdrawn: { icon: FileX, label: 'Application Withdrawn', color: 'text-slate-500' },
+  application_step_completed: {
+    icon: BadgeCheck,
+    label: 'Application Step Completed',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_status_link: {
+    icon: Link2,
+    label: 'Application Status Link',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
   suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-700 dark:text-amber-600' },
   equipment_request_update: {
     icon: PackageCheck,
@@ -143,15 +155,17 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
   {
     id: 'members',
     label: 'Members & Accounts',
+    types: ['welcome', 'password_reset', 'it_password_notification', 'member_dropped', 'member_archived'],
+  },
+  {
+    id: 'prospective',
+    label: 'Prospective Members',
     types: [
-      'welcome',
-      'password_reset',
-      'it_password_notification',
-      'member_dropped',
-      'member_archived',
       'inactivity_warning',
       'duplicate_application',
       'application_withdrawn',
+      'application_step_completed',
+      'application_status_link',
     ],
   },
   {

@@ -1,3 +1,24 @@
+# October 25–26, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                           | Now in                                                                                                      |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Guest check-in QR code for any event; Add guest and Sign in from the event page | [04 — Events & Meetings](./04-events-meetings.md)                                                           |
+| Embedding a public form on your website                                         | [07 — Documents & Forms](./07-documents-forms.md)                                                           |
+| Edit and delete notification rules                                              | [07 — Documents & Forms](./07-documents-forms.md)                                                           |
+| Edit and retire grant opportunities                                             | [12 — Grants](./12-grants-fundraising.md)                                                                   |
+| Medical screening falls due by frequency; waivers listed                        | [13 — Medical Screening](./13-medical-screening.md)                                                         |
+| Pipeline stage email template; next meeting on the status page                  | [15 — Prospective Members](./15-prospective-members.md)                                                     |
+| Yes / No privacy choices                                                        | [17 — Privacy](./17-privacy-data-rights.md)                                                                 |
+| Shared area navigation for Members, Events and Store                            | [01](./01-membership.md), [04](./04-events-meetings.md), [18](./18-storefront.md) (written with the change) |
+| Encrypted phone numbers and addresses; Google Drive storage                     | Operator-facing: [`UPGRADING.md`](../UPGRADING.md), `BACKUP.md`                                             |
+
+---
+
 # October 5–6, 2026 workflow updates
 
 > **This lesson is an index.** Each module guide describes how its screens work

@@ -936,11 +936,11 @@ class ElectionSettingsUpdate(BaseModel):
 
     default_voting_method: Optional[str] = None
     default_victory_condition: Optional[str] = None
-    default_victory_percentage: Optional[int] = None
+    default_victory_percentage: Optional[int] = Field(None, ge=1, le=100)
     default_anonymous_voting: Optional[bool] = None
     default_allow_write_ins: Optional[bool] = None
     default_quorum_type: Optional[str] = None
-    default_quorum_value: Optional[int] = None
+    default_quorum_value: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     # The settings screen's 1-10 range was advisory only: the browser flagged
     # rangeOverflow and the API still stored 111 behind "All changes saved".
     # 0 would silently refuse every delegation, so the floor is 1.
@@ -1094,6 +1094,20 @@ async def update_election_settings(
     for api_field, settings_field in default_fields.items():
         if api_field in update_data:
             election_defaults[settings_field] = update_data[api_field]
+
+    # Checked on the merged defaults: an update may carry only the type or only
+    # the value, so neither field alone says whether the pair is a valid percentage.
+    stored_quorum_value = election_defaults.get("quorum_value")
+    if (
+        ("default_quorum_type" in update_data or "default_quorum_value" in update_data)
+        and election_defaults.get("quorum_type") == "percentage"
+        and stored_quorum_value is not None
+        and stored_quorum_value > 100
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Percentage quorum cannot exceed 100",
+        )
 
     if "proxy_voting_enabled" in update_data:
         proxy_config["enabled"] = update_data["proxy_voting_enabled"]
@@ -2695,6 +2709,7 @@ async def delete_candidate(
 
     candidate_name = candidate.name
     candidate_position = candidate.position
+    released = await service.release_merged_write_ins(election_id, candidate.id)
     await db.delete(candidate)
     await db.commit()
 
@@ -2708,6 +2723,7 @@ async def delete_candidate(
             "candidate_id": str(candidate_id),
             "candidate_name": candidate_name,
             "position": candidate_position,
+            "write_in_merges_released": released,
         },
         user_id=str(current_user.id),
     )

@@ -97,7 +97,7 @@ describe('TrainingAdminPage', () => {
       expect.stringContaining('Compliance Reporting'),
       expect.stringContaining('Settings & Data'),
     ]);
-    expect(areaTab('Curriculum')).toHaveTextContent('What members must complete, and the courses that count');
+    expect(areaTab('Curriculum')).toHaveAccessibleDescription('What members must complete, and the courses that count');
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
   });
 
@@ -264,9 +264,11 @@ describe('TrainingAdminPage', () => {
     window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');
     renderWithRouter(<TrainingAdminPage />);
 
-    await waitFor(() => expect(areaTab('Records')).toHaveTextContent('3 need attention'));
+    await waitFor(() =>
+      expect(areaTab('Records')).toHaveAccessibleDescription(expect.stringContaining('3 need attention'))
+    );
     expect(screen.getByRole('tab', { name: /Submissions to Review/ })).toHaveTextContent('3 need attention');
-    expect(areaTab('Overview')).not.toHaveTextContent('need attention');
+    expect(areaTab('Overview')).not.toHaveAccessibleDescription(expect.stringContaining('need attention'));
   });
 
   it('shows no badges when the summary cannot be loaded', async () => {

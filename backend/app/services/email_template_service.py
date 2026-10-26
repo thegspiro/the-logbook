@@ -610,6 +610,34 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Date the applicant withdrew, in the department's timezone",
         },
     ],
+    "application_step_completed": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "step_name", "description": "Name of the completed pipeline stage"},
+    ],
+    "application_status_link": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "status_url", "description": "Link to the application status page"},
+        {
+            "name": "custom_message",
+            "description": "The stage's custom message, as written",
+        },
+        {
+            "name": "custom_message_html",
+            "description": (
+                "The stage's custom message as a paragraph, omitted entirely "
+                "when the stage has none"
+            ),
+        },
+        {
+            "name": "custom_message_text",
+            "description": (
+                "The stage's custom message followed by a blank line, omitted "
+                "entirely when the stage has none (for the plain-text body)"
+            ),
+        },
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -1267,6 +1295,23 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "withdrawal_date": "March 3, 2026",
         }
     ),
+    "application_step_completed": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "step_name": "Background Check",
+        }
+    ),
+    "application_status_link": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "status_url": "https://example.com/application-status/sample-token",
+            "custom_message": "Your interview will be scheduled next.",
+            "custom_message_html": "<p>Your interview will be scheduled next.</p>",
+            "custom_message_text": "Your interview will be scheduled next.\n\n",
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1513,6 +1558,8 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "event_request_status": {"contact_name": "full"},
     "duplicate_application": {"applicant_name": "full"},
     "application_withdrawn": {"applicant_name": "full"},
+    "application_step_completed": {"first_name": "first", "applicant_name": "full"},
+    "application_status_link": {"first_name": "first", "applicant_name": "full"},
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
@@ -2436,6 +2483,58 @@ DEFAULT_APPLICATION_WITHDRAWN_SUBJECT = (
     "Your application has been withdrawn — {{organization_name}}"
 )
 
+# Sent to an applicant when a stage marked "notify the applicant on
+# completion" is completed. The wording is what the pipeline sent when this
+# email was built in code, so a department that never edits it sees no change.
+DEFAULT_APPLICATION_STEP_COMPLETED_HTML = build_shell(
+    "{{step_name}} Complete",
+    """        <p>Hi {{first_name}},</p>
+        <p>We're writing to let you know that the <strong>{{step_name}}</strong>
+        step of your membership application has been completed.</p>
+        <p>We'll be in touch with next steps soon.</p>""",
+    accent=ACCENT_BLUE,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_STEP_COMPLETED_TEXT = """{{step_name}} Complete
+
+Hi {{first_name}},
+
+The {{step_name}} step of your membership application has been completed.
+
+We'll be in touch with next steps soon.
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_STEP_COMPLETED_SUBJECT = (
+    "Application Update — {{step_name}} Complete"
+)
+
+# Sent by an "Enable Status Page" stage with the applicant's private status
+# link. The stage stays open when this email cannot be sent, so a coordinator
+# can see the applicant never received the link.
+DEFAULT_APPLICATION_STATUS_LINK_HTML = build_shell(
+    "Track Your Membership Application",
+    """        <p>Hi {{first_name}},</p>
+        {{custom_message_html}}
+        <p>You can now follow the progress of your membership application
+        online.</p>
+""" + action("{{status_url}}", "Track Your Application"),
+    accent=ACCENT_BLUE,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_STATUS_LINK_TEXT = """Track Your Membership Application
+
+Hi {{first_name}},
+
+{{custom_message_text}}You can now follow the progress of your membership
+application online: {{status_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_STATUS_LINK_SUBJECT = "Track Your Membership Application"
+
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
 # department's control for good, so the text stays in the application. An
@@ -3255,6 +3354,33 @@ def _append_footer_html(html_body: str, footer_html: str) -> str:
     return html_body.rstrip() + "\n" + footer_html
 
 
+# Context keys for render()'s appendix. Underscored so an admin's template
+# cannot collide with them by naming a variable it expects to be blank.
+_APPENDIX_HTML_VAR = "_appendix_html"
+_APPENDIX_TEXT_VAR = "_appendix_text"
+
+
+def _insert_appendix_token(
+    body: str,
+    var_name: str,
+    footer_token: re.Pattern[str],
+    card_tail: Optional[re.Pattern[str]],
+) -> str:
+    """Place ``{{var_name}}`` where a caller's appendix belongs in ``body``.
+
+    Before the footer token when the body asks for its footer; otherwise
+    before the shell card's closing tail, which is where render() will put
+    the footer; otherwise at the end.
+    """
+    token = "{{" + var_name + "}}"
+    match = footer_token.search(body)
+    if match is None and card_tail is not None:
+        match = card_tail.search(body)
+    if match is None:
+        return body.rstrip() + "\n" + token
+    return body[: match.start()] + token + "\n" + body[match.start() :]
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -3677,6 +3803,8 @@ class EmailTemplateService:
         template: EmailTemplate,
         context: Dict[str, Any],
         organization: Optional[Any] = None,
+        appendix_html: Optional[str] = None,
+        appendix_text: Optional[str] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """
         Render a template with the given context variables.
@@ -3691,6 +3819,12 @@ class EmailTemplateService:
         ``organization_phone``, and ``organization_email`` are auto-injected
         into the context (without overwriting values already supplied by the
         caller).
+
+        ``appendix_html`` / ``appendix_text`` are caller-built content placed
+        after the template's own body and ahead of its footer — inside the
+        card when the body is the shell. The HTML must already be escaped.
+        It is substituted as a variable value rather than spliced into the
+        template source, so ``{{...}}`` typed inside it is never expanded.
         """
         ctx = self.build_context(
             context,
@@ -3698,27 +3832,39 @@ class EmailTemplateService:
             footer_key=getattr(template, "footer_key", None),
             template=template,
         )
+        raw_html = template.html_body or ""
+        raw_text = template.text_body
+        if appendix_html:
+            ctx[_APPENDIX_HTML_VAR] = appendix_html
+            raw_html = _insert_appendix_token(
+                raw_html, _APPENDIX_HTML_VAR, _FOOTER_HTML_TOKEN, _CARD_TAIL
+            )
+        # A template with no text body is sent HTML-only; an appendix alone
+        # would make a text alternative missing the template's own message.
+        if appendix_text and raw_text:
+            ctx[_APPENDIX_TEXT_VAR] = appendix_text
+            raw_text = _insert_appendix_token(
+                raw_text, _APPENDIX_TEXT_VAR, _FOOTER_TEXT_TOKEN, None
+            )
 
         # The subject becomes the SMTP Subject: header and the text body the
         # text/plain alternative — neither is markup, so neither is escaped.
         # Only html_body is.
         subject = self._replace_variables(template.subject, ctx, escape_html=False)
-        html_body = self._replace_variables(template.html_body, ctx)
+        html_body = self._replace_variables(raw_html, ctx)
         # A footer names its department, so with no organization to resolve
         # it against there is nothing honest to append.
         append_footer = organization is not None
         if append_footer and not _FOOTER_HTML_TOKEN.search(template.html_body or ""):
             html_body = _append_footer_html(html_body, str(ctx.get("footer_html", "")))
         text_body = None
-        if template.text_body:
-            text_body = self._replace_variables(
-                template.text_body, ctx, escape_html=False
-            )
+        if raw_text:
+            text_body = self._replace_variables(raw_text, ctx, escape_html=False)
             footer_text = str(ctx.get("footer_text", "")).strip()
             if (
                 append_footer
                 and footer_text
-                and not _FOOTER_TEXT_TOKEN.search(template.text_body)
+                and not _FOOTER_TEXT_TOKEN.search(raw_text)
             ):
                 text_body = text_body.rstrip() + "\n\n" + footer_text
 
@@ -3902,6 +4048,8 @@ class EmailTemplateService:
         template: EmailTemplate,
         context: Dict[str, Any],
         organization: Optional[Any] = None,
+        appendix_html: Optional[str] = None,
+        appendix_text: Optional[str] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """Render a template without requiring a DB session.
 
@@ -3911,7 +4059,13 @@ class EmailTemplateService:
         """
         # Create a lightweight instance — render() does not use self.db
         instance = cls.__new__(cls)
-        return instance.render(template, context, organization=organization)
+        return instance.render(
+            template,
+            context,
+            organization=organization,
+            appendix_html=appendix_html,
+            appendix_text=appendix_text,
+        )
 
     @classmethod
     def render_default(
@@ -3983,6 +4137,8 @@ class EmailTemplateService:
     # HTML (e.g. item tables, logo <img> tags).  These are built by
     # trusted backend code and must NOT be HTML-escaped during rendering.
     _RAW_HTML_VARIABLES: set = {
+        # render()'s appendix: built and escaped by the caller.
+        _APPENDIX_HTML_VAR,
         "items_list_html",
         "items_issued_html",
         "items_returned_html",
@@ -4332,6 +4488,30 @@ class EmailTemplateService:
             "description": (
                 "Sent to an applicant who withdraws their own application "
                 "from their application status page, confirming it is closed."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_STEP_COMPLETED,
+            "footer": "public",
+            "name": "Application Step Completed",
+            "subject": DEFAULT_APPLICATION_STEP_COMPLETED_SUBJECT,
+            "html": DEFAULT_APPLICATION_STEP_COMPLETED_HTML,
+            "text": DEFAULT_APPLICATION_STEP_COMPLETED_TEXT,
+            "description": (
+                "Sent to an applicant when a pipeline stage set to notify "
+                "them on completion is completed."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_STATUS_LINK,
+            "footer": "public",
+            "name": "Application Status Link",
+            "subject": DEFAULT_APPLICATION_STATUS_LINK_SUBJECT,
+            "html": DEFAULT_APPLICATION_STATUS_LINK_HTML,
+            "text": DEFAULT_APPLICATION_STATUS_LINK_TEXT,
+            "description": (
+                "Sent to an applicant by an Enable Status Page stage, with "
+                "the private link to follow their application online."
             ),
         },
         {

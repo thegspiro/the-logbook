@@ -7,7 +7,13 @@ leaking to API clients while passing through safe validation messages.
 Pure logic; no DB.
 """
 
-from app.core.utils import _GENERIC_ERROR, safe_error_detail, sanitize_error_message
+from app.core.utils import (
+    _GENERIC_ERROR,
+    MAX_ERROR_DETAIL_LENGTH,
+    list_within_detail_limit,
+    safe_error_detail,
+    sanitize_error_message,
+)
 
 
 class TestSafeErrorDetail:
@@ -79,6 +85,40 @@ class TestSanitizeErrorMessage:
 
     def test_overlong_message_suppressed(self):
         assert sanitize_error_message("y" * 400) == _GENERIC_ERROR
+
+
+class TestListWithinDetailLimit:
+    """A refusal that lists everything wrong must still fit the cap above,
+    or the user is told nothing at all."""
+
+    def test_a_short_list_is_kept_whole(self):
+        assert (
+            list_within_detail_limit("Blocked: ", ["fire", "ems"], ".")
+            == "Blocked: fire, ems."
+        )
+
+    def test_a_long_list_keeps_what_fits_and_counts_the_rest(self):
+        items = [f"compartment number {n:02d}" for n in range(40)]
+        message = list_within_detail_limit("Blocked: ", items, ".")
+
+        assert len(message) <= MAX_ERROR_DETAIL_LENGTH
+        assert message.startswith("Blocked: compartment number 00, ")
+        shown = message.count("compartment number")
+        assert message.endswith(f", and {40 - shown} more.")
+        assert safe_error_detail(ValueError(message)) == message
+
+    def test_the_separator_is_used_for_the_count_too(self):
+        message = list_within_detail_limit("X: ", ["a" * 150] * 3, separator="; ")
+        assert message == "X: " + "a" * 150 + "; and 2 more"
+
+    def test_an_item_too_long_to_fit_alone_is_clipped(self):
+        message = list_within_detail_limit("Blocked: ", ["z" * 500, "b"], ".")
+
+        assert len(message) == MAX_ERROR_DETAIL_LENGTH
+        assert message.endswith("…, and 1 more.")
+
+    def test_an_empty_list_is_just_the_frame(self):
+        assert list_within_detail_limit("Blocked: ", [], ".") == "Blocked: ."
 
 
 if __name__ == "__main__":  # pragma: no cover

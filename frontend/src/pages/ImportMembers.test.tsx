@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import ImportMembers from './ImportMembers';
@@ -924,5 +924,69 @@ describe('ImportMembers — a role column naming a rank', () => {
         expect.objectContaining({ role_ids: ['role-1'], rank: 'Firefighter' })
       );
     });
+  });
+});
+
+// The file input is display:none, so the zone is the only way to it. It was a
+// clickable <div>: no keyboard user could choose a file, and the "or drag and
+// drop" it offered handled no drop.
+describe('ImportMembers — choosing the file', () => {
+  beforeEach(() => {
+    mockGetRoles.mockReset();
+    mockGetRoles.mockResolvedValue([{ id: 'member-role', slug: 'member', name: 'Member' }]);
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue([]);
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+  });
+
+  const csvFile = () =>
+    new File(['first_name,last_name,email\nAda,Lovelace,ada@example.com\n'], 'members.csv', { type: 'text/csv' });
+
+  it('opens the file picker from the keyboard', async () => {
+    renderWithRouter(<ImportMembers />);
+    const zone = screen.getByRole('button', { name: /^Choose a CSV file to upload/ });
+    const pick = vi.spyOn(screen.getByTestId<HTMLInputElement>('csv-file-input'), 'click').mockImplementation(() => {});
+
+    zone.focus();
+    expect(zone).toHaveFocus();
+    await userEvent.setup().keyboard('{Enter}');
+    await userEvent.setup().keyboard(' ');
+
+    expect(pick).toHaveBeenCalledTimes(2);
+  });
+
+  it('accepts a dropped CSV file', async () => {
+    renderWithRouter(<ImportMembers />);
+    fireEvent.drop(screen.getByRole('button', { name: /^Choose a CSV file to upload/ }), {
+      dataTransfer: { files: [csvFile()] },
+    });
+
+    expect(await screen.findByRole('button', { name: /^members\.csv/ })).toBeInTheDocument();
+  });
+
+  // WCAG 2.5.3: the zone is named by what it shows, so saying what is on
+  // screen reaches it — an aria-label of its own drifted from its text.
+  it('names the zone by its visible text before and after a file is chosen', async () => {
+    renderWithRouter(<ImportMembers />);
+    const zone = screen.getByRole('button', { name: /^Choose a CSV file to upload/ });
+    expect(zone).toHaveAccessibleName('Choose a CSV file to upload or drag and drop');
+
+    await userEvent.setup().upload(screen.getByTestId<HTMLInputElement>('csv-file-input'), csvFile());
+    expect(await screen.findByRole('button', { name: /^members\.csv/ })).toHaveAccessibleName(
+      /^members\.csv [\d.]+ KB Choose a different file$/
+    );
+  });
+
+  it('keeps Remove file outside the zone, so it is a button of its own', async () => {
+    renderWithRouter(<ImportMembers />);
+    await userEvent.setup().upload(screen.getByTestId<HTMLInputElement>('csv-file-input'), csvFile());
+
+    const zone = await screen.findByRole('button', { name: /^members\.csv/ });
+    const remove = screen.getByRole('button', { name: 'Remove file' });
+    expect(zone).not.toContainElement(remove);
+
+    await userEvent.setup().click(remove);
+    expect(screen.getByRole('button', { name: /^Choose a CSV file to upload/ })).toBeInTheDocument();
   });
 });

@@ -86,6 +86,7 @@ def _redact(value: Optional[str]) -> Optional[str]:
 _EMAIL_SECRET_FIELDS = frozenset(
     {
         "google_app_password",
+        "google_service_account_key",
         "microsoft_app_password",
         "microsoft_client_secret",
         "smtp_password",
@@ -233,9 +234,32 @@ class EmailServiceSettings(BaseModel):
     cloudflare_api_token: Optional[str] = Field(
         None, description="Cloudflare API token with email sending permission"
     )
-    # Gmail / Google Workspace — signs in to smtp.gmail.com as from_email
+    # Gmail / Google Workspace — signs in to smtp.gmail.com as from_email with
+    # an App Password, or sends through the Gmail API as from_email with a
+    # domain-wide delegated service account (Workspace only).
+    google_auth_method: str = Field(
+        default="app_password",
+        description="Gmail authentication: app_password or service_account",
+    )
     google_app_password: Optional[str] = Field(
         None, description="Google App Password for the sending account"
+    )
+    google_service_account_key: Optional[str] = Field(
+        None,
+        description=(
+            "Google service account JSON key with domain-wide delegation for "
+            "the gmail.send scope"
+        ),
+    )
+    # Derived from google_service_account_key on every validation, never
+    # stored as an independent choice: the key is redacted on read, and this
+    # is the value an administrator has to authorize in the Admin console.
+    google_service_account_client_id: Optional[str] = Field(
+        None,
+        description=(
+            "Client ID of the saved service account key, for the Google Admin "
+            "console's domain-wide delegation screen. Read-only."
+        ),
     )
     # Microsoft 365 — signs in to smtp.office365.com as from_email, with
     # either an App Password (Basic auth) or an app-registration token.
@@ -257,7 +281,7 @@ class EmailServiceSettings(BaseModel):
     )
     # Self-hosted SMTP
     smtp_host: Optional[str] = Field(None, description="SMTP server hostname")
-    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_port: int = Field(default=587, ge=1, le=65535, description="SMTP server port")
     smtp_user: Optional[str] = Field(None, description="SMTP username")
     smtp_password: Optional[str] = Field(None, description="SMTP password")
     smtp_encryption: str = Field(
@@ -298,6 +322,21 @@ class EmailServiceSettings(BaseModel):
         self.use_tls = resolved["encryption"] != "none"
         return self
 
+    @model_validator(mode="after")
+    def _derive_service_account_client_id(self) -> "EmailServiceSettings":
+        """Report the saved key's client ID, whatever a caller submitted.
+
+        Reads validate the decrypted key, so this is the stored key's ID; a
+        write that echoes the redaction marker derives None here and the read
+        that follows the write reports the real one.
+        """
+        from app.utils.google_oauth import service_account_client_id
+
+        self.google_service_account_client_id = service_account_client_id(
+            self.google_service_account_key
+        )
+        return self
+
     @field_validator("platform")
     @classmethod
     def _validate_platform(cls, value: str) -> str:
@@ -327,11 +366,31 @@ class EmailServiceSettings(BaseModel):
             )
         return value
 
+    @field_validator("google_auth_method", mode="before")
+    @classmethod
+    def _validate_google_auth_method(cls, value: Any) -> str:
+        """Settle the method, defaulting a stored null to App Password.
+
+        The same reasoning as the Microsoft method: rows written before the
+        service account existed have no method and sign in with a password.
+        """
+        from app.utils.email_providers import GOOGLE_AUTH_METHODS
+
+        if value is None or value == "":
+            return "app_password"
+        if not isinstance(value, str) or value not in GOOGLE_AUTH_METHODS:
+            raise ValueError(
+                "google_auth_method must be one of: "
+                f"{', '.join(GOOGLE_AUTH_METHODS)}"
+            )
+        return value
+
     def redacted(self) -> "EmailServiceSettings":
         """Return a copy with secret fields replaced by redaction markers."""
         copied: EmailServiceSettings = self.model_copy(
             update={
                 "google_app_password": _redact(self.google_app_password),
+                "google_service_account_key": _redact(self.google_service_account_key),
                 "microsoft_app_password": _redact(self.microsoft_app_password),
                 "microsoft_client_secret": _redact(self.microsoft_client_secret),
                 "smtp_password": _redact(self.smtp_password),
@@ -350,6 +409,7 @@ class EmailServiceSettings(BaseModel):
                     "cloudflare_account_id",
                     "microsoft_tenant_id",
                     "microsoft_client_id",
+                    "google_service_account_client_id",
                 ),
                 None,
             )
@@ -772,6 +832,7 @@ class MembershipTier(BaseModel):
     years_required: int = Field(
         default=0,
         ge=0,
+        le=INT32_MAX,
         description="Minimum credited years of service to reach this tier (time away between stints is not counted)",
     )
     sort_order: int = Field(

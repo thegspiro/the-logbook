@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.skills_testing import ResultDisclosure, ResultRelease
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.services.skills_testing_service import SCORE_MODES
 
@@ -87,7 +87,7 @@ class SkillCriterionSchema(BaseModel):
     required: bool = False
     sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     passing_score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
-    max_score: Optional[float] = Field(None, ge=0)
+    max_score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     time_limit_seconds: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     checklist_items: Optional[List[str]] = Field(None, max_length=MAX_CHECKLIST_ITEMS)
     statement_text: Optional[str] = None
@@ -110,7 +110,7 @@ class SkillCriterionSchema(BaseModel):
     # from max_score deliberately: "maximum score" reads as the most a step can
     # earn, and a penalty is never earned, so overloading it would leave a
     # number whose meaning changed silently when the author switched modes.
-    deduction_points: Optional[float] = Field(None, gt=0)
+    deduction_points: Optional[float] = Field(None, gt=0, le=FLOAT32_MAX)
     # Statements only. Whether reading this one aloud is inside the timed
     # evolution. Sheets differ: an opening statement that briefs the candidate
     # before they are in position is read off the clock, while a mid-evolution
@@ -261,7 +261,7 @@ class SkillSheetLibraryItem(BaseModel):
     already_imported: bool = False
 
 
-class SkillTemplateUpdate(BaseModel):
+class SkillTemplateUpdate(RefusesNull):
     """Schema for updating a skill template"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -288,6 +288,10 @@ class SkillTemplateUpdate(BaseModel):
     result_viewer_positions: Optional[List[str]] = Field(
         None, max_length=MAX_RESULT_VIEWER_POSITIONS
     )
+
+    # Nullable columns behind response fields that are plain bool / str: a stored
+    # NULL is written and then fails to serialize on every read of the template.
+    null_refused = frozenset({"visibility", "require_all_critical"})
 
     @field_validator("result_disclosure")
     @classmethod
@@ -361,7 +365,7 @@ class CriterionResultSchema(BaseModel):
     criterion_label: Optional[str] = None
     passed: Optional[bool] = None
     score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
-    time_seconds: Optional[int] = None
+    time_seconds: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     checklist_completed: Optional[List[bool]] = Field(
         None, max_length=MAX_CHECKLIST_ITEMS
     )
@@ -394,7 +398,7 @@ class SectionResultSchema(BaseModel):
     criteria_results: List[CriterionResultSchema] = Field(
         default_factory=list, max_length=MAX_SECTION_CRITERIA
     )
-    section_score: Optional[float] = None
+    section_score: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     section_passed: Optional[bool] = None
     notes: Optional[str] = None
 
@@ -414,7 +418,7 @@ class SkillTestCreate(BaseModel):
     # The template version a test started offline was scored against. The
     # server refuses the create if the sheet has changed since, rather than
     # freezing a snapshot that does not match the scorecard.
-    expected_template_version: Optional[int] = Field(None, ge=1)
+    expected_template_version: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     template_id: UUID
     candidate_id: UUID
     notes: Optional[str] = None
@@ -471,7 +475,7 @@ class SkillTestUpdate(BaseModel):
     # Optimistic concurrency: the version the client last saw. Omit to keep the
     # previous last-write-wins behavior; send it to be refused with 409 rather
     # than silently overwriting a concurrent edit.
-    expected_version: Optional[int] = None
+    expected_version: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     # Set once by the examiner screen when scoring is picked up again on a test
     # that already had time on the clock. Increments resume_count server-side;
     # the client cannot set the count directly, so a replayed save cannot

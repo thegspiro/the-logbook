@@ -6,7 +6,7 @@ Manages compliance configuration, profiles, and report generation/storage.
 
 import html
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -227,6 +227,12 @@ class ComplianceConfigService:
 class ComplianceReportService:
     """Service for generating, storing, and emailing compliance reports."""
 
+    # How long after a scheduled report is stored its email keeps being retried.
+    # The task runs daily, so this is at most that many further attempts: long
+    # enough to ride out a mail outage over a weekend, short enough that a
+    # report nobody has been able to deliver for a week stops being re-sent.
+    UNSENT_EMAIL_RETRY_DAYS = 7
+
     def __init__(self, db: AsyncSession):
         self.db = db
         # What the most recent _email_report did: "sent", "no_recipients" or
@@ -400,6 +406,68 @@ class ComplianceReportService:
             (await self.db.execute(query)).scalars().first()
         )
         return found
+
+    async def retry_unsent_auto_emails(
+        self, organization_id: str
+    ) -> List[tuple[ComplianceReport, str]]:
+        """Re-send scheduled reports that were stored but never emailed.
+
+        The scheduled task generates a period's report on one day only, so an
+        email that failed that day would otherwise never be tried again. Each
+        report is retried on every later daily run for ``UNSENT_EMAIL_RETRY_DAYS``.
+
+        Returns (report, outcome) for every report attempted. Nothing is
+        attempted when the department has no recipients configured, since
+        there is nothing to retry into and the reports were never expected to
+        be emailed.
+
+        Only reports with no ``generated_by`` qualify: a manual report is the
+        officer's own, and its send is the officer's to repeat. The lookup is a
+        locking read, so a second worker waits for the first to stamp
+        ``emailed_at`` and then no longer sees the report; the send goes out
+        before that stamp commits, so a crash between the two sends a second
+        copy, which for a summary with a link is the lesser harm (pitfall #36).
+        """
+        config = (
+            (
+                await self.db.execute(
+                    select(ComplianceConfig).where(
+                        ComplianceConfig.organization_id == organization_id
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not config or not dedupe_addresses(config.report_email_recipients):
+            return []
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            days=self.UNSENT_EMAIL_RETRY_DAYS
+        )
+        unsent = (
+            (
+                await self.db.execute(
+                    select(ComplianceReport)
+                    .where(
+                        ComplianceReport.organization_id == organization_id,
+                        ComplianceReport.generated_by.is_(None),
+                        ComplianceReport.status == ReportStatus.COMPLETED.value,
+                        ComplianceReport.emailed_at.is_(None),
+                        ComplianceReport.generated_at >= cutoff,
+                    )
+                    .order_by(ComplianceReport.generated_at)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        attempted: List[tuple[ComplianceReport, str]] = []
+        for report in unsent:
+            outcome = await self._email_report(report, organization_id)
+            if outcome != "no_recipients":
+                attempted.append((report, outcome))
+        return attempted
 
     async def record_failed_attempt(
         self,

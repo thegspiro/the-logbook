@@ -7,7 +7,7 @@ donations, donors, pledges, and fundraising events.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import (
@@ -750,6 +750,9 @@ class CampaignCreate(CampaignBase):
 
     goal_amount: Decimal = Field(..., ge=0, le=MAX_AMOUNT)
     minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
+    suggested_amounts: Optional[
+        List[Annotated[Decimal, Field(gt=0, le=MAX_GIFT_AMOUNT)]]
+    ] = None
 
     # W69: the form offers a starting status; without this field a campaign
     # created as Active was stored as Draft, and nothing could change it after.
@@ -782,7 +785,9 @@ class CampaignUpdate(BaseModel):
     thank_you_message: Optional[str] = None
     allow_anonymous: Optional[bool] = None
     minimum_donation: Optional[Decimal] = Field(None, ge=0, le=MAX_GIFT_AMOUNT)
-    suggested_amounts: Optional[List[Decimal]] = None
+    suggested_amounts: Optional[
+        List[Annotated[Decimal, Field(gt=0, le=MAX_GIFT_AMOUNT)]]
+    ] = None
     is_restricted: Optional[bool] = None
     restriction_purpose: Optional[str] = Field(None, max_length=2000)
 
@@ -813,8 +818,11 @@ class DonorBase(BaseModel):
 
     model_config = _request_config
 
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
+    # Optional since W69-6: a non-individual donor may give only company_name.
+    # FundraisingService.check_donor_name holds the rule for both create and
+    # update, because an update can change donor_type or clear a name.
+    first_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[str] = Field(None, max_length=255)
     phone: Optional[str] = Field(None, max_length=20)
     address_line1: Optional[str] = Field(None, max_length=255)

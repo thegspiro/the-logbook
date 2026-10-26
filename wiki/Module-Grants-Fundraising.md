@@ -345,6 +345,6 @@ environment flag.
 
 ---
 
-**See also:** [Original design research](../docs/GRANTS_FUNDRAISING_MODULE.md) ·
-[Security review GF-22](../docs/security-review/GF-22-grants-fundraising.md) ·
-[Troubleshooting](../docs/TROUBLESHOOTING.md#grants-module-serialization-issues)
+**See also:** [Original design research](https://github.com/thegspiro/the-logbook/blob/main/docs/GRANTS_FUNDRAISING_MODULE.md) ·
+[Security review GF-22](https://github.com/thegspiro/the-logbook/blob/main/docs/security-review/GF-22-grants-fundraising.md) ·
+[Troubleshooting](https://github.com/thegspiro/the-logbook/blob/main/docs/TROUBLESHOOTING.md#grants-module-serialization-issues)

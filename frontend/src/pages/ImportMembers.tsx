@@ -670,6 +670,7 @@ const ImportMembers: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [importing, setImporting] = useState(false);
   const [validating, setValidating] = useState(false);
   const [preflight, setPreflight] = useState<Preflight | null>(null);
@@ -708,8 +709,8 @@ const ImportMembers: React.FC = () => {
     setProgress(null);
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
+  // One path for a picked file and a dropped one.
+  const acceptFile = (selectedFile: File | undefined) => {
     if (!selectedFile) return;
 
     if (!selectedFile.name.endsWith('.csv')) {
@@ -720,6 +721,10 @@ const ImportMembers: React.FC = () => {
     setFile(selectedFile);
     resetFileState();
     void validateFile(selectedFile);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    acceptFile(event.target.files?.[0]);
   };
 
   const validateFile = async (file: File) => {
@@ -1057,25 +1062,42 @@ const ImportMembers: React.FC = () => {
         <div className="card mb-8 p-8">
           <h2 className="text-theme-text-primary mb-4 font-bold">Step 1: Upload CSV File</h2>
 
+          {/* A button to a keyboard and a screen reader, not only a click
+              target: the file input it opens is display:none and so cannot
+              take focus either, which left no way to choose a file without a
+              mouse. The drop handlers make "or drag and drop" true — the zone
+              offered it and handled no drop. "Remove file" sits outside: a
+              button inside a button is not operable on its own. */}
           <div
+            role="button"
+            tabIndex={0}
             onClick={() => fileInputRef.current?.click()}
-            className="border-theme-input-border cursor-pointer rounded-lg border-2 border-dashed p-12 text-center transition-colors hover:border-blue-500"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              acceptFile(e.dataTransfer.files[0]);
+            }}
+            className={`cursor-pointer rounded-lg border-2 border-dashed p-12 text-center transition-colors hover:border-blue-500 ${
+              isDragging ? 'drop-surface-active' : 'border-theme-input-border'
+            }`}
           >
-            <Upload className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+            <Upload className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
             {file ? (
               <>
                 <p className="text-theme-text-primary mb-1 font-medium">{file.name}</p>
                 <p className="text-theme-text-muted text-sm">{(file.size / 1024).toFixed(2)} KB</p>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFile(null);
-                    resetFileState();
-                  }}
-                  className="touch-target-phone mt-3 text-sm text-red-700 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  Remove file
-                </button>
+                <p className="text-theme-text-muted mt-2 text-sm">Choose a different file</p>
               </>
             ) : (
               <>
@@ -1084,6 +1106,20 @@ const ImportMembers: React.FC = () => {
               </>
             )}
           </div>
+          {file && (
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setFile(null);
+                  resetFileState();
+                }}
+                className="touch-target-phone text-sm text-red-700 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+              >
+                Remove file
+              </button>
+            </div>
+          )}
 
           <input
             ref={fileInputRef}

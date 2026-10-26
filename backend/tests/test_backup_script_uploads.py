@@ -190,10 +190,16 @@ class TestBackupUploads:
         assert not _archive(env).exists()
 
 
-def _install_bucket_check(env: dict[str, str], output: str, exit_code: int = 0):
-    """The backend's ``migrate_uploads_to_s3.py --buckets``, as the docker
-    stub runs it: a host ``python`` on a script under the fake /app."""
-    script = Path(env["STUB_ROOT"]) / "app" / "scripts" / "migrate_uploads_to_s3.py"
+def _install_bucket_check(
+    env: dict[str, str],
+    output: str,
+    exit_code: int = 0,
+    name: str = "migrate_uploads_to_remote.py",
+):
+    """The backend's store inventory, as the docker stub runs it: a host
+    ``python`` on a script under the fake /app. ``name`` is the command an
+    image of that age carries: ``migrate_uploads_to_s3.py`` before 2026-10-25."""
+    script = Path(env["STUB_ROOT"]) / "app" / "scripts" / name
     script.parent.mkdir(parents=True, exist_ok=True)
     script.write_text(
         f"import sys\nsys.stdout.write({output!r})\nsys.exit({exit_code})\n"
@@ -231,7 +237,25 @@ class TestBucketNotice:
             in result.stdout
         )
         log = Path(env["STUB_LOG"]).read_text()
-        assert "migrate_uploads_to_s3.py --buckets" in log
+        assert "migrate_uploads_to_remote.py --stores" in log
+        assert "migrate_uploads_to_s3.py" not in log
+
+    def test_an_older_backend_image_is_asked_by_the_old_name(self, env):
+        """A host script updated before its backend image: the image has only
+        ``migrate_uploads_to_s3.py``, and the notice must still appear."""
+        self._uploads(env)
+        _install_bucket_check(
+            env,
+            '[{"organization_id": "org-1", "platform": "s3", "bucket": "dept-files",'
+            ' "files": 2}]',
+            name="migrate_uploads_to_s3.py",
+        )
+
+        result = _run(env, "backup_uploads")
+
+        assert result.returncode == 0, result.stderr + result.stdout
+        assert "s3 dept-files: 2 file(s) of organization org-1" in result.stdout
+        assert "migrate_uploads_to_s3.py --buckets" in Path(env["STUB_LOG"]).read_text()
 
     def test_no_bucket_files_says_nothing(self, env):
         self._uploads(env)

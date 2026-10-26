@@ -209,6 +209,37 @@ and an owner may want to revisit each:
 
 ---
 
+## Gmail — Sending Through a Service Account (2026-10-25)
+
+Gmail departments on Google Workspace can send through the Gmail API with a
+domain-wide delegated service account (`app/utils/google_oauth.py`,
+`app/services/gmail_api_sender.py`) instead of an App Password. Each of these is
+a known edge an owner should know about:
+
+- **The key can send as anyone in the domain.** Domain-wide delegation cannot be
+  limited to one mailbox; the `gmail.send` scope limits it to sending, not to a
+  sender. Whoever holds the key could send mail as the chief. The key is
+  encrypted at rest and never returned by the API, configuring the method needs
+  `admin.access` (owner decision, 2026-10-25), and the From address is fixed by
+  the saved settings — but the key itself is as powerful as the delegation
+  allows. Microsoft 365's equivalent is narrower: its app registration is granted
+  `SendAs` on one mailbox. Recommend a dedicated Google Cloud project for the
+  key, and delete the key in Google Cloud if it may have leaked.
+- **Not yet proven against a live tenant.** The request shape, the scope and the
+  upload endpoint are taken from Google's own API description bundled with
+  `google-api-python-client`. Three behaviours are taken from Google's
+  documentation without a live test: that the Gmail API delivers to a `Bcc`
+  header and strips it (the sender adds one for recipients not in To or Cc),
+  how a daily sending limit is reported (the sender stops the batch on a
+  message naming a daily limit, or a `Retry-After` longer than 60 seconds), and
+  that the `Message-ID` and `List-Unsubscribe` headers the sender sets are kept.
+- **Onboarding offers App Password only.** A department chooses the service
+  account after setup, in **Settings → Email**, where the `admin.access` check
+  applies. Someone with `settings.manage` alone sees the option disabled.
+- **The connection test is open to `settings.manage`.** It obtains a token as
+  the From address and sends nothing, and a saved key is only used for the From
+  address it was saved with, so it cannot be pointed at another mailbox.
+
 ## Google Workspace — What Account Provisioning Leaves Out (2026-10-15)
 
 The Google Workspace integration creates an account for each applicant
@@ -541,12 +572,12 @@ numbers a column cannot hold, duplicate identifiers, a tracking-mode change
 under a live assignment, the assign URL/body mismatch, category loops) is fixed;
 these were left because each is a policy choice or needs a schema change.
 
-| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                                                                                                                                        |
-| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                                                                                                                                |
-| Numeric request fields with no column behind them     | Open          | Every numeric request field that is stored in a column is now bounded to that column's range, across the whole API, and `tests/test_request_numeric_bounds.py` walks the live routes and fails on a new unbounded one (`tests/request_bound_columns.py` maps each field to its column). 51 fields are listed there as deliberately unbounded because no column limits them: values kept inside JSON columns, values only compared against another value, transient inputs, and values a service validates itself. Those need an owner-chosen business limit (for example `CohortShiftRequest.days`) rather than one invented from a column type. |
-| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Request field still unbounded by choice               | Open          | Every numeric request field is bounded: to its column's range where it has one, to the range its meaning fixes where it does not (a port, a quarter, a weekday number, a percentage), to the 32-bit ceiling for counts and scores stored in JSON, and to 30 days for every reminder lead time (`app/schemas/reminder_limits.py`: 30 days, or 720 hours for `reminder_schedule`). The reminder limit is on request schemas only, so a response still serializes a lead time stored further out by an earlier release. `tests/test_request_numeric_bounds.py` walks the live routes and fails on a new unbounded one. Two membership-number fields are bounded by a schema validator instead (the formatted id must fit its 50-character column). One field remains open because the right ceiling is a department rule nobody has set: how far a class may be shifted (`CohortShiftRequest.days`, which feeds date arithmetic, so an enormous value raises `OverflowError`). Pick a number and the field gets a bound. The election quorum default is bounded from its own meaning: at least 1 and at most the 32-bit ceiling, and at most 100 when its type is a percentage. |
+| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
@@ -644,6 +675,25 @@ owner made, recorded so they are not mistaken for gaps:
   `inactive_since` is separate from the drawer's historical `deactivated_at`,
   which is untouched; an application with no `inactive_since` is never
   auto-purged.
+
+## Prospective Members — The Inactivity "Notify" Checkboxes Have No Reader (2026-10-26)
+
+Pipeline Settings → Inactivity offers **Notify coordinator** (on by default)
+and **Notify applicant**. Both are saved into the pipeline's inactivity
+configuration and **nothing on the backend reads either**. The daily
+inactivity sweep (`process_inactivity_warnings` in
+`membership_pipeline_service.py`) marks overdue applications inactive and
+writes an `inactivity_warning_sent` entry to the activity log, and sends no
+email to anyone, whatever the boxes say. Its docstring claimed it emailed
+coordinators until 2026-10-26.
+
+This is the shape Pitfall #19 forbids: a switch whose only effect is being
+stored. Found while writing the wiki page `Module-Prospective-Members`, which
+says plainly that the boxes do nothing yet. **Owner decision needed:** wire a
+sender (who receives it, how often, and whether an applicant email is wanted at
+all), or remove the two checkboxes from the settings page. Wiring the applicant
+half sends email to people outside the department, so it was not done as a
+side effect of a documentation change.
 
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 
@@ -1033,6 +1083,13 @@ Still open:
   the drives it was added to; the existence check also requires the file to
   be in the drive the reference names, but a download does not repeat that
   check. Rows are written only by the server.
+- **A file deleted from a Shared Drive stays in its trash for 30 days
+  (2026-10-25).** The Content manager role the account is given may trash a
+  file but not delete it outright, and Google empties a Shared Drive's trash
+  after 30 days. The file is encrypted, and until then it still counts against
+  the drive's storage; a drive Manager can empty the trash sooner. Granting the
+  account Manager would allow an outright delete, but also lets it change who
+  belongs to the drive, so it is not asked for.
 - **Resolved 2026-10-22: existing files move with
   `scripts/migrate_uploads_to_s3.py`** (apply, rollback, finalize), and
   `scripts/encrypt_uploads.py --rewrap` reaches bucket objects. Every object
@@ -1042,7 +1099,16 @@ Still open:
 - **Backups do not include buckets, by decision (2026-10-22).**
   `scripts/backup.sh` names the buckets it left out; `docs/BACKUP.md` says how
   to protect them with the provider's tooling. A department that skips that
-  has no second copy of its bucket.
+  has no second copy of its bucket. The same holds for a Google Shared Drive
+  (2026-10-25).
+- **A copy of a Shared Drive cannot simply be put back (2026-10-25).** The
+  Logbook finds a Drive file by its id, and a file copied out and uploaded
+  again is a new file with a new id, so its record still points at the old
+  one. Nothing repoints references yet. Within 30 days the drive's own trash
+  restores a file with its id intact; after that, a copy kept elsewhere has
+  to be matched to its records by file name (each is named after its storage
+  path) and the references updated by hand. A bucket has no such gap: its
+  objects are found by key, so a mirror restores as it is.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.
@@ -1162,6 +1228,32 @@ encrypts every file written under `/app/uploads`. It does not reach:
   see where it is, and on an installation hosting more than one organization
   any organization's `settings.manage` holder confirms for the installation,
   because the key is installation-wide.
+
+## Forms — What a Sensitive Field Does Not Reach (2026-10-25)
+
+**Open, each deliberate.** A field marked Sensitive stores its answers
+encrypted in `form_submissions.sensitive_data` and serves them only to holders
+of `sensitive_answers.view` (see "Sensitive Fields" in
+`docs/FORMS_MODULE.md`). Three things fall outside that:
+
+- **Copies an integration made before the field was marked.** Marking an
+  existing field Sensitive moves the answers held on each submission into the
+  encrypted column. It does not reach a value an integration already copied
+  out — an applicant record created from an interest form, or the answers kept
+  on that applicant's pipeline stage. Mark a field Sensitive before the form
+  is published to avoid this; otherwise those records keep what they were
+  given until they are edited, purged or anonymized.
+- **A submission that arrives while the field is being marked.** A request
+  that loaded the form before the flag was saved writes that one answer to the
+  plain `data` column. The submission screens still withhold it — they decide
+  by the field's current flag, not only by where the answer is stored — but
+  the stored copy is not encrypted. Closing it would mean locking the form row
+  on every submission.
+- **Backups taken before the field was marked.** They hold the plaintext
+  answers, as any pre-change backup does.
+
+`sensitive_answers.view` is granted to no seeded position, so a department
+that wants its membership committee to read these answers grants it by hand.
 
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
@@ -5861,12 +5953,10 @@ category, schedule or check-in rules rather than their presence in the save,
 and the edit form disables those controls and leaves them out. Found on the
 same screen, and left as they are:
 
-- **Saving a draft publishes it.** The edit page does not load `is_draft`, so
-  the form starts from its default and every save sends `is_draft: false`.
-- **A window-type event stored with no lead time is shown, and saved, as 60
-  minutes.** The backend reads a missing lead time on a window-type event as 15,
-  so the first save of an open one moves its check-in window. A finalized
-  one's check-in rules are locked and left alone.
+- **✅ Resolved 2026-10-25 — saving a draft published it, and a window-type
+  event with no stored lead time saved as 60 minutes.** The edit page now
+  loads `is_draft`, and fills a missing lead time with what the backend reads
+  it as (15 on a window-type event, 60 otherwise).
 - **An open event's times are saved at the form's minute precision.** A stored
   start or end with seconds, or one in the hour repeated when clocks fall back,
   can move by those seconds or by an hour on its first save. A finalized
@@ -6145,17 +6235,6 @@ on each department switching on **Require for every member** for them under
 **Administration → Forms & Comms → Member Emails & Texts** (`settings.manage`
 or `organization.update_settings`).
 
-## Shift Reports — "Your Reporting Summary" Counts the Whole Department (2026-09-30)
-
-An officer's **Written by me** view on **Scheduling → Shift Reports** opens with
-a card headed **Your reporting summary** — **Reports written**, **Shift hours
-covered**, **Calls covered**, the crew summary and **Reports written per
-month**. Its figures come from `GET /training/shift-reports/officer-analytics`,
-which totals every report in the organization, not only the viewer's. The list
-below the card is the viewer's own. Either scope the endpoint to the officer or
-retitle the card; until then an officer in a department with several report
-writers reads the department's numbers as their own.
-
 ## AP2-4 — The EVOC Driver Gate Stops Enforcing On A Deleted Apparatus (2026-10-05)
 
 `EvocLevelService.check_driver_evoc_eligibility` answers "may this member drive
@@ -6297,29 +6376,6 @@ connected — or accept that catalog changes reach new organizations only.
 
 See `docs/app-review/integrations.md` → Pass 5.
 
-## Privacy Choices — A Member Cannot Record "No" Without First Recording "Yes" (2026-10-13)
-
-Found driving W59 (`docs/workflow-review/W59-photo-use-consent.md`, W59-3).
-
-- **What the screen offers:** My Account → Privacy → Privacy Choices shows
-  photo use, public roster listing and SMS texts as one checkbox each. An
-  unanswered choice is an unticked box marked "(not answered)".
-- **What goes wrong:** leaving the box unticked records nothing. A member who
-  means "no" must tick it, which records an agreement, and then untick it.
-  - The audit ledger, which is the consent record, then shows an agreement
-    the member never gave.
-  - A member who does not find that trick stays "Not answered". The
-    photo-use roster says those members "can still be asked", so the PIO
-    keeps asking someone who has refused.
-- **Why it was not changed in the review:** an explicit Yes / No choice is
-  the obvious fix, but the same control carries the SMS consent, a TCPA
-  record whose switch also sets the SMS notification preference through a
-  shared handler.
-- **Decisions needed:**
-  - whether each choice becomes an explicit Yes / No;
-  - whether SMS changes with the other two, or keeps its switch on the
-    Notifications section.
-
 ## Finance — Emailed Approvals Cannot Be Re-Sent, and Show the Approver Nothing to Decide On (2026-10-14)
 
 Found driving W62 (`docs/workflow-review/W62-approval-chains-and-finance-settings.md`,
@@ -6447,20 +6503,6 @@ Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10).
   start an application from them. **Decision:** whether they become real,
   seeded opportunities.
 
-## Fundraising — A Donor Must Have a Person's Name (2026-10-15)
-
-Found driving W69 (`docs/workflow-review/W69-fundraising.md`, W69-6).
-
-- **What happens:** `first_name` and `last_name` are required on every donor
-  (`DonorBase` in `schemas/grant.py`, and the Add Donor form), whatever the
-  donor type. A business is entered under its contact ("Dale Harmon (Valley
-  Hardware)"); a foundation or business with no named contact cannot be
-  added at all.
-- **Decision:** whether business, foundation and government donors may be
-  recorded by organization name alone, which would make the name fields
-  optional for those types (a schema change, and the list and receipts would
-  need to name such a donor by `company_name`).
-
 ## Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)
 
 Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
@@ -6483,11 +6525,11 @@ Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
   stored `expiration_date`, so it does not list a record falling due by
   frequency that the dashboard lists. Bringing it in needs the derived date in
   SQL, or giving up SQL paging for that tool.
-- **Still open — superseded records on the expiring list.**
-  `get_expiring_soon` lists every satisfying record in the window, including
-  one a newer record of the same type supersedes, while the count grades only
-  the latest; the MCP tool already excludes superseded records. Predates this
-  change, for dated records as well.
+- **Resolved 2026-10-25 — superseded records on the expiring list.**
+  `get_expiring_soon` now leaves out a record a newer one of the same type
+  supersedes for the same member or prospect, using the same
+  `superseded_record_clause` the MCP tool uses, so the list and the count
+  agree.
 
 ## Integrations — Connecting iCalendar (ICS) Does Nothing (2026-10-17)
 
@@ -6546,44 +6588,19 @@ Found driving W76 (`docs/workflow-review/W76-public-portal.md`, W76-6).
   Removing a catalogue row also needs a data change for existing
   installations.
 
-## IP Security — An Admin Can Approve Their Own IP Exception (2026-10-20)
+## RPT2-3 — The QR Check-In Analytics Dashboard Had A Reader And No Writer (2026-10-20, resolved 2026-10-25)
 
-Found driving W74 (`docs/workflow-review/W74-ip-security.md`, W74-5).
-
-- **What happens:** `POST /ip-security/exceptions/{id}/approve` accepts an
-  approval from the member the exception is for. An admin who files a request
-  can approve it at once.
-- **Why it is not simply fixed:** the same admin can already add and remove
-  blocked countries, so self-approval widens little. A department with one
-  IT administrator would also be left unable to approve their own travel
-  exception.
-- **Decision:** whether approval needs a second person
-  (`assert_different_person`, as money approvals use), and if so what a
-  single-admin department does.
-
-## RPT2-3 — The QR Check-In Analytics Dashboard Has A Reader And No Writer (2026-10-20)
-
-`/events/:id/analytics` (and the admin route) render `GET /analytics/metrics`, which counts
-`qr_scan`, `check_in_success` and `check_in_failure` rows in `analytics_events`. Nothing
-writes them. `POST /analytics/track` is the only writer in the repository; its only client
-method, `analyticsService.trackEvent`, is reached through `trackQRScan`, `trackCheckInSuccess`,
-`trackCheckInFailure`, `trackQRView` and `trackQRPrint`, and no page or component calls any of
-the five. `self_check_in` and `check_in_attendee` do not write an event either. The screen
-therefore reads zero scans, zero check-ins and an empty error breakdown, which looks like a
-department that has not used QR check-in rather than a feed that was never connected.
-
-**Why not fixed.** Which moments count as a "scan", a "success" and a "failure", and whether
-they are recorded by the browser or by the server, is a metric definition. **Owner decision:**
-
-1. **Record server-side** — `self_check_in` / `check_in_attendee` write the success and
-   failure events (with a bounded reason) and the QR page's load writes the scan. Reliable
-   and not forgeable by a member, at the cost of a write on the check-in path.
-2. **Wire the client calls** — call the five existing methods from the QR and check-in pages.
-   Smallest change, but a member's browser decides what is counted.
-3. **Retire the page** — remove the dashboard and the three analytics routes.
-
-Related: the accepted entry _"Events — There Is No Per-Event Analytics Panel"_ above rests on
-this dashboard covering the need. See `docs/app-review/reports-analytics.md` → Pass 5.
+**Resolved (owner decision: record server-side).** The self-check-in page's
+first load records one `qr_scan` per member per event (the data endpoint is
+polled, and the officer's QR display page polls it too, so the page marks only
+its first load and the server deduplicates). `POST /events/{id}/self-check-in`
+records `check_in_success`, or `check_in_failure` with one of `not_open_yet`,
+`closed`, `event_cancelled` or `attendance_locked`; a check-out, a repeat scan,
+the phase-gate warning and a manual officer check-in are not counted. Rows
+from before this change do not exist, so the dashboard starts from zero on
+upgrade. `POST /analytics/track` and its unused client methods remain. Kept
+only because code and tests cite it by name; history in
+`docs/app-review/reports-analytics.md`.
 
 ## Process
 
@@ -6689,39 +6706,15 @@ answers 400 on an order already paid ("Refund it instead") or already waived. A
 partly paid order can still be waived. Kept only because code and tests cite it
 by name; history in `docs/security-review/SF-04-storefront-payments.md`.
 
-## FIN8-05-1 — Deciding A Budget Request Has No Separation-Of-Duties Guard, Unlike Its Own Sibling (2026-10-12)
+## FIN8-05-1 — Deciding A Budget Request Had No Separation-Of-Duties Guard (2026-10-12, resolved 2026-10-26)
 
-`FinanceBudgetRequestService.decide_request` — the Treasurer's
-`finance.manage`-gated approve/adjust/decline on a submitted budget
-request — has no `assert_different_person` check against the request's
-`submitted_by`. `review_request`, the leadership-review step one stage
-later in the same new feature, explicitly has one:
-
-```python
-if str(request.submitted_by or "") == str(reviewer_id) or (
-    await self._acts_as_owner(request, org_id, reviewer_id)
-):
-    raise BudgetRequestForbiddenError(...)
-```
-
-A `finance.manage` holder who also holds a position that owns a budget
-line can create a request for that line (`create_request` lets a manager
-create one for any line, bypassing the ownership check it enforces on
-everyone else) and then decide it themselves — approving their own
-requested amount into the draft-year budget with no second person
-involved at the Treasurer-decision step. A department that uses the
-leadership-review planning stage still gets `review_request`'s guard as a
-backstop; one that doesn't has no check on this path at all.
-
-**Why it is here rather than fixed.** The same tension this page already
-records for FIN-4 (disbursement SoD) and OPS-8 (`record_dues_payment`):
-an unconditional guard would also block the only-finance-officer
-department from ever deciding a request they raised themselves. Whether
-to accept that cost, add a narrow override, or treat leadership review as
-the sole intended backstop is an owner decision, not a drive-by fix.
-
-Found in security-review FIN-05 pass 8 (2026-10-12); see
-`docs/security-review/FIN-05-finance-approvals.md` → FIN8-05-1.
+**Resolved (owner decision: refuse, no single-officer exception).**
+`FinanceBudgetRequestService.decide_request` refuses a decider who submitted
+the request or owns its line, with the same check `review_request` already
+made; another `finance.manage` holder has to decide it. A department with one
+finance officer grants the permission to a second member. Kept only because
+code and tests cite it by name; history in
+`docs/security-review/FIN-05-finance-approvals.md`.
 
 ## CI-1 — Backend Lint's Pinned `flake8`/`isort` Have Drifted From `requirements.txt` Again (2026-10-12) — ✅ FIXED (2026-10-25)
 
@@ -7019,6 +7012,41 @@ question against Finance's own locking conventions (Pitfall #27) that a
 documents-feature review pass should not decide unilaterally — Finance and
 Documents would need to agree on one order before this can lock safely
 without risking a new cross-feature deadlock.
+
+## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26)
+
+Found by security review EC-14 pass 12
+(`docs/security-review/EC-14-equipment-check-shifts.md`, pass 12, EC-17).
+Pre-existing, not introduced by this pass's own delta — the same pass's
+delta hardened `update_report`'s `review_status` field specifically (a
+submitted report's status now changes only through review, and the
+submit-destination is read from the department's own config rather than
+trusted from the client), and its own docstring rewrite claims "The
+service allows only drafts" — true for that one field, not for the rest.
+
+`ShiftCompletionService.update_report`'s `UPDATABLE_FIELDS` loop writes
+`performance_rating`, `officer_narrative`, `areas_of_strength`,
+`areas_for_improvement`, `skills_observed`, `tasks_performed`,
+`hours_on_shift`, `calls_responded`, `call_types`, and `enrollment_id` onto
+the row for any update from the filing officer, with no check on
+`review_status` at all. A report that has already been reviewed and
+`approved` stays open to the same officer editing its narrative, rating, or
+recorded skills through `PUT /shift-reports/{id}`, weeks later, with no
+re-review triggered and nothing beyond the generic `shift_report_updated`
+audit-log entry (which records which fields changed, not that the report
+had already cleared review) to surface it to whoever approved the original
+version. Confirmed this does not re-run training credit —
+`_trigger_deferred_progress` only fires when the report was not already
+`approved` before this edit — so the risk is to the integrity of the
+record itself, not to double-granted credit.
+
+**Not fixed.** Closing it is a product decision between three shapes this
+pass should not pick unilaterally: block every `UPDATABLE_FIELDS` write
+once a report is no longer a draft (simplest, but removes the ability to
+fix a typo after approval), require any edit to an approved/pending report
+to go back through review (more correct, but is a workflow change its own
+users would need to learn), or accept the status quo and rely on the audit
+log as the record of what changed and when.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be

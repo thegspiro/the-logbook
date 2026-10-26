@@ -160,12 +160,12 @@ The Logbook supports multiple authentication methods:
 
 ## Encryption
 
-| Layer               | Algorithm                    | Details                                                                                                                                                                                                                                                                                                                  |
-| ------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Passwords**       | Argon2id                     | OWASP-recommended, memory-hard                                                                                                                                                                                                                                                                                           |
-| **Data at rest**    | AES-256-GCM                  | Authenticated encryption of sensitive fields; a tampered value fails to decrypt (fails closed). Values written under the legacy Fernet (AES-128-CBC) scheme still decrypt; `backend/scripts/reencrypt_to_aesgcm.py` backfills them (see [`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](../docs/AES256_GCM_BACKFILL_RUNBOOK.md)) |
-| **Data in transit** | TLS 1.3                      | HTTPS required in production                                                                                                                                                                                                                                                                                             |
-| **Audit logs**      | Keyed HMAC-SHA256 hash chain | Tamper-evident chain keyed with the signing key, so forging it requires the key, not just DB write access (legacy pre-upgrade rows remain unkeyed SHA-256 for verification)                                                                                                                                              |
+| Layer               | Algorithm                    | Details                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Passwords**       | Argon2id                     | OWASP-recommended, memory-hard                                                                                                                                                                                                                                                                                                                                           |
+| **Data at rest**    | AES-256-GCM                  | Authenticated encryption of sensitive fields; a tampered value fails to decrypt (fails closed). Values written under the legacy Fernet (AES-128-CBC) scheme still decrypt; `backend/scripts/reencrypt_to_aesgcm.py` backfills them (see [`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/AES256_GCM_BACKFILL_RUNBOOK.md)) |
+| **Data in transit** | TLS 1.3                      | HTTPS required in production                                                                                                                                                                                                                                                                                                                                             |
+| **Audit logs**      | Keyed HMAC-SHA256 hash chain | Tamper-evident chain keyed with the signing key, so forging it requires the key, not just DB write access (legacy pre-upgrade rows remain unkeyed SHA-256 for verification)                                                                                                                                                                                              |
 
 ---
 
@@ -184,7 +184,7 @@ The bundled nginx proxies add a per-address ceiling in front of these _(2026-10-
 queue rather than being refused). The values are sized for a station of about a
 hundred members sharing one public address; sign-in stays at 5 a minute (burst 3).
 A proxy you run yourself needs its own limits sized the same way. See
-[Deployment guide](../docs/DEPLOYMENT.md#docker-compose-production-profile).
+[Deployment guide](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#docker-compose-production-profile).
 
 ---
 
