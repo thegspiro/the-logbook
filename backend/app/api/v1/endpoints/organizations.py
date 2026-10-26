@@ -20,6 +20,7 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
     require_stepup,
+    user_has_permission,
 )
 from app.api.v1.email_test_helper import (
     test_cloudflare_email,
@@ -185,7 +186,11 @@ async def update_organization_settings(
     # Update settings
     async with handle_service_errors("Failed to update organization settings"):
         updated_settings = await org_service.update_organization_settings(
-            current_user.organization_id, settings_dict
+            current_user.organization_id,
+            settings_dict,
+            may_configure_delegated_email=user_has_permission(
+                current_user, "admin.access"
+            ),
         )
 
         await log_audit_event(
@@ -287,7 +292,11 @@ async def update_email_settings(
 
     async with handle_service_errors("Failed to update email settings"):
         updated = await org_service.update_organization_settings(
-            current_user.organization_id, settings_dict
+            current_user.organization_id,
+            settings_dict,
+            may_configure_delegated_email=user_has_permission(
+                current_user, "admin.access"
+            ),
         )
 
         await log_audit_event(
@@ -299,6 +308,13 @@ async def update_email_settings(
                 "settings_changed": ["email_service"],
                 "email_platform": email_settings.platform,
                 "email_enabled": email_settings.enabled,
+                # Recorded because the service-account method can send as
+                # anyone in the domain; the audit trail should say when a
+                # department switched to it.
+                "email_auth_method": {
+                    "gmail": updated.email_service.google_auth_method,
+                    "microsoft": updated.email_service.microsoft_auth_method,
+                }.get(updated.email_service.platform),
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -478,8 +494,9 @@ async def check_email_settings(
     """
     Test the email configuration shown on the settings screen without saving it.
 
-    Signs in to the provider's SMTP server (Gmail, Microsoft 365, self-hosted)
-    or verifies the Cloudflare API token. Redacted secrets are resolved against
+    Signs in to the provider's SMTP server (Gmail, Microsoft 365, self-hosted),
+    obtains a delegated send token for a Gmail service account, or verifies the
+    Cloudflare API token. Redacted secrets are resolved against
     the saved configuration, so an admin can test what is stored.
 
     **Authentication and admin permission required**
@@ -499,7 +516,9 @@ async def check_email_settings(
     config = {
         "fromEmail": resolved.from_email,
         "fromName": resolved.from_name,
+        "googleAuthMethod": resolved.google_auth_method,
         "googleAppPassword": resolved.google_app_password,
+        "googleServiceAccountKey": resolved.google_service_account_key,
         "microsoftAppPassword": resolved.microsoft_app_password,
         "microsoftAuthMethod": resolved.microsoft_auth_method,
         "microsoftTenantId": resolved.microsoft_tenant_id,

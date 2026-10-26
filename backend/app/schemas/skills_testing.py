@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.skills_testing import ResultDisclosure, ResultRelease
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.services.skills_testing_service import SCORE_MODES
 
@@ -261,7 +261,7 @@ class SkillSheetLibraryItem(BaseModel):
     already_imported: bool = False
 
 
-class SkillTemplateUpdate(BaseModel):
+class SkillTemplateUpdate(RefusesNull):
     """Schema for updating a skill template"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -288,6 +288,10 @@ class SkillTemplateUpdate(BaseModel):
     result_viewer_positions: Optional[List[str]] = Field(
         None, max_length=MAX_RESULT_VIEWER_POSITIONS
     )
+
+    # Nullable columns behind response fields that are plain bool / str: a stored
+    # NULL is written and then fails to serialize on every read of the template.
+    null_refused = frozenset({"visibility", "require_all_critical"})
 
     @field_validator("result_disclosure")
     @classmethod

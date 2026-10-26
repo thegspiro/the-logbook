@@ -39,11 +39,13 @@ from app.services.email_theme import (
     facts,
     find_element_end,
 )
+from app.services.gmail_api_sender import GmailApiSender
 from app.utils.email_attachments import confined_template_attachments
 from app.utils.email_providers import (
     is_valid_cloudflare_account_id,
     resolve_smtp_settings,
     stored_email_section,
+    uses_google_service_account,
 )
 from app.utils.microsoft_oauth import acquire_access_token, xoauth2_string
 from app.utils.org_timezone import ZONED_DATE_TIME_FORMAT, format_in_org_timezone
@@ -519,6 +521,7 @@ class EmailService:
         self.organization = organization
         self._smtp_config = self._get_smtp_config()
         self._cloudflare_config = self._get_cloudflare_config()
+        self._gmail_api_config = self._get_gmail_api_config()
         # ID of the MessageHistory row written by the most recent send_email
         # call on this instance. Lets callers fetch the exact record they just
         # created instead of guessing "the latest row", which races under
@@ -731,6 +734,36 @@ class EmailService:
     @property
     def _use_cloudflare(self) -> bool:
         return self._cloudflare_config is not None
+
+    def _get_gmail_api_config(self) -> Optional[Dict[str, str]]:
+        """The key and sending address when the organization sends via the Gmail API.
+
+        Only an organization's own settings can choose it: there is no
+        deployment-wide service account. A row on the service-account method
+        always goes to the Gmail API, even with its key or address missing
+        (which a save refuses, but a key that no longer decrypts can still
+        produce): the sender then fails every message naming what is missing,
+        instead of the send falling through to smtp.gmail.com with no
+        credential, where it would fail with an authentication error that
+        points at the wrong method.
+        """
+        if not (self.organization and self.organization.settings):
+            return None
+        org_email = stored_email_section(
+            decrypt_settings_secrets(self.organization.settings)
+        )
+        if not org_email.get("enabled") or not uses_google_service_account(org_email):
+            return None
+        return {
+            "key": org_email.get("google_service_account_key") or "",
+            "from_email": org_email.get("from_email") or "",
+        }
+
+    async def _gmail_api_send(self, batch: List[Tuple[List[str], str]]) -> List[bool]:
+        cfg = self._gmail_api_config
+        if cfg is None:
+            raise ValueError("Gmail API sending is not configured")
+        return await GmailApiSender(cfg["key"], cfg["from_email"]).send(batch)
 
     @property
     def can_send(self) -> bool:
@@ -1408,6 +1441,10 @@ class EmailService:
         if not self.can_send:
             logger.info("Email disabled. Would batch-send {} messages.", len(messages))
             return [False] * len(messages)
+        if self._gmail_api_config is not None:
+            # The Gmail API takes the same MIME the SMTP path sends, so both
+            # message shapes are served.
+            return await self._gmail_api_send([(m[0], m[1]) for m in messages])
         if self._use_cloudflare:
             built = [m for m in messages if isinstance(m, BuiltMessage)]
             if len(built) == len(messages):
@@ -1593,8 +1630,12 @@ class EmailService:
                         f"Failed to build email for {_redact_email(to_email)}: {e}"
                     )
 
+            if self._gmail_api_config is not None:
+                # Same MIME, different transport: the Gmail API answers per
+                # message and never raises, like _smtp_send_batch.
+                results = await self._gmail_api_send(batch) if batch else []
             # Send through a single SMTP connection when possible
-            if len(batch) == 1:
+            elif len(batch) == 1:
                 try:
                     await asyncio.to_thread(self._smtp_send, batch[0][0], batch[0][1])
                     results = [True]
