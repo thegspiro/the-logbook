@@ -472,8 +472,9 @@ pwd  # Should end with /wiki
 
 ## 📊 Wiki Statistics
 
-Current pages: **12+**
-Total lines: **~3,000+**
+Published pages: **70** (68 in this directory, plus the generated
+Troubleshooting and Error-Codes)
+Total lines in this directory: **~31,000**
 Coverage:
 
 - ✅ Installation & Setup
