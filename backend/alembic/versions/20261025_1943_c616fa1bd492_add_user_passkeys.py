@@ -16,7 +16,7 @@ they are sent to authenticator-app setup at their next sign-in. Their
 recovery codes stay on the user row and keep working.
 
 Revision ID: c616fa1bd492
-Revises: 0a8d11fcada1
+Revises: c96c193f9db8
 Create Date: 2026-10-25 19:43:00.000000
 """
 
@@ -25,7 +25,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "c616fa1bd492"
-down_revision = "0a8d11fcada1"
+down_revision = "c96c193f9db8"
 branch_labels = None
 depends_on = None
 
