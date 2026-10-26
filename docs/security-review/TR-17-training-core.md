@@ -2692,7 +2692,7 @@ remove the route (nothing in the frontend calls it).
 | `python3 scripts/check_route_permissions.py --strict`                        | ✅ 0 errors, 0 warnings                                                                          |
 | `pytest -k "training or enrollment or program or requirement or competency"` | ✅ 2327 passed, 1 skipped (`py_vapid`); the sandbox database needed `alembic upgrade head` first |
 | `cd frontend && npm run typecheck`                                           | ✅ exit 0                                                                                        |
-| `cd frontend && npm run lint`                                                | GATE_LINT                                                                                        |
+| `cd frontend && npm run lint`                                                | ✅ 0 errors, 0 warnings (NODE_OPTIONS=--max-old-space-size=6144)                                 |
 
 ---
 
