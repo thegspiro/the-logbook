@@ -16,6 +16,55 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3744](https://github.com/thegspiro/the-logbook/pull/3744)** (branch
+`claude/security-review-scheduling`) — Feature 15 (Scheduling), pass 11. No
+security-review PR was open — confirmed via `search_pull_requests` (`is:pr
+is:open head:claude/security-review-`), 0 matching results, re-checked both
+before starting and again immediately before pushing. No Claude session
+reachable via `ListAgents` — the dedicated `/loop 30m /security-review`
+session is still unreachable. PR #3741 (Feature 14, Equipment check &
+shifts, pass 12) had already merged. Row 15 (Scheduling) was confirmed the
+next `⬜` by reading the rotation table directly. **0 fixed in Scheduling
+itself, 0 new findings, 1 ride-along fix.** Real delta since pass 10's
+baseline (`6d3cd946f`, PR #3617): 15 non-merge commits, real diff in 5 of 13
+declared files, every one read in full. Every behavior change hardens an
+existing invariant in Scheduling's own favor (full candidate check applied
+to assignment edits and pattern-generated seats, which previously bypassed
+it; attendance/calls locked on finalized/cancelled shifts with proper
+row-lock ordering; seat names capped at the existing length limit; a shift
+report's `review_status` locked to move only through review — closing the
+exact gap this same day's EC-17 named as still open, but only for that one
+field, so EC-17 itself stays OPEN in its own findings file) or is pure
+data-correctness. All seven standing items re-verified unchanged; SCH-19
+remains the one OPEN item. 0 new routes (112/112 by AST walk). Ride-along:
+this pass's own completion gate found the Alembic chain forked into 3
+heads — three concurrent sessions had each independently rejoined the same
+pair of parents within a few hours of each other, unrelated to Scheduling
+but blocking regardless of cause. This pass's own join of those three
+heads was dropped in favor of a different concurrent session's join
+([#3742](https://github.com/thegspiro/the-logbook/pull/3742)), which
+reached `main` first — landing both would have re-forked the same pair;
+this branch merged `main` in to pick up #3742's fix instead, then
+re-verified `alembic upgrade head` against a live database. See
+`SCH-15-scheduling.md`'s **Pass 11** section for the full review.
+
+A second, independently-opened review of this same row — PR #3745
+(`claude/security-review-scheduling-p11`), opened six minutes after this
+one by another watchdog session that also found row 15 as the next `⬜`
+— was closed as a duplicate once this PR covered the same pass; see that
+PR for the closing note. The race is the mechanism this file's own opening
+paragraph (`search_pull_requests` / `ListAgents` checks, re-checked
+"immediately before pushing") is meant to catch, and here it fired anyway
+because both sessions passed those checks within the same few-minute
+window, before either had pushed.
+
+Rotation row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events
+& requests) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3741, Feature 14, Equipment check & shifts, pass 12, merged), preserved for history</summary>
+
 **PR [#3741](https://github.com/thegspiro/the-logbook/pull/3741)** (branch
 `claude/security-review-equipment-check`) — Feature
 14 (Equipment check & shifts), pass 12. No security-review PR was open —
@@ -48,6 +97,8 @@ review.
 
 Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
 (Scheduling).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3740, Feature 13, Apparatus & NFC, pass 19, merged), preserved for history</summary>
@@ -21960,7 +22011,7 @@ PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -21987,6 +22038,80 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 15 (Scheduling, pass 11) — watchdog pickup, real delta (15 non-merge commits), 0 fixes needed in Scheduling itself, 0 new findings; an unrelated alembic triple-fork found, independently fixed twice by concurrent sessions, resolved by merging in the one that landed first (#3742); a duplicate PR for this same row (#3745) closed
+
+PR #3741 (Feature 14, Equipment check & shifts, pass 12) had already merged,
+with no `claude/security-review-*` PR open anywhere (`search_pull_requests`,
+0 matching results, re-checked both before starting and again immediately
+before pushing). No Claude session reachable via `ListAgents` — the
+dedicated review session is still unreachable. Row 15 (Scheduling) confirmed
+the next `⬜` by reading the Rotation table directly.
+
+Baseline `6d3cd946f` (PR #3617's merge, pass 10). 15 non-merge commits
+touched the declared files; real diff in 5 of 13 primary files
+(`scheduling.py`, `schemas/scheduling.py`, `scheduling_service.py`,
+`shift_completion_service.py`, `shift_eligibility_service.py` —
+1,129 insertions / 267 deletions combined), all read in full. Every
+behavior change this pass hardens an existing invariant in the feature's
+own favor — full candidate check applied to assignment edits and to
+pattern-generated seats (previously bypassing it entirely), attendance/calls
+locked on finalized/cancelled shifts with proper row-lock ordering (Pitfall
+#27), seat names capped at the existing 100-character limit (same class as
+SCH-18), and a shift report's `review_status` now locked to move only
+through review — or is pure data-correctness (call counts by tracking mode,
+coverage-report headcount order, a leap-day clamp, a settings round-trip
+bug, history-import recompute). The `review_status` hardening
+(`e3306a678`) closes the exact gap Equipment & Shifts' own EC-17 (pass 12,
+this same day) named as still open, but only for that one field — EC-17
+itself stays OPEN, owned by `EC-14-equipment-check-shifts.md`, not
+re-added here. All seven standing items (SCH-9, SCH-10, SCH-13, SCH-15,
+SCH-16, SCH-17, SCH-18, SCH-19) re-verified unchanged; SCH-19
+(`member_call_counts`/`reported_call_types` dict/list length, needs an
+owner-picked ceiling) remains the one OPEN item. Routes unchanged by AST
+walk (112/112, all carrying `Depends(...)`). 54 frontend files swept
+individually for banned patterns — zero hits.
+
+**Ride-along fix, not a Scheduling finding:** this pass's own completion
+gate (`validate_migrations.py --strict`) found the Alembic chain forked
+into **3 heads**, all three themselves merge revisions independently
+rejoining the _same_ pair of parents within a few hours of each other —
+three concurrent sessions each closed the same fork, and each merged clean
+on GitHub because the per-PR fork check cannot see sibling PRs doing the
+same join at the same time. This pass opened its own pure-join merge
+revision for the three heads, but a separate concurrent watchdog session's
+join of the same three parents
+([#3742](https://github.com/thegspiro/the-logbook/pull/3742),
+`1ad0b594f3fb`) merged to `main` first; landing this pass's own join on top
+would have re-forked the same pair, so it was dropped and this branch
+merged `main` in to pick up #3742's fix instead. Verified against this
+sandbox's own database with `alembic upgrade head` (not just the static
+parser) to a clean single head. This also explains an initial test failure
+(`test_data_export.py::test_shift_reports_respect_trainee_visibility`,
+MySQL 1406 "Data too long for column 'phone'"): the sandbox's long-lived
+database predated the unrelated contact-encryption migration this fork was
+blocking, and applying the now-unforked chain resolved it — not a
+scheduling defect, and the test itself was not touched.
+
+Full writeup: `docs/security-review/SCH-15-scheduling.md`'s **Pass 11**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI-pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — single head `1ad0b594f3fb` (fixed by
+#3742, merged first) after merge; `alembic upgrade head` against this sandbox's
+own database — clean, single head reached; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; `generate_schema_docs.py
+--check` — up to date; scoped backend tests (18-term `-k` filter) — 2784
+passed, 1 pre-existing skip (`py_vapid`), 0 failed (1 failure before the
+alembic fix); tenancy/security guard tests — 712 passed; frontend
+`npm run typecheck` clean; `npm run lint` clean;
+`npx vitest run src/modules/scheduling src/pages/scheduling` — 1044 passed
+(71 files).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-10-26 — Feature 14 (Equipment check & shifts, pass 12) — watchdog pickup, 0 fixed, 1 new finding flagged (EC-17, MED, pre-existing)
 
