@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(this PR)** (branch `claude/security-review-documents-legal`) — Feature 10
+**PR [#3734](https://github.com/thegspiro/the-logbook/pull/3734)** (branch
+`claude/security-review-documents-legal`) — Feature 10
 (Documents & legal), pass 12. No security-review PR was open — confirmed via
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
 matching results, and no Claude session reachable via `ListAgents` (the
