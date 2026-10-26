@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3760 (Feature 19, Skills testing, pass 11) merged — confirmed
+via `search_pull_requests` (`is:pr is:open head:claude/security-review-`),
+0 matching results. Its CI hit the same recurring Ubuntu-mirror timeout on
+`Frontend E2E (Mobile Safari)`'s `Install WebKit system libraries` step as
+PR #3759 — the third occurrence of the identical stall in roughly two
+hours, confirmed unrelated to this docs-only PR (every other job in the
+run passed). The standing one-re-run budget was unspent for this PR; used
+it once the rest of the run's jobs finished, and it came back green.
+Rotation row 19 → ✅ (merged); next is Feature 20 (Compliance) — re-check
+`search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 11, PR #3760, merged after a second recurrence of the CI mirror timeout), preserved for history</summary>
+
 **PR [#3760](https://github.com/thegspiro/the-logbook/pull/3760)** (branch
 `claude/security-review-skills-testing-p11`) — Feature 19 (Skills testing),
 pass 11. **Watchdog pickup** — the dedicated `/loop 30m /security-review`
@@ -35,9 +49,9 @@ standing SKT findings re-verified unchanged. **Branch name avoids reuse**
 name was already used and merged (PR #3630, pass 10). See
 `SKT-19-skills-testing.md`'s **Pass 11** section for the full review.
 
-Rotation row 19 → ✅ (pending this PR's merge); next is Feature 20
-(Compliance) — re-check `search_pull_requests` fresh rather than trusting
-this note.
+Rotation row 19 → ✅ (merged); next was Feature 20 (Compliance).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 11, PR #3759, merged after a merge conflict and a transient CI mirror timeout), preserved for history</summary>
@@ -22140,7 +22154,7 @@ PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
@@ -40121,4 +40135,61 @@ revisions, single head `1ad0b594f3fb`; `check_route_permissions.py
 frontend `npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
 
 Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-26 — Feature 19 (Skills testing, pass 11) — merged after a second recurrence of the CI mirror timeout
+
+PR #3760 merged. Its CI hit the same `Install WebKit system libraries`
+Ubuntu-mirror timeout as PR #3759 — the third occurrence of the identical
+stall in roughly two hours, confirmed unrelated to the docs-only diff
+(every other job in the run passed both times). The standing one-re-run
+budget was unspent for this PR; spent it once the rest of the run's jobs
+finished, and it came back green.
+
+Row 19 → ✅ (merged); next is Feature 20 (Compliance).
+
+### 2026-10-26 — Feature 20 (Compliance, pass 11) — watchdog pickup, real delta, 0 new findings, 1 ride-along fix
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable). No open security-review PR
+— confirmed via `search_pull_requests`, 0 results, after Feature 19 pass
+11's own PR (#3760) merged. Row 20 (Compliance) confirmed the next pending
+feature by reading the rotation table on a freshly fetched `main`.
+
+Real, substantial delta since pass 10's own merge (`839bca85`, PR #3631):
+six of eight declared backend files changed (349 insertions, 42
+deletions). The core of it is scheduled compliance-report delivery made
+retry-safe and idempotent across three commits — a config-row lock plus a
+locking read before generating a period's report (Pitfall #27), a `FAILED`
+row that survives the scheduled task's own rollback so a missed period
+isn't silently lost, an explicit send-before-stamp ordering documented
+against Pitfall #36, and an audit-trail addition (the report email now
+logs to `message_history`). Plus a float-drift grading fix in
+`training_compliance.py` and two defensive numeric-bounds sweeps already
+seen elsewhere this rotation. The one frontend file changed
+(`ComplianceRequirementsConfigPage.tsx`) mirrors the new outcome
+information to the user; two other changed files live under
+`modules/medical-screening/` and are Feature 09's own, not this feature's.
+Routes re-enumerated by AST: 20, unchanged, all gated. All standing CMP
+findings (CMP2-1, CS-8, CS-9) re-verified unchanged.
+
+**Ride-along fix, not a Compliance finding:** this pass's own completion
+gate found the Alembic chain forked into three heads again (the same
+recurring parallel-merge pattern this rotation has fixed before). Fixed
+with one more pure-join merge revision (`f5426e40b955`), verified against
+a live database with `alembic upgrade head`.
+
+Full write-up: `docs/security-review/CMP-20-compliance.md`'s **Pass 11**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 662
+revisions, single head `f5426e40b955`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
+"compliance or attestation"` plus ten named idempotency/retry test files)
+— 979 passed combined; frontend `npm run typecheck`/`npm run lint` — 0
+errors, 0 warnings; scoped frontend suite (7 `ComplianceRequirementsConfigPage.*`/
+`ComplianceOfficerDashboard` files) — 55 passed.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
 re-check `search_pull_requests` fresh rather than trusting this note.

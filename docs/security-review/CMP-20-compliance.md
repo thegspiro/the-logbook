@@ -3,7 +3,7 @@
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
-2026-10-19 (pass 9), 2026-10-24 (pass 10) ·
+2026-10-19 (pass 9), 2026-10-24 (pass 10), 2026-10-26 (pass 11) ·
 **PR:** #1902 (pass 1, merged),
 [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
 #2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
@@ -12,7 +12,165 @@
 (pass 6, merged), [#2977](https://github.com/thegspiro/the-logbook/pull/2977)
 (pass 7, merged), [#3330](https://github.com/thegspiro/the-logbook/pull/3330)
 (pass 8, merged), [#3449](https://github.com/thegspiro/the-logbook/pull/3449)
-(pass 9, merged), pass 10 (this PR)
+(pass 9, merged), [#3631](https://github.com/thegspiro/the-logbook/pull/3631)
+(pass 10, merged), pass 11 (this PR)
+
+## Pass 11 (2026-10-26) — watchdog pickup, real delta, 0 new findings, 1 ride-along fix
+
+**Prefix:** `CMP11` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results); PR #3760
+(Feature 19, Skills testing, pass 11) had just merged. The dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was not reachable via `ListAgents`. Rotation row 20 (Compliance) was
+confirmed the next pending feature by reading the rotation table directly
+on a freshly fetched `main`.
+
+### Scope check — real delta since pass 10
+
+Baseline: `839bca85` (pass 10's own merge, PR #3631, on `main`). Across the
+eight-file declared scope, six files changed (349 insertions, 42
+deletions) — a genuinely substantial delta, not another cosmetic-sweep
+pass. Every real (non-merge) commit touching them read in full:
+
+- **`016d389e` "Make scheduled report delivery retry-safe and idempotent"**
+  — the auto-report scheduled task previously advanced `next_run_date`
+  before the email sent, so a failed send silently skipped that period
+  forever. Now advances only once the email is accepted. Adds
+  `ComplianceReportService.auto_report_exists` (later renamed
+  `find_auto_report`, see below): locks the org's `ComplianceConfig` row
+  first, then does a **locking read** on `ComplianceReport` — correctly
+  citing and following CLAUDE.md Pitfall #27 (a plain SELECT under
+  REPEATABLE READ answers from the pre-lock snapshot and would not see a
+  concurrent run's commit). No unique constraint added by design (manual
+  regeneration of a period must keep working); two scheduled runs are
+  serialized by the config-row lock instead. Deliberately not scoped to
+  this feature's org only — `organization_id` is a parameter, not
+  client-supplied, so no tenant-isolation concern.
+- **`deb1d3e0` "Report delivery follow-ups"** — `_email_report` now returns
+  and records an outcome (`sent`/`no_recipients`/`failed`) instead of
+  silently swallowing a send failure; the manual "email this report"
+  endpoint now raises (400, via the existing `ValueError`→`safe_error_detail`
+  path) when nothing went out, rather than reporting success. Adds
+  `record_failed_attempt`, writing a `FAILED` row that survives the
+  scheduled task's own rollback-on-exception (previously the only trace of
+  a missed period was a log line). The email is now logged to
+  `message_history` (positive for dimension 5 — audit trail on a
+  report-delivery event that previously left none). `dedupe_addresses`
+  (case-insensitive, trimmed, stable order) replaces a bare `set()` — read
+  directly: no injection surface, pure string normalization. Touches
+  `security_weekly_report.py`/`external_recipients.py`, which are shared
+  infrastructure outside this feature's own declared scope (not
+  reviewed as this feature's finding) — confirmed the compliance-specific
+  portions (above) are the only parts this commit changes inside this
+  feature's own files.
+- **`43e46010` "Retry the email of a stored scheduled compliance report on
+  later days"** — adds `retry_unsent_auto_emails` (7-day window via
+  `UNSENT_EMAIL_RETRY_DAYS`), re-sending a report that was generated but
+  never emailed. Explicitly documents the fail direction in its own
+  docstring (CLAUDE.md Pitfall #36): send precedes the `emailed_at` stamp,
+  so a crash between them sends one extra copy rather than silently
+  dropping the notice — the correct choice for a non-transactional
+  summary email. The lookup is again a locking read on the same
+  org-scoped query shape. Nothing here is client-reachable; it only runs
+  inside the scheduled task.
+- **`0b18dc3f` "limit reminder lead times to 30 days"** — adds the
+  `ReminderLeadDays` bound to `notify_days_before_deadline` on
+  `ComplianceConfigCreate`/`Update`, part of a cross-feature sweep (also
+  touched events/training schemas, out of scope here). Request-only, as
+  documented — a response still serializes a pre-existing stored value
+  further out. No security surface; a business-rule bound.
+- **`a1f8b83d` "Grade hours requirements through one drift-tolerant
+  comparison"** — `training_compliance.py`'s `_grade_member_requirement`
+  now calls `meets_required_hours` instead of a raw `>=`, fixing a
+  float-summation drift bug (ten records of 0.7 summed to 6.99999988 and
+  failed a 7-hour requirement). Correctness only — grading still never
+  reads a rounded figure, per the module's own rule.
+- **`dd4ba98a`** — the same repo-wide numeric-bounds sweep already seen in
+  TRX-18/SKT-19 this rotation: `period_quarter` on `AttestationCreate` now
+  carries `ge=1, le=4`. Defensive only.
+
+### Frontend surface
+
+`ComplianceRequirementsConfigPage.tsx` (this feature's one established
+frontend file) changed: the generate/email-report handlers now surface the
+new outcome information — `generateReport`'s response is checked for
+`emailedAt` (toasting a distinct warning when the report was stored but
+not emailed, rather than claiming unconditional success) and both catch
+blocks use `getSaveFailureMessage` instead of a generic string, so the new
+backend 400s ("no recipient", "could not be emailed") reach the user.
+Correctness/UX mirror of the backend change, not a new security surface.
+Five new test files (`*.emailReport.test.tsx`, `*.generateReport.test.tsx`
+and others) add coverage; none change production code. Grep-swept for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`/`date-fns`, a bare `fetch(` — zero hits. (`ComplianceDashboard.tsx`/
+`SubjectCompliancePanel.tsx` also changed this window but live under
+`modules/medical-screening/` — Feature 09's own files, not this feature's,
+confirmed by path.)
+
+### Route re-enumeration
+
+AST-walked both endpoint files directly: **20 routes** (8 + 12), unchanged
+from pass 10, every one carrying a recognized `Depends(...)`.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **279
+total application routes, 0 errors, 0 warnings** — up from pass 10's 273
+from other features merging in the interim, confirming no new top-level
+page from this feature.
+
+### Standing findings re-verified at their current citation
+
+- **CMP2-1** — `compliance_member_notices.py` re-read: still the only
+  reader of `notify_days_before_deadline`/`notify_non_compliant_members`
+  outside `schemas/`/`models/`; still cron-registered
+  (`run-task?task=compliance_member_notices`, `scheduled_tasks.py`).
+- **CS-8 (attestation dual control)** — OPEN by design, unchanged: still
+  exactly two attestation routes (`create_attestation`, `get_attestations`).
+- **CS-9 (`grace_period_days` unwired)** — re-confirmed via a fresh
+  `grep -rn "\.grace_period_days" app/` filtered to compliance: zero
+  readers of `ComplianceConfig`/`ComplianceProfile`'s own field remain (the
+  hits elsewhere in the codebase are `training_enhancements`/
+  `medical_screening`/`finance`'s own unrelated `grace_period_days` columns
+  on different models — confirmed by model, not by name alone). Still OPEN.
+
+No OPEN or FLAGGED item exists beyond CS-8/CS-9 (both owner-accepted,
+unchanged) as of pass 10; none reopened by this pass's six-file diff.
+
+### Ride-along fix — not a Compliance finding
+
+This pass's own completion gate (`validate_migrations.py --strict`) found
+the Alembic chain forked into **three** heads (`ce541de8d3da`,
+`08e6220f2dce`, `e03f96c98452`) — three concurrent sessions each
+independently branched off the same parent (`1ad0b594f3fb`) within the
+interim, the same recurring pattern this rotation has hit and fixed before
+(passes on Scheduling and Security, audit & IP). Fixed with one more
+pure-join merge revision (`f5426e40b955`), verified against a live
+database with `alembic upgrade head`, not just the static parser.
+
+### Findings
+
+**0 new findings.** A substantial, real delta since pass 10 — idempotent/
+retry-safe scheduled report delivery (explicitly implementing Pitfalls #27
+and #36, correctly), an audit-trail addition, a float-drift grading fix,
+and two defensive-bounds sweeps — none introduce a new tenancy,
+authorization, injection, or data-exposure gap. Every standing CMP finding
+re-verified unchanged.
+
+## Completion gate (pass 11)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                   | Result                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                           | ✅ 0 violations                                                                    |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                    | ✅ 2690 files unchanged                                                            |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                               | ✅ clean                                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                       | ✅ 662 revisions, single head `f5426e40b955` (after the ride-along merge-head fix) |
+| `alembic upgrade head` against a live database                                                                                                                                                                                                                                                                                                                                                          | ✅ applies cleanly through the new merge revision                                  |
+| `pytest tests/ -q -k "compliance or attestation"`                                                                                                                                                                                                                                                                                                                                                       | ✅ 667 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip)              |
+| `pytest tests/test_compliance_member_notices.py tests/test_compliance_grace_period_is_unwired.py tests/test_training_compliance.py tests/test_my_training_records.py tests/test_account_status_gates.py tests/test_compliance_auto_report_idempotency.py tests/test_saved_report_delivery.py tests/test_security_weekly_report.py tests/test_org_local_today.py tests/test_external_recipient_audit.py` | ✅ 312 passed                                                                      |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                                                                                                                                   | ✅ 279 routes, 0 errors/warnings                                                   |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                                                      | ✅ 0 errors                                                                        |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                                                           | ✅ 0 errors/warnings (`--max-warnings 10`)                                         |
+| Scoped frontend tests (7 `ComplianceRequirementsConfigPage.*`/`ComplianceOfficerDashboard` files)                                                                                                                                                                                                                                                                                                       | ✅ 55 passed                                                                       |
 
 ## Pass 10 (2026-10-24)
 
