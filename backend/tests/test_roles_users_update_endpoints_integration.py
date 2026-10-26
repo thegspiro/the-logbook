@@ -26,7 +26,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pydantic.alias_generators import to_camel, to_snake
-from sqlalchemy import null, text
+from sqlalchemy import null, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
@@ -238,9 +238,9 @@ class _Bench:
             value = _value_for(column, prop)
         except AssertionError:
             return False
+        table = model.__table__
         await self.db.execute(
-            text(f"UPDATE {model.__tablename__} SET {column.key} = :v WHERE id = :i"),
-            {"v": value, "i": row_id},
+            update(table).where(table.c.id == row_id).values({column.key: value})
         )
         await self.db.commit()
         await self.reset()
@@ -248,11 +248,13 @@ class _Bench:
 
     async def stored(self, model: Any, row_id: str, column: str) -> Any:
         await self.reset()
+        # Built with Core rather than raw SQL so the dialect quotes the column:
+        # users.rank is a reserved word on MySQL 8 (a window function) and an
+        # unquoted SELECT or UPDATE of it is a syntax error there, though not on
+        # the MariaDB this suite also runs on.
+        table = model.__table__
         return (
-            await self.db.execute(
-                text(f"SELECT {column} FROM {model.__tablename__} WHERE id = :i"),
-                {"i": row_id},
-            )
+            await self.db.execute(select(table.c[column]).where(table.c.id == row_id))
         ).scalar()
 
 
