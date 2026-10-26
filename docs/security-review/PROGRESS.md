@@ -16,16 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3760 (Feature 19, Skills testing, pass 11) merged — confirmed
-via `search_pull_requests` (`is:pr is:open head:claude/security-review-`),
-0 matching results. Its CI hit the same recurring Ubuntu-mirror timeout on
-`Frontend E2E (Mobile Safari)`'s `Install WebKit system libraries` step as
-PR #3759 — the third occurrence of the identical stall in roughly two
-hours, confirmed unrelated to this docs-only PR (every other job in the
-run passed). The standing one-re-run budget was unspent for this PR; used
-it once the rest of the run's jobs finished, and it came back green.
-Rotation row 19 → ✅ (merged); next is Feature 20 (Compliance) — re-check
-`search_pull_requests` fresh rather than trusting this note.
+**PR [#3761](https://github.com/thegspiro/the-logbook/pull/3761)** (branch
+`claude/security-review-compliance-p11`) — Feature 20 (Compliance), pass 11. **Watchdog pickup** — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. No
+security-review PR was open — confirmed via `search_pull_requests`, 0
+matching results, after PR #3760 (Feature 19, Skills testing, pass 11)
+merged. **0 fixed, 0 flagged, 1 ride-along fix.** Real, substantial delta
+since pass 10's own merge (`839bca85`): six of eight declared backend
+files changed — scheduled compliance-report delivery made retry-safe and
+idempotent across three commits (Pitfalls #27 and #36, both correctly
+followed), a `message_history` audit-trail addition, a float-drift
+grading fix, and two defensive bounds sweeps. Routes re-enumerated by
+AST: 20, unchanged, all gated. All standing CMP findings re-verified
+unchanged. **Ride-along:** the Alembic chain had forked into three heads
+again (the same recurring parallel-merge pattern); fixed with one more
+pure-join merge revision, verified against a live database. See
+`CMP-20-compliance.md`'s **Pass 11** section for the full review.
+
+Rotation row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin
+hours) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 11, PR #3760, merged after a second recurrence of the CI mirror timeout), preserved for history</summary>
