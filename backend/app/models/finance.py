@@ -31,7 +31,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedText
+from app.core.encrypted_types import EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -862,7 +862,7 @@ class ApprovalChainStep(Base):
     )
     approver_value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     notification_emails: Mapped[Optional[list[str]]] = mapped_column(
-        JSON, nullable=True
+        EncryptedJSON, nullable=True
     )
     email_template_id: Mapped[Optional[str]] = mapped_column(
         String(36),

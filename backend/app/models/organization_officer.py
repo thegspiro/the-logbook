@@ -57,7 +57,7 @@ class OrganizationOfficer(Base):
     # Admin overrides. NULL means "derive from the linked member".
     display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     title: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
-    email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

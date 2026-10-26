@@ -25,6 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedJSON
 from app.models.user import generate_uuid
 
 if TYPE_CHECKING:
@@ -125,7 +126,7 @@ class ComplianceConfig(Base):
         server_default="none",
     )
     report_email_recipients: Mapped[Optional[list[str]]] = mapped_column(
-        JSON,
+        EncryptedJSON,
         nullable=True,
         comment="List of email addresses to receive reports",
     )
@@ -319,7 +320,7 @@ class ComplianceReport(Base):
 
     # -- Distribution --
     emailed_to: Mapped[Optional[list[str]]] = mapped_column(
-        JSON,
+        EncryptedJSON,
         nullable=True,
         comment="Email addresses report was sent to",
     )

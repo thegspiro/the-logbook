@@ -17,7 +17,7 @@ import json
 from datetime import date, datetime
 
 from cryptography.fernet import InvalidToken
-from sqlalchemy import Text
+from sqlalchemy import Text, event
 from sqlalchemy.types import TypeDecorator
 
 
@@ -158,3 +158,19 @@ class EncryptedDate(TypeDecorator):
         except InvalidToken:
             plain = value
         return date.fromisoformat(plain.strip()[:10])
+
+
+def keep_email_fingerprint(email_attribute, fingerprint_name: str) -> None:
+    """Recompute ``fingerprint_name`` whenever the email attribute is assigned.
+
+    The fingerprint is what SQL matches on once the email is ciphertext, so it
+    has to change with every ORM write of the address, including the one in
+    the constructor. A bulk ``update().values(email=...)`` bypasses attribute
+    events and must set the fingerprint itself.
+    """
+
+    @event.listens_for(email_attribute, "set")
+    def _refresh(target, value, _oldvalue, _initiator):
+        from app.core.security import email_fingerprint
+
+        setattr(target, fingerprint_name, email_fingerprint(value))

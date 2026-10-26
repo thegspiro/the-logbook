@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 GOOGLE_WORKSPACE_INTEGRATION = "google-workspace"
@@ -65,7 +66,7 @@ class DirectoryAccountProvision(Base):
     provider: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=DirectoryProvider.GOOGLE.value
     )
-    primary_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    primary_email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=DirectoryAccountStatus.PENDING.value
     )

@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedText
+from app.core.encrypted_types import EncryptedText, keep_email_fingerprint
 from app.core.utils import generate_uuid
 
 # ---------------------------------------------------------------------------
@@ -1069,7 +1069,8 @@ class Donor(Base):
     # Contact info
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    email_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     # Address
@@ -1132,7 +1133,7 @@ class Donor(Base):
 
     __table_args__ = (
         Index("idx_donors_user", "user_id"),
-        Index("idx_donors_email", "organization_id", "email"),
+        Index("idx_donors_email_hash", "organization_id", "email_hash"),
         Index("idx_donors_type", "organization_id", "donor_type"),
         Index("idx_donors_name", "organization_id", "last_name", "first_name"),
     )
@@ -1201,7 +1202,7 @@ class Donation(Base):
         Boolean, nullable=False, server_default="0"
     )
     donor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    donor_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    donor_email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     # Dedication
     dedication_type: Mapped[Optional[DedicationType]] = mapped_column(
@@ -1445,3 +1446,6 @@ class FundraisingEvent(Base):
         Index("idx_fundraising_events_date", "event_date"),
         Index("idx_fundraising_events_status", "organization_id", "status"),
     )
+
+
+keep_email_fingerprint(Donor.email, "email_hash")

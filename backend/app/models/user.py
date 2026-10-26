@@ -105,7 +105,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 from sqlalchemy.sql import ColumnElement, and_, func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedDate, EncryptedJSON, EncryptedText
+from app.core.encrypted_types import (
+    EncryptedDate,
+    EncryptedJSON,
+    EncryptedText,
+    keep_email_fingerprint,
+)
 from app.core.permissions import position_mirrors_rank
 from app.core.utils import generate_uuid
 from app.utils.member_badge import generate_badge_code
@@ -331,9 +336,12 @@ class User(Base):
 
     # Basic Info
     username: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # Encrypted at rest; SQL matches on email_hash, which keep_email_fingerprint
+    # recomputes on every ORM write of the address (see the end of this module).
+    email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    email_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     personal_email: Mapped[Optional[str]] = mapped_column(
-        String(255)
+        EncryptedText
     )  # Personal/home email for post-separation contact
     password_hash: Mapped[Optional[str]] = mapped_column(String(255))
     # OAuth / external identity provider linkage. NULL for password-only users.
@@ -633,7 +641,7 @@ class User(Base):
     # Indexes and constraints
     __table_args__ = (
         Index("idx_user_org_username", "organization_id", "username", unique=True),
-        Index("idx_user_org_email", "organization_id", "email", unique=True),
+        Index("idx_user_org_email_hash", "organization_id", "email_hash", unique=True),
         Index(
             "idx_user_org_membership_number",
             "organization_id",
@@ -695,7 +703,7 @@ class User(Base):
         return bool(datetime.now(timezone.utc) < locked)
 
     def __repr__(self):
-        return f"<User(username={self.username}, email={self.email})>"
+        return f"<User(id={self.id}, username={self.username})>"
 
 
 def _reconcile_membership(_mapper, _connection, target: "User") -> None:
@@ -956,7 +964,7 @@ class Prospect(Base):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     middle_name: Mapped[Optional[str]] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[Optional[str]] = mapped_column(String(255))  # Personal email
+    email: Mapped[Optional[str]] = mapped_column(EncryptedText)  # Personal email
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText)
     mobile: Mapped[Optional[str]] = mapped_column(EncryptedText)
 
@@ -986,10 +994,7 @@ class Prospect(Base):
         "Organization", back_populates="prospects"
     )
 
-    __table_args__ = (
-        Index("idx_prospect_org_email", "organization_id", "email"),
-        Index("idx_prospect_org_status", "organization_id", "status"),
-    )
+    __table_args__ = (Index("idx_prospect_org_status", "organization_id", "status"),)
 
     def __repr__(self):
         return (
@@ -1229,3 +1234,6 @@ class PasswordHistory(Base):
     __table_args__ = (
         Index("idx_password_history_user_created", "user_id", "created_at"),
     )
+
+
+keep_email_fingerprint(User.email, "email_hash")

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedJSON
 from app.core.utils import generate_uuid
 
 
@@ -94,7 +95,7 @@ class SavedReport(Base):
 
     # Delivery
     email_recipients: Mapped[Optional[list[str]]] = mapped_column(
-        JSON, default=list
+        EncryptedJSON, default=list
     )  # list of email addresses
 
     # Ownership

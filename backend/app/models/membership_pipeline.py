@@ -28,7 +28,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedDate, EncryptedText
+from app.core.encrypted_types import (
+    EncryptedDate,
+    EncryptedText,
+    keep_email_fingerprint,
+)
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -306,7 +310,9 @@ class ProspectiveMember(Base):
     # Personal Information
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Encrypted at rest; SQL matches on email_hash (keep_email_fingerprint).
+    email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    email_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText)
     mobile: Mapped[Optional[str]] = mapped_column(EncryptedText)
     # Encrypted at rest (HIPAA): not searchable or sortable in SQL.
@@ -417,10 +423,13 @@ class ProspectiveMember(Base):
     # MySQL has no partial unique indexes.  NULL values do not conflict in a
     # unique index, so this generated column enforces uniqueness only while a
     # prospect is active (and keeps create_all schemas aligned with Alembic).
-    active_email: Mapped[Optional[str]] = mapped_column(
-        String(255),
+    # It reads the fingerprint, not the email: ciphertext differs on every
+    # write, so a unique index over it would never see two rows as equal.
+    active_email_hash: Mapped[Optional[str]] = mapped_column(
+        String(64),
         Computed(
-            "CASE WHEN status = 'active' THEN email ELSE NULL END", persisted=True
+            "CASE WHEN status = 'active' THEN email_hash ELSE NULL END",
+            persisted=True,
         ),
     )
 
@@ -481,11 +490,11 @@ class ProspectiveMember(Base):
     __table_args__ = (
         Index("idx_prospect_org_status", "organization_id", "status"),
         Index("idx_prospect_org_pipeline", "organization_id", "pipeline_id"),
-        Index("idx_prospect_org_email", "organization_id", "email"),
+        Index("idx_prospect_org_email_hash", "organization_id", "email_hash"),
         Index(
-            "uq_prospect_org_active_email",
+            "uq_prospect_org_active_email_hash",
             "organization_id",
-            "active_email",
+            "active_email_hash",
             unique=True,
         ),
     )
@@ -889,3 +898,6 @@ class ProspectEventLink(Base):
             unique=True,
         ),
     )
+
+
+keep_email_fingerprint(ProspectiveMember.email, "email_hash")
