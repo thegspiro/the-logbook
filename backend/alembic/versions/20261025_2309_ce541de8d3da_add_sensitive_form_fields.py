@@ -1,7 +1,7 @@
 """Add sensitive form fields
 
 Revision ID: ce541de8d3da
-Revises: 0a8d11fcada1
+Revises: 2382ef7e55c3
 Create Date: 2026-10-25 23:09:42.000000
 
 A form field can now be marked Sensitive. Answers to such a field are written
@@ -30,7 +30,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "ce541de8d3da"
-down_revision: Union[str, None] = "0a8d11fcada1"
+down_revision: Union[str, None] = "2382ef7e55c3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
