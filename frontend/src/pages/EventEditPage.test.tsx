@@ -267,6 +267,47 @@ describe('EventEditPage', () => {
     });
   });
 
+  describe('Values the form must load before it saves (Events edit-form gaps)', () => {
+    async function saveUnchanged() {
+      renderWithRouter(<EventEditPage />);
+      await waitFor(() => expect(screen.getByLabelText(/title/i)).toHaveValue('Existing Event'));
+      await userEvent.setup().click(screen.getByRole('button', { name: /save changes/i }));
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      return vi.mocked(eventService.updateEvent).mock.calls[0]?.[1] as Record<string, unknown>;
+    }
+
+    beforeEach(() => {
+      vi.mocked(eventService.updateEvent).mockReset();
+      vi.mocked(eventService.updateEvent).mockResolvedValue({} as unknown as Event);
+    });
+
+    it('saving a draft keeps it a draft', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, is_draft: true });
+
+      expect((await saveUnchanged()).is_draft).toBe(true);
+    });
+
+    it('a window-type event with no stored lead time keeps the 15 minutes the server uses', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_window_type: 'window',
+        check_in_minutes_before: undefined,
+      });
+
+      expect((await saveUnchanged()).check_in_minutes_before).toBe(15);
+    });
+
+    it('a flexible event with no stored lead time keeps 60', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_window_type: 'flexible',
+        check_in_minutes_before: undefined,
+      });
+
+      expect((await saveUnchanged()).check_in_minutes_before).toBe(60);
+    });
+  });
+
   describe('Finalized attendance', () => {
     const finalizedEvent: Event = {
       ...mockEvent,

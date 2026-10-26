@@ -5909,12 +5909,10 @@ category, schedule or check-in rules rather than their presence in the save,
 and the edit form disables those controls and leaves them out. Found on the
 same screen, and left as they are:
 
-- **Saving a draft publishes it.** The edit page does not load `is_draft`, so
-  the form starts from its default and every save sends `is_draft: false`.
-- **A window-type event stored with no lead time is shown, and saved, as 60
-  minutes.** The backend reads a missing lead time on a window-type event as 15,
-  so the first save of an open one moves its check-in window. A finalized
-  one's check-in rules are locked and left alone.
+- **✅ Resolved 2026-10-25 — saving a draft published it, and a window-type
+  event with no stored lead time saved as 60 minutes.** The edit page now
+  loads `is_draft`, and fills a missing lead time with what the backend reads
+  it as (15 on a window-type event, 60 otherwise).
 - **An open event's times are saved at the form's minute precision.** A stored
   start or end with seconds, or one in the hour repeated when clocks fall back,
   can move by those seconds or by an hour on its first save. A finalized
