@@ -16,23 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3759 (Feature 18, Training extended, pass 11) merged —
-confirmed via `search_pull_requests` (`is:pr is:open head:claude/security-review-`),
-0 matching results. That PR hit a real merge conflict (its branch was cut
-from a stale point and missed PR #3754's own merge to `PROGRESS.md`),
-resolved by merging `main` in; while resolving it, a defect in an earlier
-watchdog edit was found and fixed — the prior tick had deleted the "#3748
-Events & requests" superseded-history block outright instead of wrapping it
-in `<details>` like every other entry, and it was restored from `origin/main`
-during the conflict resolution. After merging, its CI then hit the Mobile
-Safari job's `Install WebKit system libraries` step timing out twice against
-a slow Ubuntu package mirror (external, unrelated to this docs-only PR,
-confirmed by the other 21 jobs in the same run all passing) — the standing
-one-re-run budget was spent, a comment was posted naming the cause, and a
-third attempt (triggered independently, not by this session) succeeded once
-the mirror recovered. Rotation row 18 → ✅ (merged); next is Feature 19
-(Skills testing) — re-check `search_pull_requests` fresh rather than
-trusting this note.
+**PR [#3760](https://github.com/thegspiro/the-logbook/pull/3760)** (branch
+`claude/security-review-skills-testing-p11`) — Feature 19 (Skills testing),
+pass 11. **Watchdog pickup** — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. No
+security-review PR was open — confirmed via `search_pull_requests`, 0
+matching results, after PR #3759 (Feature 18, Training extended, pass 11)
+merged. **0 fixed, 0 flagged.** Real delta since pass 10's own merge
+(`28410795`): only `schemas/skills_testing.py` changed (a `RefusesNull` fix
+on `SkillTemplateUpdate`, and the same numeric-bounds sweep TRX-18 pass 11
+saw). Of 8 frontend files a substring search surfaced, 6 are false
+positives belonging to other features (Apparatus & NFC, a Training-admin-
+area nav rollout, Equipment check & shifts), each traced to confirm; the 2
+genuinely this feature's own carry only a cosmetic status-label-map
+cleanup. Routes re-enumerated by AST: 29, unchanged, all gated. All
+standing SKT findings re-verified unchanged. **Branch name avoids reuse**
+(CLAUDE.md Pitfall #24) — the bare `claude/security-review-skills-testing`
+name was already used and merged (PR #3630, pass 10). See
+`SKT-19-skills-testing.md`'s **Pass 11** section for the full review.
+
+Rotation row 19 → ✅ (pending this PR's merge); next is Feature 20
+(Compliance) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 11, PR #3759, merged after a merge conflict and a transient CI mirror timeout), preserved for history</summary>
