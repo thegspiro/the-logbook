@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**(this PR)** (branch `claude/security-review-apparatus-nfc`) — Feature 13
+(Apparatus & NFC), pass 19. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, re-checked both before starting and again immediately
+before pushing (this rotation has seen two genuine concurrent-watchdog
+races on the last two features; neither recurred this time). No Claude
+session reachable via `ListAgents` — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+is still unreachable. PR #3739 (Feature 12, Facilities, pass 12) had
+already merged. Row 13 (Apparatus & NFC) was confirmed the next `⬜` by
+reading the rotation table directly. **0 fixed, 0 new findings.** Real
+delta since pass 18's baseline (PR #3589, `ca2f1c3c`): a brand-new Member ID
+Cards admin surface added to `nfc_tags.py` (6 new routes — tap-log
+coverage report, paginated tap log + CSV export, bulk revoke/suspend up to
+200 cards, retention settings — all gated `members.manage_id_cards`),
+backed by a new `NfcCardAdminService` and `nfc_card_status_sync.py`
+(auto-suspend/restore on member status change), plus a correctly org-scoped
+refusal (400) added to `delete_apparatus` when a shift/template/equipment
+check still names the vehicle. Reviewed end to end against Pitfall #14/#25
+as the highest-sensitivity surface touched this pass (bulk credential
+revocation, PII export): every query org-scoped, the bulk-revoke's
+per-item failure detail does not distinguish a nonexistent id from an
+out-of-org one (no enumeration oracle), CSV export via `SafeCsvWriter`, new
+migration (`a8c3b50b6d9b`) handles existing rows and guards on table
+existence. Routes re-enumerated: `nfc_tags.py` 5 → 11, `apparatus.py`
+unchanged at 94. AP2-4 re-confirmed FLAGGED/unaffected. See
+`AP-13-apparatus-nfc.md`'s **Pass 19** section for the full review.
+
+Rotation row 13 → ✅ (pending this PR's merge); next is Feature 14
+(Equipment check & shifts).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3739, Feature 12, Facilities, pass 12, merged), preserved for history</summary>
+
 **PR [#3739](https://github.com/thegspiro/the-logbook/pull/3739)** (branch
 `claude/security-review-facilities-p12`) — Feature 12 (Facilities), pass 12. PR #3738 (Feature 11, Inventory, pass 12) was merged
 by this same iteration (watchdog pickup — `search_pull_requests` showed 0
@@ -39,6 +73,8 @@ unaffected — already in `docs/KNOWN_LIMITATIONS.md`. See
 
 Rotation row 12 → ✅ (pending this PR's merge); next is Feature 13
 (Apparatus & NFC).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3738, Feature 11, Inventory, pass 12, merged), preserved for history</summary>
@@ -21883,7 +21919,7 @@ PR is recorded in the Log, not repeated here.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
@@ -21912,6 +21948,69 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 13 (Apparatus & NFC, pass 19) — watchdog pickup, 0 fixed, 0 new findings; Member ID Cards admin surface reviewed end to end
+
+PR #3739 (Feature 12, Facilities, pass 12) had already merged, with no
+`claude/security-review-*` PR open anywhere (`search_pull_requests`, 0
+matching results, re-checked both before starting and again immediately
+before pushing — this rotation saw genuine concurrent-watchdog races on
+each of the last two features, and this pass hit none). No Claude session
+reachable via `ListAgents` — the dedicated review session is still
+unreachable. Row 13 (Apparatus & NFC) confirmed the next `⬜` from the
+Rotation table directly.
+
+Baseline `ca2f1c3c` (PR #3589's merge, pass 18). Real delta, read in full:
+a correctly org-scoped refusal (400, via a new `apparatus_in_use()` helper)
+added to `delete_apparatus` when a shift template, shift, pre-work session,
+equipment check or call response still names the vehicle; and, far larger,
+a brand-new department-wide **Member ID Cards admin surface** added to
+`nfc_tags.py` — six routes (coverage report, paginated tap log, CSV export,
+bulk suspend/revoke up to 200 cards, retention settings), all gated
+`members.manage_id_cards`, backed by a new `NfcCardAdminService` (596 L)
+and `nfc_card_status_sync.py` (auto-suspends/restores a member's cards on
+status change, correctly idempotent — only cards it itself suspended come
+back).
+
+This is the most sensitivity-dense surface reviewed in this rotation lap —
+names members, shows which card each holds, exports that as a file, and
+revokes credentials in bulk — so it got a full trace against CLAUDE.md
+Pitfall #14/#14a/#14c and #25 rather than a spot check: every query in the
+new service filters `organization_id` or ANDs an extra filter onto an
+already org-scoped base query (coverage, tap log); `bulk_update_status`
+resolves each client-supplied `tag_id` through the existing org-scoped
+`get_tag`, and the identical `"Card not found"` message for a nonexistent
+id and an out-of-org id means the bulk response's per-item failure detail
+cannot be used to enumerate another org's card ids; the CSV export uses
+`SafeCsvWriter` and audits row/filter counts, never card contents; the new
+migration (`a8c3b50b6d9b`) guards on table existence, adds the new column
+`NOT NULL` with a `server_default`, and its one data backfill is itself
+org-scoped. No file under `frontend/src/modules/apparatus/` changed — the
+new surface's permission (`members.manage_id_cards`) places any admin UI
+for it outside this module. Routes re-enumerated: `nfc_tags.py` 5 → 11
+(exactly the six new routes), `apparatus.py` unchanged at 94.
+`check_route_permissions.py --strict`: 279 routes, 0 errors. **AP2-4** (the
+one standing flagged item) re-confirmed unaffected — `evoc_level_service.py`
+carries zero commits in this window's delta. See
+`AP-13-apparatus-nfc.md`'s **Pass 19** section for the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+`flake8==7.4.1`/`black==26.10.1`/`isort==9.0.2`, invoked via their
+`/usr/local/bin/` binaries directly — a `~/.local/bin/black` install
+shadows the CI version on `PATH` with a stale `26.5.1`, same gotcha prior
+passes on this feature already documented) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — single head `9ab7b4276c22`, 655
+revisions, no fork; `check_route_permissions.py --strict` — 279 routes, 0
+errors/warnings; `generate_schema_docs.py --check` — up to date; scoped
+backend tests (`-k "apparatus or nfc or evoc or driver_exception or
+card"`) — 1580 passed, 1 skipped (environment-only, `py_vapid`); frontend
+`npm run typecheck` clean; `npm run lint` clean (0 warnings); scoped
+frontend suite (`npx vitest run src/modules/apparatus`) — 114 passed (15
+files, unchanged from pass 18).
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
+& shifts) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-10-26 — Feature 12 (Facilities, pass 12) — watchdog pickup, 0 fixes, 0 new findings; two new paginated endpoints reviewed and found sound
 

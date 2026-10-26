@@ -1,13 +1,169 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 18 PR recorded in `PROGRESS.md`
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 19 (this PR)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (94 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
-`external_apparatus_service.py`, `api/v1/endpoints/nfc_tags.py` (5 routes),
-`services/nfc_tag_service.py`, `mcp/tools/apparatus.py`
-**Frontend:** `modules/apparatus`
-**Migrations:** none this iteration (no schema change)
+`external_apparatus_service.py`, `api/v1/endpoints/nfc_tags.py` (11 routes,
+up from 5 as of pass 19 — the Member ID Cards admin surface), `services/nfc_tag_service.py`,
+`services/nfc_card_admin_service.py` (new, pass 19), `services/nfc_card_status_sync.py`
+(new, pass 19; also called from the Users & organizations member-status
+endpoints — that call site is Feature 07's scope), `mcp/tools/apparatus.py`
+**Frontend:** `modules/apparatus` (the Member ID Cards admin UI, if any, is
+members-permission-gated and lives outside this module — not found under
+`frontend/src/modules/apparatus/`, confirmed by diff: no frontend file in
+that tree changed this pass)
+**Migrations:** none through pass 18; pass 19 reviews
+`a8c3b50b6d9b_nfc_card_taps_and_auto_suspend`
+
+---
+
+## Pass 19 (2026-10-26, watchdog pickup) — real delta: Member ID Cards admin surface (NFC tap log, bulk revoke, coverage report), 0 fixed, 0 new findings
+
+**Watchdog pickup.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 open PRs, and no Claude session was reachable via `ListAgents`
+(the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, is still unreachable). PR #3739
+(Feature 12, Facilities, pass 12) had already merged. Rotation row 13
+(Apparatus & NFC) was confirmed the next `⬜` by reading the rotation table
+directly, immediately before and again immediately before pushing (this
+rotation has seen two genuine concurrent-watchdog races in the last two
+passes; re-checked at both points and found no competing PR either time).
+
+### Scope and delta
+
+Baseline: pass 18's merge, PR #3589 (`ca2f1c3c`). `git diff --stat` against
+it, across the declared scope plus the two new backing service files the
+delta itself pulled in, found **4 files directly in the declared scope
+changed, plus 3 backing files** (`models/nfc_tag.py`, `schemas/nfc_tag.py`,
+and a new `services/nfc_card_status_sync.py`) and one new migration —
+**+1829/−23** across all of it. Read in full:
+
+- **`apparatus.py` (+16) / `apparatus_service.py` (+8)** — `delete_apparatus`
+  now refuses (400) when a shift template, shift, pre-work session,
+  equipment check or call response still names the vehicle, via a new
+  `apparatus_in_use()` helper (`app/utils/apparatus_ref.py`). The helper
+  queries five models filtered on `apparatus_id == ... AND organization_id
+== organization_id`, called only after the apparatus row itself was already
+  resolved org-scoped one line above — the same "already-landed `*InUseError`
+  409" shape pass 18 and earlier passes reviewed for Facilities/Documents.
+  Not a finding.
+- **`nfc_tags.py` (+235) — a brand-new Member ID Cards admin surface**,
+  backed by a brand-new `NfcCardAdminService` (596 L, read in full): six new
+  routes — `GET /coverage` (members with no working card / unused cards /
+  cards held by leavers), `GET /taps` (paginated tap log), `GET
+/taps/export` (the tap log as a CSV, `SafeCsvWriter`, capped at
+  `MAX_EXPORT_ROWS=10000`, audited on export via `log_audit_event`), `POST
+/bulk-status` (suspend/reactivate/report-lost/revoke up to `MAX_BULK_CARDS=200`
+  cards at once — matched by `NfcTagBulkStatusRequest.tag_ids`'s own
+  `max_length=200`), `GET`/`PUT /settings` (tap-log retention months,
+  audited on change). All six gated `require_permission("members.manage_id_cards")`
+  plus `require_nfc_id_cards` (the module feature-flag gate). Routes
+  re-enumerated by grep: `nfc_tags.py` 5 → 11 (the sixth is the settings
+  GET+PUT pair, each its own decorator).
+- **Reviewed end to end against Pitfall #14/#14a/#14c and #25, as the
+  highest-sensitivity surface this pass touched** (names members, shows
+  which card each holds, exports that as a file, revokes credentials in
+  bulk):
+  - `coverage()` and `list_taps()`: every query's base filter is
+    `organization_id == org_id` (on `User`, `NfcTag`, or `NfcCardTap`); every
+    other parameter (`facility_id`-style filters, `tag_id`, `user_id`,
+    `location_id`, `target_id`) is one more `AND` term inside that already
+    org-scoped query, so a cross-org id simply matches nothing — the correct
+    shape, not a missing check.
+  - `bulk_update_status(organization_id, tag_ids, status, revoked_reason)`:
+    each `tag_id` is resolved through `NfcTagService.update_tag` →
+    `get_tag(tag_id, organization_id)`, which filters
+    `NfcTag.organization_id == organization_id` and returns `None` for any
+    id not in this org. `update_tag` then raises `ValueError("Card not
+found")` — **the identical message** for a nonexistent id and an
+    out-of-org id — which lands in the response's `failed` list as `{"id":
+tag_id, "detail": "Card not found"}`. Traced this specifically because a
+    bulk endpoint returning per-item detail is exactly where an existence
+    oracle tends to leak: confirmed it does not, since both cases are
+    indistinguishable in the response.
+  - `get_settings`/`update_settings`: `organization_id` here is always
+    `current_user.organization_id` (never a client-supplied value to
+    validate against another org), so this is the caller reading/writing
+    their own org's settings row — not an IDOR surface. `update_settings`
+    uses `copy.deepcopy(org.settings)` + `flag_modified` (Pitfall #12
+    compliant).
+  - CSV export: `SafeCsvWriter`, correctly used; audit event logs row/total
+    counts and the filters applied, not card contents.
+  - `NfcCardTap`'s `tag_id`/`user_id`/`location_id`/`operator_id` FKs are all
+    `ondelete="SET NULL"` with `nullable=True` (Pitfall #2 compliant).
+- **`nfc_tag_service.py` (+208/−?)** — `check_in` now always writes a
+  `NfcCardTap` row via a new `_record_tap` helper, refusals included
+  (`organization_id` always stamped from the caller's own org; an
+  unregistered card's UID is stored only as the same peppered hash
+  `nfc_tags` already uses, never the raw UID). A new `auto_suspended` column
+  on `NfcTag` (see below) is now cleared by `update_tag` whenever an officer
+  changes a card's status by hand, "handing the card back to human control."
+  `station_check_in` additionally threads through a new `operator_id`
+  parameter for attribution only — no authorization change.
+- **`services/nfc_card_status_sync.py` (new, +123)** — automatically
+  suspends a member's active cards when their status moves into
+  `BLOCKED_MEMBER_STATUSES`, and restores (only) the cards it itself
+  suspended when the member returns (gated on `NfcTag.auto_suspended.is_(True)`,
+  so an officer's own suspension and lost/revoked cards are untouched in
+  either direction — correctly idempotent per Pitfall #36: re-running with an
+  unchanged `member_status` matches no rows because the query's `status ==
+wanted` condition is already false). Runs in the caller's transaction,
+  commits with the status change or not at all. Imported by both
+  `nfc_tag_service.py` (for the tap-time refusal set) and the Users &
+  organizations member-status endpoints (the call site itself is Feature
+  07's scope, not reviewed here beyond confirming the shared set's shape).
+- **Migration `a8c3b50b6d9b`** (new `nfc_card_taps` table, new
+  `nfc_tags.auto_suspended` column): guards every step on the target table
+  existing first (Pitfall #26), adds the new column `nullable=False` with a
+  `server_default` (Pitfall #35), and its one data change — backfilling
+  `auto_suspended`/`suspended` onto already-blocked members' active
+  cards — is itself org-scoped (`JOIN users ... AND u.organization_id =
+t.organization_id`). Downgrade restores the pre-migration status and drops
+  the column/table, documented as losing tap history. `validate_migrations.py
+--strict`: single head, no fork.
+- **Frontend**: confirmed no file under `frontend/src/modules/apparatus/`
+  changed. The new surface is gated on `members.manage_id_cards`, not an
+  apparatus permission, so its admin UI (if built) belongs to a different
+  module/rotation row; nothing to review here.
+
+### Route inventory
+
+`apparatus.py`: **94**, unchanged from pass 18. `nfc_tags.py`: **11**, up
+from 5 — exactly the six new Member ID Cards routes described above, all
+gated `members.manage_id_cards` (+ the feature-flag gate). No existing
+route's permission string changed. `check_route_permissions.py --strict`:
+279 routes repo-wide, 0 errors, 0 warnings.
+
+### Standing flagged item (unchanged)
+
+**AP2-4** (MED, app-review, mirrored in `KNOWN_LIMITATIONS.md`) re-confirmed
+unchanged — `evoc_level_service.py` has zero commits in this pass's delta.
+
+## Findings (pass 19)
+
+None new. The bulk-revoke, coverage-report and tap-log surfaces reviewed
+above — the parts of this delta most likely to leak across tenants or
+enumerate another org's cards — all came back clean on direct trace, not
+inference. AP2-4 remains the only standing item.
+
+## Completion gate (pass 19)
+
+| Check                                                                     | Result                                           |
+| ------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (CI-pinned 7.4.1)                           | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/` (CI-pinned 26.10.1)                  | ✅ clean, 2671 files unchanged                   |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.2)               | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                         | ✅ single head `9ab7b4276c22`, 655 revisions     |
+| `python3 scripts/check_route_permissions.py --strict`                     | ✅ 279 routes, 0 errors, 0 warnings              |
+| `python3 scripts/generate_schema_docs.py --check`                         | ✅ up to date                                    |
+| `pytest tests/ -k "apparatus or nfc or evoc or driver_exception or card"` | ✅ 1580 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                        | ✅ 0 errors                                      |
+| `cd frontend && npm run lint`                                             | ✅ 0 errors, 0 warnings                          |
+
+Rotation row 13 → ✅ (pending this PR's merge); next is Feature 14
+(Equipment check & shifts) — re-check `search_pull_requests` fresh rather
+than trusting this note.
 
 ---
 
