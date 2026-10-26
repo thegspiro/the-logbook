@@ -258,6 +258,20 @@ See the [Installation Guide](Installation) for setup instructions.
 [Link Text](https://full-url.com)
 ```
 
+### Links to Files in the Main Repository
+
+```markdown
+[docs/BACKUP.md](https://github.com/thegspiro/the-logbook/blob/main/docs/BACKUP.md)
+```
+
+Use the absolute `blob/main` URL, never a relative `../docs/BACKUP.md`. The
+relative form resolves while browsing this directory on GitHub, and the docs
+link checker accepts it, but the published wiki lives at
+`github.com/thegspiro/the-logbook/wiki/<Page>`, where `../docs/...` resolves to
+a path that does not exist. The sidebar carried twelve such links to modules
+that had no wiki page. If a topic a reader needs only exists under `docs/`, give
+it a wiki page and link to that page.
+
 ### Images
 
 Put the file in `wiki/images/` and reference it relative to the page:

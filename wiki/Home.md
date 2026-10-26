@@ -73,11 +73,19 @@ docker compose up -d
 - **[Communications](Module-Communications)** - Department messages with acknowledgment tracking, email/SMS escalation, and scheduled send
 - **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates, pattern presets & reports
 - **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out, bulk approve, CSV export
-- **[Member ID Card](../docs/TROUBLESHOOTING.md#member-id-card-issues)** - Digital member identification with QR code, barcode, and print support
+- **[Member ID Card](Member-ID-Cards)** - Digital member identification with QR code, barcode, and print support
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Inventory](Module-Inventory)** - Gear, uniforms and EMS supplies: tracking, assignments, pool items, thermal labels
 - **[Medical Supplies](Module-Medical-Supplies)** - EMS consumables as dated lots, domain-scoped permissions, EMS Supply Officer role
 - **[Compliance](Module-Compliance)** - Compliance tracking
+- **[Compliance Configuration](Compliance-Configuration)** - Thresholds, profiles and report settings
+- **[Training Compliance Calculations](Training-Compliance-Calculations)** - How a member's compliance figure is worked out
+- **[Skills Testing](Module-Skills-Testing)** - Skill evaluations, scorecards and officer sign-off
+- **[Medical Screening](Module-Medical-Screening)** - Physicals, fit tests and other screenings (PHI)
+- **[Prospective Members](Module-Prospective-Members)** - Applicant pipeline from inquiry to membership
+- **[Meeting Minutes](Module-Meeting-Minutes)** - Agendas, minutes, circulation and adoption
+- **[Finance](Module-Finance)** - Budgets, purchase requests, approvals, dues
+- **[Label Printing](Module-Label-Printing)** - Thermal and sheet labels for inventory and equipment
 - **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync _(2026-04-11)_
 
 ### 🔐 Security
@@ -87,7 +95,9 @@ docker compose up -d
 - **[Encryption](Security-Encryption)** - AES-256-GCM encryption
 - **[Audit Logging](Security-Audit-Logging)** - Tamper-proof audit trails
 - **[Privacy & Data Rights](Security-Privacy)** - Data export, anonymization, consent, retention
-- **[Compliance Hub](../docs/COMPLIANCE.md)** - Framework alignment and control inventory
+- **[Compliance Hub](Compliance-Hub)** - Framework alignment and control inventory
+- **[Key Rotation](Security-Key-Rotation)** - Rotating signing and encryption keys
+- **[Backup & Disaster Recovery](Backup-Recovery)** - Backups, restores and drills
 - **[HIPAA Security Features](Security-HIPAA)** - Security features aligned with HIPAA requirements
 
 ### 🛠️ Troubleshooting
