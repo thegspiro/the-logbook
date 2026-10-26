@@ -33,6 +33,7 @@ import {
 import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
+import { BARCODE_SVG_PRINT_CSS } from './barcodePrintCss';
 import { SheetStartPicker } from './SheetStartPicker';
 import type { LabelPrinterConfig, PrintLabelsResult } from '../../services/labelService';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -446,7 +447,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
       body { background: white; }
       .barcode-label { break-inside: avoid; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       .barcode-label svg { display: block !important; max-width: 100% !important; height: auto !important; }
-      .barcode-label svg rect { fill: #000 !important; }
+      ${BARCODE_SVG_PRINT_CSS}
       ${isThermalFmt ? '.barcode-label { page-break-after: always; } .barcode-label:last-child { page-break-after: auto; }' : ''}
     </style></head><body><div style="${(container.getAttribute('style') || '').replace(/"/g, '&quot;')}">${container.innerHTML}</div></body></html>`);
     doc.close();
