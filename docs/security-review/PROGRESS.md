@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(this PR)** (branch `claude/security-review-equipment-check`) — Feature
+**PR [#3741](https://github.com/thegspiro/the-logbook/pull/3741)** (branch
+`claude/security-review-equipment-check`) — Feature
 14 (Equipment check & shifts), pass 12. No security-review PR was open —
 confirmed via `search_pull_requests` (`is:pr is:open
 head:claude/security-review-`), 0 matching results, re-checked immediately
