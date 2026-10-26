@@ -6459,20 +6459,6 @@ Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10).
   start an application from them. **Decision:** whether they become real,
   seeded opportunities.
 
-## Fundraising — A Donor Must Have a Person's Name (2026-10-15)
-
-Found driving W69 (`docs/workflow-review/W69-fundraising.md`, W69-6).
-
-- **What happens:** `first_name` and `last_name` are required on every donor
-  (`DonorBase` in `schemas/grant.py`, and the Add Donor form), whatever the
-  donor type. A business is entered under its contact ("Dale Harmon (Valley
-  Hardware)"); a foundation or business with no named contact cannot be
-  added at all.
-- **Decision:** whether business, foundation and government donors may be
-  recorded by organization name alone, which would make the name fields
-  optional for those types (a schema change, and the list and receipts would
-  need to name such a donor by `company_name`).
-
 ## Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)
 
 Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).

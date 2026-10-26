@@ -818,8 +818,11 @@ class DonorBase(BaseModel):
 
     model_config = _request_config
 
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
+    # Optional since W69-6: a non-individual donor may give only company_name.
+    # FundraisingService.check_donor_name holds the rule for both create and
+    # update, because an update can change donor_type or clear a name.
+    first_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[str] = Field(None, max_length=255)
     phone: Optional[str] = Field(None, max_length=20)
     address_line1: Optional[str] = Field(None, max_length=255)
