@@ -201,17 +201,18 @@ described in [Membership → Pipeline Stage Types](./01-membership.md#pipeline-s
 
 Each stage can be set up with:
 
-| Setting                                    | What it does                                                                      |
-| ------------------------------------------ | --------------------------------------------------------------------------------- |
-| **Auto-Advance**                           | Move to the next stage automatically when this stage's condition is met           |
-| **Required**                               | The stage must be completed — it cannot be skipped                                |
-| **Inactivity Timeout Override**            | A custom timeout for this stage, instead of the pipeline's                        |
-| **Email Settings** (automated email stage) | Subject, sections, welcome text, FAQ link, next meeting info, status tracker link |
-| **Form** (form stages)                     | Which form to link                                                                |
-| **Event Type** (meeting stage)             | Interview, orientation, or ride-along                                             |
-| **Auto-Link Event Type** (meeting stage)   | Which event type the stage waits on. Naming one makes attendance required         |
-| **Scheduling** (meeting stage)             | _Manual_ or _Cal.com self-scheduling_ — shown only when Cal.com is connected      |
-| **Collection Method** (document stage)     | _Upload_ or _Documenso e-signature_ — shown only when Documenso is connected      |
+| Setting                                    | What it does                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auto-Advance**                           | Move to the next stage automatically when this stage's condition is met                                                                                                                                                                                                                                       |
+| **Required**                               | The stage must be completed — it cannot be skipped                                                                                                                                                                                                                                                            |
+| **Inactivity Timeout Override**            | A custom timeout for this stage, instead of the pipeline's                                                                                                                                                                                                                                                    |
+| **Email Settings** (automated email stage) | Subject, sections, welcome text, FAQ link, next meeting info, status tracker link                                                                                                                                                                                                                             |
+| **Email Template** (automated email stage) | A switched-on custom template to send instead of the section-built email; its subject and body are used, with first name, last name, prospect name, stage name and status link filled in. System templates cannot be chosen. A template that is later switched off or deleted falls back to the section email |
+| **Form** (form stages)                     | Which form to link                                                                                                                                                                                                                                                                                            |
+| **Event Type** (meeting stage)             | Interview, orientation, or ride-along                                                                                                                                                                                                                                                                         |
+| **Auto-Link Event Type** (meeting stage)   | Which event type the stage waits on. Naming one makes attendance required                                                                                                                                                                                                                                     |
+| **Scheduling** (meeting stage)             | _Manual_ or _Cal.com self-scheduling_ — shown only when Cal.com is connected                                                                                                                                                                                                                                  |
+| **Collection Method** (document stage)     | _Upload_ or _Documenso e-signature_ — shown only when Documenso is connected                                                                                                                                                                                                                                  |
 
 ![Editing the Attend a Business Meeting stage: Auto-Link Event Type set to Next Business Meeting, its help text saying that naming an event makes attendance required, the next upcoming meeting it will link, and the checkbox reading Auto-advance when the event's attendance is finalized, with its explanation that a sign-in at the door is not enough on its own](./images/15-15-meeting-stage-config.png)
 
@@ -976,6 +977,13 @@ Applicants get a private link to check their application without signing in.
 - The link is created when the applicant is added, and it goes out in the
   pipeline's emails.
 - The link stays the same each time they open it.
+- **Next meeting** _(2026-10-25)_: the page shows the applicant's next
+  meeting stage with its title, date and time in the department's time zone,
+  location, address, **Add to calendar** and **Get directions**. A meeting the
+  applicant missed is replaced as soon as it ends, and the nightly pass records
+  the miss and links the next event. It is hidden for a stage hidden from
+  applicants. The stage email also falls back to the next event of the chosen
+  type once its saved meeting has passed.
 - If the page cannot reach the department — an outage, a dropped connection —
   it reads **Status Unavailable** with **Try again**. Only a link that really
   matches no application reads **Application Not Found**.

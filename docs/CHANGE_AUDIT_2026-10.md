@@ -5,6 +5,47 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 25 – 26, 2026
+
+Merged to `main` since `a083c82a` (2026-10-25 13:18 UTC) through `14f1e4b2`
+(2026-10-26 13:24 UTC). Security-review passes (medical-screening,
+membership-pipeline, finance-approvals, elections-ballots, users-organizations,
+documents-legal, inventory, facilities, apparatus-nfc, equipment-check-shifts
+with EC-17 flagged) are in `docs/security-review/PROGRESS.md`. `CHANGELOG.md`
+stays closed.
+
+| Change                                                                                                                                                                                                   | Guide                                           | Disposition                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------- |
+| Event **guest check-in QR code** for events with no kiosk room (`/event-guest/:token`, migration `b7e4c2a91d35`); reset revokes printed copies                                                           | 04                                              | Added; screenshot queued                                      |
+| Staff **Add guest** / **Sign in** on the event Guests card; walk-ins open an application at pipeline events                                                                                              | 04                                              | Added                                                         |
+| Recruitment-event kiosk signs in by **email**, recognising active applicants                                                                                                                             | 04, 15                                          | Already in 04; confirmed                                      |
+| Public forms **embeddable** on a department site (`forms.allow_embed`, allowed websites under Organization Settings → Forms, nginx `auth_request`)                                                       | 07                                              | Written with the change; operators: see frontend `nginx.conf` |
+| Pipeline stage **Email Template** picker; stage email falls back to the next event; applicant status page shows the **next meeting** with Add to calendar                                                | 15                                              | Added                                                         |
+| Events, Members and Department Store admin use the shared area-card navigation (`AdminHubAreaNav`)                                                                                                       | 01, 04, 18                                      | Written with the change; full-page shots queued               |
+| Scheduling settings: second section nav removed, **Platoon Rosters** card                                                                                                                                | 03                                              | Written with the change                                       |
+| Grants: **edit and retire** opportunities, **Show retired**                                                                                                                                              | 12                                              | Added; screenshot queued                                      |
+| Notification rules: **Edit** and **Delete** with warning                                                                                                                                                 | 07                                              | Added; screenshot queued                                      |
+| Privacy choices: **Yes / No** for photo use and roster listing                                                                                                                                           | 17                                              | Added; 17-01 to replace                                       |
+| Medical screening: record with no expiration falls due by **frequency**; superseded records off the expiring list; waivers listed; unknown subject is 404                                                | 13                                              | Added; `KNOWN_LIMITATIONS`                                    |
+| Inventory **Print Labels** menu beside Export; Print Selected renamed                                                                                                                                    | 05                                              | Written with the change                                       |
+| QR check-in analytics now recorded on the server (scans once per member, outcomes with a reason)                                                                                                         | wiki                                            | Dashboard no longer reads zero                                |
+| Phone numbers and home addresses encrypted at rest (migration `5510d5ff49eb`; needs `ENCRYPTION_KEY`; older backups hold plaintext)                                                                      | `UPGRADING`, wiki Security-Encryption           | Written with the change                                       |
+| Google Drive storage deletes by trashing (30 days); `migrate_uploads_to_remote.py` replaces the S3-only name (alias kept)                                                                                | `UPGRADING`, `BACKUP`, `FILE_STORAGE_HARDENING` | Written with the change                                       |
+| Email: Gmail sending notes on both setup screens; SMTP batches stop at Gmail and Exchange Online daily quota, retry on 421/451/452/432                                                                   | 08                                              | Setup notes written; batch behaviour backend only             |
+| Scheduled compliance report email retried for 7 days; Generate Report toast says when the email was not sent                                                                                             | 08                                              | Backend / toast wording                                       |
+| Dotted usernames (`john.doe`) can sign in; password-change gate no longer fires refused requests                                                                                                         | 00, 01                                          | Backend / no wording change                                   |
+| Refused: deleting an apparatus that records name, a repeat dues waiver, waiving a paid order; merged write-in votes survive a candidate delete; deleted program phase no longer blocks a credit reversal | 06, 11, 14, 02                                  | Backend refusals; no screen change                            |
+| Hours grading tolerates float drift; reminder lead times capped at 30 days; 30 request fields bounded                                                                                                    | `KNOWN_LIMITATIONS`                             | Backend                                                       |
+| Accessibility: input borders 3:1, hub tab names, keyboard CSV drop zone; toolbar buttons match field height on desktop; iPad-landscape grids; phone landscape side nav                                   | none                                            | Visual only; shots queued                                     |
+| Housekeeping: four npm packages patched (0 vulnerabilities), three Alembic heads joined by `1ad0b594f3fb`, Mobile Safari E2E job, permissionless-route ratchet                                           | none                                            | No guide change                                               |
+
+**Screenshots to create:** guest QR on the event QR page, Grants edit form and
+Show retired, notification-rule delete warning, Print Labels menu, applicant
+status page next-meeting card, Pipeline stage Email Template picker. **Replace:**
+17-01 (Yes / No pairs). **Re-check:** Events, Members and Store admin hub
+shots (area cards), any shot of the old flat tab row. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 24 – 25, 2026
 
 Merged to `main` since `adf1d463` (2026-10-24 13:15 UTC) through `4f27e679`

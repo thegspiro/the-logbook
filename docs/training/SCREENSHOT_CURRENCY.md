@@ -1,5 +1,23 @@
 # Screenshot currency
 
+## Queued by the October 25 – 26 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 04 | Event QR page with the guest check-in QR code, Reset, and print-one-code choice; event Guests card with Add guest | Create |
+| 17 | 17-01 My Account → Privacy with Yes / No pairs for photo use and roster listing | Replace |
+| 12 | Edit opportunity form; opportunities list with Show retired | Create |
+| 07 | Notification rule delete warning; Edit dialog | Create |
+| 05 | Items list **Print Labels** menu | Create |
+| 15 | Stage editor Email Template picker; applicant status page next-meeting card | Create |
+| 07 | Share dialog embed code and Organization Settings → Forms allowed sites | Create |
+| 01, 04, 18 | Members, Events and Department Store administration with area cards | Re-check any full-page or flat-tab-row shot (01-22, 08-91, 18-02, 19-06, 19-08 already marked) |
+| 13 | Compliance tab showing a **by frequency** row and a waiver | Create |
+| All | Any form or toolbar shot on desktop or an iPad (input borders darker; toolbar buttons match field height) | Re-check |
+
 ## Queued by the October 24 – 25 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
