@@ -4584,8 +4584,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
-| `first_name` | VARCHAR(100) | no |  |  |  |
-| `last_name` | VARCHAR(100) | no |  |  |  |
+| `first_name` | VARCHAR(100) | yes |  |  |  |
+| `last_name` | VARCHAR(100) | yes |  |  |  |
 | `email` | VARCHAR(255) | yes |  |  |  |
 | `phone` | TEXT | yes |  |  |  |
 | `address_line1` | TEXT | yes |  |  |  |

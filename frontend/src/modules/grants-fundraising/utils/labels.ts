@@ -32,7 +32,7 @@ export const budgetItemCategoryLabel = (category: string): string =>
 
 /** A donor as the pickers and lists name them: person, then organization. */
 export const donorDisplayName = (donor: Donor): string => {
-  const name = `${donor.firstName} ${donor.lastName}`.trim();
+  const name = `${donor.firstName ?? ''} ${donor.lastName ?? ''}`.trim();
   if (donor.companyName) return name ? `${name} (${donor.companyName})` : donor.companyName;
   return name || 'Unnamed donor';
 };
