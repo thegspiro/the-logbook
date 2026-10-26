@@ -6544,21 +6544,6 @@ Found driving W76 (`docs/workflow-review/W76-public-portal.md`, W76-6).
   Removing a catalogue row also needs a data change for existing
   installations.
 
-## IP Security — An Admin Can Approve Their Own IP Exception (2026-10-20)
-
-Found driving W74 (`docs/workflow-review/W74-ip-security.md`, W74-5).
-
-- **What happens:** `POST /ip-security/exceptions/{id}/approve` accepts an
-  approval from the member the exception is for. An admin who files a request
-  can approve it at once.
-- **Why it is not simply fixed:** the same admin can already add and remove
-  blocked countries, so self-approval widens little. A department with one
-  IT administrator would also be left unable to approve their own travel
-  exception.
-- **Decision:** whether approval needs a second person
-  (`assert_different_person`, as money approvals use), and if so what a
-  single-admin department does.
-
 ## RPT2-3 — The QR Check-In Analytics Dashboard Had A Reader And No Writer (2026-10-20, resolved 2026-10-25)
 
 **Resolved (owner decision: record server-side).** The self-check-in page's
