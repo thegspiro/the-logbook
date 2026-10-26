@@ -198,6 +198,8 @@ const UNCACHEABLE_SUBSTRINGS = [
   // /inventory/checkout to this request's option list.
   '/ical-feed', // the department events feed URL carries its bearer token; a cached
   // copy would keep showing the old link for 90s after a reset.
+  '/guest-check-in-link', // an event's guest QR code token: the same bearer
+  // credential, and the same stale-after-reset problem.
 ] as const;
 
 interface CacheEntry {

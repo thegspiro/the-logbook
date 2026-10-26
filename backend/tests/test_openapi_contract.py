@@ -96,6 +96,22 @@ class TestPublicRouteErrorResponses:
                 "post",
                 {"400", "404", "429"},
             ),
+            # The same guest sign-in through an event's own guest QR code.
+            (
+                "/api/public/v1/event-guest/{guest_token}/guest-check-in",
+                "post",
+                {"400", "404", "429"},
+            ),
+            (
+                "/api/public/v1/event-guest/{guest_token}/guest-lookup",
+                "post",
+                {"400", "404", "429"},
+            ),
+            (
+                "/api/public/v1/event-guest/{guest_token}/guest-confirm",
+                "post",
+                {"400", "404", "429"},
+            ),
         ],
     )
     def test_declares_the_codes_it_can_return(self, schema, path, method, expected):
@@ -121,6 +137,18 @@ class TestTokenPathConstraints:
 
         assert param["schema"]["minLength"] == 10
         assert param["schema"]["maxLength"] == 64
+
+    def test_event_guest_token_declares_its_exact_length(self, schema):
+        # secrets.token_urlsafe(32) is always 43 characters.
+        param = self._param(
+            schema,
+            "/api/public/v1/event-guest/{guest_token}/guest",
+            "get",
+            "guest_token",
+        )
+
+        assert param["schema"]["minLength"] == 43
+        assert param["schema"]["maxLength"] == 43
 
     def test_approval_token_declares_its_length_bounds(self, schema):
         param = self._param(

@@ -226,7 +226,8 @@ export function scrubSensitive(text: string): string {
  * `path` — so each pattern must cover both. The /display/ pattern redacts the
  * kiosk display code, which is the bearer credential for the public guest
  * check-in flow; it requires a segment after the slash, so paths that merely
- * end in /display are untouched.
+ * end in /display are untouched. The /event-guest/ pattern redacts an event's
+ * own guest QR code token, the same credential for the same flow.
  */
 export function sanitizePath(path: string): string {
   return path
@@ -234,7 +235,8 @@ export function sanitizePath(path: string): string {
     .replace(/(\/event-requests?\/status\/)[^/?#]+/gi, '$1[REDACTED]')
     .replace(/(\/application-status\/)[^/?#]+/gi, '$1[REDACTED]')
     .replace(/(\/calendar\/)[^/?#]+(?=\.ics(?:[/\s?#]|$))/gi, '$1[REDACTED]')
-    .replace(/(\/display\/)[^/?#]+/gi, '$1[REDACTED]');
+    .replace(/(\/display\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/event-guest\/)[^/?#]+/gi, '$1[REDACTED]');
 }
 
 // ---------------------------------------------------------------------------

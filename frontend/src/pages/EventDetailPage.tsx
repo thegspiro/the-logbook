@@ -81,6 +81,7 @@ import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplate
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
+import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
 import EventTransferModal from '../components/event-detail/EventTransferModal';
@@ -1645,6 +1646,20 @@ export const EventDetailPage: React.FC = () => {
               allowsGuestCheckIn={event.allow_guest_check_in ?? false}
               addsGuestsToPipeline={event.guest_check_in_creates_prospect ?? false}
             />
+
+            {/* The code visitors scan to sign themselves in, for an event held
+                where there is no room kiosk. Renders only for events.manage,
+                and only while guest check-in is on. A cancelled event refuses
+                every guest sign-in, so it offers no code to put up. */}
+            {!event.is_cancelled && (
+              <GuestCheckInQRCard
+                eventId={event.id}
+                eventName={event.title}
+                allowGuestCheckIn={event.allow_guest_check_in ?? false}
+                isDraft={event.is_draft ?? false}
+                showFullPageLink
+              />
+            )}
 
             {/* Attachments */}
             {event.attachments && event.attachments.length > 0 && (

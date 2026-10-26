@@ -449,4 +449,82 @@ describe('GuestCheckInPage', () => {
       expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
     });
   });
+
+  describe("Through an event's own guest QR code", () => {
+    const TOKEN = 'g'.repeat(43);
+    const base = `/api/public/v1/event-guest/${TOKEN}`;
+
+    beforeEach(() => {
+      mockParamsValue = { token: TOKEN };
+    });
+
+    it('loads the event from the token, not a room code', async () => {
+      const fetchMock = mockFetchSequence({ ok: true, body: eventInfo });
+
+      renderWithRouter(<GuestCheckInPage />);
+
+      expect(await screen.findByText('Volunteer Interest Night')).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledWith(`${base}/guest`);
+    });
+
+    it('signs the guest in through the same token', async () => {
+      const user = userEvent.setup();
+      const fetchMock = mockFetchSequence(
+        { ok: true, body: eventInfo },
+        {
+          ok: true,
+          status: 201,
+          body: {
+            status: 'checked_in',
+            attendee_id: 'att-1',
+            event_name: 'Volunteer Interest Night',
+            checked_in_at: '2026-08-09T23:05:00Z',
+            message: "You're signed in to Volunteer Interest Night.",
+          },
+        }
+      );
+
+      renderWithRouter(<GuestCheckInPage />);
+      expect(await screen.findByLabelText(/first name/i)).toBeInTheDocument();
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      expect(await screen.findByText("You're signed in!")).toBeInTheDocument();
+      const [url, options] = fetchMock.mock.calls[1] as [string, RequestInit];
+      expect(url).toBe(`${base}/guest-check-in`);
+      expect(options.method).toBe('POST');
+    });
+
+    it('looks up a returning applicant through the same token', async () => {
+      const user = userEvent.setup();
+      const fetchMock = mockFetchSequence(
+        { ok: true, body: pipelineEventInfo },
+        {
+          ok: true,
+          body: {
+            status: 'prospect',
+            display_name: 'Jane S.',
+            confirm_token: 'tok-123',
+            message: 'Welcome back! Please confirm this is you.',
+          },
+        }
+      );
+
+      renderWithRouter(<GuestCheckInPage />);
+      await user.type(await screen.findByLabelText(/^email/i), 'jane@example.com');
+      await user.click(screen.getByRole('button', { name: /continue/i }));
+
+      expect(await screen.findByText('Is this you, Jane S.?')).toBeInTheDocument();
+      const [url] = fetchMock.mock.calls[1] as [string, RequestInit];
+      expect(url).toBe(`${base}/guest-lookup`);
+    });
+
+    it('answers an unknown or revoked code with the unavailable message', async () => {
+      mockFetchSequence({ ok: false, status: 404, body: { detail: 'Sign-in is not available for this event.' } });
+
+      renderWithRouter(<GuestCheckInPage />);
+
+      expect(await screen.findByText(/Sign-in is not available for this event/)).toBeInTheDocument();
+    });
+  });
 });

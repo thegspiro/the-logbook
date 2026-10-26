@@ -993,6 +993,19 @@ class GuestCheckInEventInfo(BaseModel):
     timezone: Optional[str] = None
 
 
+class GuestCheckInLinkResponse(BaseModel):
+    """An event's own guest QR code, returned only to events.manage holders.
+
+    ``guest_token`` is a bearer credential for the public sign-in path; it is
+    deliberately absent from every response a member without that permission
+    can read.
+    """
+
+    event_id: str
+    allow_guest_check_in: bool
+    guest_token: Optional[str] = None
+
+
 class EventStats(BaseModel):
     """Event statistics"""
 
