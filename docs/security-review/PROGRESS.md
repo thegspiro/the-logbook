@@ -16,21 +16,48 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3754 (Feature 17, Training core, pass 11) merged — confirmed
-via `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
-matching results. That PR was itself a watchdog pickup (dedicated
-`/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
-unreachable); a second watchdog tick picked up its CI after merge-time: the
-`Frontend E2E (Mobile Safari)` check failed deterministically (3/3 attempts)
-on a pre-existing `/scheduling/admin/planning` color-contrast test-timing
-race (axe sampling `.btn-secondary` mid 150ms fade-in) — confirmed red on
-the PR's own base commit too, so unrelated to this docs-only PR. The fix
-already existed, unmerged, on PR #3757 (commit `77597088`); ported the same
-one-line `page.emulateMedia({ reducedMotion: 'reduce' })` change into #3754
-directly rather than waiting on #3757, then merged once green.
+**PR [#3759](https://github.com/thegspiro/the-logbook/pull/3759)** (branch
+`claude/security-review-training-extended-p11`) — Feature 18 (Training
+extended), pass 11. **Watchdog pickup** — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was unreachable. No security-review PR was open — confirmed via
+`search_pull_requests`, 0 matching results, after PR #3754 (Feature 17,
+Training core, pass 11) merged. **0 fixed, 0 flagged.** Real delta since
+pass 10's own merge (`e8b0791f`): three of fourteen declared backend files
+changed (a schema-layer `RefusesNull` sweep, a numeric-bounds sweep, and a
+bug fix scoped to an already-validated `program_id`); three of eleven
+established frontend files changed (two touch-target/layout fixes, two
+`apiCache.ts` entries confirmed to belong to other features). Routes
+re-enumerated by AST: 100, unchanged. All standing TRX findings re-verified
+unchanged. **Branch name avoids reuse** (CLAUDE.md Pitfall #24) — pass 9
+already used the bare `claude/security-review-training-extended` name, so
+this pass's branch carries a `-p11` suffix. See
+`TRX-18-training-extended.md`'s **Pass 11** section for the full review.
 
-Rotation row 17 → ✅ (merged); next is Feature 18 (Training extended) — re-check
-`search_pull_requests` fresh rather than trusting this note.
+Rotation row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills
+testing) — re-check `search_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 11, PR #3754, merged — docs-only, plus a mid-flight CI fix ported into it), preserved for history</summary>
+
+**PR [#3754](https://github.com/thegspiro/the-logbook/pull/3754)** (branch
+`claude/security-review-training-core`) — Feature 17 (Training core), pass 11. **Watchdog pickup** — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. No
+security-review PR was open — confirmed via `search_pull_requests`, 0
+matching results. **0 fixed, 0 flagged.** A second watchdog tick picked up
+its CI after merge-time: the `Frontend E2E (Mobile Safari)` check failed
+deterministically (3/3 attempts) on a pre-existing
+`/scheduling/admin/planning` color-contrast test-timing race (axe sampling
+`.btn-secondary` mid 150ms fade-in) — confirmed red on the PR's own base
+commit too, so unrelated to this docs-only PR. The fix already existed,
+unmerged, on PR #3757 (commit `77597088`); ported the same one-line
+`page.emulateMedia({ reducedMotion: 'reduce' })` change into #3754 directly
+rather than waiting on #3757, then merged once green.
+
+Rotation row 17 → ✅ (merged); next was Feature 18 (Training extended).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 11, PR #3744, merged), preserved for history</summary>
