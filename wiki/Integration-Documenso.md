@@ -122,5 +122,5 @@ Secret values (`api_token`, `webhook_secret`) are stored in the encrypted
 
 ## See Also
 
-- [Prospective Members Pipeline](../docs/PROSPECTIVE_MEMBERS_MODULE.md)
-- [Training: Integrations → Documenso](../docs/training/16-integrations.md#documenso--document-e-signatures)
+- [Prospective Members Pipeline](https://github.com/thegspiro/the-logbook/blob/main/docs/PROSPECTIVE_MEMBERS_MODULE.md)
+- [Training: Integrations → Documenso](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#documenso--document-e-signatures)

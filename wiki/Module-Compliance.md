@@ -184,8 +184,8 @@ returns 403. See the [Training Module](Module-Training#member--officer-exports).
 
 ## Related Documentation
 
-- **[Training Compliance Calculations](../docs/training-compliance-calculations.md)** — Complete formula reference
-- **[Training Waivers](../backend/app/docs/TRAINING_WAIVERS.md)** — Waiver system details
+- **[Training Compliance Calculations](https://github.com/thegspiro/the-logbook/blob/main/docs/training-compliance-calculations.md)** — Complete formula reference
+- **[Training Waivers](https://github.com/thegspiro/the-logbook/blob/main/backend/app/docs/TRAINING_WAIVERS.md)** — Waiver system details
 - **[Training Module](Module-Training)** — Full training documentation
 
 ---
