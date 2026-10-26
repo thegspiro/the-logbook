@@ -305,6 +305,10 @@ def status_page_stage_enables(step: MembershipPipelineStep) -> bool:
     return (step.config or {}).get("enable_public_status", True) is not False
 
 
+def _applicant_name(prospect: ProspectiveMember) -> str:
+    return " ".join(p for p in (prospect.first_name, prospect.last_name) if p)
+
+
 def public_status_enabled_for(prospect: ProspectiveMember) -> bool:
     """Whether ``prospect``'s public status page is switched on.
 
@@ -5241,9 +5245,7 @@ class MembershipPipelineService:
                 context = {
                     "first_name": prospect.first_name or "",
                     "last_name": prospect.last_name or "",
-                    "prospect_name": " ".join(
-                        p for p in (prospect.first_name, prospect.last_name) if p
-                    ),
+                    "prospect_name": _applicant_name(prospect),
                     "stage_name": step.name or "",
                     "status_url": status_url,
                 }
@@ -5306,10 +5308,7 @@ class MembershipPipelineService:
     ) -> bool:
         """Send a notification email when a pipeline step is completed."""
         try:
-            import html as _html
-
-            from app.services.email_service import EmailService, wrap_email_body
-            from app.services.email_theme import ACCENT_BLUE
+            from app.services.email_service import EmailService
 
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == prospect.organization_id)
@@ -5318,50 +5317,26 @@ class MembershipPipelineService:
             if not org:
                 return False
 
-            first_name = _html.escape(prospect.first_name or "")
-            step_name = _html.escape(step.name or "")
-            subject = f"Application Update — {step.name} Complete"
-
-            html_body = wrap_email_body(
-                org,
-                subject,
-                f"<p>Hi {first_name},</p>"
-                f"<p>We're writing to let you know that the "
-                f"<strong>{step_name}</strong> step of your "
-                f"membership application has been completed.</p>"
-                f"<p>We'll be in touch with next steps soon.</p>",
-                footer_text=f"This email was sent by {org.name or 'The Logbook'}.",
-                header_color=ACCENT_BLUE,
-                chip=_APPLICATION_UPDATE_CHIP,
-            )
-            text_body = (
-                f"Hi {prospect.first_name},\n\n"
-                f"The {step.name} step of your membership "
-                f"application has been completed.\n\n"
-                f"We'll be in touch with next steps soon.\n\n"
-                f"This email was sent by "
-                f"{org.name or 'The Logbook'}."
-            )
-
-            email_svc = EmailService(org)
-            success, _ = await email_svc.send_email(
-                to_emails=[prospect.email],
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
+            sent = await EmailService(org).send_application_step_completed_email(
+                to_email=prospect.email,
+                first_name=prospect.first_name or "",
+                applicant_name=_applicant_name(prospect),
+                step_name=step.name or "",
                 db=self.db,
-                template_type="pipeline_stage",
+                organization_id=str(org.id),
             )
-            if success:
+            if sent:
                 logger.info(
-                    "Step-completion notification sent to "
-                    f"{prospect.email} for step '{step.name}'"
+                    "Step-completion notification sent to prospect {} for step {}",
+                    prospect.id,
+                    step.id,
                 )
-            return success > 0
+            return sent
         except Exception as e:
             logger.error(
-                "Failed to send step-completion notification "
-                f"to {prospect.email}: {e}"
+                "Failed to send step-completion notification to prospect {}: {}",
+                prospect.id,
+                e,
             )
             return False
 
@@ -5397,11 +5372,8 @@ class MembershipPipelineService:
     ) -> bool:
         """Email the applicant the link to their public status page."""
         try:
-            import html as _html
-
             from app.core.config import settings as app_settings
-            from app.services.email_service import EmailService, wrap_email_body
-            from app.services.email_theme import ACCENT_BLUE, action
+            from app.services.email_service import EmailService
 
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == prospect.organization_id)
@@ -5412,52 +5384,27 @@ class MembershipPipelineService:
                 return False
 
             frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
-            status_url = f"{frontend_url}/application-status/{prospect.status_token}"
-            custom_message = ((step.config or {}).get("custom_message") or "").strip()
-
-            first_name = _html.escape(prospect.first_name or "")
-            custom_html = (
-                f"<p>{_html.escape(custom_message)}</p>" if custom_message else ""
-            )
-            html_body = wrap_email_body(
-                org,
-                "Track Your Membership Application",
-                f"<p>Hi {first_name},</p>"
-                f"{custom_html}"
-                f"<p>You can now follow the progress of your membership "
-                f"application online.</p>"
-                + action(_html.escape(status_url), "Track Your Application"),
-                footer_text=f"This email was sent by {org.name or 'The Logbook'}.",
-                header_color=ACCENT_BLUE,
-                chip=_APPLICATION_UPDATE_CHIP,
-            )
-            text_parts = [f"Hi {prospect.first_name},"]
-            if custom_message:
-                text_parts.append(custom_message)
-            text_parts += [
-                "You can now follow the progress of your membership application "
-                f"online: {status_url}",
-                f"This email was sent by {org.name or 'The Logbook'}.",
-            ]
-
-            email_svc = EmailService(org)
-            success, _ = await email_svc.send_email(
-                to_emails=[prospect.email],
-                subject="Track Your Membership Application",
-                html_body=html_body,
-                text_body="\n\n".join(text_parts),
+            sent = await EmailService(org).send_application_status_link_email(
+                to_email=prospect.email,
+                first_name=prospect.first_name or "",
+                applicant_name=_applicant_name(prospect),
+                status_url=(
+                    f"{frontend_url}/application-status/{prospect.status_token}"
+                ),
+                custom_message=(step.config or {}).get("custom_message") or "",
                 db=self.db,
-                template_type="pipeline_stage",
+                organization_id=str(org.id),
             )
-            if success:
+            if sent:
                 logger.info(
-                    f"Status page link sent to prospect {prospect.id} "
-                    f"for step '{step.name}'"
+                    "Status page link sent to prospect {} for step {}",
+                    prospect.id,
+                    step.id,
                 )
-            return success > 0
+            return sent
         except Exception as e:
             logger.error(
-                f"Failed to send status page link to prospect {prospect.id}: {e}"
+                "Failed to send status page link to prospect {}: {}", prospect.id, e
             )
             return False
 
@@ -5512,14 +5459,19 @@ class MembershipPipelineService:
                 temp_password=temp_password,
                 organization_name=org_name,
                 login_url=login_url,
+                # Without the session the department's own Welcome template
+                # (its wording and attachments) was never loaded, and every
+                # converted applicant got the built-in default.
+                db=self.db,
                 organization_id=organization_id,
                 appended_html=appended_html,
                 appended_text=appended_text,
             )
             return bool(sent)
         except Exception as e:
-            target = recipient_email or prospect.email
-            logger.error(f"Failed to send welcome email to {target}: {e}")
+            logger.error(
+                "Failed to send welcome email to prospect {}: {}", prospect.id, e
+            )
             return False
 
     @staticmethod
