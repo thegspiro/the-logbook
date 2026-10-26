@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None. PR #3734 (Feature 10, Documents & legal, pass 12) merged — confirmed
+via `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, re-checked fresh at the start of this iteration. It
+touched only `DOC-10-documents-legal.md` and `PROGRESS.md`, so per this
+skill's "a docs-only PR is not a recordable event" rule there is nothing to
+record here beyond clearing the row; rotation row 10 was already ✅ on
+`main`. This watchdog picked up row 11 (Inventory) next — see the Log entry
+below for its pass 12 review, and the rotation table for this row once that
+pass's PR is opened.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3734, Feature 10, Documents & legal, pass 12, merged, docs-only), preserved for history</summary>
+
 **PR [#3734](https://github.com/thegspiro/the-logbook/pull/3734)** (branch
 `claude/security-review-documents-legal`) — Feature 10
 (Documents & legal), pass 12. No security-review PR was open — confirmed via
@@ -35,6 +48,8 @@ section for the full review.
 
 Rotation row 10 → ✅ (pending this PR's merge); next is Feature 11
 (Inventory).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3711, Feature 09, Medical screening, pass 12, merged), preserved for history</summary>
@@ -21827,7 +21842,7 @@ PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
@@ -21858,6 +21873,72 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 11 (Inventory, pass 12) — watchdog pickup, 1 cross-cutting fix (migration fork + stale schema doc, not this feature's code), 0 findings
+
+No `claude/security-review-*` PR was open (`search_pull_requests`, 0 matching
+results, re-checked fresh at the start of this iteration). PR #3734
+(Feature 10, Documents & legal, pass 12) had already merged, docs-only, so
+there was nothing to record from it beyond clearing the Open PR row. Row 11
+(Inventory) confirmed the next `⬜` from the Rotation table directly.
+
+Baseline `5871258c` (PR #3580's merge, pass 11). 19 non-merge commits touch
+the declared scope since then. The real delta is three features: the NFC
+Tag Register (department-wide tag list/search/bulk-lost-found/move/export,
+5 new routes in `inventory_nfc.py`, all gated `inventory.manage` or
+`inventory.check_manage` with the kind a checklist manager may act on
+narrowed server-side to compartment tags), a variant-group rename that now
+carries onto every member item's name (all-or-nothing, org-scoped), and
+Medical Supplies lot recalls (primarily Feature 23's own row, but it lands
+in `inventory_service.py`/`schemas/inventory.py`, both this feature's
+declared scope, so reviewed here) — row-locked against the read-then-write
+race Pitfall #27 describes, org- and domain-scoped, and applied at every
+on-hand/low-stock/reorder/issuing/truck-figure site. `inventory.py` 150
+routes (unchanged), `inventory_nfc.py` 29 (**+5**, 0 removed).
+
+While bringing up a database to run this feature's tests, found the
+migration chain forked at two heads (`0a8d11fcada1` forms `allow_embed`,
+Feature 26; `b7e4c2a91d35` event guest check-in token, Feature 16) —
+neither in this feature's scope, but per CLAUDE.md's "no acceptable
+pre-existing errors" rule, fixed rather than flagged: generated a merge
+revision with `alembic merge` (matching the shape of the chain's own prior
+merge revisions), hand-corrected its formatting, and verified
+`alembic upgrade head` against a real database applies the full chain
+cleanly. Also found `docs/DATABASE_SCHEMA.md` stale against current models
+(an unrelated model change upstream had not regenerated it) and
+regenerated it (one-line diff, a column count bump).
+
+No finding in this feature's own code this pass — all three new features
+were reviewed fresh against all seven checklist dimensions and found sound:
+every new route is permission-gated and org-scoped, the one new
+cross-org-reachable write path (NFC tag move) is bounded to the same
+organization and kind before use, the new `inventory_lot_recalls` migration
+is `create_all`-tolerant and reversible, and no unsafe pattern was
+introduced in the frontend diff (65 changed files swept for
+`dangerouslySetInnerHTML`, `window.confirm`/`alert`/`prompt`, zero matches).
+INV-22, the one standing flagged item, re-confirmed OPEN/owner-accepted,
+unaffected. See `INV-11-inventory.md`'s **Pass 12** section for the full
+writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+`flake8==7.4.1`/`black==26.10.1`/`isort==9.0.2`, invoked as
+`/usr/local/bin/{flake8,black,isort}` — a stale `~/.local/bin/black` shadows
+the pinned version on `PATH` and was bypassed, same as pass 12 of Feature 09) on `app/ tests/ alembic/` all clean; `validate_migrations.py --strict`
+— 655 revisions, single head `9ab7b4276c22` (after the merge fix);
+`test_alembic_migrations.py`/`test_migration_create_all_tables.py` — 80
+passed; `check_route_permissions.py --strict` (repo root) — 279 routes, 0
+errors/warnings; `generate_schema_docs.py --check` — stale, regenerated,
+re-checked clean; scoped backend tests (`-k "inventory or label or nfc or
+kiosk"`) — 2035 passed, 1 skipped (environment-only, `pywebpush`) — the
+first run hit 106 failures against a stale pre-migration test database,
+resolved by `alembic upgrade head`, confirming they were environmental;
+frontend `npm run typecheck` clean; `npm run lint` clean (0 warnings);
+`testingRegistry.test.ts` — 12 passed; `mobile-route-integrity.spec.ts` — 1
+passed; scoped frontend suite (`npx vitest run src/modules/inventory`) —
+1868 passed (126 files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-26 — Feature 10 (Documents & legal, pass 12) — watchdog pickup, 0 fixed, 0 new findings
 
