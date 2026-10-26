@@ -11,6 +11,9 @@ import { useAuthStore } from '../stores/authStore';
 vi.mock('../services/api', () => ({
   eventService: {
     getQRCheckInData: vi.fn(),
+    getGuestCheckInLink: vi.fn(),
+    issueGuestCheckInLink: vi.fn(),
+    rotateGuestCheckInLink: vi.fn(),
   },
 }));
 
@@ -504,6 +507,89 @@ describe('EventQRCodePage', () => {
       const trigger = await screen.findByRole('button', { name: /Set up an NFC tag/ });
       expect(trigger).toHaveAttribute('aria-expanded', 'false');
       expect(screen.getByText(/Tap it with your phone to check in/)).toBeInTheDocument();
+    });
+  });
+
+  describe('Guest QR code', () => {
+    const GUEST_TOKEN = 'g'.repeat(43);
+    const guestEvent: QRCheckInData = { ...mockQRCheckInData, allow_guest_check_in: true };
+
+    beforeEach(() => {
+      vi.mocked(eventService.getQRCheckInData).mockReset();
+      vi.mocked(eventService.getGuestCheckInLink).mockReset();
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(guestEvent);
+      vi.mocked(eventService.getGuestCheckInLink).mockResolvedValue({
+        event_id: '1',
+        allow_guest_check_in: true,
+        guest_token: GUEST_TOKEN,
+      });
+    });
+
+    afterEach(() => {
+      useAuthStore.setState({ user: null });
+    });
+
+    it('shows a manager both codes', async () => {
+      useAuthStore.setState({ user: { permissions: ['events.manage'] } as never });
+      renderWithRouter(<EventQRCodePage />);
+
+      const card = await screen.findByTestId('guest-qr-card');
+      await waitFor(() =>
+        expect(within(card).getByTestId('qr-code')).toHaveAttribute(
+          'data-value',
+          `${window.location.origin}/event-guest/${GUEST_TOKEN}`
+        )
+      );
+      expect(screen.getAllByTestId('qr-code')).toHaveLength(2);
+    });
+
+    it('shows a member only the member code, and never fetches the guest token', async () => {
+      useAuthStore.setState({ user: { permissions: ['events.view'] } as never });
+      renderWithRouter(<EventQRCodePage />);
+
+      expect(await screen.findByText('Scan to Check In')).toBeInTheDocument();
+      expect(screen.queryByTestId('guest-qr-card')).not.toBeInTheDocument();
+      expect(eventService.getGuestCheckInLink).not.toHaveBeenCalled();
+    });
+
+    it('tells a manager how to turn guest check-in on when it is off', async () => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue({ ...mockQRCheckInData, allow_guest_check_in: false });
+      useAuthStore.setState({ user: { permissions: ['events.manage'] } as never });
+      renderWithRouter(<EventQRCodePage />);
+
+      expect(await screen.findByText(/Guest check-in is off for this event/)).toBeInTheDocument();
+      expect(eventService.getGuestCheckInLink).not.toHaveBeenCalled();
+    });
+
+    it('leaves the member code off a printed guest sheet', async () => {
+      const user = userEvent.setup();
+      useAuthStore.setState({ user: { permissions: ['events.manage'] } as never });
+      let memberSectionHiddenWhenPrinted = false;
+      vi.mocked(window.print).mockImplementation(() => {
+        memberSectionHiddenWhenPrinted = screen.getByTestId('member-qr-section').classList.contains('print:hidden');
+      });
+      renderWithRouter(<EventQRCodePage />);
+
+      await user.click(await screen.findByRole('button', { name: /Print Guest QR Code/ }));
+
+      expect(window.print).toHaveBeenCalledTimes(1);
+      expect(memberSectionHiddenWhenPrinted).toBe(true);
+    });
+
+    it('leaves the guest code off a printed member sheet', async () => {
+      const user = userEvent.setup();
+      useAuthStore.setState({ user: { permissions: ['events.manage'] } as never });
+      let guestHiddenWhenPrinted = false;
+      vi.mocked(window.print).mockImplementation(() => {
+        guestHiddenWhenPrinted = screen.getByTestId('guest-qr-section').classList.contains('print:hidden');
+      });
+      renderWithRouter(<EventQRCodePage />);
+      await screen.findByTestId('guest-qr-card');
+
+      await user.click(screen.getByRole('button', { name: 'Print QR Code' }));
+
+      expect(window.print).toHaveBeenCalledTimes(1);
+      expect(guestHiddenWhenPrinted).toBe(true);
     });
   });
 });

@@ -114,6 +114,28 @@ describe('pipelineService stage mapping', () => {
     expect(payload).not.toHaveProperty('description');
   });
 
+  it('sends an explicit null when a linked email template is removed', async () => {
+    await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate({ email_template_id: null }));
+
+    const payload = mockPut.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('email_template_id', null);
+  });
+
+  it('omits the email template when the caller did not touch it', async () => {
+    await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate());
+
+    const payload = mockPut.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('email_template_id');
+  });
+
+  it('carries a linked email template back to the stage', async () => {
+    mockPut.mockResolvedValue({ data: backendStep({ email_template_id: 'tmpl-1' }) });
+
+    const stage = await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate());
+
+    expect(stage.email_template_id).toBe('tmpl-1');
+  });
+
   it('carries a stored timeout override back to the stage', async () => {
     mockPut.mockResolvedValue({ data: backendStep({ inactivity_timeout_days: 45 }) });
 

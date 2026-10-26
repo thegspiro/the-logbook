@@ -318,7 +318,9 @@ class ShiftFinalizeRequest(BaseModel):
     )
     # {"ems": 3, "fire": 1} keyed by the org's own type slugs. Must not exceed
     # reported_call_count; the remainder is recorded as unclassified.
-    reported_call_types: Optional[dict[str, int]] = None
+    reported_call_types: Optional[
+        dict[str, Annotated[int, Field(ge=0, le=INT32_MAX)]]
+    ] = None
     # Per-member credit. Omitted members default to the shift's count.
     member_call_counts: Optional[List[MemberCallCredit]] = None
     # Calls another unit already logged that this shift's apparatus was also
@@ -467,7 +469,9 @@ class CloseoutCallsRequest(BaseModel):
     reported_call_count: Optional[int] = Field(
         default=None, ge=0, le=MAX_CALLS_PER_SHIFT
     )
-    reported_call_types: Optional[dict[str, int]] = None
+    reported_call_types: Optional[
+        dict[str, Annotated[int, Field(ge=0, le=INT32_MAX)]]
+    ] = None
     # Bounded to match the picker's own ceiling
     # (CallTrackingService.MAX_ATTACHABLE_CALLS) — each id costs the server a
     # lookup, so an unbounded list is a free multiplier on a single
@@ -1659,7 +1663,9 @@ class SchedulingFeatureSettings(BaseModel):
     # write — the settings screen needs it to tell an unused type (safe to
     # delete outright) from one carrying a decade of history (retire it
     # instead), and asking the client to supply that would let it decide.
-    call_type_usage: dict[str, int] = Field(default_factory=dict)
+    call_type_usage: dict[str, Annotated[int, Field(ge=0, le=INT32_MAX)]] = Field(
+        default_factory=dict
+    )
     # Types the editor must not offer to delete. Broader than a non-zero
     # usage count: a filed shift report can outlive the calls it was built
     # from, and deleting the type would leave that report showing a raw slug.

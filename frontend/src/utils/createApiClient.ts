@@ -16,6 +16,7 @@ import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
 import { handleExpiredSession, performSharedRefresh } from '../services/apiClient';
 import { reportApiError } from '../services/errorReporting';
+import { holdDuringPasswordChange } from '../services/passwordChangeGate';
 import { isStepUpRequired, requestStepUp } from './stepUp';
 
 declare module 'axios' {
@@ -50,6 +51,7 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
     (config) => {
       // SEC: Auth is handled exclusively via httpOnly cookies (withCredentials).
       // No Authorization header bridge — tokens are never exposed to JS.
+      holdDuringPasswordChange(config);
       const method = (config.method || '').toUpperCase();
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
         const csrf = getCookie('csrf_token');

@@ -9,9 +9,12 @@ import type { GuestCheckInEventInfo, GuestCheckInResult } from '../types/event';
 /**
  * Guest Check-In Page (Public — No Authentication Required)
  *
- * Landing page for the guest QR code on a room display. Lets a visitor at an
- * outreach event — a volunteer interest night, an open house — record their own
- * attendance without an account.
+ * Landing page for a guest QR code — the one on a room display
+ * (/display/:code/events/:eventId/guest) or an event's own
+ * (/event-guest/:token), for an event held where there is no kiosk. Lets a
+ * visitor at an outreach event — a volunteer interest night, an open house —
+ * record their own attendance without an account. The two differ only in the
+ * credential the path carries; the backend applies the same gates to both.
  *
  * An event that adds its guests to the prospective members pipeline signs in
  * only applicants it recognises, through GuestEmailSignIn; anyone else is sent
@@ -24,8 +27,20 @@ import type { GuestCheckInEventInfo, GuestCheckInResult } from '../types/event';
  * visitor to /login — the exact wall this page exists to remove.
  */
 
+/** The public API base for whichever guest QR code the visitor scanned. */
+const guestApiBase = (params: {
+  code?: string | undefined;
+  eventId?: string | undefined;
+  token?: string | undefined;
+}): string | null => {
+  if (params.token) return `/api/public/v1/event-guest/${encodeURIComponent(params.token)}`;
+  if (params.code && params.eventId) return `/api/public/v1/display/${params.code}/events/${params.eventId}`;
+  return null;
+};
+
 const GuestCheckInPage: React.FC = () => {
-  const { code, eventId } = useParams<{ code: string; eventId: string }>();
+  const { code, eventId, token } = useParams<{ code: string; eventId: string; token: string }>();
+  const apiBase = guestApiBase({ code, eventId, token });
   const fallbackTz = useTimezone();
 
   const [info, setInfo] = useState<GuestCheckInEventInfo | null>(null);
@@ -51,9 +66,9 @@ const GuestCheckInPage: React.FC = () => {
   const tz = info?.timezone || fallbackTz;
 
   const fetchInfo = useCallback(async () => {
-    if (!code || !eventId) return;
+    if (!apiBase) return;
     try {
-      const response = await fetch(`/api/public/v1/display/${code}/events/${eventId}/guest`);
+      const response = await fetch(`${apiBase}/guest`);
       if (!response.ok) {
         setLoadError(
           response.status === 404
@@ -69,7 +84,7 @@ const GuestCheckInPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [code, eventId]);
+  }, [apiBase]);
 
   useEffect(() => {
     void fetchInfo();
@@ -77,13 +92,13 @@ const GuestCheckInPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code || !eventId || submitting) return;
+    if (!apiBase || submitting) return;
 
     setSubmitting(true);
     setSubmitError(null);
 
     try {
-      const response = await fetch(`/api/public/v1/display/${code}/events/${eventId}/guest-check-in`, {
+      const response = await fetch(`${apiBase}/guest-check-in`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -220,10 +235,9 @@ const GuestCheckInPage: React.FC = () => {
             <h3 className="mb-2 font-semibold">Sign-in is not open</h3>
             <p>{info.closed_reason || 'Please ask a member of the department to record your attendance.'}</p>
           </div>
-        ) : info.collects_prospect_details && code && eventId ? (
+        ) : info.collects_prospect_details && apiBase ? (
           <GuestEmailSignIn
-            code={code}
-            eventId={eventId}
+            apiBase={apiBase}
             onSignedIn={(signedIn, displayName) => {
               setRecognisedName(displayName);
               setResult(signedIn);

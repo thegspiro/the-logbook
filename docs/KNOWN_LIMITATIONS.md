@@ -541,12 +541,12 @@ numbers a column cannot hold, duplicate identifiers, a tracking-mode change
 under a live assignment, the assign URL/body mismatch, category loops) is fixed;
 these were left because each is a policy choice or needs a schema change.
 
-| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                                                                                                                                        |
-| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                                                                                                                                |
-| Numeric request fields with no column behind them     | Open          | Every numeric request field that is stored in a column is now bounded to that column's range, across the whole API, and `tests/test_request_numeric_bounds.py` walks the live routes and fails on a new unbounded one (`tests/request_bound_columns.py` maps each field to its column). 51 fields are listed there as deliberately unbounded because no column limits them: values kept inside JSON columns, values only compared against another value, transient inputs, and values a service validates itself. Those need an owner-chosen business limit (for example `CohortShiftRequest.days`) rather than one invented from a column type. |
-| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Request field still unbounded by choice               | Open          | Every numeric request field is bounded: to its column's range where it has one, to the range its meaning fixes where it does not (a port, a quarter, a weekday number, a percentage), to the 32-bit ceiling for counts and scores stored in JSON, and to 30 days for every reminder lead time (`app/schemas/reminder_limits.py`: 30 days, or 720 hours for `reminder_schedule`). The reminder limit is on request schemas only, so a response still serializes a lead time stored further out by an earlier release. `tests/test_request_numeric_bounds.py` walks the live routes and fails on a new unbounded one. Two membership-number fields are bounded by a schema validator instead (the formatted id must fit its 50-character column). One field remains open because the right ceiling is a department rule nobody has set: how far a class may be shifted (`CohortShiftRequest.days`, which feeds date arithmetic, so an enormous value raises `OverflowError`). Pick a number and the field gets a bound. The election quorum default is bounded from its own meaning: at least 1 and at most the 32-bit ceiling, and at most 100 when its type is a percentage. |
+| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
@@ -6145,17 +6145,6 @@ on each department switching on **Require for every member** for them under
 **Administration → Forms & Comms → Member Emails & Texts** (`settings.manage`
 or `organization.update_settings`).
 
-## Shift Reports — "Your Reporting Summary" Counts the Whole Department (2026-09-30)
-
-An officer's **Written by me** view on **Scheduling → Shift Reports** opens with
-a card headed **Your reporting summary** — **Reports written**, **Shift hours
-covered**, **Calls covered**, the crew summary and **Reports written per
-month**. Its figures come from `GET /training/shift-reports/officer-analytics`,
-which totals every report in the organization, not only the viewer's. The list
-below the card is the viewer's own. Either scope the endpoint to the officer or
-retitle the card; until then an officer in a department with several report
-writers reads the department's numbers as their own.
-
 ## AP2-4 — The EVOC Driver Gate Stops Enforcing On A Deleted Apparatus (2026-10-05)
 
 `EvocLevelService.check_driver_evoc_eligibility` answers "may this member drive
@@ -6296,29 +6285,6 @@ them in a migration — noting that a status reconcile can change what a departm
 connected — or accept that catalog changes reach new organizations only.
 
 See `docs/app-review/integrations.md` → Pass 5.
-
-## Privacy Choices — A Member Cannot Record "No" Without First Recording "Yes" (2026-10-13)
-
-Found driving W59 (`docs/workflow-review/W59-photo-use-consent.md`, W59-3).
-
-- **What the screen offers:** My Account → Privacy → Privacy Choices shows
-  photo use, public roster listing and SMS texts as one checkbox each. An
-  unanswered choice is an unticked box marked "(not answered)".
-- **What goes wrong:** leaving the box unticked records nothing. A member who
-  means "no" must tick it, which records an agreement, and then untick it.
-  - The audit ledger, which is the consent record, then shows an agreement
-    the member never gave.
-  - A member who does not find that trick stays "Not answered". The
-    photo-use roster says those members "can still be asked", so the PIO
-    keeps asking someone who has refused.
-- **Why it was not changed in the review:** an explicit Yes / No choice is
-  the obvious fix, but the same control carries the SMS consent, a TCPA
-  record whose switch also sets the SMS notification preference through a
-  shared handler.
-- **Decisions needed:**
-  - whether each choice becomes an explicit Yes / No;
-  - whether SMS changes with the other two, or keeps its switch on the
-    Notifications section.
 
 ## Finance — Emailed Approvals Cannot Be Re-Sent, and Show the Approver Nothing to Decide On (2026-10-14)
 
@@ -6483,11 +6449,11 @@ Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
   stored `expiration_date`, so it does not list a record falling due by
   frequency that the dashboard lists. Bringing it in needs the derived date in
   SQL, or giving up SQL paging for that tool.
-- **Still open — superseded records on the expiring list.**
-  `get_expiring_soon` lists every satisfying record in the window, including
-  one a newer record of the same type supersedes, while the count grades only
-  the latest; the MCP tool already excludes superseded records. Predates this
-  change, for dated records as well.
+- **Resolved 2026-10-25 — superseded records on the expiring list.**
+  `get_expiring_soon` now leaves out a record a newer one of the same type
+  supersedes for the same member or prospect, using the same
+  `superseded_record_clause` the MCP tool uses, so the list and the count
+  agree.
 
 ## Integrations — Connecting iCalendar (ICS) Does Nothing (2026-10-17)
 
@@ -6561,29 +6527,19 @@ Found driving W74 (`docs/workflow-review/W74-ip-security.md`, W74-5).
   (`assert_different_person`, as money approvals use), and if so what a
   single-admin department does.
 
-## RPT2-3 — The QR Check-In Analytics Dashboard Has A Reader And No Writer (2026-10-20)
+## RPT2-3 — The QR Check-In Analytics Dashboard Had A Reader And No Writer (2026-10-20, resolved 2026-10-25)
 
-`/events/:id/analytics` (and the admin route) render `GET /analytics/metrics`, which counts
-`qr_scan`, `check_in_success` and `check_in_failure` rows in `analytics_events`. Nothing
-writes them. `POST /analytics/track` is the only writer in the repository; its only client
-method, `analyticsService.trackEvent`, is reached through `trackQRScan`, `trackCheckInSuccess`,
-`trackCheckInFailure`, `trackQRView` and `trackQRPrint`, and no page or component calls any of
-the five. `self_check_in` and `check_in_attendee` do not write an event either. The screen
-therefore reads zero scans, zero check-ins and an empty error breakdown, which looks like a
-department that has not used QR check-in rather than a feed that was never connected.
-
-**Why not fixed.** Which moments count as a "scan", a "success" and a "failure", and whether
-they are recorded by the browser or by the server, is a metric definition. **Owner decision:**
-
-1. **Record server-side** — `self_check_in` / `check_in_attendee` write the success and
-   failure events (with a bounded reason) and the QR page's load writes the scan. Reliable
-   and not forgeable by a member, at the cost of a write on the check-in path.
-2. **Wire the client calls** — call the five existing methods from the QR and check-in pages.
-   Smallest change, but a member's browser decides what is counted.
-3. **Retire the page** — remove the dashboard and the three analytics routes.
-
-Related: the accepted entry _"Events — There Is No Per-Event Analytics Panel"_ above rests on
-this dashboard covering the need. See `docs/app-review/reports-analytics.md` → Pass 5.
+**Resolved (owner decision: record server-side).** The self-check-in page's
+first load records one `qr_scan` per member per event (the data endpoint is
+polled, and the officer's QR display page polls it too, so the page marks only
+its first load and the server deduplicates). `POST /events/{id}/self-check-in`
+records `check_in_success`, or `check_in_failure` with one of `not_open_yet`,
+`closed`, `event_cancelled` or `attendance_locked`; a check-out, a repeat scan,
+the phase-gate warning and a manual officer check-in are not counted. Rows
+from before this change do not exist, so the dashboard starts from zero on
+upgrade. `POST /analytics/track` and its unused client methods remain. Kept
+only because code and tests cite it by name; history in
+`docs/app-review/reports-analytics.md`.
 
 ## Process
 

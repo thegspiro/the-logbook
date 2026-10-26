@@ -11,7 +11,7 @@ use the camelCase alias generator.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -154,7 +154,7 @@ class CourseClassReorder(BaseModel):
 class CourseClassAutofill(BaseModel):
     """Recompute every class's day_offset from a weekly meeting pattern"""
 
-    meeting_days: List[int] = Field(
+    meeting_days: List[Annotated[int, Field(ge=0, le=6)]] = Field(
         ..., min_length=1, description="Weekday numbers, 0=Monday"
     )
     start_weekday: int = Field(
@@ -182,7 +182,7 @@ class CourseClassAutofill(BaseModel):
 class CohortScheduleConfig(BaseModel):
     """Schedule knobs shared by the preview request and cohort creation"""
 
-    meeting_days: Optional[List[int]] = None
+    meeting_days: Optional[List[Annotated[int, Field(ge=0, le=6)]]] = None
     default_start_time: Optional[str] = None
     default_duration_minutes: Optional[int] = Field(None, ge=1, le=1440)
     date_roll_policy: str = Field(
@@ -508,6 +508,7 @@ class CohortShiftRequest(BaseModel):
     from_sequence: Optional[int] = Field(
         None,
         ge=1,
+        le=INT32_MAX,
         description=(
             "Only shift future classes at or after this position; a class whose "
             "date has passed never moves"

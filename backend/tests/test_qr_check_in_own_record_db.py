@@ -7,6 +7,7 @@ own check-in and never someone else's.
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -134,8 +135,14 @@ async def test_the_endpoint_answers_each_caller_with_their_own_record(db_session
         caller = (
             await db_session.execute(select(User).where(User.id == user_id))
         ).scalar_one()
+        # request and scan are what FastAPI would inject; a direct call has to
+        # pass them (scan=False: this test is not about the analytics scan).
         return await get_qr_check_in_data(
-            uuid.UUID(hall["event"]), db=db_session, current_user=caller
+            uuid.UUID(hall["event"]),
+            request=SimpleNamespace(headers={}),
+            scan=False,
+            db=db_session,
+            current_user=caller,
         )
 
     own = await as_caller(hall["member"])

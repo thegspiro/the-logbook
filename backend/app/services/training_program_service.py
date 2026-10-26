@@ -4156,6 +4156,28 @@ class TrainingProgramService:
                 await self.db.commit()
         return result
 
+    async def _phase_still_in_program(
+        self, phase_id: Optional[str], program_id: Any
+    ) -> bool:
+        """Whether a credit's ``phase_before_id`` can still be restored.
+
+        ``requirement_progress_credits.phase_before_id`` has no foreign key, and
+        ``delete_program_phase`` keeps a requirement's progress (and its
+        credits) when another phase still links the requirement. Restoring a
+        phase that is gone would point ``current_phase_id`` at nothing, which
+        its foreign key refuses at commit, failing the whole reversal. No
+        phase at all (``None``) is always restorable.
+        """
+        if phase_id is None:
+            return True
+        found = await self.db.execute(
+            select(ProgramPhase.id).where(
+                ProgramPhase.id == str(phase_id),
+                ProgramPhase.program_id == str(program_id),
+            )
+        )
+        return found.scalar_one_or_none() is not None
+
     async def revoke_requirement_credit(
         self,
         progress_id: Any,
@@ -4239,7 +4261,13 @@ class TrainingProgramService:
             )
             enrollment = phase_result.scalar_one_or_none()
             # Do not overwrite a later manual or legitimate phase change.
-            if enrollment and str(enrollment.current_phase_id) == str(phase_after_id):
+            if (
+                enrollment
+                and str(enrollment.current_phase_id) == str(phase_after_id)
+                and await self._phase_still_in_program(
+                    phase_before_id, enrollment.program_id
+                )
+            ):
                 enrollment.current_phase_id = phase_before_id
                 await self.db.commit()
         return result

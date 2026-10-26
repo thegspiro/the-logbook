@@ -143,16 +143,12 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
   {
     id: 'members',
     label: 'Members & Accounts',
-    types: [
-      'welcome',
-      'password_reset',
-      'it_password_notification',
-      'member_dropped',
-      'member_archived',
-      'inactivity_warning',
-      'duplicate_application',
-      'application_withdrawn',
-    ],
+    types: ['welcome', 'password_reset', 'it_password_notification', 'member_dropped', 'member_archived'],
+  },
+  {
+    id: 'prospective',
+    label: 'Prospective Members',
+    types: ['inactivity_warning', 'duplicate_application', 'application_withdrawn'],
   },
   {
     id: 'events',

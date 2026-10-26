@@ -19,6 +19,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -79,6 +80,7 @@ from app.schemas.event import (
     EventUpdate,
     ExternalAttendeeCheckInResponse,
     FinalizeAttendanceResponse,
+    GuestCheckInLinkResponse,
     ManagerAddAttendee,
     QRCheckInData,
     RecordActualTimes,
@@ -123,6 +125,11 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
+from app.services.qr_check_in_analytics import (
+    device_type_from_user_agent,
+    record_check_in_outcome,
+    record_qr_scan,
+)
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
@@ -2700,6 +2707,12 @@ async def end_event(
 @router.get("/{event_id}/qr-check-in-data", response_model=QRCheckInData)
 async def get_qr_check_in_data(
     event_id: UUID,
+    request: Request,
+    scan: bool = Query(
+        False,
+        description="Set by the self-check-in page on its first load, so the "
+        "member's scan is recorded for QR analytics (once per member per event)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -2723,12 +2736,137 @@ async def get_qr_check_in_data(
     if error or data is None:
         raise _event_error(error or "An unexpected error occurred")
 
+    # RPT2-3: only the self-check-in page's first load asks; the page polls
+    # this endpoint afterwards, as does the officer's QR display page.
+    if scan and await record_qr_scan(
+        db,
+        str(current_user.organization_id),
+        str(event_id),
+        str(current_user.id),
+        device_type_from_user_agent(request.headers.get("user-agent")),
+    ):
+        await db.commit()
+
     return QRCheckInData(**data)
+
+
+async def _event_for_guest_link(
+    db: AsyncSession, event_id: UUID, organization_id: str
+) -> Event:
+    event = (
+        await db.execute(
+            select(Event).where(
+                Event.id == str(event_id),
+                Event.organization_id == organization_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
+
+
+def _guest_link_response(event: Event) -> GuestCheckInLinkResponse:
+    return GuestCheckInLinkResponse(
+        event_id=str(event.id),
+        allow_guest_check_in=bool(event.allow_guest_check_in),
+        guest_token=event.guest_check_in_token,
+    )
+
+
+@router.get("/{event_id}/guest-check-in-link", response_model=GuestCheckInLinkResponse)
+async def get_guest_check_in_link(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get the event's own guest QR code, if one has been issued.
+
+    Gated on events.manage rather than open to every member like the member
+    QR code: the token is a credential for an unauthenticated write, and the
+    member QR page is reachable by anyone signed in.
+    """
+    event = await _event_for_guest_link(db, event_id, current_user.organization_id)
+    return _guest_link_response(event)
+
+
+@router.post("/{event_id}/guest-check-in-link", response_model=GuestCheckInLinkResponse)
+async def issue_guest_check_in_link(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Issue the event's guest QR code, or return the one it already has.
+
+    Idempotent, so a code already printed keeps working. Refused with a 400
+    while guest check-in is off for the event.
+    """
+    try:
+        event, changed = await GuestCheckInService(db).issue_link_token(
+            str(event_id), current_user.organization_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if changed:
+        await log_audit_event(
+            db=db,
+            event_type="event_guest_link_issued",
+            event_category="events",
+            severity="info",
+            event_data={"event_id": str(event.id)},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=current_user.organization_id,
+        )
+    return _guest_link_response(event)
+
+
+@router.post(
+    "/{event_id}/guest-check-in-link/rotate",
+    response_model=GuestCheckInLinkResponse,
+)
+async def rotate_guest_check_in_link(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Replace the event's guest QR code; the previous one stops working at once.
+
+    The way to revoke a code that was printed on a flyer or shared too widely.
+    Allowed while guest check-in is off, since revoking is always safe.
+    """
+    try:
+        event, _changed = await GuestCheckInService(db).issue_link_token(
+            str(event_id), current_user.organization_id, rotate=True
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    await log_audit_event(
+        db=db,
+        event_type="event_guest_link_rotated",
+        event_category="events",
+        severity="warning",
+        event_data={"event_id": str(event.id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=current_user.organization_id,
+    )
+    return _guest_link_response(event)
 
 
 @router.post("/{event_id}/self-check-in", response_model=RSVPResponse)
 async def self_check_in(
     event_id: UUID,
+    request: Request,
     check_in_data: SelfCheckInRequest | None = None,
     override: bool = Query(
         False, description="Proceed despite a training-pipeline phase warning"
@@ -2756,6 +2894,26 @@ async def self_check_in(
         is_checkout=is_checkout,
         override=override,
     )
+
+    # RPT2-3: record the outcome for QR analytics. Committed here, before a
+    # refusal raises below: the request's session rolls back on an error, and
+    # a failure that is never stored is the one the dashboard exists to show.
+    # A check-out, a repeat scan and the overridable phase-gate warning are not
+    # check-in outcomes.
+    if (
+        not is_checkout
+        and error != "ALREADY_CHECKED_IN"
+        and not (error and error.startswith(PHASE_GATE_PREFIX))
+    ):
+        record_check_in_outcome(
+            db,
+            str(current_user.organization_id),
+            str(event_id),
+            str(current_user.id),
+            device_type_from_user_agent(request.headers.get("user-agent")),
+            error,
+        )
+        await db.commit()
 
     if error:
         # Soft pipeline phase gate — 409 the client can override (proceed anyway)

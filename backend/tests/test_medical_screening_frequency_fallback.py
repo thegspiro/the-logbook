@@ -251,3 +251,99 @@ def test_a_frequency_that_is_not_positive_derives_nothing(months):
     assert _effective_expiration(
         record, SimpleNamespace(frequency_months=months), {}
     ) == (None, False)
+
+
+class TestSupersededRecords:
+    """A record a newer one of the same type replaces is not expiring.
+
+    The count grades only the subject's latest record of each type; the list
+    named every record in the window, so a renewed physical still showed as
+    "expiring in 10 days" beside a count of zero (pitfall #29).
+    """
+
+    async def _pair(self, db, org_id, **subject):
+        old = ScreeningRecord(
+            id=_uid(),
+            organization_id=org_id,
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            status=ScreeningStatus.PASSED,
+            completed_date=date.today() - relativedelta(months=12),
+            expiration_date=date.today() + timedelta(days=10),
+            **subject,
+        )
+        renewed = ScreeningRecord(
+            id=_uid(),
+            organization_id=org_id,
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            status=ScreeningStatus.PASSED,
+            completed_date=date.today() - timedelta(days=5),
+            expiration_date=date.today() + relativedelta(months=12),
+            **subject,
+        )
+        db.add_all([old, renewed])
+        await db.flush()
+        return old
+
+    async def test_a_renewed_members_old_record_is_not_listed(self, db_session, scene):
+        await _requirement(db_session, scene.org_id, 12)
+        await self._pair(db_session, scene.org_id, user_id=scene.member_id)
+
+        listed = await MedicalScreeningService(db_session).get_expiring_soon(
+            scene.org_id, days=30
+        )
+        summary = await _summary(db_session, scene)
+
+        assert listed == []
+        assert summary.expiring_soon_count == 0
+
+    async def test_a_renewed_prospects_old_record_is_not_listed(
+        self, db_session, scene
+    ):
+        prospect_id = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO prospective_members (id, organization_id, "
+                "first_name, last_name, email) VALUES (:id, :org, 'Sam', "
+                "'Applicant', :em)"
+            ),
+            {"id": prospect_id, "org": scene.org_id, "em": f"{prospect_id}@t.com"},
+        )
+        await self._pair(db_session, scene.org_id, prospect_id=prospect_id)
+
+        listed = await MedicalScreeningService(db_session).get_expiring_soon(
+            scene.org_id, days=30
+        )
+
+        assert listed == []
+
+    async def test_another_subjects_newer_record_does_not_hide_this_one(
+        self, db_session, scene
+    ):
+        other = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, first_name, "
+                "last_name, email, password_hash, status) VALUES (:id, :org, "
+                ":un, 'Lee', 'Other', :em, 'x', 'active')"
+            ),
+            {
+                "id": other,
+                "org": scene.org_id,
+                "un": f"o-{other[:8]}",
+                "em": f"{other}@t.com",
+            },
+        )
+        old = await self._pair(db_session, scene.org_id, user_id=scene.member_id)
+        # Only the renewal is moved to the other member.
+        await db_session.execute(
+            text(
+                "UPDATE screening_records SET user_id=:o WHERE user_id=:m AND id<>:old"
+            ),
+            {"o": other, "m": scene.member_id, "old": old.id},
+        )
+
+        listed = await MedicalScreeningService(db_session).get_expiring_soon(
+            scene.org_id, days=30
+        )
+
+        assert [r.record_id for r in listed] == [old.id]

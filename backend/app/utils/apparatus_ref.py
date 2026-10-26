@@ -39,7 +39,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.apparatus import Apparatus
-from app.models.training import BasicApparatus
+from app.models.call_tracking import OrgCallResponse
+from app.models.training import (
+    BasicApparatus,
+    Shift,
+    ShiftEquipmentCheck,
+    ShiftPreWorkSession,
+    ShiftTemplate,
+)
 
 
 @dataclass(frozen=True)
@@ -277,3 +284,37 @@ async def apparatus_ref_exists(
     """
     ref = await resolve_apparatus_ref(db, apparatus_id, organization_id)
     return ref.exists
+
+
+async def apparatus_in_use(
+    db: AsyncSession,
+    apparatus_id: str,
+    organization_id: str,
+) -> bool:
+    """True when a template, shift, pre-work session, equipment check or
+    call response names this vehicle, from either apparatus table.
+
+    None of those columns has a foreign key, because each may hold an id from
+    either table, so a hard delete leaves every one of them dangling. A
+    template naming a deleted vehicle then refuses every save with "Apparatus
+    not found", since its form re-sends the stored id. Both deletes ask this
+    before removing a row.
+    """
+    for model in (
+        ShiftTemplate,
+        Shift,
+        ShiftPreWorkSession,
+        ShiftEquipmentCheck,
+        OrgCallResponse,
+    ):
+        found = await db.scalar(
+            select(model.id)
+            .where(
+                model.apparatus_id == apparatus_id,
+                model.organization_id == organization_id,
+            )
+            .limit(1)
+        )
+        if found is not None:
+            return True
+    return False
