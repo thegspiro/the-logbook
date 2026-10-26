@@ -42,20 +42,70 @@ note.
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 11, PR #3754, merged — docs-only, plus a mid-flight CI fix ported into it), preserved for history</summary>
 
 **PR [#3754](https://github.com/thegspiro/the-logbook/pull/3754)** (branch
-`claude/security-review-training-core`) — Feature 17 (Training core), pass 11. **Watchdog pickup** — the dedicated `/loop 30m /security-review`
-session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. No
-security-review PR was open — confirmed via `search_pull_requests`, 0
-matching results. **0 fixed, 0 flagged.** A second watchdog tick picked up
-its CI after merge-time: the `Frontend E2E (Mobile Safari)` check failed
-deterministically (3/3 attempts) on a pre-existing
-`/scheduling/admin/planning` color-contrast test-timing race (axe sampling
-`.btn-secondary` mid 150ms fade-in) — confirmed red on the PR's own base
-commit too, so unrelated to this docs-only PR. The fix already existed,
-unmerged, on PR #3757 (commit `77597088`); ported the same one-line
+`claude/security-review-training-core`) — Feature 17 (Training core),
+pass 11. **Watchdog pickup** — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was unreachable. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results. PR #3748 (Feature 16, Events & requests, pass 11) had
+already merged. Row 17 (Training core) was confirmed the next `⬜` by
+reading the rotation table directly on a freshly fetched `main`. **0
+fixed, 0 flagged.** Real delta since pass 10's baseline (`0676a090`): 9 of
+210 non-merge commits in the window touch this feature's declared files,
+all read in full — including two files (`models/training.py`,
+`schemas/training_program.py`) this pass found missing from the declared
+scope list and added. The new `POST /training/programs/enrollments/{id}/
+complete` route (`training.manage`-gated, org-scoped) and its new
+`completion_reason` column are correctly masked from members and reuse
+the existing row-locked completion claim. TR7-1 re-confirmed OPEN,
+unchanged. A second watchdog tick picked up its CI after merge-time: the
+`Frontend E2E (Mobile Safari)` check failed deterministically (3/3
+attempts) on a pre-existing `/scheduling/admin/planning` color-contrast
+test-timing race (axe sampling `.btn-secondary` mid 150ms fade-in) —
+confirmed red on the PR's own base commit too, so unrelated to this
+docs-only PR. The fix already existed, unmerged, on PR #3757 (commit
+`77597088`); ported the same one-line
 `page.emulateMedia({ reducedMotion: 'reduce' })` change into #3754 directly
-rather than waiting on #3757, then merged once green.
+rather than waiting on #3757, then merged once green. See
+`TR-17-training-core.md`'s **Pass 11** section for the full review.
 
 Rotation row 17 → ✅ (merged); next was Feature 18 (Training extended).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 11, PR #3748, merged), preserved for history</summary>
+
+**PR [#3748](https://github.com/thegspiro/the-logbook/pull/3748)** (branch
+`claude/security-review-events-requests`) — Feature 16 (Events &
+requests), pass 11. **Watchdog pickup** — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was unreachable. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, re-checked both before starting and again immediately
+before pushing. PR #3744 (Feature 15, Scheduling, pass 11) had already
+merged. Row 16 (Events & requests) was confirmed the next `⬜` by reading
+the rotation table directly on a freshly fetched `main`. **0 fixed, 0
+flagged.** Real delta since pass 10's baseline (`31f24bf7`, PR #3625): 9
+real commits of 202 non-merge commits in the window, real diff in 4 of 9
+primary declared files plus one frontend route file, every one read in
+full. **Scope gap found and closed**, the same shape pass 7 found and
+fixed for the attendance-petition files: a brand-new public,
+unauthenticated endpoint file, `api/public/event_guest.py` (4 routes),
+gives an event its own guest-link QR code for sign-in with no room
+kiosk, reusing the room-kiosk path's rate limits, per-event daily cap and
+channel-scoped confirm-token mechanism rather than reimplementing them —
+reviewed against all seven `CHECKLIST.md` dimensions and found clean
+(token-only auth resolves the org itself, manager routes are
+`events.manage` **and** org-scoped by id, the token is never serialized
+on the ordinary event detail, a repeat sign-in is proven idempotent
+against a real database). Added it, its service
+(`guest_check_in_service.py`), `qr_check_in_analytics.py` and two
+frontend files to this feature's declared scope. A repo-wide
+phone/address encryption-at-rest migration touching two of this
+feature's columns was also reviewed in full and found sound. EV-23 and
+EV-26 re-verified unregressed. See `EV-16-events-requests.md`'s
+**Pass 11** section for the full review.
 
 </details>
 
@@ -22086,6 +22136,56 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 17 (Training core, pass 11) — watchdog pickup, real delta (9 of 210 commits), scope gap closed (models/schemas added to declared scope), 0 fixed, 0 new findings, TR7-1 re-confirmed OPEN
+
+Watchdog pickup for the standing `/loop 30m /security-review` rotation
+(dedicated session `session_011T1ZyyLrD5HagusgK9uDw2` unreachable via
+`ListAgents`). PR #3748 (Feature 16, Events & requests, pass 11) had
+already merged (`e8e0e075`, confirmed on a fresh `origin/main`), with no
+`claude/security-review-*` PR open (`search_pull_requests`, `is:pr is:open
+head:claude/security-review-`, 0 matching results). Row 17 (Training core)
+was confirmed the next `⬜`.
+
+Diffed pass 10's own landing commit (`0676a090`) against current `HEAD`.
+This pass's first diff pass used a file list copied from the findings
+file's own "Backend:" header (endpoints + services only) and missed
+`backend/app/models/training.py` and `backend/app/schemas/
+training_program.py` — both genuinely training-core's own
+(`ProgramEnrollment`, `TrainingProgram`, `TrainingProgramUpdate`), not the
+misleadingly-named shared files pass 3 found at the same two paths.
+Re-running with both added raised the real-commit count from 7 to 9 and
+surfaced two already-merged app-review fixes (null-handling hardening via
+a new `RefusesNull` schema mixin, and a 30-day cap on reminder lead
+times) — both reviewed and found to be pure validation/business-rule
+changes with no security surface. The declared backend/frontend scope at
+the top of `TR-17-training-core.md` now includes both files.
+
+Of the remaining 7 commits: a new officer action,
+`POST /training/programs/enrollments/{id}/complete`
+(`training.manage`-gated, org-scoped via a join on
+`TrainingProgram.organization_id`, claimed through the same row-locked
+compare-and-set the automatic-completion path already uses), with its new
+`completion_reason` column correctly masked from members at both read
+sites that serve them; a deactivated requirement/prerequisite correctly
+stops counting toward completion rather than vacuously passing (Pitfall
+#29); an hours-grading float-drift fix; a credit-reversal correctness fix;
+and a frontend-only routing change updating all three route registries
+consistently. TR7-1 re-confirmed OPEN/unchanged (zero diff on
+`enroll_member_in_program`/`enroll_member` this window).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean at CI's pinned versions (7.4.1/26.10.1/9.0.2);
+`validate_migrations.py --strict` — 658 revisions, single head
+`1ad0b594f3fb`; `check_route_permissions.py --strict` — 279 routes, 0
+errors/warnings; `generate_schema_docs.py --check` — up to date; scoped
+backend tests (`-k "training or compliance or hours_float or
+progress_credit"`) — 2359 passed, 1 pre-existing skip (`pywebpush`);
+frontend `npm run typecheck`/`npm run lint` — 0 errors.
+
+Row 17 → ✅ (pending this PR's merge); next is Feature 18 (Training
+extended) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-10-26 — Feature 16 (Events & requests, pass 11) — watchdog pickup, real delta (9 real commits of 202 in scope), new public guest-link surface found outside declared scope and reviewed clean, 0 fixed, 0 flagged
 
