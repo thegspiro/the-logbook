@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**(this PR)** (branch `claude/security-review-equipment-check`) — Feature
+14 (Equipment check & shifts), pass 12. No security-review PR was open —
+confirmed via `search_pull_requests` (`is:pr is:open
+head:claude/security-review-`), 0 matching results, re-checked immediately
+before pushing. No Claude session reachable via `ListAgents` — the
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) is still unreachable. PR #3740
+(Feature 13, Apparatus & NFC, pass 19) had already merged. Row 14
+(Equipment check & shifts) was confirmed the next `⬜`. **0 fixed, 1 new
+finding flagged (EC-17, MED, pre-existing).** Real delta since pass 11's
+baseline (`8475c902`, PR #3602): a genuine data-integrity bug fix
+(`_apply_trainee_visibility` used to mutate the session-tracked ORM row,
+permanently erasing a hidden field on the first trainee view — now builds
+a detached response copy instead; a regression test already covers it),
+a future-shift-date rejection resolved in the org's own timezone, and
+`update_report`'s `review_status` field hardened so a submitted report's
+status changes only through review and the submit-destination is read
+from server config, never the client. EC-17: that hardening only covers
+the `review_status` field — every other editable field
+(narrative/rating/skills_observed/etc.) stays writable by the filing
+officer on an already-approved report with no re-review, contradicting
+the docstring's "allows only drafts" claim; pre-existing, not introduced
+by this delta, flagged for an owner decision and mirrored to
+`docs/KNOWN_LIMITATIONS.md`. Lot-recall integration landing in
+`equipment_check_service.py` (primarily Feature 23's own row) reviewed for
+org-scoping and found sound. Routes unchanged (54/21). See
+`EC-14-equipment-check-shifts.md`'s **Pass 12** section for the full
+review.
+
+Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
+(Scheduling).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3740, Feature 13, Apparatus & NFC, pass 19, merged), preserved for history</summary>
+
 **PR [#3740](https://github.com/thegspiro/the-logbook/pull/3740)** (branch
 `claude/security-review-apparatus-nfc`) — Feature 13
 (Apparatus & NFC), pass 19. No security-review PR was open — confirmed via
@@ -47,6 +82,8 @@ unchanged at 94. AP2-4 re-confirmed FLAGGED/unaffected. See
 
 Rotation row 13 → ✅ (pending this PR's merge); next is Feature 14
 (Equipment check & shifts).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3739, Feature 12, Facilities, pass 12, merged), preserved for history</summary>
@@ -21921,7 +21958,7 @@ PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -21949,6 +21986,77 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 14 (Equipment check & shifts, pass 12) — watchdog pickup, 0 fixed, 1 new finding flagged (EC-17, MED, pre-existing)
+
+PR #3740 (Feature 13, Apparatus & NFC, pass 19) had already merged, with no
+`claude/security-review-*` PR open anywhere (`search_pull_requests`, 0
+matching results, re-checked immediately before pushing). No Claude
+session reachable via `ListAgents` — the dedicated review session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) is still unreachable; this watchdog
+picked up row 14 (Equipment check & shifts) next, confirmed the next `⬜`
+from the Rotation table directly.
+
+Baseline `8475c902` (PR #3602's merge, pass 11). `git diff --stat` against
+it, across the full declared scope, found 3 files, +258/−32 — the endpoint
+file (`equipment_check.py`) is byte-identical; all of it is in the two
+services plus `shift_completion.py`'s handler bodies. Routes re-enumerated
+by grep, unchanged (54/21).
+
+Three real changes in `shift_completion_service.py`, all read in full:
+(1) a genuine data-integrity bug, already fixed and now re-verified —
+`_apply_trainee_visibility` used to mutate the session-tracked ORM row
+directly, and because `get_db` commits at the end of every request
+(including a GET), the first trainee view under a restrictive visibility
+config permanently erased the hidden field from the database; the fix
+builds a detached response copy instead, and a dedicated regression test
+(`tests/test_shift_report_trainee_view.py`) already asserts both the
+hidden response and the intact stored value; (2) `reject_future_shift_date`,
+correctly resolving "today" through the organization's own configured
+timezone rather than server UTC; (3) `update_report` now refuses a
+`review_status` change from the filing officer once a report is no longer
+a draft (closing a real hole — an officer could previously set their own
+report straight to `approved` or regress an approved one back through
+approval to re-run sign-offs), reads the submit destination from
+`TrainingModuleConfigService` and overwrites whatever the client sent, and
+scopes its new deleted-officer carve-out to `report.officer_id is None`
+only (not merely `training.manage`).
+
+**EC-17 — MED — FLAGGED — pre-existing, not introduced by this delta.**
+That hardening covers only the `review_status` field. Every other
+`UPDATABLE_FIELDS` entry (`performance_rating`, `officer_narrative`,
+`skills_observed`, etc.) stays writable by the filing officer on an
+already-approved report with no draft-only gate and no re-review
+triggered — unchanged from pass 11's baseline, confirmed by diff —
+contradicting this same pass's own docstring rewrite ("The service allows
+only drafts"), which is only true for the status field. Does not re-run
+training credit (`_trigger_deferred_progress` gates on `not was_released`,
+captured before the edit), so the risk is to record integrity, not
+double-counted credit. Not fixed — closing it is a product decision
+(block all edits once non-draft, require re-review on any post-approval
+edit, or accept the audit-log-only status quo) this pass should not make
+unilaterally. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+`equipment_check_service.py`'s larger diff (+114) is primarily Medical
+Supplies' own lot-recall feature (Feature 23's rotation row) landing in
+this feature's shared service; reviewed for org-scoping only, per the
+scoping discipline prior passes use for cross-feature landings — every new
+query threads `organization_id` through, no gap found.
+
+Full writeup: `EC-14-equipment-check-shifts.md`'s **Pass 12** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI-pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — single head, no fork; `check_route_
+permissions.py --strict` (repo root) — 279 routes, 0 errors/warnings;
+`generate_schema_docs.py --check` — up to date; scoped backend tests
+(`-k "shift_completion or equipment_check or shift_report"`) — 677 passed,
+1 skipped (environment-only, `py_vapid`); frontend `npm run typecheck`
+clean; `npm run lint` clean. No frontend file in this feature's declared
+scope changed this pass, so no scoped frontend suite was run.
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-26 — Feature 13 (Apparatus & NFC, pass 19) — watchdog pickup, 0 fixed, 0 new findings; Member ID Cards admin surface reviewed end to end
 
