@@ -6,6 +6,7 @@ import type {
   ConsentStatus,
   EmailLinkDomainSource,
   FiscalYearLabel,
+  GoogleAuthMethod,
   MembershipYearBasis,
   MicrosoftAuthMethod,
   RejoinServiceCredit,
@@ -161,8 +162,15 @@ export interface EmailServiceSettings {
   // Cloudflare Email Service
   cloudflare_account_id?: string;
   cloudflare_api_token?: string;
-  // Gmail / Google Workspace — signs in to smtp.gmail.com as from_email
+  // Gmail / Google Workspace — signs in to smtp.gmail.com as from_email with
+  // an App Password, or sends through the Gmail API as from_email with a
+  // domain-wide delegated service account.
+  google_auth_method?: GoogleAuthMethod;
   google_app_password?: string;
+  google_service_account_key?: string;
+  // Read-only, derived by the backend from the saved key: the client ID to
+  // authorize in the Google Admin console. Null when no key is saved.
+  google_service_account_client_id?: string | null;
   // Microsoft 365 — signs in to smtp.office365.com as from_email, with an
   // App Password (Basic auth, retiring) or an Entra ID app registration.
   microsoft_auth_method?: MicrosoftAuthMethod;

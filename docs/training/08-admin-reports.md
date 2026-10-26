@@ -1512,6 +1512,27 @@ changing. The form lists them too:
   records. Without them, Gmail, Outlook and Yahoo may send department mail to
   spam or reject it.
 
+**Gmail** on Google Workspace also offers **Service account**, which a
+password change does not affect. Choosing it needs **admin.access** (the Fire
+Chief, President and IT Manager positions hold it by default); anyone else sees
+the option disabled. It sends through the Gmail API instead of signing in to
+`smtp.gmail.com`:
+
+1. In Google Cloud, enable the **Gmail API**, create a service account and
+   download a JSON key for it.
+2. On the form, choose **Service account** and upload the key. The form shows
+   the key's **client ID**.
+3. In the Google Admin console, open **Security → API controls → Domain-wide
+   delegation**, add that client ID, and authorize only the scope
+   `https://www.googleapis.com/auth/gmail.send`.
+4. Use an active user in your Workspace domain as the account email address,
+   save, and select **Test Connection**. It checks that Google will let the key
+   send as that address, and sends nothing.
+
+The key can send as anyone in the domain; Google cannot limit it to one
+mailbox. Keep it in a Google Cloud project used only for this. Changing the
+account email address later clears the saved key, so upload it again.
+
 **Microsoft 365** also offers **App registration (OAuth)**. It asks for the
 directory (tenant) ID, application (client) ID and client secret. In Microsoft,
 the app registration needs the **SMTP.SendAsApp** application permission and
