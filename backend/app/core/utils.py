@@ -10,7 +10,7 @@ import string
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional, Sequence, TypeVar
 
 from fastapi import HTTPException, status
 from loguru import logger
@@ -32,6 +32,10 @@ _UNSAFE_PATTERNS = [
 ]
 
 _GENERIC_ERROR = "An unexpected error occurred. Please try again."
+
+# A longer message is replaced with _GENERIC_ERROR rather than sent, so a
+# refusal that runs past it reaches the user as no reason at all.
+MAX_ERROR_DETAIL_LENGTH = 300
 
 
 def safe_error_detail(
@@ -60,12 +64,49 @@ def safe_error_detail(
             if pattern.search(msg):
                 return fallback
         # Cap length to prevent verbose messages
-        if len(msg) > 300:
+        if len(msg) > MAX_ERROR_DETAIL_LENGTH:
             return fallback
         return msg
 
     # Everything else: generic message
     return fallback
+
+
+def list_within_detail_limit(
+    prefix: str,
+    items: Sequence[str],
+    suffix: str = "",
+    separator: str = ", ",
+) -> str:
+    """``prefix`` + as many ``items`` as fit + ``suffix``, within the cap.
+
+    For a refusal that names everything wrong at once. Joined whole, a list
+    grows with the data and eventually runs past ``MAX_ERROR_DETAIL_LENGTH``,
+    at which point the user is told nothing. Items are kept in order while
+    they fit, and the rest are counted ("and 4 more"). An item too long to
+    fit even alone is clipped, so the result never exceeds the cap.
+    """
+
+    def compose(shown: list[str], hidden: int) -> str:
+        parts = list(shown)
+        if hidden:
+            parts.append(f"and {hidden} more")
+        return prefix + separator.join(parts) + suffix
+
+    shown: list[str] = []
+    for index, item in enumerate(items):
+        candidate = compose([*shown, item], len(items) - index - 1)
+        if len(candidate) > MAX_ERROR_DETAIL_LENGTH:
+            break
+        shown.append(item)
+
+    if not shown and items:
+        first = items[0]
+        overflow = len(compose([first], len(items) - 1)) - MAX_ERROR_DETAIL_LENGTH
+        keep = max(0, len(first) - overflow - 1)
+        shown.append(first[:keep].rstrip() + "…")
+
+    return compose(shown, len(items) - len(shown))
 
 
 def sanitize_error_message(
@@ -83,7 +124,7 @@ def sanitize_error_message(
         if pattern.search(msg):
             logger.warning("Suppressed unsafe error message: {}", msg)
             return fallback
-    if len(msg) > 300:
+    if len(msg) > MAX_ERROR_DETAIL_LENGTH:
         return fallback
     return msg
 

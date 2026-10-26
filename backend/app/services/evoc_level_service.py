@@ -269,7 +269,7 @@ class EvocLevelService:
         if apparatus_using.scalar_one_or_none():
             raise ValueError(
                 "Cannot delete EVOC level that is assigned to apparatus. "
-                "Remove the EVOC requirement from those apparatus first."
+                "Clear the EVOC requirement on those apparatus first."
             )
 
         await self.db.delete(level)
