@@ -79,7 +79,10 @@ class FakeDrive:
         self.calls: list[tuple[str, str, dict]] = []
         self.next_id = 0
         self.down = False
-        self.delete_status = None
+        # The service account's role on the Shared Drive. Content manager is
+        # "fileOrganizer": it may move a file to the trash, but files.delete
+        # (permanent) needs "organizer", the Manager role.
+        self.role = "fileOrganizer"
 
     def _id(self):
         self.next_id += 1
@@ -103,16 +106,23 @@ class FakeDrive:
         assert match, url
         file_id = match.group(1)
         stored = self.files.get(file_id)
-        if method == "PATCH":
+        if method == "PATCH" and path.startswith("/upload/"):
             if stored is None:
                 return FakeResponse(404)
             stored["bytes"] = kwargs["data"]
             return FakeResponse(200, payload={"id": file_id})
-        if method == "DELETE":
-            if self.delete_status:
-                return FakeResponse(self.delete_status)
+        if method == "PATCH":
             if stored is None:
                 return FakeResponse(404)
+            if self.role not in ("organizer", "fileOrganizer"):
+                return FakeResponse(403)
+            stored["trashed"] = bool(kwargs["json"]["trashed"])
+            return FakeResponse(200, payload={"id": file_id})
+        if method == "DELETE":
+            if stored is None:
+                return FakeResponse(404)
+            if self.role != "organizer":
+                return FakeResponse(403)
             del self.files[file_id]
             return FakeResponse(204)
         if stored is None:
@@ -120,7 +130,11 @@ class FakeDrive:
         if params.get("alt") != "media":
             return FakeResponse(
                 200,
-                payload={"id": file_id, "trashed": False, "driveId": stored["drive"]},
+                payload={
+                    "id": file_id,
+                    "trashed": stored.get("trashed", False),
+                    "driveId": stored["drive"],
+                },
             )
         headers = kwargs.get("headers") or {}
         assert headers.get("Accept-Encoding") == "identity"
@@ -136,6 +150,10 @@ class FakeDrive:
                 {"Content-Range": f"bytes {start}-{start + len(part) - 1}/{len(data)}"},
             )
         return FakeResponse(200, data, {"Content-Length": str(len(data))})
+
+    def live(self) -> dict[str, dict]:
+        """The files a person browsing the drive sees, outside its trash."""
+        return {k: v for k, v in self.files.items() if not v.get("trashed")}
 
     def _create(self, kwargs):
         boundary = re.search(
@@ -364,20 +382,34 @@ class TestBackend:
         elsewhere = gdrive.make_ref("0AOtherDrive12345", location.file_id, location.key)
         assert backend.exists(elsewhere) is False
 
-    def test_delete_reports_gone_including_already_missing(self, drive):
+    def test_delete_moves_the_file_to_the_drive_trash(self, drive):
+        """Content manager may trash a file but not delete it outright, so a
+        delete is a move to the Shared Drive's trash, which Google empties
+        after 30 days. It must still read as gone, and repeat as gone."""
         backend = _backend(drive)
         ref = backend.ref_for(f"{ORG}/documents/rec/a.pdf")
         backend.put(ref, PDF)
+        file_id = gdrive.parse_ref(ref).file_id
+
         assert backend.delete(ref) is True
         assert backend.exists(ref) is False
+        assert drive.files[file_id]["trashed"] is True
+        assert drive.live() == {}
+        assert backend.delete(ref) is True
+        assert not [c for c in drive.calls if c[0] == "DELETE"]
+
+    def test_delete_of_a_file_already_gone_reports_gone(self, drive):
+        backend = _backend(drive)
+        ref = backend.ref_for(f"{ORG}/documents/rec/a.pdf")
         assert backend.delete(ref) is True
 
     def test_delete_without_the_content_manager_role_reports_failure(self, drive):
         backend = _backend(drive)
         ref = backend.ref_for(f"{ORG}/documents/rec/a.pdf")
         backend.put(ref, PDF)
-        drive.delete_status = 403
+        drive.role = "writer"
         assert backend.delete(ref) is False
+        assert backend.exists(ref) is True
 
     def test_an_unreachable_drive_is_a_storage_error(self, drive):
         backend = _backend(drive)
@@ -455,7 +487,7 @@ class TestWhereNewFilesGo:
         body = b"".join([chunk async for chunk in response.body_iterator])
         assert body == PDF
         assert await file_storage.delete(ref) is True
-        assert drive.files == {}
+        assert drive.live() == {}
 
     async def test_a_changed_key_goes_back_to_disk(self, drive, root, monkeypatch):
         _saved(
@@ -517,7 +549,7 @@ class TestActivate:
         )
         assert "PRIVATE KEY" not in json.dumps(record)
         db.commit.assert_awaited_once()
-        assert drive.files == {}
+        assert drive.live() == {}
         assert view is not None
 
     async def test_a_drive_the_account_cannot_reach_fails_cleanly(
