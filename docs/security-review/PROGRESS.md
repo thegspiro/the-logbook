@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3744](https://github.com/thegspiro/the-logbook/pull/3744)** (branch
+`claude/security-review-scheduling`) — Feature 15 (Scheduling), pass 11. No
+security-review PR was open — confirmed via `search_pull_requests` (`is:pr
+is:open head:claude/security-review-`), 0 matching results, re-checked both
+before starting and again immediately before pushing. No Claude session
+reachable via `ListAgents` — the dedicated `/loop 30m /security-review`
+session is still unreachable. PR #3741 (Feature 14, Equipment check &
+shifts, pass 12) had already merged. Row 15 (Scheduling) was confirmed the
+next `⬜` by reading the rotation table directly. **0 fixed in Scheduling
+itself, 0 new findings, 1 ride-along fix.** Real delta since pass 10's
+baseline (`6d3cd946f`, PR #3617): 15 non-merge commits, real diff in 5 of 13
+declared files, every one read in full. Every behavior change hardens an
+existing invariant in Scheduling's own favor (full candidate check applied
+to assignment edits and pattern-generated seats, which previously bypassed
+it; attendance/calls locked on finalized/cancelled shifts with proper
+row-lock ordering; seat names capped at the existing length limit; a shift
+report's `review_status` locked to move only through review — closing the
+exact gap this same day's EC-17 named as still open, but only for that one
+field, so EC-17 itself stays OPEN in its own findings file) or is pure
+data-correctness. All seven standing items re-verified unchanged; SCH-19
+remains the one OPEN item. 0 new routes (112/112 by AST walk). Ride-along:
+this pass's own completion gate found the Alembic chain forked into 3
+heads — three concurrent sessions had each independently rejoined the same
+pair of parents within a few hours of each other, unrelated to Scheduling
+but blocking regardless of cause — fixed with one more pure-join merge
+revision, verified against a live database with `alembic upgrade head`. See
+`SCH-15-scheduling.md`'s **Pass 11** section for the full review.
+
+Rotation row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events
+& requests) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3741, Feature 14, Equipment check & shifts, pass 12, merged), preserved for history</summary>
+
 **PR [#3741](https://github.com/thegspiro/the-logbook/pull/3741)** (branch
 `claude/security-review-equipment-check`) — Feature
 14 (Equipment check & shifts), pass 12. No security-review PR was open —
@@ -48,6 +83,8 @@ review.
 
 Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
 (Scheduling).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3740, Feature 13, Apparatus & NFC, pass 19, merged), preserved for history</summary>
