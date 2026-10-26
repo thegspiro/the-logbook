@@ -1,8 +1,10 @@
+import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.core.utils import safe_error_detail
 from app.services.equipment_check_service import EquipmentCheckService
 
 
@@ -43,12 +45,48 @@ async def test_activation_rejects_incomplete_blocking_configuration():
     with pytest.raises(ValueError, match="Template cannot be activated") as error:
         await service.update_template("template-1", "org-1", {"is_active": True})
 
+    # Every rule is still evaluated in one pass; the message the client sees
+    # carries as many as fit safe_error_detail's cap and counts the rest.
+    issues = "\n".join(
+        EquipmentCheckService._publication_errors(template, template.compartments)
+    )
+    assert "template name is required" in issues
+    assert 'operational compartment "Untitled" has no checkable items' in issues
+    assert "every checklist item needs a name" in issues
+    assert "needs an expected quantity" in issues
+    assert "needs a minimum level" in issues
+
     detail = str(error.value)
+    assert safe_error_detail(error.value) == detail
     assert "template name is required" in detail
-    assert 'operational compartment "Untitled" has no checkable items' in detail
-    assert "every checklist item needs a name" in detail
-    assert "needs an expected quantity" in detail
-    assert "needs a minimum level" in detail
+    assert detail.endswith("; and 2 more")
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_long_list_of_issues_still_reaches_the_client():
+    """A new apparatus whose compartments are not filled in yet produces one
+    issue per compartment. Joined whole, that ran past safe_error_detail's
+    300-character cap and the builder showed only a generic error."""
+    db = SimpleNamespace(commit=AsyncMock())
+    service = EquipmentCheckService(db)
+    names = [f"Driver Side Compartment {n}" for n in range(1, 9)]
+    template = SimpleNamespace(
+        name="Engine 1 daily check",
+        is_active=False,
+        apparatus_id=None,
+        compartments=[compartment(name=n, items=[]) for n in names],
+    )
+    service.get_template = AsyncMock(return_value=template)
+
+    with pytest.raises(ValueError, match="Template cannot be activated") as error:
+        await service.update_template("template-1", "org-1", {"is_active": True})
+
+    detail = str(error.value)
+    assert safe_error_detail(error.value) == detail
+    assert detail.startswith("Template cannot be activated: ")
+    assert f'operational compartment "{names[0]}" has no checkable items' in detail
+    assert re.search(r"; and \d+ more$", detail)
     db.commit.assert_not_awaited()
 
 
