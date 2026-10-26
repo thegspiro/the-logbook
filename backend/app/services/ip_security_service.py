@@ -206,12 +206,18 @@ class IPSecurityService:
         Raises:
             ValueError: If exception not found or not pending
         """
-        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR).
+        # Locked: this is a check-then-write on a security allowlist, and two
+        # administrators acting on one request at once would both pass the
+        # status check, so an approval and a rejection could each land and leave
+        # the row approved with a rejection's attribution beside it.
         result = await db.execute(
-            select(IPException).where(
+            select(IPException)
+            .where(
                 IPException.id == exception_id,
                 IPException.organization_id == str(organization_id),
             )
+            .with_for_update()
         )
         exception: IPException | None = result.scalar_one_or_none()
 
@@ -298,12 +304,18 @@ class IPSecurityService:
         if not rejection_reason:
             raise ValueError("Rejection reason is required")
 
-        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR).
+        # Locked: this is a check-then-write on a security allowlist, and two
+        # administrators acting on one request at once would both pass the
+        # status check, so an approval and a rejection could each land and leave
+        # the row approved with a rejection's attribution beside it.
         result = await db.execute(
-            select(IPException).where(
+            select(IPException)
+            .where(
                 IPException.id == exception_id,
                 IPException.organization_id == str(organization_id),
             )
+            .with_for_update()
         )
         exception: IPException | None = result.scalar_one_or_none()
 
@@ -374,12 +386,18 @@ class IPSecurityService:
         if not revoke_reason:
             raise ValueError("Revoke reason is required")
 
-        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR).
+        # Locked: this is a check-then-write on a security allowlist, and two
+        # administrators acting on one request at once would both pass the
+        # status check, so an approval and a rejection could each land and leave
+        # the row approved with a rejection's attribution beside it.
         result = await db.execute(
-            select(IPException).where(
+            select(IPException)
+            .where(
                 IPException.id == exception_id,
                 IPException.organization_id == str(organization_id),
             )
+            .with_for_update()
         )
         exception: IPException | None = result.scalar_one_or_none()
 
