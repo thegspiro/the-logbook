@@ -1,7 +1,64 @@
 # Application Review — Compliance / Skills (Tier B)
 
 **Prefix:** `CS2` · **Iteration:** B22 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-26 (pass 5)
+
+---
+
+## Pass 5 (2026-10-26) — a null on two template fields was stored and unreadable (1 fixed)
+
+Lens for this pass: the update-payload contract (omit = keep, `null` = clear, a value =
+set) driven through the real handlers, the method of B18–B21, on the three update routes
+this module owns that write a model row: `PUT /training/skills-testing/templates/{id}`,
+`PUT /training/skills-testing/tests/{id}` and `PUT /compliance/config/profiles/{id}`.
+(`PATCH /training/skill-evaluations/{id}` was covered with training in B18; the
+nfpa, facilities and grants compliance routes belong to their own features.) A test
+reads each route's schemas from the application's OpenAPI document, builds a row from
+the model, and sends `null` for every field. A field must be refused (exactly 400 or 422,
+value unchanged) when its column is NOT NULL or its response cannot hold `None`; anything
+else must be accepted, and a column that was given a value first must be empty afterwards.
+39 derived cases plus one real-change test; compliance profiles came back clean.
+
+### CS2-2 — LOW/MED — a null `visibility` or `require_all_critical` on a skill template was stored and the template became unreadable — ✅ FIXED
+
+Both are nullable columns with a default, behind response fields that are plain `str` and
+`bool`. `PUT /templates/{id}` with either as `null` committed it, and every later read of
+the template failed response validation (500) until the row was repaired by hand. **Fixed**
+with `RefusesNull` on `SkillTemplateUpdate`: a null is now a 422, an omitted key still
+keeps the stored value, and the template builder never sends one (its update type excludes
+null for both). Unrelated to who may edit a template; only what a null does.
+
+### Checked and left alone
+
+- `overall_score`, `result` and `status` on a **skill test** are refused with a 400 for any
+  value, null included: a test's outcome is computed by completing it, never set by saving
+  it (owner decision SKT4-7). The derived test names `overall_score` in
+  `_REFUSED_BY_DESIGN` with that reason. `result` and `status` are NOT NULL and already
+  refused.
+- All 55 endpoints in `skills_testing.py`, `compliance_config.py`, `compliance_officer.py`
+  and `skill_evaluations.py` (29, 12, 8 and 6) carry an auth dependency (an AST scan).
+
+### Not done
+
+- `PUT /compliance/config` (the department-wide config, not a row) and the
+  `compliance-exempt` action are not in the derived test.
+- The harness is a fifth copy and should move to a shared helper; it now also builds its
+  own candidate user (a skill test is refused to its own candidate) and reads columns
+  through Core.
+- The other five checklist dimensions were not re-run beyond the scan above; passes 1–4
+  stand, including the full client-FK audit.
+
+**Completion gate (pass 5):** `flake8 app/ tests/` 0 · `black --check app/ tests/` clean ·
+`isort` clean on the changed files · `mypy` on `schemas/skills_testing.py` clean · no
+frontend change · new `test_skills_compliance_update_endpoints_integration.py` 40 pass, 0
+selected under the unit job's marker expression; 2 cases failed before the schema change
+(`SkillTemplate.visibility`, `SkillTemplate.require_all_critical`) · 1,079 tests selected
+by `skill|complian|model_updates` pass. **Environment note:** the first run of that group
+showed 4 failures (`Unknown column 'events.guest_check_in_token'`); they reproduce on a
+clean `main` and were the sandbox database sitting behind the migrations. `main` currently
+has **two Alembic heads**, so `alembic upgrade head` refuses and `alembic upgrade heads` was
+needed; see the PR.
 
 ---
 

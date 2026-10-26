@@ -60,7 +60,7 @@ from its open list.
 | B19 | scheduling                 | SCH2   | ✅     |
 | B20 | finance                    | FIN2   | ✅     |
 | B21 | orgs, roles & users        | ORU2   | ✅     |
-| B22 | compliance & skills        | CS2    | ⬜     |
+| B22 | compliance & skills        | CS2    | ✅     |
 | B23 | security, audit & IP       | SEC2   | ⬜     |
 | B24 | core infra                 | CI2    | ⬜     |
 | B25 | onboarding                 | ONB2   | ⬜     |
@@ -3430,3 +3430,17 @@ secrets redacted for non-admins. See
   checklist dimensions. Gate: flake8 / black / isort / mypy (changed schemas) clean · 595
   related tests pass after the migration · new file 42 pass, all `integration`. See
   orgs-roles-users.md → Pass 5. Next: B22 compliance & skills.
+- **B22 compliance & skills ✅ (pass 5) — a null on two skill-template fields made the template
+  unreadable (CS2-2).** The B18–B21 method on the three row-backed update routes this module
+  owns (skill templates, skill tests, compliance profiles): 39 derived cases. **Fixed** — a null
+  `visibility` or `require_all_critical` on `PUT /templates/{id}` was committed and every later read of
+  the template failed response validation; `SkillTemplateUpdate` now refuses it with a 422 through
+  `RefusesNull`, and the builder never sends one. **Verified good:** compliance profiles clean; a skill
+  test's `overall_score` / `result` / `status` are refused for any value by owner decision SKT4-7 (named
+  in the test); all 55 endpoints in the four files carry an auth dependency. **Not covered:**
+  `PUT /compliance/config` and the `compliance-exempt` action. **Follow-up:** the harness is a fifth
+  copy. **Environment:** `main` has two Alembic heads (`b7e4c2a91d35` and `0a8d11fcada1`), so
+  `alembic upgrade head` refuses; three open PRs each add a join (see the PR). **Not re-run:** the other
+  five checklist dimensions. Gate: flake8 / black / isort / mypy (changed schema) clean · 1,079 related
+  tests pass · new file 40 pass, all `integration`. See compliance-skills.md → Pass 5. Next: B23 security,
+  audit & IP.
