@@ -3,8 +3,10 @@ Email Testing Helper Functions
 
 Provides SMTP connection testing functionality for onboarding email configuration.
 Runs synchronous SMTP operations in thread pool to avoid blocking async event loop.
-Gmail and Microsoft 365 are tested as SMTP submission with an App Password;
-Cloudflare is verified through its REST API.
+Gmail and Microsoft 365 are tested as SMTP submission with an App Password
+(or, for Microsoft 365, an app-registration token over XOAUTH2); a Gmail
+service account is tested by obtaining a delegated send token; Cloudflare is
+verified through its REST API.
 """
 
 import json
@@ -21,7 +23,13 @@ from app.utils.email_providers import (
     is_valid_cloudflare_account_id,
     normalize_app_password,
     resolve_smtp_settings,
+    uses_google_service_account,
     uses_microsoft_oauth,
+)
+from app.utils.google_oauth import (
+    GoogleOAuthError,
+    acquire_gmail_send_token,
+    parse_service_account_key,
 )
 from app.utils.microsoft_oauth import (
     MicrosoftOAuthError,
@@ -329,7 +337,9 @@ def _settings_shape(platform: str, config: dict[str, Any]) -> dict[str, Any]:
     return {
         "platform": platform,
         "from_email": config.get("fromEmail"),
+        "google_auth_method": config.get("googleAuthMethod"),
         "google_app_password": config.get("googleAppPassword"),
+        "google_service_account_key": config.get("googleServiceAccountKey"),
         "microsoft_app_password": config.get("microsoftAppPassword"),
         "microsoft_auth_method": config.get("microsoftAuthMethod"),
         "microsoft_tenant_id": config.get("microsoftTenantId"),
@@ -413,11 +423,50 @@ def _test_microsoft_oauth_connection(
     return success, message, details
 
 
+def _test_google_service_account_connection(
+    config: dict[str, Any],
+) -> tuple[bool, str, dict[str, Any]]:
+    """Obtain a delegated token to send as the From address, sending nothing.
+
+    Google issues the token only when the key is valid, its client ID is
+    authorized in the Admin console for ``gmail.send``, and the From address
+    is a user in the domain — the three things a department gets wrong — so
+    a token is the whole test. No message is sent: the settings screen's
+    test should not put mail in anyone's inbox.
+    """
+    key = config.get("googleServiceAccountKey")
+    if not key:
+        return (
+            False,
+            "A Google service account key is required",
+            {"required": ["googleServiceAccountKey"]},
+        )
+    try:
+        client_id = str(parse_service_account_key(key)["client_id"])
+        acquire_gmail_send_token(key, str(config.get("fromEmail")))
+    except GoogleOAuthError as e:
+        return False, str(e), {"error": "token_request_failed"}
+    return (
+        True,
+        (
+            f"Google authorized this service account to send as "
+            f"{config.get('fromEmail')}. No message was sent."
+        ),
+        {
+            "token_acquired": True,
+            "auth_method": "service_account",
+            "client_id": client_id,
+        },
+    )
+
+
 def _test_provider_connection(
     platform: str, label: str, config: dict[str, Any]
 ) -> tuple[bool, str, dict[str, Any]]:
     if not config.get("fromEmail"):
         return False, f"{label} account email address is required", {}
+    if uses_google_service_account(_settings_shape(platform, config)):
+        return _test_google_service_account_connection(config)
     if uses_microsoft_oauth(_settings_shape(platform, config)):
         return _test_microsoft_oauth_connection(config)
     password_key = (
@@ -433,12 +482,12 @@ def _test_provider_connection(
 
 
 def test_gmail_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
-    """Test a Gmail / Google Workspace account by signing in to smtp.gmail.com.
+    """Test a Gmail / Google Workspace account the way the sender will use it.
 
-    Gmail is SMTP submission behind an App Password (2-Step Verification must
-    be on for the account). There is no OAuth path: the sender only speaks
-    SMTP, so a test that validated OAuth client credentials was confirming
-    something the system could never use.
+    With an App Password, by signing in to smtp.gmail.com (2-Step
+    Verification must be on for the account). With a service account, by
+    obtaining a delegated ``gmail.send`` token for the From address — the
+    sender uses the Gmail API for that method, not SMTP.
     """
     return _test_provider_connection("gmail", "Gmail", config)
 
