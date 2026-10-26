@@ -49,7 +49,9 @@ const EventSelfCheckInPage: React.FC = () => {
 
     try {
       setError(null);
-      const data = await eventService.getQRCheckInData(eventId);
+      // The member arrived by scanning the event's code; the server counts
+      // one scan per member per event for QR analytics (RPT2-3).
+      const data = await eventService.getQRCheckInData(eventId, { scan: true });
       setQrData(data);
 
       // A member who scans again after checking in is offered check-out, or

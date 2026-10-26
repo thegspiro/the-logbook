@@ -1,6 +1,70 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), (this PR) (pass 11)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), (this PR) (pass 12)
+
+---
+
+## Pass 12 (2026-10-26)
+
+**Watchdog pickup.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 open PRs, and no Claude session was reachable via `ListAgents`
+(the dedicated `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+is still unreachable). PR #3711 (Feature 09, Medical screening, pass 12) had
+already merged, docs-only, with no open rotation PR behind it — confirmed via
+the same `search_pull_requests` query immediately before this pass began.
+Rotation row 10 (Documents & legal) was the next `⬜`.
+
+**Baseline** `f8d0a41f` (PR #3579's merge, pass 11). `git diff --stat` against
+it, across the declared scope (`documents.py`, `station_documents.py`,
+`legal_documents.py`, `documents_service.py`, `print_document_service.py`,
+`legal_service.py`, `models/legal.py`, `schemas/legal.py`,
+`admin_only_folder_digest.py`, `document_service.py`, `DocumentsPage.tsx`,
+`LegalPage.tsx`, and the `documents/` frontend components) found exactly one
+changed file:
+
+| File                 | +/−   | What changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `models/document.py` | +9/−3 | Part of the repo-wide 99-column `NOT NULL` sweep (`609e04d2`, "Make 99 columns NOT NULL in the models, as upgraded databases already are"): `DocumentFolder.is_system`/`.sort_order` and `Document.document_type` tightened from `Optional` to required, each with a `server_default` matching the value every upgraded database already has. The companion migration (`6dce1364ff7e`) backfills any stray NULL to the default and skips already-NOT-NULL columns and absent tables, satisfying CLAUDE.md Pitfall #35. Cross-cutting; reviewed as its own change outside this feature (same disposition pass 13's Membership-pipeline review gave its 3 columns from the same sweep). No behavior change to any endpoint, service method, or permission check in this feature. |
+
+No new or changed route (24, re-enumerated by grep over the three endpoint
+files' `@router.` decorators — identical count to pass 11) and no
+feature-specific migration.
+
+## Findings — 0 fixed, 0 new findings
+
+Nothing in the feature's own code moved this pass. The one standing item from
+pass 11 was re-checked against the (unchanged) code it concerns:
+
+- **DOC-31 — LOW — FLAGGED — re-confirmed, unaffected.**
+  `documents_service.py`'s `_release_document_references` is byte-identical to
+  pass 11 — still a plain `SELECT`, not `.with_for_update()`, on the
+  referencing `PurchaseRequest`/`ExpenseReport` rows before refusing a
+  receipt-document delete. Already mirrored in `docs/KNOWN_LIMITATIONS.md`;
+  no new information this pass.
+
+No other standing OPEN finding exists for this feature (pass 10 and pass 11
+both closed with none carried forward).
+
+## Completion gate
+
+| Check                                                                                                   | Result                                          |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI-pinned 7.4.1)                                                         | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/` (CI-pinned 26.10.1)                                                | ✅ 2660 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.2)                                             | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 653 revisions, single head `0a8d11fcada1`    |
+| `python3 scripts/check_route_permissions.py --strict`                                                   | ✅ 278 routes, 0 errors, 0 warnings             |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only"`   | ✅ 647 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                      | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                                                           | ✅ 0 errors, 0 warnings                         |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/components/documents src/pages/LegalPage.test.tsx` | ✅ 51 passed (3 files)                          |
+
+No source file needed a fix this pass — only this findings file and
+`PROGRESS.md` were updated.
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 

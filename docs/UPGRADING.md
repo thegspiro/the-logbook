@@ -553,6 +553,26 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Google Drive's connection test passes with the Content manager role (2026-10-25)
+
+The Google Drive backend from 2026-10-23 deleted a file permanently. On a
+Shared Drive that needs the **Manager** role, and the setup asks for **Content
+manager**. So **Test and switch to Google Drive** could not delete its probe
+file and failed every time, with a message saying to check the role that was
+already granted. No department could switch, so no stored file is affected.
+
+A delete now moves the file to the Shared Drive's **trash**, which Content
+manager may do, and Google empties the trash after 30 days. Nothing to change
+on upgrade: press **Test and switch to Google Drive** again.
+
+- A file the Logbook deletes stays in the drive's trash for those 30 days.
+  It is encrypted like every stored file. A drive Manager can restore it there
+  or empty the trash sooner.
+- Trashed files still count against the Shared Drive's storage until they are
+  removed.
+- Granting **Manager** instead is not needed and gives the account more than
+  it uses: it could also change who belongs to the drive.
+
 ### A department can keep its files in a Google Shared Drive (2026-10-23)
 
 Google Drive under **Organization Settings > Storage** (and in onboarding) now

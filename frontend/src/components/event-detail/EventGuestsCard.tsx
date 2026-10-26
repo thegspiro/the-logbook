@@ -27,6 +27,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 
 const SOURCE_LABELS: Record<string, string> = {
   kiosk_qr: 'Signed in at the kiosk',
+  event_qr: "Signed in with the event's guest QR code",
   form_submission: 'From a form',
 };
 

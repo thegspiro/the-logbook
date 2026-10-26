@@ -307,7 +307,10 @@ export const eventService = {
   /**
    * Get QR code check-in data for an event
    */
-  async getQRCheckInData(eventId: string): Promise<import('../types/event').QRCheckInData> {
+  async getQRCheckInData(
+    eventId: string,
+    options: { scan?: boolean } = {}
+  ): Promise<import('../types/event').QRCheckInData> {
     // `_skipCache`: this payload reports whether the check-in window is open
     // *right now*, and both callers poll it to react to that flipping. The
     // shared client would serve it from cache for 30s and serve it stale for a
@@ -315,9 +318,41 @@ export const eventService = {
     // could go unnoticed for up to 90 seconds — the QR page would keep showing
     // its placeholder and the self-check-in page would keep withholding its
     // button while the backend was already accepting scans.
+    // `scan`: the self-check-in page's first load, which the server records
+    // once per member for the QR check-in analytics (RPT2-3).
     const response = await api.get<import('../types/event').QRCheckInData>(`/events/${eventId}/qr-check-in-data`, {
       _skipCache: true,
+      ...(options.scan ? { params: { scan: true } } : {}),
     });
+    return response.data;
+  },
+
+  /**
+   * The event's own guest QR code token, or null when none is issued yet
+   * (events.manage). `_skipCache` because the token is a credential: a stale
+   * copy would keep showing a code for up to 90s after a manager reset it.
+   */
+  async getGuestCheckInLink(eventId: string): Promise<import('../types/event').GuestCheckInLink> {
+    const response = await api.get<import('../types/event').GuestCheckInLink>(
+      `/events/${eventId}/guest-check-in-link`,
+      { _skipCache: true }
+    );
+    return response.data;
+  },
+
+  /** Issue the event's guest QR code, or return the one it has (idempotent). */
+  async issueGuestCheckInLink(eventId: string): Promise<import('../types/event').GuestCheckInLink> {
+    const response = await api.post<import('../types/event').GuestCheckInLink>(
+      `/events/${eventId}/guest-check-in-link`
+    );
+    return response.data;
+  },
+
+  /** Replace the event's guest QR code; the previous one stops working at once. */
+  async rotateGuestCheckInLink(eventId: string): Promise<import('../types/event').GuestCheckInLink> {
+    const response = await api.post<import('../types/event').GuestCheckInLink>(
+      `/events/${eventId}/guest-check-in-link/rotate`
+    );
     return response.data;
   },
 

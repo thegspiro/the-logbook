@@ -196,7 +196,7 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | done (#3561) |
 | 8     | Decision 31, step 3 of 3: moving existing files into a bucket, rewrap on S3, backup notice                                                      | done (#3567) |
 | 9     | Decision 32, step 1 of 3: the connection test, status, migration and rewrap made platform-neutral (S3 unchanged)                                | done (#3611) |
-| 10    | Decision 32, step 2 of 3: the Google Drive backend (service account, Shared Drive) and its settings                                             | this change  |
+| 10    | Decision 32, step 2 of 3: the Google Drive backend (service account, Shared Drive) and its settings                                             | done (#3623) |
 
 ### Phase 1 — what changed
 
@@ -444,7 +444,7 @@ fingerprint did not change.
 | A stored reference | `gdrive://<shared_drive_id>/<file_id>/<org>/<area>/<record>/<name>`; `resolve()` confines it by the key after the id, as for a bucket                  |
 | A new file's id    | Reserved at Drive (`files.generateIds`, 20 at a time) before the upload, so a retried upload replaces the file it made rather than making a second one |
 | Settings           | `google_drive_service_account_key` (encrypted, never returned), `google_drive_shared_drive_id`, optional `google_drive_folder_id`                      |
-| Connection test    | The shared Test and switch: write, read back and delete a probe in the chosen folder; the account needs the Content manager role so it can delete      |
+| Connection test    | The shared Test and switch: write, read back and delete a probe in the chosen folder; the account needs the Content manager role so it can trash       |
 
 `RemoteBackend.ref_for` may now ask the store, so it runs off the event loop
 with the upload, and the migration assigns each file's reference when it
@@ -454,6 +454,15 @@ cover Drive. Step 3 renames the S3-named command and finishes the docs.
 
 The old OAuth client ID and secret fields were read by nothing; the API still
 accepts them, the screens no longer ask for them.
+
+**Corrected 2026-10-25: a delete moves the file to the Shared Drive's trash.**
+As shipped, a delete was `files.delete`, which Google allows on a Shared Drive
+only to the Manager role. The Content manager role the setup asks for may only
+trash, so the connection test could not remove its probe and failed every
+time; the in-memory Drive in the tests accepted the delete, which is why
+nothing caught it. The fake now refuses `files.delete` to a Content manager as
+Drive does, and a delete is `files.update` with `trashed: true`, which Google
+empties after 30 days.
 
 ### Found in passing, not in this change
 

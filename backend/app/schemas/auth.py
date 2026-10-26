@@ -4,7 +4,7 @@ Authentication Pydantic Schemas
 Request and response schemas for authentication endpoints.
 
 Security Features:
-- Username validation: alphanumeric, underscores, hyphens only (prevents SQL injection)
+- Username validation: alphanumeric, underscores, hyphens (and, at sign-in, dots)
 - Password minimum length enforcement
 - Email validation via EmailStr
 - Rate limiting applied at endpoint level
@@ -18,15 +18,22 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-# Safe characters for usernames - prevents SQL injection and XSS
+# Safe characters for a username chosen at self-registration.
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+# What sign-in accepts. Wider than USERNAME_PATTERN on purpose: an
+# administrator's create and the member import store whatever username they are
+# given, and the import's own template suggests "john.doe", so a dotted
+# username exists in practice and its member must be able to sign in with it.
+# A dot is inert here: the value only ever reaches SQL as a bound parameter.
+SIGN_IN_USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
 class UserLogin(BaseModel):
     """Schema for user login
 
     Security:
-    - Username restricted to alphanumeric, underscores, hyphens
+    - Username restricted to alphanumeric, dots, underscores, hyphens
     - Also accepts email format for login flexibility
     """
 
@@ -44,9 +51,10 @@ class UserLogin(BaseModel):
                 raise ValueError("Invalid email format")
             return v.lower().strip()
         # For usernames, only allow safe characters
-        if not USERNAME_PATTERN.match(v):
+        if not SIGN_IN_USERNAME_PATTERN.match(v):
             raise ValueError(
-                "Username can only contain letters, numbers, hyphens, and underscores"
+                "Username can only contain letters, numbers, dots, hyphens, "
+                "and underscores"
             )
         return v.strip()
 
