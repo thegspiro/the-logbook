@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (number recorded in a follow-up commit on this same branch once
-opened)** (branch `claude/security-review-scheduling-p11`) — Feature 15
+**PR [#3745](https://github.com/thegspiro/the-logbook/pull/3745)** (branch
+`claude/security-review-scheduling-p11`) — Feature 15
 (Scheduling), pass 11. Tended and merged PR #3741 (Feature 14, Equipment
 check & shifts, pass 12) first — CI was already green with no unresolved
 review threads. `search_pull_requests`
