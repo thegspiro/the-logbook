@@ -74,10 +74,10 @@ current recommendation, which auditors do check.
    ```
 6. Move stored files to the new key too. On the uploads volume this rewraps
    each file's own key, not its body, so it is quick. Files in a department's
-   own S3 bucket are covered by the same command: each object under the old
-   key is downloaded, re-encrypted and uploaded again in one write, which
-   takes as long as transferring it. The report lists the volume and the
-   buckets separately:
+   own S3 bucket or Google Shared Drive are covered by the same command: each
+   one under the old key is downloaded, re-encrypted and uploaded again in one
+   write, which takes as long as transferring it. The report lists the volume
+   and the remote stores separately:
    ```bash
    # Report only:
    docker exec -it intranet-backend python scripts/encrypt_uploads.py --rewrap
