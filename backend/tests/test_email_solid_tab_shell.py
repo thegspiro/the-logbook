@@ -71,6 +71,8 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.TRAINING_RECORD_VOIDED.value: "26ca07c56d0f",
     EmailTemplateType.TRAINING_RECORD_CHANGED.value: "26ca07c56d0f",
     EmailTemplateType.EVENT_WAITLIST_PROMOTION.value: "32a58e65eb63",
+    EmailTemplateType.APPLICATION_STEP_COMPLETED.value: "08e6220f2dce",
+    EmailTemplateType.APPLICATION_STATUS_LINK.value: "08e6220f2dce",
 }
 
 

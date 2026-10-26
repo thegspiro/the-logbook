@@ -2501,6 +2501,101 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_application_step_completed_email(
+        self,
+        to_email: str,
+        first_name: str,
+        applicant_name: str,
+        step_name: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell an applicant a pipeline stage of their application is done."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_STEP_COMPLETED_HTML,
+            DEFAULT_APPLICATION_STEP_COMPLETED_SUBJECT,
+            DEFAULT_APPLICATION_STEP_COMPLETED_TEXT,
+        )
+
+        context = {
+            "first_name": first_name,
+            "applicant_name": applicant_name,
+            "step_name": step_name,
+        }
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.APPLICATION_STEP_COMPLETED,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_STEP_COMPLETED_SUBJECT,
+            default_html=DEFAULT_APPLICATION_STEP_COMPLETED_HTML,
+            default_text=DEFAULT_APPLICATION_STEP_COMPLETED_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_STEP_COMPLETED.value,
+        )
+
+        return success_count > 0
+
+    async def send_application_status_link_email(
+        self,
+        to_email: str,
+        first_name: str,
+        applicant_name: str,
+        status_url: str,
+        custom_message: str = "",
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Send an applicant the private link to their status page."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_STATUS_LINK_HTML,
+            DEFAULT_APPLICATION_STATUS_LINK_SUBJECT,
+            DEFAULT_APPLICATION_STATUS_LINK_TEXT,
+        )
+
+        custom_message = custom_message.strip()
+        context = {
+            "first_name": first_name,
+            "applicant_name": applicant_name,
+            "status_url": status_url,
+            "custom_message": custom_message,
+            # Built here so a stage with no message leaves no empty paragraph
+            # or stray blank line behind; the HTML one is a raw variable.
+            "custom_message_html": (
+                f"<p>{_html.escape(custom_message)}</p>" if custom_message else ""
+            ),
+            "custom_message_text": f"{custom_message}\n\n" if custom_message else "",
+        }
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.APPLICATION_STATUS_LINK,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_STATUS_LINK_SUBJECT,
+            default_html=DEFAULT_APPLICATION_STATUS_LINK_HTML,
+            default_text=DEFAULT_APPLICATION_STATUS_LINK_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_STATUS_LINK.value,
+        )
+
+        return success_count > 0
+
     async def send_suggestion_submitted_email(
         self,
         to_email: str,

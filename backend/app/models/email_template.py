@@ -72,6 +72,8 @@ class EmailTemplateType(str, enum.Enum):
     TRAINING_RECORD_VOIDED = "training_record_voided"
     TRAINING_RECORD_CHANGED = "training_record_changed"
     EVENT_WAITLIST_PROMOTION = "event_waitlist_promotion"
+    APPLICATION_STEP_COMPLETED = "application_step_completed"
+    APPLICATION_STATUS_LINK = "application_status_link"
     CUSTOM = "custom"
 
 
