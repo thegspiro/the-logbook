@@ -338,8 +338,10 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100), nullable=False)
     # Encrypted at rest; SQL matches on email_hash, which keep_email_fingerprint
     # recomputes on every ORM write of the address (see the end of this module).
+    # Nullable only because raw-SQL inserts bypass that listener; a row written
+    # that way has no fingerprint and cannot be found by its address.
     email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
-    email_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    email_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     personal_email: Mapped[Optional[str]] = mapped_column(
         EncryptedText
     )  # Personal/home email for post-separation contact

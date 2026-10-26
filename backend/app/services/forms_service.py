@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.security import email_fingerprints
 from app.core.security_middleware import InputSanitizer, daily_cap_exceeded
 from app.core.utils import safe_error_detail, sanitize_error_message
 from app.models.forms import (
@@ -3412,7 +3413,9 @@ class FormsService:
             and contact_policy.show_email
             and not contact_policy.honor_member_choice
         ):
-            matchers.append(User.email.ilike(search_term, escape=LIKE_ESCAPE_CHAR))
+            # The address is encrypted at rest, so only a complete address can
+            # match, through its fingerprint.
+            matchers.append(User.email_hash.in_(email_fingerprints(query)))
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))

@@ -62,6 +62,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
+from app.core.security import email_fingerprints
 from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.storefront import (
     StoreOrder,
@@ -570,7 +571,9 @@ class StorefrontNotificationService:
             result = await self.db.execute(
                 select(User.email, User.notification_preferences).where(
                     User.organization_id == str(organization.id),
-                    User.email.in_(addresses),
+                    User.email_hash.in_(
+                        [fp for a in addresses for fp in email_fingerprints(a)]
+                    ),
                 )
             )
             rows = result.all()

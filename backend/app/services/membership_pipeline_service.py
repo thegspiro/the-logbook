@@ -31,6 +31,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG, office_label
+from app.core.security import email_fingerprints
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.event import Event, EventExternalAttendee
@@ -1451,7 +1452,8 @@ class MembershipPipelineService:
                         pattern, escape=LIKE_ESCAPE_CHAR
                     ),
                     ProspectiveMember.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
-                    ProspectiveMember.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    # Encrypted at rest: only a complete address matches.
+                    ProspectiveMember.email_hash.in_(email_fingerprints(term)),
                 )
             )
         return and_(*clauses)
@@ -1726,7 +1728,7 @@ class MembershipPipelineService:
         ]
 
         # Match by email or by first+last name
-        match_conditions = [func.lower(User.email) == email.lower()]
+        match_conditions = [User.email_hash.in_(email_fingerprints(email))]
         if first_name and last_name:
             match_conditions.append(
                 and_(
@@ -3426,7 +3428,9 @@ class MembershipPipelineService:
             .where(
                 ProspectiveMember.organization_id == organization_id,
                 ProspectiveMember.status == ProspectStatus.ACTIVE,
-                func.lower(ProspectiveMember.email).in_(normalized),
+                ProspectiveMember.email_hash.in_(
+                    [fp for address in normalized for fp in email_fingerprints(address)]
+                ),
             )
             .options(
                 selectinload(ProspectiveMember.current_step),
@@ -4433,7 +4437,7 @@ class MembershipPipelineService:
                 select(User.deleted_at)
                 .where(
                     User.organization_id == prospect.organization_id,
-                    User.email == primary_email,
+                    User.email_hash.in_(email_fingerprints(primary_email)),
                 )
                 .limit(1)
             )
@@ -6130,7 +6134,7 @@ class MembershipPipelineService:
             .where(
                 and_(
                     ProspectiveMember.organization_id == organization_id,
-                    func.lower(ProspectiveMember.email) == email.lower(),
+                    ProspectiveMember.email_hash.in_(email_fingerprints(email)),
                     ProspectiveMember.status.in_(
                         [
                             ProspectStatus.ACTIVE,

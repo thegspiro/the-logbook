@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.security import email_fingerprints
 from app.core.utils import generate_uuid
 from app.models.event import Event, EventExternalAttendee
 from app.models.membership_pipeline import (
@@ -209,7 +210,9 @@ class GuestCheckInService:
         )
 
         if email:
-            query = query.where(func.lower(EventExternalAttendee.email) == email)
+            query = query.where(
+                EventExternalAttendee.email_hash.in_(email_fingerprints(email))
+            )
         else:
             query = query.where(
                 func.lower(EventExternalAttendee.name) == full_name.lower(),
@@ -512,7 +515,7 @@ class GuestCheckInService:
                 select(User.id)
                 .where(
                     User.organization_id == organization_id,
-                    func.lower(User.email) == normalized,
+                    User.email_hash.in_(email_fingerprints(normalized)),
                     User.is_active,
                 )
                 .limit(1)

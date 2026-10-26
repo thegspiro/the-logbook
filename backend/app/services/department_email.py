@@ -12,6 +12,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import email_fingerprints
 from app.models.user import User
 
 
@@ -72,7 +73,7 @@ async def generate_department_email(
             .select_from(User)
             .where(
                 User.organization_id == str(organization_id),
-                User.email == candidate,
+                User.email_hash.in_(email_fingerprints(candidate)),
             )
         )
         if (taken.scalar() or 0) == 0:

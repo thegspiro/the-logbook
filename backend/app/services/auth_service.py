@@ -23,6 +23,7 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    email_fingerprints,
     hash_password,
     validate_password_strength,
     verify_password,
@@ -282,7 +283,10 @@ class AuthService:
                 await self.db.execute(
                     select(User)
                     .join(Organization, User.organization_id == Organization.id)
-                    .where((User.username == username) | (User.email == username))
+                    .where(
+                        (User.username == username)
+                        | User.email_hash.in_(email_fingerprints(username))
+                    )
                     .where(User.deleted_at.is_(None))
                     .where(Organization.active.is_(True))
                     .order_by(User.created_at.asc())
@@ -776,7 +780,7 @@ class AuthService:
 
         result = await self.db.execute(
             select(User).where(
-                User.email == email,
+                User.email_hash.in_(email_fingerprints(email)),
                 User.organization_id == organization_id,
                 User.deleted_at.is_(None),
             )
@@ -1086,7 +1090,7 @@ class AuthService:
         """
         result = await self.db.execute(
             select(User).where(
-                User.email == email,
+                User.email_hash.in_(email_fingerprints(email)),
                 User.organization_id == organization_id,
                 User.deleted_at.is_(None),
             )

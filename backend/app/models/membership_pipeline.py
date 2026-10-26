@@ -312,7 +312,7 @@ class ProspectiveMember(Base):
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     # Encrypted at rest; SQL matches on email_hash (keep_email_fingerprint).
     email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
-    email_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    email_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText)
     mobile: Mapped[Optional[str]] = mapped_column(EncryptedText)
     # Encrypted at rest (HIPAA): not searchable or sortable in SQL.

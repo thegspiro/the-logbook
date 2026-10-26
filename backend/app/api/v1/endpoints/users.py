@@ -40,6 +40,7 @@ from app.core.constants import AUDIT_EVENT_ACCOUNT_UNLOCKED, ROLE_MEMBER
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import get_rank_default_permissions
+from app.core.security import email_fingerprints
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
@@ -376,7 +377,7 @@ async def create_member(
     # Check if email already exists (including archived and deactivated members)
     result = await db.execute(
         select(User)
-        .where(User.email == user_data.email)
+        .where(User.email_hash.in_(email_fingerprints(user_data.email)))
         .where(User.organization_id == str(current_user.organization_id))
     )
     existing_user = result.scalar_one_or_none()
@@ -1815,7 +1816,7 @@ async def update_contact_info(
         # Check if email is already in use by another user in the organization
         existing = await db.execute(
             select(User)
-            .where(User.email == contact_update.email)
+            .where(User.email_hash.in_(email_fingerprints(contact_update.email)))
             .where(User.organization_id == str(current_user.organization_id))
             # User.id is a String column; user_id is a UUID — compare as strings
             # so the caller's own row is actually excluded (a UUID-vs-str compare
