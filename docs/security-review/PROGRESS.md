@@ -16,6 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (number recorded in a follow-up commit on this same branch once
+opened)** (branch `claude/security-review-scheduling-p11`) — Feature 15
+(Scheduling), pass 11. Tended and merged PR #3741 (Feature 14, Equipment
+check & shifts, pass 12) first — CI was already green with no unresolved
+review threads. `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) then returned 0 results,
+re-checked immediately before pushing. No Claude session reachable via
+`ListAgents` — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) is still unreachable. Row 15
+(Scheduling) was confirmed the next `⬜` by reading the rotation table
+directly. **0 fixed, 0 new findings.** Real delta since pass 10's baseline
+(PR #3617, `6d3cd946`): pattern-generation and assignment-edit seating now
+run the same candidate check (eligibility, named-seat cap, duplicate,
+overlap, leave, driver) an officer's direct assignment always has; a
+pattern naming an inactive day/night/main template is refused (409) rather
+than silently generating a half-staffed rotation; attendance is now locked
+on a finalized shift the same way calls already were; `update_shift_call`
+and `update_basic_apparatus` moved onto `apply_updates`. SCH-19 partially
+mitigated (dict values bounded `ge=0, le=INT32_MAX`; the dict/list size cap
+itself remains an owner decision, re-confirmed OPEN). SCH-15, SCH-16,
+SCH-17, SCH-18 all re-confirmed unchanged. 0 new routes (112 unchanged). See
+`SCH-15-scheduling.md`'s **Pass 11** section for the full review.
+
+Rotation row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events
+& requests).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3741, Feature 14, Equipment check & shifts, pass 12, merged), preserved for history</summary>
+
+**PR [#3741](https://github.com/thegspiro/the-logbook/pull/3741)** (branch
+`claude/security-review-equipment-check`) — Feature 14 (Equipment check &
+shifts), pass 12. Watchdog pickup for the `/loop 30m /security-review`
+rotation: the dedicated review session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was unreachable, and `search_pull_requests` returned 0 open rotation PRs.
+PR #3740 (Feature 13, Apparatus & NFC, pass 19) had already merged. Row 14
+(Equipment check & shifts) was confirmed the next `⬜`. **0 fixed, 1 new
+finding flagged (EC-17, MED).** A genuine data-integrity bug in
+`_apply_trainee_visibility` (mutated the session-tracked ORM row directly,
+permanently erasing a hidden field on the first trainee view) was already
+fixed with a regression test; `update_report`'s `review_status` now
+changes only through review. EC-17: a non-draft report's narrative,
+rating and recorded skills stay editable by the filing officer
+indefinitely, with no draft-only gate — an owner decision, mirrored to
+`docs/KNOWN_LIMITATIONS.md`. See `EC-14-equipment-check-shifts.md`'s
+**Pass 12** section for the full review.
+
+Rotation row 14 → ✅ (merged by the following iteration — CI was already
+green with no unresolved review threads).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3740, Feature 13, Apparatus & NFC, pass 19, merged), preserved for history</summary>
+
 **PR [#3740](https://github.com/thegspiro/the-logbook/pull/3740)** (branch
 `claude/security-review-apparatus-nfc`) — Feature 13
 (Apparatus & NFC), pass 19. No security-review PR was open — confirmed via
@@ -47,6 +101,8 @@ unchanged at 94. AP2-4 re-confirmed FLAGGED/unaffected. See
 
 Rotation row 13 → ✅ (pending this PR's merge); next is Feature 14
 (Equipment check & shifts).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3739, Feature 12, Facilities, pass 12, merged), preserved for history</summary>
@@ -21921,8 +21977,8 @@ PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -21949,6 +22005,101 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 15 (Scheduling, pass 11) — watchdog pickup, 0 fixed, 0 new findings; SCH-19 partially mitigated (value bounds added, size cap still open), all other standing items re-confirmed
+
+Tended PR #3741 (Feature 14, Equipment check & shifts, pass 12) first —
+CI was already green and `mergeable_state: "clean"` with no unresolved
+review threads, so it was merged rather than left for a tend-only cycle.
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) then
+returned 0 results, confirmed immediately before starting. Row 15
+(Scheduling) was confirmed the next `⬜` by reading the rotation table
+directly.
+
+Baseline `6d3cd946` (PR #3617's merge, pass 10). 15 non-merge commits touch
+the declared scope; real diff in 5 of 13 files: `scheduling.py`,
+`schemas/scheduling.py`, `scheduling_service.py` (the largest single
+change — pattern-generation and assignment-edit paths now run the same
+eligibility/named-seat-cap/duplicate/overlap/leave/driver candidate check
+an officer's direct assignment always has, closing two paths that
+previously bypassed it), `shift_eligibility_service.py`, and
+`shift_completion_service.py` (shared with, and already reviewed under,
+Feature 14's pass 12 — EC-17 is that feature's finding to own, not
+re-flagged here). Every by-id/lookup path touched filters
+`organization_id` explicitly; the widened member-visibility logic
+(a member now also sees a shift they hold a live seat on, or are the
+named shift officer of) is scoped to the caller's own id in every case.
+0 new routes (112 unchanged); a repo-wide decorator walk confirms all 112
+still carry `Depends(...)`.
+
+**SCH-19 (LOW, flagged, partially mitigated, re-confirmed OPEN).** A
+repo-wide numeric-bounds sweep landing in this window's delta happened to
+bound `reported_call_types`'s dict **values** to `ge=0, le=INT32_MAX`,
+closing the integer-overflow sub-case. The finding's actual subject — no
+cap on the **number** of call-type keys or on `member_call_counts`'s list
+length, unlike the sibling `attach_call_ids`/`detach_call_ids`'s
+`max_length=200` — is unchanged; left for an owner-picked ceiling, same
+reasoning as pass 8's addendum. `docs/KNOWN_LIMITATIONS.md` updated to
+record the partial mitigation.
+
+A separate, non-rotation PR (#3742, `claude/merge-alembic-heads`) was open
+against `main` for an unrelated cross-cutting problem (three forked
+Alembic heads left by parallel 2026-10-25/26 merges), authored by a
+different watchdog session. Not duplicated here; this pass's own
+completion gate joined the three heads in a local-only, uncommitted copy
+of #3742's merge revision to get a working test database, then discarded
+it before committing. `backend/alembic/versions/` carries zero diff from
+this feature.
+
+Full writeup: `docs/security-review/SCH-15-scheduling.md`'s **Pass 11**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean at CI's pinned versions (7.4.1/26.10.1/9.0.2);
+`check_route_permissions.py --strict` — 279 routes, 0 errors/warnings;
+scoped backend tests (`-k "scheduling or shift or swap or calcom or
+position_slots or call_tracking or call_type or pre_shift or pre_work or
+custom_crew or open_swap or xc1_scheduling or mcp_tools or
+member_shift_release or member_hard_delete or attribution_set_null or
+sunday_week_start or request_numeric_bounds or delete_reference_guards or
+scheduling_delete_in_use"`) — 2784 passed, 1 pre-existing skip
+(`py_vapid`); standing guard suites (org-scoping ratchet, capacity
+locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, account-
+status gates, request-numeric-bounds) — 712 passed; frontend `npm run
+typecheck`/`npm run lint` — 0 errors; scoped frontend suite (`npx vitest
+run src/modules/scheduling src/pages/scheduling`) — 1044 passed (71
+files). `validate_migrations.py --strict` against `main`'s actual
+committed chain still reports the pre-existing 3-head error tracked by
+#3742 (not this feature's); against a local-only joined copy it reports a
+single head, 658 revisions.
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+### 2026-10-26 — Feature 14 (Equipment check & shifts, pass 12) — watchdog pickup, 0 fixed, 1 flagged (EC-17, MED); merged by the following iteration after a clean CI tend
+
+PR #3741, opened by a separate watchdog session picking up the rotation
+while the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. A genuine
+data-integrity bug in `_apply_trainee_visibility` (mutated the
+session-tracked ORM row directly, so the first trainee view under a
+restrictive visibility config permanently erased the hidden field from the
+database) was already fixed with a regression test; `reject_future_shift_date`
+now resolves "today" through the organization's own timezone; `update_report`'s
+`review_status` now changes only through review, closing a hole where the
+filing officer could approve their own report or regress one back through
+approval to re-run sign-offs. **EC-17 (MED, flagged)** — the `UPDATABLE_FIELDS`
+loop still lets a non-draft report's narrative, rating and recorded skills
+stay editable by the filing officer indefinitely, with no draft-only gate
+and no re-review trigger; an owner decision, mirrored to
+`docs/KNOWN_LIMITATIONS.md`. CI was green with no unresolved review
+threads at the start of the following iteration (this entry's own pass),
+which tended and merged it per Step 0 rather than leaving it for a
+dedicated tend cycle. Full writeup: `docs/security-review/EC-14-
+equipment-check-shifts.md`'s **Pass 12** section.
+
+Row 14 → ✅ (merged).
 
 ### 2026-10-26 — Feature 13 (Apparatus & NFC, pass 19) — watchdog pickup, 0 fixed, 0 new findings; Member ID Cards admin surface reviewed end to end
 
