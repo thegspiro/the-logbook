@@ -182,6 +182,7 @@ function mapStepToStage(step: BackendStepResponse): PipelineStage {
     is_required: step.required ?? true,
     is_final_step: step.is_final_step ?? false,
     inactivity_timeout_days: step.inactivity_timeout_days ?? null,
+    email_template_id: step.email_template_id ?? null,
     notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
     public_visible: step.public_visible ?? true,
     created_at: step.created_at,
@@ -245,6 +246,7 @@ function mapStageCreateToBackend(stage: PipelineStageCreate): BackendStepCreateP
     notify_prospect_on_completion: stage.notify_prospect_on_completion ?? false,
     public_visible: stage.public_visible ?? true,
     inactivity_timeout_days: stage.inactivity_timeout_days ?? undefined,
+    email_template_id: stage.email_template_id ?? undefined,
   };
 }
 
@@ -269,6 +271,8 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
   // "use a custom timeout for this stage" was acknowledged with a success toast
   // and the old override stayed in the database.
   if (stage.inactivity_timeout_days !== undefined) payload.inactivity_timeout_days = stage.inactivity_timeout_days;
+  // Same three states: null unlinks the template, omitted leaves it alone.
+  if (stage.email_template_id !== undefined) payload.email_template_id = stage.email_template_id;
   return payload;
 }
 
