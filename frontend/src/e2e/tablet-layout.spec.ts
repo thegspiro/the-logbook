@@ -107,11 +107,20 @@ const FORM_ROUTES = [
   '/events',
   '/inventory/admin/pool',
   '/inventory/admin/store?tab=orders',
+  // Four-across filter grids and a two-pane form that crushed their fields at
+  // 1024px, beside the side navigation.
+  '/admin/audit-log',
+  '/training/submit',
+  '/inventory',
+  '/inventory/admin/items',
 ];
 /** About 8em at 16px: enough of a value or placeholder to read what it is. */
 const READABLE_PX = 128;
 const TOUCH_TABLETS = [
   { name: 'iPad portrait', width: 820, height: 1180 },
+  // 1024px is where `lg:` layouts switch on while the side navigation still
+  // leaves only ~690px of content.
+  { name: 'iPad landscape 1024', width: 1024, height: 768 },
   { name: 'iPad landscape', width: 1180, height: 820 },
 ];
 

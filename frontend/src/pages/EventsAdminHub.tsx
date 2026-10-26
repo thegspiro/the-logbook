@@ -3,7 +3,7 @@
  *
  * Consolidated admin page for event coordinators, rendered in the shared
  * administration frame: header, four headline metrics, the "Needs attention"
- * queue, then the area cards and page strip (`EventsAdminNav`) Training,
+ * queue, then the area cards and page strip (`AdminHubAreaNav`) Training,
  * Inventory and Scheduling Administration also draw, and the page's own body.
  *
  * URL structure: /events/admin?tab=<page>. The area is derived from the page,
@@ -18,7 +18,7 @@ import { Plus, QrCode, Settings } from 'lucide-react';
 import { AdminHubFrame } from '../components/admin';
 import type { AdminHubAction } from '../components/admin';
 import { attentionCountsForTabs } from '../components/admin/attentionCounts';
-import EventsAdminNav from '../components/events/EventsAdminNav';
+import { AdminHubAreaNav } from '../components/admin/AdminHubAreaNav';
 import type { AdminHubSummary } from '../types/adminHub';
 import {
   EVENTS_ADMIN_AREA_ID_PREFIX,
@@ -111,13 +111,18 @@ export const EventsAdminHub: React.FC = () => {
         onClick: () => void navigate('/events/new'),
       }}
       nav={
-        <EventsAdminNav
+        <AdminHubAreaNav
           areas={EVENTS_ADMIN_AREAS}
           activeArea={activeArea}
           activeTab={activeTab}
           onAreaChange={handleAreaChange}
           onTabChange={handleTabChange}
           attentionCounts={attentionCounts}
+          hintOf={(destination) => destination.description}
+          label="Events admin areas"
+          idPrefix={EVENTS_ADMIN_AREA_ID_PREFIX}
+          tabId={(_area, tab) => eventsAdminTabId(tab)}
+          tabPanelId={(_area, tab) => eventsAdminTabPanelId(tab)}
         />
       }
       refreshToken={frameToken}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CreditCard, LayoutDashboard, Settings } from 'lucide-react';
 import { AdminHubCardTabs, type AdminHubCardTab } from './AdminHubCardTabs';
@@ -42,7 +42,20 @@ describe('AdminHubCardTabs', () => {
     );
     // A count of zero draws nothing, so a quiet section is not badged "0".
     expect(screen.getByRole('tab', { name: 'Settings' })).toHaveAccessibleDescription('Methods and pricing');
-    expect(screen.getByRole('tab', { name: 'Payments' })).toHaveTextContent('2');
+    const tablist = within(screen.getByRole('tablist'));
+    expect(tablist.getByText('2', { exact: true })).toBeVisible();
+    expect(tablist.queryByText('0', { exact: true })).not.toBeInTheDocument();
+  });
+
+  // WCAG 2.5.3: every word visible inside the control is in its name, so a
+  // voice-control user saying what they see reaches it. The description and
+  // count are drawn on the card beside the button, not inside it.
+  it('holds no visible text inside a card beyond its name', () => {
+    renderTabs();
+
+    for (const { label } of tabs) {
+      expect(screen.getByRole('tab', { name: label })).toHaveTextContent(new RegExp(`^${label}$`));
+    }
   });
 
   it('marks the selected card and keeps only it in the tab order', () => {

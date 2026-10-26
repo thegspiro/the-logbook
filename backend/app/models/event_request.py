@@ -31,6 +31,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -81,7 +82,7 @@ class EventRequest(Base):
     # Requester contact info
     contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
     contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
-    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Event details (outreach_type is a plain string — types are configurable per department)
@@ -118,7 +119,7 @@ class EventRequest(Base):
     venue_preference: Mapped[str] = mapped_column(
         String(20), nullable=False, default="their_location"
     )  # "their_location", "our_station", "either"
-    venue_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    venue_address: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     special_requests: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Pipeline tracking — broad status plus flexible per-task completions

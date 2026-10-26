@@ -494,6 +494,81 @@
   min-width: min(14rem, 100%);
 }
 
+/* A button in the same row as a field takes the field's height, on a desktop.
+ *
+ * With a mouse there is no 44px floor, so each control keeps its own natural
+ * height, and a toolbar row mixes them: a 42px search box beside a 38px
+ * "Filters" button or a 30px "Add", and — the other way — a 38px field beside
+ * a button carrying an unconditional 44px touch minimum (`min-h-11`,
+ * `mobile-touch-target`, Pagination). Measured on eleven routes at 1366–1920px.
+ *
+ * A stretch cannot fix it: half these rows are `items-end`, with a label above
+ * the field, where a stretched button would take the label's height too. What
+ * is known is the field's own height, which `form-input` fixes per size — one
+ * line of its text plus py-2 (42px at 16px), 38px with `text-sm`, 50px with
+ * `py-3`, 34px for `form-input-sm` — so the row publishes it and its buttons
+ * take it as a minimum: a short button grows, a
+ * 44px one comes down, and a button whose label wraps can still grow past it.
+ *
+ * Scope: a flex row (a column only once `sm:`/`md:`/`lg:flex-row` makes it a
+ * row) holding a field directly or one wrapper deep, and buttons at the same
+ * depths. A segmented control, toggle group or `<nav>` keeps its own geometry
+ * (Pagination sizes its whole bar itself), and an
+ * absolutely positioned button is a field's clear or show-password control,
+ * not a row member. Mouse-driven screens from 768px only; a phone or touch
+ * screen keeps its 44px targets. `styles/fieldRowHeight.test.ts` pins it. */
+/* Registered so that the default below — `1lh` — resolves on the row, at the
+   line height an un-classed `form-input` inherits from it, rather than at each
+   button's own. A field reads its text size from the page as often as from a
+   class, and assuming 16px lifted a 38px row's button to 42px. */
+@property --row-field-h {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@media (min-width: 768px) and (pointer: fine) {
+  :is(.flex, .inline-flex, .sm\:flex, .md\:flex):not(
+    .flex-col:not(.sm\:flex-row, .md\:flex-row, .lg\:flex-row),
+    .flex-col-reverse:not(.sm\:flex-row, .md\:flex-row, .lg\:flex-row)
+  ) {
+    /* py-2 and a 1px border around one line of the inherited text. */
+    &:has(> .form-input, > * > .form-input) {
+      --row-field-h: calc(1lh + 1rem + 2px);
+    }
+    &:has(
+      > .form-input:is(.text-sm, .sm\:text-sm),
+      > * > .form-input:is(.text-sm, .sm\:text-sm),
+      > .text-sm > .form-input
+    ) {
+      --row-field-h: 2.375rem;
+    }
+    &:has(> .form-input.py-3, > * > .form-input.py-3) {
+      --row-field-h: 3.125rem;
+    }
+    &:has(> .form-input-sm, > * > .form-input-sm) {
+      --row-field-h: 2.125rem;
+    }
+    /* Two selectors, not one `:is()`: in `row > :is(button, :not(.group) > button)`
+       the element after `>` must itself be the row's child, so the second
+       branch could only ever match a direct child too. */
+    &:has(> :is(.form-input, .form-input-sm), > * > :is(.form-input, .form-input-sm)) > button:not(.absolute),
+    &:has(> :is(.form-input, .form-input-sm), > * > :is(.form-input, .form-input-sm))
+      > :not(
+        nav,
+        .segmented-group,
+        .segmented-group-secondary,
+        .overflow-hidden,
+        [role='tablist'],
+        [role='group'],
+        [role='radiogroup']
+      )
+      > button:not(.absolute) {
+      min-height: var(--row-field-h);
+    }
+  }
+}
+
 /* Keep native and one-off form controls usable even when a feature has not yet
    migrated to the form-input utility. min-width:0 also lets date/time inputs
    shrink inside narrow grid columns instead of widening the whole page. */
@@ -878,16 +953,17 @@
 }
 
 @utility settings-subnav-item {
-  /* Sub-page in the left rail. Below lg the rail collapses to a scrolling
-     strip above the panel — lg rather than md because from 768px the app's
+  /* Sub-page in the left rail. Below xl the rail collapses to a scrolling
+     strip above the panel — xl rather than md because from 768px the app's
      own side navigation takes 16rem, and a 13rem rail beside it left an iPad
      in portrait a ~200px panel whose headings overlapped and whose selects
-     showed two letters. In the strip the same active signal reads as an
+     showed two letters, and an iPad on its side (1024px) still only ~390px,
+     where the timezone read "America/New Y". In the strip the same active signal reads as an
      underline rather than a left marker — one nav element either way, so the sub-page
      list is a single landmark at every width. An inactive item keeps the
      marker transparent rather than absent, so selecting one does not shift
      the label sideways. */
-  @apply settings-nav-item block w-auto shrink-0 border-b-3 border-b-transparent px-3 py-2.5 text-left whitespace-nowrap duration-150 ease-out lg:w-full lg:border-b-0 lg:border-l-3 lg:border-l-transparent lg:whitespace-normal;
+  @apply settings-nav-item block w-auto shrink-0 border-b-3 border-b-transparent px-3 py-2.5 text-left whitespace-nowrap duration-150 ease-out xl:w-full xl:border-b-0 xl:border-l-3 xl:border-l-transparent xl:whitespace-normal;
 
   /* Touch minimum. Padded rather than capped: on desktop the item carries a
      hint line under its label, so shrinking it would clip the hint instead. */
@@ -897,7 +973,7 @@
 }
 
 @utility settings-subnav-item-active {
-  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-800 lg:border-l-red-800;
+  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-800 xl:border-l-red-800;
 }
 
 @utility settings-save-pill {
@@ -1624,6 +1700,51 @@
   }
 }
 
+/* The same correction one breakpoint up. From 1024px `lg:` believes it has
+ * the whole screen, and beside the side navigation it has ~690px: a field grid
+ * written four across (`lg:grid-cols-4`, or `md:grid-cols-4` with no `lg:`
+ * override) gave each field ~155px, so a select showed "All Categorie" and a
+ * placeholder half of itself — the audit-log filters and both inventory filter
+ * bars on an iPad on its side. Three columns until `xl`, where the content
+ * column is ~1000px. Scoped exactly as the rule above, and a grid that already
+ * steps down at `lg` keeps its own count. `styles/sideNavFormGrid.test.ts`
+ * pins it. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .has-side-nav
+    main
+    :is(
+      .sm\:grid-cols-4,
+      .md\:grid-cols-4,
+      .lg\:grid-cols-4,
+      .md\:grid-cols-5,
+      .lg\:grid-cols-5,
+      .md\:grid-cols-6,
+      .lg\:grid-cols-6
+    ):not(.lg\:grid-cols-1, .lg\:grid-cols-2, .lg\:grid-cols-3):has(
+      input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='range'], [type='color']),
+      select,
+      textarea
+    ):not(:is(.modal-overlay, .modal-panel, [role='dialog']) *) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    &
+      > :is(
+        .col-span-4,
+        .col-span-5,
+        .col-span-6,
+        .sm\:col-span-4,
+        .md\:col-span-4,
+        .md\:col-span-5,
+        .md\:col-span-6,
+        .lg\:col-span-4,
+        .lg\:col-span-5,
+        .lg\:col-span-6
+      ) {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
 /* Republished at the root for fixed elements that are NOT inside AppLayout and
  * so cannot inherit the declaration above — the update banner is mounted beside
  * the router, one level up. `:has` keeps it conditional on the layout, and
@@ -1749,9 +1870,12 @@
   --nav-bg: #ffffff; /* white */
   --nav-border: #e2e8f0; /* slate-200 */
 
-  /* Inputs */
+  /* Inputs. The border is the whole visible edge of a field — its white fill
+     is the colour of the card it sits on — so it carries WCAG 1.4.11's 3:1
+     for a control's boundary. slate-300 measured 1.36–1.48:1; slate-500 is
+     4.34:1 at worst (on slate-100). `inputBorderContrast.test.ts` holds it. */
   --input-bg: #ffffff; /* white */
-  --input-border: #cbd5e1; /* slate-300 */
+  --input-border: #64748b; /* slate-500 */
 
   /* Scrollbar */
   --scrollbar-track: #f1f5f9; /* slate-100 */
@@ -1873,9 +1997,11 @@
   --nav-bg: #0f172a; /* slate-900 */
   --nav-border: rgba(255, 255, 255, 0.1); /* white/10 */
 
-  /* Inputs */
+  /* Inputs. 3:1 against both neighbours of the edge: the slate-800 fill and
+     the 5–8% white surfaces over the red-900 band of the gradient, where
+     slate-600 fell to 1.10:1. slate-400 is 3.25:1 at worst. */
   --input-bg: #1e293b; /* slate-800 */
-  --input-border: #475569; /* slate-600 */
+  --input-border: #94a3b8; /* slate-400 */
 
   /* Scrollbar */
   --scrollbar-track: #1e293b; /* slate-800 */

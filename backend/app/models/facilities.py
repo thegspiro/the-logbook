@@ -29,6 +29,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 SHARED_DOCUMENT_PREFIX = "document:"
@@ -1496,8 +1497,8 @@ class FacilityEmergencyContact(Base):
     # that at least one of the two is present.
     company_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     contact_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    alt_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    alt_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     service_contract_number: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
@@ -1641,7 +1642,9 @@ class FacilityCapitalProject(Base):
 
     # Contractor
     contractor_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    contractor_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    contractor_phone: Mapped[Optional[str]] = mapped_column(
+        EncryptedText, nullable=True
+    )
     contractor_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     project_manager: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
@@ -1708,7 +1711,7 @@ class FacilityInsurancePolicy(Base):
     carrier_name: Mapped[str] = mapped_column(String(200), nullable=False)
 
     agent_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    agent_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    agent_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     agent_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     coverage_amount: Mapped[Optional[Decimal]] = mapped_column(
@@ -1783,7 +1786,7 @@ class FacilityOccupant(Base):
     )  # e.g., "Engine Co. 1", "Rescue Squad 2"
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     contact_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     effective_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

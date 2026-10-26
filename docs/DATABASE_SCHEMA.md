@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**319 tables · 5277 columns · 1081 foreign keys**
+**319 tables · 5278 columns · 1081 foreign keys**
 
 ---
 
@@ -2746,7 +2746,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `contact_name` | VARCHAR(255) | no |  |  |  |
 | `contact_email` | VARCHAR(255) | no |  |  |  |
-| `contact_phone` | VARCHAR(50) | yes |  |  |  |
+| `contact_phone` | TEXT | yes |  |  |  |
 | `organization_name` | VARCHAR(255) | yes |  |  |  |
 | `outreach_type` | VARCHAR(100) | no |  | `'other'` |  |
 | `description` | TEXT | no |  |  |  |
@@ -2829,7 +2829,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `event_id` | VARCHAR(36) | no | FK, IDX |  | → `events.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `email` | VARCHAR(255) | yes | IDX |  |  |
-| `phone` | VARCHAR(50) | yes |  |  |  |
+| `phone` | TEXT | yes |  |  |  |
 | `organization_name` | VARCHAR(255) | yes |  |  |  |
 | `checked_in` | BOOL | no |  | `0` |  |
 | `checked_in_at` | DATETIME | yes |  |  |  |
@@ -3222,7 +3222,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `estimated_completion` | DATE | yes |  |  |  |
 | `actual_completion` | DATE | yes |  |  |  |
 | `contractor_name` | VARCHAR(200) | yes |  |  |  |
-| `contractor_phone` | VARCHAR(50) | yes |  |  |  |
+| `contractor_phone` | TEXT | yes |  |  |  |
 | `contractor_email` | VARCHAR(200) | yes |  |  |  |
 | `project_manager` | VARCHAR(200) | yes |  |  |  |
 | `permit_numbers` | TEXT | yes |  |  |  |
@@ -3340,8 +3340,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `contact_type` | ENUM(`utility_provider`, `alarm_company`, `elevator_service`, `plumber`, `electrician`, `hvac_service`, `locksmith`, `general_contractor`, `fire_protection`, `pest_control`, `roofing`, `janitorial`, `other`) | no | IDX |  |  |
 | `company_name` | VARCHAR(200) | yes |  |  |  |
 | `contact_name` | VARCHAR(200) | yes |  |  |  |
-| `phone` | VARCHAR(50) | yes |  |  |  |
-| `alt_phone` | VARCHAR(50) | yes |  |  |  |
+| `phone` | TEXT | yes |  |  |  |
+| `alt_phone` | TEXT | yes |  |  |  |
 | `email` | VARCHAR(200) | yes |  |  |  |
 | `service_contract_number` | VARCHAR(100) | yes |  |  |  |
 | `priority` | INTEGER | no |  | `1` |  |
@@ -3413,7 +3413,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `policy_number` | VARCHAR(100) | yes |  |  |  |
 | `carrier_name` | VARCHAR(200) | no |  |  |  |
 | `agent_name` | VARCHAR(200) | yes |  |  |  |
-| `agent_phone` | VARCHAR(50) | yes |  |  |  |
+| `agent_phone` | TEXT | yes |  |  |  |
 | `agent_email` | VARCHAR(200) | yes |  |  |  |
 | `coverage_amount` | NUMERIC(14, 2) | yes |  |  |  |
 | `deductible` | NUMERIC(10, 2) | yes |  |  |  |
@@ -3521,7 +3521,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `unit_name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `contact_name` | VARCHAR(200) | yes |  |  |  |
-| `contact_phone` | VARCHAR(50) | yes |  |  |  |
+| `contact_phone` | TEXT | yes |  |  |  |
 | `effective_date` | DATE | yes |  |  |  |
 | `end_date` | DATE | yes |  |  |  |
 | `is_active` | BOOL | no | IDX | `1` |  |
@@ -4587,12 +4587,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `first_name` | VARCHAR(100) | no |  |  |  |
 | `last_name` | VARCHAR(100) | no |  |  |  |
 | `email` | VARCHAR(255) | yes |  |  |  |
-| `phone` | VARCHAR(20) | yes |  |  |  |
-| `address_line1` | VARCHAR(255) | yes |  |  |  |
-| `address_line2` | VARCHAR(255) | yes |  |  |  |
-| `city` | VARCHAR(100) | yes |  |  |  |
-| `state` | VARCHAR(50) | yes |  |  |  |
-| `postal_code` | VARCHAR(20) | yes |  |  |  |
+| `phone` | TEXT | yes |  |  |  |
+| `address_line1` | TEXT | yes |  |  |  |
+| `address_line2` | TEXT | yes |  |  |  |
+| `city` | TEXT | yes |  |  |  |
+| `state` | TEXT | yes |  |  |  |
+| `postal_code` | TEXT | yes |  |  |  |
 | `country` | VARCHAR(100) | yes |  | `USA` |  |
 | `donor_type` | ENUM(`individual`, `business`, `foundation`, `government`, `other`) | no |  | `individual` |  |
 | `company_name` | VARCHAR(255) | yes |  |  |  |
@@ -5754,7 +5754,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(255) | no |  |  |  |
 | `title` | VARCHAR(150) | yes |  |  |  |
 | `email` | VARCHAR(255) | yes |  |  |  |
-| `phone` | VARCHAR(50) | yes |  |  |  |
+| `phone` | TEXT | yes |  |  |  |
 | `phone_extension` | VARCHAR(20) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `is_primary` | BOOL | no |  | `0` |  |
@@ -7346,13 +7346,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `first_name` | VARCHAR(100) | no |  |  |  |
 | `last_name` | VARCHAR(100) | no |  |  |  |
 | `email` | VARCHAR(255) | no |  |  |  |
-| `phone` | VARCHAR(20) | yes |  |  |  |
-| `mobile` | VARCHAR(20) | yes |  |  |  |
+| `phone` | TEXT | yes |  |  |  |
+| `mobile` | TEXT | yes |  |  |  |
 | `date_of_birth` | TEXT | yes |  |  |  |
-| `address_street` | VARCHAR(255) | yes |  |  |  |
-| `address_city` | VARCHAR(100) | yes |  |  |  |
-| `address_state` | VARCHAR(50) | yes |  |  |  |
-| `address_zip` | VARCHAR(20) | yes |  |  |  |
+| `address_street` | TEXT | yes |  |  |  |
+| `address_city` | TEXT | yes |  |  |  |
+| `address_state` | TEXT | yes |  |  |  |
+| `address_zip` | TEXT | yes |  |  |  |
 | `interest_reason` | TEXT | yes |  |  |  |
 | `referral_source` | VARCHAR(255) | yes |  |  |  |
 | `referred_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -7847,7 +7847,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `display_name` | VARCHAR(200) | yes |  |  |  |
 | `title` | VARCHAR(150) | yes |  |  |  |
 | `email` | VARCHAR(320) | yes |  |  |  |
-| `phone` | VARCHAR(50) | yes |  |  |  |
+| `phone` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -8370,7 +8370,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `order_number` | VARCHAR(30) | no |  |  |  |
 | `customer_name` | VARCHAR(200) | no |  |  |  |
 | `customer_email` | VARCHAR(255) | yes |  |  |  |
-| `customer_phone` | VARCHAR(50) | yes |  |  |  |
+| `customer_phone` | TEXT | yes |  |  |  |
 | `status` | ENUM(`submitted`, `awaiting_payment`, `paid`, `ordered`, `ready_for_pickup`, `fulfilled`, `cancelled`) | no |  | `submitted` |  |
 | `payment_status` | ENUM(`unpaid`, `pending_verification`, `partial`, `paid`, `refunded`, `waived`) | no |  | `unpaid` |  |
 | `payment_method` | ENUM(`venmo`, `paypal`, `cash_app`, `zelle`, `cash`, `check`, `payroll_deduction`, `other`) | yes |  |  |  |
@@ -10954,12 +10954,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `middle_name` | VARCHAR(100) | yes |  |  |  |
 | `last_name` | VARCHAR(100) | no |  |  |  |
 | `email` | VARCHAR(255) | yes |  |  |  |
-| `phone` | VARCHAR(20) | yes |  |  |  |
-| `mobile` | VARCHAR(20) | yes |  |  |  |
-| `address_street` | VARCHAR(255) | yes |  |  |  |
-| `address_city` | VARCHAR(100) | yes |  |  |  |
-| `address_state` | VARCHAR(50) | yes |  |  |  |
-| `address_zip` | VARCHAR(20) | yes |  |  |  |
+| `phone` | TEXT | yes |  |  |  |
+| `mobile` | TEXT | yes |  |  |  |
+| `address_street` | TEXT | yes |  |  |  |
+| `address_city` | TEXT | yes |  |  |  |
+| `address_state` | TEXT | yes |  |  |  |
+| `address_zip` | TEXT | yes |  |  |  |
 | `status` | VARCHAR(50) | yes |  | `'applied'` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `referred_by` | VARCHAR(255) | yes |  |  |  |
@@ -11038,18 +11038,18 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `membership_number` | VARCHAR(50) | yes |  |  |  |
 | `badge_code` | VARCHAR(16) | yes |  | `generate_badge_code()` |  |
 | `previous_membership_number` | VARCHAR(50) | yes |  |  |  |
-| `phone` | VARCHAR(20) | yes |  |  |  |
-| `mobile` | VARCHAR(20) | yes |  |  |  |
+| `phone` | TEXT | yes |  |  |  |
+| `mobile` | TEXT | yes |  |  |  |
 | `photo_url` | TEXT | yes |  |  |  |
 | `date_of_birth` | TEXT | yes |  |  |  |
 | `hire_date` | DATE | yes |  |  |  |
 | `rank` | VARCHAR(100) | yes |  |  |  |
 | `station` | VARCHAR(100) | yes |  |  |  |
 | `platoon` | VARCHAR(20) | yes |  |  |  |
-| `address_street` | VARCHAR(255) | yes |  |  |  |
-| `address_city` | VARCHAR(100) | yes |  |  |  |
-| `address_state` | VARCHAR(50) | yes |  |  |  |
-| `address_zip` | VARCHAR(20) | yes |  |  |  |
+| `address_street` | TEXT | yes |  |  |  |
+| `address_city` | TEXT | yes |  |  |  |
+| `address_state` | TEXT | yes |  |  |  |
+| `address_zip` | TEXT | yes |  |  |  |
 | `address_country` | VARCHAR(100) | yes |  | `'USA'` |  |
 | `referral_source` | VARCHAR(255) | yes |  |  |  |
 | `interest_reason` | TEXT | yes |  |  |  |
