@@ -2396,7 +2396,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 min="0"
                 step="0.1"
                 inputMode="decimal"
-                className={`form-input min-h-[48px] w-24 px-3 py-2.5 text-sm ${belowMin ? 'border-theme-alert-danger-icon focus:ring-theme-alert-danger-icon' : 'border-theme-surface-border focus:ring-theme-focus-ring'}`}
+                className={`form-input min-h-[48px] w-24 px-3 py-2.5 text-sm ${belowMin ? 'border-theme-alert-danger-icon focus:ring-theme-alert-danger-icon' : 'border-theme-input-border focus:ring-theme-focus-ring'}`}
                 value={result?.levelReading ?? ''}
                 onChange={(e) => {
                   const val = e.target.value;

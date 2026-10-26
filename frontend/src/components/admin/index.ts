@@ -11,3 +11,5 @@ export type { AdminHubTab, AdminHubAction } from './AdminHubFrame';
 export { AdminAttentionQueue } from './AdminAttentionQueue';
 export { AdminMetricsRow } from './AdminMetricsRow';
 export { AdminMetricsSettings } from './AdminMetricsSettings';
+export { AdminHubAreaNav } from './AdminHubAreaNav';
+export type { AdminHubAreaNavArea, AdminHubAreaNavDestination } from './AdminHubAreaNav';

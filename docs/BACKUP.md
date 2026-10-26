@@ -8,11 +8,11 @@ from a total loss. Business-continuity alignment context (ISO 22301) lives in
 
 `scripts/backup.sh` produces a single timestamped archive containing:
 
-| Component        | Contents                                                                   | Notes                                                         |
-| ---------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `database.sql`   | Full `mysqldump` of the application database                               | `--single-transaction --quick`, safe against a running server |
-| `uploads.tar.gz` | Every uploaded file on the uploads volume (documents, photos, attachments) | Not files in a department's own S3 bucket — see below         |
-| `config/`        | `.env.example`, `docker-compose.yml`, and a **sanitized** `.env` template  | Values are stripped — see the warning below                   |
+| Component        | Contents                                                                   | Notes                                                          |
+| ---------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `database.sql`   | Full `mysqldump` of the application database                               | `--single-transaction --quick`, safe against a running server  |
+| `uploads.tar.gz` | Every uploaded file on the uploads volume (documents, photos, attachments) | Not files in a department's own bucket or Shared Drive — below |
+| `config/`        | `.env.example`, `docker-compose.yml`, and a **sanitized** `.env` template  | Values are stripped — see the warning below                    |
 
 Uploads are read from `/app/uploads` inside the running backend container
 (`intranet-backend`, or `logbook-backend` on Unraid; set `BACKEND_CONTAINER`
@@ -127,7 +127,7 @@ Plaintext archives restore as before.
 and `.sha256` files and **refuses to upload an unencrypted archive**. If you
 sync the backups directory with your own tooling, sync all three files.
 
-## Files in a department's own S3 bucket
+## Files in a department's own bucket or Shared Drive
 
 A department that switched its storage to its own S3 or MinIO bucket
 (Organization Settings > Storage, "Test and switch to S3") keeps its files
@@ -151,16 +151,57 @@ secrets section below), so a bucket copy is as unreadable without
 `ENCRYPTION_KEY` / `ENCRYPTION_SALT` as the uploads archive, and a restored
 copy needs the keys that were current when it was written.
 
-When the backend container is running, `scripts/backup.sh` asks it which
-departments keep files in which bucket and prints them under a warning, so a
-backup run says what it left out. To check by hand:
+### A Google Shared Drive
+
+A department that switched to its own Google Shared Drive ("Test and switch
+to Google Drive") keeps its files there instead. The same decision applies:
+the backup does not download the drive. Two things make a drive different
+from a bucket, and both matter on the day something is lost.
+
+**The Logbook finds a file by its Drive file id, not by its name.** Every
+stored reference names the file's id, and the files sit in one folder (the
+one chosen in the settings, or the drive's top level), each named after its
+storage path with `/` written as `_`. A copy taken with ordinary tools and
+uploaded back later is a **new file with a new id**, so the references still
+point at the old id and the Logbook cannot find it. Nothing repoints them
+yet. A copy elsewhere is still worth keeping: it is the only copy left if
+the drive or the Workspace account itself is lost, and the files can be
+matched back to their records by name. But it is not a one-step restore.
+
+**The drive's own trash keeps the id.** A file the Logbook deletes, or a
+person deletes in Drive, goes to the Shared Drive's trash for 30 days. A
+drive Manager can restore it from there with its id intact, and the record
+that pointed at it works again. That is the quick recovery, and the reason
+not to empty a drive's trash by hand.
+
+To keep a copy outside the drive, rclone reads a Shared Drive with the same
+kind of service account. Give a **separate** service account the Viewer role
+on the drive, rather than reusing the Logbook's key, so the backup cannot
+change or delete anything:
 
 ```bash
-docker exec -it intranet-backend python scripts/migrate_uploads_to_s3.py --buckets
+rclone copy :drive: /backups/shared-drive \
+  --drive-service-account-file /secure/backup-reader.json \
+  --drive-team-drive <shared_drive_id>
 ```
 
-A restore drill for such a department also opens a recently uploaded file
-from its bucket. That checks the bucket is reachable and the keys are right.
+The files are encrypted before upload, so this copy is as unreadable without
+`ENCRYPTION_KEY` / `ENCRYPTION_SALT` as the uploads archive.
+
+### Which departments are not in the archive
+
+When the backend container is running, `scripts/backup.sh` asks it which
+departments keep files in which bucket or Shared Drive and prints them under
+a warning, so a backup run says what it left out. To check by hand:
+
+```bash
+docker exec -it intranet-backend python scripts/migrate_uploads_to_remote.py --stores
+```
+
+(`migrate_uploads_to_s3.py --buckets`, the name before 2026-10-25, still
+works.) A restore drill for such a department also opens a recently uploaded
+file from its bucket or drive. That checks the store is reachable and the
+keys are right.
 
 ## Automated: the backup sidecar (production compose)
 
@@ -290,8 +331,10 @@ Tighten them if the platform is used during activations.
       copy of `backup-drill.key` stored away from the server
 - [ ] Secrets (`ENCRYPTION_KEY`, `ENCRYPTION_SALT`, `SECRET_KEY`, DB/Redis
       passwords) stored offline in at least two locations
-- [ ] Every department's own S3 bucket (`migrate_uploads_to_s3.py --buckets`)
-      versioned and replicated or mirrored with its provider's tooling
+- [ ] Every department's own bucket or Shared Drive
+      (`migrate_uploads_to_remote.py --stores`) protected with its provider's
+      tooling: a bucket versioned and replicated or mirrored, a drive copied
+      out with a read-only account
 - [ ] Quarterly restore drill scheduled, with results recorded
 - [ ] RTO/RPO targets written into department SOPs
 

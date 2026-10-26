@@ -32,6 +32,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 from app.models.nfc_tag import NfcCredentialType
 from app.utils.label_renderer import printable_label_value
@@ -385,7 +386,7 @@ class InventoryVendorContact(Base):
         String(150)
     )  # e.g. "Account Manager", "Service Coordinator"
     email: Mapped[Optional[str]] = mapped_column(String(255))
-    phone: Mapped[Optional[str]] = mapped_column(String(50))
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText)
     phone_extension: Mapped[Optional[str]] = mapped_column(String(20))
     notes: Mapped[Optional[str]] = mapped_column(Text)
 

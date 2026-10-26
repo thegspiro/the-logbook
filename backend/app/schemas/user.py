@@ -11,7 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase
 from app.utils.membership import MemberClass, MemberStatus
 from app.utils.phone_numbers import validate_member_phone
 
@@ -402,7 +402,7 @@ class AdminUserCreate(MembershipClassificationFields):
     )
 
 
-class UserUpdate(MembershipClassificationFields):
+class UserUpdate(MembershipClassificationFields, RefusesNull):
     """Schema for updating a user"""
 
     # Member class and status are the two independent facts `membership_type`
@@ -454,6 +454,10 @@ class UserUpdate(MembershipClassificationFields):
 
     # Emergency contacts
     emergency_contacts: Optional[List[EmergencyContact]] = None
+
+    # The profile handler skips a null here (an empty list is how contacts are
+    # removed), so a null would answer 200 and change nothing.
+    null_refused = frozenset({"emergency_contacts"})
 
     @field_validator("preferred_name")
     @classmethod
@@ -712,13 +716,18 @@ class NotificationPreferences(BaseModel):
     model_config = _response_config
 
 
-class ContactInfoUpdate(BaseModel):
+class ContactInfoUpdate(RefusesNull):
     """Schema for updating contact information and notification preferences"""
 
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
     notification_preferences: Optional[NotificationPreferences] = None
+
+    # The handler skips both when they are None, so a null would answer 200 and
+    # change nothing; the email column is NOT NULL and preferences are merged,
+    # never cleared. Phone and mobile are different: null clears them.
+    null_refused = frozenset({"email", "notification_preferences"})
 
 
 class UserProfileResponse(_UserResponseFields):

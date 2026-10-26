@@ -1049,7 +1049,16 @@ Still open:
 - **Backups do not include buckets, by decision (2026-10-22).**
   `scripts/backup.sh` names the buckets it left out; `docs/BACKUP.md` says how
   to protect them with the provider's tooling. A department that skips that
-  has no second copy of its bucket.
+  has no second copy of its bucket. The same holds for a Google Shared Drive
+  (2026-10-25).
+- **A copy of a Shared Drive cannot simply be put back (2026-10-25).** The
+  Logbook finds a Drive file by its id, and a file copied out and uploaded
+  again is a new file with a new id, so its record still points at the old
+  one. Nothing repoints references yet. Within 30 days the drive's own trash
+  restores a file with its id intact; after that, a copy kept elsewhere has
+  to be matched to its records by file name (each is named after its storage
+  path) and the references updated by hand. A bucket has no such gap: its
+  objects are found by key, so a mirror restores as it is.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.
@@ -6982,6 +6991,41 @@ question against Finance's own locking conventions (Pitfall #27) that a
 documents-feature review pass should not decide unilaterally — Finance and
 Documents would need to agree on one order before this can lock safely
 without risking a new cross-feature deadlock.
+
+## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26)
+
+Found by security review EC-14 pass 12
+(`docs/security-review/EC-14-equipment-check-shifts.md`, pass 12, EC-17).
+Pre-existing, not introduced by this pass's own delta — the same pass's
+delta hardened `update_report`'s `review_status` field specifically (a
+submitted report's status now changes only through review, and the
+submit-destination is read from the department's own config rather than
+trusted from the client), and its own docstring rewrite claims "The
+service allows only drafts" — true for that one field, not for the rest.
+
+`ShiftCompletionService.update_report`'s `UPDATABLE_FIELDS` loop writes
+`performance_rating`, `officer_narrative`, `areas_of_strength`,
+`areas_for_improvement`, `skills_observed`, `tasks_performed`,
+`hours_on_shift`, `calls_responded`, `call_types`, and `enrollment_id` onto
+the row for any update from the filing officer, with no check on
+`review_status` at all. A report that has already been reviewed and
+`approved` stays open to the same officer editing its narrative, rating, or
+recorded skills through `PUT /shift-reports/{id}`, weeks later, with no
+re-review triggered and nothing beyond the generic `shift_report_updated`
+audit-log entry (which records which fields changed, not that the report
+had already cleared review) to surface it to whoever approved the original
+version. Confirmed this does not re-run training credit —
+`_trigger_deferred_progress` only fires when the report was not already
+`approved` before this edit — so the risk is to the integrity of the
+record itself, not to double-granted credit.
+
+**Not fixed.** Closing it is a product decision between three shapes this
+pass should not pick unilaterally: block every `UPDATABLE_FIELDS` write
+once a report is no longer a draft (simplest, but removes the ability to
+fix a typo after approval), require any edit to an approved/pending report
+to go back through review (more correct, but is a workflow change its own
+users would need to learn), or accept the status quo and rely on the audit
+log as the record of what changed and when.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
