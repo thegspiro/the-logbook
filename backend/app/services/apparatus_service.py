@@ -60,6 +60,7 @@ from app.schemas.apparatus import (
     ApparatusTypeUpdate,
     ApparatusUpdate,
 )
+from app.utils.apparatus_ref import apparatus_in_use
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today
@@ -962,6 +963,13 @@ class ApparatusService:
         )
         if not apparatus:
             return False
+
+        # Archiving keeps the row, so the records that name it still resolve.
+        if await apparatus_in_use(self.db, str(apparatus.id), organization_id):
+            raise ValueError(
+                "This apparatus is still named by a shift template, shift, "
+                "equipment check or call response; archive it instead"
+            )
 
         await self.db.delete(apparatus)
         await self.db.commit()
