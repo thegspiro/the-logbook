@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD]** (branch `claude/security-review-facilities-p12`) — Feature 12
-(Facilities), pass 12. PR #3738 (Feature 11, Inventory, pass 12) was merged
+**PR [#3739](https://github.com/thegspiro/the-logbook/pull/3739)** (branch
+`claude/security-review-facilities-p12`) — Feature 12 (Facilities), pass 12. PR #3738 (Feature 11, Inventory, pass 12) was merged
 by this same iteration (watchdog pickup — `search_pull_requests` showed 0
 open rotation PRs both before and after that merge). The dedicated
 `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) was
