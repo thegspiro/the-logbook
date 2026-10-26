@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(this PR)** (branch `claude/security-review-apparatus-nfc`) — Feature 13
+**PR [#3740](https://github.com/thegspiro/the-logbook/pull/3740)** (branch
+`claude/security-review-apparatus-nfc`) — Feature 13
 (Apparatus & NFC), pass 19. No security-review PR was open — confirmed via
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
 matching results, re-checked both before starting and again immediately
