@@ -1,6 +1,193 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), pass 11 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), pass 12 (this PR)
+
+---
+
+## Pass 12 (2026-10-26) — watchdog pickup, real delta (NFC tag register + lot recalls), 0 fixed in this feature's own code, 0 new findings, INV-22 re-verified open/accepted; fixed a repo-wide forked migration chain found during the completion gate
+
+**Watchdog pickup.** No PR with a `claude/security-review-` head branch was
+open (`search_pull_requests`, 0 results) and no Claude session was reachable
+via `ListAgents` (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, is still unreachable). PR #3734
+(Feature 10, Documents & legal, pass 12) had already merged, CI green. Per
+`PROGRESS.md`'s rotation table, row 11 (Inventory) was the next `⬜`.
+
+**Backend:** same five endpoint files as pass 11 — `inventory.py` (+32/-0ish,
+minor), `inventory_nfc.py` (+293, a new department-wide NFC tag register),
+`schemas/inventory.py` (+60, lot-recall schemas), `schemas/inventory_nfc.py`
+(+89, register/move/bulk-status schemas), `inventory_service.py` (+575/-50,
+lot-recall data access shared with Medical Supplies), plus one **new**
+service file, `inventory_nfc_register_service.py` (+372). `labels.py`,
+`inventory_kiosk.py`, `inventory_last_seen.py`, and the rest of pass 11's
+declared scope are byte-identical. **Frontend:** `modules/inventory/*` — a
+large admin-hub restructuring (`InventoryAdminHub.tsx` cut from ~1000 to
+~250 lines behind new `InventoryAdminLayout.tsx`/`InventoryAdminNav.tsx`/
+`inventoryAdminAreas.ts`/`useInventoryAdminData.ts`) plus a new
+`InventoryNfcRegisterPage.tsx` (+498) and `MoveNfcTagDialog.tsx` (+187).
+**Migrations:** one new table, `inventory_lot_recalls`
+(`3d67883cd461`), reviewed below; 654 revisions at the point this pass
+started (up from 640 at pass 11).
+
+### Scope
+
+Baseline is pass 11's own merge commit, `5871258c` (PR #3580) — confirmed an
+ancestor of `HEAD`. `git diff --stat 5871258c..HEAD` across the full
+declared scope (all five endpoint files, all seven inventory service files,
+all four inventory schema files, and the entire `modules/inventory/` tree)
+returns **70 files, +5004/−1393** — a much larger real delta than pass 11's,
+reviewed in full rather than spot-checked.
+
+Route decorators diffed directly across all five endpoint files:
+**+5, 0 removed** — `GET /nfc-tags`, `GET /nfc-tags/export`,
+`GET /nfc-tags/move-targets`, `POST /nfc-tags/bulk-status`,
+`POST /nfc-tags/{tag_id}/move` (all in `inventory_nfc.py`; `inventory.py`
+itself has no decorator change this window — `git diff ... | grep
+'^[+-]@router\.'` on that file alone is empty). Direct recount:
+`inventory.py` **150**, `labels.py` **12**, `inventory_kiosk.py` **4**,
+`inventory_last_seen.py` **2**, `inventory_nfc.py` **29** (24 + 5).
+**Correction to pass 11's own count:** pass 11 recorded `inventory.py` as
+151; a direct recount at pass 11's own merge commit (`5871258c`) gives
+**150**, and the diff since then touches no decorator in that file — this is
+a pass-11 tally error, not a route removed this pass.
+`check_route_permissions.py --strict`: **279** routes repo-wide, 0 errors, 0
+warnings.
+
+### New real delta reviewed, all clean
+
+- **The NFC tag register (`GET /nfc-tags`, `/export`, `/move-targets`,
+  `POST /bulk-status`, `POST /{tag_id}/move`, backed by the new
+  `InventoryNfcRegisterService`) — a department-wide view across item,
+  storage-area and compartment tags, plus a bulk lost/found change and
+  moving a tag onto another target of the same kind.** Read the new service
+  file and the five new route handlers in full:
+  - Every query in `list_tags`/`move_targets` filters its joined target to
+    `organization_id == org_id` in the join condition itself (items, storage
+    areas) or through the owning template (compartments, which carry no
+    `organization_id` of their own) — Pitfall #14a's parent-resolution shape,
+    applied correctly for the one target kind that needs it.
+  - `_register_kinds` enforces the two-tier read: `inventory.manage` sees
+    every kind; `inventory.check_manage` alone is **403'd**, not silently
+    filtered, for any kind but `compartment` — "not yours" cannot be mistaken
+    for "none." The route dependency (`require_permission("inventory.manage",
+"inventory.check_manage")`) only gates entry; this function is what
+    narrows what each tier actually sees, and it is exercised on all four of
+    `list_tags`/`export`/`move_targets`/`bulk_update_status`.
+  - `move_tag` resolves its target through the same org-scoped `_get_item`/
+    `_get_storage_area`/`_get_compartment` helpers `inventory_nfc_service.py`
+    already used for linking, so a moved tag is checked against the
+    organization exactly as a newly linked one is — not a second, divergent
+    lookup. A move across kinds (item → storage area) is rejected with a 400
+    before any write, by the owner's stated design.
+  - `bulk_update_status` resolves every id through `get_tag`'s own
+    org-scoped lookup and reports a cross-org or wrong-kind id under
+    `failed` rather than erroring the whole batch (capped at
+    `MAX_BULK_TAGS = 200`, matching the schema's `max_length=200`).
+  - `export_inventory_nfc_register` uses `SafeCsvWriter` (Pitfall #15), not
+    bare `csv.writer`, and caps rows at `MAX_EXPORT_ROWS = 10000`. Search
+    uses `like_pattern(...)` with `escape=LIKE_ESCAPE_CHAR` everywhere a
+    user-supplied string reaches a `.ilike()` (Pitfall #25) — checked at all
+    three call sites (`list_tags`, `move_targets`'s item/area/compartment
+    branches).
+  - The frontend route (`/inventory/admin/nfc/tags`) gates on
+    `requiredAnyPermission: ['inventory.manage', 'inventory.check_manage']`
+    with a comment noting the server applies the same limit — matching
+    `_REGISTER_PERMISSIONS` exactly; the admin-hub restructuring (below)
+    did not touch this gate.
+- **Lot recalls (`record_lot_recall`/`lift_lot_recall`/`list_lot_recalls`/
+  `get_recalled_shelf_lots`/`recalled_lot_keys`/`_usable_lot`/
+  `_lot_not_recalled`, new table `inventory_lot_recalls`) — shared
+  infrastructure in this feature's own `inventory_service.py`, consumed by
+  Medical Supplies' own endpoint (`medical_supplies.py`, outside this
+  feature's scope, MSUP-23's own rotation turn).** Reviewed to the depth
+  this feature's shared surface warrants, matching the precedent other
+  features have used for shared `inventory_service.py` extensions:
+  - `record_lot_recall`/`lift_lot_recall` both take the row they check
+    `with_for_update()` before the duplicate/already-lifted check, so two
+    officers recording or lifting the same recall at once cannot both pass
+    (Pitfall #27). Both are org-scoped on every query and raise `ValueError`
+    on a blank input or a row that does not exist/already applies.
+  - `_usable_lot` — the single filter every on-hand figure, low-stock
+    judgement and issuance now reads — ANDs the pre-existing expiration
+    check with `_lot_not_recalled`, so a recalled lot cannot count as stock
+    in one place and still count in another; `_usable_lot` replaces the
+    old inline expiration-only `case()` at its one call site rather than
+    living beside it as a second, divergent rule.
+  - The new table (`inventory_lot_recalls`, migration `3d67883cd461`):
+    `organization_id`/`inventory_item_id` FKs `ondelete="CASCADE"` and
+    `nullable=False`; `recalled_by`/`lifted_by` FKs `ondelete="SET NULL"`
+    and `nullable=True` — satisfies Pitfall #2. Guarded on table existence
+    (`_has_table()`) per Pitfall #26. A new, empty table — no backfill
+    question arises.
+  - `item_ids_matching` (new, backs `sort_values` for Medical Supplies'
+    cross-location expiry sort) raises `RuntimeError` if `_build_items_query`
+    ever produced a criteria with no organization clause — a defensive
+    fail-closed check on the one query this feature cannot let escape its
+    org scope, mirroring `search_items_fuzzy`'s existing guard.
+- **Admin-hub restructuring (`InventoryAdminHub.tsx`,
+  `InventoryAdminLayout.tsx`, `InventoryAdminNav.tsx`,
+  `inventoryAdminAreas.ts`, `useInventoryAdminData.ts`) — a navigation/layout
+  extraction, not a permission change.** Confirmed by grepping all five new/
+  rewritten files for `requiredPermission`/`requiredRole`: none — because
+  gating has always lived at the route level in `routes.tsx`
+  (`<ProtectedRoute requiredPermission=...>` per CLAUDE.md's documented
+  pattern), not inside the hub page itself. `routes.tsx`'s own diff (+158)
+  carries every existing gate forward unchanged plus the two new ones
+  (register page above; the NFC-tag-move dialog has no route of its own, it
+  opens from the register page already gated).
+- **Frontend safety sweep** (same checks pass 11 ran, over all 45 non-test
+  files this window touches): zero `window.confirm`/`alert`/`prompt`, zero
+  `dangerouslySetInnerHTML`, zero raw `axios.*`/`fetch(` bypassing a module
+  service.
+
+### Fixed outside this feature's own findings: a forked migration chain
+
+The completion gate's `validate_migrations.py --strict` failed with **two**
+heads — `0a8d11fcada1` ("Add allow_embed to forms") and `b7e4c2a91d35`
+("event guest check-in token") — both landed on `main` on 2026-10-25 by
+unrelated branches that forked the chain independently. Neither migration
+touches an inventory table and neither is in this feature's scope, but per
+CLAUDE.md's "no acceptable pre-existing errors" rule, a failing completion-
+gate check discovered mid-pass is owned, not noted and left: added merge
+revision `c96c193f9db8` (pure join, no-op `upgrade`/`downgrade`, modeled on
+the repo's existing `7dba2d6d2dbb`/`33922563bb88`/`ca0c2111466f` precedents),
+applied it with `alembic upgrade head` against the live database to confirm
+it resolves cleanly, and re-ran `validate_migrations.py --strict` to a single
+head. This is an infrastructure fix, not a security finding, and is called
+out separately from the Findings section below for that reason.
+
+### Re-verified: INV-22, still OPEN, owner-accepted, unchanged
+
+`get_fulfillment_options`/`get_requestable_categories` are untouched —
+neither function appears in this window's diff of `inventory_service.py`
+(confirmed via `git diff ... | grep` on both definitions).
+`docs/KNOWN_LIMITATIONS.md`'s entry recording the owner's 2026-10-05
+decision is unchanged; nothing new to add.
+
+## Findings — 0 fixed, 0 new findings
+
+Nothing in this feature's own code needed fixing this pass; the NFC register
+and lot-recall additions are new write/read paths but every one of them is
+org-scoped, bounded, and — where a race was possible — locked, as detailed
+above. INV-22 is the only standing item and remains unchanged.
+
+### Completion gate
+
+| Check                                                       | Result                                                                                                        |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI-pinned 7.4.1)             | ✅ 0 violations (after fixing the new merge migration's 2 unused imports)                                     |
+| `black --check app/ tests/ alembic/` (CI-pinned 26.10.1)    | ✅ clean, 2670 files unchanged                                                                                |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.2) | ✅ clean                                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`           | ❌ → ✅ — forked at 2 heads (see above); fixed with merge revision `c96c193f9db8`; 655 revisions, single head |
+| `alembic upgrade head` against a live database              | ✅ applies cleanly through the new merge revision                                                             |
+| `python3 scripts/check_route_permissions.py --strict`       | ✅ 279 routes, 0 errors, 0 warnings                                                                           |
+| `pytest tests/ -k "inventory or label or nfc or kiosk"`     | ✅ 2035 passed, 1 pre-existing skip (`py_vapid`)                                                              |
+| `cd frontend && npm run typecheck`                          | ✅ 0 errors                                                                                                   |
+| `cd frontend && npm run lint`                               | ✅ 0 errors, 0 warnings                                                                                       |
+| `npx vitest run src/modules/inventory`                      | ✅ 1868 passed (126 files)                                                                                    |
+
+Rotation row 11 → ✅ (pending this PR's merge). Next: Feature 12
+(Facilities).
 
 ---
 
