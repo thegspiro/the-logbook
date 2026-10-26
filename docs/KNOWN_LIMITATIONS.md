@@ -233,10 +233,9 @@ a known edge an owner should know about:
   how a daily sending limit is reported (the sender stops the batch on a
   message naming a daily limit, or a `Retry-After` longer than 60 seconds), and
   that the `Message-ID` and `List-Unsubscribe` headers the sender sets are kept.
-- **No settings screen yet.** The method can be set through
-  `PATCH /api/v1/organizations/settings/email`; the screen arrives separately.
-  Onboarding offers App Password only, so a department chooses the service
-  account after setup, in Settings, where the `admin.access` check applies.
+- **Onboarding offers App Password only.** A department chooses the service
+  account after setup, in **Settings → Email**, where the `admin.access` check
+  applies. Someone with `settings.manage` alone sees the option disabled.
 - **The connection test is open to `settings.manage`.** It obtains a token as
   the From address and sends nothing, and a saved key is only used for the From
   address it was saved with, so it cannot be pointed at another mailbox.
