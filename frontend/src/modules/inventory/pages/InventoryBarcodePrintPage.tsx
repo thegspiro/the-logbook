@@ -40,6 +40,8 @@ import { prefersPdfOverBrowserPrint } from '../../../utils/printEnvironment';
 import toast from 'react-hot-toast';
 import { LabelScopePicker } from '../components/LabelScopePicker';
 import { LabelScanConfirm } from '../components/LabelScanConfirm';
+import { PrintSetupChecklist } from '../components/PrintSetupChecklist';
+import { isPrintChecklistSkipped } from '../utils/printChecklist';
 import { PrinterLanguage, Symbology, labelPrinterService } from '../../../services/labelService';
 import type { LabelPrinterConfig, PrintLabelsResult } from '../../../services/labelService';
 import {
@@ -57,6 +59,7 @@ import type { LabelNames } from '../utils/labelLines';
 import { MAX_LABEL_SETUPS, MAX_SETUP_NAME, usableSetupLines } from '../utils/labelSetups';
 import type { LabelSetup } from '../utils/labelSetups';
 import { Breadcrumbs, PromptDialog } from '../../../components/ux';
+import { BARCODE_SVG_PRINT_CSS } from '../../../components/labels/barcodePrintCss';
 import { SheetStartPicker } from '../../../components/labels/SheetStartPicker';
 import {
   buildLabelFilterPath,
@@ -578,6 +581,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [chosenSetup, setChosenSetup] = useState('');
   const [namingSetup, setNamingSetup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showPrintChecklist, setShowPrintChecklist] = useState(false);
   const [barcodesReady, setBarcodesReady] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   // After a print or PDF, ask whether the labels actually came out. Only a
@@ -622,6 +626,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
   const isThermal = preset.columns === 1;
+  // A custom size is its own stock, so "don't show again" is per dimension.
+  const printSizeKey = isCustom ? `custom:${customW}x${customH}` : preset.id;
   // The label API accepts at most 500 records per PDF. Keep the copies control
   // inside that batch limit while retaining the existing per-item cap of 50.
   // Copies stay capped at 50 per item. A batch whose labels (items × copies)
@@ -1009,11 +1015,26 @@ const InventoryBarcodePrintPage: React.FC = () => {
       toast.error('One or more barcodes did not render. Download the PDF instead to avoid printing blank labels.');
       return;
     }
+    if (isPrintChecklistSkipped(printSizeKey)) {
+      printViaBrowser();
+    } else {
+      setShowPrintChecklist(true);
+    }
+  };
+
+  const printViaBrowser = () => {
+    setShowPrintChecklist(false);
+    const container = document.querySelector('.barcode-labels-container');
+    if (!container) {
+      toast.error('Could not prepare the labels for printing. Reload the page and try again.');
+      return;
+    }
 
     // Iframe-based printing: Chrome reliably applies @page size when it's
     // part of a static document parsed at load time, rather than injected
     // dynamically into the current page.
     const iframe = document.createElement('iframe');
+    iframe.title = 'Label print job';
     iframe.style.position = 'fixed';
     iframe.style.top = '-10000px';
     iframe.style.left = '-10000px';
@@ -1058,12 +1079,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  .barcode-label svg rect,
-  .barcode-label svg g rect {
-    fill: #000 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
+  ${BARCODE_SVG_PRINT_CSS}
   ${
     isThermal
       ? `
@@ -1382,12 +1398,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
               print-color-adjust: exact !important;
             }
 
-            .barcode-label svg rect,
-            .barcode-label svg g rect {
-              fill: #000 !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
+            ${BARCODE_SVG_PRINT_CSS}
 
             ${
               isThermal
@@ -1514,6 +1525,17 @@ const InventoryBarcodePrintPage: React.FC = () => {
             defaultValue={setups.find((s) => s.id === chosenSetup)?.name ?? ''}
             hint={`Saved for the whole department. A setup with the same name is replaced. Up to ${MAX_SETUP_NAME} characters.`}
             confirmLabel="Save setup"
+          />
+
+          <PrintSetupChecklist
+            isOpen={showPrintChecklist}
+            onClose={() => setShowPrintChecklist(false)}
+            onContinue={printViaBrowser}
+            sizeKey={printSizeKey}
+            widthIn={preset.width.replace(/in$/, '')}
+            heightIn={preset.height.replace(/in$/, '')}
+            isThermal={isThermal}
+            offerNetworkPrinter={printers.length === 0}
           />
 
           {partCount > 1 && (
@@ -2018,7 +2040,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
                     <li>In the print dialog, set margins to &quot;None&quot; or &quot;Minimum&quot;</li>
                     <li>Disable &quot;Scale to fit&quot; or set scaling to 100%</li>
                     <li>For Dymo: select the correct label type in Dymo Print Utility</li>
-                    <li>For Rollo: the printer auto-detects label size</li>
+                    <li>
+                      For Rollo: the printer finds the gap between labels, but the driver&apos;s paper size must still
+                      be set to {preset.width} x {preset.height}
+                    </li>
                     <li>
                       Alternatively, use the <strong>PDF</strong> button above for better thermal printer compatibility
                     </li>
