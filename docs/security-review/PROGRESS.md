@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #PENDING** (branch `claude/security-review-training-core`) — Feature
-17 (Training core), pass 11. **Watchdog pickup** — the dedicated
+**PR [#3754](https://github.com/thegspiro/the-logbook/pull/3754)** (branch
+`claude/security-review-training-core`) — Feature 17 (Training core),
+pass 11. **Watchdog pickup** — the dedicated
 `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
 was unreachable. No security-review PR was open — confirmed via
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
