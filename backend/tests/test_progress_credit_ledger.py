@@ -350,7 +350,7 @@ class TestRevokeCredit:
 
     async def test_revoke_rolls_back_phase_advanced_by_completion(self):
         progress = _progress(value=0.0, status="completed")
-        enrollment = SimpleNamespace(current_phase_id="phase-2")
+        enrollment = SimpleNamespace(current_phase_id="phase-2", program_id="prog-1")
         credit = RequirementProgressCredit(
             progress_id=progress.id,
             source_type=ProgressCreditSource.OFFICER_APPLY,
@@ -361,7 +361,14 @@ class TestRevokeCredit:
             phase_after_id="phase-2",
         )
         db = RecordingSession(
-            [_one(progress), _one(credit), MagicMock(), _one(None), _one(enrollment)]
+            [
+                _one(progress),
+                _one(credit),
+                MagicMock(),
+                _one(None),
+                _one(enrollment),
+                _one("phase-1"),  # the before-phase still exists
+            ]
         )
         svc = _svc(db)
 
@@ -374,6 +381,45 @@ class TestRevokeCredit:
 
         assert enrollment.current_phase_id == "phase-1"
         db.commit.assert_awaited_once()
+
+    async def test_revoke_does_not_restore_a_deleted_phase(self):
+        # delete_program_phase keeps a requirement's progress, and its credits,
+        # when another phase still links the requirement; phase_before_id then
+        # names a phase that is gone. Restoring it would point current_phase_id
+        # at nothing, which its foreign key refuses at commit.
+        progress = _progress(value=0.0, status="completed")
+        enrollment = SimpleNamespace(current_phase_id="phase-2", program_id="prog-1")
+        credit = RequirementProgressCredit(
+            progress_id=progress.id,
+            source_type=ProgressCreditSource.OFFICER_APPLY,
+            source_id="submission-1",
+            units=0.0,
+            previous_status="in_progress",
+            phase_before_id="phase-deleted",
+            phase_after_id="phase-2",
+        )
+        db = RecordingSession(
+            [
+                _one(progress),
+                _one(credit),
+                MagicMock(),
+                _one(None),
+                _one(enrollment),
+                _one(None),  # the before-phase no longer exists
+            ]
+        )
+        svc = _svc(db)
+
+        _, err = await svc.revoke_requirement_credit(
+            progress.id,
+            uuid4(),
+            ProgressCreditSource.OFFICER_APPLY,
+            "submission-1",
+        )
+
+        assert err is None
+        assert enrollment.current_phase_id == "phase-2"
+        db.commit.assert_not_awaited()
 
     async def test_revoke_missing_credit_is_noop(self):
         progress = _progress(value=10.0)

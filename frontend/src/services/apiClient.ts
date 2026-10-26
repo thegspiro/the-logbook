@@ -15,6 +15,7 @@ import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import type { AxiosResponse } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
 import { clearQueuedReports, reportApiError } from './errorReporting';
+import { holdDuringPasswordChange } from './passwordChangeGate';
 import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import { isStepUpRequired, requestStepUp } from '../utils/stepUp';
 import {
@@ -70,6 +71,9 @@ function getCookie(name: string): string | null {
 // to eliminate redundant fetches when navigating between pages.
 api.interceptors.request.use(
   (config) => {
+    // First, so a request the server will refuse is not served from or
+    // written to the cache either.
+    holdDuringPasswordChange(config);
     const method = (config.method || '').toUpperCase();
 
     // --- GET response cache ---

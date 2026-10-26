@@ -35,6 +35,8 @@ SENSITIVE_QUERY_KEYS = {
     # Location kiosk display codes are the bearer credential for the public
     # guest check-in flow (/public/v1/display/{display_code}/...).
     "display_code",
+    # An event's own guest QR code token (/public/v1/event-guest/{guest_token}).
+    "guest_token",
 }
 
 # The frontend page routes are not always spelled like the API routes they call
@@ -50,6 +52,9 @@ TOKEN_PATH_PATTERNS = (
     # public API (/public/v1/display/{code}/...). Requires a segment after the
     # slash, so /locations/{id}/display (which ends there) is untouched.
     re.compile(r"(/display/)[^/?#]+", re.IGNORECASE),
+    # An event's guest QR code token: the same credential for the same flow,
+    # spelled /event-guest/{token} on both the page and the public API.
+    re.compile(r"(/event-guest/)[^/?#]+", re.IGNORECASE),
 )
 
 # ``error_logs.error_type`` is String(50); a longer value fails the insert and

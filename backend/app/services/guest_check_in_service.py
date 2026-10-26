@@ -19,10 +19,13 @@ refuses the typed sign-in at these events, so the prospect-opening branch of
 :meth:`GuestCheckInService.check_in_guest` is not reachable from the kiosk.
 
 Everything here runs for an anonymous caller, so the organization is resolved
-from the room's display code by the endpoint layer and passed in — never taken
+from the room's display code — or, for an event's own guest QR code, from the
+event the link token names — by the endpoint layer and passed in, never taken
 from the request body.
 """
 
+import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -31,6 +34,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.utils import generate_uuid
@@ -55,6 +59,9 @@ class GuestCheckInService:
     # Marks rows created by this path, distinguishing a self-recorded kiosk
     # sign-in from one a staff member typed in on a member's behalf.
     SOURCE_KIOSK_QR = "kiosk_qr"
+    # The same self-recorded sign-in, reached through the event's own guest QR
+    # code (Event.guest_check_in_token) rather than a room display.
+    SOURCE_EVENT_QR = "event_qr"
     # A prospect opened because a staff member signed a walk-in in at the door.
     SOURCE_STAFF_ENTRY = "staff_entry"
 
@@ -71,6 +78,11 @@ class GuestCheckInService:
     CONFIRM_TOKEN_TYPE = "guest_prospect_confirm"
     CONFIRM_TOKEN_TTL = timedelta(minutes=10)
 
+    # The shape secrets.token_urlsafe(32) issues: 43 characters of URL-safe
+    # base64. Checked before the lookup so a malformed path never reaches SQL.
+    LINK_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_-]{43}")
+    LINK_TOKEN_BYTES = 32
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -84,12 +96,14 @@ class GuestCheckInService:
         phone: Optional[str] = None,
         organization_name: Optional[str] = None,
         interest_reason: Optional[str] = None,
+        source: str = SOURCE_KIOSK_QR,
     ) -> Tuple[Optional[EventExternalAttendee], Optional[str], bool]:
         """Record a guest's attendance at *event*.
 
         Returns ``(attendee, error, prospect_created)``. The event is expected
         to have been resolved and gated by the caller (org scope, guest opt-in
         and check-in window); this method owns only what gets written.
+        ``source`` says which QR code the guest scanned.
         """
         if not event.allow_guest_check_in:
             return None, "Guest check-in is not enabled for this event.", False
@@ -125,7 +139,7 @@ class GuestCheckInService:
                 email=normalized_email,
                 phone=phone,
                 organization_name=organization_name,
-                source=self.SOURCE_KIOSK_QR,
+                source=source,
                 notes=interest_reason,
             )
             self.db.add(attendee)
@@ -156,6 +170,7 @@ class GuestCheckInService:
                 email=normalized_email,
                 phone=phone,
                 interest_reason=interest_reason,
+                source=source,
             )
             if prospect is not None:
                 attendee.prospect_id = prospect.id
@@ -525,15 +540,22 @@ class GuestCheckInService:
         cls,
         prospect_id: str,
         event_id: str,
-        location_id: str,
+        location_id: Optional[str],
         organization_id: str,
     ) -> str:
+        """Sign a confirm token for this prospect, event and room.
+
+        ``location_id`` is None for the event's own guest QR code, which has no
+        room; the claim is then empty, so a token issued at a room kiosk is not
+        accepted through the event link and one issued there is not accepted
+        at a kiosk.
+        """
         now = datetime.now(timezone.utc)
         payload = {
             "type": cls.CONFIRM_TOKEN_TYPE,
             "sub": str(prospect_id),
             "evt": str(event_id),
-            "loc": str(location_id),
+            "loc": str(location_id) if location_id else "",
             "org": str(organization_id),
             "iat": now,
             "exp": now + cls.CONFIRM_TOKEN_TTL,
@@ -545,7 +567,7 @@ class GuestCheckInService:
         cls,
         token: str,
         event_id: str,
-        location_id: str,
+        location_id: Optional[str],
         organization_id: str,
     ) -> Optional[str]:
         """Return the prospect id a confirm token names, or None.
@@ -566,7 +588,7 @@ class GuestCheckInService:
         if (
             payload.get("type") != cls.CONFIRM_TOKEN_TYPE
             or payload.get("evt") != str(event_id)
-            or payload.get("loc") != str(location_id)
+            or payload.get("loc") != (str(location_id) if location_id else "")
             or payload.get("org") != str(organization_id)
         ):
             return None
@@ -574,7 +596,11 @@ class GuestCheckInService:
         return prospect_id if isinstance(prospect_id, str) else None
 
     async def check_in_known_prospect(
-        self, event: Event, organization_id: str, prospect_id: str
+        self,
+        event: Event,
+        organization_id: str,
+        prospect_id: str,
+        source: str = SOURCE_KIOSK_QR,
     ) -> Tuple[Optional[EventExternalAttendee], Optional[str], bool]:
         """Sign in an applicant the kiosk recognised and they confirmed.
 
@@ -617,6 +643,7 @@ class GuestCheckInService:
             last_name=prospect.last_name,
             email=email or None,
             phone=prospect.phone,
+            source=source,
         )
         return attendee, error, already_checked_in
 
@@ -672,3 +699,84 @@ class GuestCheckInService:
         if prospect is None:
             return None, True
         return str(prospect.id), False
+
+    # ------------------------------------------------------------------
+    # The event's own guest QR code
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def new_link_token(cls) -> str:
+        return secrets.token_urlsafe(cls.LINK_TOKEN_BYTES)
+
+    async def issue_link_token(
+        self, event_id: str, organization_id: str, rotate: bool = False
+    ) -> Tuple[Optional[Event], bool]:
+        """Give the event a guest QR code, or replace the one it has.
+
+        Returns ``(event, changed)``; ``event`` is None when it is not in this
+        organization. Without ``rotate`` this is idempotent: an event that
+        already has a code keeps it, so a code printed yesterday still works
+        when a second manager opens the QR page today. The row is locked so two
+        managers opening the page at once cannot each issue a code and leave
+        the first holding one the second overwrote.
+
+        Issuing needs guest check-in switched on, so a code is never printed
+        for an event that would refuse every scan. Rotating does not: revoking
+        a code that leaked is always safe.
+
+        Raises ``ValueError`` when issuing for an event that does not take
+        guest sign-ins.
+        """
+        event = (
+            await self.db.execute(
+                select(Event)
+                .where(
+                    Event.id == str(event_id),
+                    Event.organization_id == str(organization_id),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if event is None:
+            return None, False
+
+        # Neither early exit commits: the lock is released with the caller's
+        # transaction, and a rollback here would discard the caller's own
+        # pending work along with it.
+        if not rotate and event.guest_check_in_token:
+            return event, False
+        if not rotate and not event.allow_guest_check_in:
+            raise ValueError(
+                "Turn on guest check-in for this event before showing its "
+                "guest QR code."
+            )
+
+        event.guest_check_in_token = self.new_link_token()
+        await self.db.commit()
+        return event, True
+
+    async def get_event_by_link_token(self, token: str) -> Optional[Event]:
+        """Resolve the event an anonymous guest QR code names, or None.
+
+        The token is the only credential in play, so it alone decides the
+        event and, through it, the organization. None covers a malformed or
+        unknown token, a cancelled or unpublished event, and one whose guest
+        check-in has been switched off since the code was printed — every
+        case reads the same so the caller can answer one 404.
+        """
+        if not self.LINK_TOKEN_PATTERN.fullmatch(token or ""):
+            return None
+        event = (
+            await self.db.execute(
+                select(Event)
+                .where(
+                    Event.guest_check_in_token == token,
+                    Event.is_cancelled.is_(False),
+                    Event.is_draft.is_(False),
+                )
+                .options(selectinload(Event.location_obj))
+            )
+        ).scalar_one_or_none()
+        if event is None or not event.allow_guest_check_in:
+            return None
+        return event

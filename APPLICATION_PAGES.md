@@ -18,6 +18,7 @@ Complete reference of all pages in the application, organized by module.
 | `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                        |
 | `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_      |
 | `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                                  |
+| `/event-guest/:token`                  | `GuestCheckInPage`     | Guest (non-member) sign-in through the event's own guest QR code, for an event with no room kiosk (token-based) _(2026-10-25)_            |
 | `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text                                      |
 | `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text                                        |
 | `/public/minutes`                      | Public Minutes         | Minutes the department posted publicly (list); off until the department turns on public posting under Minutes → Publishing _(2026-10-17)_ |
@@ -314,10 +315,10 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 Set per event on **Edit Event → Check-In Settings**. Both default to off.
 
-| Setting                                     | Field                             | Effect                                                                                            |
-| ------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Allow guest check-in                        | `allow_guest_check_in`            | Adds a second, guest QR code to the room display and opens `/display/:code/events/:eventId/guest` |
-| Create a prospective member from each guest | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email, linked to the event            |
+| Setting                                     | Field                             | Effect                                                                                                                                                                                                                                          |
+| ------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Allow guest check-in                        | `allow_guest_check_in`            | Adds a second, guest QR code to the room display and opens `/display/:code/events/:eventId/guest`; also gives the event its own guest QR code (`/event-guest/:token`), shown to `events.manage` holders on the event's QR code and detail pages |
+| Create a prospective member from each guest | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email, linked to the event                                                                                                                                                          |
 
 > **Turning on guest check-in exposes an unauthenticated write path.** It is for
 > outreach events — volunteer interest nights, open houses — and should stay off

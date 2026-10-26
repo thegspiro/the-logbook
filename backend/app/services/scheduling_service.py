@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
-from app.models.call_tracking import CallTrackingMode, OrgCallResponse
+from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.training import (
@@ -39,7 +39,6 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
-    ShiftEquipmentCheck,
     ShiftPattern,
     ShiftPosition,
     ShiftPreWorkSession,
@@ -88,6 +87,7 @@ from app.services.training_compliance import (
 )
 from app.services.training_waiver_service import fetch_org_waivers
 from app.utils.apparatus_ref import (
+    apparatus_in_use,
     apparatus_ref_exists,
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
@@ -4015,32 +4015,9 @@ class SchedulingService:
     async def basic_apparatus_in_use(
         self, apparatus_id: str, organization_id: str
     ) -> bool:
-        """True when a template, shift, pre-work session, equipment check or
-        call response names this vehicle.
-
-        None of those columns has a foreign key — each resolves against either
-        apparatus table through ``utils/apparatus_ref`` — so a hard delete
-        leaves every one of them dangling, and a template naming it then
-        fails to save with "Apparatus not found".
-        """
-        for model in (
-            ShiftTemplate,
-            Shift,
-            ShiftPreWorkSession,
-            ShiftEquipmentCheck,
-            OrgCallResponse,
-        ):
-            found = await self.db.scalar(
-                select(model.id)
-                .where(
-                    model.apparatus_id == apparatus_id,
-                    model.organization_id == organization_id,
-                )
-                .limit(1)
-            )
-            if found is not None:
-                return True
-        return False
+        """See :func:`app.utils.apparatus_ref.apparatus_in_use`, which the full
+        Apparatus delete asks as well."""
+        return await apparatus_in_use(self.db, apparatus_id, organization_id)
 
     async def remove_basic_apparatus(
         self, apparatus: BasicApparatus, organization_id: str
