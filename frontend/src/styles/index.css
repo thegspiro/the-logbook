@@ -1870,9 +1870,12 @@
   --nav-bg: #ffffff; /* white */
   --nav-border: #e2e8f0; /* slate-200 */
 
-  /* Inputs */
+  /* Inputs. The border is the whole visible edge of a field — its white fill
+     is the colour of the card it sits on — so it carries WCAG 1.4.11's 3:1
+     for a control's boundary. slate-300 measured 1.36–1.48:1; slate-500 is
+     4.34:1 at worst (on slate-100). `inputBorderContrast.test.ts` holds it. */
   --input-bg: #ffffff; /* white */
-  --input-border: #cbd5e1; /* slate-300 */
+  --input-border: #64748b; /* slate-500 */
 
   /* Scrollbar */
   --scrollbar-track: #f1f5f9; /* slate-100 */
@@ -1994,9 +1997,11 @@
   --nav-bg: #0f172a; /* slate-900 */
   --nav-border: rgba(255, 255, 255, 0.1); /* white/10 */
 
-  /* Inputs */
+  /* Inputs. 3:1 against both neighbours of the edge: the slate-800 fill and
+     the 5–8% white surfaces over the red-900 band of the gradient, where
+     slate-600 fell to 1.10:1. slate-400 is 3.25:1 at worst. */
   --input-bg: #1e293b; /* slate-800 */
-  --input-border: #475569; /* slate-600 */
+  --input-border: #94a3b8; /* slate-400 */
 
   /* Scrollbar */
   --scrollbar-track: #1e293b; /* slate-800 */

@@ -124,28 +124,40 @@ export function AdminHubCardTabs<K extends string>({
           // caller renders the panel under the second.
           const tabId = `${idPrefix}-tab-${tab.id}`;
           return (
-            <button
+            // The button holds the icon and label and nothing else; the
+            // description and count sit beside it in the card. Visible text
+            // inside a control that is not in its name fails WCAG 2.5.3
+            // (Label in Name) — "click Catalog" has to match — and hiding that
+            // text with aria-hidden does not help, since what is measured is
+            // what is seen. The button's ::after spans the card, so the whole
+            // card still takes the tap.
+            <div
               key={tab.id}
-              id={tabId}
-              ref={(element) => {
-                refs.current[tab.id] = element;
-              }}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={isActive || panelsAlwaysRendered ? `${idPrefix}-panel-${tab.id}` : undefined}
-              aria-labelledby={`${tabId}-label`}
-              aria-describedby={`${tabId}-description`}
-              tabIndex={isActive ? 0 : -1}
-              onClick={() => onTabChange(tab.id)}
-              onKeyDown={(event) => handleKeyDown(event, tab.id)}
-              className={`focus:ring-theme-focus-ring flex min-h-11 items-center gap-2 rounded-lg border p-2.5 text-left whitespace-nowrap transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden sm:flex-col sm:items-start sm:p-3 sm:whitespace-normal ${
+              role="presentation"
+              className={`focus-within:ring-theme-focus-ring relative flex shrink-0 flex-col rounded-lg border transition-colors focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-offset-(--ring-offset-bg) ${
                 isActive
                   ? 'border-red-800 bg-red-800 text-white shadow-md'
                   : 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover shadow-sm'
               }`}
             >
-              <span className="flex w-full items-center justify-between gap-2">
+              <button
+                id={tabId}
+                ref={(element) => {
+                  refs.current[tab.id] = element;
+                }}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={isActive || panelsAlwaysRendered ? `${idPrefix}-panel-${tab.id}` : undefined}
+                aria-labelledby={`${tabId}-label`}
+                aria-describedby={`${tabId}-description`}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => onTabChange(tab.id)}
+                onKeyDown={(event) => handleKeyDown(event, tab.id)}
+                className={`flex min-h-11 items-center gap-2 p-2.5 text-left whitespace-nowrap after:absolute after:inset-0 after:rounded-lg focus:outline-hidden sm:flex-col sm:items-start sm:p-3 sm:pb-2 sm:whitespace-normal ${
+                  count > 0 ? 'pr-11 sm:pr-3' : ''
+                }`}
+              >
                 <span
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                     isActive ? 'bg-white/15' : 'bg-theme-surface-secondary'
@@ -153,34 +165,33 @@ export function AdminHubCardTabs<K extends string>({
                 >
                   <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-theme-accent-red'}`} aria-hidden="true" />
                 </span>
-                {/* The label sits beside the icon on a phone and under it from
-                    sm up; it is rendered once and moved, so the accessible name
-                    never reads it twice. */}
-                <span id={`${tabId}-label`} className="min-w-0 flex-1 text-sm leading-tight font-semibold sm:hidden">
+                <span id={`${tabId}-label`} className="min-w-0 text-sm leading-tight font-semibold">
                   {tab.label}
                 </span>
-                {count > 0 && (
-                  <span
-                    className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-xs leading-none font-semibold ${
-                      isActive ? 'bg-white text-red-800' : 'bg-red-800 text-white'
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {count}
-                  </span>
-                )}
-              </span>
-              <span className="hidden text-sm leading-tight font-semibold sm:block" aria-hidden="true">
-                {tab.label}
-              </span>
+              </button>
+              {count > 0 && (
+                // Beside the label on a phone, level with the icon from sm up.
+                <span
+                  className={`pointer-events-none absolute top-1/2 right-2.5 inline-flex min-w-6 -translate-y-1/2 items-center justify-center rounded-full px-1.5 py-0.5 text-xs leading-none font-semibold sm:top-5 sm:right-3 sm:translate-y-0 ${
+                    isActive ? 'bg-white text-red-800' : 'bg-red-800 text-white'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {count}
+                </span>
+              )}
+              {/* Still the tab's description: aria-describedby reads hidden
+                  content, so the count is announced here rather than as a bare
+                  number. */}
               <span
                 id={`${tabId}-description`}
-                className={`hidden text-xs leading-snug sm:block ${isActive ? 'text-white' : 'text-theme-text-muted'}`}
+                aria-hidden="true"
+                className={`hidden px-3 pb-3 text-xs leading-snug sm:block ${isActive ? 'text-white' : 'text-theme-text-muted'}`}
               >
                 {tab.description}
                 {count > 0 && <span className="sr-only">. {count} need attention</span>}
               </span>
-            </button>
+            </div>
           );
         })}
       </ScrollCueRow>

@@ -231,7 +231,7 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`form-input px-3 focus:border-transparent ${error ? 'border-theme-accent-red' : 'border-theme-surface-border'}`}
+      className={`form-input px-3 focus:border-transparent ${error ? 'border-theme-accent-red' : 'border-theme-input-border'}`}
       aria-required={required}
       aria-invalid={!!error}
       aria-describedby={error ? `${id}-error` : undefined}
@@ -264,7 +264,7 @@ const SelectField: React.FC<{
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`form-input px-3 focus:border-transparent ${error ? 'border-theme-accent-red' : 'border-theme-surface-border'}`}
+      className={`form-input px-3 focus:border-transparent ${error ? 'border-theme-accent-red' : 'border-theme-input-border'}`}
       aria-required={required}
       aria-invalid={!!error}
       aria-describedby={error ? `${id}-error` : undefined}

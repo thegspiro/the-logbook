@@ -561,7 +561,17 @@ export const MembersAdminPage: React.FC = () => {
 
         {/* View by Member */}
         {viewMode === 'by-member' && (
-          <div className="bg-theme-surface overflow-x-auto shadow-sm backdrop-blur-xs sm:rounded-lg">
+          // A named, focusable scroll region: on a tablet the table is wider
+          // than its card, and with no member rows yet nothing inside it can
+          // take focus, so a keyboard could not scroll to the cut-off columns
+          // (axe scrollable-region-focusable).
+          <div
+            className="bg-theme-surface overflow-x-auto shadow-sm backdrop-blur-xs sm:rounded-lg"
+            role="region"
+            aria-label="Members and their positions"
+            tabIndex={0}
+            data-mobile-scroll-region
+          >
             <table
               className="rwd-table divide-theme-surface-border min-w-full divide-y"
               aria-label="Members and their positions"
