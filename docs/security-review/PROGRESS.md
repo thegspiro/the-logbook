@@ -16,15 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR #3734 (Feature 10, Documents & legal, pass 12) merged — confirmed
-via `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
-matching results, re-checked fresh at the start of this iteration. It
-touched only `DOC-10-documents-legal.md` and `PROGRESS.md`, so per this
-skill's "a docs-only PR is not a recordable event" rule there is nothing to
-record here beyond clearing the row; rotation row 10 was already ✅ on
-`main`. This watchdog picked up row 11 (Inventory) next — see the Log entry
-below for its pass 12 review, and the rotation table for this row once that
-pass's PR is opened.
+**PR [#3738](https://github.com/thegspiro/the-logbook/pull/3738)** (branch
+`claude/security-review-inventory-p12`) — Feature 11 (Inventory), pass 12.
+No security-review PR was open — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 matching results. PR
+#3734 (Feature 10, Documents & legal, pass 12) had already merged,
+docs-only, with no open rotation PR behind it. This is a watchdog pickup.
+**0 fixed, 0 new findings** in this feature's own code; **1 cross-cutting
+fix** (a forked migration chain and a stale `docs/DATABASE_SCHEMA.md`,
+neither in this feature's code). Real delta since pass 11's baseline
+(`5871258c`, PR #3580): the NFC Tag Register (5 new routes, permission-
+gated and org-scoped throughout), a variant-group rename carried onto every
+member item, and Medical Supplies lot recalls (Feature 23's own row,
+reviewed here because it lands in this feature's declared scope files) —
+all found sound. INV-22 re-confirmed FLAGGED/unaffected — already in
+`docs/KNOWN_LIMITATIONS.md`. See `INV-11-inventory.md`'s **Pass 12** section
+for the full review.
+
+Rotation row 11 → ✅ (pending this PR's merge); next is Feature 12
+(Facilities).
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3734, Feature 10, Documents & legal, pass 12, merged, docs-only), preserved for history</summary>
