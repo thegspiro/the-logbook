@@ -16,6 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3748](https://github.com/thegspiro/the-logbook/pull/3748)** (branch
+`claude/security-review-events-requests`) — Feature 16 (Events &
+requests), pass 11. **Watchdog pickup** — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was unreachable. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results, re-checked both before starting and again immediately
+before pushing. PR #3744 (Feature 15, Scheduling, pass 11) had already
+merged. Row 16 (Events & requests) was confirmed the next `⬜` by reading
+the rotation table directly on a freshly fetched `main`. **0 fixed, 0
+flagged.** Real delta since pass 10's baseline (`31f24bf7`, PR #3625): 9
+real commits of 202 non-merge commits in the window, real diff in 4 of 9
+primary declared files plus one frontend route file, every one read in
+full. **Scope gap found and closed**, the same shape pass 7 found and
+fixed for the attendance-petition files: a brand-new public,
+unauthenticated endpoint file, `api/public/event_guest.py` (4 routes),
+gives an event its own guest-link QR code for sign-in with no room
+kiosk, reusing the room-kiosk path's rate limits, per-event daily cap and
+channel-scoped confirm-token mechanism rather than reimplementing them —
+reviewed against all seven `CHECKLIST.md` dimensions and found clean
+(token-only auth resolves the org itself, manager routes are
+`events.manage` **and** org-scoped by id, the token is never serialized
+on the ordinary event detail, a repeat sign-in is proven idempotent
+against a real database). Added it, its service
+(`guest_check_in_service.py`), `qr_check_in_analytics.py` and two
+frontend files to this feature's declared scope. A repo-wide
+phone/address encryption-at-rest migration touching two of this
+feature's columns was also reviewed in full and found sound. EV-23 and
+EV-26 re-verified unregressed. See `EV-16-events-requests.md`'s
+**Pass 11** section for the full review.
+
+Rotation row 16 → ✅ (pending this PR's merge); next is Feature 17
+(Training core) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 11, PR #3744, merged), preserved for history</summary>
+
 **PR [#3744](https://github.com/thegspiro/the-logbook/pull/3744)** (branch
 `claude/security-review-scheduling`) — Feature 15 (Scheduling), pass 11. No
 security-review PR was open — confirmed via `search_pull_requests` (`is:pr
@@ -61,6 +99,8 @@ window, before either had pushed.
 Rotation row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events
 & requests) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3741, Feature 14, Equipment check & shifts, pass 12, merged), preserved for history</summary>

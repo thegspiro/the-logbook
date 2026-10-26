@@ -13,8 +13,8 @@ fixed),
 fixed),
 [#3625](https://github.com/thegspiro/the-logbook/pull/3625) (pass 10, 0
 fixed),
-pass 11 PR (0 fixed, 0 flagged — new public guest-link surface reviewed
-clean; see below)
+[#3748](https://github.com/thegspiro/the-logbook/pull/3748) (pass 11, 0
+fixed, 0 flagged — new public guest-link surface reviewed clean)
 
 **Backend:** `api/v1/endpoints/events.py` (61 routes, up from 58 — the new
 guest-check-in-link issue/get/rotate trio),
