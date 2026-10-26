@@ -6944,6 +6944,16 @@ duplicate route outright — is a product decision, not a drive-by patch.
 Exposure today is narrow: nothing in the frontend calls this route, so it
 reaches only a direct API client holding `training.manage`.
 
+**Update 2026-10-26 (security review TR-17, pass 11).** The prerequisite gap
+is closed: `enroll_member_in_program` now calls
+`TrainingProgramService.missing_prerequisites` and answers the shared
+`prerequisite_refusal` wording, so a prerequisite pipeline cannot be skipped
+through this route. The other two symptoms stand: the duplicate-active-
+enrollment race (no lock, no unique constraint) and an enrollment created with
+no `RequirementProgress` rows, phase, deadline or notice. The endpoint's own
+comment records the choice not to delegate to `enroll_member`; whether to
+delegate, lock in place or remove the route is still the owner's decision.
+
 **Still open as of security review TR-17 pass 8 (2026-10-16), and the gap
 widened in the interim.** `training_program_service.py`'s `enroll_member` (the
 fixed path) gained prerequisite-program enforcement on 2026-10-14

@@ -1,7 +1,7 @@
 # Security Review 17 — Training Core
 
 **Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9),
-2026-10-24 (pass 10) · **PR:** see `PROGRESS.md`'s **Open PR** row
+2026-10-24 (pass 10), 2026-10-26 (pass 11) · **PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training.py` (3,162 L),
 `api/v1/endpoints/training_programs.py` (2,142 L),
@@ -2616,6 +2616,83 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 11 (2026-10-26) — watchdog pickup: real delta (14 commits), 0 fixed, 0 new findings; TR7-1 re-confirmed open, one of its three symptoms now closed
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0. The rotation had wrapped and other sessions had cleared rows 10–16
+(#3748 for row 16 had just merged), so row 17 was the first `⬜`.
+
+**Scope.** Baseline `74dfaf582` (pass 9's merge). Pass 10 read the commits up
+to 2026-10-22 (`0eefe3c5`, `294d5a74`, `b10aead2`, `f5447376`, `8511182b`,
+`87ac8514`, `8a57d069`, `a948beed`, `b0c40332`, `653ace20`); this pass read
+the ones after it that touch the feature's files, as diffs: `e411a100d`,
+`94e3d2e00`, `e1f24b839`, `57624c9c7`, `f7e86b3e3`, `59fd45088`, `a1f8b83df`,
+`dd4ba98a4`, `0b18dc3f1`, `609e04d21`, `31d04bf49`, `746382501`, `ed2d07a41`.
+Routes enumerated mechanically: `training.py` 37, `training_programs.py` 47
+(+1), `training_sessions.py` 11; every one carries `require_permission` or
+`get_current_user`. `check_route_permissions.py --strict`: 0 errors.
+
+**Verified good (mechanisms).**
+
+- **`POST /training/programs/enrollments/{id}/complete`** (new,
+  `training.manage`). `complete_enrollment_manually` fetches the enrollment
+  joined to its program and filters `TrainingProgram.organization_id`, so an id
+  from another organization is a 404, not a 403. It takes
+  `FOR UPDATE OF ProgramEnrollment`, refuses any status outside
+  `MANUALLY_COMPLETABLE_STATUSES` and then completes through `_claim_completion`,
+  which re-checks the status in its own `WHERE`; two officers, or an officer and
+  the rollup, cannot both complete it, and a repeat answers 409 "already
+  complete" without a second notice (pitfall #36). The reason is required,
+  trimmed and capped at 500 characters (`ProgramEnrollmentComplete`) and is
+  audited at warning severity with the unmet-required count.
+- **The officer's reason does not reach the member.** `completion_reason` is
+  blanked by `_member_enrollment` on `GET /enrollments/me` and on
+  `GET /enrollments/{id}` for a caller without `can_view_officer_training_data`;
+  the other readers (`/enrollments/user/{id}`, the program Enrollments tab) are
+  `training.view_all` / `training.manage`. No other endpoint returns
+  `ProgramEnrollmentResponse`.
+- **Deactivation and recalculation stay in the organization.**
+  `recalculate_enrollments_for_requirement` joins through
+  `TrainingProgram.organization_id`; `_withdraw_in_progress_enrollments` takes a
+  `program_id` from an org-scoped read and only touches live statuses, leaving
+  completed, failed and expired enrollments as history.
+- **Auto-enrollment skipped notice** (`notify_officers_enrollment_skipped`):
+  email only (pitfall #18), recipients from `training_officers` for the
+  organization; member and program names are `html.escape`d in the body and the
+  subject is whitespace-collapsed so a name cannot end the header; never raises
+  into the conversion that triggered it.
+- **`f7e86b3e3`** restores `phase_before_id` only while that phase still
+  belongs to the enrollment's program, so reversing a credit cannot point
+  `current_phase_id` at a deleted phase. Its commit message states why an
+  existing test changed.
+- **Frontend delta** (`modules/training`, 2 files): no
+  `dangerouslySetInnerHTML`, storage, raw `fetch` or blocking dialog added.
+
+**Standing: TR7-1 (MEDIUM, FLAGGED), re-verified at current lines.**
+`POST /training/enrollments` (`enroll_member_in_program`) still has no lock and
+no unique constraint on `program_enrollments` for the duplicate-active-
+enrollment check, and still creates an enrollment with no progress rows, phase,
+deadline or notice. **One symptom is now closed:** it applies the
+prerequisite gate through `missing_prerequisites`, with the shared refusal.
+`docs/KNOWN_LIMITATIONS.md`'s entry is updated to say so. The decision is
+unchanged and the owner's: delegate to `enroll_member`, lock in place, or
+remove the route (nothing in the frontend calls it).
+
+### Completion gate (pass 11)
+
+| Check                                                                        | Result                                                                                           |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                | ✅ 0 violations                                                                                  |
+| `black --check app/ tests/ alembic/`                                         | ✅ clean                                                                                         |
+| `isort --check-only app/ tests/ alembic/`                                    | ✅ clean                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                            | ✅ single head `1ad0b594f3fb`                                                                    |
+| `python3 scripts/check_route_permissions.py --strict`                        | ✅ 0 errors, 0 warnings                                                                          |
+| `pytest -k "training or enrollment or program or requirement or competency"` | ✅ 2327 passed, 1 skipped (`py_vapid`); the sandbox database needed `alembic upgrade head` first |
+| `cd frontend && npm run typecheck`                                           | ✅ exit 0                                                                                        |
+| `cd frontend && npm run lint`                                                | GATE_LINT                                                                                        |
 
 ---
 

@@ -22053,7 +22053,7 @@ PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
@@ -22078,6 +22078,17 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-26 — Feature 17 (Training core, pass 11) — watchdog pickup, 0 fixed, 0 new findings; TR7-1 re-confirmed (one symptom closed)
+
+The rotation had wrapped and rows 10–16 were cleared by other sessions, so row
+17 was first pending. Delta since pass 10: 14 commits, read as diffs. The new
+route `POST /training/programs/enrollments/{id}/complete` is org-scoped through
+its program, row-locked, and claim-guarded against a double completion; the
+officer's reason is blanked on member-facing reads; deactivation and
+recalculation stay inside the organization. TR7-1 (the legacy
+`POST /training/enrollments`) is still open, but it now applies the
+prerequisite gate. See `TR-17-training-core.md`'s **Pass 11**.
 
 ### 2026-10-26 — Feature 16 (Events & requests, pass 11) — watchdog pickup, real delta (9 real commits of 202 in scope), new public guest-link surface found outside declared scope and reviewed clean, 0 fixed, 0 flagged
 
