@@ -30,7 +30,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, CodedValueError
-from app.core.utils import ensure_found, safe_error_detail
+from app.core.utils import ensure_found, list_within_detail_limit, safe_error_detail
 from app.models.call_tracking import (
     MAX_CALL_TYPES,
     UNCLASSIFIED_CALL_TYPE,
@@ -4261,9 +4261,11 @@ async def _reject_deleting_a_used_call_type(
     blocked = sorted(removed & locked)
     if blocked:
         raise ValueError(
-            "Cannot delete a call type that history still refers to: "
-            + ", ".join(blocked)
-            + ". Turn it off instead to stop offering it."
+            list_within_detail_limit(
+                "Cannot delete a call type that history still refers to: ",
+                blocked,
+                ". Turn it off instead to stop offering it.",
+            )
         )
 
     # Requirements are read after the history check and without a lock of
@@ -4274,9 +4276,11 @@ async def _reject_deleting_a_used_call_type(
     required = await service.slugs_named_by_requirements(organization_id, removed)
     if required:
         raise ValueError(
-            "Cannot delete a call type a training requirement counts: "
-            + ", ".join(sorted(required))
-            + ". Turn it off instead, or remove it from the requirement first."
+            list_within_detail_limit(
+                "Cannot delete a call type a training requirement counts: ",
+                sorted(required),
+                ". Turn it off instead, or remove it from the requirement first.",
+            )
         )
 
 

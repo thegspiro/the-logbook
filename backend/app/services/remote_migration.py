@@ -6,9 +6,9 @@ bucket below means whatever container the department's platform has. The
 manifest's directory and kind keep their S3-era names so a manifest written
 before the rename still rolls back and finalizes.
 
-``scripts/migrate_uploads_to_s3.py`` drives the move; ``--rewrap`` in
+``scripts/migrate_uploads_to_remote.py`` drives the move; ``--rewrap`` in
 ``scripts/encrypt_uploads.py`` drives :func:`rewrap_bucket_objects`. A
-department's new uploads go to its bucket once "Test and switch to S3" passes;
+department's new uploads go to its bucket once its "Test and switch" passes;
 files written before that stay on the uploads volume, and are served from it,
 until this moves them.
 
@@ -221,7 +221,7 @@ def _load_manifest(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as handle:
         data: dict[str, Any] = json.load(handle)
     if data.get("version") != MANIFEST_VERSION or data.get("kind") != "s3-migration":
-        raise ValueError(f"{path} is not an S3 migration manifest")
+        raise ValueError(f"{path} is not a storage migration manifest")
     return data
 
 
@@ -252,7 +252,7 @@ async def apply(
             RemoteStorageError,
             file_encryption.FileDecryptionError,
         ) as exc:
-            logger.error(f"S3 migration could not copy {copy.old_path}: {exc}")
+            logger.error(f"Storage migration could not copy {copy.old_path}: {exc}")
             report.failed.append(copy.old_path)
             continue
         copied.append(copy)
