@@ -5,6 +5,29 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 25 – 26, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).
+
+- **Guest QR code for any event**, even without a kiosk room. Managers can reset
+  it to stop a printed copy working. Staff can also add and sign in walk-ins.
+- **Public forms can be embedded** on your website, after you list the site
+  under Organization Settings and switch it on per form.
+- **Applicant status page** shows the next meeting; pipeline emails can use a
+  custom template.
+- **Events, Members and the Department Store** use Training's area cards.
+- **Grants** can be edited and retired. **Notification rules** can be edited and
+  deleted. **Privacy choices** are Yes / No.
+- **Medical screenings** with no expiration now fall due by their requirement's
+  frequency.
+- **Phone numbers and addresses are encrypted at rest.** Operators: see
+  `docs/UPGRADING.md`; backups taken earlier still hold the plain values.
+- **Google Drive** storage deletes by trashing; the file-move command is now
+  `migrate_uploads_to_remote.py`.
+- Screenshots to create or replace are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 24 – 25, 2026
 
 The engineering audit is

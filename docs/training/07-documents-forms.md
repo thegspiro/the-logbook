@@ -608,6 +608,14 @@ nothing.
 With no rules, the tab says automated notifications already go out with their
 default settings.
 
+### Editing and deleting a rule _(2026-10-25)_
+
+Each rule has **Edit** (name, trigger, description) and **Delete**. Deleting
+or changing the trigger can switch a notification back **on** or **off** for
+the whole department: a trigger with no rules sends as normal, and one with
+rules sends while any of them is on. The confirmation says which will happen.
+Screenshot to create: the delete warning.
+
 ### Creating a Rule
 
 1. Open **Notifications → Notification Rules**.

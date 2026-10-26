@@ -86,6 +86,13 @@ opens the application list filtered to the same applications the card counted.
 
 ## Grant Opportunities Library
 
+> **Edit or retire an opportunity** _(2026-10-25)_. Each opportunity can be
+> edited (a mistyped deadline, a changed program) and **retired**. Retiring
+> keeps the record, so applications already started keep their program; it
+> just leaves the list. **Show retired** lists them (marked, with no Start
+> Application) and lets you reinstate one. Screenshot to create: the edit form
+> and the Show retired list.
+
 **Opportunities** — "Browse grant programs and start an application" — has two
 parts:
 

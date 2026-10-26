@@ -1,5 +1,19 @@
 # Script currency
 
+## Flagged by the 2026-10-25 → 10-26 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                             | Beat                        | Was                                                      | Now                                                                                 |
+| ---------------------------------- | --------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **04** (chief), **07** (secretary) | Open house / outside events | Guest QR only on a kiosk display                         | Event QR page shows a guest code; Reset revokes printed copies; staff can Add guest |
+| **07** (secretary)                 | Public forms                | Link only                                                | Share dialog gives an embed code once the department lists its website              |
+| **06** (member)                    | Privacy choices             | Checkboxes                                               | Yes / No for photo use and roster listing                                           |
+| **03** (IT)                        | Security and storage        | Plain phone and address in backups; S3-only move command | Encrypted at rest; `migrate_uploads_to_remote.py`; Google Drive trash               |
+| **04**, **07**                     | Administration hubs         | Flat row of section cards                                | Area cards above a page strip (Events, Members, Store)                              |
+| **Any recruitment beat**           | Applicant status page       | No meeting shown                                         | Next meeting with Add to calendar and directions                                    |
+
 ## Flagged by the 2026-10-24 → 10-25 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).

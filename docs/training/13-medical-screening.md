@@ -138,8 +138,13 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
   screening regularly. The **Expiration Date** on each record decides when it
   runs out. When you link a record to a repeating requirement and enter the
   completed date, the form fills in the expiration date from the frequency;
-  change it if the provider gave a different date. A record saved with no
-  expiration date counts as met for good, so do not clear it.
+  change it if the provider gave a different date. A record saved with no expiration date of its own now falls
+  due the requirement's **Frequency** after its completed date (shown **by
+  frequency**) _(2026-10-25)_. A requirement with no frequency still counts as
+  met for good. Records saved without an expiration before this change can
+  change standing the first time they are read after the upgrade. A record a
+  newer one replaced no longer appears on the expiring list, and a waiver that
+  lapses within 30 days is listed and marked **Waiver**.
 - **One-time:** a single qualifying record with no expiration date satisfies
   it for good.
 
