@@ -3114,3 +3114,156 @@ data-exposure gap. Every standing TRX finding re-verified unchanged.
 | `python3 scripts/check_route_permissions.py --strict` (repo root)                                                         | ✅ 273 routes, 0 errors, 0 warnings                                    |
 | `cd frontend && npm run typecheck`                                                                                        | ✅ 0 errors                                                            |
 | `cd frontend && npm run lint`                                                                                             | ✅ 0 errors, 0 warnings                                                |
+
+## Pass 11 (2026-10-26) — watchdog pickup, real delta, 0 new findings
+
+**Prefix:** `TRX11` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results); PR #3754
+(Feature 17, Training core, pass 11) had just merged, after a watchdog tick
+diagnosed and ported a fix for its own CI failure (a pre-existing
+`desktop-accessibility.spec.ts` test-timing race, unrelated to that PR's
+docs-only diff). The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via `ListAgents`.
+Rotation row 18 (Training extended) was confirmed the next pending feature
+by reading the rotation table directly on a freshly fetched `main`.
+
+### Scope check — real delta since pass 10
+
+Baseline: `e8b0791f` (pass 10's own merge, on `main`). 312 non-merge/merge
+commits landed in the window; across the full fourteen-file declared scope
+(six endpoint files, six service files, `training_program_service.py`, and
+the two schema files) only three files changed: `schemas/training.py`
+(+42/-14), `schemas/training_enhancements.py` (+28/-?), and
+`training_program_service.py` (+30/-?). All four real (non-merge) commits
+touching them read in full via `git show`:
+
+- **`59fd4508`** — adds `RefusesNull` to five update schemas in
+  `schemas/training.py` (`TrainingCategoryUpdate`, `TrainingCourseUpdate`,
+  `TrainingRecordUpdate`, `TrainingRequirementUpdate`,
+  `ExternalTrainingProviderUpdate`), naming per-schema the fields with no
+  "cleared" state so an explicit `null` now gets a 422 instead of silently
+  mis-applying. Correctness hardening (CLAUDE.md Pitfall #1's `apply_updates`
+  discipline, extended to the schema layer) — no security surface.
+- **`dd4ba98a`** — the repo-wide numeric-bounds sweep adds `le=INT32_MAX`
+  (and `ge=INT32_MIN` or `ge=0` where applicable) to two previously-unbounded
+  fields: `HistoricalImportParsedRow.row_number` and
+  `ParticipatingOrganization.participant_count`
+  (`schemas/training_enhancements.py`). Narrows what was previously accepted
+  into a clean 422; not a vulnerability.
+- **`f7e86b3e`** — `training_program_service.py` gains
+  `_phase_still_in_program`, a guard `revoke_requirement_credit` now calls
+  before restoring a sign-off credit's `phase_before_id` onto
+  `current_phase_id`. `phase_before_id` carries no foreign key and
+  `delete_program_phase` can leave it naming a phase that no longer exists
+  (the requirement's progress survives the phase deletion when another phase
+  still links it); restoring a dangling id previously hit
+  `current_phase_id`'s real foreign key and failed the whole reversal. The
+  new check queries `ProgramPhase` scoped to the enrollment's own
+  `program_id` — a value resolved earlier in the same already-org-scoped
+  call chain (not client-supplied), so no new tenant-isolation surface. Pure
+  bug fix; its own test
+  (`test_revoke_does_not_restore_a_deleted_phase`) was read and proves the
+  rollback path rather than passing on a default mock.
+- (`2a441fe2`, `ee99cabb` are merge commits carrying the above into `main`;
+  no independent diff.)
+
+Also present in the window but **not this feature's own files**, traced to
+confirm: the repo-wide "RefusesNull" and "numeric-bounds" sweeps touch dozens
+of other schemas across the rotation's other features — out of scope here by
+file path. No migration landed inside this feature's twelve backend files
+this window (`git log e8b0791f..main -- backend/alembic/versions/` filtered
+to commits also touching this feature's model/schema files: none).
+
+### Frontend surface
+
+Diffed all ten established frontend files plus `apiCache.ts` against
+`e8b0791f`: three changed.
+
+- **`ReviewSubmissionsPage.tsx`** — adds `touch:min-h-11` to four controls
+  (a checkbox label and three action buttons) and `form-checkbox` to the
+  pipeline-apply checkbox — the standard 44px touch-target/shared-utility
+  pattern (CLAUDE.md's "Form Controls" and "Shared component/mobile
+  utilities" conventions), not a behavior change.
+- **`SubmitTrainingPage.tsx`** — moves the two-column summary/form layout's
+  breakpoint from `lg` to `xl` (1024px → 1280px) with a comment explaining
+  why: beside the 16rem side nav, a 1024px screen left only 369px for the
+  form's two-column rows. Six class-name edits (`lg:` → `xl:` on the grid,
+  the sticky aside, the desktop submit button, the phone action bar, and the
+  page's bottom padding), all moving together so the summary and the phone
+  action bar switch at the same width. Pure responsive-layout fix, no new
+  data flow.
+- **`apiCache.ts`** — two new `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS`
+  entries, `/nfc-activity` and `/guest-check-in-link`. Neither is this
+  feature's: confirmed by substring against this feature's own service
+  exports (`trainingSubmissionService`, `recertificationService`,
+  `competencyService`, `instructorService`, `effectivenessService`,
+  `multiAgencyService`, `courseSyllabusService`, `courseCohortService`,
+  `externalTrainingService`) — `/nfc-activity` is Feature 13 (Apparatus &
+  NFC)'s own card-tap log, `/guest-check-in-link` is Feature 16 (Events &
+  requests)'s guest QR token. This feature's own eleven established
+  prefix/substring entries are all still present, unmoved. No finding.
+
+Grep-swept the three changed files (plus a re-sweep of the seven unchanged
+ones, to catch a pattern a prior pass's narrower sweep might have missed) for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, a `date-fns` import, and direct `fetch(` — zero hits.
+
+### Route re-enumeration
+
+AST-walked every `@router.get/post/put/patch/delete` across all six endpoint
+files directly: **100 routes** (22 + 5 + 30 + 20 + 17 + 6) — unchanged from
+pass 10, matching the zero-diff on these six files this window. Every one
+carries a `Depends(...)` callable (`get_current_user`, `require_permission`,
+or `require_all_permissions`) — verified by walking each decorated
+function's parameter defaults for a `Depends(` call, not by counting
+decorators alone. `python3 scripts/check_route_permissions.py --strict`
+(repo root): **279 total application routes, 0 errors, 0 warnings** — up
+from pass 10's 273 from other features in the rotation merging in the
+interim, confirming no new top-level page from this feature (Pitfall #30a
+n/a).
+
+### Standing findings re-verified at their current citation
+
+TRX-1 through TRX-10, TRX3-1, TRX4-1/TRX4-2, and TRX7-1 re-read directly at
+their current file/line: `training_program_service.py`'s batch `User`
+lookup in the prerequisite-gate error path still filters `organization_id`
+(TRX-1, unchanged — the only diff to this file this pass is the unrelated
+`_phase_still_in_program` addition above); `update_provider`,
+`CourseCohortService.update_cohort`, `CourseSyllabusService.update_class`
+still route through `apply_updates` (TRX-2/5/5b); `get_effectiveness_evaluations`
+still confines non-officers via `can_view_officer_training_data` (TRX-3);
+`_get_cohort_class` still takes `cohort_id` before any write (TRX-4);
+`training_waivers.py` still calls `assert_all_in_org` (TRX-6);
+`training_submission_service.py` still calls `assert_in_org` on
+`category_id` (TRX-7); the `_validate_references` methods on
+`RecertificationService`/`MultiAgencyService` are unchanged (TRX-8/9);
+`XAPIService`'s `_provider_validated` flag and batch-once validation are
+unchanged (TRX-10); the SSRF-pinned transport (TRX3-1) and the
+instructor-qualification permission gate (TRX4-2) are both unchanged. No
+OPEN or FLAGGED item exists as of pass 10 (confirmed by grep before starting
+this pass); none is reopened by this pass's three-file diff.
+
+### Findings
+
+**0 new findings.** A small, real delta since pass 10 — a schema-layer null
+hardening sweep, a numeric-bounds sweep, and a bug fix that closes a
+foreign-key failure in credit reversal using an already-org-scoped
+`program_id` — none introduce a new tenancy, authorization, injection, or
+data-exposure gap. Two frontend touch-target/responsive-layout fixes and two
+unrelated `apiCache.ts` entries, all confirmed out of this feature's own
+security surface. Every standing TRX finding re-verified unchanged.
+
+## Completion gate (pass 11)
+
+| Check                                                                                                                     | Result                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                             | ✅ 0 violations                                                        |
+| `black --check app/ tests/ alembic/`                                                                                      | ✅ 2682 files unchanged                                                |
+| `isort --check-only app/ tests/ alembic/`                                                                                 | ✅ clean                                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                         | ✅ 658 revisions, single head `1ad0b594f3fb`                           |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or crew"` | ✅ 2451 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                         | ✅ 279 routes, 0 errors, 0 warnings                                    |
+| `cd frontend && npm run typecheck`                                                                                        | ✅ 0 errors                                                            |
+| `cd frontend && npm run lint`                                                                                             | ✅ 0 errors, 0 warnings                                                |

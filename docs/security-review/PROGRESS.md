@@ -16,40 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3748](https://github.com/thegspiro/the-logbook/pull/3748)** (branch
-`claude/security-review-events-requests`) — Feature 16 (Events &
-requests), pass 11. **Watchdog pickup** — the dedicated
-`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
-was unreachable. No security-review PR was open — confirmed via
-`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
-matching results, re-checked both before starting and again immediately
-before pushing. PR #3744 (Feature 15, Scheduling, pass 11) had already
-merged. Row 16 (Events & requests) was confirmed the next `⬜` by reading
-the rotation table directly on a freshly fetched `main`. **0 fixed, 0
-flagged.** Real delta since pass 10's baseline (`31f24bf7`, PR #3625): 9
-real commits of 202 non-merge commits in the window, real diff in 4 of 9
-primary declared files plus one frontend route file, every one read in
-full. **Scope gap found and closed**, the same shape pass 7 found and
-fixed for the attendance-petition files: a brand-new public,
-unauthenticated endpoint file, `api/public/event_guest.py` (4 routes),
-gives an event its own guest-link QR code for sign-in with no room
-kiosk, reusing the room-kiosk path's rate limits, per-event daily cap and
-channel-scoped confirm-token mechanism rather than reimplementing them —
-reviewed against all seven `CHECKLIST.md` dimensions and found clean
-(token-only auth resolves the org itself, manager routes are
-`events.manage` **and** org-scoped by id, the token is never serialized
-on the ordinary event detail, a repeat sign-in is proven idempotent
-against a real database). Added it, its service
-(`guest_check_in_service.py`), `qr_check_in_analytics.py` and two
-frontend files to this feature's declared scope. A repo-wide
-phone/address encryption-at-rest migration touching two of this
-feature's columns was also reviewed in full and found sound. EV-23 and
-EV-26 re-verified unregressed. See `EV-16-events-requests.md`'s
-**Pass 11** section for the full review.
+**None.** PR #3754 (Feature 17, Training core, pass 11) merged — confirmed
+via `search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results. That PR was itself a watchdog pickup (dedicated
+`/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
+unreachable); a second watchdog tick picked up its CI after merge-time: the
+`Frontend E2E (Mobile Safari)` check failed deterministically (3/3 attempts)
+on a pre-existing `/scheduling/admin/planning` color-contrast test-timing
+race (axe sampling `.btn-secondary` mid 150ms fade-in) — confirmed red on
+the PR's own base commit too, so unrelated to this docs-only PR. The fix
+already existed, unmerged, on PR #3757 (commit `77597088`); ported the same
+one-line `page.emulateMedia({ reducedMotion: 'reduce' })` change into #3754
+directly rather than waiting on #3757, then merged once green.
 
-Rotation row 16 → ✅ (pending this PR's merge); next is Feature 17
-(Training core) — re-check `search_pull_requests` fresh rather than
-trusting this note.
+Rotation row 17 → ✅ (merged); next is Feature 18 (Training extended) — re-check
+`search_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 11, PR #3744, merged), preserved for history</summary>
@@ -22053,8 +22034,8 @@ PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
@@ -39875,3 +39856,60 @@ scoped frontend suite (`npx vitest run src/modules/prospective-members`)
 Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
 screening, PHI) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+### 2026-10-26 — Feature 17 (Training core, pass 11) — watchdog pickup, 0 fixed, 0 flagged; CI red fix ported mid-rotation
+
+Watchdog pickup for Feature 17 (Training core), pass 11 (PR #3754,
+docs-only, no application code). After merge-time, a second watchdog tick
+found `Frontend E2E (Mobile Safari)` failing deterministically (3/3
+attempts, same `/scheduling/admin/planning` `.btn-secondary` color-contrast
+finding) on that PR's own head, and confirmed the identical failure on the
+PR's own base commit too — a pre-existing test-timing race (axe sampling
+the Refresh button mid 150ms fade-in), not caused by the docs-only diff.
+The fix already existed, unmerged, on PR #3757 (commit `77597088`): ported
+the same one-line `page.emulateMedia({ reducedMotion: 'reduce' })` change
+into #3754 directly rather than waiting on #3757 to merge first, then
+merged once green. See `TR-17-training-core.md`'s **Pass 11** section for
+the review itself.
+
+Row 17 → ✅ (merged); next is Feature 18 (Training extended).
+
+### 2026-10-26 — Feature 18 (Training extended, pass 11) — watchdog pickup, real delta, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable). No open security-review PR
+— confirmed via `search_pull_requests`, 0 results, after Feature 17 pass
+11's own PR (#3754) merged. Row 18 (Training extended) confirmed the next
+pending feature by reading the rotation table on a freshly fetched `main`.
+
+Real delta since pass 10's own merge (`e8b0791f`): across the full
+fourteen-file declared backend scope, three files changed
+(`schemas/training.py`, `schemas/training_enhancements.py`,
+`training_program_service.py`), all four real commits read in full — a
+schema-layer `RefusesNull` hardening sweep, a numeric-bounds sweep, and a
+bug fix (`_phase_still_in_program`) closing a foreign-key failure in credit
+reversal, scoped to the enrollment's own already-validated `program_id`.
+On the frontend, three of the eleven established files changed:
+`ReviewSubmissionsPage.tsx` and `SubmitTrainingPage.tsx` (touch-target and
+responsive-breakpoint fixes only) and two new unrelated `apiCache.ts`
+entries (`/nfc-activity`, `/guest-check-in-link` — Features 13 and 16's
+own, confirmed by substring, not this feature's). Routes re-enumerated by
+AST: 100, unchanged from pass 10, all carrying a `Depends(...)`. All
+standing TRX findings (TRX-1 through TRX-10, TRX3-1, TRX4-1/2, TRX7-1)
+re-read at their current citation and confirmed unchanged; no OPEN or
+FLAGGED item exists.
+
+Full write-up: `docs/security-review/TRX-18-training-extended.md`'s
+**Pass 11** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 658
+revisions, single head `1ad0b594f3fb`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
+"training or cohort or syllabus or waiver or external or enhancement or
+submission or xapi or crew"`) — 2,451 passed, 1 skipped (environment-only,
+`pywebpush`); frontend `npm run typecheck`/`npm run lint` — 0 errors, 0
+warnings.
+
+Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing)
+— re-check `search_pull_requests` fresh rather than trusting this note.
