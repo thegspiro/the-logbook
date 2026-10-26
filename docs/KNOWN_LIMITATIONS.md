@@ -677,6 +677,25 @@ owner made, recorded so they are not mistaken for gaps:
   which is untouched; an application with no `inactive_since` is never
   auto-purged.
 
+## Prospective Members — The Inactivity "Notify" Checkboxes Have No Reader (2026-10-26)
+
+Pipeline Settings → Inactivity offers **Notify coordinator** (on by default)
+and **Notify applicant**. Both are saved into the pipeline's inactivity
+configuration and **nothing on the backend reads either**. The daily
+inactivity sweep (`process_inactivity_warnings` in
+`membership_pipeline_service.py`) marks overdue applications inactive and
+writes an `inactivity_warning_sent` entry to the activity log, and sends no
+email to anyone, whatever the boxes say. Its docstring claimed it emailed
+coordinators until 2026-10-26.
+
+This is the shape Pitfall #19 forbids: a switch whose only effect is being
+stored. Found while writing the wiki page `Module-Prospective-Members`, which
+says plainly that the boxes do nothing yet. **Owner decision needed:** wire a
+sender (who receives it, how often, and whether an applicant email is wanted at
+all), or remove the two checkboxes from the settings page. Wiring the applicant
+half sends email to people outside the department, so it was not done as a
+side effect of a documentation change.
+
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 
 An address saved on **Settings → Email** is applied to `settings.FRONTEND_URL`

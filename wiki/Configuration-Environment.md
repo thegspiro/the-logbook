@@ -43,7 +43,7 @@ name something that works worse than intended. _(2026-09-25)_ A
 production it is now a blocking item that stops startup — see
 [Application Settings](#application-settings).
 
-Full procedure: [`docs/UPGRADING.md`](../docs/UPGRADING.md).
+Full procedure: [`docs/UPGRADING.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md).
 
 ---
 
@@ -106,7 +106,7 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 > from a terminal) and stop before installing without one, unless an existing
 > `.env` already has a public `FRONTEND_URL`. All three refuse a `localhost`
 > address, and none rewrites a public value already in an existing `.env`. See
-> [UPGRADING.md](../docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
+> [UPGRADING.md](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md#frontend_url-must-be-a-public-address-2026-09-25).
 
 > **`COMPOSE_FILE`** _(2026-07)_: production installs (via `install.sh`) pin
 > `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so that
@@ -153,8 +153,8 @@ The app needs the delegated Microsoft Graph permission `Calendars.ReadWrite`
 and the callback URL registered as a **Web** redirect URI; `AZURE_AD_ENABLED`
 is not required. The department iCalendar (ICS) feed does not depend on this
 setting. See the Integrations guide's
-[Google Calendar](../docs/training/16-integrations.md#google-calendar) and
-[Microsoft Outlook](../docs/training/16-integrations.md#microsoft-outlook)
+[Google Calendar](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#google-calendar) and
+[Microsoft Outlook](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#microsoft-outlook)
 sections.
 
 ---
@@ -314,7 +314,7 @@ organization's settings (`enabled_modules`), configured inside the app
 | `MAX_LOGIN_ATTEMPTS`                   | Attempts before lockout                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `5`                   |
 | `ACCOUNT_LOCKOUT_DURATION_MINUTES`     | Minutes an account stays locked after `MAX_LOGIN_ATTEMPTS` failed sign-ins in a row                                                                                                                                                                                                                                                                                                                                                                                                                        | `15`                  |
 | `PASSWORD_MIN_LENGTH`                  | Minimum password length                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `12`                  |
-| `ENCRYPTION_KEYS_LEGACY`               | Comma-separated **previous** `ENCRYPTION_KEY` values, kept readable during a key rotation. See [docs/KEY_ROTATION.md](../docs/KEY_ROTATION.md) _(2026-07-31)_                                                                                                                                                                                                                                                                                                                                              | `""`                  |
+| `ENCRYPTION_KEYS_LEGACY`               | Comma-separated **previous** `ENCRYPTION_KEY` values, kept readable during a key rotation. See [docs/KEY_ROTATION.md](https://github.com/thegspiro/the-logbook/blob/main/docs/KEY_ROTATION.md) _(2026-07-31)_                                                                                                                                                                                                                                                                                              | `""`                  |
 | `SECURITY_TXT_CONTACT`                 | Security contact published at `/.well-known/security.txt` — an email address (a `mailto:` prefix is added) or a reporting URL. Unset falls back to the project's GitHub advisory intake _(2026-07-31)_                                                                                                                                                                                                                                                                                                     | `""`                  |
 | `SECURITY_TXT_POLICY_URL`              | Policy URL advertised in `security.txt` _(2026-07-31)_                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Project `SECURITY.md` |
 | `HIPAA_AUDIT_RETENTION_DAYS`           | Audit-log retention; **enforced** by the weekly archival job                                                                                                                                                                                                                                                                                                                                                                                                                                               | `2555` (7 years)      |

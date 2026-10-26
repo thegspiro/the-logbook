@@ -37,7 +37,7 @@ Values written before the AES-256-GCM migration used **Fernet**
 migration is required for correctness. `backend/scripts/reencrypt_to_aesgcm.py`
 (dry-run by default) re-encrypts existing rows to AES-256-GCM as a background
 step, after which Fernet read-support can be retired. See the operator runbook:
-[`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](../docs/AES256_GCM_BACKFILL_RUNBOOK.md).
+[`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/AES256_GCM_BACKFILL_RUNBOOK.md).
 
 ### Configuration
 
@@ -129,7 +129,7 @@ relationships, phones, emails of people who are not members) are stored as
 AES-256-GCM ciphertext, like screening records. Screens, exports and integrations
 are unchanged; the database cannot search or sort on them. They are covered by
 `scripts/rotate_encryption_key.py`. See
-[`docs/UPGRADING.md`](../docs/UPGRADING.md).
+[`docs/UPGRADING.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md).
 
 ### Database and cache TLS
 
@@ -139,7 +139,7 @@ the server's certificate and name, and present a client certificate. Plaintext i
 accepted until you set `DB_REQUIRE_TLS=true` / `REDIS_REQUIRE_TLS=true`; run
 `scripts/tls-enforce.sh` first, which lists any client still connecting without
 TLS. Administrators get a banner 30 days before a certificate expires. Setup,
-enforcement, renewal and CA-key custody: [`docs/TLS.md`](../docs/TLS.md).
+enforcement, renewal and CA-key custody: [`docs/TLS.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/TLS.md).
 
 ### Encrypted backups
 
@@ -151,11 +151,11 @@ so the nightly restore drill can open what it wrote, and a **certificate**
 whose private key you keep offline. Only the offline key protects backups
 taken before a server compromise. If both are lost the backups cannot be
 recovered. Offsite uploads carry ciphertext only and refuse a plaintext
-archive. Setup, restore and key custody: [`docs/BACKUP.md`](../docs/BACKUP.md#encrypted-backups).
+archive. Setup, restore and key custody: [`docs/BACKUP.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/BACKUP.md#encrypted-backups).
 
 > ⚠️ **A database backup without its era's `ENCRYPTION_KEY`/`ENCRYPTION_SALT`
 > cannot decrypt sensitive fields.** Keep retired keys archived alongside the
-> backups they match. Full runbook: [`docs/KEY_ROTATION.md`](../docs/KEY_ROTATION.md).
+> backups they match. Full runbook: [`docs/KEY_ROTATION.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/KEY_ROTATION.md).
 
 > `SECRET_KEY` (JWT signing) is different — rotating it signs everyone out by
 > design. `AUDIT_LOG_SIGNING_KEY` must not be casually rotated: historical
