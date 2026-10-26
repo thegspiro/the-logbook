@@ -1728,7 +1728,9 @@ class MembershipPipelineService:
         ]
 
         # Match by email or by first+last name
-        match_conditions = [User.email_hash.in_(email_fingerprints(email))]
+        match_conditions: List[ColumnElement[bool]] = [
+            User.email_hash.in_(email_fingerprints(email))
+        ]
         if first_name and last_name:
             match_conditions.append(
                 and_(
