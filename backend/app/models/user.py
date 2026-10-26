@@ -105,7 +105,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 from sqlalchemy.sql import ColumnElement, and_, func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedDate, EncryptedJSON
+from app.core.encrypted_types import EncryptedDate, EncryptedJSON, EncryptedText
 from app.core.permissions import position_mirrors_rank
 from app.core.utils import generate_uuid
 from app.utils.member_badge import generate_badge_code
@@ -366,8 +366,8 @@ class User(Base):
     previous_membership_number: Mapped[Optional[str]] = mapped_column(
         String(50)
     )  # Preserved on soft-delete so returning members can reclaim their number
-    phone: Mapped[Optional[str]] = mapped_column(String(20))
-    mobile: Mapped[Optional[str]] = mapped_column(String(20))
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    mobile: Mapped[Optional[str]] = mapped_column(EncryptedText)
 
     # Profile
     photo_url: Mapped[Optional[str]] = mapped_column(Text)
@@ -386,11 +386,13 @@ class User(Base):
     # Single source of truth consumed by shift pattern generation.
     platoon: Mapped[Optional[str]] = mapped_column(String(20))
 
-    # Address
-    address_street: Mapped[Optional[str]] = mapped_column(String(255))
-    address_city: Mapped[Optional[str]] = mapped_column(String(100))
-    address_state: Mapped[Optional[str]] = mapped_column(String(50))
-    address_zip: Mapped[Optional[str]] = mapped_column(String(20))
+    # Address. Phone, mobile and these four are encrypted at rest so a stolen
+    # dump or backup does not carry a member's home address; nothing filters or
+    # sorts on them in SQL. Country alone identifies no one and stays plain.
+    address_street: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_city: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_state: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_zip: Mapped[Optional[str]] = mapped_column(EncryptedText)
     address_country: Mapped[Optional[str]] = mapped_column(String(100), default="USA")
 
     # Referral data preserved from prospect record on transfer
@@ -955,14 +957,14 @@ class Prospect(Base):
     middle_name: Mapped[Optional[str]] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[Optional[str]] = mapped_column(String(255))  # Personal email
-    phone: Mapped[Optional[str]] = mapped_column(String(20))
-    mobile: Mapped[Optional[str]] = mapped_column(String(20))
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    mobile: Mapped[Optional[str]] = mapped_column(EncryptedText)
 
     # Address
-    address_street: Mapped[Optional[str]] = mapped_column(String(255))
-    address_city: Mapped[Optional[str]] = mapped_column(String(100))
-    address_state: Mapped[Optional[str]] = mapped_column(String(50))
-    address_zip: Mapped[Optional[str]] = mapped_column(String(20))
+    address_street: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_city: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_state: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_zip: Mapped[Optional[str]] = mapped_column(EncryptedText)
 
     # Application Details
     status: Mapped[Optional[str]] = mapped_column(

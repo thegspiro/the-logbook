@@ -15,6 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -651,7 +652,7 @@ class EventExternalAttendee(Base):
     # Attendee info
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Check-in tracking
