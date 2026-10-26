@@ -6,7 +6,7 @@ Request and response schemas for event-related endpoints.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import (
@@ -27,6 +27,7 @@ from app.models.event import (
 )
 from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
+from app.schemas.reminder_limits import ReminderLeadDays, ReminderLeadHours
 from app.schemas.training_session import TrainingSessionAttach
 
 _response_config = ConfigDict(from_attributes=True)
@@ -77,7 +78,7 @@ class EmailTriggerConfig(BaseModel):
     enabled: Optional[bool] = None
     notify_assignee: Optional[bool] = None
     notify_requester: Optional[bool] = None
-    days: Optional[List[int]] = None
+    days: Optional[List[ReminderLeadDays]] = None
 
 
 class RequestPipelineUpdate(BaseModel):
@@ -98,14 +99,14 @@ class RequestPipelineUpdate(BaseModel):
     form was "now closed".
     """
 
-    min_lead_time_days: Optional[int] = Field(None, ge=0)
+    min_lead_time_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     default_assignee_id: Optional[str] = None
     public_progress_visible: Optional[bool] = None
     accept_public_requests: Optional[bool] = None
     # ge=1, not ge=0: a zero ceiling would accept nothing while the intake
     # toggle still read as open, which is a confusing way to spell the thing
     # `accept_public_requests: false` already says plainly.
-    public_daily_limit: Optional[int] = Field(None, ge=1)
+    public_daily_limit: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     tasks: Optional[List[RequestPipelineTask]] = None
     email_triggers: Optional[Dict[str, EmailTriggerConfig]] = None
 
@@ -147,7 +148,7 @@ class EventDefaultsUpdate(BaseModel):
     is_mandatory: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
-    reminder_schedule: Optional[List[int]] = None
+    reminder_schedule: Optional[List[ReminderLeadHours]] = None
     default_reminder_time: Optional[str] = Field(None, max_length=10)
     default_duration_minutes: Optional[int] = Field(
         None, ge=1, le=MAX_EVENT_DURATION_MINUTES
@@ -326,6 +327,16 @@ class EventBase(BaseModel):
 class EventCreate(EventBase):
     """Schema for creating a new event"""
 
+    # Request-only: EventResponse inherits EventBase, and a stored schedule from
+    # before the 30-day limit must still serialize.
+    reminder_schedule: List[ReminderLeadHours] = Field(
+        default=[24],
+        description=(
+            "Hours before event to send reminders"
+            " (e.g. [168, 24] for 1 week + 1 day)"
+        ),
+    )
+
     _check_event_type = field_validator("event_type")(
         _enum_check(_EVENT_TYPES, "event_type")
     )
@@ -408,7 +419,7 @@ class EventUpdate(BaseModel):
     attendee_visibility: Optional[str] = Field(None, max_length=20)
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
-    reminder_schedule: Optional[List[int]] = None
+    reminder_schedule: Optional[List[ReminderLeadHours]] = None
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = Field(None, ge=0, le=1440)
     check_in_minutes_after: Optional[int] = Field(None, ge=0, le=1440)
@@ -982,6 +993,19 @@ class GuestCheckInEventInfo(BaseModel):
     timezone: Optional[str] = None
 
 
+class GuestCheckInLinkResponse(BaseModel):
+    """An event's own guest QR code, returned only to events.manage holders.
+
+    ``guest_token`` is a bearer credential for the public sign-in path; it is
+    deliberately absent from every response a member without that permission
+    can read.
+    """
+
+    event_id: str
+    allow_guest_check_in: bool
+    guest_token: Optional[str] = None
+
+
 class EventStats(BaseModel):
     """Event statistics"""
 
@@ -1101,7 +1125,7 @@ class EventTemplateCreate(BaseModel):
     require_checkout: bool = False
     send_reminders: bool = True
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
-    reminder_schedule: List[int] = Field(default=[24])
+    reminder_schedule: List[ReminderLeadHours] = Field(default=[24])
     custom_fields_template: Optional[Dict[str, Any]] = None
 
 
@@ -1138,7 +1162,7 @@ class EventTemplateUpdate(BaseModel):
     require_checkout: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
-    reminder_schedule: Optional[List[int]] = None
+    reminder_schedule: Optional[List[ReminderLeadHours]] = None
     custom_fields_template: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
 
@@ -1308,7 +1332,7 @@ class RecurringEventCreate(BaseModel):
         default=False,
         description="Auto-extend series on a rolling 12-month window",
     )
-    recurrence_custom_days: Optional[List[int]] = Field(
+    recurrence_custom_days: Optional[List[Annotated[int, Field(ge=0, le=6)]]] = Field(
         None, description="For custom: weekday numbers (0=Mon, 6=Sun)"
     )
     recurrence_weekday: Optional[int] = Field(
@@ -1347,7 +1371,7 @@ class RecurringEventCreate(BaseModel):
     attendee_visibility: Optional[str] = Field(None, max_length=20)
     send_reminders: bool = True
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
-    reminder_schedule: List[int] = Field(default=[24])
+    reminder_schedule: List[ReminderLeadHours] = Field(default=[24])
     check_in_window_type: Optional[str] = Field(default="flexible")
     check_in_minutes_before: Optional[int] = Field(default=60, ge=0, le=INT32_MAX)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0, le=INT32_MAX)

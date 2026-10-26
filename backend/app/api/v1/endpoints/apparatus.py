@@ -3788,13 +3788,21 @@ async def delete_apparatus(
 
     **Warning:** This permanently deletes the apparatus and all related records.
     Consider using archive instead for historical tracking.
+
+    **Note:** Cannot delete apparatus that a shift template, shift, pre-work
+    session, equipment check or call response still names; archive it instead.
     """
     service = ApparatusService(db)
 
-    deleted = await service.delete_apparatus(
-        apparatus_id=apparatus_id,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        deleted = await service.delete_apparatus(
+            apparatus_id=apparatus_id,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if not deleted:
         raise HTTPException(

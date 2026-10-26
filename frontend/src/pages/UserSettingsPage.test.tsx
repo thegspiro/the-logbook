@@ -237,6 +237,53 @@ describe('UserSettingsPage', () => {
       expect(screen.getByRole('button', { name: 'Download my data' })).toBeInTheDocument();
     });
 
+    describe('Photo use and roster listing are an explicit Yes / No (W59-3)', () => {
+      // A checkbox left unticked recorded nothing, so "no" could only be
+      // reached by ticking (a yes the consent ledger keeps) and unticking.
+      beforeEach(() => {
+        vi.mocked(userService.setMyConsent).mockReset();
+        vi.mocked(userService.setMyConsent).mockResolvedValue(undefined);
+        vi.mocked(userService.getMyConsents).mockResolvedValue([
+          { consent_type: 'photo_use', granted: null, updated_at: null },
+          { consent_type: 'public_roster_listing', granted: true, updated_at: '2026-10-01T00:00:00Z' },
+          { consent_type: 'sms_notifications', granted: true, updated_at: null },
+        ]);
+      });
+
+      it('records a no on an unanswered choice without ever recording a yes', async () => {
+        window.history.pushState({}, '', '/account?tab=privacy');
+        renderWithRouter(<UserSettingsPage />);
+
+        const photo = await screen.findByRole('group', { name: /photo use/i });
+        expect(within(photo).getByText('(not answered)')).toBeInTheDocument();
+        expect(within(photo).getByRole('radio', { name: 'Yes' })).not.toBeChecked();
+        expect(within(photo).getByRole('radio', { name: 'No' })).not.toBeChecked();
+
+        await userEvent.setup().click(within(photo).getByRole('radio', { name: 'No' }));
+
+        await waitFor(() => expect(userService.setMyConsent).toHaveBeenCalledWith('photo_use', false));
+        expect(userService.setMyConsent).toHaveBeenCalledTimes(1);
+        expect(within(photo).getByRole('radio', { name: 'No' })).toBeChecked();
+      });
+
+      it('shows an answered choice as chosen', async () => {
+        window.history.pushState({}, '', '/account?tab=privacy');
+        renderWithRouter(<UserSettingsPage />);
+
+        const roster = await screen.findByRole('group', { name: /public roster listing/i });
+        expect(within(roster).getByRole('radio', { name: 'Yes' })).toBeChecked();
+        expect(within(roster).queryByText('(not answered)')).not.toBeInTheDocument();
+      });
+
+      it('leaves the SMS consent as its switch', async () => {
+        window.history.pushState({}, '', '/account?tab=privacy');
+        renderWithRouter(<UserSettingsPage />);
+
+        expect(await screen.findByRole('checkbox', { name: /text message notifications/i })).toBeChecked();
+        expect(screen.queryByRole('group', { name: /text message notifications/i })).not.toBeInTheDocument();
+      });
+    });
+
     it('keeps the switches off when the profile behind them could not load', async () => {
       // A member must never enable a field they cannot see: with the profile
       // unknown every row would read "Nothing on file" over a real value.

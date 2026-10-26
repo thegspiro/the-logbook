@@ -214,7 +214,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 55 | Event model for managing department events |
+| [`events`](#events) | `Event` | 56 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
 
 ### External_Shift_Hours
@@ -2965,6 +2965,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `require_checkout` | BOOL | no |  | `0` |  |
 | `allow_guest_check_in` | BOOL | no |  | `0` |  |
 | `guest_check_in_creates_prospect` | BOOL | no |  | `0` |  |
+| `guest_check_in_token` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
 | `is_recurring` | BOOL | no |  | `0` |  |
 | `recurrence_pattern` | ENUM(`daily`, `weekly`, `biweekly`, `monthly`, `monthly_weekday`, `annually`, `annually_weekday`, `custom`) | yes |  |  |  |
 | `recurrence_end_date` | DATETIME | yes |  |  |  |
@@ -2996,6 +2997,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_events_alternate_organizer_id` (`alternate_organizer_id`)
 - `ix_events_custom_category` (`custom_category`)
 - `ix_events_event_type` (`event_type`)
+- UNIQUE `ix_events_guest_check_in_token` (`guest_check_in_token`)
 - `ix_events_location_id` (`location_id`)
 - `ix_events_organization_id` (`organization_id`)
 - `ix_events_organizer_id` (`organizer_id`)

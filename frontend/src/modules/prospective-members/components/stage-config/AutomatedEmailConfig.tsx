@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import {
@@ -13,6 +13,9 @@ import { Plus, Trash2, GripVertical, Eye } from 'lucide-react';
 import type { AutomatedEmailStageConfig, AutomatedEmailSection, StageConfig } from '../../types';
 import { EMAIL_BUILTIN_SECTION_IDS, DEFAULT_EMAIL_SECTION_ORDER } from '../../types';
 import type { EventListItem } from '@/types/event';
+import { emailTemplatesService } from '@/services/api';
+import type { EmailTemplate } from '@/services/adminServices';
+import { toAppError } from '@/utils/errorHandling';
 
 interface SortableEmailSectionProps {
   id: string;
@@ -52,9 +55,11 @@ const EMAIL_TINT = '#eff6ff';
 interface EmailPreviewProps {
   config: AutomatedEmailStageConfig;
   sectionOrder: string[];
+  /** The linked template, whose subject and body lead the email. */
+  template?: EmailTemplate | undefined;
 }
 
-const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => {
+const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder, template }) => {
   const enabledSections = sectionOrder.filter((sid) => {
     if (sid === EMAIL_BUILTIN_SECTION_IDS.WELCOME) return config.include_welcome;
     if (sid === EMAIL_BUILTIN_SECTION_IDS.FAQ_LINK) return config.include_faq_link;
@@ -87,12 +92,16 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
       </div>
       <div className="px-5 py-4" style={{ backgroundColor: EMAIL_TINT }}>
         <p className="m-0 text-lg leading-tight font-bold text-slate-900">
-          {config.email_subject || 'Update on Your Membership Application'}
+          {template ? template.subject : config.email_subject || 'Update on Your Membership Application'}
         </p>
       </div>
       <div className="space-y-4 rounded-b-lg bg-white p-5 text-slate-700" style={{ lineHeight: 1.6 }}>
-        <p className="m-0">Hi Prospect,</p>
-        {enabledSections.length === 0 && (
+        {template ? (
+          <p className="m-0 text-gray-500 italic">The body of “{template.name}” appears here.</p>
+        ) : (
+          <p className="m-0">Hi Prospect,</p>
+        )}
+        {!template && enabledSections.length === 0 && (
           <p className="m-0 text-gray-400 italic">Your membership application has been updated.</p>
         )}
         {enabledSections.map((sid) => {
@@ -155,7 +164,11 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
           );
         })}
       </div>
-      <div className="px-2 pt-3 pb-1 text-center text-xs text-gray-600">This email was sent by Organization Name.</div>
+      {!template && (
+        <div className="px-2 pt-3 pb-1 text-center text-xs text-gray-600">
+          This email was sent by Organization Name.
+        </div>
+      )}
     </div>
   );
 };
@@ -163,6 +176,9 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
 interface AutomatedEmailConfigProps {
   config: StageConfig;
   setConfig: React.Dispatch<React.SetStateAction<StageConfig>>;
+  /** '' when no template is linked. */
+  emailTemplateId: string;
+  setEmailTemplateId: (id: string) => void;
   errors: Record<string, string>;
   showEmailPreview: boolean;
   setShowEmailPreview: React.Dispatch<React.SetStateAction<boolean>>;
@@ -184,6 +200,8 @@ const EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
 const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
   config,
   setConfig,
+  emailTemplateId,
+  setEmailTemplateId,
   errors,
   showEmailPreview,
   setShowEmailPreview,
@@ -192,6 +210,43 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
 }) => {
   const emailConfig = config as AutomatedEmailStageConfig;
   const customSectionsEndRef = useRef<HTMLDivElement>(null);
+
+  const [customTemplates, setCustomTemplates] = useState<EmailTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    emailTemplatesService.getTemplates().then(
+      (templates) => {
+        if (cancelled) return;
+        // Only custom templates are written for an applicant; the backend
+        // refuses any other type on a stage.
+        setCustomTemplates(templates.filter((t) => t.template_type === 'custom'));
+        setTemplatesLoading(false);
+      },
+      (err: unknown) => {
+        if (cancelled) return;
+        // The template list is gated on settings permissions, which a
+        // pipeline coordinator may not hold. The stage still saves; the
+        // existing link is kept because the picker keeps its value.
+        setTemplatesError(
+          toAppError(err).status === 403
+            ? 'Choosing a template needs permission to manage email templates.'
+            : 'Email templates could not be loaded.'
+        );
+        setTemplatesLoading(false);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const linkedTemplate = customTemplates.find((t) => t.id === emailTemplateId);
+  // A switched-off template is offered only when it is the one already
+  // linked, so the coordinator can see why the stage is sending its sections.
+  const templateOptions = customTemplates.filter((t) => t.is_active || t.id === emailTemplateId);
 
   const generateSectionId = useCallback(
     () =>
@@ -297,23 +352,66 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="stage-email-subject" className="text-theme-text-muted mb-2 block text-sm">
-          Email Subject
+        <label htmlFor="stage-email-template" className="form-label">
+          Email Template
         </label>
-        <input
-          id="stage-email-subject"
-          type="text"
-          value={emailConfig.email_subject}
-          onChange={(e) => setConfig({ ...emailConfig, email_subject: e.target.value })}
-          placeholder="e.g., Welcome to the Membership Process"
-          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-        />
-        {errors.email_subject && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email_subject}</p>}
+        <select
+          id="stage-email-template"
+          value={emailTemplateId}
+          onChange={(e) => setEmailTemplateId(e.target.value)}
+          disabled={templatesLoading}
+          className="form-input"
+        >
+          <option value="">None — build the email from the sections below</option>
+          {templateOptions.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.is_active ? t.name : `${t.name} (switched off)`}
+            </option>
+          ))}
+          {emailTemplateId && !linkedTemplate && !templatesLoading && (
+            <option value={emailTemplateId}>
+              {templatesError ? 'Linked template' : 'Linked template (not available)'}
+            </option>
+          )}
+        </select>
+        {templatesError ? (
+          <p className="mt-1 text-sm text-red-700 dark:text-red-400">{templatesError}</p>
+        ) : (
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Custom templates from Communications → Email Templates. A template can use <code>{'{{first_name}}'}</code>,{' '}
+            <code>{'{{prospect_name}}'}</code>, <code>{'{{stage_name}}'}</code> and <code>{'{{status_url}}'}</code>.
+          </p>
+        )}
+        {linkedTemplate && !linkedTemplate.is_active && (
+          <p className="mt-1 text-sm text-amber-800 dark:text-amber-400">
+            This template is switched off, so the stage sends its sections alone until it is switched back on.
+          </p>
+        )}
       </div>
 
+      {!emailTemplateId && (
+        <div>
+          <label htmlFor="stage-email-subject" className="text-theme-text-muted mb-2 block text-sm">
+            Email Subject
+          </label>
+          <input
+            id="stage-email-subject"
+            type="text"
+            value={emailConfig.email_subject}
+            onChange={(e) => setConfig({ ...emailConfig, email_subject: e.target.value })}
+            placeholder="e.g., Welcome to the Membership Process"
+            className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+          />
+          {errors.email_subject && (
+            <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email_subject}</p>
+          )}
+        </div>
+      )}
+
       <p className="text-theme-text-muted text-xs">
-        Configure the sections to include in the email. Drag sections to reorder them. The prospect's name will be used
-        as the greeting automatically.
+        {emailTemplateId
+          ? "The template's subject and body are sent first; the sections enabled below follow it. Drag sections to reorder them."
+          : "Configure the sections to include in the email. Drag sections to reorder them. The prospect's name will be used as the greeting automatically."}
       </p>
 
       <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleEmailSectionDragEnd}>
@@ -544,7 +642,7 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
         </button>
         {showEmailPreview && (
           <div className="mt-3 flex justify-center" data-testid="email-preview">
-            <EmailPreview config={emailConfig} sectionOrder={effectiveSectionOrder} />
+            <EmailPreview config={emailConfig} sectionOrder={effectiveSectionOrder} template={linkedTemplate} />
           </div>
         )}
       </div>

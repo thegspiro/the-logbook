@@ -28,6 +28,11 @@ vi.mock('../services/api', () => ({
   budgetService: { options: () => Promise.resolve([]) },
   purchaseRequestService: {},
   fundService: { list: () => Promise.resolve([]) },
+  // The form's approval-route preview fires on a debounce, so a test that ends
+  // within it passes and a slower run reaches an undefined mock export.
+  approvalChainService: {
+    routePreview: () => Promise.resolve({ manual: true, steps: [], secondApproverRequired: false }),
+  },
   financeSettingsService: {
     get: () =>
       Promise.resolve({

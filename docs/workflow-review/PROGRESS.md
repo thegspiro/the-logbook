@@ -156,10 +156,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   InventoryScanModal's confirm and custody-transfer dialogs (W14-2). The
   inventory pair sits inside another modal; check its tests' dialog queries
   when changing it.
-- **Any run touching the app shell** — while a password change is required
-  (first sign-in, admin reset), the shell and shared hooks fire ~17 requests
-  the server refuses with 403, including `POST /errors/log`, so errors from
-  that state cannot be reported (W08-6).
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
@@ -225,6 +221,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### W08-6 follow-up — Requests held while a password change is required — 2026-10-25
+
+Driven as: a member created by `admin` and signed in on the forced-change
+screen, at 1280×900. Fixed: W08-6. The two axios clients now hold every
+request outside the server's allowlist while `must_change_password` is set,
+answering it with the server's own `403 LB-AUTH-004`, and the error reporter
+skips that refusal. Refused requests on the screen fell from 24 (nine of them
+`POST /errors/log`) to 0. The change itself, the sign-out it forces and the
+next sign-in sent 57 requests, none refused. Not covered: an expired password
+past its grace period, which the client cannot see until the server refuses a
+request; those refusals are no longer reported. Gate: typecheck and lint clean,
+and the tests related to the six changed files pass.
 
 ### W79 — Phone pass: W08, W19, W24, W33, W39 and W70 at 390×844 — 2026-10-23
 

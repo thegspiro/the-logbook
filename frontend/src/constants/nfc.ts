@@ -233,6 +233,11 @@ export function buildEventCheckInUrl(eventId: string, origin?: string): string {
   return withOrigin(origin, `/events/${eventId}/check-in`);
 }
 
+/** Absolute URL of the public guest sign-in page an event's guest QR code opens. */
+export function buildGuestCheckInUrl(guestToken: string, origin?: string): string {
+  return withOrigin(origin, `/event-guest/${encodeURIComponent(guestToken)}`);
+}
+
 /** Absolute URL to encode onto a tag for an admin hours category's clock-in. */
 export function buildAdminHoursClockInUrl(categoryId: string, origin?: string): string {
   return withOrigin(origin, `/admin-hours/${categoryId}/clock-in`);

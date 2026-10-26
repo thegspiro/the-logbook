@@ -2,8 +2,8 @@
 
 Decision 32 in ``docs/FILE_STORAGE_HARDENING.md``. The server signs in as a
 **service account** the department created, and stores files in a **Shared
-Drive** it has added that account to (as Content manager, so it can delete
-what it wrote). Files belong to the department's drive, not to a person whose
+Drive** it has added that account to (as Content manager, so it can trash
+what it wrote; outright deletion would need Manager). Files belong to the department's drive, not to a person whose
 access can lapse. A Shared Drive needs Google Workspace.
 
 **A stored reference** is ``gdrive://<shared_drive_id>/<file_id>/<org>/<area>/…``.
@@ -398,14 +398,23 @@ class GoogleDriveBackend(RemoteBackend):
         return file_encryption.key_id_from_head(head)
 
     def delete(self, ref: str) -> bool:
+        """Move the file to the Shared Drive's trash, which Google empties
+        after 30 days. files.delete would remove it outright, but on a Shared
+        Drive that needs the Manager role, and the Content manager role this
+        account is given may only trash. A trashed file reads as gone to
+        ``exists``, and it is ciphertext like every stored file."""
         location = self._location(ref)
         try:
             response = self._request(
-                "DELETE", f"{DRIVE_API}/files/{location.file_id}", "delete"
+                "PATCH",
+                f"{DRIVE_API}/files/{location.file_id}",
+                "delete",
+                params={"fields": "id"},
+                json={"trashed": True},
             )
         except GoogleDriveStorageError:
             return False
-        if response.status_code in (200, 204, 404):
+        if response.status_code in (200, 404):
             return True
         logger.warning(
             f"Could not remove {ref}: HTTP {response.status_code}. The service "

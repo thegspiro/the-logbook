@@ -5,7 +5,7 @@ Request and response schemas for training session endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -133,7 +133,7 @@ class RecurringTrainingSessionCreate(TrainingSessionCreate):
     recurrence_end_date: datetime = Field(
         ..., description="When the recurring series ends"
     )
-    recurrence_custom_days: Optional[List[int]] = Field(
+    recurrence_custom_days: Optional[List[Annotated[int, Field(ge=0, le=6)]]] = Field(
         None, description="For custom pattern: weekday numbers (0=Mon, 6=Sun)"
     )
     recurrence_weekday: Optional[int] = Field(
@@ -294,7 +294,7 @@ class AttendeeApprovalData(UTCResponseBase):
     # Original times
     checked_in_at: datetime
     checked_out_at: Optional[datetime]
-    calculated_duration_minutes: Optional[int]
+    calculated_duration_minutes: Optional[int] = Field(..., ge=INT32_MIN, le=INT32_MAX)
 
     # Override times (for adjustments)
     override_check_in_at: Optional[datetime] = None

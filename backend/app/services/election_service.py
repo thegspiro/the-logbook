@@ -3294,10 +3294,15 @@ class ElectionService:
         # results list and their votes count under the merge target. Votes
         # are remapped via lightweight copies — the ORM rows are never
         # touched, because vote signatures embed candidate_id.
+        # A merge whose target is gone is ignored, so the variant counts as
+        # its own candidate: the column has no foreign key, and mapping its
+        # votes to the missing id would credit them to nobody.
+        candidate_ids = {c.id for c in candidates}
         merge_map = {
             c.id: c.merged_into_candidate_id
             for c in candidates
             if getattr(c, "merged_into_candidate_id", None)
+            and c.merged_into_candidate_id in candidate_ids
         }
         if merge_map:
             all_votes = [
@@ -4968,6 +4973,7 @@ class ElectionService:
             candidate.accepted_on_behalf_at = None
             event = "nomination_accepted"
         else:
+            await self.release_merged_write_ins(election_id, candidate.id)
             await self.db.delete(candidate)
             event = "nomination_declined"
         await self.db.commit()
@@ -5834,6 +5840,26 @@ class ElectionService:
             user_id=str(created_by),
         )
         return clone, None
+
+    async def release_merged_write_ins(
+        self, election_id: UUID | str, candidate_id: UUID | str
+    ) -> int:
+        """Undo every write-in merge into *candidate_id*, before it is deleted.
+
+        ``merged_into_candidate_id`` has no foreign key, so deleting a merge
+        target would leave its variants pointing at nothing and their votes
+        credited to no one. Released, each variant counts as its own write-in
+        again with its votes intact. There is no other way to undo a merge, so
+        refusing the delete instead would make the target undeletable.
+        Returns how many variants were released; the caller commits.
+        """
+        result = await self.db.execute(
+            sql_update(Candidate)
+            .where(Candidate.election_id == str(election_id))
+            .where(Candidate.merged_into_candidate_id == str(candidate_id))
+            .values(merged_into_candidate_id=None)
+        )
+        return rows_affected(result) or 0
 
     async def merge_write_in_candidates(
         self,
@@ -7277,6 +7303,7 @@ class ElectionService:
         )
         dropped = 0
         for candidate in rows.scalars().all():
+            await self.release_merged_write_ins(election.id, candidate.id)
             await self.db.delete(candidate)
             dropped += 1
         return dropped

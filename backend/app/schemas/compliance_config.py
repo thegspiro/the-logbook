@@ -12,6 +12,7 @@ from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
+from app.schemas.reminder_limits import ReminderLeadDays
 
 # =============================================================================
 # Admin Hours Requirement (embedded in ComplianceProfile)
@@ -148,7 +149,9 @@ class ComplianceConfigBase(BaseModel):
 class ComplianceConfigCreate(ComplianceConfigBase):
     """Schema for creating compliance config (initial setup)."""
 
-    pass
+    # Request-only: ComplianceConfigResponse inherits the base, and a stored
+    # list from before the 30-day limit must still serialize.
+    notify_days_before_deadline: Optional[List[ReminderLeadDays]] = None
 
 
 class ComplianceConfigUpdate(BaseModel):
@@ -163,7 +166,7 @@ class ComplianceConfigUpdate(BaseModel):
     report_email_recipients: Optional[List[str]] = None
     report_day_of_month: Optional[int] = Field(None, ge=1, le=28)
     notify_non_compliant_members: Optional[bool] = None
-    notify_days_before_deadline: Optional[List[int]] = None
+    notify_days_before_deadline: Optional[List[ReminderLeadDays]] = None
 
     @model_validator(mode="after")
     def _check_threshold_order(self) -> "ComplianceConfigUpdate":

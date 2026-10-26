@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import { authService } from '../services/api';
 import { markLoginComplete, clearTempAccessToken } from '../services/apiClient';
+import { setPasswordChangePending } from '../services/passwordChangeGate';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
 import { clearCache } from '../utils/apiCache';
@@ -658,3 +659,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: { ...user, bottom_nav_slots: slots } });
   },
 }));
+
+// The API clients hold requests the server would refuse while the signed-in
+// member must change their password (services/passwordChangeGate.ts). Kept in
+// step from here, the one place the signed-in user is set, so a sign-in,
+// a refresh of /auth/me and a sign-out all move it.
+setPasswordChangePending(!!useAuthStore.getState().user?.must_change_password);
+useAuthStore.subscribe((state) => setPasswordChangePending(!!state.user?.must_change_password));

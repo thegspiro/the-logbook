@@ -34,6 +34,7 @@
 
 import type { AxiosError } from 'axios';
 import { getErrorMapping } from './errorCatalog';
+import { isPasswordChangeRefusal } from './passwordChangeGate';
 import { requestAction } from '../utils/errorContext';
 
 /** Posted directly rather than through `errorLogsService` — see above. */
@@ -225,7 +226,8 @@ export function scrubSensitive(text: string): string {
  * `path` — so each pattern must cover both. The /display/ pattern redacts the
  * kiosk display code, which is the bearer credential for the public guest
  * check-in flow; it requires a segment after the slash, so paths that merely
- * end in /display are untouched.
+ * end in /display are untouched. The /event-guest/ pattern redacts an event's
+ * own guest QR code token, the same credential for the same flow.
  */
 export function sanitizePath(path: string): string {
   return path
@@ -233,7 +235,8 @@ export function sanitizePath(path: string): string {
     .replace(/(\/event-requests?\/status\/)[^/?#]+/gi, '$1[REDACTED]')
     .replace(/(\/application-status\/)[^/?#]+/gi, '$1[REDACTED]')
     .replace(/(\/calendar\/)[^/?#]+(?=\.ics(?:[/\s?#]|$))/gi, '$1[REDACTED]')
-    .replace(/(\/display\/)[^/?#]+/gi, '$1[REDACTED]');
+    .replace(/(\/display\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/event-guest\/)[^/?#]+/gi, '$1[REDACTED]');
 }
 
 // ---------------------------------------------------------------------------
@@ -785,6 +788,9 @@ export function reportApiError(error: AxiosError): void {
   // Never report a failure of the reporting endpoint itself.
   if (path.includes('/errors')) return;
   if (UNREPORTED_REQUEST.test(path)) return;
+  // Expected while a password change is pending, and the report itself would
+  // be refused by the same gate (W08-6).
+  if (isPasswordChangeRefusal(error)) return;
 
   const classified = classifyApiError(error);
   if (!classified) return;

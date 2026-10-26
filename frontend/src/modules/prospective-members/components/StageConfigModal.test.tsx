@@ -5,6 +5,14 @@ import type { FormsListResponse } from '@/services/formTypes';
 
 const mockGetForms = vi.fn();
 const mockGetEvents = vi.fn();
+const mockGetTemplates = vi.fn();
+
+vi.mock('@/services/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/api')>()),
+  emailTemplatesService: {
+    getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
+  },
+}));
 
 vi.mock('@/services/formsServices', () => ({
   formsService: {
@@ -125,6 +133,8 @@ const defaultProps = {
 describe('StageConfigModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([]);
     mockGetForms.mockResolvedValue(mockForms);
     mockGetEvents.mockResolvedValue(mockUpcomingEvents);
     // jsdom does not implement scrollIntoView
@@ -1314,5 +1324,114 @@ describe('StageConfigModal multi-signer approver roles', () => {
 
     expect(screen.getAllByText('At least one approver role is required').length).toBeGreaterThan(0);
     expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe('StageConfigModal — linked email template', () => {
+  const template = (overrides: Record<string, unknown>) => ({
+    organization_id: 'org-1',
+    template_type: 'custom',
+    subject: 'Welcome aboard',
+    html_body: '<p>Hi</p>',
+    allow_attachments: false,
+    is_active: true,
+    available_variables: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  });
+
+  const emailStage: PipelineStage = {
+    id: 'stage-1',
+    pipeline_id: 'pipeline-1',
+    name: 'Welcome Email',
+    stage_type: 'automated_email',
+    config: {
+      email_subject: 'Welcome!',
+      include_welcome: false,
+      include_faq_link: false,
+      include_next_meeting: false,
+      include_status_tracker: false,
+    },
+    sort_order: 0,
+    is_required: true,
+    email_template_id: 'tmpl-custom',
+    notify_prospect_on_completion: false,
+    public_visible: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetForms.mockResolvedValue(mockForms);
+    mockGetEvents.mockResolvedValue([]);
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([
+      template({ id: 'tmpl-custom', name: 'Applicant welcome' }),
+      template({ id: 'tmpl-off', name: 'Old welcome', is_active: false }),
+      template({ id: 'tmpl-system', name: 'Password Reset', template_type: 'password_reset' }),
+    ]);
+  });
+
+  it('offers only switched-on custom templates', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+    await user.click(screen.getByText('Automated Email'));
+
+    const picker = await screen.findByLabelText('Email Template');
+    await waitFor(() => expect(picker).toBeEnabled());
+    const labels = Array.from((picker as HTMLSelectElement).options).map((o) => o.textContent);
+    expect(labels).toEqual(['None — build the email from the sections below', 'Applicant welcome']);
+  });
+
+  it('saves the chosen template and no longer asks for a subject', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} />);
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+    await user.click(screen.getByText('Automated Email'));
+    await user.type(screen.getByLabelText('Welcome message content'), 'Welcome!');
+    await user.clear(screen.getByLabelText('Email Subject'));
+
+    const picker = await screen.findByLabelText('Email Template');
+    await waitFor(() => expect(picker).toBeEnabled());
+    await user.selectOptions(picker, 'tmpl-custom');
+    expect(screen.queryByLabelText('Email Subject')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0]?.[0]).toMatchObject({ email_template_id: 'tmpl-custom' });
+  });
+
+  it('sends an explicit null when the link is removed from an existing stage', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} editingStage={emailStage} />);
+
+    const picker = await screen.findByLabelText('Email Template');
+    await waitFor(() => expect(picker).toHaveValue('tmpl-custom'));
+    await user.selectOptions(picker, '');
+    await user.click(screen.getByText('Update Stage'));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0]?.[0]).toMatchObject({ email_template_id: null });
+  });
+
+  it('keeps the existing link when templates cannot be listed', async () => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockRejectedValue({ isAxiosError: true, response: { status: 403, data: {} } });
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} editingStage={emailStage} />);
+
+    expect(
+      await screen.findByText('Choosing a template needs permission to manage email templates.')
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Email Template')).toHaveValue('tmpl-custom');
+    await user.click(screen.getByText('Update Stage'));
+
+    expect(onSave.mock.calls[0]?.[0]).toMatchObject({ email_template_id: 'tmpl-custom' });
   });
 });

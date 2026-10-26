@@ -3255,6 +3255,33 @@ def _append_footer_html(html_body: str, footer_html: str) -> str:
     return html_body.rstrip() + "\n" + footer_html
 
 
+# Context keys for render()'s appendix. Underscored so an admin's template
+# cannot collide with them by naming a variable it expects to be blank.
+_APPENDIX_HTML_VAR = "_appendix_html"
+_APPENDIX_TEXT_VAR = "_appendix_text"
+
+
+def _insert_appendix_token(
+    body: str,
+    var_name: str,
+    footer_token: re.Pattern[str],
+    card_tail: Optional[re.Pattern[str]],
+) -> str:
+    """Place ``{{var_name}}`` where a caller's appendix belongs in ``body``.
+
+    Before the footer token when the body asks for its footer; otherwise
+    before the shell card's closing tail, which is where render() will put
+    the footer; otherwise at the end.
+    """
+    token = "{{" + var_name + "}}"
+    match = footer_token.search(body)
+    if match is None and card_tail is not None:
+        match = card_tail.search(body)
+    if match is None:
+        return body.rstrip() + "\n" + token
+    return body[: match.start()] + token + "\n" + body[match.start() :]
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -3677,6 +3704,8 @@ class EmailTemplateService:
         template: EmailTemplate,
         context: Dict[str, Any],
         organization: Optional[Any] = None,
+        appendix_html: Optional[str] = None,
+        appendix_text: Optional[str] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """
         Render a template with the given context variables.
@@ -3691,6 +3720,12 @@ class EmailTemplateService:
         ``organization_phone``, and ``organization_email`` are auto-injected
         into the context (without overwriting values already supplied by the
         caller).
+
+        ``appendix_html`` / ``appendix_text`` are caller-built content placed
+        after the template's own body and ahead of its footer — inside the
+        card when the body is the shell. The HTML must already be escaped.
+        It is substituted as a variable value rather than spliced into the
+        template source, so ``{{...}}`` typed inside it is never expanded.
         """
         ctx = self.build_context(
             context,
@@ -3698,27 +3733,39 @@ class EmailTemplateService:
             footer_key=getattr(template, "footer_key", None),
             template=template,
         )
+        raw_html = template.html_body or ""
+        raw_text = template.text_body
+        if appendix_html:
+            ctx[_APPENDIX_HTML_VAR] = appendix_html
+            raw_html = _insert_appendix_token(
+                raw_html, _APPENDIX_HTML_VAR, _FOOTER_HTML_TOKEN, _CARD_TAIL
+            )
+        # A template with no text body is sent HTML-only; an appendix alone
+        # would make a text alternative missing the template's own message.
+        if appendix_text and raw_text:
+            ctx[_APPENDIX_TEXT_VAR] = appendix_text
+            raw_text = _insert_appendix_token(
+                raw_text, _APPENDIX_TEXT_VAR, _FOOTER_TEXT_TOKEN, None
+            )
 
         # The subject becomes the SMTP Subject: header and the text body the
         # text/plain alternative — neither is markup, so neither is escaped.
         # Only html_body is.
         subject = self._replace_variables(template.subject, ctx, escape_html=False)
-        html_body = self._replace_variables(template.html_body, ctx)
+        html_body = self._replace_variables(raw_html, ctx)
         # A footer names its department, so with no organization to resolve
         # it against there is nothing honest to append.
         append_footer = organization is not None
         if append_footer and not _FOOTER_HTML_TOKEN.search(template.html_body or ""):
             html_body = _append_footer_html(html_body, str(ctx.get("footer_html", "")))
         text_body = None
-        if template.text_body:
-            text_body = self._replace_variables(
-                template.text_body, ctx, escape_html=False
-            )
+        if raw_text:
+            text_body = self._replace_variables(raw_text, ctx, escape_html=False)
             footer_text = str(ctx.get("footer_text", "")).strip()
             if (
                 append_footer
                 and footer_text
-                and not _FOOTER_TEXT_TOKEN.search(template.text_body)
+                and not _FOOTER_TEXT_TOKEN.search(raw_text)
             ):
                 text_body = text_body.rstrip() + "\n\n" + footer_text
 
@@ -3902,6 +3949,8 @@ class EmailTemplateService:
         template: EmailTemplate,
         context: Dict[str, Any],
         organization: Optional[Any] = None,
+        appendix_html: Optional[str] = None,
+        appendix_text: Optional[str] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """Render a template without requiring a DB session.
 
@@ -3911,7 +3960,13 @@ class EmailTemplateService:
         """
         # Create a lightweight instance — render() does not use self.db
         instance = cls.__new__(cls)
-        return instance.render(template, context, organization=organization)
+        return instance.render(
+            template,
+            context,
+            organization=organization,
+            appendix_html=appendix_html,
+            appendix_text=appendix_text,
+        )
 
     @classmethod
     def render_default(
@@ -3983,6 +4038,8 @@ class EmailTemplateService:
     # HTML (e.g. item tables, logo <img> tags).  These are built by
     # trusted backend code and must NOT be HTML-escaped during rendering.
     _RAW_HTML_VARIABLES: set = {
+        # render()'s appendix: built and escaped by the caller.
+        _APPENDIX_HTML_VAR,
         "items_list_html",
         "items_issued_html",
         "items_returned_html",

@@ -20,6 +20,7 @@ const EventDetailPage = lazyWithRetry(() =>
 );
 const EventQRCodePage = lazyWithRetry(() => import('../../pages/EventQRCodePage'));
 const EventSelfCheckInPage = lazyWithRetry(() => import('../../pages/EventSelfCheckInPage'));
+const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
 const EventsAdminHub = lazyWithRetry(() =>
   import('../../pages/EventsAdminHub').then((m) => ({ default: m.EventsAdminHub }))
 );
@@ -173,6 +174,17 @@ export const getEventsPublicRoutes = () => {
         element={
           <Suspense fallback={null}>
             <EventRequestStatusPage />
+          </Suspense>
+        }
+      />
+      {/* Guest sign-in through an event's own guest QR code, for an event held
+          where there is no room kiosk. The token is the credential; it names one
+          event, so the backend resolves the department without a session. */}
+      <Route
+        path="/event-guest/:token"
+        element={
+          <Suspense fallback={null}>
+            <GuestCheckInPage />
           </Suspense>
         }
       />

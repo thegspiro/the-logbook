@@ -37,6 +37,7 @@ from sqlalchemy import Float, Integer, Numeric
 from app.core.database import Base
 from tests.request_bound_columns import (
     COLUMN_BACKED,
+    DOMAIN_BOUNDED,
     NOT_COLUMN_BACKED,
     POLICY_BOUNDED,
 )
@@ -388,6 +389,37 @@ class TestBoundsMatchTheColumn:
             r.split("=")[0] for r in POLICY_BOUNDED
         }
         assert sorted(both) == []
+
+
+class TestDomainBounds:
+    @pytest.mark.parametrize(
+        "key", sorted(DOMAIN_BOUNDED), ids=lambda k: k.split(":")[1]
+    )
+    def test_accepts_the_range_and_refuses_just_past_it(self, key):
+        module, rest = key.split(":")
+        cls, field = rest.rsplit(".", 1)
+        schema = getattr(importlib.import_module(module), cls)
+        shape, accepted, refused = DOMAIN_BOUNDED[key]
+        adapter = _validator(schema, field)
+
+        def wrap(value):
+            if shape == "list":
+                return [value]
+            if shape == "dict":
+                return {"slug": value}
+            return value
+
+        for value in accepted:
+            assert _accepts(adapter, wrap(value)), f"{value!r} is refused"
+        for value in refused:
+            assert not _accepts(adapter, wrap(value)), f"{value!r} is accepted"
+
+    def test_a_field_is_not_domain_bounded_and_an_exception(self):
+        assert sorted(set(DOMAIN_BOUNDED) & set(NOT_COLUMN_BACKED)) == []
+
+    def test_a_field_is_not_domain_bounded_and_column_backed(self):
+        columns = {row.split("=")[0] for row in COLUMN_BACKED + POLICY_BOUNDED}
+        assert sorted(set(DOMAIN_BOUNDED) & columns) == []
 
 
 # ============================================

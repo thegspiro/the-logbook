@@ -1,6 +1,180 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11, PR [#3577](https://github.com/thegspiro/the-logbook/pull/3577)), 2026-10-25 (pass 12) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10), [#3577](https://github.com/thegspiro/the-logbook/pull/3577) (pass 11)
+
+---
+
+## Pass 12 (2026-10-25) — watchdog pickup: MS-17/MS2-7 already fixed by a direct, non-rotation commit; 0 fixed, 0 new findings; MS-14/MS-15 re-confirmed unchanged
+
+**Step 0.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results. PR #3702 (Feature 08, Membership pipeline, pass 13) had
+already merged (`507ae1d0`). The dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable; this is a
+watchdog pickup. Rotation row 09 (Medical screening, PHI) was confirmed the
+next `⬜` by reading `PROGRESS.md`'s Rotation table directly (row 08 ✅, row 09
+⬜, pass-11 lap).
+
+**Scope.** Baseline `ca2233e5` (PR #3577's merge, pass 11). `git log
+--no-merges ca2233e5..HEAD` over the five declared backend files
+(`endpoints/medical_screening.py`, `services/medical_screening_service.py`,
+`models/medical_screening.py`, `schemas/medical_screening.py`,
+`mcp/tools/medical.py`) plus the full `frontend/src/modules/
+medical-screening/` directory: **1 non-merge commit** (`2f2b8cc6`), read in
+full, including its test file and both doc files it touched. No
+medical-screening-table migration landed in the window (the latest head,
+`3f2593e8071e`, is an unrelated membership-pipeline DOB/emergency-contact
+encryption migration from pass 13 — scanned its body too; it does not
+reference `medical_screening`/`screening_requirement`/`screening_record`).
+
+**`2f2b8cc6` was not made through the security-review rotation.** It carries
+no `claude/security-review-*` branch name in its ancestry, is not a "Merge
+pull request" bubble (a direct commit onto `main`, or a squash-merge from a
+differently-named branch), and its co-author line names a different session
+(`session_01V3sx5bNDnFJ6AMSSb6sBDh`, "Claude Opus 5.5") than this rotation
+uses. It is the owner-directed fix for two items this rotation had already
+flagged and tracked — MS-17 (app-review's mirror of this file's
+"Compliance-404" finding, pass 9) and MS2-7 (app-review pass 5) — and it
+already self-annotated both the app-review doc and **this file** (the pass 9
+and pass 7 sections above now read "✅ FIXED 2026-10-25") before this pass
+started. Re-verifying an already-landed, already-documented fix is still this
+pass's job per Step 3's enumerate-everything instruction, so both are
+re-checked below against the current code and tests rather than taken on the
+commit message or the doc's own claim.
+
+- **MS-17, re-verified fixed.** `get_user_compliance`
+  (`endpoints/medical_screening.py:539-542`) and `get_prospect_compliance`
+  (`:568-573`) each call `is_in_org` (`app/utils/org_scoping.py`) against
+  `User`/`ProspectiveMember` and the caller's `organization_id` before any
+  grading, audit write, or name lookup, and raise 404 on a `False`. `is_in_org`
+  fails closed on a falsy id and returns the same `False` for "does not exist"
+  and "exists in another org" — confirmed by reading the function
+  (`org_scoping.py:24-42`) — so the 404 cannot be used to distinguish a
+  made-up id from a real one belonging to a different department (not a new
+  cross-tenant enumeration oracle). `test_medical_screening_compliance_
+subjects.py::TestComplianceSubjectMustExist` drives both routes directly
+  (not through a mocked session) with four cases per subject type — in-org,
+  random uuid, and a real id seeded into a second, separately-inserted
+  organization — and the foreign-org case is the one that matters: it proves
+  the check is a real org filter, not merely "does this row exist anywhere."
+  Ran clean (below).
+- **MS2-7, re-verified fixed.** `_grade` and `get_expiring_soon`
+  (`services/medical_screening_service.py:146-153`, `:805`) both now read the
+  single module-level `_SATISFYING_STATUSES` tuple
+  (`PASSED`/`COMPLETED`/`WAIVED`) rather than each hard-coding its own subset
+  — checked directly that there is exactly one definition in the file, not
+  two that happen to agree today. `ExpiringScreening.status` is a new
+  `Optional[str]` field (`schemas/medical_screening.py:364`) carrying the
+  record's status so the UI can tell a lapsing waiver from a lapsing passed
+  screening; `ComplianceDashboard.tsx` renders a `Waived` badge only when
+  `status === ScreeningStatus.WAIVED`. `test_medical_screening_compliance_
+subjects.py::TestALapsingWaiverIsCountedAndListed` seeds a waived record
+  expiring in 10 days and asserts both `get_compliance_status`'s
+  `expiring_soon_count == 1` and that `get_expiring_soon` lists that exact
+  record with `status == "waived"` — i.e. it asserts the two methods agree on
+  the same waiver, not merely that each runs without erroring.
+
+No other change in the window: `endpoints/medical_screening.py` beyond the
+MS-17 hunk, `models/medical_screening.py`, and `mcp/tools/medical.py` are
+unchanged from pass 11's own read.
+
+**All 16 routes re-enumerated by decorator** (`grep -c '^@router\.'` → 16,
+matching pass 11's count exactly) and each one's auth dependency read
+directly rather than assumed:
+
+| Route                       | Method | Auth dependency                                                              |
+| --------------------------- | ------ | ---------------------------------------------------------------------------- |
+| `/requirements`             | GET    | `require_permission("medical_screening.view")`                               |
+| `/requirements/{id}`        | GET    | `.view`                                                                      |
+| `/requirements`             | POST   | `.manage`                                                                    |
+| `/requirements/{id}`        | PUT    | `.manage`                                                                    |
+| `/requirements/{id}`        | DELETE | `.manage`                                                                    |
+| `/records`                  | GET    | `.view`                                                                      |
+| `/subjects`                 | GET    | `.manage`                                                                    |
+| `/records/{id}`             | GET    | `.view`                                                                      |
+| `/records`                  | POST   | `.manage`                                                                    |
+| `/records/{id}`             | PUT    | `.manage`                                                                    |
+| `/records/{id}`             | DELETE | `.manage`                                                                    |
+| `/compliance`               | GET    | `.view`                                                                      |
+| `/compliance/me`            | GET    | `get_current_user` (self-scoped by construction — no id param to substitute) |
+| `/compliance/{user_id}`     | GET    | `.view` + the new MS-17 org check                                            |
+| `/compliance/prospect/{id}` | GET    | `.view` + the new MS-17 org check                                            |
+| `/expiring`                 | GET    | `.view`                                                                      |
+
+Unchanged from every prior pass: no route lacks an auth dependency; no
+permission string changed; the router itself still sits behind
+`module_gate("medical_screening", ...)` in `api/v1/api.py:350-353`; neither
+`medical_screening.view` nor `.manage` is baseline-granted (re-confirmed:
+`grep -rn medical_screening backend/alembic/versions/` matches nothing, and
+neither string appears in `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS`).
+
+**Tenant isolation and PHI encryption, re-confirmed by direct read:** every
+by-id getter (`get_requirement`, `get_record`) still filters
+`organization_id` in the same `and_()`; `create_record`'s three
+client-supplied FKs (`user_id`, `prospect_id`, `requirement_id`) still route
+through `assert_in_org(..., allow_none=True)`
+(`medical_screening_service.py:427-450`); `ScreeningRecordUpdate`
+(`schemas/medical_screening.py:176-197`) still has no `user_id`/`prospect_id`/
+`requirement_id` field, so an update cannot reassign a record's subject;
+`provider_name`/`result_summary`/`notes` are still `EncryptedText` and
+`result_data` still `EncryptedJSON` (`models/medical_screening.py:198-204`,
+`226`), backed by real AES-256-GCM (`core/encrypted_types.py`'s
+`process_bind_param`/`process_result_value` call `app.core.security.
+encrypt_data`/`decrypt_data`); grepped all five backend files plus the
+frontend module for `.where(`/`.filter(`/`.ilike(`/`order_by(` against
+`provider_name`/`result_summary`/`notes`/`result_data` — zero matches, so
+nothing compares or sorts on an encrypted column in SQL (the DOB-style bug
+PR #3702 fixed in membership pipeline does not recur here). Also re-grepped
+for `.like(`/`.ilike(`, `csv.writer`, `logger.`, and
+`window.confirm`/`alert`/`prompt` across the same files — zero matches on
+every pattern, so Pitfalls #15, #25, #31 and #33 do not apply to this
+feature's current code.
+
+**Schema casing (CLAUDE.md #5):** `grep alias_generator=to_camel
+backend/app/schemas/medical_screening.py` — no match. This module is
+snake_case on the wire (unlike apparatus/etc.); the frontend types in
+`frontend/src/modules/medical-screening/types/index.ts` are written
+snake_case to match, consistent with every prior pass.
+
+**Standing items re-verified, unchanged (neither site touched by this
+window's one commit):**
+
+- **MS-14** (`medical_screening.view` grants full narrative PHI with no
+  finer-grained read tier, LOW, FLAGGED, owner decision) — unchanged. Still
+  five routes gated on `.view` return the narrative fields
+  (`GET /records`/`{id}`); still no permission tier narrower than `.manage`
+  exists to separate "sees compliance" from "sees the clinical detail."
+- **MS-15** (the compliance roster loads every screening record in the
+  organization, unbounded, LOW, FLAGGED, same class as MS-6/FIN-9/ELEC-12/
+  USR-5/MP-10/DOC-9) — `get_compliance_roster`
+  (`medical_screening_service.py:658-750`) still calls
+  `self.list_requirements(..., is_active=True)` (unbounded `limit=None`) and
+  `self.list_records(organization_id)` (also `limit=None`, no filter) to
+  build `by_user`/`by_prospect` for grading every subject at once. Unchanged.
+- **MS-16's remaining open half** — `grace_period_days` and
+  `frequency_months` are still written on create/update and read by nothing
+  in `_grade()` (`applies_to_roles` was wired in pass 11; these two were not).
+  Re-confirmed: `_grade` (`:128-199`) references neither name.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.** This
+pass's own finding is that the two items pass 9/app-review pass 5 had flagged
+for a product decision were, in fact, decided and correctly implemented
+(including their own guard tests) by a session outside this rotation, and
+that the fix holds up under direct re-verification against current code
+rather than being taken on the commit message.
+
+### Completion gate (pass 12)
+
+| Check                                                                                                                                                                                    | Result                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI-pinned `flake8==7.4.1`, `/usr/local/bin/flake8`, which matches CI — a `flake8-pytest-style`-shadowing `~/.local/bin/flake8` is older and was bypassed) | ✅ 0 violations                                         |
+| `black --check app/ tests/ alembic/` (CI-pinned `black==26.10.1`, `/usr/local/bin/black` — `~/.local/bin/black` resolves to a stale `26.5.1` uv-tool install and was bypassed)           | ✅ 2649 files unchanged                                 |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned `isort==9.0.2`)                                                                                                                     | ✅ clean                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                        | ✅ 652 revisions, single head `3f2593e8071e`            |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                        | ✅ 276 routes, 0 errors, 0 warnings                     |
+| `pytest tests/ -q -k "medical_screening or screening"`                                                                                                                                   | ✅ 154 passed, 1 skipped (environment-only, `py_vapid`) |
+| `frontend: npm run typecheck`                                                                                                                                                            | ✅ clean                                                |
+| `frontend: npm run lint` (`eslint --max-warnings 10`)                                                                                                                                    | ✅ clean, 0 warnings                                    |
+| `npx vitest run src/modules/medical-screening`                                                                                                                                           | ✅ 61 passed (11 files)                                 |
 
 ---
 
