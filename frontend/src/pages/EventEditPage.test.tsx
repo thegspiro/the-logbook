@@ -276,6 +276,9 @@ describe('EventEditPage', () => {
       return vi.mocked(eventService.updateEvent).mock.calls[0]?.[1] as Record<string, unknown>;
     }
 
+    // The key absent, as the API omits it, rather than present and undefined.
+    const { check_in_minutes_before: _stored, ...withoutLeadTime } = mockEvent;
+
     beforeEach(() => {
       vi.mocked(eventService.updateEvent).mockReset();
       vi.mocked(eventService.updateEvent).mockResolvedValue({} as unknown as Event);
@@ -288,21 +291,13 @@ describe('EventEditPage', () => {
     });
 
     it('a window-type event with no stored lead time keeps the 15 minutes the server uses', async () => {
-      vi.mocked(eventService.getEvent).mockResolvedValue({
-        ...mockEvent,
-        check_in_window_type: 'window',
-        check_in_minutes_before: undefined,
-      });
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...withoutLeadTime, check_in_window_type: 'window' });
 
       expect((await saveUnchanged()).check_in_minutes_before).toBe(15);
     });
 
     it('a flexible event with no stored lead time keeps 60', async () => {
-      vi.mocked(eventService.getEvent).mockResolvedValue({
-        ...mockEvent,
-        check_in_window_type: 'flexible',
-        check_in_minutes_before: undefined,
-      });
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...withoutLeadTime, check_in_window_type: 'flexible' });
 
       expect((await saveUnchanged()).check_in_minutes_before).toBe(60);
     });
