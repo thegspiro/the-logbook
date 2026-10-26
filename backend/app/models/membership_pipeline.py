@@ -307,16 +307,16 @@ class ProspectiveMember(Base):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[Optional[str]] = mapped_column(String(20))
-    mobile: Mapped[Optional[str]] = mapped_column(String(20))
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    mobile: Mapped[Optional[str]] = mapped_column(EncryptedText)
     # Encrypted at rest (HIPAA): not searchable or sortable in SQL.
     date_of_birth: Mapped[Optional[date]] = mapped_column(EncryptedDate)
 
     # Address
-    address_street: Mapped[Optional[str]] = mapped_column(String(255))
-    address_city: Mapped[Optional[str]] = mapped_column(String(100))
-    address_state: Mapped[Optional[str]] = mapped_column(String(50))
-    address_zip: Mapped[Optional[str]] = mapped_column(String(20))
+    address_street: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_city: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_state: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    address_zip: Mapped[Optional[str]] = mapped_column(EncryptedText)
 
     # Application details
     interest_reason: Mapped[Optional[str]] = mapped_column(Text)

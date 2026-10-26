@@ -1676,6 +1676,22 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
         with pytest.raises(ValueError, match="fire"):
             await self._save(["ems"], ["fire", "ems"], {"fire"})
 
+    async def test_dropping_many_used_types_still_names_them(self):
+        """Every blocked slug used to be listed, so removing a dozen at once
+        ran past safe_error_detail's 300-character cap and the settings
+        screen showed only a generic error."""
+        from app.core.utils import safe_error_detail
+
+        used = [f"mutual_aid_structure_fire_{n:02d}" for n in range(12)]
+        with pytest.raises(ValueError, match="history still refers to") as refusal:
+            await self._save(["ems"], [*used, "ems"], set(used))
+
+        detail = str(refusal.value)
+        assert safe_error_detail(refusal.value) == detail
+        assert used[0] in detail
+        assert "more" in detail
+        assert detail.endswith("Turn it off instead to stop offering it.")
+
     async def test_dropping_an_unused_type_is_allowed(self):
         await self._save(["ems"], ["fire", "ems"], {"ems"})
 

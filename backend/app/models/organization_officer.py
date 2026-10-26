@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 
@@ -57,7 +58,7 @@ class OrganizationOfficer(Base):
     display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     title: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
-    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -548,13 +548,20 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   );
 
   return (
+    // The summary sits beside the form from xl, not lg. Beside the 16rem side
+    // navigation a 1024px screen (an iPad on its side) has ~690px, and a 300px
+    // summary left the form 369px: its two-column rows cut "Continuing
+    // Education" to "Continuing Ed". The summary's sticky offset, its submit
+    // button, the fixed phone action bar and the page's bottom padding all
+    // switch at the same breakpoint, so the action bar shows for exactly as
+    // long as the summary is below the form.
     <form
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
         void save({ asDraft: false });
       }}
-      className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_300px]"
+      className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[1fr_300px]"
     >
       <div className="flex flex-col gap-4">
         {config.member_instructions && (
@@ -1003,7 +1010,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           phone, where the fixed bar carries the submit. Rendered once either
           way — the attachment and Save Draft have no second copy to keep in
           step, and no member loses them on a small screen. */}
-      <aside className="card flex flex-col gap-4 p-5 lg:sticky lg:top-6">
+      <aside className="card flex flex-col gap-4 p-5 xl:sticky xl:top-6">
         <Overline>This Submission</Overline>
         <div>
           <p className="text-theme-text-primary font-mono text-4xl leading-10 font-bold">
@@ -1027,7 +1034,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
             }}
           />
         )}
-        <div className="hidden lg:block">{submitButton(submitLabel, '')}</div>
+        <div className="hidden xl:block">{submitButton(submitLabel, '')}</div>
         {/* Nothing to draft once the department has the submission — from
             pending_review on, a save is an edit to something they can see. */}
         {(!isEdit || editSubmission?.status === 'draft') && (
@@ -1048,7 +1055,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       </aside>
 
       {/* ---------- Sticky action bar (phone) ---------- */}
-      <div className="surface-opaque border-theme-surface-border action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 flex items-center gap-3 border-t px-4 shadow-lg lg:hidden">
+      <div className="surface-opaque border-theme-surface-border action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 flex items-center gap-3 border-t px-4 shadow-lg xl:hidden">
         <div className="min-w-0">
           <p className="text-theme-text-primary font-mono text-xl font-bold">{formatDuration(durationMinutes)}</p>
           <p className="text-theme-text-muted text-xs">
@@ -1178,7 +1185,7 @@ const SubmitTrainingPage: React.FC = () => {
   }
 
   return (
-    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 pb-40 sm:px-6 lg:px-8 lg:pb-8">
+    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 pb-40 sm:px-6 lg:px-8 xl:pb-8">
       <TrainingPageHeader
         icon={ClipboardList}
         title="Submit External Training"

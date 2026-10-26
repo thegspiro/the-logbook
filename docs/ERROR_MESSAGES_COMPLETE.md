@@ -314,6 +314,26 @@ send through it.
 
 ---
 
+### Gmail Service Account Errors
+
+A Gmail department on the service-account method sends through the Gmail API
+with a domain-wide delegated key. **Test Connection** obtains a token as the
+From address and sends nothing; each message below comes from
+`backend/app/utils/google_oauth.py` and is shown both by the test and, at save
+time, for a key that cannot be used.
+
+| Message (starts with)                                                                                | Cause                                                                           | Fix                                                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `A Google service account key is required`                                                           | Method is service account and no key was uploaded                               | Upload the JSON key downloaded from Google Cloud                                                                                                                  |
+| `The service account key is not valid JSON` / `must be a service account key` / `is missing …`       | The file is not a service-account key                                           | Download a new **JSON** key for the service account (not an OAuth client file)                                                                                    |
+| `Google refused delegation for this service account`                                                 | The client ID is not authorized for `gmail.send`                                | Google Admin console > Security > API controls > Domain-wide delegation: add the client ID named in the message with `https://www.googleapis.com/auth/gmail.send` |
+| `Google refused the key or the sending account`                                                      | The From address is not an active user in the domain, or the key was deleted    | Use an active Workspace user as the From address; create a new key if it was deleted                                                                              |
+| `Could not reach Google to obtain an access token`                                                   | No outbound HTTPS to `oauth2.googleapis.com`                                    | Allow outbound HTTPS to `oauth2.googleapis.com` and `gmail.googleapis.com`                                                                                        |
+| `The saved service account key could not be read`                                                    | The stored key cannot be decrypted (for example after `ENCRYPTION_KEY` changed) | Upload the key again                                                                                                                                              |
+| `Only an organization administrator can set up or change Gmail sending with a service account` (403) | The caller has `settings.manage` but not `admin.access`                         | Ask a Fire Chief, President or IT Manager, or anyone holding `admin.access`                                                                                       |
+
+---
+
 ### Microsoft OAuth Errors
 
 Removed 2026-09-03. Microsoft 365 is now tested and used as SMTP submission

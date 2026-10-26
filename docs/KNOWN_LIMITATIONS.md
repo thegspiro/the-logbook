@@ -209,6 +209,38 @@ and an owner may want to revisit each:
 
 ---
 
+## Gmail — Sending Through a Service Account (2026-10-25)
+
+Gmail departments on Google Workspace can send through the Gmail API with a
+domain-wide delegated service account (`app/utils/google_oauth.py`,
+`app/services/gmail_api_sender.py`) instead of an App Password. Each of these is
+a known edge an owner should know about:
+
+- **The key can send as anyone in the domain.** Domain-wide delegation cannot be
+  limited to one mailbox; the `gmail.send` scope limits it to sending, not to a
+  sender. Whoever holds the key could send mail as the chief. The key is
+  encrypted at rest and never returned by the API, configuring the method needs
+  `admin.access` (owner decision, 2026-10-25), and the From address is fixed by
+  the saved settings — but the key itself is as powerful as the delegation
+  allows. Microsoft 365's equivalent is narrower: its app registration is granted
+  `SendAs` on one mailbox. Recommend a dedicated Google Cloud project for the
+  key, and delete the key in Google Cloud if it may have leaked.
+- **Not yet proven against a live tenant.** The request shape, the scope and the
+  upload endpoint are taken from Google's own API description bundled with
+  `google-api-python-client`. Three behaviours are taken from Google's
+  documentation without a live test: that the Gmail API delivers to a `Bcc`
+  header and strips it (the sender adds one for recipients not in To or Cc),
+  how a daily sending limit is reported (the sender stops the batch on a
+  message naming a daily limit, or a `Retry-After` longer than 60 seconds), and
+  that the `Message-ID` and `List-Unsubscribe` headers the sender sets are kept.
+- **No settings screen yet.** The method can be set through
+  `PATCH /api/v1/organizations/settings/email`; the screen arrives separately.
+  Onboarding offers App Password only, so a department chooses the service
+  account after setup, in Settings, where the `admin.access` check applies.
+- **The connection test is open to `settings.manage`.** It obtains a token as
+  the From address and sends nothing, and a saved key is only used for the From
+  address it was saved with, so it cannot be pointed at another mailbox.
+
 ## Google Workspace — What Account Provisioning Leaves Out (2026-10-15)
 
 The Google Workspace integration creates an account for each applicant
@@ -1049,7 +1081,16 @@ Still open:
 - **Backups do not include buckets, by decision (2026-10-22).**
   `scripts/backup.sh` names the buckets it left out; `docs/BACKUP.md` says how
   to protect them with the provider's tooling. A department that skips that
-  has no second copy of its bucket.
+  has no second copy of its bucket. The same holds for a Google Shared Drive
+  (2026-10-25).
+- **A copy of a Shared Drive cannot simply be put back (2026-10-25).** The
+  Logbook finds a Drive file by its id, and a file copied out and uploaded
+  again is a new file with a new id, so its record still points at the old
+  one. Nothing repoints references yet. Within 30 days the drive's own trash
+  restores a file with its id intact; after that, a copy kept elsewhere has
+  to be matched to its records by file name (each is named after its storage
+  path) and the references updated by hand. A bucket has no such gap: its
+  objects are found by key, so a mirror restores as it is.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.
@@ -7008,6 +7049,41 @@ question against Finance's own locking conventions (Pitfall #27) that a
 documents-feature review pass should not decide unilaterally — Finance and
 Documents would need to agree on one order before this can lock safely
 without risking a new cross-feature deadlock.
+
+## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26)
+
+Found by security review EC-14 pass 12
+(`docs/security-review/EC-14-equipment-check-shifts.md`, pass 12, EC-17).
+Pre-existing, not introduced by this pass's own delta — the same pass's
+delta hardened `update_report`'s `review_status` field specifically (a
+submitted report's status now changes only through review, and the
+submit-destination is read from the department's own config rather than
+trusted from the client), and its own docstring rewrite claims "The
+service allows only drafts" — true for that one field, not for the rest.
+
+`ShiftCompletionService.update_report`'s `UPDATABLE_FIELDS` loop writes
+`performance_rating`, `officer_narrative`, `areas_of_strength`,
+`areas_for_improvement`, `skills_observed`, `tasks_performed`,
+`hours_on_shift`, `calls_responded`, `call_types`, and `enrollment_id` onto
+the row for any update from the filing officer, with no check on
+`review_status` at all. A report that has already been reviewed and
+`approved` stays open to the same officer editing its narrative, rating, or
+recorded skills through `PUT /shift-reports/{id}`, weeks later, with no
+re-review triggered and nothing beyond the generic `shift_report_updated`
+audit-log entry (which records which fields changed, not that the report
+had already cleared review) to surface it to whoever approved the original
+version. Confirmed this does not re-run training credit —
+`_trigger_deferred_progress` only fires when the report was not already
+`approved` before this edit — so the risk is to the integrity of the
+record itself, not to double-granted credit.
+
+**Not fixed.** Closing it is a product decision between three shapes this
+pass should not pick unilaterally: block every `UPDATABLE_FIELDS` write
+once a report is no longer a draft (simplest, but removes the ability to
+fix a typo after approval), require any edit to an approved/pending report
+to go back through review (more correct, but is a workflow change its own
+users would need to learn), or accept the status quo and rely on the audit
+log as the record of what changed and when.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be

@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import async_session_factory
-from app.core.utils import generate_uuid
+from app.core.utils import generate_uuid, list_within_detail_limit
 from app.models.apparatus import (
     Apparatus,
     ApparatusEquipment,
@@ -201,7 +201,9 @@ class EquipmentCheckService:
                 for error in errors
             ]
             raise ValueError(
-                "Template cannot be activated: " + "; ".join(display_errors)
+                list_within_detail_limit(
+                    "Template cannot be activated: ", display_errors, separator="; "
+                )
             )
 
     @staticmethod

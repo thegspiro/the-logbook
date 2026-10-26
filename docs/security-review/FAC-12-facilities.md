@@ -1,15 +1,148 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail), [#2621](https://github.com/thegspiro/the-logbook/pull/2621) (pass 6, watchdog re-verification, 0 fixed, 0 new findings), [#2968](https://github.com/thegspiro/the-logbook/pull/2968) (pass 7, 0 fixed, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact), [#3169](https://github.com/thegspiro/the-logbook/pull/3169) (pass 8, watchdog pickup, 0 new application findings, FAC-13 re-verified already fixed by owner-direct work, 1 cross-cutting migration-head conflict fixed), [#3288](https://github.com/thegspiro/the-logbook/pull/3288) (pass 9, watchdog pickup, 0 fixes, 0 new findings, FAC-30 re-confirmed the only standing item), [#3433](https://github.com/thegspiro/the-logbook/pull/3433) (pass 10, watchdog pickup, 0 fixes, 0 new findings, two new one-step upload routes reviewed and found sound), pass 11 PR recorded in `PROGRESS.md`
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail), [#2621](https://github.com/thegspiro/the-logbook/pull/2621) (pass 6, watchdog re-verification, 0 fixed, 0 new findings), [#2968](https://github.com/thegspiro/the-logbook/pull/2968) (pass 7, 0 fixed, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact), [#3169](https://github.com/thegspiro/the-logbook/pull/3169) (pass 8, watchdog pickup, 0 new application findings, FAC-13 re-verified already fixed by owner-direct work, 1 cross-cutting migration-head conflict fixed), [#3288](https://github.com/thegspiro/the-logbook/pull/3288) (pass 9, watchdog pickup, 0 fixes, 0 new findings, FAC-30 re-confirmed the only standing item), [#3433](https://github.com/thegspiro/the-logbook/pull/3433) (pass 10, watchdog pickup, 0 fixes, 0 new findings, two new one-step upload routes reviewed and found sound), [#3585](https://github.com/thegspiro/the-logbook/pull/3585) (pass 11, watchdog pickup, docs-only, 0 fixes, 0 new findings), pass 12 PR recorded in `PROGRESS.md`
 
-**Backend:** `api/v1/endpoints/facilities.py` (100 routes, 4274 L),
+**Backend:** `api/v1/endpoints/facilities.py` (102 routes, 4274 L),
 `services/facilities_service.py` (3465 L), `services/documents_service.py`
 (shared folder-access machinery), model `app/models/facilities.py` (1945 L),
 schemas `app/schemas/facilities.py` (1438 L), `app/mcp/tools/facilities.py`
 (139 L)
 **Frontend:** `modules/facilities`
-**Migrations:** none touching this module's own tables this pass (one
-repo-wide redundant-index migration reviewed; see below).
+**Migrations:** none touching this module's own tables this pass.
+
+---
+
+## Pass 12 (2026-10-26) — watchdog pickup; 0 application fixes needed, 0 new findings; two new paginated endpoints reviewed and found sound; FAC-30 re-confirmed the only standing item
+
+**Watchdog pickup.** No open PR's head branch started with
+`claude/security-review-` (`search_pull_requests`, 0 matches, re-checked
+fresh at the start of this iteration). PR #3738 (Feature 11, Inventory, pass 12) had already merged and was handled by this same iteration — Inventory's
+Open PR row was cleared as part of merging it, and this iteration branched
+from that updated `main`. The dedicated `/loop 30m /security-review` session
+was not reachable via `ListAgents`. Per `PROGRESS.md`'s rotation table,
+Feature 12 (Facilities) was the first `⬜` row.
+
+### Prior art loaded first
+
+Read, in full: `CHECKLIST.md`; this file's pass 11 section (docs-only, 0
+fixes, 0 new findings, standing items unchanged); pass 10's section for the
+underlying code baseline. `docs/module-audit/facilities.md` and
+`docs/app-review/facilities.md` still defer security-relevant claims to this
+file; no new open items in either.
+
+### Real delta since pass 11's baseline (PR #3585's merge, `b627b7ad`,
+
+docs-only — the underlying code baseline is unchanged from pass 10,
+`de27c25f`)
+
+Three non-merge commits touch this feature's declared scope files, all read
+in full via `git show`:
+
+- **`ac73e154`** — "Facilities: page, search and filter maintenance and
+  inspections on the server" (FAC2-5). The cross-facility maintenance and
+  inspection screens previously loaded the first 100 rows and filtered/
+  searched them client-side, so a search could miss older records and a long
+  overdue list could be silently cut short. Adds `GET /facilities/
+maintenance/page` and `GET /facilities/inspections/page`, both registered
+  ahead of their `/{id}` siblings (confirmed by reading route order; a test
+  pins it) and gated identically to the existing list endpoints
+  (`require_permission("facilities.view", "facilities.manage")`). Every new
+  query path (`page_maintenance_records`/`page_inspections` in
+  `facilities_service.py`) builds its `WHERE` from the same
+  `organization_id == caller's org` condition the existing list methods use
+  (`_maintenance_conditions`/`_inspection_conditions`, now shared between the
+  old and new methods rather than duplicated); a `facility_id` filter
+  parameter is just one more `AND` term inside that already org-scoped query,
+  so a cross-org id simply matches nothing — no new by-id surface. Search
+  terms go through `like_pattern(search)` with `escape=LIKE_ESCAPE_CHAR` on
+  every `ilike()` call (4 columns for maintenance, 3 for inspections, all
+  confirmed by reading the calls). `limit` is bounded `le=100` server-side
+  (Pitfall abuse-resistance dimension); `skip`/`limit` plus a `created_at`/
+  `inspection_date` + `id` compound `ORDER BY` prevents the classic offset-
+  pagination "same row twice or a row skipped" defect on ties. The `result=
+pending` inspection filter (`passed IS NULL`) is new but reads the same
+  already-org-scoped query, not a new endpoint shape.
+- **`934f430a`** — "Open Check-In QR Codes with the Facilities module off".
+  Removes the `requiredModule="facilities"` gate from
+  `/locations/qr-codes` (frontend route only) because the page it guards
+  reads rooms from the ungated `/locations` backend endpoint and already
+  hides its apparatus section when that module is off — the module gate was
+  guarding a page that had no Facilities-only data behind it. The permission
+  gate (`requiredAnyPermission=['locations.manage', 'facilities.manage',
+'locations.manage_nfc_tags']`) is untouched; `test_module_api_gating.py`'s
+  `ROUTES_OPEN_BY_DESIGN` registry and the testing registry's route entry
+  both updated to match, so the exemption is visible and tested rather than
+  silent. No backend endpoint's authorization changed.
+- **`9315f1f9`** — "Add Card Readers page and card taps on events (NFC admin,
+  part 2)". Within this feature's declared scope, the only touched file is
+  `frontend/src/modules/facilities/routes.tsx`, which adds the
+  `/locations/card-readers` route (permission-gated, no module gate, for the
+  same reason as the QR codes route above — card readers exist in Locations
+  mode too). The backend of this feature (`nfc_activity.py`,
+  `nfc_card_admin_service.py`) is not in this feature's declared scope
+  (Locations & kiosk / Apparatus & NFC own it, rows 32/13) and was not
+  reviewed here — deferred to those rotation rows, per the scoping
+  discipline the prior passes already follow for cross-feature landings.
+
+No migration touches this feature's tables in this window. `FACILITY_FOLDER_
+PERMISSIONS`/`FACILITY_ACCESS_PERMISSIONS`/`FACILITY_SENSITIVE_PERMISSIONS`
+and `core/permissions.py`'s chief-rank bundling are untouched by any commit
+in this window (grepped the full commit range).
+
+### Standing findings re-verified
+
+- **FAC-30 (P2, owner-accepted "leave as is", 2026-10-05)** — re-confirmed
+  unchanged; nothing in this pass's delta touches the permission constants
+  it concerns.
+- **FAC-13 (HIGH, closed pass 8)**, **FAC-41/FAC-44 (locking fixes, confirmed
+  intact every pass since 3)** — all untouched this window.
+
+### Route inventory
+
+**102 routes, up from 100 at pass 11** — the exact expected delta: the two
+new `GET /maintenance/page` and `GET /inspections/page` routes, confirmed by
+an AST walk of every `@router.<verb>`-decorated function in
+`facilities.py` (102) and by diffing for added `@router.` lines against the
+pass-11 baseline (exactly those two). `check_route_permissions.py --strict`
+(repo-wide): 279 routes, 0 errors, 0 warnings — no new or un-gated route
+anywhere in the codebase.
+
+### Verified good ✅ (pass 12)
+
+- Both new paged endpoints carry the same permission gate as the list
+  endpoints they complement, and build their query from the same org-scoped
+  condition builder — no new by-id or cross-tenant surface.
+- Every new `ilike()` call in `page_maintenance_records`/`page_inspections`
+  uses `like_pattern()` with `escape=LIKE_ESCAPE_CHAR`.
+- `limit` is bounded (`le=100`); pagination is tie-broken on `id` so no
+  offset page can repeat or skip a row.
+- The two module-gate removals (`/locations/qr-codes`, `/locations/card-
+readers`) touch only a frontend convenience gate; the underlying permission
+  gates and backend authorization are unchanged, and both exemptions are
+  recorded in `ROUTES_OPEN_BY_DESIGN`/the testing registry rather than left
+  implicit.
+- The NFC admin backend landing in this window (`nfc_activity.py`) is outside
+  this feature's declared scope and is deferred to the rows that own it.
+
+### Completion gate
+
+| Check                                                                                                                                                    | Result                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                    | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                                           | ✅ clean (2671 files unchanged)                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                        | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                        | ✅ single head (`9ab7b4276c22`), 655 revisions   |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                    | ✅ 279 routes, 0 errors, 0 warnings              |
+| `pytest tests/ -k "facilit"`                                                                                                                             | ✅ 303 passed, 1 pre-existing skip (`pywebpush`) |
+| Tenancy/security guard suites (LIKE escaping, capacity locking, CSV sweep, org-scoping ratchet, account-status gates, numeric bounds, live schema drift) | ✅ 658 passed                                    |
+| `npm run typecheck` (frontend)                                                                                                                           | ✅ clean                                         |
+| `npm run lint` (frontend)                                                                                                                                | ✅ clean, exit 0                                 |
+| `npx vitest run src/modules/facilities`                                                                                                                  | ✅ 147 passed (19 files, up from 139 at pass 11) |
+
+**0 application-security findings, 0 new FAC-N findings.** FAC-30 (P2,
+owner-accepted "leave as is") remains the only standing flagged item.
+Rotation row 12 → ✅ (pending this PR's merge). Next: Feature 13 (Apparatus &
+NFC).
 
 ---
 

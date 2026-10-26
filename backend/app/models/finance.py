@@ -31,6 +31,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -1424,7 +1425,7 @@ class CheckRequest(Base):
         index=True,
     )
     payee_name: Mapped[str] = mapped_column(String(300), nullable=False)
-    payee_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payee_address: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     memo: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     purpose: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

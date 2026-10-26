@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import RefusesNull, UTCResponseBase
 
 
 class RoleBase(BaseModel):
@@ -33,13 +33,17 @@ class RoleCreate(RoleBase):
     model_config = ConfigDict(extra="forbid")
 
 
-class RoleUpdate(BaseModel):
+class RoleUpdate(RefusesNull):
     """Schema for updating a role"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
     priority: Optional[int] = Field(None, ge=0, le=100)
+
+    # The service reads None as "not provided", so a null here would answer 200
+    # and change nothing. An emptied description is sent as an empty string.
+    null_refused = frozenset({"name", "description", "permissions", "priority"})
 
     model_config = ConfigDict(extra="forbid")
 

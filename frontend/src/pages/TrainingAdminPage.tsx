@@ -18,7 +18,7 @@ import { useSearchParams } from 'react-router';
 import { Plus } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
 import { AdminHubFrame, AdminMetricsSettings } from '../components/admin';
-import TrainingAdminNav from '../components/training/TrainingAdminNav';
+import { AdminHubAreaNav } from '../components/admin/AdminHubAreaNav';
 import {
   areaPanelId,
   areaTabId,
@@ -194,13 +194,19 @@ export const TrainingAdminPage: React.FC = () => {
         />
       }
       nav={
-        <TrainingAdminNav
+        <AdminHubAreaNav
           areas={areas}
           activeArea={activeArea}
           activeTab={activeTab}
           onAreaChange={handleAreaChange}
           onTabChange={(tab) => navigateTo(activeAreaId, tab)}
           attentionCounts={attentionCounts}
+          hintOf={(destination) => destination.hint}
+          label="Training admin areas"
+          // Matches `areaTabId` / `areaPanelId`, under which the page renders the area's panel.
+          idPrefix="training-admin-area"
+          tabId={tabId}
+          tabPanelId={tabPanelId}
         />
       }
       refreshToken={frameToken}
