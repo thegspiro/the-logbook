@@ -8635,9 +8635,11 @@ class MembershipPipelineService:
         self, organization_id: str, processed_by: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Process inactivity warnings: mark critical prospects as inactive,
-        send coordinator emails for warnings.
-        Returns count of warnings and actions taken.
+        Process inactivity warnings: mark critical prospects as inactive and
+        record an ``inactivity_warning_sent`` activity entry for the rest.
+        Nothing is emailed: the pipeline's ``notify_coordinator`` /
+        ``notify_applicant`` settings have no reader yet (see
+        docs/KNOWN_LIMITATIONS.md). Returns count of warnings and actions taken.
 
         Prior-activity lookups are batched rather than run per prospect: this
         runs over every stale prospect in the organization, so a department
