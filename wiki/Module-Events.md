@@ -61,6 +61,11 @@ requests, templates, analytics, and the public outreach request pipeline.
   record is written. Reopening needs `events.reopen_attendance`, deliberately
   kept out of `events.manage` so the organizer who closed an event cannot
   quietly reopen it and change numbers already fed into hours and compliance.
+  On a **Training** event a `training.manage` holder may also edit the event,
+  close it (Finalize, End Event, Record Times) and reopen it — including one
+  they closed themselves, which the department chose over a second-person
+  check; the audit row records who reopened it. See
+  [Training managers on Training events](#training-managers-on-training-events)
   See [Attendance Finalization and the Lock](#attendance-finalization-and-the-lock)
 - **Past events** — every member can switch the Events list to past events;
   managers also get a **Past Events** tab in the Events admin hub
@@ -313,6 +318,18 @@ list of **names and status — nothing else**. Contact details, RSVP notes,
 dietary restrictions, accessibility needs, guest counts and check-in times stay
 in the organizer view (`GET /events/{id}/rsvps` — `events.manage`, the
 event's organizer pair, or `training.manage` on a Training event).
+
+### Training managers on Training events
+
+A `training.manage` holder without `events.manage` gets, on **Training** events
+only: **Edit** (the type is locked to Training, and a "this and all future
+events" edit is refused if any occurrence it reaches is another type),
+**End Event**, **Finalize Attendance**, **Record Times** and **Reopen
+Attendance**, as well as the attendance tools above. The More menu (duplicate,
+cancel, delete, templates, meetings) and reminders stay with `events.manage`.
+The page reads `can_edit_event` and `can_reopen_attendance` from
+`GET /events/{id}`; `/events/:id/edit` admits `training.manage` and then asks
+the event.
 
 ### Manager tools on the detail page
 
@@ -690,7 +707,8 @@ Recording the actual end time (Record Times, End Event) triggers duration
 finalization automatically.
 
 **Reopening** (`POST /events/{id}/reopen-attendance`) requires
-`events.reopen_attendance`. Re-finalizing after a correction restates the
+`events.reopen_attendance`, or `training.manage` on a Training event.
+Re-finalizing after a correction restates the
 credit: `apply_requirement_credit` takes a `restate` flag, and the enrollment
 lookups include `COMPLETED` enrollments, so certification and phase totals move
 with the corrected hours.

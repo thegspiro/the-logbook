@@ -75,6 +75,10 @@ CALLER_SUPPLIED = {
     # detail endpoint; False is the honest default everywhere else.
     "attendance_access",
     "can_correct_attendance_times",
+    # Edit/close and reopen rights: events.manage / events.reopen_attendance,
+    # or training.manage on a Training event. Per caller, detail endpoint only.
+    "can_edit_event",
+    "can_reopen_attendance",
     # The rest of the list card's derived fields, per caller: whether this
     # member checked in (their own RSVP row), what the event would credit (the
     # org's hour mappings) and whether the attendee list will answer them (the

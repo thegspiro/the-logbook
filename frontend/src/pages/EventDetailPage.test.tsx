@@ -831,6 +831,72 @@ describe('EventDetailPage', () => {
     });
   });
 
+  // training.manage edits a Training event and closes and reopens its
+  // attendance; the server says so in can_edit_event / can_reopen_attendance.
+  describe('Training manager on a Training event', () => {
+    const lastNightsDrill: Event = {
+      ...mockEvent,
+      event_type: 'training',
+      start_datetime: '2026-04-15T18:00:00Z',
+      end_datetime: '2026-04-15T20:00:00Z',
+      attendance_access: 'training_manager',
+      can_correct_attendance_times: true,
+      can_edit_event: true,
+      can_reopen_attendance: true,
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'training.manage');
+      mockAuthState.user = { id: 'tm-1', permissions: ['training.manage'] } as unknown as CurrentUser;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+    });
+
+    it('offers Edit, Finalize Attendance and Record Times, but not the More menu', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(lastNightsDrill);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /^edit$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /finalize attendance/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /record times/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /more/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /send reminders/i })).not.toBeInTheDocument();
+    });
+
+    it('offers Reopen Attendance once it is finalized', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...lastNightsDrill,
+        attendance_finalized_at: '2026-04-15T21:00:00Z',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /reopen attendance/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /finalize attendance/i })).not.toBeInTheDocument();
+    });
+
+    it('offers none of it on an event the server does not give them', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...lastNightsDrill,
+        event_type: 'business_meeting',
+        attendance_access: null,
+        can_edit_event: false,
+        can_reopen_attendance: false,
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /finalize attendance/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /record times/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe('Cancel Event Modal', () => {
     beforeEach(() => {
       mockCheckPermission.mockReturnValue(true);
