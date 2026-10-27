@@ -1,6 +1,237 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 10 (2026-10-27) — two substantive new features (sensitive fields, website embedding), both reviewed end-to-end; 0 fixed, 0 new findings
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-9) before touching code. Confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review`) that no security-review PR was
+open, and re-confirmed row 26 (Forms) as the first `⬜` row on a freshly
+fetched `main` (head `02bdfb59`, PR #3768/Feature 25 already merged).
+
+Baseline: pass 9's merge (`2d000c36`, PR #3640). Unlike several recent
+passes, this one has a real, substantial delta on the module's core files —
+`git log 2d000c36..HEAD` on the five backend scope files plus
+`app/core/permissions.py` and the new `app/utils/embed_origins.py` shows
+exactly two feature commits (plus no merge-commit noise):
+
+- **`7ee7f1fe` ("Forms: mark a field Sensitive to encrypt its answers and
+  restrict who reads them")** — a form field can be marked Sensitive; its
+  answers move to a new AES-256-GCM `EncryptedJSON` column
+  (`form_submissions.sensitive_data`) instead of the plain `data` JSON, and
+  are served only to a new permission, `sensitive_answers.view`.
+- **`90618aaa` ("Let departments embed public forms on their own websites")**
+  — a published public form can be shown in an `<iframe>` on a department's
+  own site at `/embed/f/<slug>`, gated by a per-form `allow_embed` flag and a
+  per-department allow-list of exact `https` origins
+  (`Organization.settings.forms.embed_allowed_origins`), served through a new
+  public, unauthenticated `GET /{slug}/embed-policy` endpoint that nginx asks
+  via `auth_request` on every load of the embed page and copies into that
+  page's `Content-Security-Policy: frame-ancestors`.
+
+Both read in full — service, schema, model, migration, nginx config and
+frontend — rather than trusted from the commit message.
+
+### Route inventory (re-enumerated by AST, not diffed)
+
+22 routes in `endpoints/forms.py` (unchanged from pass 9's actual count — see
+pass 6's correction note; no decorator added or removed this pass, confirmed
+by `git diff` showing zero `@router.` lines touched in that file) + **3** in
+`public/forms.py` (was 2 — the one new route is `GET /{slug}/embed-policy`,
+confirmed the only `+@router.` line in that file's diff). **Total 25.**
+
+Permission distribution, every route checked against its `Depends`:
+`forms.view` ×3 (`list_forms`, `get_forms_summary`, `get_form`),
+`forms.manage` ×17 (every write, plus `list_submissions`/`get_submission`/
+`reprocess_submission_integrations`/`delete_submission`), bare
+`get_current_user` ×2 (`member_lookup`, `submit_form` — by design, unchanged).
+`public/forms.py`'s three routes (`GET /{slug}`, `GET /{slug}/embed-policy`,
+`POST /{slug}/submit`) are all intentionally unauthenticated, each behind
+`_rate_limit_view`/`_rate_limit_submit` (60/10 per minute per IP) — the new
+embed-policy route reuses the existing view limiter rather than adding a
+fourth rate-limit shape, and (submit only) honeypot + CAPTCHA, unchanged from
+every prior pass.
+
+### Sensitive fields — reviewed against all seven dimensions, no gap found
+
+- **Namespace/wildcard escape (dimension 2, Pitfall #23's reasoning applied
+  to a brand-new permission rather than a seeded rank grant):**
+  `sensitive_answers.view` (`app/core/permissions.py`) is deliberately
+  **outside** the `forms.` prefix — confirmed by reading `_has_permission`'s
+  wildcard matching and by grep: no `DEFAULT_POSITIONS` entry and no
+  onboarding checkbox writes `sensitive_answers.*` or a bare `*` to any seeded
+  position, so a department's existing `forms.manage`/`forms.*` grant cannot
+  reach it. Only the global `*` (System Owner) holds it out of the box,
+  matching `docs/KNOWN_LIMITATIONS.md`'s new "Forms — What a Sensitive Field
+  Does Not Reach" entry.
+- **The reveal check is a programmatic permission check, not a route gate,
+  and it is correctly placed before any response leaves the service
+  boundary:** `_present_submissions` (new helper, `endpoints/forms.py:49-91`)
+  is the single choke point all four submission-returning endpoints
+  (`submit_form`, `list_submissions`, `get_submission`,
+  `reprocess_submission_integrations`) now go through; `reveal` is computed
+  from `user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name)` at
+  each of the three admin call sites and hardcoded `False` at `submit_form`
+  (the submitter is not shown their own answer back — deliberate, and does
+  not cost them anything they do not already have). Every reveal is audited
+  (`form_sensitive_answers_viewed`, ids only — no answer text — matching
+  CLAUDE.md Pitfall #33).
+- **Judged by the field's current flag, not only by where the answer is
+  stored (`FormsService.partition_answers`, `forms_service.py:255-275`):**
+  closes the gap a write-time-only check would leave — a submission
+  committed in the instant between loading the form and a flag change lands
+  in plain `data`, but the response layer still treats it as sensitive by
+  re-checking `sensitive_field_ids` fresh from the DB on every read. The
+  residual (that one answer stays unencrypted at rest until the field is
+  next toggled) is correctly left open and documented, not silently assumed
+  fixed — see `docs/KNOWN_LIMITATIONS.md`.
+- **Sealing an existing field uses the row-lock shape Pitfall #27 requires:**
+  `_seal_existing_answers`/`_has_sealed_answers` (`forms_service.py:277-321`)
+  lock the `Form` row and then every `FormSubmission` row with
+  `.with_for_update()`, org-scoped on both. Un-marking a field with any
+  sealed answer is refused (`SENSITIVE_UNSEAL_REFUSED_ERROR`) rather than
+  decrypting into plain text — verified by reading `update_field`
+  (`forms_service.py:1329-1343`) and its test
+  (`tests/test_form_sensitive_fields.py`).
+- **JSON-column mutation (Pitfall #12):** every write to `sensitive_data`
+  (`_seal_existing_answers`, both submission-create paths' `_split_sensitive`)
+  assigns a new dict, never mutates a shared reference.
+- **No bypass through an integration, CSV export or anonymization:**
+  confirmed `_process_integrations` and every `_process_*` processor read
+  `form.fields`/the sanitized submission dict, never `sensitive_data` — the
+  publish-warnings check (`forms_service.py:1105-1125`) now warns when a
+  sensitive field feeds an integration, so the gap is visible to the
+  `forms.manage` user publishing the form, not just documented. The frontend
+  CSV export (`SubmissionViewer.tsx:202-221`) reads only `s.data`, which
+  never carries a sensitive answer — confirmed by reading the function, not
+  just trusting its comment, and backed by
+  `SubmissionViewer.sensitive.test.tsx`'s own assertion that a sensitive
+  answer never reaches the built CSV even for a viewer who can see it
+  on-screen. `member_anonymization_service.py:317-327` clears
+  `sensitive_data` to NULL, org-scoped, alongside the plain fields it already
+  redacted. Both key-rotation scripts (`reencrypt_to_aesgcm.py`,
+  `rotate_encryption_key.py`) list the column — confirmed by grep, not
+  assumed from the commit message — so a key rotation does not skip it.
+- **Migration (`ce541de8d3da`):** `is_sensitive` is `NOT NULL` with
+  `server_default=false()` (Pitfall #2/#35 — safe on a populated table,
+  nothing to backfill); `sensitive_data` is nullable `Text`. Idempotent
+  (`_has_column` guard on both). **Downgrade correctly refuses** while any
+  submission holds sealed data, rather than destroying it or writing it back
+  out in plain text — read in full, this is the right failure direction per
+  Pitfall #35's "which order fails safely" reasoning, just applied to a
+  schema downgrade rather than a write race.
+
+### Website embedding — reviewed against all seven dimensions, no gap found
+
+- **Dimension 1 (auth coverage) — a new intentionally-public route, compensating
+  controls named:** `GET /{slug}/embed-policy` (`public/forms.py:146-191`) is
+  unauthenticated by design (nginx's `auth_request` cannot send credentials a
+  browser holds) and sits behind the same `_rate_limit_view` (60/min/IP) every
+  other public view route uses. It fails closed in both directions that
+  matter: a slug that doesn't match the 12-hex pattern, a form that doesn't
+  exist, a form with `allow_embed=False`, or a department with no listed
+  origins all answer `'none'` (still **200 OK**, deliberately, so the embed
+  page itself renders and simply refuses to be framed rather than nginx
+  turning a lookup failure into a 500 that would itself be information); and
+  if the backend cannot be reached at all, nginx's `auth_request` fails the
+  _page_ request with 500 rather than serving the page with no
+  `frame-ancestors` restriction. Read `frontend/nginx.conf`'s
+  `location ~ "^/embed/f/..."` block in full to confirm this, not inferred
+  from the commit message.
+- **Dimension 4 (injection) — the header-injection surface a free-form stored
+  list creates:** `app/utils/embed_origins.py`'s `_ORIGIN` regex (read in
+  full) accepts only a lowercase `https://` scheme, host labels and an
+  optional port — no space, semicolon, quote or newline can pass, so a stored
+  origin cannot inject a second CSP directive or end the header early when it
+  is joined with spaces and written into
+  `X-Embed-Frame-Ancestors`/`frame-ancestors`. **Validated twice**, matching
+  the module's own docstring: at write time
+  (`FormsSettings._normalize_origins`, a `field_validator` that raises
+  `ValueError` → 422 on anything that fails `normalize_embed_origin`) and
+  again at read time (`valid_embed_origins`, which drops rather than raises
+  on a bad stored entry — read `embed-policy`'s call site: this is so a
+  value that reached the column some other way, e.g. direct DB access,
+  cannot take every embedded form down, only silently fail to list itself).
+  Confirmed by testing the regex against `; script-src evil`, a bare `*`, a
+  `javascript:` scheme, and a path suffix — all rejected.
+- **Dimension 3 (tenant isolation) — the settings write:**
+  `PATCH /organization/settings/forms` is gated by
+  `require_permission("settings.manage", "organization.update_settings")`,
+  the identical OR-pair every other `/settings/*` sub-resource endpoint in
+  `organizations.py` uses (grepped: 17 call sites) — not a newly-introduced
+  broader grant. The settings merge (`OrganizationService.update_organization_settings`)
+  deep-copies `org.settings` before mutating (Pitfall #12) and
+  `_deep_merge_settings` replaces a list wholesale rather than merging it
+  element-wise, matching the endpoint's own "the list replaces the stored
+  one" docstring — confirmed by reading the merge helper, not assumed.
+- **postMessage / cross-origin messaging (not in `CHECKLIST.md` by name, but
+  the same injection-adjacent class):** `useEmbedHeight` posts
+  `{type, slug, height}` to `window.parent` with target origin `'*'` — read
+  the comment's own justification (the department may list several host
+  sites, so no single target origin is correct, and the payload carries
+  nothing the host page doesn't already have) and found it correct: the
+  **receiving** snippet (`formEmbedSnippet.ts:21`) is the side that must
+  check origin, and it does, against the app's own fixed origin plus the
+  expected message `type` and `slug` — confirmed by reading the generated
+  snippet text itself, not merely its test.
+- **Migration (`0a8d11fcada1`):** `allow_embed` is `NOT NULL` with
+  `server_default=false()` — no existing form becomes embeddable on upgrade.
+  Idempotent, same `_has_column` guard shape.
+- **Nginx (all three configs: `frontend/nginx.conf`,
+  `infrastructure/nginx/nginx.conf`, `infrastructure/nginx/docker.conf`, read
+  in full, not sampled):** the `/_embed_policy` internal subrequest location
+  is marked `internal` (unreachable directly by a browser) and proxies with
+  `proxy_pass_request_body off` (no client body forwarded to the policy
+  check); every other page keeps `X-Frame-Options: DENY` and the embed
+  location is the only one that overrides `frame-ancestors`, from a value the
+  backend computed, never from a client-controlled header on the inbound
+  request. The two edge-proxy configs restate HSTS specifically because a
+  named location does not inherit the server block's `add_header`s —
+  confirmed this is true of nginx's `add_header` inheritance model, not
+  merely asserted by the comment.
+- **The route is in all three registries** (`APPLICATION_PAGES.md`,
+  `modules/testing/testingRegistry.ts`, `e2e/mobile-route-inventory.ts`) —
+  confirmed by grep, and `scripts/check_route_permissions.py --strict` passes
+  (279 routes checked, 0 errors/warnings).
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-4** (form-definition text stored unescaped, safe today — no
+  `dangerouslySetInnerHTML` under `frontend/src/components/forms/`,
+  `pages/PublicFormPage.tsx` or `modules/forms/`, re-grepped, zero matches) —
+  still correctly flagged defense-in-depth, unchanged.
+- **FORM-12** (`get_submission`/`delete_submission`/
+  `reprocess_submission_integrations` ignore the `form_id` path segment) —
+  re-read all three; still a correctness-only API-shape gap, not a security
+  boundary (`forms.manage` is org-wide, not per-form), unchanged reasoning.
+- **BXC-1** (closed at pass 5) — re-read `_condition_error`/
+  `_visible_field_ids`/`_condition_matches`; still closed, nothing in this
+  pass's delta touches conditional-visibility code.
+- **FORM-1/2/3/5/6/7/8/9/10/11** and tenant isolation, LIKE escaping, CSV
+  export (n/a for the admin-facing export per Pitfall #15 — it is a frontend
+  `Blob` download, not a backend `csv.writer`, and the frontend's own
+  `escapeCsvCell` already handles formula injection, pre-existing and
+  unchanged) — none of this pass's two commits touch a line any of these
+  findings concern; nothing regressed.
+
+### Completion gate (pass 10)
+
+| Check                                                              | Result                                                       |
+| ------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                      | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/`                               | ✅ clean, 2695 files unchanged                               |
+| `isort --check-only app/ tests/ alembic/`                          | ✅ clean (isort 9.0.2, matches CI's pin)                     |
+| `python3 scripts/validate_migrations.py --strict`                  | ✅ PASSED — 663 revisions, single head `c616fa1bd492`        |
+| `pytest tests/ -q -k form`                                         | ✅ 931 passed, 1 skipped (pywebpush, environment-only)       |
+| `pytest` (sensitive-field + embed test files, explicit)            | ✅ 71 passed (subset of the 931 above, run individually too) |
+| `scripts/check_route_permissions.py --strict`                      | ✅ 279 routes checked, 0 errors, 0 warnings                  |
+| `cd frontend && npm run typecheck`                                 | ✅ 0 errors                                                  |
+| `cd frontend && npm run lint`                                      | ✅ exit 0                                                    |
+| `cd frontend && npx vitest run` (forms/embed/sensitive test files) | ✅ 14 files, 70 tests passed                                 |
 
 ---
 
