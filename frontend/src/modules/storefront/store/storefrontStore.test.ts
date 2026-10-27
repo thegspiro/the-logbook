@@ -333,6 +333,16 @@ describe('storefrontStore', () => {
       useAuthStore.setState({ user: member('m1') });
     });
 
+    it('still loads a body that leaves out the window lists', async () => {
+      mockGetStorefront.mockResolvedValue({ isEnabled: false, storeName: 'Store' });
+
+      await store().loadStorefront();
+
+      expect(store().error).toBeNull();
+      expect(store().storefront).toEqual({ isEnabled: false, storeName: 'Store' });
+      expect(store().cart).toEqual([]);
+    });
+
     it('survives a reload: the cart comes back when the store loads again', async () => {
       mockGetStorefront.mockResolvedValue(storeFor('w1'));
       await store().loadStorefront();

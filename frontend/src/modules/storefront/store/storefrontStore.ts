@@ -120,7 +120,13 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
       const storefront = await storefrontService.getStorefront(windowId);
       const openWindowId = storefront.window?.id ?? null;
       const memberId = currentMemberId();
-      if (memberId) {
+      // Read defensively: a body without these lists rendered the closed-store
+      // page before carts were saved, and must not now fail to load. Without
+      // the window list nothing is pruned, since which windows are open is
+      // unknown and a cart for one still open would be lost.
+      const otherWindows: unknown = storefront.otherOpenWindows;
+      const products = Array.isArray(storefront.products) ? storefront.products : [];
+      if (memberId && Array.isArray(otherWindows)) {
         // A closed window's cart can never be ordered, so it goes.
         const openIds = [openWindowId, ...storefront.otherOpenWindows.map((w) => w.id)];
         pruneSavedCarts(
@@ -133,7 +139,7 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
       if (cartWindowId === openWindowId && current.length > 0) {
         cart = current;
       } else if (memberId && openWindowId) {
-        cart = restoreLines(loadSavedCart(memberId, openWindowId), storefront.products);
+        cart = restoreLines(loadSavedCart(memberId, openWindowId), products);
         persistCart(cart, openWindowId);
       } else {
         cart = [];
