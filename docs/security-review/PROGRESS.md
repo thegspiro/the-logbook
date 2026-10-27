@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3767](https://github.com/thegspiro/the-logbook/pull/3767)** (branch
+`claude/security-review-meetings-minutes-p10`) —
+Feature 24 (Meetings & minutes), pass 10. **Watchdog pickup** — the
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, no reachable agents). No security-review PR was open —
+confirmed via `search_pull_requests`, 0 matching results, after PR #3766
+(Feature 23, Medical supplies, pass 17) merged. Row 24 (Meetings & minutes)
+confirmed as the first ⬜ row on a freshly fetched `main` (head `69963418`).
+**0 fixed by this pass itself, 0 new findings** — the real delta since pass
+9's merge is 2 commits, both landed by other sessions and independently
+re-verified here: MM-19 and MM-20 (the two LOW find-or-create races pass 8
+flagged and pass 9 re-confirmed OPEN) are both now RESOLVED by `2cb6c029`
+(a minutes-row lock + locking re-read on each, matching Pitfall #27, backed
+by a new two-connection race test — 2 passed), and a cross-feature
+status-label cosmetic fix touches two of this module's files with no
+security surface. Routes re-enumerated by AST from scratch: 81, unchanged.
+See `MM-24-meetings-minutes.md`'s **Pass 10** section for the full review.
+
+Rotation row 24 → ✅ (pending this PR's merge); next is Feature 25
+(Messaging & notifications) — re-check `search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 17, PR #3766, merged), preserved for history</summary>
+
 **PR [#3766](https://github.com/thegspiro/the-logbook/pull/3766)** (branch
 `claude/security-review-medical-supplies-p17`) —
 Feature 23 (Medical supplies), pass 17. **Watchdog pickup** — the
@@ -31,6 +57,8 @@ supplies) confirmed as the first ⬜ row on a freshly fetched `main` (head
 Rotation row 23 → ✅ (pending this PR's merge); next is Feature 24
 (Meetings & minutes) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 11, PR #3765, merged), preserved for history</summary>
