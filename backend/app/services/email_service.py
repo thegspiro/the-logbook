@@ -565,6 +565,7 @@ class EmailService:
         default_subject: str = "",
         default_html: str = "",
         default_text: str = "",
+        attachments_out: Optional[List[AttachmentSpec]] = None,
     ) -> Optional[Tuple[str, str, Optional[str]]]:
         """``_render_with_fallback``, or ``None`` when the email is switched off.
 
@@ -603,6 +604,7 @@ class EmailService:
             default_subject=default_subject,
             default_html=default_html,
             default_text=default_text,
+            attachments_out=attachments_out,
         )
 
     async def _render_with_fallback(
@@ -615,6 +617,7 @@ class EmailService:
         default_subject: str = "",
         default_html: str = "",
         default_text: str = "",
+        attachments_out: Optional[List[AttachmentSpec]] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """Load an admin template or fall back to built-in defaults.
 
@@ -623,6 +626,10 @@ class EmailService:
         2. Else if *db* and *organization_id* are given, try loading from DB.
         3. Fall back to *default_subject* / *default_html* / *default_text*
            with proper HTML escaping via ``EmailTemplateService``.
+
+        When *attachments_out* is given and the rendered template allows
+        attachments, its stored files are appended to that list, confined to
+        *organization_id*; the code default has none.
 
         Returns ``(subject, html_body, text_body)``.
         """
@@ -640,6 +647,15 @@ class EmailService:
                 )
 
         if loaded:
+            if (
+                attachments_out is not None
+                and organization_id
+                and getattr(loaded, "allow_attachments", False)
+                and getattr(loaded, "attachments", None)
+            ):
+                attachments_out.extend(
+                    confined_template_attachments(loaded.attachments, organization_id)
+                )
             return EmailTemplateService.render_static(
                 loaded, context, organization=self.organization
             )
@@ -2209,36 +2225,22 @@ class EmailService:
             "login_url": login_url,
         }
 
-        # Welcome template supports attachments stored on the template itself
-        loaded_template = None
-        if db and organization_id:
-            try:
-                svc = EmailTemplateService(db)
-                loaded_template = await svc.get_template(
-                    organization_id, EmailTemplateType.WELCOME
-                )
-                if (
-                    loaded_template
-                    and loaded_template.allow_attachments
-                    and loaded_template.attachments
-                ):
-                    stored = confined_template_attachments(
-                        loaded_template.attachments, organization_id
-                    )
-                    attachment_paths = [*(attachment_paths or []), *stored]
-            except Exception as e:
-                logger.warning(
-                    "Failed to load welcome email template, using default: {}", e
-                )
-
-        subject, html_body, text_body = await self._render_with_fallback(
+        stored_attachments: List[AttachmentSpec] = []
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.WELCOME,
             context=context,
-            template=loaded_template,
+            db=db,
+            organization_id=organization_id,
             default_subject=DEFAULT_WELCOME_SUBJECT,
             default_html=DEFAULT_WELCOME_HTML,
             default_text=DEFAULT_WELCOME_TEXT,
+            attachments_out=stored_attachments,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+        if stored_attachments:
+            attachment_paths = [*(attachment_paths or []), *stored_attachments]
         if appended_html:
             html_body = append_to_email_html(html_body, appended_html)
         if appended_text:

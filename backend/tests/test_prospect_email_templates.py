@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models.email_template import EmailTemplate, EmailTemplateType
+from app.models.email_template import (
+    EmailAttachment,
+    EmailTemplate,
+    EmailTemplateType,
+)
 from app.models.membership_pipeline import (
     MembershipPipelineStep,
     ProspectiveMember,
@@ -194,6 +198,76 @@ class TestConvertedApplicantWelcome:
 
         assert sent["subject"] == "Welcome to the house, Pat"
         assert "Your username is pobrien." in sent["html_body"]
+
+
+class TestWelcomeTemplateAttachments:
+    """The welcome email renders through the shared path, which now also
+    collects the template's stored attachments."""
+
+    async def _send(self, db_session, tmp_path, monkeypatch, allow_attachments):
+        from app.services import file_storage_service
+
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+        org = await _org(db_session)
+        template = await _template(
+            db_session,
+            str(org.id),
+            EmailTemplateType.WELCOME,
+            subject="Welcome aboard, {{first_name}}",
+            allow_attachments=allow_attachments,
+        )
+        packet = tmp_path / str(org.id) / "email-attachments" / "tpl" / "p.pdf"
+        packet.parent.mkdir(parents=True)
+        packet.write_bytes(b"%PDF-1.4")
+        db_session.add(
+            EmailAttachment(
+                template_id=str(template.id),
+                filename="Welcome Packet.pdf",
+                content_type="application/pdf",
+                storage_path=str(packet),
+            )
+        )
+        await db_session.flush()
+        db_session.expire(template)
+
+        sent = await _capture(
+            lambda: EmailService(org).send_welcome_email(
+                to_email="new@example.org",
+                first_name="Pat",
+                last_name="O'Brien",
+                username="pobrien",
+                temp_password="Temp-Pass-1",
+                organization_name=org.name,
+                login_url="https://fd.example/login",
+                db=db_session,
+                organization_id=str(org.id),
+                attachment_paths=["/already/attached.pdf"],
+            )
+        )
+        return sent, packet
+
+    async def test_stored_attachments_ride_with_the_edited_template(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        sent, packet = await self._send(
+            db_session, tmp_path, monkeypatch, allow_attachments=True
+        )
+
+        assert sent["subject"] == "Welcome aboard, Pat"
+        assert sent["attachment_paths"] == [
+            "/already/attached.pdf",
+            (str(packet.resolve()), "Welcome Packet.pdf"),
+        ]
+
+    async def test_a_template_not_allowing_attachments_sends_none(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        sent, _packet = await self._send(
+            db_session, tmp_path, monkeypatch, allow_attachments=False
+        )
+
+        assert sent["subject"] == "Welcome aboard, Pat"
+        assert sent["attachment_paths"] == ["/already/attached.pdf"]
 
 
 class TestInactivityWarnings:
