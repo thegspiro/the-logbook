@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // The link-address card fetches its own data and has its own tests; this file
@@ -138,7 +138,7 @@ describe('EmailSettingsSection — Microsoft 365 authentication method', () => {
     expect(screen.getByRole('button', { name: /app registration \(oauth\)/i })).toBeInTheDocument();
   });
 
-  it('offers no method choice for Gmail', () => {
+  it("does not offer Microsoft's app registration for Gmail", () => {
     renderSection(settings({ platform: 'gmail' }));
     expect(screen.queryByRole('button', { name: /app registration \(oauth\)/i })).not.toBeInTheDocument();
   });
@@ -290,6 +290,135 @@ describe('EmailSettingsSection — Gmail sending guidance', () => {
   it('does not show the Gmail guidance for another platform', () => {
     renderSection(settings({ platform: 'microsoft' }));
 
+    expect(screen.queryByText(/revokes all of its App Passwords/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('EmailSettingsSection — Gmail service account', () => {
+  const KEY = JSON.stringify({
+    type: 'service_account',
+    client_id: '112233445566778899',
+    client_email: 'mailer@dept.iam.gserviceaccount.com',
+    private_key: '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n',
+    token_uri: 'https://oauth2.googleapis.com/token',
+  });
+  const keyFile = (text: string) => new File([text], 'key.json', { type: 'application/json' });
+  const serviceAccount = (overrides: Partial<EmailServiceSettings> = {}) =>
+    settings({ platform: 'gmail', google_auth_method: 'service_account', ...overrides });
+
+  it('starts a Gmail setup on App Password', () => {
+    renderSection(settings({ platform: 'gmail' }), { canConfigureServiceAccount: true });
+
+    expect(screen.getByRole('button', { name: /^app password/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^service account/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByLabelText('Google App Password')).toBeInTheDocument();
+  });
+
+  it('lets an administrator choose the service account', async () => {
+    const state = applyUpdatesTo(settings({ platform: 'gmail' }));
+    renderSection(settings({ platform: 'gmail' }), {
+      onEmailSettingsChange: state.onEmailSettingsChange,
+      canConfigureServiceAccount: true,
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /^service account/i }));
+
+    expect(state.latest()).toMatchObject({ google_auth_method: 'service_account' });
+  });
+
+  it('does not offer the service account without admin.access', () => {
+    renderSection(settings({ platform: 'gmail' }));
+
+    expect(screen.getByRole('button', { name: /^service account/i })).toBeDisabled();
+    expect(screen.getByText(/only an organization administrator/i)).toBeInTheDocument();
+  });
+
+  it('asks for a key instead of an App Password, with the scope to authorize', () => {
+    renderSection(serviceAccount(), { canConfigureServiceAccount: true });
+
+    expect(screen.getByLabelText(/service account key/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Google App Password')).not.toBeInTheDocument();
+    expect(screen.getByText('https://www.googleapis.com/auth/gmail.send')).toBeInTheDocument();
+    expect(screen.getByText(/can send as anyone in your domain/i)).toBeInTheDocument();
+  });
+
+  it('stores a chosen key file and names its client ID', async () => {
+    const state = applyUpdatesTo(serviceAccount());
+    const { rerender } = render(
+      <EmailSettingsSection
+        emailSettings={serviceAccount()}
+        onEmailSettingsChange={state.onEmailSettingsChange}
+        savingEmail={false}
+        testingEmail={false}
+        emailPasswordVisible={false}
+        onTogglePasswordVisible={vi.fn()}
+        onSave={vi.fn()}
+        onTest={vi.fn()}
+        profileName="Test FD"
+        canConfigureServiceAccount
+      />
+    );
+
+    await userEvent.upload(screen.getByLabelText(/service account key/i), keyFile(KEY));
+
+    await waitFor(() => expect(state.latest()).toMatchObject({ google_service_account_key: KEY }));
+    rerender(
+      <EmailSettingsSection
+        emailSettings={state.latest()}
+        onEmailSettingsChange={state.onEmailSettingsChange}
+        savingEmail={false}
+        testingEmail={false}
+        emailPasswordVisible={false}
+        onTogglePasswordVisible={vi.fn()}
+        onSave={vi.fn()}
+        onTest={vi.fn()}
+        profileName="Test FD"
+        canConfigureServiceAccount
+      />
+    );
+    expect(screen.getByText(/key chosen for client id 112233445566778899/i)).toBeInTheDocument();
+    expect(screen.getAllByText('112233445566778899').length).toBeGreaterThan(0);
+  });
+
+  it('refuses a file that is not a service account key', async () => {
+    const state = applyUpdatesTo(serviceAccount());
+    renderSection(serviceAccount(), {
+      onEmailSettingsChange: state.onEmailSettingsChange,
+      canConfigureServiceAccount: true,
+    });
+
+    await userEvent.upload(
+      screen.getByLabelText(/service account key/i),
+      keyFile(JSON.stringify({ type: 'authorized_user' }))
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/not a service account key/i);
+    expect(state.onEmailSettingsChange).not.toHaveBeenCalled();
+  });
+
+  it('reports a saved key by the client ID the server derived', () => {
+    renderSection(
+      serviceAccount({ google_service_account_key: '••••••••', google_service_account_client_id: '998877' }),
+      { canConfigureServiceAccount: true }
+    );
+
+    expect(screen.getByText(/a key is saved \(client id 998877\)/i)).toBeInTheDocument();
+  });
+
+  it('keeps the key and its address as an administrator set them', () => {
+    renderSection(serviceAccount({ google_service_account_key: '••••••••' }));
+
+    expect(screen.getByLabelText(/service account key/i)).toBeDisabled();
+    expect(screen.getByPlaceholderText('notifications@yourdomain.com')).toBeDisabled();
+    // Switching back to an App Password narrows what is stored, so it stays open.
+    expect(screen.getByRole('button', { name: /^app password/i })).toBeEnabled();
+  });
+
+  it('leaves out the App Password revocation note', () => {
+    renderSection(serviceAccount(), { canConfigureServiceAccount: true });
+
+    expect(screen.getByText(/dedicated account/i)).toBeInTheDocument();
+    expect(screen.getByText(/turn on DKIM/i)).toBeInTheDocument();
     expect(screen.queryByText(/revokes all of its App Passwords/i)).not.toBeInTheDocument();
   });
 });

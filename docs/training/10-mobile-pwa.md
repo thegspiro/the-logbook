@@ -160,6 +160,10 @@ On a phone, The Logbook has a **bar along the bottom of the screen**, within
 reach of your thumb. On a tablet or computer (768 pixels wide or more) the bar
 does not appear: the side or top menu is already on screen there.
 
+A phone turned on its side is usually that wide, so it shows the menu instead
+of the bar. The screen is short, so the whole side menu scrolls, down to the
+**Theme**, **High contrast** and **Logout** buttons at its foot.
+
 ### The Bottom Bar
 
 From left to right, the bar holds five items:

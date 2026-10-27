@@ -187,7 +187,7 @@ track per-user `read_at` / `acknowledged_at` and is retained on soft delete.
   scheduled-publish batch.
 
 See the member/officer how-to in the
-[Documents, Forms & Communications training guide](../docs/training/07-documents-forms.md#department-messages).
+[Documents, Forms & Communications training guide](https://github.com/thegspiro/the-logbook/blob/main/docs/training/07-documents-forms.md#department-messages).
 
 ## Email Templates (2026-08-07)
 
@@ -233,7 +233,7 @@ write, when the Officers tab loads, and nightly by `officer_directory_sync` — 
 last of which catches a change made to the _member behind_ an office rather than
 to the assignment.
 
-See [DEPARTMENT_OFFICERS.md](../docs/DEPARTMENT_OFFICERS.md) for the full catalogue
+See [DEPARTMENT_OFFICERS.md](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPARTMENT_OFFICERS.md) for the full catalogue
 and API.
 
 ## Email Footer Library (2026-08-10)

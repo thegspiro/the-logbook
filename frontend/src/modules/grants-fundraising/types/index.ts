@@ -531,8 +531,9 @@ export interface Donor {
   id: string;
   organizationId: string;
   userId: string | null;
-  firstName: string;
-  lastName: string;
+  /** Null for an organization recorded by its name alone (W69-6). */
+  firstName: string | null;
+  lastName: string | null;
   email: string | null;
   phone: string | null;
   addressLine1: string | null;

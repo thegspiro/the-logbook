@@ -2,6 +2,8 @@
  * Authentication type definitions
  */
 
+import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
+
 export interface LoginCredentials {
   username: string;
   password: string;
@@ -51,7 +53,10 @@ export interface CurrentUser {
   permissions: string[];
   is_active: boolean;
   email_verified: boolean;
+  /** The authenticator app specifically; a passkey is counted in `passkey_count`. */
   mfa_enabled: boolean;
+  /** Passkeys usable on this site. Absent from servers older than passkeys. */
+  passkey_count?: number;
   mfa_enrollment_required?: boolean;
   /** Privileged and not yet enrolled: when the grace period ends, then enrollment is forced. */
   mfa_grace_ends_at?: string | null;
@@ -105,4 +110,40 @@ export interface KioskSessionResult {
   is_kiosk: boolean;
   session_timeout_minutes: number;
   session_ends_at: string | null;
+}
+
+/** The second factors on offer for a pending sign-in (POST /auth/mfa/challenge). */
+export interface MfaChallenge {
+  totp: boolean;
+  passkey_options: PublicKeyCredentialRequestOptionsJSON | null;
+}
+
+export interface PasskeyInfo {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+  /** Syncs between the member's devices (iCloud Keychain, Google Password Manager). */
+  backed_up: boolean;
+}
+
+export interface PasskeyList {
+  passkeys: PasskeyInfo[];
+  max_passkeys: number;
+  /** The site is on HTTPS at a domain name, so browsers will offer passkeys. */
+  available: boolean;
+  /** The organization lets members add new passkeys. */
+  allowed: boolean;
+}
+
+export interface PasskeyRegisterResult {
+  passkey: PasskeyInfo;
+  /** Shown once; empty unless this passkey was the member's first second factor. */
+  recovery_codes: string[];
+}
+
+export interface MfaPolicy {
+  mfa_required: boolean;
+  /** Absent from servers older than passkeys. */
+  passkeys_enabled?: boolean;
 }

@@ -1088,6 +1088,29 @@ def rate_limit_token_refresh():
     return Depends(_dependency)
 
 
+def rate_limit_passkey():
+    """Rate limit passkey challenges and management: 20 per 60 seconds.
+
+    Kept off the login bucket. Issuing a challenge proves nothing, and the
+    sign-in screen fetches a fresh one after every cancelled or failed prompt,
+    so counting them against login's 5 per minute would lock a station's
+    shared address out of signing in. The requests that check a credential
+    (``/mfa/login``, ``/step-up``, ``/passkeys/register``) stay on the login
+    bucket.
+    """
+
+    async def _dependency(request: Request) -> None:
+        await check_rate_limit(
+            request,
+            max_requests=20,
+            window_seconds=60,
+            lockout_seconds=600,
+            scope="passkey",
+        )
+
+    return Depends(_dependency)
+
+
 def rate_limit_password_change():
     """Rate limit password changes: 5 per 60 seconds, on its own bucket.
 

@@ -1,6 +1,144 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), pass 10 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), pass 11 (this PR)
+
+## Pass 11 (2026-10-27) — 0 fixed, 0 new findings; feature remains at zero open findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, no reachable agents). `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results — PR #3761
+(Feature 20, Compliance, pass 11) had just merged. Rotation row 21 (Admin
+hours) was the first `⬜` in `PROGRESS.md`'s table.
+
+**Baseline `39043668`** (pass 10's merge, PR #3632, docs-only). Per-file
+`git log 39043668..HEAD` across every file this feature declares in scope
+(`endpoints/admin_hours.py`, `admin_hours_service.py`, `models/admin_hours.py`,
+`schemas/admin_hours.py`, `utils/admin_hours_settings.py`,
+`core/seed_admin_hours.py`, the `admin-hours` frontend module) finds exactly
+two commits, both workflow-review W79 (a phone-layout pass):
+`git diff --stat` confirms **zero** diff in all six backend files — they are
+byte-identical to pass 10's merge — and four frontend files changed
+(`CategoriesTab.tsx`, `PendingReviewTab.tsx`, `SummaryTab.tsx`,
+`AdminHoursClockInPage.tsx`).
+
+### The frontend delta, read in full
+
+All four changes are phone-layout/touch-target fixes, not behavior changes:
+
+- **`CategoriesTab.tsx`** — `grid gap-4` → `grid grid-cols-1 gap-4`. The
+  category list's details row doesn't wrap, so an implicit single-column
+  grid wasn't actually constrained to one column on a narrow viewport
+  (comment cites W79-2: "made the page 929px wide on a phone"). No data or
+  request path touched.
+- **`PendingReviewTab.tsx`** — three containers gain `flex-wrap`/`gap-2` so the
+  action row drops under the entry instead of widening the page (W79-3); the
+  reject-reason `<input>` switches a hand-rolled class string to the shared
+  `form-input` utility (CLAUDE.md Pitfall #17 — this is a net improvement,
+  not a regression); the Cancel button gains an explicit `type="button"`
+  (prevents an accidental form submit if this ever sits inside a `<form>`)
+  and a `touch:min-h-11` 44px target. No change to which entries render, who
+  can reject, or what reason text is sent — the input's `value`/`onChange`
+  wiring and the reject handler are untouched.
+- **`SummaryTab.tsx`**, **`AdminHoursClockInPage.tsx`** — `touch:min-h-11` /
+  `inline-flex items-center` added to four existing navigation links/buttons.
+  Purely a touch-target-size and layout change; `onClick`/`to` targets
+  unchanged.
+
+Swept all four files for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, `innerHTML`, a bare `fetch(`/`axios` import,
+`localStorage`/`sessionStorage`, and the banned `.toLocale*`/`date-fns`
+imports: zero hits. None of these files touch an API call, a permission
+check, or org/user scoping.
+
+### Other movement checked and found out of scope
+
+- **A new migration touches `admin_hours` only by name, not by table.**
+  `git diff --stat 39043668..HEAD -- backend/alembic/versions/` shows 14 new
+  migration files; grepping all of them (case-insensitive) for
+  `admin_hours`/`AdminHours`/`event_hour_mapping` found one hit:
+  `20261023_1916_a8c3b50b6d9b_nfc_card_taps_and_auto_suspend.py:142`, which
+  only re-declares the pre-existing `NfcCheckInTarget` MySQL enum
+  (`"shift", "event", "admin_hours"`) as part of an unrelated `NfcCardTap`
+  table creation (Feature 13's own scope). Confirmed by `grep` for
+  `admin_hours_categories`/`admin_hours_entries`/`event_hour_mapping` against
+  that file: zero matches — no admin-hours table is created, altered, or
+  backfilled.
+- **`nfc_tag_service.py`'s one changed line is a re-indent, not a logic
+  change.** `git diff` shows `_check_in_admin_hours(organization_id, user,
+target_id, direction)` moved from a bare `if/elif` chain into an `else`
+  branch (Feature 13's tap-logging refactor, `NfcCardTap`); the call's
+  arguments are byte-identical before and after. No admin-hours behavior
+  changed.
+- `reports_service.py`, `reports.py`, `training_session_service.py`,
+  `event_service.py`, `dashboard.py`, `compliance_officer_service.py`,
+  `compliance_config_service.py`, `data_export_service.py`, `onboarding.py`,
+  `security_middleware.py`, `permissions.py`, `scheduled_tasks.py`,
+  `org_template_registry.py`, `saved_report_schedule.py` — grepped for
+  added/removed `admin_hours`/`AdminHours` content (via `git diff`, not a
+  context-insensitive grep): zero hits in any of them.
+
+### Route inventory, re-enumerated by AST (not trusted from pass 10's count)
+
+A Python `ast` walk over every `@router.*` decorator in
+`admin_hours.py` (not a text grep) finds **30 routes**, matching pass 10.
+**17** carry `Depends(require_permission("admin_hours.manage"))`; **13**
+carry `Depends(get_current_user)` alone (17 + 13 = 30 — pass 10's doc said
+"18 … 12", which the AST walk here does not reproduce; the discrepancy is in
+that prior pass's prose, not in the code, since this pass's own count sums
+correctly and every route still carries one dependency or the other). Every
+one of the 13 self-scoped routes was re-read at its current lines and still
+either filters the caller's own id or constrains an otherwise-public endpoint
+to org-wide reference data read via `current_user.organization_id`:
+
+- `GET /summary` (`admin_hours.py:965-998`) and
+  `GET /compliance/{user_id}` (`admin_hours.py:1160-1201`) still route the
+  non-admin fallback through `user_has_permission(current_user,
+"admin_hours.manage")` (the latter also accepts `compliance.view`) rather
+  than a hand-rolled permission scan — the AH-17 fix, re-verified at its
+  current lines, unchanged since pass 6.
+- The other 11 (`list_categories`, `get_qr_data`, `clock_in`, `clock_out`,
+  `clock_out_by_category`, `get_active_session`, `create_manual_entry`,
+  `list_my_entries`, `edit_my_entry`, `withdraw_my_entry`,
+  `list_event_hour_mappings`) are unchanged since pass 9's own full
+  enumeration and were not re-derived line by line this pass, since the
+  backend file is confirmed byte-identical to pass 10's baseline above.
+
+### Standing findings
+
+No open or flagged finding carries forward. Every item in passes 1–10 — AH-1
+through AH-18, AH21-1 through AH21-4, the per-org self-approval toggle, and
+the resync-growth re-queue — was already closed (by fix or by owner decision)
+as of pass 10, and nothing in this window's delta (cosmetic frontend layout
+only) touches any of the code those findings were about. `KNOWN_LIMITATIONS.md`'s
+two admin-hours rows were re-read and still match the current code exactly —
+no edit needed.
+
+### Completion gate (pass 11)
+
+| Check                                                             | Result                                                                                                                                                                                    |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1, CI's pin)            | ✅ 0 violations                                                                                                                                                                           |
+| `black --check app/ tests/ alembic/` (black 26.10.1)              | ✅ 2695 files unchanged                                                                                                                                                                   |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2)           | ✅ clean                                                                                                                                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 663 revisions, single head `c616fa1bd492`                                                                                                                                              |
+| `python3.13 -m pytest tests/ -q -k "admin_hours"`                 | ✅ 171 passed, 1 pre-existing skip (`py_vapid`/pywebpush optional dep)                                                                                                                    |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 279 routes, 0 errors, 0 warnings                                                                                                                                                       |
+| `cd frontend && npm run typecheck`                                | ✅ 0 errors (after `npm ci` from the repo root — sandbox's `node_modules` predated the `@simplewebauthn/browser`/`webauthn` passkeys dependency pair; environment fix, not a code defect) |
+| `cd frontend && npm run lint`                                     | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                                                                                                                                             |
+| `npx vitest run src/modules/admin-hours`                          | ✅ 121/121 (13 files)                                                                                                                                                                     |
+
+No backend or frontend source file was modified by this pass itself — the
+only real delta in this window (W79's four frontend files) is cosmetic phone
+layout, already reviewed above and introducing no security-relevant change.
+This pass's own contribution is re-enumerating the route inventory by AST,
+confirming the backend is byte-identical to pass 10, and verifying the
+`admin_hours` name's two outside hits (a migration, a service re-indent)
+belong to Feature 13 and touch nothing in this feature's scope.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ## Pass 10 (2026-10-24) — 0 fixed by this pass, 0 new findings; AH-18 (pass 9's one open finding) is now fixed
 

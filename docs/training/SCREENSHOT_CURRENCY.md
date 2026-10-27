@@ -1,5 +1,47 @@
 # Screenshot currency
 
+## Queued by the October 25 – 26 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 04 | Event QR page with the guest check-in QR code, Reset, and print-one-code choice; event Guests card with Add guest | Create |
+| 17 | 17-01 My Account → Privacy with Yes / No pairs for photo use and roster listing | Replace |
+| 12 | Edit opportunity form; opportunities list with Show retired | Create |
+| 07 | Notification rule delete warning; Edit dialog | Create |
+| 05 | Items list **Print Labels** menu | Create |
+| 15 | Stage editor Email Template picker; applicant status page next-meeting card | Create |
+| 07 | Share dialog embed code and Organization Settings → Forms allowed sites | Create |
+| 01, 04, 18 | Members, Events and Department Store administration with area cards | Re-check any full-page or flat-tab-row shot (01-22, 08-91, 18-02, 19-06, 19-08 already marked) |
+| 13 | Compliance tab showing a **by frequency** row and a waiver | Create |
+| All | Any form or toolbar shot on desktop or an iPad (input borders darker; toolbar buttons match field height) | Re-check |
+
+## Queued by the October 25 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
+Nothing was captured by this pass. The Events Administration, Scheduling
+settings and Inventory Items shots were queued by their own PRs (rows dated
+2026-10-25 below). The October 25 – 26 pass above overlaps this window, so the
+new screens it queues (the Guests card, embed code and allowed sites, the
+notification-rule dialogs, the grant edit form, the next-meeting card) are not
+repeated here; these rows are the existing images to replace and the screens
+it does not list.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 04 | `04-32-guest-sign-in-form`, `04-33-guest-sign-in-confirmation`: the guest page at a recruitment event now asks for an email, then "Is this you, Jane S.?"; the confirmation can read "You're already checked in" | Replace (manifest updated by #3693) |
+| 07 | `07-05-form-sharing`: Share window with **Allow embedding on your website** | Replace |
+| 07 | `07-08-notification-rules`: edit and delete icons on each row | Replace |
+| 15 | `15-13-application-status` with the **Your next step** card; `15-28-status-page-withdraw` (card now above the withdraw area) | Replace / re-check |
+| 15 | Automated Email stage → **Next Meeting Details** with the preview heading ("The saved event has passed …") | Create |
+| 12 | `12-03-opportunities`: edit and retire icons; a **Retired** card | Replace |
+| 13 | `13-05-add-requirement` (frequency note reworded); `13-06-expiring-screenings` ("Due … (by frequency)", a **Waived** row) | Replace / re-check |
+| 06 | `06-13-facility-maintenance`, `06-14-facility-inspections` (page controls past 50 records) | Re-check |
+| 08 | `08-38-email-configuration` with Gmail selected (the "Before you rely on it:" notes) | Re-check / create |
+| 03 | `03-02-shift-detail-panel`, `19-34-schedule-board-desktop`: under 1280px the day panel is below the calendar | Re-check |
+
 ## Queued by the October 24 – 25 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).

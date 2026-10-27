@@ -45,6 +45,9 @@ ALLOWLISTED_PUBLIC = {
     # Second factor of login: caller is pre-auth by definition; gated by the
     # short-lived mfa_pending token from the password step + login rate limit.
     ("auth.py", "mfa_login"),
+    # Offers the second-factor choices (and a passkey challenge) for that same
+    # pending sign-in; gated by the same mfa_pending token and rate limit.
+    ("auth.py", "mfa_challenge"),
     ("auth.py", "refresh_token"),
     ("auth.py", "forgot_password"),
     ("auth.py", "reset_password"),

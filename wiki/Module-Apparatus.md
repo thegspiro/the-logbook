@@ -6,7 +6,7 @@ operators and crew positions. It offers both a full module and a lightweight
 
 > **Structured reference:** data models, the full endpoint-and-permission
 > tables, data flows, edge cases and troubleshooting live in
-> [docs/APPARATUS_MODULE.md](../docs/APPARATUS_MODULE.md). This page is the
+> [docs/APPARATUS_MODULE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/APPARATUS_MODULE.md). This page is the
 > feature overview.
 
 ---
@@ -97,7 +97,7 @@ Sub-resources follow the same pattern: `/types`, `/statuses`,
 `/nfpa-compliance`, `/nfpa-settings`, `/{id}/nfpa-summary`, `/evoc-levels`,
 `/evoc-check/{apparatus_id}/{user_id}` and `/driver-exceptions`. The full
 table, with each endpoint's permission, is in
-[docs/APPARATUS_MODULE.md](../docs/APPARATUS_MODULE.md).
+[docs/APPARATUS_MODULE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/APPARATUS_MODULE.md).
 
 ### Basic (Scheduling Integration)
 

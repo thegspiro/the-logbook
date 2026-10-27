@@ -1512,6 +1512,27 @@ changing. The form lists them too:
   records. Without them, Gmail, Outlook and Yahoo may send department mail to
   spam or reject it.
 
+**Gmail** on Google Workspace also offers **Service account**, which a
+password change does not affect. Choosing it needs **admin.access** (the Fire
+Chief, President and IT Manager positions hold it by default); anyone else sees
+the option disabled. It sends through the Gmail API instead of signing in to
+`smtp.gmail.com`:
+
+1. In Google Cloud, enable the **Gmail API**, create a service account and
+   download a JSON key for it.
+2. On the form, choose **Service account** and upload the key. The form shows
+   the key's **client ID**.
+3. In the Google Admin console, open **Security → API controls → Domain-wide
+   delegation**, add that client ID, and authorize only the scope
+   `https://www.googleapis.com/auth/gmail.send`.
+4. Use an active user in your Workspace domain as the account email address,
+   save, and select **Test Connection**. It checks that Google will let the key
+   send as that address, and sends nothing.
+
+The key can send as anyone in the domain; Google cannot limit it to one
+mailbox. Keep it in a Google Cloud project used only for this. Changing the
+account email address later clears the saved key, so upload it again.
+
 **Microsoft 365** also offers **App registration (OAuth)**. It asks for the
 directory (tenant) ID, application (client) ID and client secret. In Microsoft,
 the app registration needs the **SMTP.SendAsApp** application permission and
@@ -1532,6 +1553,13 @@ _The success message in this picture is simulated. The demo department has no
 Microsoft 365 account, so the test was answered with the message a real app
 password test returns when it succeeds, **SMTP connection successful**.
 Everything else is the real screen, and nothing on it was saved._
+
+**Gmail** and **Microsoft 365** each limit how many messages one account sends
+in a day. Ballot emails go out as one batch. If the account reaches its daily
+limit partway through, The Logbook stops there instead of trying every
+remaining member, and the send reports the members not yet emailed as failed.
+If the provider only asks it to wait, The Logbook tries that message once more
+before counting it as failed.
 
 #### SMTP (any provider) and the quick-fill presets
 
@@ -2578,6 +2606,14 @@ recipients appears once the switch is on. Generated reports are listed beneath
 it with their period, when they were produced, how long it took, and the
 headline compliance figure.
 
+If **Email report** is on and the email does not go out, the report is still
+saved and listed, and the message reads _"Report generated, but it was not
+emailed. Check the recipients and the email settings."_ Fix the cause, then
+select the send icon (**Email report**) on the report's row to send it. If the
+report is refused, the message gives the reason. If the server fails, it reads
+_"Could not generate the report: the server hit a problem on its end."_ and
+asks you to try again.
+
 ![Generating a compliance report, and the history it lands in](./images/08-71-compliance-report-history.png)
 
 > **What a monthly report counts.** Training hours, admin hours, exercises,
@@ -2873,8 +2909,9 @@ Training Admin (see [Training](./02-training.md)):
 
 Steve works through the rest of the checklist:
 
-- **Notifications** — on the **Notification Rules** tab of Notifications he
-  sets up rules such as Event Reminder, Training Expiry and Schedule Change.
+- **Notifications** — he opens the **Notification Rules** tab of
+  Notifications. Every notification already goes out with its built-in
+  settings, and a rule only switches one off, so he adds none.
 - **Email** — he sets up the department's email in **Settings → Email**,
   selects **Test Connection**, then sends himself a test from Email Templates.
 - **Shift templates** — in **Scheduling Admin → Planning → Templates** he builds

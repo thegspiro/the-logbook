@@ -5,6 +5,96 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 25 – 26, 2026
+
+Merged to `main` since `a083c82a` (2026-10-25 13:18 UTC) through `14f1e4b2`
+(2026-10-26 13:24 UTC). Security-review passes (medical-screening,
+membership-pipeline, finance-approvals, elections-ballots, users-organizations,
+documents-legal, inventory, facilities, apparatus-nfc, equipment-check-shifts
+with EC-17 flagged) are in `docs/security-review/PROGRESS.md`. `CHANGELOG.md`
+stays closed.
+
+| Change                                                                                                                                                                                                   | Guide                                           | Disposition                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------- |
+| Event **guest check-in QR code** for events with no kiosk room (`/event-guest/:token`, migration `b7e4c2a91d35`); reset revokes printed copies                                                           | 04                                              | Added; screenshot queued                                      |
+| Staff **Add guest** / **Sign in** on the event Guests card; walk-ins open an application at pipeline events                                                                                              | 04                                              | Added                                                         |
+| Recruitment-event kiosk signs in by **email**, recognising active applicants                                                                                                                             | 04, 15                                          | Already in 04; confirmed                                      |
+| Public forms **embeddable** on a department site (`forms.allow_embed`, allowed websites under Organization Settings → Forms, nginx `auth_request`)                                                       | 07                                              | Written with the change; operators: see frontend `nginx.conf` |
+| Pipeline stage **Email Template** picker; stage email falls back to the next event; applicant status page shows the **next meeting** with Add to calendar                                                | 15                                              | Added                                                         |
+| Events, Members and Department Store admin use the shared area-card navigation (`AdminHubAreaNav`)                                                                                                       | 01, 04, 18                                      | Written with the change; full-page shots queued               |
+| Scheduling settings: second section nav removed, **Platoon Rosters** card                                                                                                                                | 03                                              | Written with the change                                       |
+| Grants: **edit and retire** opportunities, **Show retired**                                                                                                                                              | 12                                              | Added; screenshot queued                                      |
+| Notification rules: **Edit** and **Delete** with warning                                                                                                                                                 | 07                                              | Added; screenshot queued                                      |
+| Privacy choices: **Yes / No** for photo use and roster listing                                                                                                                                           | 17                                              | Added; 17-01 to replace                                       |
+| Medical screening: record with no expiration falls due by **frequency**; superseded records off the expiring list; waivers listed; unknown subject is 404                                                | 13                                              | Added; `KNOWN_LIMITATIONS`                                    |
+| Inventory **Print Labels** menu beside Export; Print Selected renamed                                                                                                                                    | 05                                              | Written with the change                                       |
+| QR check-in analytics now recorded on the server (scans once per member, outcomes with a reason)                                                                                                         | wiki                                            | Dashboard no longer reads zero                                |
+| Phone numbers and home addresses encrypted at rest (migration `5510d5ff49eb`; needs `ENCRYPTION_KEY`; older backups hold plaintext)                                                                      | `UPGRADING`, wiki Security-Encryption           | Written with the change                                       |
+| Google Drive storage deletes by trashing (30 days); `migrate_uploads_to_remote.py` replaces the S3-only name (alias kept)                                                                                | `UPGRADING`, `BACKUP`, `FILE_STORAGE_HARDENING` | Written with the change                                       |
+| Email: Gmail sending notes on both setup screens; SMTP batches stop at Gmail and Exchange Online daily quota, retry on 421/451/452/432                                                                   | 08                                              | Setup notes written; batch behaviour backend only             |
+| Scheduled compliance report email retried for 7 days; Generate Report toast says when the email was not sent                                                                                             | 08                                              | Backend / toast wording                                       |
+| Dotted usernames (`john.doe`) can sign in; password-change gate no longer fires refused requests                                                                                                         | 00, 01                                          | Backend / no wording change                                   |
+| Refused: deleting an apparatus that records name, a repeat dues waiver, waiving a paid order; merged write-in votes survive a candidate delete; deleted program phase no longer blocks a credit reversal | 06, 11, 14, 02                                  | Backend refusals; no screen change                            |
+| Hours grading tolerates float drift; reminder lead times capped at 30 days; 30 request fields bounded                                                                                                    | `KNOWN_LIMITATIONS`                             | Backend                                                       |
+| Accessibility: input borders 3:1, hub tab names, keyboard CSV drop zone; toolbar buttons match field height on desktop; iPad-landscape grids; phone landscape side nav                                   | none                                            | Visual only; shots queued                                     |
+| Housekeeping: four npm packages patched (0 vulnerabilities), three Alembic heads joined by `1ad0b594f3fb`, Mobile Safari E2E job, permissionless-route ratchet                                           | none                                            | No guide change                                               |
+
+**Screenshots to create:** guest QR on the event QR page, Grants edit form and
+Show retired, notification-rule delete warning, Print Labels menu, applicant
+status page next-meeting card, Pipeline stage Email Template picker. **Replace:**
+17-01 (Yes / No pairs). **Re-check:** Events, Members and Store admin hub
+shots (area cards), any shot of the old flat tab row. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Change audit: October 25, 2026
+
+Merged to `main` since `4f27e679` (2026-10-25 11:14 UTC) through `3783a25f`
+(2026-10-25 21:27 UTC). Security-review passes (finance-approvals,
+elections-ballots, users-organizations, membership-pipeline; one new open
+decision, USR-11, in `KNOWN_LIMITATIONS.md`) are in
+`docs/security-review/PROGRESS.md`; the finance app review (B20) is in
+`docs/app-review/PROGRESS.md`. Two earlier documentation passes (#3690, #3661)
+and the Learning Center re-shoot (#3710) merged in this window; CI gained a
+Mobile Safari E2E job (#3663) and a ratchet on routes gated only by sign-in
+(#3709). `CHANGELOG.md` stays closed.
+
+The October 25 – 26 pass above overlaps this window from 13:18 UTC and covers
+several of the same changes. Where both passes wrote the same guide text, it
+was merged into one place: notification-rule edit and delete (07), grant
+edit and retire (12), the applicant's next meeting (15) and the no-expiration
+rule (13). This section's screenshot and script queues list only what that
+pass's do not.
+
+| Change                                                                                                                                                                                                                        | Guide                                                                                                    | Disposition                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Recruitment-event guests sign in by email; an active applicant confirms first name and last initial; members pointed to the member QR code; everyone else to staff; typed form refuses pipeline events (`LB-EVT-006`) (#3693) | 04; wiki `Module-Events`; `PUBLIC_API_DOCUMENTATION.md`; `ERROR_CODES.md`                                | Written with the change; screenshot queued                                                   |
+| Staff **Add guest** and per-row **Sign in** on the event's Guests card; a staff check-in at a pipeline event opens the walk-in's application (#3700)                                                                          | 04; wiki `Module-Events`; `KNOWN_LIMITATIONS.md`                                                         | Written with the change; screenshot queued                                                   |
+| Public forms embeddable on a department's own website (`/embed/f/<slug>`): per-form **Allow embedding**, **Settings → Forms** website list, nginx `auth_request`; migration `0a8d11fcada1` (#3705)                            | 07; `UPGRADING.md`; `PUBLIC_API_DOCUMENTATION.md`; wiki `Configuration-Security`; `deployment/unraid.md` | Written with the change; screenshot queued                                                   |
+| Applicant status page shows **Your next step** with Add to calendar and Get directions; a missed meeting rolls to the next (#3706)                                                                                            | 15; `PROSPECTIVE_MEMBERS_MODULE.md`                                                                      | Added to 15 (The next meeting to attend); module doc written with the change                 |
+| A refused **Advance** on a meeting stage shows its reason instead of a generic error (#3704)                                                                                                                                  | 15; `PROSPECTIVE_MEMBERS_MODULE.md`; `UPGRADING.md`                                                      | Added (older-version note; 300-character limit); `UPGRADING` written with the change         |
+| Automated-email stage's Next Meeting falls back to the next event when the saved one has passed; the editor's preview says which (#3692)                                                                                      | 15; `PROSPECTIVE_MEMBERS_MODULE.md`                                                                      | Added                                                                                        |
+| Notification rules: **Edit** and **Delete** from the Rules tab, with a warning when either switches a notification on or off (#3699)                                                                                          | 07                                                                                                       | Added (Changing or deleting a rule)                                                          |
+| Grants: edit, retire, **Show retired** and **Reinstate** opportunities in the library (#3699)                                                                                                                                 | 12; wiki `Module-Grants-Fundraising`; `GRANTS_FUNDRAISING_MODULE.md`                                     | Added (Editing or Retiring an Opportunity)                                                   |
+| Facilities maintenance and inspections searched, filtered and paged on the server, 50 a page (#3699)                                                                                                                          | 06                                                                                                       | Added                                                                                        |
+| Medical screening: a record with no expiration date falls due by its requirement's frequency; lapsing waivers listed with a **Waived** badge (#3699, #3694)                                                                   | 13; `MEDICAL_SCREENING_MODULE.md`; `UPGRADING.md`                                                        | Added; six guide sentences the change made untrue corrected; upgrade note added by this pass |
+| Finance: a second waiver of already-waived dues is refused (#3707)                                                                                                                                                            | 11; `FINANCE_MODULE.md`                                                                                  | Added                                                                                        |
+| Storefront: waiving a fully paid order is refused ("Refund it instead"); settlement locked on the move to PAID (#3694)                                                                                                        | 18; `STOREFRONT_MODULE.md`                                                                               | Added                                                                                        |
+| Email: Gmail sending notes on Settings → Email and onboarding; ballot batches keep rate-limited messages and stop at Gmail's or Exchange Online's daily limit (#3698, #3713)                                                  | 08, 14                                                                                                   | Gmail notes written with the change; daily-limit paragraphs added to 08 and 14               |
+| Compliance **Generate Report** says when the report was saved but not emailed, and shows the server's reason on failure (#3708)                                                                                               | 08                                                                                                       | Added                                                                                        |
+| Events Administration uses the area-card navigation (#3697); Scheduling settings drop their second section list (#3701)                                                                                                       | 04, 03; wiki `Module-Scheduling-Developer`                                                               | Written with the change; screenshots queued by the PRs                                       |
+| Inventory: **Print Labels** menu on the Items list; the selection bar's button is now **Print Selected** (#3703)                                                                                                              | 05                                                                                                       | Written with the change; screenshot queued by the PR                                         |
+| Phone and tablet layout: schedule day panel below the calendar under 1280px; landscape side menu scrolls; touch targets (#3679)                                                                                               | 03, 10                                                                                                   | Added (03 sentence corrected, 10 note)                                                       |
+| Hours requirements met at exactly the required total no longer read a fraction short (#3715); minutes find-or-create serialized (#3694)                                                                                       | —                                                                                                        | no screen changed                                                                            |
+
+**Screenshots to create:** the email-first guest sign-in pages, the Guests card
+with **Add guest**, the Share dialog's embedding block, **Settings → Forms**,
+an embedded form, the applicant **Your next step** card, the automated-email
+stage preview, the Edit Notification Rule dialog, the grants library with
+**Show retired**. **Re-check:** forms sharing, notification rules, grants
+library, medical-screening requirement form and expiring list, facilities
+maintenance and inspections, the schedule board under 1280px. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 24 – 25, 2026
 
 Merged to `main` since `adf1d463` (2026-10-24 13:15 UTC) through `4f27e679`

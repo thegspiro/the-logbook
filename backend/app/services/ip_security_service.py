@@ -27,6 +27,7 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.services.separation_of_duties import assert_different_person
 
 # Maximum allowed exception duration (in days)
 MAX_EXCEPTION_DURATION_DAYS = 90
@@ -222,6 +223,17 @@ class IPSecurityService:
             raise ValueError(
                 f"Exception is not pending (status: {exception.approval_status})"
             )
+
+        # W74-5: an administrator could approve an exception for themselves, or
+        # one they filed, at once. Owner decision: a second person approves, as
+        # for money approvals, with no exception for a one-admin department; it
+        # grants the permission to a second member.
+        assert_different_person(
+            admin_id, exception.user_id, action="approve", record="IP exception"
+        )
+        assert_different_person(
+            admin_id, exception.requested_by, action="approve", record="IP exception"
+        )
 
         # Determine approved duration
         duration = approved_duration_days or exception.requested_duration_days

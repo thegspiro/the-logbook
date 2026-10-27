@@ -3,12 +3,186 @@
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
-2026-10-20 (pass 9), 2026-10-24 (pass 10) · **PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
+2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11) · **PR:**
+[#1904](https://github.com/thegspiro/the-logbook/pull/1904)
 (pass 1), pass 7 merged as commit `9da13118` (no PR — pushed directly), pass
 6 merged as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875),
 pass 8 merged as PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339),
 pass 9 merged as PR [#3454](https://github.com/thegspiro/the-logbook/pull/3454),
-pass 10 (this PR)
+pass 10 merged as PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633),
+pass 11 (this PR)
+
+---
+
+## Pass 11 (2026-10-27) — watchdog pickup, real delta, 0 fixed by this pass itself, 1 stale-comment correction, 0 new findings, GF-9 stays fully resolved
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, no reachable agents). No open PR whose head branch starts with
+`claude/security-review-` existed (`search_pull_requests`, 0 results) after
+PR #3764 (Feature 21, Admin hours, pass 11) merged. Row 22 (Grants &
+fundraising) was confirmed the next `⬜` by reading the rotation table on a
+freshly fetched `main`.
+
+**Backend (unchanged file set):** `app/api/v1/endpoints/grants.py`,
+`app/services/grant_service.py`, `app/services/fundraising_service.py`,
+`app/models/grant.py`, `app/schemas/grant.py`. **Frontend:**
+`frontend/src/modules/grants-fundraising/`.
+
+### Diff-scoping methodology
+
+Baseline `dbf2d64b` (PR #3633's merge, pass 10). `git diff dbf2d64b..HEAD --stat`
+against this feature's declared scope found a real delta: 3 backend files
+(68 lines) and 11 frontend files (764 insertions, 314 deletions, including
+two new test files). `git log dbf2d64b..HEAD -- <scope files>` attributes it
+to four non-rotation commits, all dated 2026-10-25/26, none from this
+rotation. Each read in full against the current code, not trusted from its
+own commit message:
+
+1. **`fde3d647` — "Encrypt personal phone numbers and addresses at rest."**
+   This feature's share: `Donor.phone`, `address_line1`, `address_line2`,
+   `city`, `state`, `postal_code` moved from plain `String`/`Optional[str]`
+   columns to `EncryptedText` (AES-256-GCM), via migration `5510d5ff49eb`
+   (repo-wide, not scoped to this feature alone). Verified this does not
+   silently break donor search: `fundraising_service.py`'s only `.ilike()`
+   call site for donors (`first_name`/`last_name`/`company_name`/`email`,
+   `:215-220`) matches none of the newly-encrypted columns — grepped every
+   `.ilike(`/`.like(` call in both service files directly, not assumed.
+   `donor_privacy.py`'s masking (GF-9) clears these fields by _name_ at the
+   Pydantic-response layer regardless of how they are stored, so the
+   encryption change doesn't interact with the privacy gate either way.
+2. **`b8c501b9` — "Fundraising: record a business, foundation or agency
+   donor by name alone" (W69-6, fixed).** `Donor.first_name`/`last_name`
+   are now `Optional` (migration `e03f96c98452`, guarded on the table's
+   existence since `donors` is a `create_all` table per repo convention);
+   `FundraisingService.check_donor_name` (new, `fundraising_service.py:248-266`)
+   enforces that an `individual`-type donor still needs both names, while
+   every other type may give only `company_name` or a contact's full name,
+   called on **both** `create_donor` and `update_donor` — correctly placed
+   before the flush, so a rejected name raises before any write (verified by
+   reading both call sites, `:272` and `:291`, not from the commit message).
+   The donor list's `ORDER BY` now sorts `coalesce(Donor.last_name,
+Donor.company_name)` so an organization-only donor sorts by its company
+   name rather than floating to one end — read the actual SQL-building
+   `order_by()` call to confirm the `coalesce()`, not assumed from the
+   commit subject.
+3. **`3c925632` — "Grants: edit and retire opportunities from the library"
+   (W68-10, fixed).** No new backend endpoint: the new `/grants/opportunities/:id/edit`
+   route and the Retire/Reinstate controls both call the _existing_
+   `PUT /grants/{id}` (`update_opportunity`, `fundraising.manage`),
+   confirmed by reading `routes.tsx`'s new `<Route>` (gated
+   `requiredPermission="fundraising.manage"`, matching the UI's own
+   `canManage` check on the Edit/Retire buttons — defense in depth, not a
+   single point of trust) and the frontend service call
+   (`updateOpportunity(id, { isActive: !retire })`). Retiring sets
+   `is_active = false` and keeps the row (an application already linked to
+   it keeps its program name); the list's `is_active` query param was
+   renamed to `active_only` to match what `GET /grants` actually reads
+   (confirmed in `grant_service.py` — it was `is_active` on the client,
+   `active_only` on the server, a pre-existing mismatch this commit fixes
+   rather than introduces). Retire goes through `useConfirm()` (Pitfall
+   #16), not `window.confirm`. The edit form's update payload sends every
+   field and nulls a cleared one (`blankToNull`), matching Pitfall #1's
+   update-path rule — read the file's own docstring and the `matchPercentage`/
+   `matchDescription` construction to confirm, not assumed from the
+   commit message's claim.
+4. **`dd4ba98a` — repo-wide numeric-bounds sweep, this feature's share.**
+   `CampaignCreate.suggested_amounts` and `CampaignUpdate.suggested_amounts`
+   (`schemas/grant.py:750-793`) both moved from an unbounded
+   `Optional[List[Decimal]]` to `Optional[List[Annotated[Decimal, Field(gt=0,
+le=MAX_GIFT_AMOUNT)]]]` — each suggested donation amount in the list must
+   now be positive and at most the existing per-gift ceiling, closing a gap
+   GF-9's own money-bounds pass (pass 10) didn't reach because this field is
+   a `List[Decimal]`, not a bare `Decimal` field. Covered by the sweep's own
+   `test_request_numeric_bounds.py`, re-run as part of this pass's gate.
+
+### Route surface — re-enumerated from scratch, unchanged
+
+45 `@router.` decorators (AST walk, not grepped), 45 `require_permission(...)`
+calls (27 `fundraising.manage`, 18 `fundraising.view`) — identical counts to
+pass 10. `scripts/check_route_permissions.py --strict`: 279 routes
+repo-wide, 0 errors, 0 warnings. No route added, removed, or regated — the
+new opportunity-edit screen reaches an endpoint that already existed.
+
+### GF-9 — re-confirmed still fully resolved
+
+Pass 10 closed GF-9's last two-thirds (unbounded amounts, donor-PII gate
+breadth) by owner decision. Re-checked directly against the current code,
+not carried forward from pass 10's wording: `donor_privacy.py`'s
+`DONOR_CONTACT_FIELDS`/`DONOR_IDENTITY_FIELDS` masking is untouched by this
+window's four commits (confirmed via `git diff dbf2d64b..HEAD --
+app/services/donor_privacy.py` — empty before this pass's own one-line
+comment fix below), and every money field this window touched
+(`suggested_amounts`) landed with a ceiling from the start rather than
+needing a follow-up. GF-9 has no open remainder.
+
+### One stale comment found and corrected (not a security finding)
+
+`donor_privacy.py`'s `DONOR_IDENTITY_FIELDS` comment asserted "the name
+fields are required strings on the response" to explain why masking
+overwrites them with a placeholder rather than leaving them blank. That
+became inaccurate the moment `b8c501b9` made `first_name`/`last_name`
+`Optional` on `DonorResponse` (inherited from `DonorBase`) — the code's
+_behavior_ is unaffected (the masking still unconditionally overwrites both
+fields with `ANONYMOUS_FIRST_NAME`/`ANONYMOUS_LAST_NAME`), but the comment's
+stated reason no longer held. Corrected in this pass to describe the actual
+invariant (the fields are `Optional`, so masking supplies a placeholder
+rather than leaving them `None`). Not a `GF-` finding — no behavior changed,
+no test needed beyond the existing anonymous-donor suite, which this pass's
+gate re-ran.
+
+### Re-confirmed unchanged (not re-derived)
+
+- **GF-1 through GF-6** (cross-org FK validation) — `_entity_in_org`,
+  `_opportunity_in_org`, `_budget_item_in_application`,
+  `_validate_pledge_fks`, `_validate_fundraising_event_fks`,
+  `_validate_application_fks` all unchanged in logic; none of this window's
+  four commits touch any of them.
+- **GF-7/GF-8/GF-14/GF-15/GF-24a/GF-27a/GF-33/GF-35/GF-36** — unchanged
+  since pass 10; none of this pass's four commits touch
+  `APPLICATION_STATUS_TRANSITIONS`, `_generate_compliance_tasks`,
+  `resolve_local_range_utc`, `APPLICATION_STATUS_GROUPS`, the
+  `.with_for_update()` locking sites, or either service's pagination
+  helpers.
+- **LIKE escaping** — every `.ilike()` call site (opportunity search, donor
+  search) still carries `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`; none
+  targets a newly-encrypted column (confirmed above).
+- **CSV export** — still n/a; no export exists anywhere in this module.
+- **JSON-column mutation (Pitfall #12)** — no new `dict(obj.json_column)`
+  shallow-copy-then-mutate shape introduced this window.
+
+**No new findings.**
+
+### Schema & migration notes
+
+Two migrations in scope this window, both reviewed: `e03f96c98452` (donor
+name columns nullable — a `create_all` table, guarded on existence,
+up/down/up verified on MariaDB per its own commit) and `5510d5ff49eb`
+(repo-wide encryption-at-rest widen-and-encrypt, which this feature's five
+Donor columns share with many other tables' columns; refuses to run without
+`ENCRYPTION_KEY` when there is data to encrypt). Neither was written by this
+rotation; both already carried their own tests before this pass began.
+Chain re-validated: 663 revisions, single head `c616fa1bd492`, no duplicate
+ids.
+
+### Completion gate (pass 11)
+
+| Check                                                 | Result                                                                                                                                                                  |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                                                                                                                                         |
+| `black --check app/ tests/ alembic/`                  | ✅ 2695 files unchanged                                                                                                                                                 |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean                                                                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 663 revisions, single head                                                                                                                                           |
+| `pytest tests/ -q -k "grant or fundraising or donor"` | ✅ 1270 passed, 1 pre-existing skip                                                                                                                                     |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 279 routes, 0 errors, 0 warnings                                                                                                                                     |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors (after `npm ci` from the repo root — sandbox `node_modules` predated the `@simplewebauthn/browser` passkeys dependency; environment gap, not a code defect) |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings                                                                                                                                                 |
+| `npx vitest run src/modules/grants-fundraising`       | ✅ 119/119 passed (23 files, up from 112/23)                                                                                                                            |
+
+This pass's own diff modifies one source file: a one-line comment
+correction in `backend/app/services/donor_privacy.py` (no behavior change),
+plus this file and `PROGRESS.md`. Every fixable item in this window's real
+delta had already landed via non-rotation commits before this pass began.
 
 ---
 

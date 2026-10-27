@@ -45,6 +45,7 @@ from app.utils.email_providers import (
     missing_for_enabled,
     normalize_stored_platform,
     required_field_message,
+    uses_google_service_account,
 )
 from app.utils.embed_origins import valid_embed_origins
 from app.utils.org_timezone import org_today
@@ -438,7 +439,10 @@ class OrganizationService:
         )
 
     async def update_organization_settings(
-        self, organization_id: UUID | str, settings_update: Dict[str, Any]
+        self,
+        organization_id: UUID | str,
+        settings_update: Dict[str, Any],
+        may_configure_delegated_email: bool = False,
     ) -> OrganizationSettings:
         """
         Update organization settings
@@ -446,6 +450,10 @@ class OrganizationService:
         Args:
             organization_id: The organization ID
             settings_update: Dictionary of settings to update
+            may_configure_delegated_email: The caller holds ``admin.access``,
+                so may set up or change Gmail sending through a domain-wide
+                delegated service account. Defaults to refusing, so a caller
+                that never thought about it fails closed.
 
         Returns:
             Updated OrganizationSettings
@@ -531,9 +539,27 @@ class OrganizationService:
             stored_section = normalize_stored_platform(
                 current_settings.get("email_service") or {}
             )
-            if connection_identity(
+            identity_changed = connection_identity(
                 stored_section.get("platform"), stored_section
-            ) != connection_identity(email_section.get("platform"), email_section):
+            ) != connection_identity(email_section.get("platform"), email_section)
+            # SEC: a delegated service-account key can send as any user in the
+            # department's Workspace domain, so choosing it, changing the
+            # address it sends as, or replacing the key needs an organization
+            # administrator, not just settings.manage (owner decision,
+            # 2026-10-25). Saving an unchanged form — a new From name, turning
+            # email off — stays open to settings.manage, and so does switching
+            # away from it, which narrows what the stored credential can do.
+            fresh_key = email_submitted_secrets.get("google_service_account_key")
+            if (
+                uses_google_service_account(email_section)
+                and not may_configure_delegated_email
+                and (identity_changed or (fresh_key and fresh_key != REDACTED_SECRET))
+            ):
+                raise PermissionError(
+                    "Only an organization administrator can set up or change "
+                    "Gmail sending with a service account"
+                )
+            if identity_changed:
                 for field in EMAIL_SECRET_FIELDS:
                     fresh = email_submitted_secrets.get(field)
                     if not fresh or fresh == REDACTED_SECRET:
