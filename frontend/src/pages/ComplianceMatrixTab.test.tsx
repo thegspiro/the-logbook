@@ -528,6 +528,190 @@ describe('ComplianceMatrixTab', () => {
     });
   });
 
+  describe('member class filter', () => {
+    /**
+     * Two operational members, an administrative one graded only on an admin
+     * requirement, and a custom-tier member nobody has classified.
+     */
+    const classed = (): ComplianceMatrix => {
+      const m = matrix();
+      m.requirements.push({
+        id: 'r3',
+        name: 'Records Management',
+        requirement_type: 'courses',
+        frequency: 'annual',
+        target: null,
+        target_unit: null,
+      });
+      const byId = (id: string) => m.members.find((x) => x.user_id === id);
+      const sean = byId('u1');
+      const britt = byId('u2');
+      const marisol = byId('u3');
+      if (!sean || !britt || !marisol) throw new Error('fixture members missing');
+      sean.member_class = 'operational';
+      britt.member_class = 'operational';
+      marisol.member_class = 'administrative';
+      marisol.membership_type = 'administrative';
+      marisol.requirements_met = 1;
+      marisol.requirements_total = 1;
+      marisol.requirements = [{ requirement_id: 'r3', requirement_name: 'Records Management', status: 'completed' }];
+      m.members.push({
+        user_id: 'u4',
+        member_name: 'Quinn, Morgan',
+        membership_type: 'senior',
+        member_class: null,
+        standing: 'non_compliant',
+        completion_pct: 0,
+        requirements_met: 0,
+        requirements_total: 1,
+        requirements: [{ requirement_id: 'r1', requirement_name: 'Company Training Hours', status: 'not_started' }],
+      });
+      return m;
+    };
+
+    const classSwitch = () => within(screen.getByRole('group', { name: 'Member class' }));
+    const railNames = () =>
+      within(screen.getByRole('navigation', { name: 'Compliance queue' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent ?? '');
+
+    beforeEach(() => {
+      getComplianceMatrix.mockReset();
+      getComplianceMatrix.mockResolvedValue(classed());
+      downloadCsv.mockReset();
+      setUrl('');
+    });
+
+    it('offers only the classes on the roster, starting on All', async () => {
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByText(/4 tracked members/);
+
+      const buttons = classSwitch().getAllByRole('button');
+      expect(buttons.map((b) => b.textContent)).toEqual(['All', 'Operational', 'Administrative']);
+      expect(classSwitch().getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('narrows the roster to one class and remembers it in the URL', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByText(/4 tracked members/);
+
+      await user.click(classSwitch().getByRole('button', { name: 'Administrative' }));
+
+      expect(await screen.findByText(/1 tracked administrative member · 1 requirement ·/)).toBeInTheDocument();
+      const names = railNames();
+      expect(names).toHaveLength(1);
+      expect(names[0]).toContain('Alvarez, Marisol');
+      expect(window.location.search).toBe('?class=administrative');
+    });
+
+    it('hides requirements that grade nobody in the class', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByText(/4 tracked members/);
+
+      await user.click(classSwitch().getByRole('button', { name: 'Administrative' }));
+      await user.click(screen.getByRole('tab', { name: 'By requirement' }));
+
+      const names = railNames();
+      expect(names).toHaveLength(1);
+      expect(names[0]).toContain('Records Management');
+      expect(names[0]).toContain('100% of 1 member met');
+    });
+
+    it('scores a requirement across the selected class only', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByText(/4 tracked members/);
+      await user.click(screen.getByRole('tab', { name: 'By requirement' }));
+
+      // All: Sean, Britt and the unclassified senior member are graded on it.
+      expect(railNames().find((n) => n.includes('Company Training Hours'))).toContain('0% of 3 members met');
+
+      await user.click(classSwitch().getByRole('button', { name: 'Operational' }));
+
+      const names = railNames();
+      expect(names.find((n) => n.includes('Company Training Hours'))).toContain('0% of 2 members met');
+      expect(names.some((n) => n.includes('Records Management'))).toBe(false);
+    });
+
+    it('lists a member with no class only under All', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByText(/4 tracked members/);
+      expect(railNames().some((n) => n.includes('Quinn, Morgan'))).toBe(true);
+
+      await user.click(classSwitch().getByRole('button', { name: 'Operational' }));
+
+      expect(await screen.findByText(/2 tracked operational members/)).toBeInTheDocument();
+      expect(railNames().some((n) => n.includes('Quinn, Morgan'))).toBe(false);
+    });
+
+    it('opens on the class named in the URL, and All clears it', async () => {
+      setUrl('?class=operational&status=noncompliant');
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+
+      expect(await screen.findByText(/2 tracked operational members/)).toBeInTheDocument();
+      expect(classSwitch().getByRole('button', { name: 'Operational' })).toHaveAttribute('aria-pressed', 'true');
+
+      await user.click(classSwitch().getByRole('button', { name: 'All' }));
+
+      expect(await screen.findByText(/4 tracked members/)).toBeInTheDocument();
+      // Only the class param goes; the dashboard's status filter stays.
+      expect(window.location.search).toBe('?status=noncompliant');
+    });
+
+    it('ignores an unrecognised class in the URL', async () => {
+      setUrl('?class=bogus');
+      renderWithRouter(<ComplianceMatrixTab />);
+
+      expect(await screen.findByText(/4 tracked members/)).toBeInTheDocument();
+      expect(classSwitch().getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('exports only the selected class, with each member class', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByText(/4 tracked members/);
+
+      await user.click(classSwitch().getByRole('button', { name: 'Administrative' }));
+      await user.click(screen.getByRole('button', { name: /Export CSV/ }));
+
+      const [contents] = downloadCsv.mock.calls[0] as [string, string];
+      expect(contents).toContain('Member class');
+      expect(contents).toContain('Alvarez, Marisol');
+      expect(contents).not.toContain('Doherty, Sean');
+    });
+
+    it('prints the selected class', async () => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByText(/4 tracked members/);
+
+      await user.click(screen.getByRole('button', { name: /Print/ }));
+      expect(open).toHaveBeenLastCalledWith('/training/print/compliance', '_blank');
+
+      await user.click(classSwitch().getByRole('button', { name: 'Operational' }));
+      await user.click(screen.getByRole('button', { name: /Print/ }));
+      expect(open).toHaveBeenLastCalledWith('/training/print/compliance?class=operational', '_blank');
+      open.mockRestore();
+    });
+
+    it('is not offered when the roster holds a single class', async () => {
+      const single = classed();
+      single.members = single.members.filter((x) => x.member_class === 'operational');
+      getComplianceMatrix.mockReset();
+      getComplianceMatrix.mockResolvedValue(single);
+
+      renderWithRouter(<ComplianceMatrixTab />);
+
+      expect(await screen.findByText(/2 tracked members/)).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Member class' })).not.toBeInTheDocument();
+    });
+  });
+
   it('waits for the request before drawing a verdict', async () => {
     getComplianceMatrix.mockReset();
     getComplianceMatrix.mockReturnValue(new Promise(() => {}));
