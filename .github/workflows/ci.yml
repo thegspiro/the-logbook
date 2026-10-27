@@ -470,7 +470,10 @@ jobs:
   backend-test-integration:
     name: Backend Integration Tests (${{ matrix.db.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 30 left no headroom: on 2026-10-27 the MySQL leg took 23, 25, 28 and 30
+    # minutes on healthy runs and was killed at 30m30s on #3743 with pytest
+    # still passing. 45 is still well short of a hang going unnoticed.
+    timeout-minutes: 45
     # No `needs:`. This job used to sit behind `needs: [backend-lint,
     # backend-test]` as a fail-fast guard — don't spend a database runner if
     # the cheap checks are already red. That guard was costing far more than
