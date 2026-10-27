@@ -131,5 +131,5 @@ Secret values (`api_key`, `webhook_secret`) are stored in the encrypted
 
 ## See Also
 
-- [Prospective Members Pipeline](../docs/PROSPECTIVE_MEMBERS_MODULE.md)
-- [Training: Integrations → Cal.com](../docs/training/16-integrations.md#calcom--interview-scheduling)
+- [Prospective Members Pipeline](https://github.com/thegspiro/the-logbook/blob/main/docs/PROSPECTIVE_MEMBERS_MODULE.md)
+- [Training: Integrations → Cal.com](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#calcom--interview-scheduling)

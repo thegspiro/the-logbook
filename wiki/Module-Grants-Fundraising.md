@@ -17,7 +17,9 @@ organization as well as on the permissions below.
 - **Grant opportunity library** — funding programs the department may apply
   to (agency, award range, match requirement, deadline type and date, category,
   required documents, federal program code), filterable by category and
-  active/inactive.
+  active/inactive. A program is edited from its card and retired (set
+  inactive, never deleted) when it closes, so applications started from it
+  keep their program; **Show retired** lists retired ones to reinstate.
 - **Application pipeline** — each application moves through a fixed lifecycle
   (see [Application lifecycle](#application-lifecycle)); the applications page
   has a pipeline (one column per status) and a server-paged, server-sorted
@@ -80,22 +82,23 @@ the organization's timezone, falling back to UTC when none is set
 
 Every page requires the `grants` module to be enabled.
 
-| URL                             | Page                                | Permission           |
-| ------------------------------- | ----------------------------------- | -------------------- |
-| `/grants`                       | Grants & Fundraising home           | `fundraising.view`   |
-| `/grants/opportunities`         | Grant opportunities                 | `fundraising.view`   |
-| `/grants/opportunities/new`     | New grant opportunity               | `fundraising.manage` |
-| `/grants/applications`          | Grant applications                  | `fundraising.view`   |
-| `/grants/applications/new`      | New grant application               | `fundraising.manage` |
-| `/grants/applications/:id`      | Grant application detail            | `fundraising.view`   |
-| `/grants/applications/:id/edit` | Edit grant application              | `fundraising.manage` |
-| `/grants/campaigns`             | Fundraising campaigns               | `fundraising.view`   |
-| `/grants/donors`                | Donors                              | `fundraising.view`   |
-| `/grants/donations`             | Donations                           | `fundraising.view`   |
-| `/grants/donations/new`         | Record a donation                   | `fundraising.manage` |
-| `/grants/pledges`               | Pledges                             | `fundraising.view`   |
-| `/grants/events`                | Fundraising events                  | `fundraising.view`   |
-| `/grants/reports`               | Reports (Grants / Fundraising tabs) | `fundraising.view`   |
+| URL                              | Page                                | Permission           |
+| -------------------------------- | ----------------------------------- | -------------------- |
+| `/grants`                        | Grants & Fundraising home           | `fundraising.view`   |
+| `/grants/opportunities`          | Grant opportunities                 | `fundraising.view`   |
+| `/grants/opportunities/new`      | New grant opportunity               | `fundraising.manage` |
+| `/grants/opportunities/:id/edit` | Edit grant opportunity              | `fundraising.manage` |
+| `/grants/applications`           | Grant applications                  | `fundraising.view`   |
+| `/grants/applications/new`       | New grant application               | `fundraising.manage` |
+| `/grants/applications/:id`       | Grant application detail            | `fundraising.view`   |
+| `/grants/applications/:id/edit`  | Edit grant application              | `fundraising.manage` |
+| `/grants/campaigns`              | Fundraising campaigns               | `fundraising.view`   |
+| `/grants/donors`                 | Donors                              | `fundraising.view`   |
+| `/grants/donations`              | Donations                           | `fundraising.view`   |
+| `/grants/donations/new`          | Record a donation                   | `fundraising.manage` |
+| `/grants/pledges`                | Pledges                             | `fundraising.view`   |
+| `/grants/events`                 | Fundraising events                  | `fundraising.view`   |
+| `/grants/reports`                | Reports (Grants / Fundraising tabs) | `fundraising.view`   |
 
 Campaigns, donors, pledges and fundraising events have no separate detail
 routes; they are created and edited in dialogs on their list pages, which offer
@@ -342,6 +345,6 @@ environment flag.
 
 ---
 
-**See also:** [Original design research](../docs/GRANTS_FUNDRAISING_MODULE.md) ·
-[Security review GF-22](../docs/security-review/GF-22-grants-fundraising.md) ·
-[Troubleshooting](../docs/TROUBLESHOOTING.md#grants-module-serialization-issues)
+**See also:** [Original design research](https://github.com/thegspiro/the-logbook/blob/main/docs/GRANTS_FUNDRAISING_MODULE.md) ·
+[Security review GF-22](https://github.com/thegspiro/the-logbook/blob/main/docs/security-review/GF-22-grants-fundraising.md) ·
+[Troubleshooting](https://github.com/thegspiro/the-logbook/blob/main/docs/TROUBLESHOOTING.md#grants-module-serialization-issues)

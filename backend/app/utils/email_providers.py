@@ -72,6 +72,31 @@ def uses_microsoft_oauth(email_config: Mapping[str, Any]) -> bool:
     )
 
 
+# How a Gmail / Google Workspace configuration authenticates. "app_password"
+# signs in to smtp.gmail.com; "service_account" sends through the Gmail API
+# with a domain-wide delegated key (app.utils.google_oauth), which is not
+# revoked when the account's password changes.
+GOOGLE_AUTH_METHODS = ("app_password", "service_account")
+
+
+def google_auth_method(email_config: Mapping[str, Any]) -> str:
+    """The Google auth method a stored or submitted section asks for.
+
+    Absent means App Password, for the reason microsoft_auth_method gives:
+    every Gmail row written before the service account existed carries no
+    method and signs in with a password.
+    """
+    method = email_config.get("google_auth_method")
+    return method if method in GOOGLE_AUTH_METHODS else "app_password"
+
+
+def uses_google_service_account(email_config: Mapping[str, Any]) -> bool:
+    return (
+        email_config.get("platform") == "gmail"
+        and google_auth_method(email_config) == "service_account"
+    )
+
+
 REDACTED_SECRET = "••••••••"
 
 # A Cloudflare account ID as the dashboard shows it. It is interpolated into
@@ -127,6 +152,13 @@ def connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
     port and encryption were saved; a Cloudflare token belongs to an account.
     A saved secret is reused only for the identity it was saved with.
     """
+    if uses_google_service_account(values):
+        # The key can send as any user in the domain, so the address it sends
+        # as is part of what it was saved for: changing the From address
+        # changes whose mail the key is used to send, and needs the key
+        # submitted again. The key itself is not part of the identity — a
+        # freshly submitted one is always kept.
+        return (platform, "service_account", values.get("from_email") or None)
     if uses_microsoft_oauth(values):
         # The client secret authenticates one app registration in one
         # directory. Carrying it to a different tenant or client ID would
@@ -164,6 +196,7 @@ def connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
 # rather than carried forward to the new server or account.
 EMAIL_SECRET_FIELDS = (
     "google_app_password",
+    "google_service_account_key",
     "microsoft_app_password",
     "microsoft_client_secret",
     "smtp_password",
@@ -184,6 +217,7 @@ def is_valid_email(value: Any) -> bool:
 REQUIRED_FIELD_LABELS = {
     "from_email": "a valid account email address",
     "google_app_password": "a Google App Password",
+    "google_service_account_key": "a Google service account key (JSON)",
     "microsoft_app_password": "a Microsoft 365 App Password",
     "microsoft_tenant_id": "the Microsoft 365 directory (tenant) ID",
     "microsoft_client_id": "the Microsoft 365 application (client) ID",
@@ -215,6 +249,10 @@ def missing_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
         # authentication rather than just delivery.
         if not is_valid_email(email_config.get("from_email")):
             return "from_email"
+        if uses_google_service_account(email_config):
+            if not email_config.get("google_service_account_key"):
+                return "google_service_account_key"
+            return None
         if uses_microsoft_oauth(email_config):
             for field in (
                 "microsoft_tenant_id",
@@ -287,6 +325,34 @@ def invalid_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
                 "hexadecimal value shown in your Cloudflare dashboard."
             )
         return None
+    if uses_google_service_account(email_config):
+        key = email_config.get("google_service_account_key")
+        if not key:
+            # Absence is missing_for_enabled's to report.
+            return None
+        from app.schemas.organization import _ENC_PREFIX
+        from app.utils.google_oauth import GoogleOAuthError, parse_service_account_key
+
+        if isinstance(key, str) and key.startswith(_ENC_PREFIX):
+            # A redaction marker on a write is replaced with the stored value
+            # before this runs, and the stored value is still encrypted. It is
+            # decrypted to be checked rather than waved through: a key that
+            # can no longer be decrypted (a rotated ENCRYPTION_KEY) cannot
+            # sign anything either.
+            from app.core.security import decrypt_data
+
+            try:
+                key = decrypt_data(key[len(_ENC_PREFIX) :])
+            except Exception:
+                return (
+                    "The saved service account key could not be read. Upload "
+                    "the JSON key again."
+                )
+        try:
+            parse_service_account_key(key)
+        except GoogleOAuthError as e:
+            return str(e)
+        return None
     if not uses_microsoft_oauth(email_config):
         return None
     # Imported here: the OAuth module imports nothing from this one, and a
@@ -337,6 +403,11 @@ def resolve_smtp_settings(email_config: Mapping[str, Any]) -> dict[str, Any]:
     decides how to report it. ``oauth`` is set only for Microsoft 365 on the
     client credentials flow, where the password is replaced by a token the
     caller obtains from ``app.utils.microsoft_oauth``.
+
+    A Gmail service-account configuration resolves to the Gmail preset with no
+    password: it does not use SMTP at all (``uses_google_service_account``
+    routes it to the Gmail API), and a ``None`` password means nothing ever
+    signs in to smtp.gmail.com with it by mistake.
     """
     platform = email_config.get("platform")
     preset = PROVIDER_SMTP_PRESETS.get(platform) if isinstance(platform, str) else None
@@ -346,6 +417,8 @@ def resolve_smtp_settings(email_config: Mapping[str, Any]) -> dict[str, Any]:
         # both. A Gmail App Password is displayed with spaces; Google accepts
         # it either way, but strip them so a pasted value cannot fail login.
         password = normalize_app_password(email_config.get(preset.password_field))
+        if uses_google_service_account(email_config):
+            password = None
         oauth = None
         if uses_microsoft_oauth(email_config):
             # The mailbox still identifies itself as the From address; what

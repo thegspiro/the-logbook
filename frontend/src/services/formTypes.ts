@@ -30,6 +30,8 @@ export interface FormField {
   condition_value?: string | undefined;
   sort_order: number;
   width: string;
+  /** Answers are stored encrypted and served only with `sensitive_answers.view`. */
+  is_sensitive?: boolean | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -52,6 +54,7 @@ export interface FormFieldCreate {
   condition_value?: string | undefined;
   sort_order?: number;
   width?: string;
+  is_sensitive?: boolean;
 }
 
 /**
@@ -182,6 +185,10 @@ export interface FormSubmission {
   integration_processed: boolean;
   integration_result?: Record<string, unknown>;
   created_at: string;
+  /** Answers to Sensitive fields; present only for viewers allowed to see them. */
+  sensitive_answers?: Record<string, unknown> | null | undefined;
+  /** The submission holds sensitive answers this response left out. */
+  sensitive_withheld?: boolean | undefined;
 }
 
 export interface SubmissionsListResponse {
@@ -218,6 +225,7 @@ export interface PublicFormField {
   condition_value?: string;
   sort_order: number;
   width: string;
+  is_sensitive?: boolean | undefined;
 }
 
 export interface PublicFormDef {

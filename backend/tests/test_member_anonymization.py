@@ -202,6 +202,7 @@ class TestAnonymizeMember:
             organization_id=org.id,
             form_id=form.id,
             data={"date_of_birth": "1990-05-04", "medical_notes": "Asthma"},
+            sensitive_data={"criminal_history": "Prior conviction"},
             submitter_name="Pat Firefighter",
             submitter_email="pat@example.org",
             ip_address="192.0.2.1",
@@ -242,6 +243,7 @@ class TestAnonymizeMember:
         assert screening.provider_name is None
         assert prospect.form_submission_id is None
         assert submission.data == {}
+        assert submission.sensitive_data is None
         assert submission.submitter_name is None
         assert submission.submitter_email is None
         assert submission.ip_address is None

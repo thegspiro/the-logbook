@@ -664,6 +664,11 @@ Use **Waive payment** when the balance goes away without money: a replacement
 for a faulty item, or something the department is giving free. It is recorded
 as a waiver, not a payment, so your totals stay true.
 
+You can waive a part-paid order's balance, but not a paid one. If someone
+records the last payment while you have the order open, your waiver is refused
+with "This order is already paid. Refund it instead of waiving it." Use
+**Refund** if the money should go back.
+
 Orders where the member tapped **I've sent payment** read **Reported — needs
 verification**. That is your queue. Filter the **Orders** tab by that payment
 status, confirm the money arrived, then mark it paid.

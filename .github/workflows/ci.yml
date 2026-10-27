@@ -1095,11 +1095,14 @@ jobs:
   #
   # Unlike the Chromium job, WebKit cannot run on the runner image as shipped:
   # it links against libraries (woff2, harfbuzz-icu, gstreamer, enchant, ...)
-  # the image does not carry. They are installed by `install-deps` on every
-  # run, since apt packages are not part of the browser cache, and that step
-  # has its own deadline for the reason `install-system-deps.sh` gives — an
-  # apt fetch with no timeout once consumed a whole job's budget. A stall
-  # fails this job in minutes rather than hanging it.
+  # the image does not carry. `install-deps` resolves and fetches ~180 of them
+  # from Ubuntu's mirror every run; the apt cache below lets a run with no
+  # mirror trouble save the downloaded .debs for the next one, so a slow mirror
+  # costs one run, not every run. The step still carries its own deadline for
+  # the reason `install-system-deps.sh` gives — an apt fetch with no timeout
+  # once consumed a whole job's budget — because a cache miss (a new Ubuntu
+  # image, a Playwright bump that changes the dependency list) still goes to
+  # the network: a stall fails this job in minutes rather than hanging it.
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari)
     runs-on: ubuntu-latest
@@ -1133,8 +1136,28 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install webkit
 
+      # /var/cache/apt/archives is root-owned on this image, so a non-root
+      # cache restore/save can't write into it without this. apt itself still
+      # installs via sudo (as root) regardless of who owns the directory, so
+      # the chown only has to satisfy actions/cache, not apt.
+      - name: Allow apt cache restore/save to write the archive directory
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
+
+      # Caches the downloaded .deb files, not the installed libraries: apt
+      # still runs and still verifies/installs them, but skips the network
+      # fetch for whichever ones match what's cached. A miss (this image's apt
+      # lists moved past what's cached) falls back to downloading just that
+      # package, the same as an always-cold run would for all of them.
+      - name: Cache apt packages for WebKit system libraries
+        uses: actions/cache@v6
+        with:
+          path: /var/cache/apt/archives
+          key: apt-webkit-deps-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            apt-webkit-deps-${{ runner.os }}-
+
       - name: Install WebKit system libraries
-        timeout-minutes: 8
+        timeout-minutes: 20
         run: npx playwright install-deps webkit
 
       - name: Run Mobile Safari E2E tests

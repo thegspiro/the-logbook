@@ -610,6 +610,34 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Date the applicant withdrew, in the department's timezone",
         },
     ],
+    "application_step_completed": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "step_name", "description": "Name of the completed pipeline stage"},
+    ],
+    "application_status_link": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "status_url", "description": "Link to the application status page"},
+        {
+            "name": "custom_message",
+            "description": "The stage's custom message, as written",
+        },
+        {
+            "name": "custom_message_html",
+            "description": (
+                "The stage's custom message as a paragraph, omitted entirely "
+                "when the stage has none"
+            ),
+        },
+        {
+            "name": "custom_message_text",
+            "description": (
+                "The stage's custom message followed by a blank line, omitted "
+                "entirely when the stage has none (for the plain-text body)"
+            ),
+        },
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -1267,6 +1295,23 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "withdrawal_date": "March 3, 2026",
         }
     ),
+    "application_step_completed": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "step_name": "Background Check",
+        }
+    ),
+    "application_status_link": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "status_url": "https://example.com/application-status/sample-token",
+            "custom_message": "Your interview will be scheduled next.",
+            "custom_message_html": "<p>Your interview will be scheduled next.</p>",
+            "custom_message_text": "Your interview will be scheduled next.\n\n",
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1513,6 +1558,8 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "event_request_status": {"contact_name": "full"},
     "duplicate_application": {"applicant_name": "full"},
     "application_withdrawn": {"applicant_name": "full"},
+    "application_step_completed": {"first_name": "first", "applicant_name": "full"},
+    "application_status_link": {"first_name": "first", "applicant_name": "full"},
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
@@ -2435,6 +2482,58 @@ or would like to apply again in the future, please contact us directly.
 DEFAULT_APPLICATION_WITHDRAWN_SUBJECT = (
     "Your application has been withdrawn — {{organization_name}}"
 )
+
+# Sent to an applicant when a stage marked "notify the applicant on
+# completion" is completed. The wording is what the pipeline sent when this
+# email was built in code, so a department that never edits it sees no change.
+DEFAULT_APPLICATION_STEP_COMPLETED_HTML = build_shell(
+    "{{step_name}} Complete",
+    """        <p>Hi {{first_name}},</p>
+        <p>We're writing to let you know that the <strong>{{step_name}}</strong>
+        step of your membership application has been completed.</p>
+        <p>We'll be in touch with next steps soon.</p>""",
+    accent=ACCENT_BLUE,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_STEP_COMPLETED_TEXT = """{{step_name}} Complete
+
+Hi {{first_name}},
+
+The {{step_name}} step of your membership application has been completed.
+
+We'll be in touch with next steps soon.
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_STEP_COMPLETED_SUBJECT = (
+    "Application Update — {{step_name}} Complete"
+)
+
+# Sent by an "Enable Status Page" stage with the applicant's private status
+# link. The stage stays open when this email cannot be sent, so a coordinator
+# can see the applicant never received the link.
+DEFAULT_APPLICATION_STATUS_LINK_HTML = build_shell(
+    "Track Your Membership Application",
+    """        <p>Hi {{first_name}},</p>
+        {{custom_message_html}}
+        <p>You can now follow the progress of your membership application
+        online.</p>
+""" + action("{{status_url}}", "Track Your Application"),
+    accent=ACCENT_BLUE,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_STATUS_LINK_TEXT = """Track Your Membership Application
+
+Hi {{first_name}},
+
+{{custom_message_text}}You can now follow the progress of your membership
+application online: {{status_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_STATUS_LINK_SUBJECT = "Track Your Membership Application"
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
@@ -4389,6 +4488,30 @@ class EmailTemplateService:
             "description": (
                 "Sent to an applicant who withdraws their own application "
                 "from their application status page, confirming it is closed."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_STEP_COMPLETED,
+            "footer": "public",
+            "name": "Application Step Completed",
+            "subject": DEFAULT_APPLICATION_STEP_COMPLETED_SUBJECT,
+            "html": DEFAULT_APPLICATION_STEP_COMPLETED_HTML,
+            "text": DEFAULT_APPLICATION_STEP_COMPLETED_TEXT,
+            "description": (
+                "Sent to an applicant when a pipeline stage set to notify "
+                "them on completion is completed."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_STATUS_LINK,
+            "footer": "public",
+            "name": "Application Status Link",
+            "subject": DEFAULT_APPLICATION_STATUS_LINK_SUBJECT,
+            "html": DEFAULT_APPLICATION_STATUS_LINK_HTML,
+            "text": DEFAULT_APPLICATION_STATUS_LINK_TEXT,
+            "description": (
+                "Sent to an applicant by an Enable Status Page stage, with "
+                "the private link to follow their application online."
             ),
         },
         {

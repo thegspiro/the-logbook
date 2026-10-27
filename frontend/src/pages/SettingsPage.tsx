@@ -65,6 +65,7 @@ import { SettingsLayout, type SettingsSection } from '../components/settings/Set
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 import { useEmailConnectionTest } from '../hooks/useEmailConnectionTest';
+import { useAuthStore } from '../stores/authStore';
 
 // ── Section definitions ──
 
@@ -460,6 +461,7 @@ export const SettingsPage: React.FC = () => {
     use_tls: true,
   });
   const [savingEmail, setSavingEmail] = useState(false);
+  const canConfigureServiceAccount = useAuthStore((s) => s.checkPermission)('admin.access');
   // Wrapped rather than passed as a bare method reference: the service is a
   // plain object literal, and handing its method around unbound is what
   // `@typescript-eslint/unbound-method` exists to catch. Stable, so the
@@ -740,9 +742,12 @@ export const SettingsPage: React.FC = () => {
       const status = (err as { response?: { status?: number } })?.response?.status;
       // A 400 names the field an enabled platform still needs; show it
       // rather than a generic failure the admin cannot act on.
+      // A 403 can be the general settings gate or the narrower refusal to set
+      // up Gmail's service account without admin.access; the server's own
+      // message says which, so it is shown when there is one.
       toast.error(
         status === 403
-          ? 'You do not have permission to change these settings.'
+          ? getErrorMessage(err, 'You do not have permission to change these settings.')
           : status === 400
             ? getErrorMessage(err, 'Failed to save email settings.')
             : 'Failed to save email settings.'
@@ -1325,6 +1330,7 @@ export const SettingsPage: React.FC = () => {
               void handleTestEmail();
             }}
             profileName={profile?.name}
+            canConfigureServiceAccount={canConfigureServiceAccount}
           />
         );
 

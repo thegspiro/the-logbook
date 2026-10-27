@@ -2,8 +2,8 @@ import React from 'react';
 import { SettingsToggle as Toggle } from './SettingsToggle';
 import EmailLinkDomainCard from './EmailLinkDomainCard';
 import { Loader2, Mail, Server, Cloud, Info, Eye, EyeOff, AlertTriangle } from 'lucide-react';
-import { MicrosoftAuthMethod } from '../../constants/enums';
-import { GMAIL_SENDING_NOTES } from '../../constants/gmailSendingGuidance';
+import { GoogleAuthMethod, MicrosoftAuthMethod } from '../../constants/enums';
+import { GMAIL_SENDING_NOTES, GMAIL_SERVICE_ACCOUNT_NOTES } from '../../constants/gmailSendingGuidance';
 import { SMTP_PROVIDER_PRESETS, findSmtpProviderPreset } from '../../constants/smtpProviders';
 import type { EmailServiceSettings } from '../../types/user';
 
@@ -17,6 +17,43 @@ interface EmailSettingsSectionProps {
   onSave: () => void;
   onTest: () => void;
   profileName: string | undefined;
+  /**
+   * The viewer holds `admin.access`. Setting up Gmail sending through a
+   * service account needs it as well as the settings grant, because the key
+   * can send as anyone in the domain; the backend refuses the save without
+   * it, and this keeps the screen from offering what the save will refuse.
+   */
+  canConfigureServiceAccount?: boolean;
+}
+
+/** Mirrors `REDACTED_SECRET` in `app/utils/email_providers.py`: a saved secret as the API returns it. */
+const REDACTED_SECRET = '••••••••';
+
+const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+
+/**
+ * The client ID from a service-account key file, or why the file is not one.
+ * The backend validates the key again on save; this only answers early, while
+ * the administrator still has the file to hand.
+ */
+function readServiceAccountKey(text: string): { clientId: string } | { error: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { error: 'That file is not JSON. Choose the JSON key file downloaded from Google Cloud.' };
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { error: 'That file is not a service account key.' };
+  }
+  const key = parsed as Record<string, unknown>;
+  if (key.type !== 'service_account') {
+    return { error: 'That file is not a service account key (its type is not service_account).' };
+  }
+  if (typeof key.client_id !== 'string' || !key.client_id || typeof key.private_key !== 'string') {
+    return { error: 'That key is incomplete. Download a new JSON key from Google Cloud.' };
+  }
+  return { clientId: key.client_id };
 }
 
 /**
@@ -68,6 +105,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
   onSave,
   onTest,
   profileName,
+  canConfigureServiceAccount = false,
 }) => {
   const appPasswordPlatform =
     emailSettings.platform === 'gmail' || emailSettings.platform === 'microsoft'
@@ -80,7 +118,47 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
   const microsoftAuthMethod: MicrosoftAuthMethod =
     emailSettings.microsoft_auth_method || MicrosoftAuthMethod.APP_PASSWORD;
   const showMicrosoftOAuth = isMicrosoft && microsoftAuthMethod === MicrosoftAuthMethod.OAUTH;
+  const isGmail = emailSettings.platform === 'gmail';
+  // Absent means App Password, as it does on the backend.
+  const googleAuthMethod: GoogleAuthMethod = emailSettings.google_auth_method || GoogleAuthMethod.APP_PASSWORD;
+  const showGoogleServiceAccount = isGmail && googleAuthMethod === GoogleAuthMethod.SERVICE_ACCOUNT;
+  // A department already on the service account, viewed by someone without
+  // admin.access: they may save the rest of the form or switch away, but the
+  // key and the address it sends as stay as an administrator set them.
+  const serviceAccountLocked = showGoogleServiceAccount && !canConfigureServiceAccount;
   const busy = savingEmail || testingEmail;
+
+  const [keyFileError, setKeyFileError] = React.useState<string | null>(null);
+  const freshKey =
+    emailSettings.google_service_account_key && emailSettings.google_service_account_key !== REDACTED_SECRET
+      ? emailSettings.google_service_account_key
+      : null;
+  const freshKeyRead = freshKey ? readServiceAccountKey(freshKey) : null;
+  const serviceAccountClientId =
+    freshKeyRead && 'clientId' in freshKeyRead
+      ? freshKeyRead.clientId
+      : emailSettings.google_service_account_key === REDACTED_SECRET
+        ? emailSettings.google_service_account_client_id || null
+        : null;
+
+  const handleKeyFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Cleared so choosing the same file again after a fix still fires.
+    event.target.value = '';
+    if (!file) return;
+    void file
+      .text()
+      .then((text) => {
+        const read = readServiceAccountKey(text);
+        if ('error' in read) {
+          setKeyFileError(read.error);
+          return;
+        }
+        setKeyFileError(null);
+        onEmailSettingsChange((s) => ({ ...s, google_service_account_key: text }));
+      })
+      .catch(() => setKeyFileError('The key file could not be read.'));
+  };
 
   // Which quick-fill provider was last chosen, so its credential guidance
   // stays on screen. It is a hint about a choice just made, not part of the
@@ -180,6 +258,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
             value={emailSettings.from_email || ''}
             onChange={(e) => onEmailSettingsChange((s) => ({ ...s, from_email: e.target.value }))}
             placeholder="notifications@yourdomain.com"
+            disabled={serviceAccountLocked}
             className="form-input"
           />
         </div>
@@ -237,7 +316,117 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
             </div>
           )}
 
-          {showMicrosoftOAuth ? (
+          {isGmail && (
+            <div>
+              <label className="text-theme-text-muted mb-2 block text-xs">Authentication</label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    {
+                      id: GoogleAuthMethod.APP_PASSWORD,
+                      label: 'App Password',
+                      hint: 'Any Gmail account',
+                    },
+                    {
+                      id: GoogleAuthMethod.SERVICE_ACCOUNT,
+                      label: 'Service account',
+                      hint: 'Google Workspace — not tied to a password',
+                    },
+                  ] as const
+                ).map((m) => {
+                  const unavailable =
+                    m.id === GoogleAuthMethod.SERVICE_ACCOUNT &&
+                    !canConfigureServiceAccount &&
+                    googleAuthMethod !== GoogleAuthMethod.SERVICE_ACCOUNT;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      aria-pressed={googleAuthMethod === m.id}
+                      disabled={unavailable}
+                      onClick={() => onEmailSettingsChange((s) => ({ ...s, google_auth_method: m.id }))}
+                      className={`flex flex-col items-start gap-0.5 rounded-lg border-2 px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        googleAuthMethod === m.id
+                          ? 'border-theme-accent-blue bg-theme-accent-blue-muted text-theme-accent-blue'
+                          : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
+                      }`}
+                    >
+                      {m.label}
+                      <span className="text-theme-text-muted text-xs font-normal">{m.hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {!canConfigureServiceAccount && (
+                <p className="text-theme-text-muted mt-2 text-xs">
+                  Only an organization administrator can set up or change sending with a service account, because its
+                  key can send as anyone in the domain.
+                </p>
+              )}
+            </div>
+          )}
+
+          {showGoogleServiceAccount ? (
+            <>
+              <div>
+                <label htmlFor="gmail-service-account-key" className="text-theme-text-muted mb-1 block text-xs">
+                  Service account key (JSON)
+                </label>
+                <input
+                  id="gmail-service-account-key"
+                  type="file"
+                  accept="application/json,.json"
+                  disabled={serviceAccountLocked}
+                  onChange={handleKeyFile}
+                  className="form-input sm:w-1/2"
+                />
+                <p className="text-theme-text-muted mt-1 text-xs" aria-live="polite">
+                  {freshKey
+                    ? `Key chosen for client ID ${serviceAccountClientId ?? 'unknown'}. Save to keep it.`
+                    : emailSettings.google_service_account_key === REDACTED_SECRET
+                      ? `A key is saved${serviceAccountClientId ? ` (client ID ${serviceAccountClientId})` : ''}. Choose a file only to replace it.`
+                      : 'No key saved.'}
+                </p>
+                {keyFileError && (
+                  <p role="alert" className="text-theme-accent-red mt-1 text-xs">
+                    {keyFileError}
+                  </p>
+                )}
+              </div>
+              <div className="text-theme-text-muted flex items-start gap-2 text-xs">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <ol className="list-inside list-decimal space-y-1">
+                  <li>
+                    In Google Cloud, enable the <span className="font-medium">Gmail API</span>, create a service account
+                    and download a JSON key for it.
+                  </li>
+                  <li>
+                    In the Google Admin console, open{' '}
+                    <span className="font-medium">Security → API controls → Domain-wide delegation</span> and add client
+                    ID{' '}
+                    <span className="font-medium">{serviceAccountClientId ?? '(shown here once a key is chosen)'}</span>{' '}
+                    with the scope <code className="break-all">{GMAIL_SEND_SCOPE}</code> and nothing broader.
+                  </li>
+                  <li>
+                    Use an active user in your Workspace domain as the address above, then select{' '}
+                    <span className="font-medium">Test Connection</span>. It sends nothing.
+                  </li>
+                </ol>
+              </div>
+              <div className="alert-warning text-theme-text-secondary text-xs">
+                Google cannot limit this key to one mailbox: it can send as anyone in your domain. Keep it in a Google
+                Cloud project used only for this, and delete it there if it may have been copied.
+              </div>
+              <div className="alert-info text-theme-text-secondary text-xs">
+                <p className="text-theme-text-primary mb-1 font-medium">Before you rely on it:</p>
+                <ul className="list-inside list-disc space-y-1">
+                  {GMAIL_SERVICE_ACCOUNT_NOTES.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          ) : showMicrosoftOAuth ? (
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>

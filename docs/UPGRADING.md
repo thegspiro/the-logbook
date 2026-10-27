@@ -155,6 +155,34 @@ nginx -V 2>&1 | grep -o with-http_auth_request_module
 No output means the module is missing: install a distribution nginx package,
 or rebuild with that flag.
 
+### The backend needs the `webauthn` package for passkeys (2026-10-25)
+
+Members can now use a passkey on their phone or computer as their second
+factor (see `docs/MFA.md`). The server verifies passkeys with `webauthn`
+(py_webauthn), now pinned in `backend/requirements.txt` and imported when the
+authentication code loads, so a backend started without it fails at import
+and never serves a request.
+
+- **Docker (including Unraid Compose Manager):** rebuild the backend image
+  (`docker compose build backend` or `--build`); the Dockerfile installs
+  `requirements.txt`.
+- **Running from source:** run `pip install -r backend/requirements.txt`
+  before restarting.
+
+The migration only creates two new tables (`user_passkeys`,
+`webauthn_challenges`); no existing row changes, and nobody's sign-in changes
+until they add a passkey.
+
+**Passkeys need `FRONTEND_URL` to be the site's HTTPS address on a domain
+name**, which is what members' browsers will check. On a deployment reached
+over plain HTTP or at an IP address the option is hidden and members keep
+using the authenticator app. **Changing `FRONTEND_URL` to a different host
+later retires every passkey**: they stop counting as a second factor, members
+add new ones, and where MFA is required members whose only factor was a
+passkey are sent to set one up at their next sign-in. Recovery codes keep
+working throughout. An administrator can turn new passkeys off under
+**Settings > Authentication**.
+
 ### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
 
 `unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`
@@ -524,6 +552,50 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### A screening record with no expiration date now falls due by its frequency (2026-10-25)
+
+Medical screening used to count a Passed, Completed or Waived record saved
+**without** an expiration date as met for good. It now falls due that many
+months after its **Completed Date**, using the frequency of the requirement
+the record is linked to (or, when it is linked to none, of the requirement it
+is graded against). Nothing in the database changes, but **members can change
+standing the moment you upgrade**: an annual physical recorded two years ago
+with no expiration date now reads as overdue, and one due soon appears on the
+**Compliance** tab's expiring list as "Due … (by frequency)".
+
+- A record with its own expiration date is unaffected; that date still wins.
+- A one-time requirement (no frequency) and a record with no completed date
+  are still met for good.
+- To see who is affected before members notice, open **Medical Screening →
+  Compliance** after upgrading: filter the roster to **Not compliant**, and
+  check **Screenings Expiring Within 60 Days**.
+  Adding the real expiration date to a record overrides the calculated one.
+
+See [Medical Screening](training/13-medical-screening.md) for how the date is
+worked out.
+
+### Gmail can send through a Google Workspace service account (2026-10-25)
+
+Gmail departments can now send through the Gmail API with a domain-wide
+delegated service account instead of an App Password, so email no longer stops
+when someone changes the sending account's password. **Nothing changes on
+upgrade**: every existing Gmail configuration has no method saved, which means
+App Password, and keeps signing in to `smtp.gmail.com` exactly as before.
+
+- Choosing it needs `admin.access`, not only `settings.manage`, because the key
+  can send as any user in the Workspace domain
+  (`docs/KNOWN_LIMITATIONS.md`, "Gmail — Sending Through a Service Account").
+- The service account's client ID must be authorized in the Google Admin
+  console under **Security > API controls > Domain-wide delegation** for
+  `https://www.googleapis.com/auth/gmail.send`, and the Gmail API must be
+  enabled in its Google Cloud project.
+- The server needs outbound HTTPS to `gmail.googleapis.com` and
+  `oauth2.googleapis.com`.
+- **Before downgrading** to a release from before this change, switch any
+  department on the service account back to an App Password. An older release
+  does not know the method, reads the row as App Password, finds none, and
+  that department's email stops.
 
 ### The command that moves files to a remote store is `migrate_uploads_to_remote.py` (2026-10-25)
 

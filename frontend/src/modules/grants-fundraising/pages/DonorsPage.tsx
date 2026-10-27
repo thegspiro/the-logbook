@@ -61,6 +61,9 @@ interface NewDonorForm {
   postalCode: string;
 }
 
+/** The person's name on a donor, or '' for an organization recorded by its name alone. */
+const personName = (donor: Donor): string => `${donor.firstName ?? ''} ${donor.lastName ?? ''}`.trim();
+
 const EMPTY_FORM: NewDonorForm = {
   firstName: '',
   lastName: '',
@@ -135,8 +138,9 @@ export const DonorsPage: React.FC = () => {
     const q = search.toLowerCase();
     return donors.filter(
       (d) =>
-        d.firstName.toLowerCase().includes(q) ||
-        d.lastName.toLowerCase().includes(q) ||
+        (d.firstName ?? '').toLowerCase().includes(q) ||
+        (d.lastName ?? '').toLowerCase().includes(q) ||
+        (d.companyName ?? '').toLowerCase().includes(q) ||
         (d.email ?? '').toLowerCase().includes(q)
     );
   }, [donors, search]);
@@ -157,16 +161,24 @@ export const DonorsPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.firstName.trim() || !form.lastName.trim()) {
+    // W69-6: an individual needs both names; a business, foundation,
+    // government or other donor may be recorded by its organization name
+    // alone. The server applies the same rule.
+    const hasPerson = Boolean(form.firstName.trim() && form.lastName.trim());
+    if (isIndividual && !hasPerson) {
       toast.error("Enter the donor's first and last name");
+      return;
+    }
+    if (!isIndividual && !hasPerson && !form.companyName.trim()) {
+      toast.error("Enter the organization's name, or a contact's first and last name");
       return;
     }
 
     try {
       setIsSubmitting(true);
       await fundraisingService.createDonor({
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
+        firstName: form.firstName.trim() || null,
+        lastName: form.lastName.trim() || null,
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
         donorType: form.donorType,
@@ -186,7 +198,7 @@ export const DonorsPage: React.FC = () => {
     }
   };
 
-  const showCompanyField = form.donorType === 'business' || form.donorType === 'foundation';
+  const isIndividual = form.donorType === 'individual';
 
   // -----------------------------------------------------------------------
   // Render
@@ -229,7 +241,8 @@ export const DonorsPage: React.FC = () => {
             {/* First Name */}
             <div>
               <label htmlFor="donor-firstName" className={labelClass}>
-                First Name <span className="text-red-500">*</span>
+                {isIndividual ? 'First Name' : 'Contact First Name'}
+                {isIndividual && <span className="text-red-500"> *</span>}
               </label>
               <input
                 id="donor-firstName"
@@ -238,14 +251,15 @@ export const DonorsPage: React.FC = () => {
                 onChange={(e) => updateField('firstName', e.target.value)}
                 placeholder="First name"
                 className={inputClass}
-                required
+                required={isIndividual}
               />
             </div>
 
             {/* Last Name */}
             <div>
               <label htmlFor="donor-lastName" className={labelClass}>
-                Last Name <span className="text-red-500">*</span>
+                {isIndividual ? 'Last Name' : 'Contact Last Name'}
+                {isIndividual && <span className="text-red-500"> *</span>}
               </label>
               <input
                 id="donor-lastName"
@@ -254,7 +268,7 @@ export const DonorsPage: React.FC = () => {
                 onChange={(e) => updateField('lastName', e.target.value)}
                 placeholder="Last name"
                 className={inputClass}
-                required
+                required={isIndividual}
               />
             </div>
 
@@ -313,18 +327,18 @@ export const DonorsPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Company Name (shown for business / foundation) */}
-            {showCompanyField && (
+            {/* Organization name: every donor type but an individual */}
+            {!isIndividual && (
               <div>
                 <label htmlFor="donor-companyName" className={labelClass}>
-                  Company Name
+                  Organization Name
                 </label>
                 <input
                   id="donor-companyName"
                   type="text"
                   value={form.companyName}
                   onChange={(e) => updateField('companyName', e.target.value)}
-                  placeholder="Company or foundation name"
+                  placeholder="Business, foundation or agency name"
                   className={inputClass}
                 />
               </div>
@@ -515,10 +529,14 @@ export const DonorsPage: React.FC = () => {
                   <tr key={donor.id} className="hover:bg-theme-surface-hover transition-colors">
                     {/* Name */}
                     <td className="px-4 py-3 text-sm">
+                      {/* An organization recorded without a contact leads with
+                          its own name (W69-6). */}
                       <span className="text-theme-text-primary font-medium">
-                        {donor.firstName} {donor.lastName}
+                        {personName(donor) || donor.companyName || 'Unnamed donor'}
                       </span>
-                      {donor.companyName && <p className="text-theme-text-secondary text-xs">{donor.companyName}</p>}
+                      {personName(donor) && donor.companyName && (
+                        <p className="text-theme-text-secondary text-xs">{donor.companyName}</p>
+                      )}
                     </td>
 
                     {/* Email */}
@@ -565,7 +583,7 @@ export const DonorsPage: React.FC = () => {
                             href={`mailto:${donor.email}`}
                             className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded p-1 transition-colors"
                             title="Send email"
-                            aria-label={`Email ${donor.firstName} ${donor.lastName}`}
+                            aria-label={`Email ${personName(donor) || donor.companyName || 'donor'}`}
                           >
                             <Mail className="h-4 w-4" />
                           </a>
@@ -575,7 +593,7 @@ export const DonorsPage: React.FC = () => {
                             href={`tel:${donor.phone}`}
                             className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded p-1 transition-colors"
                             title="Call"
-                            aria-label={`Call ${donor.firstName} ${donor.lastName}`}
+                            aria-label={`Call ${personName(donor) || donor.companyName || 'donor'}`}
                           >
                             <Phone className="h-4 w-4" />
                           </a>

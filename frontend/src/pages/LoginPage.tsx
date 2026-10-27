@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { postLoginRedirect } from '../utils/postLoginRedirect';
 import { authService } from '../services/api';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { KeyRound } from 'lucide-react';
+import { Fingerprint, KeyRound } from 'lucide-react';
+import type { MfaChallenge } from '../types/auth';
+import { getErrorMessage } from '../utils/errorHandling';
+import { getPasskeyAssertion, passkeyPromptError, passkeysSupported } from '../utils/passkeys';
 
 // OAuth configuration - these would be loaded from organization settings
 interface OAuthConfig {
@@ -32,6 +35,7 @@ export const LoginPage: React.FC = () => {
     completeMfaLogin,
     cancelMfa,
     mfaRequired,
+    mfaToken,
     isLoading,
     isAuthenticated,
     error,
@@ -47,6 +51,11 @@ export const LoginPage: React.FC = () => {
   });
   const [mfaCode, setMfaCode] = useState('');
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  // What the pending sign-in can be finished with. Null until loaded, and left
+  // null if loading fails, in which case the code form is shown as before.
+  const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
   const [oauthError, setOAuthError] = useState<string | null>(null);
@@ -236,6 +245,59 @@ export const LoginPage: React.FC = () => {
     void navigate(postLoginRedirect(location.state), { replace: true });
   };
 
+  // Each passkey challenge is single-use, so a fresh one is fetched up front
+  // and again after every attempt. Fetching it before the tap, not inside the
+  // click handler, keeps the prompt within Safari's user-gesture window.
+  const loadMfaChallenge = useCallback(async () => {
+    if (!mfaToken) return;
+    try {
+      setMfaChallenge(await authService.mfaChallenge(mfaToken));
+    } catch (err) {
+      setMfaChallenge(null);
+      setPasskeyError(getErrorMessage(err, 'Could not load your sign-in options. Enter a code instead.'));
+    }
+  }, [mfaToken]);
+
+  useEffect(() => {
+    if (!mfaRequired) {
+      setMfaChallenge(null);
+      setPasskeyError(null);
+      return;
+    }
+    void loadMfaChallenge();
+  }, [mfaRequired, loadMfaChallenge]);
+
+  const passkeyOptions = passkeysSupported() ? (mfaChallenge?.passkey_options ?? null) : null;
+  // Without a loaded challenge the member may still have an authenticator, so
+  // the code form stays available rather than leaving them with nothing.
+  const showCodeForm = useRecoveryCode || !mfaChallenge || mfaChallenge.totp || !passkeyOptions;
+
+  const handlePasskey = async () => {
+    if (!passkeyOptions || passkeyBusy) return;
+    setPasskeyError(null);
+    clearError();
+    setPasskeyBusy(true);
+    try {
+      let credential;
+      try {
+        credential = await getPasskeyAssertion(passkeyOptions);
+      } catch (err) {
+        setPasskeyError(passkeyPromptError(err));
+        void loadMfaChallenge();
+        return;
+      }
+      try {
+        await completeMfaLogin(undefined, undefined, credential);
+        redirectAfterAuth();
+      } catch (_err) {
+        // Error surfaced via store error state; the challenge was spent.
+        void loadMfaChallenge();
+      }
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
+
   const handleMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = mfaCode.trim();
@@ -321,9 +383,38 @@ export const LoginPage: React.FC = () => {
             <p className="text-theme-text-secondary mt-2 text-center text-sm">
               {useRecoveryCode
                 ? 'Enter one of your saved recovery codes.'
-                : 'Enter the 6-digit code from your authenticator app.'}
+                : passkeyOptions && !showCodeForm
+                  ? 'Confirm with the passkey on your phone or computer.'
+                  : passkeyOptions
+                    ? 'Use your passkey, or enter the 6-digit code from your authenticator app.'
+                    : 'Enter the 6-digit code from your authenticator app.'}
             </p>
           </div>
+
+          {passkeyError && (
+            <div
+              className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10"
+              role="alert"
+              aria-live="assertive"
+            >
+              <p className="text-sm text-red-700 dark:text-red-300">{passkeyError}</p>
+            </div>
+          )}
+
+          {passkeyOptions && !useRecoveryCode && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => void handlePasskey()}
+                disabled={passkeyBusy || isLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 font-medium text-white hover:bg-violet-800 disabled:opacity-50"
+              >
+                <Fingerprint className="h-5 w-5" aria-hidden="true" />
+                {passkeyBusy ? 'Waiting for your passkey…' : 'Use your passkey'}
+              </button>
+              {showCodeForm && <p className="text-theme-text-muted text-center text-xs tracking-wide uppercase">or</p>}
+            </div>
+          )}
 
           <form
             className="mt-8 space-y-6"
@@ -341,30 +432,34 @@ export const LoginPage: React.FC = () => {
                 <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
               </div>
             )}
-            <div>
-              <label htmlFor="mfa-code" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                {useRecoveryCode ? 'Recovery code' : 'Authenticator code'}
-              </label>
-              <input
-                id="mfa-code"
-                name="mfa-code"
-                type="text"
-                autoFocus
-                autoComplete="one-time-code"
-                inputMode={useRecoveryCode ? 'text' : 'numeric'}
-                value={mfaCode}
-                onChange={(e) => setMfaCode(e.target.value)}
-                placeholder={useRecoveryCode ? 'xxxxx-xxxxx-xxxxx-xxxxx' : '123456'}
-                className="form-input"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isLoading || !mfaCode.trim()}
-              className="flex w-full justify-center rounded-lg bg-violet-700 px-4 py-2.5 font-medium text-white hover:bg-violet-800 disabled:opacity-50"
-            >
-              {isLoading ? 'Verifying…' : 'Verify'}
-            </button>
+            {showCodeForm && (
+              <>
+                <div>
+                  <label htmlFor="mfa-code" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                    {useRecoveryCode ? 'Recovery code' : 'Authenticator code'}
+                  </label>
+                  <input
+                    id="mfa-code"
+                    name="mfa-code"
+                    type="text"
+                    autoFocus={!passkeyOptions || useRecoveryCode}
+                    autoComplete="one-time-code"
+                    inputMode={useRecoveryCode ? 'text' : 'numeric'}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    placeholder={useRecoveryCode ? 'xxxxx-xxxxx-xxxxx-xxxxx' : '123456'}
+                    className="form-input"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading || !mfaCode.trim()}
+                  className="flex w-full justify-center rounded-lg bg-violet-700 px-4 py-2.5 font-medium text-white hover:bg-violet-800 disabled:opacity-50"
+                >
+                  {isLoading ? 'Verifying…' : 'Verify'}
+                </button>
+              </>
+            )}
             <div className="flex items-center justify-between text-sm">
               <button
                 type="button"
@@ -375,7 +470,11 @@ export const LoginPage: React.FC = () => {
                 }}
                 className="text-violet-600 hover:underline dark:text-violet-400"
               >
-                {useRecoveryCode ? 'Use authenticator code' : 'Use a recovery code'}
+                {useRecoveryCode
+                  ? passkeyOptions && !mfaChallenge?.totp
+                    ? 'Use your passkey'
+                    : 'Use authenticator code'
+                  : 'Use a recovery code'}
               </button>
               <button
                 type="button"
@@ -383,6 +482,7 @@ export const LoginPage: React.FC = () => {
                   cancelMfa();
                   setMfaCode('');
                   setUseRecoveryCode(false);
+                  setPasskeyError(null);
                 }}
                 className="text-theme-text-muted hover:text-theme-text-primary"
               >

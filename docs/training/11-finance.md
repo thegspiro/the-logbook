@@ -1562,6 +1562,11 @@ To waive a member's dues:
 
 The record is marked **Waived**, with who waived it, when, and the reason. You cannot waive your own dues; the request is refused and the message says so.
 
+Dues can be waived only once. If another officer waived them first, yours is
+refused with "These dues are already waived." The first waiver keeps its
+officer, date and reason. To record a different waiver, reverse the first one
+and waive again.
+
 Once dues are waived, **payments against them are refused.** They are not
 owing, so recording money against them would quietly cancel the waiver and move
 the waived amount into your collection figures.
@@ -1616,6 +1621,7 @@ Selecting a schedule narrows the summary to that schedule.
 | A later payment entered without a method or notes                  | Recorded as-is. Earlier payments keep their own detail                                                                                                    |
 | Payment recorded against waived or exempt dues                     | Refused with an explanatory error. Reverse the waiver first (see Reversing a Waiver)                                                                      |
 | Waiver reversed                                                    | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is erased and not copied to the audit log      |
+| Waiving dues that are already waived                               | Refused: "These dues are already waived." The first waiver's officer, date and reason stay. Reverse it first to record a new one                          |
 | Partial payment followed by waiver                                 | The waiver sets the status to Waived. The amount already paid is not refunded -- this is an administrative decision                                       |
 | Which members Generate Dues bills                                  | All active users in the organization. No membership-type filter is applied                                                                                |
 | Changing the dues amount on a schedule                             | Only affects dues generated afterwards. Existing dues keep their original amount                                                                          |

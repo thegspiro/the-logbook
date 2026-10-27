@@ -100,19 +100,23 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
     if (fields.length === 0) return [];
 
     const sorted = [...fields].sort((a, b) => a.sort_order - b.sort_order);
+    // A viewer whose submissions came back with sensitive answers withheld
+    // would see those questions as unanswered; leave them out instead.
+    const sensitiveWithheld = submissions.some((s) => s.sensitive_withheld);
 
     return sorted
       .filter(
         (f) =>
           f.field_type !== FieldType.SECTION_HEADER &&
           f.field_type !== FieldType.FILE &&
-          f.field_type !== FieldType.SIGNATURE
+          f.field_type !== FieldType.SIGNATURE &&
+          !(f.is_sensitive && sensitiveWithheld)
       )
       .map((field) => {
         // Gather all non-empty values for this field
         const values: string[] = [];
         for (const sub of submissions) {
-          const raw = sub.data[field.id];
+          const raw = field.is_sensitive ? sub.sensitive_answers?.[field.id] : sub.data[field.id];
           const val = typeof raw === 'string' ? raw.trim() : toDisplayString(raw).trim();
           if (val) values.push(val);
         }

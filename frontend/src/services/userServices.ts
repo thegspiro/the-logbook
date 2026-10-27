@@ -5,6 +5,7 @@
 import api from './apiClient';
 import { dedupeInFlight } from '../utils/inFlight';
 import type { Permission, PermissionCategory, Role, UserRoleResponse, UserWithRoles } from '../types/role';
+import type { PasskeyInfo } from '../types/auth';
 import type {
   AppearanceSettings,
   AuthSettings,
@@ -206,6 +207,23 @@ export const userService = {
    */
   async adminResetMfa(userId: string): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/users/${userId}/reset-mfa`);
+    return response.data;
+  },
+
+  /** A member's registered passkeys: names and dates only (admin). */
+  async adminListPasskeys(userId: string): Promise<PasskeyInfo[]> {
+    const response = await api.get<PasskeyInfo[]>(`/users/${userId}/passkeys`);
+    return response.data;
+  },
+
+  /**
+   * Remove one passkey from a member's account, for a lost or stolen device.
+   * Signs the member out everywhere; their other sign-in methods keep working.
+   */
+  async adminRemovePasskey(userId: string, passkeyId: string): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(
+      `/users/${userId}/passkeys/${encodeURIComponent(passkeyId)}`
+    );
     return response.data;
   },
 

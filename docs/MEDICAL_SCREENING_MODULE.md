@@ -156,12 +156,12 @@ frontend/src/modules/medical-screening/
 
 ### Compliance
 
-| Method | Path                                                          | Permission               | Description                                                                                                                       |
-| ------ | ------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/api/v1/medical-screening/compliance`                        | `medical_screening.view` | Department roster: every member and open prospect graded, with totals (query: `standing=not_compliant\|expiring_soon\|compliant`) |
-| `GET`  | `/api/v1/medical-screening/compliance/{user_id}`              | `medical_screening.view` | User compliance summary                                                                                                           |
-| `GET`  | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | `medical_screening.view` | Prospect compliance summary                                                                                                       |
-| `GET`  | `/api/v1/medical-screening/expiring`                          | `medical_screening.view` | Expiring screenings (query: `days=30`, range 1-365)                                                                               |
+| Method | Path                                                          | Permission               | Description                                                                                                                                       |
+| ------ | ------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/medical-screening/compliance`                        | `medical_screening.view` | Department roster: every member and open prospect graded, with totals (query: `standing=not_compliant\|expiring_soon\|compliant`)                 |
+| `GET`  | `/api/v1/medical-screening/compliance/{user_id}`              | `medical_screening.view` | User compliance summary; 404 "Member not found" for an id that is not a member of the caller's organization                                       |
+| `GET`  | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | `medical_screening.view` | Prospect compliance summary; 404 "Prospect not found" for an id outside the caller's organization                                                 |
+| `GET`  | `/api/v1/medical-screening/expiring`                          | `medical_screening.view` | Expiring screenings (query: `days=30`, range 1-365). Passed, completed and waived records, each with its `status` and `expiration_from_frequency` |
 
 ---
 
@@ -256,17 +256,18 @@ Module availability is controlled per organization at runtime via the organizati
 
 ## Edge Cases
 
-| Scenario                                                | Behavior                                                                                               |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Record linked to both user_id and prospect_id           | Rejected with a 422 on create — a record names exactly one member or one prospect                      |
-| Record linked to neither                                | Rejected with a 422 on create; rows created before 2026-10-05 may still carry neither                  |
-| `frequency_months = NULL`                               | One-time screening that does not recur and has no automatic expiration                                 |
-| Grace period after expiration                           | Member remains compliant during grace period; becomes non-compliant only after grace period expires    |
-| Expiring query with days=0 or >365                      | Rejected with a 422 — `days` must be between 1 and 365 (default 30); it is not clamped                 |
-| Member, prospect or requirement from another department | Rejected with a 400 on create: "Invalid member", "Invalid prospect" or "Invalid screening requirement" |
-| Requirement deactivated                                 | Existing records preserved; requirement excluded from future compliance calculations                   |
-| Screening waived                                        | Status set to `WAIVED`; excluded from compliance calculations                                          |
-| Provider name not provided                              | Optional field; no provider info displayed in compliance dashboard                                     |
+| Scenario                                                | Behavior                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Record linked to both user_id and prospect_id           | Rejected with a 422 on create — a record names exactly one member or one prospect                                                                                                                                                                                                                                                              |
+| Record linked to neither                                | Rejected with a 422 on create; rows created before 2026-10-05 may still carry neither                                                                                                                                                                                                                                                          |
+| `frequency_months = NULL`                               | One-time screening that does not recur and has no automatic expiration                                                                                                                                                                                                                                                                         |
+| Record saved with no `expiration_date`                  | Falls due `frequency_months` after `completed_date` — the frequency of its linked requirement, else of the requirement it is graded against (`_effective_expiration`). Its own date always wins; with no positive frequency or no completed date it stays compliant indefinitely. Responses mark such a date `expiration_from_frequency: true` |
+| Grace period after expiration                           | Saved but not applied: a member is non-compliant the day after the expiration date                                                                                                                                                                                                                                                             |
+| Expiring query with days=0 or >365                      | Rejected with a 422 — `days` must be between 1 and 365 (default 30); it is not clamped                                                                                                                                                                                                                                                         |
+| Member, prospect or requirement from another department | Rejected with a 400 on create: "Invalid member", "Invalid prospect" or "Invalid screening requirement"                                                                                                                                                                                                                                         |
+| Requirement deactivated                                 | Existing records preserved; requirement excluded from future compliance calculations                                                                                                                                                                                                                                                           |
+| Screening waived                                        | Status set to `WAIVED`; satisfies a requirement like `PASSED`/`COMPLETED` (`_SATISFYING_STATUSES`), and a lapsing waiver is listed by `/expiring`                                                                                                                                                                                              |
+| Provider name not provided                              | Optional field; no provider info displayed in compliance dashboard                                                                                                                                                                                                                                                                             |
 
 ---
 
