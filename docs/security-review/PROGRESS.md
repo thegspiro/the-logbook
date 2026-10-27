@@ -16,8 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_None open as of this edit — PR #3767 merged; Feature 25's own PR number is
-recorded here once opened (Step 8)._
+**PR [#3768](https://github.com/thegspiro/the-logbook/pull/3768)** (branch
+`claude/security-review-messaging-notifications-p10`) —
+Feature 25 (Messaging & notifications), pass 10. **Watchdog pickup** — the
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, no reachable agents). PR #3767 (Feature 24, Meetings &
+minutes, pass 10) was found open, green on every check, and merged by this
+same watchdog run. `search_pull_requests` returned 0 immediately after.
+Row 25 confirmed the next `⬜` row on a freshly fetched `main` (head
+`d975bc61`). **0 fixed, 0 new findings** — real delta since pass 9 is five
+commits (SMTP batch quota/retry hardening, Gmail delegated service-account
+sending, pipeline linked-template stage email), all landed by other
+sessions and independently re-verified here. See
+`MSG-25-messaging-notifications.md`'s **Pass 10** section for the full
+review.
+
+Rotation row 25 → ✅ (pending this PR's merge); next is Feature 26
+(Forms) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings &amp; minutes, pass 10, PR #3767, merged), preserved for history</summary>
