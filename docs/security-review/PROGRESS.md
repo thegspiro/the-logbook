@@ -16,10 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None yet for this iteration (Feature 28, Security/audit/IP, pass 10) — the
-review and completion gate are done; the PR number and branch are added in a
-follow-up commit on this same branch once it is opened, per this tracker's own
-rule that the record rides along rather than getting a PR of its own.
+**PR [#3783](https://github.com/thegspiro/the-logbook/pull/3783)** (branch
+`claude/security-review-security-audit-ip-p10`) — Feature 28 (Security, audit
+& IP), pass 10. **Watchdog pickup** — the dedicated `/loop 30m
+/security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) was
+unreachable (confirmed via `ListAgents`). No security-review PR was open —
+confirmed via `search_pull_requests`, 0 results, checked immediately before
+starting. PR #3782 (Feature 27, Integrations, pass 10) had already merged.
+Row 28 was confirmed the next `⬜` row by reading the rotation table directly
+on a freshly fetched `main` (head `d9d9d59b`). **0 fixed, 0 new findings.**
+Real delta since pass 9's merge (`597ad4f5`, PR #3645): IP exception approval
+now enforces separation of duties (W74-5), `request_ip_exception` validates
+the address is a real IPv4/IPv6 address, a missed weekly-security-report
+recipient is retried on later ticks, and four frontend files picked up
+display-only a11y/UX fixes — all already fixed and shipped, verified good.
+SEC2-28-6 and the dead-detector-code note stay open, unchanged. Routes
+re-enumerated by AST: 37, unchanged. See
+`SEC2-28-security-audit-ip.md`'s **Pass 10** section for the full review.
+
+Rotation row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 10, PR #3782, merged), preserved for history</summary>
