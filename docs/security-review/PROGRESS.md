@@ -16,10 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None yet for this iteration (Feature 29, Reports & analytics, pass 12) — the
-review and completion gate are done; the PR number and branch are added in a
-follow-up commit on this same branch once it is opened, per this tracker's own
-rule that the record rides along rather than getting a PR of its own.
+**PR [#3784](https://github.com/thegspiro/the-logbook/pull/3784)** (branch
+`claude/security-review-reports-analytics-p12`) — Feature 29 (Reports &
+analytics), pass 12. **Watchdog pickup** — the dedicated `/loop 30m
+/security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) was
+unreachable (confirmed via `ListAgents`). No security-review PR was open —
+confirmed via `search_pull_requests`, 0 results, checked immediately before
+starting. PR #3783 (Feature 28, Security/audit/IP, pass 10) had already
+merged. Row 29 was confirmed the next `⬜` row by reading the rotation table
+directly on a freshly fetched `main` (head `115bd921`). **0 fixed, 0 new
+findings.** Real delta since pass 11's merge (`14e95ce1`, PR #3647):
+`analytics.py`'s hourly-activity breakdown and `platform_analytics.py`'s
+login/error trends now bucket by the organization's local day/hour instead
+of UTC (W75/W78-1), and the Module Usage section now reads the org's actual
+`enabled_modules` instead of a hardcoded `True` (W78-2) — all already fixed
+and shipped, verified good. LBL-29-2, LBL-29-4, RPT-5c/6/7 and DASH-2 stay
+open, unchanged. Routes re-enumerated by AST: 35, unchanged. See
+`RPT6-29-reports-analytics.md`'s **Pass 12** section for the full review.
+
+Rotation row 29 → ✅ (pending this PR's merge); next is Feature 30
+(Onboarding) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 10, PR #3783, merged), preserved for history</summary>
