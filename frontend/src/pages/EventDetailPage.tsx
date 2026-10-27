@@ -282,7 +282,12 @@ export const EventDetailPage: React.FC = () => {
   const { isConnected: isIntegrationConnected } = useConnectedIntegrations({ enabled: canManage });
   // Deliberately a separate grant from events.manage: whoever closed the event
   // should not also be able to quietly reopen it and move the numbers.
-  const canReopenAttendance = checkPermission('events.reopen_attendance');
+  // A training manager also reopens a Training event (the server decides,
+  // CLAUDE.md #29); the grant is read locally too, as it always was.
+  const canReopenAttendance = checkPermission('events.reopen_attendance') || Boolean(event?.can_reopen_attendance);
+  // Edit the event and close its attendance (End Event, Finalize, Record
+  // Times): events.manage, or training.manage on a Training event.
+  const canEditEvent = canManage || Boolean(event?.can_edit_event);
   // Who may act on a training event's approval; the card links them to it.
   const canApproveTraining = checkPermission('training.manage');
   const { confirm } = useConfirm();
@@ -808,7 +813,7 @@ export const EventDetailPage: React.FC = () => {
       setShowEndEventConfirm(false);
       await fetchEvent();
       setTrainingRefreshKey((key) => key + 1);
-      if (canManage) {
+      if (canManageAttendance) {
         await fetchRSVPs();
         await fetchStats();
       }
@@ -851,7 +856,7 @@ export const EventDetailPage: React.FC = () => {
       }
       await fetchEvent();
       setTrainingRefreshKey((key) => key + 1);
-      if (canManage) {
+      if (canManageAttendance) {
         await fetchRSVPs();
       }
     } catch (err) {
@@ -984,6 +989,44 @@ export const EventDetailPage: React.FC = () => {
         Check In
       </button>
     ) : null;
+  // Kept when finalized: the API still accepts descriptive edits (title,
+  // description, location) and refuses only the fields the credited durations
+  // came from. Hiding this made a leader reopen attendance just to fix a typo,
+  // which unlocks far more than the typo needed.
+  const editEventButton = (
+    <button
+      onClick={() => void navigate(`/events/${eventId}/edit`)}
+      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
+    >
+      <Pencil className="mr-2 h-5 w-5" aria-hidden="true" />
+      Edit
+    </button>
+  );
+  const closeOutButtons = (
+    <>
+      {/* End Event button — visible when event is in progress */}
+      {isOngoing && !isAttendanceFinalized && (
+        <button
+          onClick={() => setShowEndEventConfirm(true)}
+          disabled={submitting}
+          className="inline-flex items-center rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 shadow-xs hover:bg-red-100 disabled:opacity-50 dark:border-red-700 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
+        >
+          <StopCircle className="mr-2 h-4 w-4" />
+          End Event
+        </button>
+      )}
+      {isEventOver && !isAttendanceFinalized && (
+        <button
+          onClick={() => void handleFinalizeAttendance()}
+          disabled={finalizingAttendance}
+          className="inline-flex items-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+        >
+          <CheckCircle className="mr-2 h-4 w-4" />
+          {finalizingAttendance ? 'Finalizing...' : 'Finalize Attendance'}
+        </button>
+      )}
+    </>
+  );
 
   // RSVP deadline countdown
   const rsvpCountdown = (() => {
@@ -1184,20 +1227,28 @@ export const EventDetailPage: React.FC = () => {
                     controls, so the button stands on its own for them. */}
                 {!canManage && checkInMembersButton}
 
+                {/* A training manager on a Training event: edit and close it
+                    out, but none of the More menu (duplicate, cancel, delete,
+                    templates, meetings), which stays with events.manage. */}
+                {!canManage && canEditEvent && (
+                  <>
+                    {editEventButton}
+                    {closeOutButtons}
+                    {!isAttendanceFinalized && (
+                      <button
+                        onClick={openRecordTimesModal}
+                        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
+                      >
+                        <Clock className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Record Times
+                      </button>
+                    )}
+                  </>
+                )}
+
                 {canManage && (
                   <>
-                    {/* Kept when finalized: the API still accepts descriptive
-                        edits (title, description, location) and refuses only
-                        the fields the credited durations came from. Hiding this
-                        made a leader reopen attendance just to fix a typo,
-                        which unlocks far more than the typo needed. */}
-                    <button
-                      onClick={() => void navigate(`/events/${eventId}/edit`)}
-                      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
-                    >
-                      <Pencil className="mr-2 h-5 w-5" aria-hidden="true" />
-                      Edit
-                    </button>
+                    {editEventButton}
                     {checkInMembersButton}
 
                     {/* Send Reminders dropdown */}
@@ -1233,28 +1284,7 @@ export const EventDetailPage: React.FC = () => {
                       </div>
                     )}
 
-                    {/* End Event button — visible when event is in progress */}
-                    {isOngoing && !isAttendanceFinalized && (
-                      <button
-                        onClick={() => setShowEndEventConfirm(true)}
-                        disabled={submitting}
-                        className="inline-flex items-center rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 shadow-xs hover:bg-red-100 disabled:opacity-50 dark:border-red-700 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
-                      >
-                        <StopCircle className="mr-2 h-4 w-4" />
-                        End Event
-                      </button>
-                    )}
-
-                    {isEventOver && !isAttendanceFinalized && (
-                      <button
-                        onClick={() => void handleFinalizeAttendance()}
-                        disabled={finalizingAttendance}
-                        className="inline-flex items-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
-                      >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        {finalizingAttendance ? 'Finalizing...' : 'Finalize Attendance'}
-                      </button>
-                    )}
+                    {closeOutButtons}
 
                     {/* "More" dropdown for secondary actions */}
                     <div className="relative" ref={actionsMenuRef}>

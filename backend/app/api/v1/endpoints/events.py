@@ -292,6 +292,67 @@ def _refuse_own_attendance(access: str, user: User, target_user_id) -> None:
         )
 
 
+def training_manager_administers(event: Event, user: User) -> bool:
+    """Whether *user* runs this event as its training manager: a Training event
+    and ``training.manage``. Such a holder edits the event and closes and
+    reopens its attendance without ``events.manage`` or
+    ``events.reopen_attendance``, because what those steps decide on a Training
+    event is training credit, the training officer's to oversee. One definition
+    for the gate below and the ``can_*`` flags on the event (#29)."""
+    return event.event_type == EventType.TRAINING and user_has_permission(
+        user, TRAINING_MANAGER_PERMISSION
+    )
+
+
+async def _authorize_event_admin(
+    db: AsyncSession, event_id: UUID, user: User, permission: str
+) -> str:
+    """Admit a holder of *permission* (as the route always did), or a training
+    manager on a Training event. Returns how, for the audit trail's
+    ``acting_as``: *permission* itself, or ``training_manager``.
+
+    The grant is tested before any read, so its holders see what they saw when
+    the route gated on ``require_permission``. Everyone else is decided against
+    the event read org-scoped (#14b): 404 outside the caller's org, 403 for an
+    event that is not Training or a caller without ``training.manage``.
+    """
+    if user_has_permission(user, permission):
+        return permission
+    result = await db.execute(
+        select(Event)
+        .where(Event.id == str(event_id))
+        .where(Event.organization_id == str(user.organization_id))
+    )
+    event = result.scalar_one_or_none()
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    if not training_manager_administers(event, user):
+        raise CodedHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+            error_code=ErrorCode.PERM_INSUFFICIENT,
+        )
+    return ACCESS_TRAINING_MANAGER
+
+
+def _refuse_type_change_off_training(access: str, update_fields: dict) -> None:
+    """A training manager edits a Training event but may not make it something
+    else: that would take the event, and its attendance, out of training
+    oversight and out of their own reach in the same save."""
+    if access != ACCESS_TRAINING_MANAGER or "event_type" not in update_fields:
+        return
+    if update_fields["event_type"] != EventType.TRAINING.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "A training manager cannot change a training event's type. "
+                "Ask an event manager."
+            ),
+        )
+
+
 def _build_event_response(event: Event, **extra_fields) -> EventResponse:
     """Build an EventResponse from an Event model, including location and allowed_rsvp_statuses."""
     location_name = None
@@ -1391,6 +1452,14 @@ async def get_event(
         can_manage_organizers=can_manage_organizers(event, current_user),
         attendance_access=access,
         can_correct_attendance_times=may_correct_attendance_times(event, access),
+        can_edit_event=(
+            user_has_permission(current_user, EVENT_MANAGER_PERMISSION)
+            or training_manager_administers(event, current_user)
+        ),
+        can_reopen_attendance=(
+            user_has_permission(current_user, "events.reopen_attendance")
+            or training_manager_administers(event, current_user)
+        ),
         user_attended=user_attended,
         credited_hours=credited_hours,
         hour_category_label=hour_category_label,
@@ -1431,19 +1500,22 @@ async def update_event(
     event_id: UUID,
     event_data: EventUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Update an event
 
     **Authentication required**
-    **Requires permission: events.manage**
+    **Allowed: events.manage, or training.manage on a Training event**
     """
+    access = await _authorize_event_admin(
+        db, event_id, current_user, EVENT_MANAGER_PERMISSION
+    )
+    update_fields = event_data.model_dump(exclude_unset=True)
+    _refuse_type_change_off_training(access, update_fields)
     service = EventService(db)
 
     try:
-        # Capture old values for significant field change detection
-        update_fields = event_data.model_dump(exclude_unset=True)
         significant_fields = {
             "title",
             "start_datetime",
@@ -1493,6 +1565,7 @@ async def update_event(
             event_data={
                 "event_id": str(event_id),
                 "title": event.title,
+                "acting_as": access,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -1560,7 +1633,7 @@ async def update_future_events(
     event_id: UUID,
     event_data: EventUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Update this event and all future events in the same recurring series.
@@ -1568,8 +1641,13 @@ async def update_future_events(
     Applies the same update to this event and all subsequent occurrences.
 
     **Authentication required**
-    **Requires permission: events.manage**
+    **Allowed: events.manage, or training.manage on a Training event** — and
+    then only when every occurrence it would change is a Training event
     """
+    access = await _authorize_event_admin(
+        db, event_id, current_user, EVENT_MANAGER_PERMISSION
+    )
+    _refuse_type_change_off_training(access, event_data.model_dump(exclude_unset=True))
     service = EventService(db)
 
     try:
@@ -1578,6 +1656,9 @@ async def update_future_events(
             organization_id=current_user.organization_id,
             event_data=event_data,
             updated_by=current_user.id,
+            only_event_type=(
+                EventType.TRAINING if access == ACCESS_TRAINING_MANAGER else None
+            ),
         )
 
         if updated_count == 0:
@@ -1594,6 +1675,7 @@ async def update_future_events(
             event_data={
                 "event_id": str(event_id),
                 "updated_count": updated_count,
+                "acting_as": access,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -1603,6 +1685,10 @@ async def update_future_events(
             "message": f"Successfully updated {updated_count} event(s)",
             "updated_count": updated_count,
         }
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=safe_error_detail(e)
+        )
     except ValueError as e:
         raise attendance_lock_http_error(e) or HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
@@ -2683,7 +2769,7 @@ async def record_actual_times(
     event_id: UUID,
     times_data: RecordActualTimes,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Record actual start and end times for an event
@@ -2692,8 +2778,9 @@ async def record_actual_times(
     so attendance duration can be accurately calculated for all checked-in members.
 
     **Authentication required**
-    **Requires permission: events.manage**
+    **Allowed: events.manage, or training.manage on a Training event**
     """
+    await _authorize_event_admin(db, event_id, current_user, EVENT_MANAGER_PERMISSION)
     service = EventService(db)
     event, error = await service.record_actual_times(
         event_id=event_id,
@@ -2721,7 +2808,7 @@ async def record_actual_times(
 async def finalize_attendance(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Finalize attendance duration for all checked-in members who didn't check out.
@@ -2736,8 +2823,9 @@ async def finalize_attendance(
     event's training session requires it — and reports what it credited.
 
     **Authentication required**
-    **Requires permission: events.manage**
+    **Allowed: events.manage, or training.manage on a Training event**
     """
+    await _authorize_event_admin(db, event_id, current_user, EVENT_MANAGER_PERMISSION)
     service = EventService(db)
     outcome = await service.finalize_event_attendance_detailed(
         event_id=event_id,
@@ -2762,7 +2850,7 @@ async def reopen_attendance(
     event_id: UUID,
     body: ReopenAttendanceRequest = ReopenAttendanceRequest(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.reopen_attendance")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Reopen a finalized event so attendance can be corrected, then re-finalized.
@@ -2774,9 +2862,18 @@ async def reopen_attendance(
     quietly reopen it and change the numbers that already reached the hours
     ledger, training records and compliance totals.
 
+    A training manager may also reopen a Training event — including one they
+    finalized themselves. That is the department's decision (2026-10-27): on a
+    Training event the numbers are training credit, which the training officer
+    already answers for, and the audit row records who reopened it and how.
+
     **Authentication required**
-    **Requires permission: events.reopen_attendance**
+    **Allowed: events.reopen_attendance, or training.manage on a Training
+    event**
     """
+    access = await _authorize_event_admin(
+        db, event_id, current_user, "events.reopen_attendance"
+    )
     service = EventService(db)
     event, error = await service.reopen_event_attendance(
         event_id=event_id,
@@ -2800,6 +2897,7 @@ async def reopen_attendance(
             "event_id": str(event_id),
             "title": event.title,
             "reason": (body.reason or "").strip() or None,
+            "acting_as": access,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -2812,7 +2910,7 @@ async def reopen_attendance(
 async def end_event(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     End an in-progress event early.
@@ -2821,8 +2919,9 @@ async def end_event(
     members, and finalizes attendance durations.
 
     **Authentication required**
-    **Requires permission: events.manage**
+    **Allowed: events.manage, or training.manage on a Training event**
     """
+    await _authorize_event_admin(db, event_id, current_user, EVENT_MANAGER_PERMISSION)
     service = EventService(db)
     event, checked_out_count, error = await service.end_event(
         event_id=event_id,

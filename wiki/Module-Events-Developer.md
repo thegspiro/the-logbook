@@ -58,7 +58,7 @@ GET    /events/settings                          # Event settings (manage)
 PATCH  /events/settings                          # Update event settings (manage)
 GET    /events/settings/position-options         # Positions for the attendance-request fallback (manage)
 GET    /events/{id}                              # Event detail (authenticated)
-PATCH  /events/{id}                              # Update (manage)
+PATCH  /events/{id}                              # Update (manage, or training.manage on Training; type locked)
 DELETE /events/{id}                              # Delete (manage)
 POST   /events/{id}/publish                      # Publish a draft (manage)
 POST   /events/{id}/duplicate                    # Duplicate (manage)
@@ -79,7 +79,7 @@ cache.
 ### Recurring series
 
 ```
-PATCH  /events/{id}/update-future                # This and all later occurrences (manage)
+PATCH  /events/{id}/update-future                # This and all later occurrences (manage, or training.manage on an all-Training series)
 DELETE /events/{id}/series                       # Delete series; delete_future_only (manage)
 POST   /events/{id}/cancel-series                # Cancel series; cancel_future_only (manage)
 POST   /events/{id}/rsvp-series                  # RSVP to all future occurrences
@@ -101,6 +101,17 @@ POST   /events/{id}/promote-waitlist             # Promote from waitlist (manage
 POST   /events/{id}/send-reminders               # Non-respondent reminders (manage)
 POST   /events/{id}/notify                       # Targeted notification (manage)
 ```
+
+**Training-event administration.** Edit, update-future, record-times,
+end-event, finalize-attendance and reopen-attendance go through
+`_authorize_event_admin` in `endpoints/events.py`: the route's own grant
+(`events.manage`, or `events.reopen_attendance` for reopen) is admitted before
+any read, as before; otherwise `training.manage` is admitted on an event read
+org-scoped whose type is Training (`training_manager_administers`). A training
+manager's edit may not change `event_type`, and
+`EventService.update_future_events(only_event_type=...)` refuses a series edit
+that would reach an occurrence of another type. Edit, update-future and
+reopen audit events record `acting_as`.
 
 **Attendance access.** The roster routes above, and `POST /events/{id}/check-in`,
 admit more than `events.manage`. `_authorize_attendance_manager` in
@@ -140,10 +151,10 @@ GET    /events/{id}/qr-check-in-data             # QR / self check-in payload (a
 POST   /events/{id}/self-check-in                # Member self check-in / check-out
 POST   /events/{id}/check-in                     # Checks a member in (attendance access)
 GET    /events/{id}/check-in-monitoring          # Live monitoring (manage)
-POST   /events/{id}/record-times                 # Record actual start/end (manage)
-POST   /events/{id}/end-event                    # End now + bulk checkout + finalize durations (manage)
-POST   /events/{id}/finalize-attendance          # Finalize attendance (manage)
-POST   /events/{id}/reopen-attendance            # Reopen (events.reopen_attendance)
+POST   /events/{id}/record-times                 # Record actual start/end (manage, or training.manage on Training)
+POST   /events/{id}/end-event                    # End now + bulk checkout + finalize durations (manage, or training.manage on Training)
+POST   /events/{id}/finalize-attendance          # Finalize attendance (manage, or training.manage on Training)
+POST   /events/{id}/reopen-attendance            # Reopen (events.reopen_attendance, or training.manage on Training)
 ```
 
 ### Attendance requests

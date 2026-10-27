@@ -94,6 +94,13 @@ export interface Event {
   /** Server-decided: may this caller correct check-in times and credited
    * hours. False for an organizer on a Training event. */
   can_correct_attendance_times?: boolean;
+  /** Server-decided: may this caller edit the event and close its attendance
+   * (End Event, Finalize, Record Times) — events.manage, or training.manage
+   * on a Training event. Detail endpoint only. */
+  can_edit_event?: boolean;
+  /** Server-decided: may this caller reopen finalized attendance —
+   * events.reopen_attendance, or training.manage on a Training event. */
+  can_reopen_attendance?: boolean;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;

@@ -131,6 +131,19 @@ app/api/v1/endpoints/events.py::list_event_rsvps
 app/api/v1/endpoints/events.py::manager_add_attendee
 app/api/v1/endpoints/events.py::override_rsvp_attendance
 app/api/v1/endpoints/events.py::remove_attendee
+# Training-event administration (2026-10-27): each handler calls
+# _authorize_event_admin before anything else, which admits the grant the route
+# always required (events.manage; events.reopen_attendance for reopen) without
+# a read, or training.manage on an event read org-scoped and of type Training,
+# and refuses everyone else (403; 404 outside the caller's org). A training
+# manager may not change the event's type, and a series edit refuses when any
+# occurrence it reaches is not Training.
+app/api/v1/endpoints/events.py::end_event
+app/api/v1/endpoints/events.py::finalize_attendance
+app/api/v1/endpoints/events.py::record_actual_times
+app/api/v1/endpoints/events.py::reopen_attendance
+app/api/v1/endpoints/events.py::update_event
+app/api/v1/endpoints/events.py::update_future_events
 
 app/api/v1/endpoints/external_shift_hours.py::delete_my_external_shift
 app/api/v1/endpoints/external_shift_hours.py::list_apparatus_options

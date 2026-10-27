@@ -556,6 +556,13 @@ class EventResponse(EventBase, UTCResponseBase):
     # False for an organizer on a Training event: times and credited hours
     # there are a training manager's or an event manager's to correct.
     can_correct_attendance_times: bool = False
+    # Edit the event and close its attendance (Finalize, End Event, Record
+    # Times): events.manage, or training.manage on a Training event. Detail
+    # endpoint only.
+    can_edit_event: bool = False
+    # Reopen finalized attendance: events.reopen_attendance, or training.manage
+    # on a Training event. Detail endpoint only.
+    can_reopen_attendance: bool = False
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
