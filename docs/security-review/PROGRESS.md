@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3775](https://github.com/thegspiro/the-logbook/pull/3775)** (branch
+`claude/security-review-forms-p10`) — Feature 26 (Forms), pass 10. No
+security-review PR was open — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review`), 0 matching results, checked
+immediately before starting. PR #3768 (Feature 25, Messaging &
+notifications, pass 10) had already merged. Row 26 (Forms) was confirmed
+the next `⬜` row by reading the rotation table directly on a freshly
+fetched `main` (head `02bdfb59`). **0 fixed, 0 new findings.** Real delta
+since pass 9's merge (`2d000c36`, PR #3640): two substantive feature
+commits, both read end-to-end against all seven checklist dimensions
+rather than trusted from their messages — a Sensitive field type whose
+answers move to a new AES-256-GCM-encrypted column and are served only to
+a new permission deliberately kept outside the `forms.` namespace
+(`sensitive_answers.view`, seeded to no position), and a per-form,
+per-department opt-in to embed a public form in an `<iframe>` on the
+department's own website (`allow_embed` + `Organization.settings.forms.
+embed_allowed_origins`, served through a new public `GET /{slug}/
+embed-policy` route that nginx's `auth_request` copies into that page's
+`Content-Security-Policy: frame-ancestors`, fail-closed on every edge: a
+500 if the backend can't be asked, `'none'` for anything else). Both
+reviewed in full — the row-locked sealing of existing answers, the
+refusal to un-mark a field with sealed data, the CSV-export/anonymization/
+key-rotation coverage of the new column, the origin-allowlist's
+double-validation (write-time 422, read-time drop-not-raise) against
+header-injection payloads, the `postMessage` origin check on the
+receiving snippet, and all three nginx configs' `frame-ancestors`
+inheritance — and found sound; no gap, no fix needed. Routes
+re-enumerated by AST: 25 (up from 22 at pass 9 — the one addition is the
+new public embed-policy route), all gated as expected. FORM-4 and FORM-12
+re-verified OPEN/FLAGGED, unchanged. See `FORM-26-forms.md`'s **Pass 10**
+section for the full review.
+
+Rotation row 26 → ✅ (pending this PR's merge); next is Feature 27
+(Integrations) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging &amp; notifications, pass 10, PR #3768, merged), preserved for history</summary>
+
 **PR [#3768](https://github.com/thegspiro/the-logbook/pull/3768)** (branch
 `claude/security-review-messaging-notifications-p10`) —
 Feature 25 (Messaging & notifications), pass 10. **Watchdog pickup** — the
@@ -46,6 +85,8 @@ review.
 Rotation row 25 → ✅ (pending this PR's merge); next is Feature 26
 (Forms) — re-check `search_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings &amp; minutes, pass 10, PR #3767, merged), preserved for history</summary>
@@ -22298,7 +22339,7 @@ PR is recorded in the Log, not repeated here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
@@ -22314,6 +22355,102 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-27 — Feature 26 (Forms, pass 10) — two substantive new features (sensitive fields, website embedding), 0 fixed, 0 new findings
+
+No security-review PR was open — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review`), 0 matching results, checked
+immediately before starting. PR #3768 (Feature 25, Messaging &
+notifications, pass 10) had already merged. Row 26 (Forms) was confirmed
+the next `⬜` row by reading the rotation table directly on a freshly
+fetched `main` (head `02bdfb59`).
+
+Baseline: pass 9's merge, `2d000c36` (PR #3640). Unlike several recent
+passes, this one carries a real, substantial delta on the module's core
+files: two feature commits, both read end-to-end against all seven
+`CHECKLIST.md` dimensions rather than trusted from their messages.
+
+**Sensitive form fields** (`7ee7f1fe`): a field can now be marked Sensitive;
+its answers are written to a new AES-256-GCM `EncryptedJSON` column
+(`form_submissions.sensitive_data`) instead of the plain `data` JSON, and
+served only to a new permission, `sensitive_answers.view` — deliberately
+placed **outside** the `forms.` namespace (confirmed against
+`_has_permission`'s wildcard matching) so the existing `forms.manage`/
+`forms.*` grant cannot reach it, and seeded to no position, so only the
+global `*` (System Owner) holds it by default. `_present_submissions`
+(new, `endpoints/forms.py`) is the single choke point all four
+submission-returning endpoints now go through; every reveal is audited by
+id only, never by answer text (Pitfall #33). Judged by the field's
+_current_ flag as well as by where the answer is stored, closing the
+write/flag-change race a write-time-only check would leave open (the
+residual — one answer stays briefly unencrypted at rest — is correctly
+left open and documented in a new `docs/KNOWN_LIMITATIONS.md` entry, not
+silently assumed fixed). Sealing an existing field's answers locks the
+form and every submission row (`.with_for_update()`, Pitfall #27);
+un-marking a field with any sealed answer is refused rather than decrypted
+back to plain text. Confirmed, by reading rather than trusting the commit
+message: no integration processor, the admin CSV export, member
+anonymization, or either key-rotation script can see or skip
+`sensitive_data`. Migration `ce541de8d3da` is `NOT NULL`/`server_default`
+on the new boolean (Pitfall #2/#35), idempotent, and its downgrade
+correctly refuses while any submission holds sealed data rather than
+destroying or decrypting it.
+
+**Embed a public form on the department's own website** (`90618aaa`): a
+published public form may now be shown in an `<iframe>` at
+`/embed/f/<slug>`, gated by a per-form `allow_embed` flag and a
+per-department allow-list of exact `https` origins
+(`Organization.settings.forms.embed_allowed_origins`), served through a
+new public, unauthenticated `GET /{slug}/embed-policy` route that nginx's
+`auth_request` asks on every load and copies into that one page's
+`Content-Security-Policy: frame-ancestors` — every other page keeps
+`X-Frame-Options: DENY`. Fails closed on every edge, verified by reading
+all three nginx configs in full: a backend the subrequest can't reach
+fails the page itself with 500; anything else (bad slug, unpublished form,
+`allow_embed` off, no origins listed) answers `'none'` with a 200, so the
+page still renders and simply cannot be framed. The origin allow-list is
+validated twice — a strict regex at write time (422 on anything that
+isn't an exact `https://host[:port]`, tested against `; script-src evil`,
+a bare `*`, a `javascript:` scheme and a path suffix — all rejected) and
+again, drop-rather-than-raise, at read time, so a value that reached the
+column some other way can't take every embedded form down. The settings
+write is gated by the same `settings.manage`/`organization.update_settings`
+OR-pair every other `/settings/*` sub-resource already uses, not a new,
+broader grant. The embed page's own `postMessage` (height-reporting, to
+`window.parent` with `'*'`) carries nothing the host page doesn't already
+have, and the **receiving** snippet checks the sender's origin, matching
+the comment's own reasoning. The one new frontend route
+(`/embed/f/:slug`) is registered in all three registries
+(`APPLICATION_PAGES.md`, `testingRegistry.ts`,
+`mobile-route-inventory.ts`); `check_route_permissions.py --strict` passes
+clean (279 routes, 0 errors/warnings).
+
+Routes re-enumerated by AST, not diffed: 25 total (22 in
+`endpoints/forms.py`, unchanged — confirmed zero `@router.` lines touched
+in that file's diff — + 3 in `public/forms.py`, up from 2, the one
+addition being the new embed-policy route). Permission distribution
+unchanged in shape: `forms.view` ×3, `forms.manage` ×17, bare
+`get_current_user` ×2 by design; all three public routes intentionally
+unauthenticated behind rate limiting (+ honeypot/CAPTCHA on submit).
+FORM-4 and FORM-12 re-verified OPEN/FLAGGED, unchanged; BXC-1 re-verified
+closed, unchanged; FORM-1/2/3/5/6/7/8/9/10/11, tenant isolation and LIKE
+escaping all re-verified unregressed — none of this pass's delta touches
+a line any of them concern.
+
+Full write-up: `docs/security-review/FORM-26-forms.md`'s **Pass 10**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 663
+revisions, single head `c616fa1bd492`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; `pytest tests/ -q -k form` —
+931 passed, 1 skipped (`pywebpush`, environment-only); the new
+sensitive-field and embed test files run individually — 71 passed;
+frontend `npm run typecheck` — 0 errors; `npm run lint` — exit 0; the
+forms/embed/sensitive-field Vitest suites — 14 files, 70 tests passed.
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-27 — Feature 25 (Messaging & notifications, pass 10) — watchdog pickup, real delta (Gmail delegated sending + SMTP batch hardening), 1 new finding fixed
 
