@@ -22340,7 +22340,7 @@ PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ⬜     |
@@ -22355,6 +22355,38 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-27 — Feature 27 (Integrations, pass 10) — watchdog pickup, true zero backend delta, 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable per `ListAgents`). No open
+security-review PR — confirmed via both `list_pull_requests` and
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+results, after Feature 26's own PR (#3775, Forms pass 10) merged — its one
+CI failure (`Backend Integration Tests (MySQL 8.0)` cancelled at the
+~30-minute job-timeout mark, diff docs-only) resolved by one
+`rerun_failed_jobs` re-run, no code change needed. Row 27 (Integrations)
+confirmed the next pending feature on a freshly fetched `main` (head
+`3665a893`, the merge of #3775).
+
+Real delta since pass 9's merge (`09b18569`, PR #3641): **zero** — a
+per-file `git log`/`git diff --stat` check across every file this feature
+has accumulated into scope (ten route files, the directory-account
+models/service, every `services/integration_services/` connector,
+`IntegrationsPage.tsx`) shows no commit touched any of them in the three
+days since, despite 503 files changing elsewhere in the app. Two
+near-misses were checked and ruled out: `scheduled_tasks.py`'s diff belongs
+entirely to Features 20/08, and a new Gmail-delegated-sending
+`KNOWN_LIMITATIONS.md` entry documents code already reviewed and fixed
+under Feature 25's own rotation (MSG-17). Routes re-enumerated by AST: 38,
+unchanged. INT-5 (OPEN, owner decision) and INT-11 (FIXED since pass 8)
+re-verified unchanged; INT-2/3/4/6/8/9 re-confirmed unregressed.
+
+Full write-up: `docs/security-review/INT-27-integrations.md`'s **Pass 10**
+section.
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit
+& IP) — re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-27 — Feature 26 (Forms, pass 10) — two substantive new features (sensitive fields, website embedding), 0 fixed, 0 new findings
 
