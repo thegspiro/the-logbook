@@ -16,6 +16,48 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3784](https://github.com/thegspiro/the-logbook/pull/3784)** (branch
+`claude/security-review-reports-analytics-p12`) — Feature 29 (Reports &
+analytics), pass 12. **Watchdog pickup** — the dedicated `/loop 30m
+/security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) was
+unreachable (confirmed via `ListAgents`). No security-review PR was open —
+confirmed via `search_pull_requests`, 0 results, checked immediately before
+starting. PR #3783 (Feature 28, Security/audit/IP, pass 10) had already
+merged. Row 29 was confirmed the next `⬜` row by reading the rotation table
+directly on a freshly fetched `main` (head `115bd921`). **0 fixed, 0 new
+findings.** Real delta since pass 11's merge (`14e95ce1`, PR #3647):
+`analytics.py`'s hourly-activity breakdown and `platform_analytics.py`'s
+login/error trends now bucket by the organization's local day/hour instead
+of UTC (W75/W78-1), and the Module Usage section now reads the org's actual
+`enabled_modules` instead of a hardcoded `True` (W78-2) — all already fixed
+and shipped, verified good. LBL-29-2, LBL-29-4, RPT-5c/6/7 and DASH-2 stay
+open, unchanged. Routes re-enumerated by AST: 35, unchanged. See
+`RPT6-29-reports-analytics.md`'s **Pass 12** section for the full review.
+
+Rotation row 29 → ✅ (pending this PR's merge); next is Feature 30
+(Onboarding) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+**Addendum (same PR, follow-up commit):** a second, independent watchdog
+session raced this same pass concurrently (its push to this branch name was
+rejected "fetch first" against the one already pushed here). Rather than
+open a competing PR, its finding is folded in as a follow-up commit: this
+pass's own file enumeration never actually checked
+`saved_report_schedule.py` or `app/utils/external_recipients.py`, both in
+this feature's declared scope, despite the surrounding text implying every
+file had been. Both carry a real, substantial delta since pass 11 (the
+Pitfall #36 scheduled-report-delivery idempotency rewrite and a new
+`dedupe_addresses` helper) — read in full by the follow-up commit and found
+already fixed, tested and safe (org-scoping unchanged throughout). See
+`RPT6-29-reports-analytics.md`'s **Addendum to pass 12** section
+(RPT6-29-4) for the full review and why an initial, separate concern (that
+`5ef9c11e`/W72 might be an unreviewed change to `reports_service.py`) was
+checked and ruled out as a shallow-clone history-ordering artifact rather
+than reported.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 10, PR #3783, merged), preserved for history</summary>
+
 **PR [#3783](https://github.com/thegspiro/the-logbook/pull/3783)** (branch
 `claude/security-review-security-audit-ip-p10`) — Feature 28 (Security, audit
 & IP), pass 10. **Watchdog pickup** — the dedicated `/loop 30m
@@ -34,9 +76,9 @@ SEC2-28-6 and the dead-detector-code note stay open, unchanged. Routes
 re-enumerated by AST: 37, unchanged. See
 `SEC2-28-security-audit-ip.md`'s **Pass 10** section for the full review.
 
-Rotation row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
-analytics) — re-check `search_pull_requests` fresh rather than trusting this
-note.
+Rotation row 28 → ✅ (merged); next was Feature 29 (Reports & analytics).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 10, PR #3782, merged), preserved for history</summary>
@@ -22398,7 +22440,7 @@ PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
@@ -40867,3 +40909,43 @@ passed (5 files).
 Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
 analytics) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+### 2026-10-27 — Feature 29 (Reports & analytics, pass 12) — watchdog pickup, real delta (timezone/UX correctness fixes), 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`).
+No open security-review PR — confirmed via `search_pull_requests`, 0
+results, after Feature 28 (Security, audit & IP) pass 10's own PR (#3783)
+merged. Row 29 confirmed the next `⬜` row by reading the rotation table on
+a freshly fetched `main` (head `115bd921`).
+
+Real delta since pass 11's own merge (`14e95ce1`, PR #3647): `analytics.py`'s
+`/metrics` hourly-activity breakdown now buckets by the organization's local
+hour instead of UTC (W75); `platform_analytics.py`'s login/error trend
+charts now bucket by local calendar day so they add up to the headline
+total printed above them, and the Module Usage section now reads the
+organization's actual `enabled_modules` instead of a hardcoded `True`
+(W78-1/W78-2). Both re-use the pre-existing, already-reviewed
+`resolve_reporting_timezone` utility with the caller's own org id, no new
+tenancy surface, auth dependencies unchanged. Both fixes are covered by
+dedicated integration tests, re-run directly after migrating the sandbox
+database to the current migration head (one revision behind, an
+environment gap from earlier in this rotation, not a code defect) — 4
+passed. Routes re-enumerated by AST: 35, unchanged from pass 11. All four
+previously-flagged items (LBL-29-2, LBL-29-4, RPT-5c/6/7, DASH-2)
+re-verified still open, unchanged.
+
+Full write-up: `docs/security-review/RPT6-29-reports-analytics.md`'s
+**Pass 12** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — single
+head `b8236e29ec44`; `check_route_permissions.py --strict` — 279 routes, 0
+errors/warnings; scoped backend tests — 948 passed, 1 pre-existing skip
+(`pywebpush`); the two integration test files covering this pass's fixes
+— 4 passed; frontend `npm run typecheck`/`npm run lint` — 0 errors, 0
+warnings; scoped frontend suite (`src/modules/reports`) — 77 passed (9
+files).
+
+Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
+re-check `search_pull_requests` fresh rather than trusting this note.
