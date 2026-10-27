@@ -6571,24 +6571,25 @@ screenshots of the queue (`05-97`, `05-132`) still show the old heading until
 they are next captured. Covered by `InventoryAdminHub.test.tsx`. History in
 `docs/workflow-review/W79-phone-pass.md` (W79-10).
 
-## Public Portal — Three Statistics Fields Can Be Enabled but Always Publish Null (2026-10-21)
+## Public Portal — Three Statistics Fields Can Be Enabled but Always Publish Null (2026-10-21, resolved 2026-10-27)
 
-Found driving W76 (`docs/workflow-review/W76-public-portal.md`, W76-6).
+**Resolved (owner decision: define each and wire it).**
+`GET /api/public/v1/organization/stats` now computes all three, in
+`app/services/public_stats_service.py`:
 
-- **What happens:** Data Control offers `stats.stations`,
-  `stats.total_volunteer_hours` and `stats.total_calls_ytd`. An administrator
-  can switch each on and the list counts it as enabled, but
-  `GET /api/public/v1/organization/stats` hard-codes all three to `null`, so a
-  department website receives nothing for them (CLAUDE.md pitfall 19).
-- **Why it is not simply fixed:** each needs a definition someone must choose.
-  "Stations" could count facilities of one type or every facility; volunteer
-  hours could come from admin hours, events, shifts or training, approved or
-  not; and calls year-to-date would need choosing which of the call-tracking
-  records count.
-- **Decision:** for each field, either define its source (and wire it), or
-  remove it from the catalogue or mark it "not yet available" in Data Control.
-  Removing a catalogue row also needs a data change for existing
-  installations.
+- **stations**: facilities of the "Fire Station" type, not archived. An
+  EMS-only department, whose onboarding creates "EMS Station" facilities,
+  reads 0 until its stations use that type.
+- **total_calls_ytd**: calls in call tracking dated from 1 January to today in
+  the department's timezone.
+- **total_volunteer_hours**: whole hours over the same period, from approved
+  admin hours, completed training, shift attendance and event attendance. An
+  event check-in that also became an approved admin-hours entry or a training
+  record is counted once.
+
+Data Control's descriptions say the same. Covered by
+`tests/test_public_portal_stats.py`. History in
+`docs/workflow-review/W76-public-portal.md` (W76-6).
 
 ## RPT2-3 — The QR Check-In Analytics Dashboard Had A Reader And No Writer (2026-10-20, resolved 2026-10-25)
 

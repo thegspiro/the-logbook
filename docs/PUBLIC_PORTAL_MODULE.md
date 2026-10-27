@@ -7,12 +7,12 @@ The Public Portal module enables fire departments to expose selected data to a p
 ## Use Cases
 
 - Show upcoming public education events
-- Display department statistics (member and apparatus counts)
+- Display department statistics (member, apparatus and station counts, calls
+  and volunteer hours this year)
 - Show the department's description, logo and contact information
 
-A personnel roster, training certifications and volunteer-hour figures are not
-served: there are no endpoints for them, and the stats response returns
-`total_volunteer_hours`, `total_calls_ytd` and `stations` as `null`.
+A personnel roster and training certifications are not served: there are no
+endpoints for them. Volunteer hours are served only as one department total.
 
 ## Architecture
 
@@ -142,8 +142,14 @@ GET /api/public/v1/organization/info
   mailing and physical address — each subject to the whitelist
 
 GET /api/public/v1/organization/stats
-- total_members and apparatus counts; total_volunteer_hours,
-  total_calls_ytd and stations are always null
+- total_members and apparatus counts
+- stations: Fire Station facilities, not archived
+- total_calls_ytd: calls in call tracking since 1 January, in the
+  department's timezone
+- total_volunteer_hours: whole hours since 1 January in the department's
+  timezone, from approved admin hours, completed training, shift attendance
+  and event attendance, each hour counted once (an event check-in that also
+  became an admin-hours entry or a training record is not counted again)
 
 GET /api/public/v1/events/public
 - Upcoming, non-cancelled public education events
