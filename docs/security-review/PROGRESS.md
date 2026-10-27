@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_(Filled in by this iteration's own second commit, once the PR exists —
+Feature 30, Onboarding, pass 10. Step 0 of this iteration confirmed PR #3784
+merged and cleared its note below into the superseded history; see
+`docs/security-review/PROGRESS.md`'s own Log entry and
+`ONB5-30-onboarding.md`'s **Pass 10** section for the review this note will
+point to.)_
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 12, PR #3784, merged), preserved for history</summary>
+
 **PR [#3784](https://github.com/thegspiro/the-logbook/pull/3784)** (branch
 `claude/security-review-reports-analytics-p12`) — Feature 29 (Reports &
 analytics), pass 12. **Watchdog pickup** — the dedicated `/loop 30m
@@ -54,6 +64,8 @@ already fixed, tested and safe (org-scoping unchanged throughout). See
 `5ef9c11e`/W72 might be an unreviewed change to `reports_service.py`) was
 checked and ruled out as a shallow-clone history-ordering artifact rather
 than reported.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 10, PR #3783, merged), preserved for history</summary>
@@ -22441,7 +22453,7 @@ PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -22453,6 +22465,47 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-27 — Feature 30 (Onboarding, pass 10) — watchdog pickup, 0 fixed, 0 new findings; two prior-pass OPEN items re-confirmed FIXED
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable per `ListAgents`, confirmed at
+the start of this run). No open security-review PR — confirmed via
+`list_pull_requests` (`state=open`), which returned only two unrelated docs
+PRs (#3774, #3772); re-checked and nothing with a `claude/security-review-`
+head branch is open. PR #3784 (Feature 29, Reports & analytics, pass 12) had
+already merged, docs-only relative to `PROGRESS.md`/the findings file for
+that feature (its own code delta was timezone-bucketing and a module-usage
+read already landed); nothing further to record from it per the "docs-only
+PR is not a recordable event" rule beyond clearing the Open PR note below.
+Row 30 (Onboarding) was the first `⬜` on a freshly-pulled `main` (head
+`65b566ee`, the merge of #3784).
+
+Real delta since pass 9's merge plus its same-day recovery PR (`e6da6486`,
+PR #3686): substantive, but almost entirely cross-feature work landing in
+files this feature owns or in a helper its own pre-auth test endpoint calls —
+app-wide email-at-rest encryption reaching `onboarding_status.admin_email`
+and the IT-team-member lookup, and Gmail-API sending via a domain-wide
+delegated service account reaching `email_test_helper.py`'s shared connection
+tester. Both verified good: the onboarding wizard still offers Gmail App
+Password only, by design (`KNOWN_LIMITATIONS.md`'s "Gmail — Sending Through a
+Service Account," owner decision 2026-10-25 — onboarding runs before any
+`admin.access` check is possible), and the one place a service-account key
+_is_ reachable pre-auth (the connection-test oracle) grants no capability
+beyond what the key's holder could already ask Google directly. Two findings
+pass 9 had reported OPEN — the duplicate-role-id 500 and `POST /organization`'s
+missing generic exception handler — were in fact already FIXED by that same
+recovery PR (ONB6-30-2/3), which merged after pass 9's own write-up was
+drafted; re-confirmed FIXED against current code this pass. One `smtp_port`
+bound was added by an unrelated, already-tested numeric-bounds sweep passing
+through onboarding.py. Routes re-enumerated by AST: 26, unchanged. See
+`ONB5-30-onboarding.md`'s **Pass 10** section for the full review, including
+why the Gmail-service-account reachability question needed a close read
+rather than a guess.
+
+Rotation row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled
+tasks) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
 
 ### 2026-10-27 — Feature 27 (Integrations, pass 10) — watchdog pickup, true zero backend delta, 0 fixed, 0 new findings
 
