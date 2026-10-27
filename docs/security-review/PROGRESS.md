@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3782](https://github.com/thegspiro/the-logbook/pull/3782)** (branch
+`claude/security-review-integrations-p10`) — Feature 27 (Integrations), pass 10. **Watchdog pickup** — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`). No security-review PR was open — confirmed via both
+`list_pull_requests` and `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 results, checked
+immediately before starting. PR #3775 (Feature 26, Forms, pass 10) had
+already merged. Row 27 (Integrations) was confirmed the next `⬜` row by
+reading the rotation table directly on a freshly fetched `main` (head
+`3665a893`). **0 fixed, 0 new findings — true zero backend delta.** A
+per-file `git log`/`git diff --stat` check since pass 9's merge (`09b18569`,
+PR #3641) across every file this feature has accumulated into scope over
+nine prior passes — all ten route files, the directory-account
+models/service, every `services/integration_services/` connector, and
+`IntegrationsPage.tsx` — found zero commits touching any of them, despite
+503 files changing elsewhere in the app over the same three days. Two
+near-misses were checked and ruled out: `scheduled_tasks.py`'s diff belongs
+entirely to Features 20/08, and a new Gmail-delegated-sending
+`KNOWN_LIMITATIONS.md` entry documents code already reviewed and fixed
+under Feature 25's own rotation (MSG-17). Routes re-enumerated by AST: 38,
+unchanged. INT-5 (OPEN) and INT-11 (FIXED since pass 8) re-verified
+unchanged; INT-2/3/4/6/8/9 re-confirmed unregressed. See
+`INT-27-integrations.md`'s **Pass 10** section for the full review.
+
+Rotation row 27 → ✅ (pending this PR's merge); next is Feature 28
+(Security, audit & IP) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 10, PR #3775, merged), preserved for history</summary>
+
 **PR [#3775](https://github.com/thegspiro/the-logbook/pull/3775)** (branch
 `claude/security-review-forms-p10`) — Feature 26 (Forms), pass 10. No
 security-review PR was open — confirmed via `search_pull_requests`
