@@ -233,10 +233,9 @@ a known edge an owner should know about:
   how a daily sending limit is reported (the sender stops the batch on a
   message naming a daily limit, or a `Retry-After` longer than 60 seconds), and
   that the `Message-ID` and `List-Unsubscribe` headers the sender sets are kept.
-- **No settings screen yet.** The method can be set through
-  `PATCH /api/v1/organizations/settings/email`; the screen arrives separately.
-  Onboarding offers App Password only, so a department chooses the service
-  account after setup, in Settings, where the `admin.access` check applies.
+- **Onboarding offers App Password only.** A department chooses the service
+  account after setup, in **Settings → Email**, where the `admin.access` check
+  applies. Someone with `settings.manage` alone sees the option disabled.
 - **The connection test is open to `settings.manage`.** It obtains a token as
   the From address and sends nothing, and a saved key is only used for the From
   address it was saved with, so it cannot be pointed at another mailbox.
@@ -676,6 +675,25 @@ owner made, recorded so they are not mistaken for gaps:
   `inactive_since` is separate from the drawer's historical `deactivated_at`,
   which is untouched; an application with no `inactive_since` is never
   auto-purged.
+
+## Prospective Members — The Inactivity "Notify" Checkboxes Have No Reader (2026-10-26)
+
+Pipeline Settings → Inactivity offers **Notify coordinator** (on by default)
+and **Notify applicant**. Both are saved into the pipeline's inactivity
+configuration and **nothing on the backend reads either**. The daily
+inactivity sweep (`process_inactivity_warnings` in
+`membership_pipeline_service.py`) marks overdue applications inactive and
+writes an `inactivity_warning_sent` entry to the activity log, and sends no
+email to anyone, whatever the boxes say. Its docstring claimed it emailed
+coordinators until 2026-10-26.
+
+This is the shape Pitfall #19 forbids: a switch whose only effect is being
+stored. Found while writing the wiki page `Module-Prospective-Members`, which
+says plainly that the boxes do nothing yet. **Owner decision needed:** wire a
+sender (who receives it, how often, and whether an applicant email is wanted at
+all), or remove the two checkboxes from the settings page. Wiring the applicant
+half sends email to people outside the department, so it was not done as a
+side effect of a documentation change.
 
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 
@@ -1210,6 +1228,32 @@ encrypts every file written under `/app/uploads`. It does not reach:
   see where it is, and on an installation hosting more than one organization
   any organization's `settings.manage` holder confirms for the installation,
   because the key is installation-wide.
+
+## Forms — What a Sensitive Field Does Not Reach (2026-10-25)
+
+**Open, each deliberate.** A field marked Sensitive stores its answers
+encrypted in `form_submissions.sensitive_data` and serves them only to holders
+of `sensitive_answers.view` (see "Sensitive Fields" in
+`docs/FORMS_MODULE.md`). Three things fall outside that:
+
+- **Copies an integration made before the field was marked.** Marking an
+  existing field Sensitive moves the answers held on each submission into the
+  encrypted column. It does not reach a value an integration already copied
+  out — an applicant record created from an interest form, or the answers kept
+  on that applicant's pipeline stage. Mark a field Sensitive before the form
+  is published to avoid this; otherwise those records keep what they were
+  given until they are edited, purged or anonymized.
+- **A submission that arrives while the field is being marked.** A request
+  that loaded the form before the flag was saved writes that one answer to the
+  plain `data` column. The submission screens still withhold it — they decide
+  by the field's current flag, not only by where the answer is stored — but
+  the stored copy is not encrypted. Closing it would mean locking the form row
+  on every submission.
+- **Backups taken before the field was marked.** They hold the plaintext
+  answers, as any pre-change backup does.
+
+`sensitive_answers.view` is granted to no seeded position, so a department
+that wants its membership committee to read these answers grants it by hand.
 
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
@@ -5909,12 +5953,10 @@ category, schedule or check-in rules rather than their presence in the save,
 and the edit form disables those controls and leaves them out. Found on the
 same screen, and left as they are:
 
-- **Saving a draft publishes it.** The edit page does not load `is_draft`, so
-  the form starts from its default and every save sends `is_draft: false`.
-- **A window-type event stored with no lead time is shown, and saved, as 60
-  minutes.** The backend reads a missing lead time on a window-type event as 15,
-  so the first save of an open one moves its check-in window. A finalized
-  one's check-in rules are locked and left alone.
+- **✅ Resolved 2026-10-25 — saving a draft published it, and a window-type
+  event with no stored lead time saved as 60 minutes.** The edit page now
+  loads `is_draft`, and fills a missing lead time with what the backend reads
+  it as (15 on a window-type event, 60 otherwise).
 - **An open event's times are saved at the form's minute precision.** A stored
   start or end with seconds, or one in the hour repeated when clocks fall back,
   can move by those seconds or by an hour on its first save. A finalized
@@ -6461,20 +6503,6 @@ Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10).
   start an application from them. **Decision:** whether they become real,
   seeded opportunities.
 
-## Fundraising — A Donor Must Have a Person's Name (2026-10-15)
-
-Found driving W69 (`docs/workflow-review/W69-fundraising.md`, W69-6).
-
-- **What happens:** `first_name` and `last_name` are required on every donor
-  (`DonorBase` in `schemas/grant.py`, and the Add Donor form), whatever the
-  donor type. A business is entered under its contact ("Dale Harmon (Valley
-  Hardware)"); a foundation or business with no named contact cannot be
-  added at all.
-- **Decision:** whether business, foundation and government donors may be
-  recorded by organization name alone, which would make the name fields
-  optional for those types (a schema change, and the list and receipts would
-  need to name such a donor by `company_name`).
-
 ## Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)
 
 Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
@@ -6559,21 +6587,6 @@ Found driving W76 (`docs/workflow-review/W76-public-portal.md`, W76-6).
   remove it from the catalogue or mark it "not yet available" in Data Control.
   Removing a catalogue row also needs a data change for existing
   installations.
-
-## IP Security — An Admin Can Approve Their Own IP Exception (2026-10-20)
-
-Found driving W74 (`docs/workflow-review/W74-ip-security.md`, W74-5).
-
-- **What happens:** `POST /ip-security/exceptions/{id}/approve` accepts an
-  approval from the member the exception is for. An admin who files a request
-  can approve it at once.
-- **Why it is not simply fixed:** the same admin can already add and remove
-  blocked countries, so self-approval widens little. A department with one
-  IT administrator would also be left unable to approve their own travel
-  exception.
-- **Decision:** whether approval needs a second person
-  (`assert_different_person`, as money approvals use), and if so what a
-  single-admin department does.
 
 ## RPT2-3 — The QR Check-In Analytics Dashboard Had A Reader And No Writer (2026-10-20, resolved 2026-10-25)
 
@@ -6693,39 +6706,15 @@ answers 400 on an order already paid ("Refund it instead") or already waived. A
 partly paid order can still be waived. Kept only because code and tests cite it
 by name; history in `docs/security-review/SF-04-storefront-payments.md`.
 
-## FIN8-05-1 — Deciding A Budget Request Has No Separation-Of-Duties Guard, Unlike Its Own Sibling (2026-10-12)
+## FIN8-05-1 — Deciding A Budget Request Had No Separation-Of-Duties Guard (2026-10-12, resolved 2026-10-26)
 
-`FinanceBudgetRequestService.decide_request` — the Treasurer's
-`finance.manage`-gated approve/adjust/decline on a submitted budget
-request — has no `assert_different_person` check against the request's
-`submitted_by`. `review_request`, the leadership-review step one stage
-later in the same new feature, explicitly has one:
-
-```python
-if str(request.submitted_by or "") == str(reviewer_id) or (
-    await self._acts_as_owner(request, org_id, reviewer_id)
-):
-    raise BudgetRequestForbiddenError(...)
-```
-
-A `finance.manage` holder who also holds a position that owns a budget
-line can create a request for that line (`create_request` lets a manager
-create one for any line, bypassing the ownership check it enforces on
-everyone else) and then decide it themselves — approving their own
-requested amount into the draft-year budget with no second person
-involved at the Treasurer-decision step. A department that uses the
-leadership-review planning stage still gets `review_request`'s guard as a
-backstop; one that doesn't has no check on this path at all.
-
-**Why it is here rather than fixed.** The same tension this page already
-records for FIN-4 (disbursement SoD) and OPS-8 (`record_dues_payment`):
-an unconditional guard would also block the only-finance-officer
-department from ever deciding a request they raised themselves. Whether
-to accept that cost, add a narrow override, or treat leadership review as
-the sole intended backstop is an owner decision, not a drive-by fix.
-
-Found in security-review FIN-05 pass 8 (2026-10-12); see
-`docs/security-review/FIN-05-finance-approvals.md` → FIN8-05-1.
+**Resolved (owner decision: refuse, no single-officer exception).**
+`FinanceBudgetRequestService.decide_request` refuses a decider who submitted
+the request or owns its line, with the same check `review_request` already
+made; another `finance.manage` holder has to decide it. A department with one
+finance officer grants the permission to a second member. Kept only because
+code and tests cite it by name; history in
+`docs/security-review/FIN-05-finance-approvals.md`.
 
 ## CI-1 — Backend Lint's Pinned `flake8`/`isort` Have Drifted From `requirements.txt` Again (2026-10-12) — ✅ FIXED (2026-10-25)
 

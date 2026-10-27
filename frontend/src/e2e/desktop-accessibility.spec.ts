@@ -33,6 +33,13 @@ const runAxe = async (page: Page): Promise<string[]> => {
 const open = async (page: Page, path: string, viewport: { width: number; height: number }) => {
   const route = ROUTES.find((r) => r.path === path);
   if (!route) throw new Error(`${path} is not in the mobile route list`);
+  // Contrast is measured on the settled page, not mid-transition. The planning
+  // page's Refresh button is disabled at half opacity while it loads, and
+  // `btn-secondary` fades it back over 150ms; an audit landing inside that
+  // fade read the enabled button at 3.41:1 and failed, on slower runners only.
+  // As in mobile-accessibility.spec.ts, reduced motion collapses every
+  // transition in index.css to 0.01ms.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize(viewport);
   await signInForRoute(page, route, null);
   await page.goto(path);

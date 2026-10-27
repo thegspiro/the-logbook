@@ -15,6 +15,7 @@ import pytest
 
 from app.models.ip_security import IPExceptionApprovalStatus
 from app.services.ip_security_service import IPSecurityService
+from app.services.separation_of_duties import SeparationOfDutiesError
 
 
 def _exception(**kw):
@@ -22,7 +23,9 @@ def _exception(**kw):
     return SimpleNamespace(
         id=kw.get("id", "exc-1"),
         organization_id=kw.get("organization_id", "org-A"),
-        user_id="user-1",
+        user_id=kw.get("user_id", "user-1"),
+        # NOT NULL on the model: whoever filed the request.
+        requested_by=kw.get("requested_by", kw.get("user_id", "user-1")),
         ip_address="203.0.113.7",
         approval_status=kw.get("status", IPExceptionApprovalStatus.PENDING),
         requested_duration_days=kw.get("requested_duration_days", 30),
@@ -116,6 +119,37 @@ class TestApproveExceptionOrgScoping:
             organization_id="org-A",
         )
         assert out.approved_duration_days == 90
+
+
+class TestApproveExceptionNeedsASecondPerson:
+    """W74-5: an administrator could approve an exception for themselves, or
+    one they filed, at once. Owner decision: a second person approves, with no
+    exception for a one-admin department."""
+
+    async def test_an_admin_cannot_approve_their_own_exception(self, svc):
+        db = _db(_exception(user_id="admin-A"))
+        with pytest.raises(SeparationOfDutiesError):
+            await svc.approve_exception(
+                db=db, exception_id="exc-1", admin_id="admin-A", organization_id="org-A"
+            )
+        db.commit.assert_not_awaited()
+
+    async def test_an_admin_cannot_approve_one_they_filed_for_someone(self, svc):
+        db = _db(_exception(user_id="user-1", requested_by="admin-A"))
+        with pytest.raises(SeparationOfDutiesError):
+            await svc.approve_exception(
+                db=db, exception_id="exc-1", admin_id="admin-A", organization_id="org-A"
+            )
+        db.commit.assert_not_awaited()
+
+    async def test_another_admin_approves_it(self, svc):
+        out = await svc.approve_exception(
+            db=_db(_exception(user_id="admin-A")),
+            exception_id="exc-1",
+            admin_id="admin-B",
+            organization_id="org-A",
+        )
+        assert out.approved_by == "admin-B"
 
 
 class TestRejectExceptionOrgScoping:

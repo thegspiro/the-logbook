@@ -300,7 +300,7 @@ Two second factors, either of which is enough: a **passkey** on the member's
 phone or computer (Face ID, a fingerprint or the device PIN), or app-based
 **TOTP** with apps like Google Authenticator, Authy, or 1Password. Both come
 after the password or SSO sign-in. MFA is self-enrolled by default and can be
-required org-wide by an administrator. See [MFA](../docs/MFA.md) for full
+required org-wide by an administrator. See [MFA](https://github.com/thegspiro/the-logbook/blob/main/docs/MFA.md) for full
 implementation detail.
 
 ### Adding a passkey
@@ -405,7 +405,7 @@ the shared cookie jar already holds the winner's tokens — and retries the
 original request. A refresh that starts _after_ the first has committed still
 reads as replay, as above: telling it from theft would need the previous token
 on record, which is not kept. See
-[Error codes](../docs/ERROR_CODES.md).
+[Error codes](https://github.com/thegspiro/the-logbook/blob/main/docs/ERROR_CODES.md).
 
 ### Sign-Out Is Confirmed, Not Assumed
 

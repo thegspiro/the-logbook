@@ -322,6 +322,7 @@ class MemberAnonymizationService:
                     )
                     .values(
                         data={},
+                        sensitive_data=None,
                         submitter_name=None,
                         submitter_email=None,
                         # submitted_by may identify a coordinator who filed

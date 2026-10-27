@@ -2611,3 +2611,130 @@ delta since pass 9 (69/19 lines across endpoint/schema/model files, 16
 frontend files), all traced to a single, already-correct cross-cutting
 change plus independent cosmetic/defensive sweeps. No open findings
 remain in this feature.
+
+## Pass 11 (2026-10-26) — watchdog pickup, real delta, 0 new findings
+
+**Prefix:** `SKT11` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results); PR #3759
+(Feature 18, Training extended, pass 11) had just merged. The dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was not reachable via `ListAgents`. Rotation row 19 (Skills testing) was
+confirmed the next pending feature by reading the rotation table directly
+on a freshly fetched `main`.
+
+### Scope check — real delta since pass 10
+
+Baseline: `28410795` (pass 10's own merge, on `main`). 315 non-merge/merge
+commits landed in the window; across the four-file declared backend scope
+(`skills_testing.py`, `skills_testing_service.py`, `schemas/skills_testing.py`,
+`models/skills_testing.py`), only the schema file changed (+12/-8). Both
+real (non-merge) commits touching it read in full:
+
+- **`e5e8a477`** — adds `RefusesNull` to `SkillTemplateUpdate` for
+  `visibility`/`require_all_critical`: a stored `NULL` on either (both plain
+  `bool`/`str` response fields with no nullable variant) previously wrote
+  successfully and then failed to serialize on every later read of the
+  template. The same `apply_updates`/`RefusesNull` discipline this rotation
+  has applied repeatedly elsewhere (TR-17, TRX-18) — correctness, not a
+  security surface.
+- **`dd4ba98a`** — the same repo-wide numeric-bounds sweep TRX-18 pass 11
+  saw on the sibling training schemas: `le=FLOAT32_MAX`/`le=INT32_MAX` added
+  to six previously-unbounded fields (`max_score`, `deduction_points`,
+  `time_seconds`, `section_score`, `expected_template_version`,
+  `expected_version`). Narrows what was previously accepted into a clean
+  422; not a vulnerability.
+
+No migration landed inside this feature's four backend files this window.
+
+### Frontend surface
+
+A substring search for this feature's service/store imports
+(`skillsTestingService`, `skillsTestingStore`, `practicalSkillsStore`)
+turned up 28 candidate files; diffed all of them against `28410795`. Eight
+changed, and six are false positives from the shared-import substring match,
+not this feature's own surface, each traced to confirm:
+
+- `SideNavigation.tsx`/`TopNavigation.tsx`/`CommandPalette.tsx` — a new "ID
+  Cards" nav entry and command-palette items, Feature 13 (Apparatus & NFC)'s
+  own change (`members.manage_id_cards`/`locations.manage_nfc_tags`
+  permissions, nothing skills-testing touches).
+- `TrainingAdminPage.tsx` — a shared `AdminHubAreaNav` component rollout
+  replacing the training-specific `TrainingAdminNav`, plus a `view` query
+  param letting the "pipelines" tab choose between the program wizard and a
+  programs list page. A Training-admin-area-wide UI/routing change, not
+  skills-testing's own authorization surface — the server-side permission
+  gates on every route are unaffected by which component renders client-side.
+- `scheduling/ShiftReportsTab.tsx` — Feature 14 (Equipment check & shifts)'s
+  own file; a `canCompleteDraft` helper mirroring that feature's own
+  `update_report` backend check (explicitly commented as such), a date-
+  formatting cleanup, and a dead `members` state removal. Not this feature's
+  scope.
+
+The two genuinely skills-testing files, plus one page that embeds
+`MySkillTestsList`, are cosmetic only:
+
+- **`SkillsTestingTemplatesTab.tsx`/`SkillsTestingTestRecordsTab.tsx`** — a
+  `StatusBadge`'s raw `status.replace('_', ' ')` replaced with an explicit
+  label map (falling back to the same regex replace for an unmapped status),
+  plus a `sm:flex-wrap`/`field-min` toolbar-layout tweak. Pure display
+  formatting — the map is a superset of what the bare replace already
+  rendered, so no status reads differently to a user than before.
+- **`MyTrainingPage.tsx`** — the same label-map pattern applied via a new
+  shared `getTrainingStatusLabel` helper at three call sites that render
+  `TrainingRecord`/enrollment/submission status badges. Cosmetic only.
+
+Grep-swept all eight changed files for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`/`date-fns`, and a bare
+`fetch(` — zero hits.
+
+### Route re-enumeration
+
+AST-walked every `@router.get/post/put/patch/delete` decorator in
+`skills_testing.py` directly: **29 routes**, unchanged from pass 10, every
+one carrying a recognized `Depends(...)` auth dependency (verified by
+walking parameter defaults, not counting decorators). `python3
+scripts/check_route_permissions.py --strict` (repo root): **279 total
+application routes, 0 errors, 0 warnings** — up from pass 10's 273 from
+other features in the rotation merging in the interim, confirming no new
+top-level page from this feature (Pitfall #30a n/a).
+
+### Standing findings re-verified at their current citation
+
+Re-grepped directly rather than re-cited: `update_template` still routes
+through `apply_updates` (SKT-1); all four `assert_different_person(...)`
+call sites (`create_test`, `validate_test`, `void_test`,
+`return_test_for_correction`) still present, each checked against
+`candidate_id` (SKT-2/SKT-3); `lock_attempt_capacity`'s
+`.with_for_update()` and the capacity count's `.with_for_update(of=SkillTest)`
+both still present (SKT-4); zero `is_practice ==` literal comparisons
+remain (SKT2-1); `add_test_viewer` re-read in full — still resolves `test`
+through an org-scoped query (`SkillTest.organization_id ==
+current_user.organization_id`) before granting a viewer, and still behind
+`training.manage` (SKT3-1 unaffected, file unchanged this window). No OPEN
+or FLAGGED item exists as of pass 10 (confirmed by grep before starting
+this pass); none is reopened by this pass's one-file backend diff.
+
+### Findings
+
+**0 new findings.** A small, real delta since pass 10 — a schema-layer
+null-serialization fix and a numeric-bounds sweep, both correctness-only —
+plus cosmetic frontend label-formatting changes in this feature's own two
+files. The six other frontend files the substring search surfaced all
+belong to other features (Apparatus & NFC, Training admin nav, Equipment
+check & shifts), confirmed by reading each diff rather than assumed from
+the import match. Every standing SKT finding re-verified unchanged.
+
+## Completion gate (pass 11)
+
+| Check                                                        | Result                                                                |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/`                         | ✅ 2682 files unchanged                                               |
+| `isort --check-only app/ tests/ alembic/`                    | ✅ clean                                                              |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 658 revisions, single head `1ad0b594f3fb`                          |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13`)      | ✅ 635 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `python3 scripts/check_route_permissions.py --strict` (root) | ✅ 279 routes, 0 errors, 0 warnings                                   |
+| `cd frontend && npm run typecheck`                           | ✅ 0 errors                                                           |
+| `cd frontend && npm run lint`                                | ✅ 0 errors, 0 warnings                                               |

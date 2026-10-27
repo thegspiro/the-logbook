@@ -20,7 +20,7 @@ First off, thank you for considering contributing to the Intranet Platform! It's
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by our [Code of Conduct](../CONTRIBUTING.md#code-of-conduct). By participating, you are expected to uphold this code.
+This project and everyone participating in it is governed by our [Code of Conduct](https://github.com/thegspiro/the-logbook/blob/main/CONTRIBUTING.md#code-of-conduct). By participating, you are expected to uphold this code.
 
 ## How Can I Contribute?
 
@@ -90,7 +90,7 @@ npm run dev
 
 ### Project Structure
 
-See [ARCHITECTURE.md](../ARCHITECTURE.md) for detailed information about the project organization.
+See [ARCHITECTURE.md](https://github.com/thegspiro/the-logbook/blob/main/ARCHITECTURE.md) for detailed information about the project organization.
 
 ## Pull Request Process
 
@@ -102,7 +102,7 @@ See [ARCHITECTURE.md](../ARCHITECTURE.md) for detailed information about the pro
 6. **Squash Commits**: Clean up commit history before merging
 
 `CHANGELOG.md` is closed to new entries — do not add one. See
-[Changelog entries are no longer part of a pull request](../CLAUDE.md#changelog-entries-are-no-longer-part-of-a-pull-request).
+[Changelog entries are no longer part of a pull request](https://github.com/thegspiro/the-logbook/blob/main/CLAUDE.md#changelog-entries-are-no-longer-part-of-a-pull-request).
 
 ### PR Title Format
 

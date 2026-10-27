@@ -219,7 +219,7 @@ member takes effect on their next request.
 the client ID.
 
 The threat model and residual risks are in
-[`docs/security-review/MCPO-27-mcp-oauth-server.md`](../docs/security-review/MCPO-27-mcp-oauth-server.md).
+[`docs/security-review/MCPO-27-mcp-oauth-server.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/security-review/MCPO-27-mcp-oauth-server.md).
 
 ---
 

@@ -18,7 +18,8 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.models.forms import FormCategory, FormStatus
+from app.core.permissions import SENSITIVE_ANSWERS_VIEW
+from app.models.forms import FormCategory, FormStatus, FormSubmission
 from app.models.user import User
 from app.schemas.forms import (  # Form schemas; Field schemas; Submission schemas; Integration schemas; Member lookup; Summary
     FormCreate,
@@ -43,6 +44,48 @@ from app.services.forms_service import FormsService
 from app.utils.contact_visibility import load_contact_policy
 
 router = APIRouter()
+
+
+async def _present_submissions(
+    db: AsyncSession,
+    service: FormsService,
+    current_user: User,
+    form_id: UUID | str,
+    submissions: list[FormSubmission],
+    reveal: bool,
+) -> list[FormSubmissionResponse]:
+    """Build submission responses with sensitive answers revealed or withheld.
+
+    Every submission response goes through here, so a sensitive answer reaches
+    a client only when *reveal* is set — which callers derive from
+    ``sensitive_answers.view`` — and each reveal is audited.
+    """
+    sensitive_ids = await service.sensitive_field_ids(form_id)
+    responses: list[FormSubmissionResponse] = []
+    revealed: list[str] = []
+    for submission in submissions:
+        plain, sensitive = FormsService.partition_answers(submission, sensitive_ids)
+        resp = FormSubmissionResponse.model_validate(submission)
+        resp.data = plain
+        if sensitive:
+            if reveal:
+                resp.sensitive_answers = sensitive
+                revealed.append(str(submission.id))
+            else:
+                resp.sensitive_withheld = True
+        responses.append(resp)
+
+    if revealed:
+        await log_audit_event(
+            db=db,
+            event_type="form_sensitive_answers_viewed",
+            event_category="forms",
+            severity="info",
+            event_data={"form_id": str(form_id), "submission_ids": revealed},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return responses
 
 
 # ============================================
@@ -674,7 +717,12 @@ async def submit_form(
         username=current_user.username,
     )
 
-    return result
+    # The submitter is not shown their own sensitive answers back: the
+    # response is the same shape any viewer gets, and they already have them.
+    (response,) = await _present_submissions(
+        db, service, current_user, result.form_id, [result], reveal=False
+    )
+    return response
 
 
 @router.get("/{form_id}/submissions", response_model=SubmissionsListResponse)
@@ -698,17 +746,22 @@ async def list_submissions(
         limit=pagination.limit,
     )
 
+    enriched = await _present_submissions(
+        db,
+        service,
+        current_user,
+        form_id,
+        submissions,
+        reveal=user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name),
+    )
     # `submitter_name` is only stored for public submissions, where the visitor
     # types it. A signed-in member's name lives on the linked user, and without
     # this the submissions list falls back to rendering the raw submitter UUID.
-    enriched = []
-    for submission in submissions:
-        resp = FormSubmissionResponse.model_validate(submission)
+    for resp, submission in zip(enriched, submissions):
         if not resp.submitter_name and submission.submitter:
             resp.submitter_name = (
                 submission.submitter.display_name or submission.submitter.username
             )
-        enriched.append(resp)
 
     return SubmissionsListResponse(
         submissions=enriched,
@@ -745,7 +798,15 @@ async def get_submission(
             detail="Submission not found",
         )
 
-    return submission
+    (response,) = await _present_submissions(
+        db,
+        service,
+        current_user,
+        submission.form_id,
+        [submission],
+        reveal=user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name),
+    )
+    return response
 
 
 @router.post(
@@ -770,10 +831,10 @@ async def reprocess_submission_integrations(
         organization_id=current_user.organization_id,
     )
 
-    if error:
+    if error or submission is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
+            detail=error or "An unexpected error occurred",
         )
 
     await log_audit_event(
@@ -789,7 +850,15 @@ async def reprocess_submission_integrations(
         username=current_user.username,
     )
 
-    return submission
+    (response,) = await _present_submissions(
+        db,
+        service,
+        current_user,
+        submission.form_id,
+        [submission],
+        reveal=user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name),
+    )
+    return response
 
 
 @router.delete(
