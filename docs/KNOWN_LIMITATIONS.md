@@ -6356,20 +6356,18 @@ public API or add a feature:
 
 Until one is chosen, the fields are harmless to set and useless.
 
-## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16)
+## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16, INT2-3 resolved 2026-10-27)
 
-**INT2-3.** Chat and webhook integrations now refuse to connect without a destination
-URL, but PayPal, Documenso, Cal.com and Salesforce still accept `POST /{id}/connect`
-with an empty config and show _connected_ and _enabled_; `test-connection` then fails
-with "PayPal client ID and secret are required" and its siblings. A two-step "connect,
-then test" is arguable for these because everything but the credential has a default.
-**Owner decision:**
-
-1. **Require the credentials at connect** — a 422 naming the missing field, as the
-   chat integrations now do. Simplest and matches what the badge claims.
-2. **Show an in-between state** — connect succeeds but the health state reads
-   "needs credentials" until a test passes.
-3. **Leave as is** — the failing test result is the signal.
+**INT2-3 — resolved (owner decision: require the credentials at connect).**
+`POST /integrations/{id}/connect` now refuses PayPal without `client_id` and
+`client_secret`, Documenso without `api_token`, Cal.com without `api_key`, and
+Salesforce without `client_id` and `client_secret` (a 400 naming the missing
+fields, as chat integrations already got). A blank value counts as missing, and
+a credential already stored lets a reconnect through. Their config schemas keep
+the credentials optional, because a partial settings update is validated
+against the same schema, so the check is a list by type in the endpoint
+(`_CREDENTIALS_REQUIRED_TO_CONNECT`). Covered by
+`tests/test_integration_connect_required_fields.py`.
 
 **INT2-4.** `ensure_catalog` only inserts rows an organization lacks. A catalog entry
 promoted from `coming_soon` to `available`, demoted, or reworded keeps its seeded values
