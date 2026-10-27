@@ -23,7 +23,7 @@ from typing import (
 )
 
 from loguru import logger
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -183,6 +183,12 @@ AUTO_PURGE_MAX_DAYS = 1095
 # every enabled pipeline has a warning window.
 AUTO_PURGE_WARNING_DAYS = 7
 AUTO_PURGE_WARNING_ACTION = "auto_purge_warning_sent"
+# Coordinators are emailed when the daily sweep marks an application inactive
+# (owner decision, 2026-10-27). The lookback bounds which deactivations a run
+# still reports: wide enough that a failed send is retried for a week, narrow
+# enough that the first run after an upgrade does not mail years of history.
+INACTIVITY_NOTICE_ACTION = "inactivity_notice_sent"
+INACTIVITY_NOTICE_LOOKBACK_DAYS = 7
 
 
 # The detailed duplicate-match message names the existing member and their
@@ -8589,9 +8595,10 @@ class MembershipPipelineService:
         """
         Process inactivity warnings: mark critical prospects as inactive and
         record an ``inactivity_warning_sent`` activity entry for the rest.
-        Nothing is emailed: the pipeline's ``notify_coordinator`` /
-        ``notify_applicant`` settings have no reader yet (see
-        docs/KNOWN_LIMITATIONS.md). Returns count of warnings and actions taken.
+        Coordinators are then emailed about applications the sweep marked
+        inactive, where the pipeline's ``notify_coordinator`` is on (see
+        :meth:`notify_coordinators_of_inactivity`). Nothing is emailed to the
+        applicant. Returns count of warnings and actions taken.
 
         Prior-activity lookups are batched rather than run per prospect: this
         runs over every stale prospect in the organization, so a department
@@ -8600,6 +8607,9 @@ class MembershipPipelineService:
         """
         warnings = await self.check_inactivity(organization_id)
         if not warnings:
+            # Still run: a notice whose send failed on an earlier run is
+            # retried here even when this run deactivates nobody new.
+            await self.notify_coordinators_of_inactivity(organization_id)
             return {"warnings_sent": 0, "marked_inactive": 0, "total_checked": 0}
 
         critical = [w for w in warnings if w["alert_level"] == "critical"]
@@ -8669,11 +8679,174 @@ class MembershipPipelineService:
         if warning_count > 0 or inactive_count > 0:
             await self.db.commit()
 
+        await self.notify_coordinators_of_inactivity(organization_id)
+
         return {
             "warnings_sent": warning_count,
             "marked_inactive": inactive_count,
             "total_checked": len(warnings),
         }
+
+    async def notify_coordinators_of_inactivity(
+        self, organization_id: str, now: Optional[datetime] = None
+    ) -> int:
+        """Email the coordinators about applications the sweep marked inactive.
+
+        Owner decision, 2026-10-27: Pipeline Settings → Inactivity's **Notify
+        coordinator** box is honoured, and nothing goes to the applicant. One
+        digest per department per run. An application is listed once per
+        inactive spell: it qualifies while it is inactive, the sweep's
+        ``marked_inactive_by_system`` entry dates from this spell and from the
+        last ``INACTIVITY_NOTICE_LOOKBACK_DAYS``, and no ``inactivity_notice_sent``
+        entry dates from this spell. A coordinator who deactivated it by hand
+        already knows, so only the sweep's deactivations count.
+
+        A pipeline whose inactivity settings never stored the box counts as on,
+        because the settings screen shows it ticked by default; switching it
+        off is what stops the email. Recipients are the withdrawal notice's
+        (Membership Coordinator / Assistant, else whoever can manage
+        prospective members), filtered by their email preferences.
+
+        Send, then record: nothing is marked as notified unless the email was
+        accepted, so a failed send is retried by the next run (at least once;
+        a crash between the two repeats one digest, which is a nuisance, not
+        harm). Returns how many applications were included in a sent notice.
+        """
+        import html as _html
+
+        now = now or datetime.now(timezone.utc)
+        marked_since = now - timedelta(days=INACTIVITY_NOTICE_LOOKBACK_DAYS)
+        # The sweep stamps inactive_since from the app clock and its entry's
+        # created_at comes from the server's NOW(), in the same instant, both
+        # into whole-second columns. MySQL 8 rounds the stamp's fraction
+        # (MariaDB truncates it), so on MySQL the entry can read a second
+        # before the spell it began. A minute's slack keeps it matched without
+        # reaching back to an earlier spell.
+        marked_this_spell = (
+            select(ProspectActivityLog.id)
+            .where(
+                ProspectActivityLog.prospect_id == ProspectiveMember.id,
+                ProspectActivityLog.action == "marked_inactive_by_system",
+                ProspectActivityLog.created_at
+                >= func.date_sub(
+                    ProspectiveMember.inactive_since, text("INTERVAL 1 MINUTE")
+                ),
+                ProspectActivityLog.created_at >= marked_since,
+            )
+            .exists()
+        )
+        already_notified = (
+            select(ProspectActivityLog.id)
+            .where(
+                ProspectActivityLog.prospect_id == ProspectiveMember.id,
+                ProspectActivityLog.action == INACTIVITY_NOTICE_ACTION,
+                ProspectActivityLog.created_at >= ProspectiveMember.inactive_since,
+            )
+            .exists()
+        )
+        rows = (
+            await self.db.execute(
+                select(
+                    ProspectiveMember.id,
+                    ProspectiveMember.first_name,
+                    ProspectiveMember.last_name,
+                    MembershipPipeline.name,
+                    MembershipPipeline.inactivity_config,
+                )
+                .join(
+                    MembershipPipeline,
+                    MembershipPipeline.id == ProspectiveMember.pipeline_id,
+                )
+                .where(
+                    ProspectiveMember.organization_id == organization_id,
+                    ProspectiveMember.status == ProspectStatus.INACTIVE,
+                    ProspectiveMember.inactive_since.isnot(None),
+                    marked_this_spell,
+                    ~already_notified,
+                )
+                .order_by(MembershipPipeline.name, ProspectiveMember.last_name)
+            )
+        ).all()
+        due = [
+            (str(prospect_id), f"{first or ''} {last or ''}".strip(), pipeline)
+            for prospect_id, first, last, pipeline, config in rows
+            if (config or {}).get("notify_coordinator", True) is not False
+        ]
+        if not due:
+            return 0
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+        ).scalar_one_or_none()
+        if org is None:
+            return 0
+        recipients = recipients_for(
+            await self._withdrawal_notice_recipients(organization_id),
+            EmailKind.MEMBERSHIP_ADMIN,
+            department_required_kinds(org),
+        )
+        if not recipients:
+            logger.warning(
+                "Inactivity notice: {} application(s) in org {} were marked "
+                "inactive and no coordinator can be emailed",
+                len(due),
+                organization_id,
+            )
+            return 0
+
+        from app.core.config import settings as app_settings
+        from app.services.email_service import EmailService, build_email_logo_html
+
+        frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+        queue_url = f"{frontend_url}/prospective-members?status=inactive"
+
+        count = len(due)
+        subject = f"{count} application{'s' if count != 1 else ''} marked inactive"
+        items_html = "".join(
+            f"<li>{_html.escape(name)} ({_html.escape(pipeline)})</li>"
+            for _, name, pipeline in due
+        )
+        items_text = "\n".join(f"- {name} ({pipeline})" for _, name, pipeline in due)
+        explain = (
+            "These applications had no activity for longer than their pipeline "
+            "allows, so they were marked inactive. To pick one up again, "
+            "reactivate it from the inactive applications."
+        )
+        html_body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;">
+{build_email_logo_html(org)}
+<p>{_html.escape(explain)}</p>
+<ul>
+{items_html}
+</ul>
+<p><a href="{_html.escape(queue_url)}">Open the inactive applications</a></p>
+</div>"""
+        text_body = f"{explain}\n\n{items_text}\n\n{queue_url}\n"
+
+        success, _ = await EmailService(org).send_email(
+            to_emails=[u.email for u in recipients],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=self.db,
+        )
+        if not success:
+            logger.warning(
+                "Inactivity notice for org {} was not sent; it will be retried "
+                "on the next run",
+                organization_id,
+            )
+            return 0
+
+        for prospect_id, _, _ in due:
+            await self._log_activity(
+                prospect_id=prospect_id,
+                action=INACTIVITY_NOTICE_ACTION,
+                details={"recipient_count": len(recipients)},
+            )
+        await self.db.commit()
+        return count
 
     async def _prospects_with_action(self, prospect_ids: List[str], action: str) -> set:
         """Which of ``prospect_ids`` already have an activity entry for ``action``."""

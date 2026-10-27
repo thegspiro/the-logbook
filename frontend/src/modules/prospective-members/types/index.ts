@@ -76,7 +76,6 @@ export interface InactivityConfig {
   custom_timeout_days?: number | undefined;
   warning_threshold_percent: number; // default 80 — warn at 80% of timeout
   notify_coordinator: boolean;
-  notify_applicant: boolean;
   auto_purge_enabled: boolean;
   purge_days_after_inactive: number; // days after going inactive before purge
 }
@@ -85,7 +84,6 @@ export const DEFAULT_INACTIVITY_CONFIG: InactivityConfig = {
   timeout_preset: '3_months',
   warning_threshold_percent: 80,
   notify_coordinator: true,
-  notify_applicant: false,
   auto_purge_enabled: false,
   purge_days_after_inactive: 365,
 };

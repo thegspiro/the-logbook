@@ -37,7 +37,13 @@ class QueryCounter:
         self._sync_engine = session.get_bind().engine
         self.count = 0
 
-    def _on_execute(self, *args, **kwargs):
+    def _on_execute(self, conn, cursor, statement, *args, **kwargs):
+        # The db_session fixture runs each test inside a transaction and turns
+        # every commit into a savepoint, opened lazily by the next statement.
+        # Which measured block happens to open one depends on where the last
+        # commit fell, not on the code under test, so they are not counted.
+        if statement.lstrip().upper().startswith(("SAVEPOINT", "RELEASE SAVEPOINT")):
+            return
         self.count += 1
 
     def __enter__(self):
@@ -136,6 +142,22 @@ class TestInactivityProcessingScales:
                 " timezone) VALUES (:id, 'Big', 'fire_department', :slug, 'UTC')"
             ),
             {"id": big_org, "slug": f"b-{big_org[:8]}"},
+        )
+        # The same one admin as the small org: the sweep's coordinator notice
+        # reads the department's members, so the two orgs may differ only in
+        # how many prospects they have.
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, first_name, "
+                "last_name, email, password_hash, status) "
+                "VALUES (:id, :org, :un, 'Admin', 'User', :em, 'hashed', 'active')"
+            ),
+            {
+                "id": _uid(),
+                "org": big_org,
+                "un": f"admin-{big_org[:8]}",
+                "em": f"admin-{big_org[:8]}@test.example",
+            },
         )
         await db_session.flush()
         await _stale_pipeline(svc, db_session, big_org, prospect_count=20)
