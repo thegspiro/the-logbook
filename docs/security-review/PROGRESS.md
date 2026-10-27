@@ -16,8 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR to be recorded once opened** — Feature 23 (Medical supplies), pass 17.
-**Watchdog pickup** — the dedicated `/loop 30m /security-review` session
+**PR [#3766](https://github.com/thegspiro/the-logbook/pull/3766)** (branch
+`claude/security-review-medical-supplies-p17`) —
+Feature 23 (Medical supplies), pass 17. **Watchdog pickup** — the
+dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
 `ListAgents`, no reachable agents). No security-review PR was open —
 confirmed via `search_pull_requests`, 0 matching results, after PR #3765
@@ -25,8 +27,10 @@ confirmed via `search_pull_requests`, 0 matching results, after PR #3765
 supplies) confirmed as the first ⬜ row on a freshly fetched `main` (head
 `fdfa0d83`). **0 fixed, 0 new findings** — see
 `MSUP-23-medical-supplies.md`'s **Pass 17** section for the full review.
-This row is updated with the PR number as the next commit on this same
-branch, per Step 8.
+
+Rotation row 23 → ✅ (pending this PR's merge); next is Feature 24
+(Meetings & minutes) — re-check `search_pull_requests` fresh rather than
+trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 11, PR #3765, merged), preserved for history</summary>
