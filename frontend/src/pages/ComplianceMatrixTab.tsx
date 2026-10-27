@@ -40,33 +40,23 @@ import { EmptyState } from '../components/ux/EmptyState';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import {
   CellTone,
+  MEMBER_CLASS_LABELS,
+  MEMBER_CLASS_ORDER,
   Standing,
   cellFor,
   evaluateMatrix,
+  parseClassFilter,
   rankMembers,
   requirementMeta,
   requirementStanding,
+  requirementsApplyingTo,
   rollUpRequirements,
 } from './training/complianceMatrixModel';
-import type { EvaluatedCell, EvaluatedMember, RequirementRollup } from './training/complianceMatrixModel';
+import type { ClassFilter, EvaluatedCell, EvaluatedMember, RequirementRollup } from './training/complianceMatrixModel';
 import { useTablist } from '../hooks/useTablist';
-import { MemberClass } from '../constants/enums';
 
 type Axis = 'members' | 'requirements';
 type Sort = 'worst' | 'az';
-type ClassFilter = 'all' | MemberClass;
-
-const CLASS_ORDER: readonly MemberClass[] = [MemberClass.OPERATIONAL, MemberClass.ADMINISTRATIVE, MemberClass.SOCIAL];
-
-const CLASS_LABELS: Record<MemberClass, string> = {
-  [MemberClass.OPERATIONAL]: 'Operational',
-  [MemberClass.ADMINISTRATIVE]: 'Administrative',
-  [MemberClass.SOCIAL]: 'Social',
-};
-
-/** An unrecognised `?class=` value falls back to the whole roster. */
-const parseClassFilter = (value: string | null): ClassFilter => CLASS_ORDER.find((c) => c === value) ?? 'all';
-
 /** A rail entry — a member or a requirement, reduced to what the rail draws. */
 interface QueueItem {
   id: string;
@@ -250,33 +240,33 @@ const ComplianceMatrixTab: React.FC = () => {
 
   const allEvaluated = useMemo(() => (matrix ? evaluateMatrix(matrix, tz) : []), [matrix, tz]);
   const allRequirements = useMemo(() => matrix?.requirements ?? [], [matrix]);
-  // A member with no class (a custom tier nobody has classified) is listed
-  // only under "All": guessing a class for them would grade them in a view
-  // they do not belong to.
+  // A member with no class is listed only under "All" (see membersOfClass).
   const evaluated = useMemo(
     () => (classFilter === 'all' ? allEvaluated : allEvaluated.filter((m) => m.member.member_class === classFilter)),
     [allEvaluated, classFilter]
   );
   // Under a class, a requirement that grades nobody in it is noise — an
   // operational requirement in the administrative view is exactly the mix
-  // this filter exists to separate. Whether it applies is the backend's call,
-  // made per member: it is applicable precisely when it appears in their row.
+  // this filter exists to separate.
   const requirements = useMemo(
     () =>
       classFilter === 'all'
         ? allRequirements
-        : allRequirements.filter((r) => evaluated.some((m) => m.cells.some((c) => c.cell.requirement_id === r.id))),
+        : requirementsApplyingTo(
+            evaluated.map((m) => m.member),
+            allRequirements
+          ),
     [allRequirements, classFilter, evaluated]
   );
   const rollups = useMemo(() => rollUpRequirements(evaluated, requirements), [evaluated, requirements]);
   const classesPresent = useMemo(
-    () => CLASS_ORDER.filter((c) => allEvaluated.some((m) => m.member.member_class === c)),
+    () => MEMBER_CLASS_ORDER.filter((c) => allEvaluated.some((m) => m.member.member_class === c)),
     [allEvaluated]
   );
   // A single-class roster has nothing to switch between. A class arriving in
   // the URL keeps the switch visible even if nobody holds it any more, so it
   // can still be cleared.
-  const classOptions = CLASS_ORDER.filter((c) => classesPresent.includes(c) || c === classFilter);
+  const classOptions = MEMBER_CLASS_ORDER.filter((c) => classesPresent.includes(c) || c === classFilter);
   const showClassFilter = classesPresent.length > 1 || classFilter !== 'all';
 
   const groups = useMemo<QueueGroup[]>(() => {
@@ -478,7 +468,8 @@ const ComplianceMatrixTab: React.FC = () => {
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="text-theme-text-primary text-lg font-bold">Compliance</h2>
             <p className="text-theme-text-muted text-sm">
-              {evaluated.length} tracked {classFilter === 'all' ? '' : `${CLASS_LABELS[classFilter].toLowerCase()} `}
+              {evaluated.length} tracked{' '}
+              {classFilter === 'all' ? '' : `${MEMBER_CLASS_LABELS[classFilter].toLowerCase()} `}
               member{evaluated.length === 1 ? '' : 's'} · {requirements.length} requirement
               {requirements.length === 1 ? '' : 's'} · {nonCompliant} non-compliant, {atRisk} at risk
               {notApplicable > 0 ? `, ${notApplicable} not applicable` : ''}
@@ -499,7 +490,7 @@ const ComplianceMatrixTab: React.FC = () => {
                         : 'text-theme-text-muted hover:text-theme-text-primary'
                     }`}
                   >
-                    {value === 'all' ? 'All' : CLASS_LABELS[value]}
+                    {value === 'all' ? 'All' : MEMBER_CLASS_LABELS[value]}
                   </button>
                 ))}
               </div>
@@ -537,7 +528,14 @@ const ComplianceMatrixTab: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={() => window.open('/training/print/compliance', '_blank')}
+              onClick={() =>
+                window.open(
+                  classFilter === 'all'
+                    ? '/training/print/compliance'
+                    : `/training/print/compliance?class=${classFilter}`,
+                  '_blank'
+                )
+              }
               className="btn-secondary btn-sm inline-flex items-center gap-1.5 print:hidden"
             >
               <Printer className="h-4 w-4" aria-hidden="true" />
@@ -721,7 +719,7 @@ const ComplianceMatrixTab: React.FC = () => {
                     onlyBehind
                       ? 'Every tracked member meets their requirements as evaluated. Clear the filter to see the full roster.'
                       : classFilter !== 'all' && evaluated.length === 0
-                        ? `No ${CLASS_LABELS[classFilter].toLowerCase()} members are tracked. Choose All to see the full roster.`
+                        ? `No ${MEMBER_CLASS_LABELS[classFilter].toLowerCase()} members are tracked. Choose All to see the full roster.`
                         : 'No members matched this search.'
                   }
                 />

@@ -684,6 +684,21 @@ describe('ComplianceMatrixTab', () => {
       expect(contents).not.toContain('Doherty, Sean');
     });
 
+    it('prints the selected class', async () => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByText(/4 tracked members/);
+
+      await user.click(screen.getByRole('button', { name: /Print/ }));
+      expect(open).toHaveBeenLastCalledWith('/training/print/compliance', '_blank');
+
+      await user.click(classSwitch().getByRole('button', { name: 'Operational' }));
+      await user.click(screen.getByRole('button', { name: /Print/ }));
+      expect(open).toHaveBeenLastCalledWith('/training/print/compliance?class=operational', '_blank');
+      open.mockRestore();
+    });
+
     it('is not offered when the roster holds a single class', async () => {
       const single = classed();
       single.members = single.members.filter((x) => x.member_class === 'operational');
