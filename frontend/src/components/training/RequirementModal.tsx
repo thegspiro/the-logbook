@@ -34,6 +34,14 @@ const MEMBERSHIP_TYPES = [
 ] as const;
 
 /**
+ * Every membership type an operational-class member is stored under. Mirrors
+ * the operational rows of `_SPLIT` in backend/app/utils/membership.py, which
+ * derives `membership_type` from the member's class and status; `prospective`
+ * is left out because prospects are not member accounts and are never graded.
+ */
+const OPERATIONAL_MEMBERSHIP_TYPES: readonly string[] = ['active', 'probationary', 'life', 'retired'];
+
+/**
  * Full create/edit form for a training requirement.
  *
  * Shared by the Training Admin requirements page and the Training Programs
@@ -122,6 +130,27 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   // the backend ignores — that pairing is what made one-time requirements read
   // as annual.
   const isOneTime = formData.frequency === 'one_time';
+
+  const allOperationalSelected = OPERATIONAL_MEMBERSHIP_TYPES.every((t) =>
+    formData.required_membership_types.includes(t)
+  );
+  // Adds whichever operational types are missing, or clears all four when
+  // they are already ticked; any other category (Administrative, Honorary)
+  // is left as the officer set it.
+  const toggleOperational = () => {
+    setFormData((prev) => {
+      const hasAll = OPERATIONAL_MEMBERSHIP_TYPES.every((t) => prev.required_membership_types.includes(t));
+      return {
+        ...prev,
+        required_membership_types: hasAll
+          ? prev.required_membership_types.filter((t) => !OPERATIONAL_MEMBERSHIP_TYPES.includes(t))
+          : [
+              ...prev.required_membership_types,
+              ...OPERATIONAL_MEMBERSHIP_TYPES.filter((t) => !prev.required_membership_types.includes(t)),
+            ],
+      };
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1038,6 +1067,26 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   <p className="text-theme-text-muted mb-3 text-sm">
                     Select which member categories this requirement applies to.
                   </p>
+                  <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button
+                      type="button"
+                      aria-pressed={allOperationalSelected}
+                      onClick={toggleOperational}
+                      className={`mobile-touch-target inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        allOperationalSelected
+                          ? 'text-theme-text-primary border-red-500 bg-red-500/20'
+                          : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:text-theme-text-primary'
+                      }`}
+                    >
+                      {allOperationalSelected && (
+                        <CheckCircle className="h-4 w-4 text-red-700 dark:text-red-300" aria-hidden="true" />
+                      )}
+                      Operational members
+                    </button>
+                    <span className="text-theme-text-muted text-xs">
+                      Active, Probationary, Life and Retired — every operational member, whatever their status.
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-3" role="group" aria-label="Member categories">
                     {MEMBERSHIP_TYPES.map((memberType) => (
                       <label

@@ -50,6 +50,89 @@ describe('RequirementModal', () => {
     expect(await screen.findByRole('button', { name: 'Create Requirement' })).toBeEnabled();
   });
 
+  describe('operational members shortcut', () => {
+    const scoped = (types: string[]) => existing({ applies_to_all: false, required_membership_types: types });
+
+    const saveAsEveryone = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+    };
+
+    beforeEach(() => {
+      onSave.mockReset();
+      onSave.mockResolvedValue(undefined);
+    });
+
+    it('ticks every operational type and leaves another category as it was', async () => {
+      const user = userEvent.setup();
+      render(
+        <RequirementModal requirement={scoped(['administrative'])} categories={[]} onClose={vi.fn()} onSave={onSave} />
+      );
+
+      const shortcut = screen.getByRole('button', { name: 'Operational members' });
+      expect(shortcut).toHaveAttribute('aria-pressed', 'false');
+      await user.click(shortcut);
+
+      expect(shortcut).toHaveAttribute('aria-pressed', 'true');
+      for (const name of ['Active', 'Probationary', 'Life', 'Retired', 'Administrative']) {
+        expect(screen.getByRole('checkbox', { name })).toBeChecked();
+      }
+      expect(screen.getByRole('checkbox', { name: 'Honorary' })).not.toBeChecked();
+
+      await saveAsEveryone(user);
+      const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
+      expect([...payload.required_membership_types].sort()).toEqual([
+        'active',
+        'administrative',
+        'life',
+        'probationary',
+        'retired',
+      ]);
+    });
+
+    it('fills in the missing types when only some are ticked', async () => {
+      const user = userEvent.setup();
+      render(
+        <RequirementModal requirement={scoped(['active', 'life'])} categories={[]} onClose={vi.fn()} onSave={onSave} />
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Operational members' }));
+
+      await saveAsEveryone(user);
+      const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
+      expect([...payload.required_membership_types].sort()).toEqual(['active', 'life', 'probationary', 'retired']);
+    });
+
+    it('reads as selected when all four are already ticked, and clears only them', async () => {
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={scoped(['active', 'probationary', 'life', 'retired', 'honorary'])}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      const shortcut = screen.getByRole('button', { name: 'Operational members' });
+      expect(shortcut).toHaveAttribute('aria-pressed', 'true');
+      await user.click(shortcut);
+
+      expect(shortcut).toHaveAttribute('aria-pressed', 'false');
+      await saveAsEveryone(user);
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ applies_to_all: false, required_membership_types: ['honorary'] }),
+        true,
+        'req-1'
+      );
+    });
+
+    it('is not offered while the requirement applies to all members', () => {
+      render(<RequirementModal requirement={existing()} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+      expect(screen.queryByRole('button', { name: 'Operational members' })).not.toBeInTheDocument();
+    });
+  });
+
   describe('shift credit', () => {
     it('leaves a new hours requirement off the shift report unless ticked', async () => {
       onSave.mockResolvedValue(undefined);
