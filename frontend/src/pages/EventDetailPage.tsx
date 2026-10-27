@@ -266,9 +266,17 @@ export const EventDetailPage: React.FC = () => {
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const reminderMenuRef = useRef<HTMLDivElement>(null);
 
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user: currentUser } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
+  // The attendance tools (roster, add, check in, remove) also reach
+  // training.manage on a Training event and the event's own organizer pair.
+  // The server decides who (CLAUDE.md #29); events.manage is read locally too
+  // so a manager's roster still loads without waiting for the event.
+  const canManageAttendance = canManage || Boolean(event?.attendance_access);
+  const canCorrectAttendanceTimes = canManage || Boolean(event?.can_correct_attendance_times);
+  // An organizer admitted on the event alone may not write their own row.
+  const readOnlyAttendeeId = event?.attendance_access === 'organizer' ? currentUser?.id : undefined;
   // Card taps are shown to event managers; the integration only decides
   // whether an event with none yet still gets an (empty) section.
   const { isConnected: isIntegrationConnected } = useConnectedIntegrations({ enabled: canManage });
@@ -288,7 +296,7 @@ export const EventDetailPage: React.FC = () => {
     event,
     onSuccess: async () => {
       await fetchEvent();
-      if (canManage) {
+      if (canManageAttendance) {
         await fetchRSVPs();
         await fetchStats();
       } else if (event?.can_view_attendees) {
@@ -327,25 +335,31 @@ export const EventDetailPage: React.FC = () => {
     if (eventId) {
       void fetchEvent();
       void fetchLinkedElections();
-      if (canManage) {
-        void fetchRSVPs();
-        void fetchStats();
-        void fetchRSVPHistory();
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, canManage]);
+  }, [eventId]);
+
+  // Separate from the event fetch: an organizer's access is only known once
+  // the event arrives, and refetching the event when it does would loop.
+  useEffect(() => {
+    if (eventId && canManageAttendance) {
+      void fetchRSVPs();
+      void fetchStats();
+      void fetchRSVPHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, canManageAttendance]);
 
   // The one roster an ordinary member can see, asked for only once the event
   // says it will answer: requesting it regardless took a 403, logged twice,
   // on every visit to an event whose roster is not shared with members.
   const canViewAttendees = Boolean(event?.can_view_attendees);
   useEffect(() => {
-    if (eventId && !canManage && canViewAttendees) {
+    if (eventId && !canManageAttendance && canViewAttendees) {
       void fetchAttendees();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, canManage, canViewAttendees]);
+  }, [eventId, canManageAttendance, canViewAttendees]);
 
   const fetchEvent = async () => {
     if (!eventId) return;
@@ -501,7 +515,9 @@ export const EventDetailPage: React.FC = () => {
 
     try {
       const data = await eventService.getEligibleMembers(eventId);
-      setEligibleMembers(data);
+      // An organizer cannot check themselves in from here (the API refuses),
+      // so they are not offered to themselves, nor swept up by "add all".
+      setEligibleMembers(readOnlyAttendeeId ? data.filter((m) => m.id !== readOnlyAttendeeId) : data);
     } catch {
       toast.error('Failed to load eligible members');
     }
@@ -958,6 +974,16 @@ export const EventDetailPage: React.FC = () => {
   // the page only decides whether to ask.
   const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
   const canReviewAttendancePetitions = canManageOrganizers;
+  const checkInMembersButton =
+    canManageAttendance && !isAttendanceFinalized ? (
+      <button
+        onClick={openCheckInModal}
+        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
+      >
+        <ClipboardCheck className="mr-2 h-5 w-5" aria-hidden="true" />
+        Check In
+      </button>
+    ) : null;
 
   // RSVP deadline countdown
   const rsvpCountdown = (() => {
@@ -1153,6 +1179,11 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                 )}
 
+                {/* An organizer or training manager without events.manage gets
+                    the attendance tools but none of the event's other
+                    controls, so the button stands on its own for them. */}
+                {!canManage && checkInMembersButton}
+
                 {canManage && (
                   <>
                     {/* Kept when finalized: the API still accepts descriptive
@@ -1167,15 +1198,7 @@ export const EventDetailPage: React.FC = () => {
                       <Pencil className="mr-2 h-5 w-5" aria-hidden="true" />
                       Edit
                     </button>
-                    {!isAttendanceFinalized && (
-                      <button
-                        onClick={openCheckInModal}
-                        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
-                      >
-                        <ClipboardCheck className="mr-2 h-5 w-5" aria-hidden="true" />
-                        Check In
-                      </button>
-                    )}
+                    {checkInMembersButton}
 
                     {/* Send Reminders dropdown */}
                     {!event.is_cancelled && !isAttendanceFinalized && (
@@ -1614,7 +1637,7 @@ export const EventDetailPage: React.FC = () => {
                 timezone={tz}
                 onApproved={() => {
                   void fetchAttendees();
-                  if (canManage) {
+                  if (canManageAttendance) {
                     void fetchRSVPs();
                     void fetchStats();
                   }
@@ -1746,8 +1769,8 @@ export const EventDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* RSVPs List & RSVP Activity (for managers) */}
-            {canManage && (
+            {/* RSVPs List & RSVP Activity (for whoever runs attendance) */}
+            {canManageAttendance && (
               <EventRSVPSection
                 rsvps={rsvps}
                 rsvpHistory={rsvpHistory}
@@ -1764,6 +1787,8 @@ export const EventDetailPage: React.FC = () => {
                 onPrintRoster={printRoster}
                 onExportCSV={exportAttendanceCSV}
                 attendanceFinalized={isAttendanceFinalized}
+                canCorrectTimes={canCorrectAttendanceTimes}
+                readOnlyUserId={readOnlyAttendeeId}
               />
             )}
             {canManage && eventId && (
@@ -1779,7 +1804,7 @@ export const EventDetailPage: React.FC = () => {
                 entirely when the API returned nothing, which is also what a
                 403 looks like — a member who may not see the list is not told
                 there is a list. */}
-            {!canManage && !attendeesFailed && attendees.length > 0 && (
+            {!canManageAttendance && !attendeesFailed && attendees.length > 0 && (
               <EventAttendeesCard
                 attendees={attendees}
                 loading={attendeesLoading}

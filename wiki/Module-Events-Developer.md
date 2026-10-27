@@ -64,7 +64,7 @@ POST   /events/{id}/publish                      # Publish a draft (manage)
 POST   /events/{id}/duplicate                    # Duplicate (manage)
 POST   /events/{id}/cancel                       # Cancel (manage)
 POST   /events/{id}/transfer                     # New organizer/alternate; scope "this" | "future"
-GET    /events/{id}/stats                        # Event stats (manage)
+GET    /events/{id}/stats                        # Event stats (attendance access, below)
 GET    /events/{id}/folder                       # Event document folder (events.view)
 ```
 
@@ -89,18 +89,36 @@ POST   /events/{id}/rsvp-series                  # RSVP to all future occurrence
 
 ```
 POST   /events/{id}/rsvp                         # Create/update own RSVP
-GET    /events/{id}/rsvps                        # Full roster with details (manage)
+GET    /events/{id}/rsvps                        # Full roster with details (attendance access)
 GET    /events/{id}/attendees                    # Going-only names (events.view or manage; per visibility)
-GET    /events/{id}/rsvp-history                 # RSVP activity (manage)
-GET    /events/{id}/eligible-members             # Active members for manual check-in (manage)
-POST   /events/{id}/add-attendee                 # Add attendee (manage)
-POST   /events/{id}/bulk-add-attendees           # Bulk add (manage)
-PATCH  /events/{id}/rsvps/{user_id}/override     # Edit Times override (manage)
-DELETE /events/{id}/rsvps/{user_id}              # Remove attendee (manage)
+GET    /events/{id}/rsvp-history                 # RSVP activity (attendance access)
+GET    /events/{id}/eligible-members             # Active members for manual check-in (attendance access)
+POST   /events/{id}/add-attendee                 # Add attendee (attendance access)
+POST   /events/{id}/bulk-add-attendees           # Bulk add (attendance access)
+PATCH  /events/{id}/rsvps/{user_id}/override     # Edit Times override (attendance access; not an organizer on Training)
+DELETE /events/{id}/rsvps/{user_id}              # Remove attendee (attendance access)
 POST   /events/{id}/promote-waitlist             # Promote from waitlist (manage)
 POST   /events/{id}/send-reminders               # Non-respondent reminders (manage)
 POST   /events/{id}/notify                       # Targeted notification (manage)
 ```
+
+**Attendance access.** The roster routes above, and `POST /events/{id}/check-in`,
+admit more than `events.manage`. `_authorize_attendance_manager` in
+`endpoints/events.py` lets in:
+
+| Caller                             | Events          | Limits                                                         |
+| ---------------------------------- | --------------- | -------------------------------------------------------------- |
+| `events.manage`                    | any             | none — admitted before the event is read, as before            |
+| `training.manage`                  | Training events | none                                                           |
+| the event's organizer or alternate | their own       | not their own row; on a Training event, no Edit Times override |
+
+Anyone else gets `403`, and an event outside the caller's organization `404`.
+Writes record `acting_as` (`events_manager` / `training_manager` /
+`organizer`) in the audit event. Off the `events.manage` path, `user_email` on
+`GET /events/{id}/rsvps` follows the member contact policy, as
+`eligible-members` does. `GET /events/{id}` reports the caller's standing as
+`attendance_access` and `can_correct_attendance_times`, which the detail page
+reads instead of re-deriving them.
 
 **Training-phase gate.** `POST /events/{id}/rsvp`,
 `POST /events/{id}/rsvp-series` and `POST /events/{id}/self-check-in` take
@@ -120,7 +138,7 @@ null.
 ```
 GET    /events/{id}/qr-check-in-data             # QR / self check-in payload (authenticated; carries the caller's own check-in and check-out times)
 POST   /events/{id}/self-check-in                # Member self check-in / check-out
-POST   /events/{id}/check-in                     # Manager checks a member in (manage)
+POST   /events/{id}/check-in                     # Checks a member in (attendance access)
 GET    /events/{id}/check-in-monitoring          # Live monitoring (manage)
 POST   /events/{id}/record-times                 # Record actual start/end (manage)
 POST   /events/{id}/end-event                    # End now + bulk checkout + finalize durations (manage)

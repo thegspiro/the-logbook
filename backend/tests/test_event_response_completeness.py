@@ -70,6 +70,11 @@ CALLER_SUPPLIED = {
     "organizer_name",
     "alternate_organizer_name",
     "can_manage_organizers",
+    # The attendance tools are decided by the same per-caller rule (events.manage,
+    # training.manage on a Training event, or the organizer pair) on the
+    # detail endpoint; False is the honest default everywhere else.
+    "attendance_access",
+    "can_correct_attendance_times",
     # The rest of the list card's derived fields, per caller: whether this
     # member checked in (their own RSVP row), what the event would credit (the
     # org's hour mappings) and whether the attendee list will answer them (the
