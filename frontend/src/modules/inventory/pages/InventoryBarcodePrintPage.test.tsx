@@ -468,6 +468,17 @@ describe('InventoryBarcodePrintPage', () => {
     expect(mockGenerateLabels.mock.calls[0]?.[0]).toEqual(['it-1']);
   });
 
+  it('prints a long name on up to two lines in a sans-serif font', async () => {
+    const longName = 'Golf Shirt — XXL — Unisex Short Sleeve Polo';
+    mockGetItem.mockResolvedValue(makeItem({ name: longName }));
+    renderPage('?ids=it-1');
+
+    const name = await screen.findByText(longName, { selector: '.barcode-label > div' });
+    expect(name.style.webkitLineClamp).toBe('2');
+    expect(name.style.whiteSpace).not.toBe('nowrap');
+    expect(name.parentElement?.style.fontFamily).toMatch(/^Arial/);
+  });
+
   describe('QR codes', () => {
     beforeEach(() => {
       mockGetLabelPreset.mockReset();
