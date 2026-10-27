@@ -25,10 +25,21 @@ dedicated `/loop 30m /security-review` session
 minutes, pass 10) was found open, green on every check, and merged by this
 same watchdog run. `search_pull_requests` returned 0 immediately after.
 Row 25 confirmed the next `⬜` row on a freshly fetched `main` (head
-`d975bc61`). **0 fixed, 0 new findings** — real delta since pass 9 is five
-commits (SMTP batch quota/retry hardening, Gmail delegated service-account
-sending, pipeline linked-template stage email), all landed by other
-sessions and independently re-verified here. See
+`d975bc61`). **1 new finding, fixed** — real delta since pass 9 is five
+backend commits (SMTP batch quota/retry hardening, Gmail delegated
+service-account sending, pipeline linked-template stage email) plus two
+frontend-only commits caught in a follow-up re-read of this same pass
+before merge (Rules-screen Edit/Delete, a template-list regrouping), all
+landed by other sessions and independently re-verified here. The Gmail
+service-account review found **MSG-17** (MEDIUM): `google_oauth.py`'s
+`parse_service_account_key` never validated that a submitted key's
+`token_uri` was Google's own token endpoint, so an org admin could point it
+at an internal address and the backend would POST a signed JWT there on
+every send or connection test — the same SSRF shape `microsoft_oauth.py`'s
+sibling module already guards against for its own `tenant_id`. Fixed by
+rejecting any `token_uri` other than `https://oauth2.googleapis.com/token`
+at the one choke point every caller already goes through; guard test
+added, verified to fail against the pre-fix code. See
 `MSG-25-messaging-notifications.md`'s **Pass 10** section for the full
 review.
 
@@ -22304,7 +22315,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-10-27 — Feature 25 (Messaging & notifications, pass 10) — watchdog pickup, real delta (Gmail delegated sending + SMTP batch hardening), 0 new findings
+### 2026-10-27 — Feature 25 (Messaging & notifications, pass 10) — watchdog pickup, real delta (Gmail delegated sending + SMTP batch hardening), 1 new finding fixed
 
 Watchdog pickup for `/loop 30m /security-review`: the dedicated session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents` returned
@@ -22342,8 +22353,30 @@ sends its linked custom template, with every value placed into the new
 whole appendix substituted as a single pre-escaped template variable so a
 custom section's own `{{...}}` text can never be re-expanded. No route
 added, removed, or re-gated in this feature's four declared endpoint
-files — re-enumerated by AST at 51, unchanged since pass 5. Standing
-findings (MSG-3, MAIL-4, `email_service.py` F4, the
+files — re-enumerated by AST at 51, unchanged since pass 5.
+
+**MSG-17 — MEDIUM — FIXED.** `google_oauth.py`'s `parse_service_account_key`
+checked every field of a submitted service-account key except `token_uri`,
+which `Credentials.refresh()` POSTs the signed JWT assertion to — so an org
+admin could point it at an internal address and the backend would POST
+there on every send or "Test connection" click, the same SSRF shape
+`microsoft_oauth.py`'s sibling module already guards against for its own
+`tenant_id`. Every real Google-issued key has `token_uri` fixed at
+`https://oauth2.googleapis.com/token`, so no legitimate value needed
+allowing. Fixed by rejecting any other value at that one choke point;
+guard test added (`test_rejects_a_token_uri_pointed_elsewhere`), verified
+to fail against the pre-fix code and pass with it.
+
+Two frontend-only commits, caught by a follow-up re-read against this
+feature's frontend scope (a backend-file-only `git log` the first time
+through does not surface a frontend-only commit) before this pass's PR
+merged: `NotificationsPage.tsx` gained Edit/Delete on the Rules screen —
+`notifications.manage`-gated to match the backend, `useConfirm()` (no
+`window.confirm`), `blankToNull` on the update payload (Pitfall #1) — and
+`TemplateList.tsx` gained a cosmetic "Prospective Members" category, no
+security surface.
+
+Standing findings (MSG-3, MAIL-4, `email_service.py` F4, the
 `NotificationRuleCreate`/`Update.config` unbounded-JSON note) all
 re-confirmed open/unchanged. Migration `08e6220f2dce` (widens
 `EmailTemplateType` by two values, no row writes) was one of three
@@ -22359,7 +22392,7 @@ tests/ alembic/` all clean; `validate_migrations.py --strict` — 663
 revisions, single head `c616fa1bd492`; `check_route_permissions.py
 --strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
 "message or notification or email_template or smtp_batch or gmail or
-google_oauth or pipeline_stage_email"`) — 1,239 passed, 1 pre-existing skip
+google_oauth or pipeline_stage_email"`) — 1,240 passed, 1 pre-existing skip
 (`pywebpush`); frontend `npm run typecheck`/`npm run lint` — 0 errors, 0
 warnings (after `npm ci` from the repo root — sandbox `node_modules`
 predated the `@simplewebauthn/browser` passkeys dependency; environment

@@ -2346,7 +2346,7 @@ No source file was changed by this pass — every behavioral delta since
 pass 8 was landed by other, non-rotation work and independently
 re-verified here against all seven `CHECKLIST.md` dimensions.
 
-## Pass 10 (2026-10-27) — watchdog pickup, real delta (Gmail delegated sending + SMTP batch hardening), 0 new findings
+## Pass 10 (2026-10-27) — watchdog pickup, real delta (Gmail delegated sending + SMTP batch hardening), 1 new finding fixed
 
 Scheduled watchdog check-in (dedicated `/loop 30m /security-review` session
 `session_011T1ZyyLrD5HagusgK9uDw2` unreachable via `ListAgents`). PR #3767
@@ -2403,6 +2403,44 @@ full:
     120 s default, so an unreachable token endpoint cannot hold a worker
     thread that long per message; a key that fails to parse raises through
     a message that never echoes key material.
+  - **MSG-17 — MEDIUM — FIXED, found in this same pass's own re-reading of
+    this bullet's file.** `parse_service_account_key` validated that
+    `token_uri` was present and non-empty, but never that it was Google's
+    own token endpoint. `google.oauth2.service_account.Credentials
+.refresh()` POSTs the signed JWT assertion to exactly the URL the parsed
+    key names — so an org admin (the only caller who can reach this, via
+    the `settings.manage`/`admin.access`-gated email-settings save/test
+    endpoints described in the next two bullets) could submit a key with
+    `token_uri` pointed at an internal address (cloud metadata, an
+    internal admin API) and the backend would POST to it on every send or
+    "Test connection" click. This is a different URL than the "Fixed
+    Google endpoint URL (no SSRF surface)" the `gmail_api_sender.py` bullet
+    below correctly describes — that one is the fixed send endpoint; this
+    one is the _token_ endpoint, read from the submitted key itself, and it
+    had no equivalent fixed-value check. It is the same SSRF shape
+    `microsoft_oauth.py`'s sibling module already guards against for its
+    own interpolated `tenant_id` (`validate_tenant_id`'s GUID/domain regex,
+    with the comment "a value carrying a slash or an @ would redirect the
+    token request to a host the department never named") — this module
+    simply never added the equivalent check for its own admin-controlled
+    URL field. Every real Google Cloud service-account key has `token_uri`
+    fixed at `https://oauth2.googleapis.com/token`, so there is no
+    legitimate value to allow other than that one — unlike `smtp_host`
+    (F4, below), where a department may legitimately want an internal
+    relay. **Fixed** by rejecting any `token_uri` other than Google's own
+    endpoint in `parse_service_account_key` — the single choke point every
+    caller (write-time validation, the client-id shown on every settings
+    read, and send/test-time token acquisition) already goes through, so
+    one change closes it everywhere with no other call site to update, and
+    no behavior change for any legitimate key. Guard test added:
+    `tests/test_google_oauth.py::TestParseKey::
+test_rejects_a_token_uri_pointed_elsewhere` (submits a key with `token_uri`
+    pointed at `169.254.169.254`, the common cloud-metadata address, and
+    asserts `GoogleOAuthError`) — verified to fail against the pre-fix code
+    (reproduced by reverting just this check and re-running the test: `DID
+NOT RAISE GoogleOAuthError`) and to pass with the fix restored,
+    alongside the rest of `test_google_oauth.py` (19/19, up from 18) and
+    `test_gmail_api_sender.py` (unaffected, still 23/23).
   - The new `google_service_account_key` settings field was added to the
     pre-existing `EMAIL_SECRET_FIELDS` tuple in `email_providers.py`
     (alongside `smtp_password`/`google_app_password`, which already rode
@@ -2477,9 +2515,40 @@ email`, never trusted from the client — while every other
   `test_prospect_email_templates.py`, 196 lines) exercise the fallback
   paths and the escaping.
 
-**0 new findings.** None of the five commits add a route, change a
-permission string on this feature's own four endpoint files, or touch
-SMS/CSV/LIKE-pattern code in this feature's scope.
+**One new finding (MSG-17, above), fixed.** None of the five commits add a
+route, change a permission string on this feature's own four endpoint
+files, or touch SMS/CSV/LIKE-pattern code in this feature's scope.
+
+### Frontend — two commits since pass 9, both reviewed
+
+Missed by this pass's first pushed revision (caught and added before merge,
+since the backend-only `git log` restricted to this feature's pass-1-scoped
+_backend_ files does not surface a frontend-only commit): `git log
+5fc3f60c..HEAD` against `modules/communications`, `modules/notifications`,
+`pages/NotificationsPage.tsx`, `hooks/usePushNotifications.ts`,
+`components/NotificationCard.tsx`, and `services/communicationsServices.ts`
+surfaces two real commits, both read in full.
+
+- **`NotificationsPage.tsx` gained Edit and Delete on the Rules screen**
+  (`bd15c709`) — PATCH and DELETE already existed; the screen could only
+  create and toggle. Both actions are gated on `canManage` =
+  `checkPermission('notifications.manage')`, matching the backend's
+  `update_rule`/`delete_rule` permission exactly (re-confirmed at
+  `notifications.py:111-134`, unchanged). Delete goes through `useConfirm()`
+  — no `window.confirm` (Pitfall #16) — with a warning naming the concrete
+  effect (a trigger's notifications switching on or off department-wide)
+  when the rule being removed or re-pointed is the one keeping a trigger's
+  default behavior from applying; that effect is computed client-side
+  (`effectOfRemoving`/`triggerSends`) purely for the confirmation copy, not
+  trusted for anything the backend decides. The edit payload sends a
+  cleared description as an explicit `null` via `blankToNull` (Pitfall #1,
+  update side — every field the dialog owns is sent, matching the backend's
+  `exclude_unset`/`apply_updates` contract already re-verified at MSG-5).
+- **`TemplateList.tsx` gained a "Prospective Members" category**
+  (`e004da9a`) — three existing template-type ids moved from the "Members &
+  Accounts" group into a new group label. Pure UI regrouping of an existing,
+  already-permission-gated list; no new data reaches the screen and no
+  security surface.
 
 ### Re-swept, unchanged since pass 9
 
@@ -2518,13 +2587,15 @@ including the three-way fork-and-merge noted above.
 
 ## Guard tests added (pass 10)
 
-None added — no new finding. The five commits' own new test files
-(`test_smtp_batch_send.py`'s additions,
-`test_pipeline_stage_email_template.py`,
+- `tests/test_google_oauth.py::TestParseKey::test_rejects_a_token_uri_pointed_elsewhere`
+  (MSG-17) — the one test this pass added itself. Verified to fail against
+  the pre-fix code and pass with it.
+
+The five reviewed commits' own new test files (`test_smtp_batch_send.py`'s
+additions, `test_pipeline_stage_email_template.py`,
 `test_prospect_email_templates.py`) and the pre-existing
-`test_gmail_api_sender.py`, `test_google_oauth.py`,
-`test_gmail_service_account_settings.py` were exercised by this pass's
-scoped test run below and confirmed passing.
+`test_gmail_api_sender.py`, `test_gmail_service_account_settings.py` were
+exercised by this pass's scoped test run below and confirmed passing.
 
 ## Completion gate (pass 10)
 
@@ -2535,12 +2606,13 @@ scoped test run below and confirmed passing.
 | `isort --check-only app/ tests/ alembic/`                                                                                                               | clean                                                    |
 | `python3 scripts/validate_migrations.py --strict`                                                                                                       | PASSED — 663 revisions, single head `c616fa1bd492`       |
 | `python3 scripts/check_route_permissions.py --strict`                                                                                                   | 279 routes, 0 errors, 0 warnings                         |
-| Backend tests, scope (`-k "message or notification or email_template or smtp_batch or gmail or google_oauth or pipeline_stage_email"`)                  | 1,239 passed, 1 skipped (environment-only — `pywebpush`) |
+| Backend tests, scope (`-k "message or notification or email_template or smtp_batch or gmail or google_oauth or pipeline_stage_email"`)                  | 1,240 passed, 1 skipped (environment-only — `pywebpush`) |
 | `cd frontend && npm run typecheck` (after `npm ci` from the repo root — sandbox predated `@simplewebauthn/browser`; environment gap, not a code defect) | 0 errors                                                 |
 | `cd frontend && npm run lint` (`eslint --max-warnings 10`)                                                                                              | clean, exit 0                                            |
 | Scoped frontend suite (`src/modules/prospective-members`, 35 files)                                                                                     | 316 passed                                               |
 | Scoped frontend suite (`src/modules/communications`, 37 files)                                                                                          | 271 passed                                               |
 
-No source file was changed by this pass — every behavioral delta since
-pass 9 was landed by other, non-rotation work and independently
-re-verified here against all seven `CHECKLIST.md` dimensions.
+One source file was changed by this pass: `app/utils/google_oauth.py`
+(MSG-17's fix, 10 lines). Every other behavioral delta since pass 9 was
+landed by other, non-rotation work and is reviewed/recorded, not authored,
+here.
