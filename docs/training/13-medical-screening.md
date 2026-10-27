@@ -445,7 +445,11 @@ prospect:
 2. **Check the expiration date** against today's date in your department's
    time zone (set under **Organization Settings → Profile**):
    - Expiration date is today or later: **met**.
-   - No expiration date: **met** for good.
+   - No expiration date: the record falls due by **frequency**, that many
+     months after its **Completed Date**. The frequency is the one on the
+     requirement the record is linked to, or else on the requirement it is
+     graded against. With no frequency (a one-time requirement) or no Completed
+     Date, it is **met** for good.
    - Expiration date has passed: **not met**.
 3. **No qualifying record:** **not met**.
 
@@ -461,7 +465,8 @@ part. See [Grace Period](#grace-period).
 | A Passed record, then a newer Failed one      | The Failed one is ignored. The Passed one counts until it expires      |
 | A qualifying record has no Completed Date     | It is treated as the oldest, so any dated record of the same type wins |
 | A requirement is not Active                   | It is left out of compliance completely                                |
-| A Waived record with no expiration date       | Met for good                                                           |
+| A record with no expiration date              | Due by the requirement's frequency; met for good if it has none        |
+| A Waived record with no expiration date       | The same: due by frequency, or met for good                            |
 | A Waived record with an expiration date       | Met until that date                                                    |
 | The screening expires today                   | Still met, and counted as expiring soon                                |
 
@@ -473,7 +478,8 @@ person. It shows:
 - "_n_ of _m_ requirements met", with how many are not met and how many expire
   soon.
 - Each requirement, with the screening type, the status and date of the record
-  it is graded on, and its expiry.
+  it is graded on, and its expiry. A date worked out from the frequency reads
+  "due _date_ (by frequency)" rather than "expires _date_".
 - A verdict for each: **Met**, **Expires in _n_ days**, **Expires today**,
   **Expired** or **No qualifying record**. "Expires in" shows for anything due
   within 30 days.
@@ -492,7 +498,11 @@ so you can book renewals early.
 ### Viewing Expiring Screenings
 
 Each entry shows the person, the screening type and linked requirement, the
-days left and the expiration date. The soonest is at the top.
+days left and the expiration date. The soonest is at the top. A waiver about
+to run out is listed too, with a **Waived** badge, because renewing it is
+different work from booking a screening. A record with no expiration date of
+its own is listed when it falls due by frequency, and reads "Due _date_ (by
+frequency)" instead of "Expires _date_".
 
 | Icon and colour | When            |
 | --------------- | --------------- |
@@ -509,8 +519,7 @@ When nothing is due, it reads _"No screenings expire in the next 60 days."_
 | Record                                   | Why                                                |
 | ---------------------------------------- | -------------------------------------------------- |
 | Already expired                          | It shows as not met in the compliance list instead |
-| No expiration date                       | One-time screenings never expire                   |
-| Status Waived                            | Only Passed and Completed records are listed       |
+| No expiration date and no frequency      | One-time screenings never expire                   |
 | Status Scheduled, Pending Review, Failed | They do not count toward compliance either         |
 
 ---
@@ -740,9 +749,9 @@ everyone expiring in September.
 | A member shows not compliant inside the grace period  | Expected. The grace period is saved but not applied. See [Grace Period](#grace-period)                                                                                     |
 | A member is not graded on a requirement               | Check the requirement's **Applies to Positions**: it applies only to members who hold one of the positions listed. See [Role-Based Requirements](#role-based-requirements) |
 | The counts do not match your own count                | Check which requirements are **Active**. A member is graded only on the active requirements that apply to their positions; prospects are graded on all of them             |
-| The expiring list is empty                            | Nothing Passed or Completed expires in the next 60 days                                                                                                                    |
+| The expiring list is empty                            | Nothing Passed, Completed or Waived expires or falls due in the next 60 days                                                                                               |
 | A record still says Passed after it expired           | Expected. The status does not change by itself. Add a new record with the new result and expiration date                                                                   |
-| A drug screening counts as compliant for ever         | Expected for a one-time requirement with no expiration date. To require re-testing, set a frequency and enter expiration dates                                             |
+| A drug screening counts as compliant for ever         | Expected for a one-time requirement with no expiration date. To require re-testing, give the requirement a frequency                                                       |
 | A new member's prospect screenings do not count       | Expected. Prospect records do not move to the member. Record them again against the member                                                                                 |
 | The Add Record button stays grey                      | Choose **Member** or **Prospect** and pick a person first                                                                                                                  |
 | A row reads **Not linked to a member or prospect**    | Re-enter the record for the right person, then delete the unlinked one                                                                                                     |
@@ -774,6 +783,13 @@ If you are following older notes or an SOP, these things work differently.
   **Delete Record**.
 - **Expiry follows your department's date.** A screening no longer reads as
   expired a few hours early in the evening.
+- **A record with no expiration date now falls due by frequency.** It used to
+  count as met for good, whatever the requirement's frequency. It now falls
+  due that many months after its Completed Date, so a member whose only such
+  record is older than the frequency now reads not compliant. Add a new record
+  when they are screened again.
+- **Waivers about to run out are listed.** The expiring list used to leave
+  waived records out, even though the count above the tabs included them.
 
 ---
 

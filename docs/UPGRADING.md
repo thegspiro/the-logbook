@@ -553,6 +553,28 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A screening record with no expiration date now falls due by its frequency (2026-10-25)
+
+Medical screening used to count a Passed, Completed or Waived record saved
+**without** an expiration date as met for good. It now falls due that many
+months after its **Completed Date**, using the frequency of the requirement
+the record is linked to (or, when it is linked to none, of the requirement it
+is graded against). Nothing in the database changes, but **members can change
+standing the moment you upgrade**: an annual physical recorded two years ago
+with no expiration date now reads as overdue, and one due soon appears on the
+**Compliance** tab's expiring list as "Due … (by frequency)".
+
+- A record with its own expiration date is unaffected; that date still wins.
+- A one-time requirement (no frequency) and a record with no completed date
+  are still met for good.
+- To see who is affected before members notice, open **Medical Screening →
+  Compliance** after upgrading: filter the roster to **Not compliant**, and
+  check **Screenings Expiring Within 60 Days**.
+  Adding the real expiration date to a record overrides the calculated one.
+
+See [Medical Screening](training/13-medical-screening.md) for how the date is
+worked out.
+
 ### Gmail can send through a Google Workspace service account (2026-10-25)
 
 Gmail departments can now send through the Gmail API with a domain-wide

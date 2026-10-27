@@ -14,6 +14,22 @@ Rows are **Open**; nothing was re-recorded.
 | **04**, **07**                     | Administration hubs         | Flat row of section cards                                | Area cards above a page strip (Events, Members, Store)                              |
 | **Any recruitment beat**           | Applicant status page       | No meeting shown                                         | Next meeting with Add to calendar and directions                                    |
 
+## Flagged by the 2026-10-25 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+Beats the 10-25 → 10-26 section above already flags (form embedding, the
+applicant's next meeting) are not repeated.
+
+| Script                              | Beat                                 | Was                            | Now                                                                                                           |
+| ----------------------------------- | ------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Any events beat**, **04** (chief) | Guest sign-in at a recruitment event | Typed name and contact details | Applicant enters their email and confirms; others are sent to staff, who use **Add guest** on the Guests card |
+| **Any notifications beat**          | Rules list                           | Create and switch only         | Rules can be edited and deleted; a warning says what changes                                                  |
+| **Any prospective-members beat**    | Automated-email stage                | Email used the saved event     | The email falls back to the next event, and the editor says which                                             |
+| **Any medical-screening beat**      | Record with no expiration date       | Compliant for good             | Falls due by the requirement's frequency; shown as "Due … (by frequency)"                                     |
+| **Any grants beat**                 | Opportunities library                | Add only                       | Edit, retire, **Show retired**, **Reinstate**                                                                 |
+| **Any scheduling beat on a tablet** | Day panel                            | Beside the calendar            | Below the calendar under 1280px                                                                               |
+
 ## Flagged by the 2026-10-24 → 10-25 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).

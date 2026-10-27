@@ -269,13 +269,13 @@ discovers at pickup.
 
 ### Recording money
 
-| Action         | Endpoint                            | Effect                                                                |
-| -------------- | ----------------------------------- | --------------------------------------------------------------------- |
-| Mark paid      | `POST /store/orders/{id}/mark-paid` | Settles the whole remaining balance, reading the amount off the order |
-| Record payment | `POST /store/orders/{id}/payments`  | Records a specific amount (partial payments)                          |
-| Waive          | `POST /store/orders/{id}/waive`     | Clears the balance without money changing hands                       |
-| Refund         | `POST /store/orders/{id}/refund`    | Records a refund                                                      |
-| Bulk mark paid | `POST /store/orders/bulk-payment`   | Several orders at once                                                |
+| Action         | Endpoint                            | Effect                                                                                                                                                                         |
+| -------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Mark paid      | `POST /store/orders/{id}/mark-paid` | Settles the whole remaining balance, reading the amount off the order                                                                                                          |
+| Record payment | `POST /store/orders/{id}/payments`  | Records a specific amount (partial payments)                                                                                                                                   |
+| Waive          | `POST /store/orders/{id}/waive`     | Clears the balance without money changing hands. Locks the order; refuses (400) one already paid or waived — a paid order is refunded instead. A part-paid order can be waived |
+| Refund         | `POST /store/orders/{id}/refund`    | Records a refund                                                                                                                                                               |
+| Bulk mark paid | `POST /store/orders/bulk-payment`   | Several orders at once                                                                                                                                                         |
 
 Every one of these takes the **payment method actually used**, which need not
 be the one the member chose at checkout — they picked Venmo and then handed

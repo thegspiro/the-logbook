@@ -28,6 +28,38 @@ The engineering audit is
 - Screenshots to create or replace are in
   `docs/training/SCREENSHOT_CURRENCY.md`.
 
+## Recent changes: October 25, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
+This pass overlaps the October 25 – 26 one above; items in both are the same
+changes.
+
+- **Recruitment events sign guests in by email.** An applicant types the email
+  they applied with and confirms their first name and last initial. Anyone the
+  kiosk does not recognise is sent to staff.
+- **Staff can add and sign in guests** from the event page's Guests card. At a
+  recruitment event, a walk-in with an email gets an application.
+- **Public forms can sit inside the department's own website.** List the
+  website under **Settings → Forms**, then tick **Allow embedding** in a form's
+  Share window. Operators: see `docs/UPGRADING.md` (nginx `auth_request`).
+- **Applicants see their next meeting** on the status page, with Add to
+  calendar and directions. A refused **Advance** on a meeting stage now says
+  why.
+- **Notification rules can be edited and deleted**, with a warning when that
+  switches a notification on or off.
+- **Grant opportunities can be edited, retired and reinstated.**
+- **Medical screening:** a record with no expiration date now falls due by its
+  requirement's frequency, so some members' standing changes on upgrade (see
+  `docs/UPGRADING.md`). Lapsing waivers are listed.
+- **Facilities** maintenance and inspection lists search every record.
+- **Email:** Gmail setup notes, and ballot sends stop cleanly at Gmail's or
+  Microsoft 365's daily limit.
+- **Events and Scheduling Administration** use the area-card layout;
+  **Print Labels** is back on the Inventory Items list.
+- Screenshots to create or re-check are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 24 – 25, 2026
 
 The engineering audit is

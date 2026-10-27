@@ -608,14 +608,6 @@ nothing.
 With no rules, the tab says automated notifications already go out with their
 default settings.
 
-### Editing and deleting a rule _(2026-10-25)_
-
-Each rule has **Edit** (name, trigger, description) and **Delete**. Deleting
-or changing the trigger can switch a notification back **on** or **off** for
-the whole department: a trigger with no rules sends as normal, and one with
-rules sends while any of them is on. The confirmation says which will happen.
-Screenshot to create: the delete warning.
-
 ### Creating a Rule
 
 1. Open **Notifications → Notification Rules**.
@@ -630,6 +622,23 @@ Each rule has its own on/off switch. A switched-off rule keeps its settings.
 ![Create Notification Rule with Rule Name, Trigger Event set to Event Reminder, Description, and the note under the trigger about switching off every rule for it](./images/07-10-create-rule-modal.png)
 
 ![Create Notification Rule named Gear request notices with the trigger Equipment Request Update, and the note under it about switching off every rule for that trigger](./images/07-30-rule-equipment-request.png)
+
+### Changing or deleting a rule _(2026-10-25)_
+
+Members who manage notifications see an edit (pencil) and a delete (bin) icon on
+each rule's row. Either can switch a notification back **on** or **off** for
+the whole department: a trigger with no rules sends as normal, and one with
+rules sends while any of them is on.
+
+- **Edit** opens **Edit Notification Rule** with the same fields. Select
+  **Save Changes**. If changing the **Trigger Event** would switch a
+  notification on or off for the whole department — the rule stops counting
+  toward its old trigger and starts counting toward the new one — a warning in
+  the window says which, before you save.
+- **Delete** asks **Delete this rule?**. When the rule is the one keeping a
+  notification switched off, or the last one switched on for its trigger, the
+  window says what deleting it changes and suggests editing or switching the
+  rule instead. Select **Delete rule**, or **Keep it** to leave it as it is.
 
 ### Send Log
 
