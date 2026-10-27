@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#TBD]** (branch `claude/security-review-grants-fundraising-p11`) —
+Feature 22 (Grants & fundraising), pass 11. **Watchdog pickup** — the
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, no reachable agents). No security-review PR was open —
+confirmed via `search_pull_requests`, 0 matching results, after PR #3764
+(Feature 21, Admin hours, pass 11) merged. **0 fixed by this pass itself, 1
+stale-comment correction, 0 new findings.** Real delta since pass 10's own
+merge (`dbf2d64b`): four non-rotation commits — donor contact fields
+(phone/address) encrypted at rest, a business/foundation donor may now be
+recorded by name alone (W69-6), opportunities can now be edited and retired
+from the library (W68-10, reusing the existing `PUT /grants/{id}`, no new
+endpoint), and a numeric-bounds sweep closed an unbounded
+`suggested_amounts` list GF-9's own money pass hadn't reached. Each read in
+full against the current code. Routes re-enumerated by AST: 45, unchanged,
+all gated. GF-9 (fully resolved at pass 10) re-confirmed to have no open
+remainder. See `GF-22-grants-fundraising.md`'s **Pass 11** section for the
+full review.
+
+Rotation row 22 → ✅ (pending this PR's merge); next is Feature 23
+(Medical supplies) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 11, PR #3764, merged), preserved for history</summary>
+
 **PR [#3764](https://github.com/thegspiro/the-logbook/pull/3764)** (branch
 `claude/security-review-admin-hours-p11`) — Feature 21 (Admin hours), pass 11. **Watchdog pickup** — the dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. No security-review PR
@@ -29,9 +55,9 @@ correction to pass 10's "18/12" prose). Zero open or flagged findings carry
 forward; feature has been clean since pass 10. See
 `AH-21-admin-hours.md`'s **Pass 11** section for the full review.
 
-Rotation row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
-fundraising) — re-check `search_pull_requests` fresh rather than trusting
-this note.
+Rotation row 21 → ✅ (merged); next was Feature 22 (Grants & fundraising).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 11, PR #3761, merged)</summary>
