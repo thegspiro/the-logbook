@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR to be recorded once opened** — Feature 23 (Medical supplies), pass 17.
+**Watchdog pickup** — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, no reachable agents). No security-review PR was open —
+confirmed via `search_pull_requests`, 0 matching results, after PR #3765
+(Feature 22, Grants & fundraising, pass 11) merged. Row 23 (Medical
+supplies) confirmed as the first ⬜ row on a freshly fetched `main` (head
+`fdfa0d83`). **0 fixed, 0 new findings** — see
+`MSUP-23-medical-supplies.md`'s **Pass 17** section for the full review.
+This row is updated with the PR number as the next commit on this same
+branch, per Step 8.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 11, PR #3765, merged), preserved for history</summary>
+
 **PR [#3765](https://github.com/thegspiro/the-logbook/pull/3765)** (branch
 `claude/security-review-grants-fundraising-p11`) —
 Feature 22 (Grants & fundraising), pass 11. **Watchdog pickup** — the
@@ -36,9 +51,9 @@ all gated. GF-9 (fully resolved at pass 10) re-confirmed to have no open
 remainder. See `GF-22-grants-fundraising.md`'s **Pass 11** section for the
 full review.
 
-Rotation row 22 → ✅ (pending this PR's merge); next is Feature 23
-(Medical supplies) — re-check `search_pull_requests` fresh rather than
-trusting this note.
+Rotation row 22 → ✅ (merged); next was Feature 23 (Medical supplies).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 11, PR #3764, merged), preserved for history</summary>
@@ -22211,8 +22226,8 @@ PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -40246,5 +40261,110 @@ revisions, single head `f5426e40b955`; `check_route_permissions.py
 errors, 0 warnings; scoped frontend suite (7 `ComplianceRequirementsConfigPage.*`/
 `ComplianceOfficerDashboard` files) — 55 passed.
 
-Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
-re-check `search_pull_requests` fresh rather than trusting this note.
+Row 20 → ✅ (merged); next was Feature 21 (Admin hours).
+
+### 2026-10-27 — Feature 21 (Admin hours, pass 11) — watchdog pickup, true zero backend delta, 0 fixed, 0 flagged
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable). No open security-review PR
+— confirmed via `search_pull_requests`, 0 results, after Feature 20 pass
+11's own PR (#3761) merged.
+
+Backend byte-identical to pass 10's merge (`39043668`, PR #3632) — `git
+diff --stat` across every file this feature declares in scope is empty.
+The only real delta is workflow-review W79's four-file phone-layout fix in
+the admin-hours frontend module, reviewed in full and confirmed cosmetic
+(layout classes, `touch:min-h-11` additions, a hand-rolled input swapped
+for the shared `form-input` utility per Pitfall #17) — no request,
+permission, or scope change. Routes re-enumerated by AST: 30, unchanged;
+pass 10's "18/12" permission-split prose corrected to the actual 17/13
+(still summing to 30 — a documentation correction, not a code defect).
+
+Full write-up: `docs/security-review/AH-21-admin-hours.md`'s **Pass 11**
+section. PR #3764, merged.
+
+Row 21 → ✅ (merged); next was Feature 22 (Grants & fundraising).
+
+### 2026-10-27 — Feature 22 (Grants & fundraising, pass 11) — watchdog pickup, real delta, 0 new findings, 1 stale-comment correction
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable). No open security-review PR
+— confirmed via `search_pull_requests`, 0 results, after Feature 21 pass
+11's own PR (#3764) merged.
+
+Real delta since pass 10's own merge (`dbf2d64b`, PR #3633): four
+non-rotation commits, each read in full against the current code — donor
+contact fields (`phone`, `address_line1/2`, `city`, `state`,
+`postal_code`) encrypted at rest (verified it doesn't break the one donor
+`.ilike()` search site or interact with GF-9's PII masking); a
+business/foundation/government donor may now be recorded by its
+organization name alone (W69-6, enforced server-side by
+`FundraisingService.check_donor_name`); opportunities can now be edited
+and retired from the library (W68-10, reusing the existing, already-gated
+`PUT /grants/{id}` — no new endpoint); and a numeric-bounds sweep closed an
+unbounded `suggested_amounts` list GF-9's own money pass hadn't reached
+(a list field, not a bare `Decimal`). Routes re-enumerated by AST: 45,
+unchanged, all gated. GF-9 (fully resolved at pass 10) re-confirmed to have
+no open remainder. One stale comment corrected in `donor_privacy.py` (its
+stated reason for the masking behavior no longer held after W69-6 made the
+name fields optional; the masking itself is unchanged) — not a security
+finding.
+
+Full write-up: `docs/security-review/GF-22-grants-fundraising.md`'s
+**Pass 11** section. PR #3765, merged.
+
+Row 22 → ✅ (merged); next was Feature 23 (Medical supplies).
+
+### 2026-10-27 — Feature 23 (Medical supplies, pass 17) — watchdog pickup, real delta (lot recalls reviewed end to end), 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable). No open security-review PR
+— confirmed via `search_pull_requests`, 0 results, after Feature 22 pass
+11's own PR (#3765) merged. Row 23 confirmed the next pending feature by
+reading the rotation table on a freshly fetched `main` (head `fdfa0d83`).
+
+Real delta since pass 16's own merge (`c1fc4894`, PR #3635): one
+substantive commit, already flagged by pass 16 as unreviewed because its
+PR (#3627) was still open at the time — **lot recalls**, now merged. A
+recall names a supply and a lot number; while active the units stop
+counting as stock (one filter, `InventoryService._usable_lot`, backs every
+on-hand figure, Low stock, reorder and issuing), can't be swapped onto a
+truck, and are listed first on the Expiring tab whatever their date. Three
+new routes (`GET /recalls`, `POST /recalls`, `POST /recalls/{id}/lift`),
+read end to end: all three carry the router's existing domain-first
+permission pattern; every query is org-scoped directly in the service
+layer; `record_lot_recall` locks the supply row before its duplicate-active
+check and `lift_lot_recall` locks the recall row before checking
+`lifted_at` (Pitfall #27, both re-read from current code); the new
+migration's two `SET NULL` columns are correctly `nullable=True` (Pitfall
+#2) and the table-create is guarded for a `create_all`-built database
+(Pitfall #26); request bounds are enforced (lot number 1–100 chars,
+reason/note ≤1000); the frontend uses `PromptDialog` for both actions
+(Pitfall #16) and sends `reason: reason || undefined` on its create payload
+(Pitfall #1). Six other commits since pass 16 touch a shared file
+(`scheduled_tasks.py`, `equipment_check_service.py`) but belong to other
+features (compliance report retry, an EVOC error-message fix, a bulk
+checklist-item `MissingGreenlet` fix, the Member ID Cards purge job) —
+each confirmed by reading its diff to touch no medical-supplies-domain
+code. Routes re-enumerated by AST: 29, up from pass 16's 26 (the three new
+recall routes), every one still carrying `require_permission(...)`. MSUP-4
+and MSUP-11 (no row cap, owner-accepted) re-checked unchanged; MSUP-1
+through MSUP-27 otherwise re-verified intact.
+
+Full write-up: `docs/security-review/MSUP-23-medical-supplies.md`'s
+**Pass 17** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 663
+revisions, single head `c616fa1bd492`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
+"medical_supplies or medical_supply or lot_recall"`) — 215 passed, 1
+pre-existing skip (unrelated); frontend `npm run typecheck`/`npm run lint`
+— 0 errors, 0 warnings (after `npm ci` from the repo root — sandbox
+`node_modules` predated the `@simplewebauthn/browser` passkeys dependency;
+environment gap, not a code defect); scoped frontend suite (`src/modules/
+medical-supplies`) — 190 passed (10 files).
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes) — re-check `search_pull_requests` fresh rather than trusting this
+note.
