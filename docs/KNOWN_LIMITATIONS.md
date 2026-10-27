@@ -6472,17 +6472,20 @@ Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
   - Decision: whether members get a "My dues" view (and on what gate), and
     which dues reminders go out (email first, pitfall 18).
 
-## Department Store — The Cart Does Not Survive a Reload (2026-10-15)
+## Department Store — The Cart Does Not Survive a Reload (2026-10-15, resolved 2026-10-27)
 
-Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
-
-- **What happens:** the cart lives only in the page's memory. A reload, or a
-  phone browser discarding the tab while the member switches apps, empties
-  it.
-- **Why it is not simply fixed:** keeping it means choosing where (browser
-  storage on that device, or saved on the server so it follows the member)
-  and how long it lasts, against an order window that closes.
-- **Decision:** whether to keep the cart, and where.
+**Resolved (owner decision: keep it in this browser).** The cart is saved in
+the browser's local storage, per member and per order window
+(`modules/storefront/utils/savedCart.ts`), and restored when the store loads.
+Only each line's product, variant, personalization and quantity are kept;
+names and prices are rebuilt from the current catalog, and a line whose
+product or variant is no longer offered is dropped. A saved cart is cleared
+when its order is placed, when its window is no longer open, and at sign-out
+(`purgeLocalMemberData`), since station computers are shared. Each window keeps
+its own cart, so with several windows open a reload shows the store's default
+window's cart until the member picks the other window again. It does not follow
+the member to another device. History in
+`docs/workflow-review/W67-department-store.md` (W67-6).
 
 ## Grants — Opportunities Could Not Be Edited (2026-10-15, edit and retire resolved 2026-10-25)
 
