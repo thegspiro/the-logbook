@@ -81,7 +81,7 @@ class EventRequest(Base):
 
     # Requester contact info
     contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     contact_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 

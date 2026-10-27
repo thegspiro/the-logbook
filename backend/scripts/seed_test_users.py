@@ -27,6 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.security import email_fingerprint, encrypt_data
 from app.core.utils import generate_uuid
 from app.services.suggestion_service import SuggestionService
 
@@ -296,12 +297,12 @@ async def seed_users(session: AsyncSession, org_id: str) -> None:
         await session.execute(
             text(
                 "INSERT INTO users "
-                "(id, organization_id, username, email, password_hash, "
+                "(id, organization_id, username, email, email_hash, password_hash, "
                 "first_name, last_name, `rank`, station, membership_type, "
                 "status, hire_date, membership_number, email_verified, "
                 "must_change_password, mfa_enabled, emergency_contacts) "
                 "VALUES "
-                "(:id, :oid, :username, :email, :pw, "
+                "(:id, :oid, :username, :email, :email_hash, :pw, "
                 ":first, :last, :rank, :station, :mtype, "
                 ":status, :hire, :mnum, 1, 0, 0, '[]')"
             ),
@@ -309,7 +310,10 @@ async def seed_users(session: AsyncSession, org_id: str) -> None:
                 "id": user_id,
                 "oid": org_id,
                 "username": username,
-                "email": email,
+                # Raw SQL skips the model's column types, so the address is
+                # encrypted and fingerprinted here or sign-in cannot find it.
+                "email": encrypt_data(email),
+                "email_hash": email_fingerprint(email),
                 "pw": SHARED_HASH,
                 "first": first,
                 "last": last,

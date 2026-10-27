@@ -26,7 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import false, func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedJSON
+from app.core.encrypted_types import EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -137,7 +137,7 @@ class Form(Base):
     )
     notify_on_submission: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     notification_emails: Mapped[Optional[list[str]]] = mapped_column(
-        JSON
+        EncryptedJSON
     )  # List of emails to notify
 
     # Public access
@@ -329,7 +329,7 @@ class FormSubmission(Base):
         String(255)
     )  # For anonymous/public submissions
     submitter_email: Mapped[Optional[str]] = mapped_column(
-        String(255)
+        EncryptedText
     )  # For anonymous/public submissions
     is_public_submission: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 

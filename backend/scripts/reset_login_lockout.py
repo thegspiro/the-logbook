@@ -48,7 +48,11 @@ from app.core.database import (  # noqa: E402
     async_session_factory,
     database_manager,
 )
-from app.core.security import hash_password, verify_password  # noqa: E402
+from app.core.security import (  # noqa: E402
+    email_fingerprints,
+    hash_password,
+    verify_password,
+)
 from app.models.user import Organization, User  # noqa: E402
 
 
@@ -82,7 +86,10 @@ async def _run(
 
         result = await db.execute(
             select(User).where(
-                or_(User.username == identifier, User.email == identifier),
+                or_(
+                    User.username == identifier,
+                    User.email_hash.in_(email_fingerprints(identifier)),
+                ),
                 User.deleted_at.is_(None),
             )
         )

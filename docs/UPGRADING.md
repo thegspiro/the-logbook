@@ -134,6 +134,55 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Email addresses are encrypted at rest (2026-10-26)
+
+A migration (`b8236e29ec44`) runs on the next start and **encrypts every stored
+email address in place**: members', applicants', guests', donors', storefront
+customers', outside contacts', and the copies in email and notification logs
+and in report, alert and form recipient lists. On a large installation, most of
+the time goes to the message history, so the first start takes noticeably
+longer. A department's own published addresses (the organization, facilities,
+vendor companies, the org chart, PayPal) are unchanged.
+
+**Two things stop the upgrade before it changes anything:**
+
+- **`ENCRYPTION_KEY` not set** while addresses are on file. It is already
+  required for the backend to start.
+- **Two members of one department, or two active applications, share an
+  address once spaces are trimmed and case is ignored.** The old index ignored
+  case and trailing spaces but not leading ones, so `" chief@x.org"` and
+  `"chief@x.org"` could both exist. The error names the row ids; correct one
+  address in each pair (in SQL, while the backend is stopped) and start again.
+
+What changes for people using the system:
+
+- **Searching by part of an email address no longer matches** in the member
+  form picker, applicant list, storefront orders, donors and message history. A
+  complete address still finds the record; names and the other fields search as
+  before.
+- **Message history:** messages sent before the upgrade to a large batch are
+  found by the addresses shown in their summary only. New messages are found by
+  any recipient.
+- **Audit log:** new OAuth sign-in and onboarding entries no longer record the
+  address; they already carry the user id. Older entries keep it: rewriting them
+  would break the log's tamper-evident hash chain.
+
+Operational notes:
+
+- **Take the database backup first.** The downgrade decrypts and restores the
+  original columns, but only with the same `ENCRYPTION_KEY` and
+  `ENCRYPTION_SALT`. **Losing them loses every email address.**
+- **Older backups still hold plain addresses** for as long as you keep them, as
+  with the phone and address change below.
+- **Key rotation:** lookups by email now depend on fingerprints derived from
+  `ENCRYPTION_KEY`. Run `scripts/rotate_encryption_key.py --commit` before
+  removing an old key from `ENCRYPTION_KEYS_LEGACY`, or sign-in by email stops
+  working (see [KEY_ROTATION.md](./KEY_ROTATION.md)).
+- **Your own SQL** that reads, compares or exports these columns directly will
+  see ciphertext. A user row inserted by raw SQL gets no fingerprint and cannot
+  sign in by email; create users through the application or
+  `scripts/seed_test_users.py`.
+
 ### The frontend's nginx config needs the `auth_request` module (2026-10-25)
 
 `frontend/nginx.conf` now uses `auth_request` for the embedded-form page,

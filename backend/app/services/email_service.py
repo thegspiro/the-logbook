@@ -23,6 +23,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 from loguru import logger
 
 from app.core.config import settings
+from app.core.security import email_fingerprint
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
@@ -437,13 +438,13 @@ def wrap_email_body(
 
 
 def _summarize_recipients(to_emails: List[str]) -> str:
-    """Fit a batch's addresses into MessageHistory.to_email (VARCHAR(320)).
+    """Summarize a batch's addresses for MessageHistory.to_email.
 
-    A joined list overflows that column as soon as a send has more than a
-    handful of recipients, and a department message goes to the whole roster in
-    one batch. Under strict MySQL the insert is rejected, which is a 1406 on
-    the shared session — see the savepoint below. ``recipient_count`` carries
-    the true number, so the addresses are a legible sample, not the record.
+    The column was VARCHAR(320), and a department message goes to the whole
+    roster in one batch, so a joined list overflowed it. It is encrypted TEXT
+    now, but the history screen still shows a legible sample rather than the
+    roster: ``recipient_count`` carries the true number, and
+    ``recipient_fingerprints`` is what search matches on.
     """
     joined = ", ".join(to_emails)
     if len(joined) <= 320:
@@ -1726,6 +1727,11 @@ class EmailService:
             id=generate_uuid(),
             organization_id=org_id,
             to_email=_summarize_recipients(to_emails),
+            recipient_fingerprints=list(
+                dict.fromkeys(
+                    fp for fp in (email_fingerprint(a) for a in to_emails) if fp
+                )
+            ),
             cc_emails=cc_emails,
             bcc_emails=bcc_emails,
             subject=subject,

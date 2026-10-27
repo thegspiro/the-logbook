@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.security import email_fingerprints
 from app.models.user import Organization, User
 
 GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -66,7 +67,7 @@ async def _link_existing_user(
 
     result = await db.execute(
         select(User)
-        .where(User.email == email)
+        .where(User.email_hash.in_(email_fingerprints(email)))
         .where(User.deleted_at.is_(None))
         .where(User.organization_id == str(org.id))
     )
