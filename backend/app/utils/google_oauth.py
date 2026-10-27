@@ -30,6 +30,15 @@ from loguru import logger
 
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 
+# The token endpoint every service account key Google Cloud issues carries.
+# ``Credentials.from_service_account_info`` sends the signed JWT assertion to
+# whatever ``token_uri`` the key names, so an admin-pasted key with a
+# different value would make this process POST that assertion to a host of
+# the admin's choosing — the same SSRF shape ``microsoft_oauth.py``'s
+# ``tenant_id`` validation exists to close, except here there is no
+# legitimate value other than Google's own endpoint to allow.
+_GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
+
 # google-auth's requests transport waits 120 seconds by default. A real send
 # runs this in a worker thread with no outer deadline, so an unreachable token
 # endpoint would hold that thread for two minutes per message; the connection
@@ -91,6 +100,12 @@ def parse_service_account_key(value: Any) -> dict[str, Any]:
                 f"The service account key is missing {field}. Download a new "
                 "JSON key from Google Cloud."
             )
+    if info["token_uri"] != _GOOGLE_TOKEN_URI:
+        raise GoogleOAuthError(
+            "The service account key's token_uri is not Google's own token "
+            f"endpoint ({_GOOGLE_TOKEN_URI}). Download a fresh, unedited JSON "
+            "key from Google Cloud."
+        )
     return info
 
 
