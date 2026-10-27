@@ -1459,3 +1459,89 @@ class TestEndOfShiftSummaryCallTypeLabels:
             types_after=[{"slug": "fire", "label": "Fire"}],
         )
         assert out["metadata"].get("call_types") == ["mutual_aid", "mutual_aid"]
+
+
+# ── run_post_shift_validation ─────────────────────────────────────────
+
+
+class TestPostShiftValidationTemplate:
+    """The officer's "validate attendance" prompt is the Post-Shift
+    Validation template, and stops when the department switches it off."""
+
+    @staticmethod
+    async def _ended_shift(db: AsyncSession, org_id: str, officer_id: str) -> str:
+        # Ended an hour ago, inside the default two-hour window.
+        shift_id, _, _ = await _insert_shift(
+            db, org_id=org_id, start_offset_minutes=-180, duration_minutes=120
+        )
+        await db.execute(
+            text(
+                "UPDATE shifts SET shift_officer_id = :officer, platoon = 'B' "
+                "WHERE id = :id"
+            ),
+            {"officer": officer_id, "id": shift_id},
+        )
+        return shift_id
+
+    @staticmethod
+    async def _run(db: AsyncSession):
+        from unittest.mock import patch
+
+        from app.services.email_service import EmailService
+        from app.services.scheduled_tasks import run_post_shift_validation
+
+        send = AsyncMock(return_value=(1, 0))
+        with patch.object(EmailService, "send_email", send):
+            await run_post_shift_validation(db)
+        return send
+
+    async def test_the_prompt_is_the_template(self, db_session: AsyncSession):
+        org_id = await _insert_org(db_session)
+        officer = await _insert_user(db_session, org_id=org_id, first_name="Olga")
+        await self._ended_shift(db_session, org_id, officer)
+        await db_session.flush()
+
+        send = await self._run(db_session)
+
+        message = send.await_args.kwargs
+        assert message["subject"].startswith("Shift Validation Needed: B — ")
+        assert "Hello Olga" in message["html_body"]
+        assert "Validate Shift" in message["html_body"]
+        assert message["template_type"] == "post_shift_validation"
+
+    async def test_a_switched_off_template_keeps_only_the_bell(
+        self, db_session: AsyncSession
+    ):
+        from app.models.email_template import EmailTemplate, EmailTemplateType
+
+        org_id = await _insert_org(db_session)
+        officer = await _insert_user(db_session, org_id=org_id)
+        await self._ended_shift(db_session, org_id, officer)
+        db_session.add(
+            EmailTemplate(
+                organization_id=org_id,
+                template_type=EmailTemplateType.POST_SHIFT_VALIDATION,
+                name="Post-Shift Validation",
+                subject="s",
+                html_body="<p>b</p>",
+                is_active=False,
+            )
+        )
+        await db_session.flush()
+
+        send = await self._run(db_session)
+
+        send.assert_not_awaited()
+        notifs = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.category == "shift_validation",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [n.recipient_id for n in notifs] == [officer]

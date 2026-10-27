@@ -157,6 +157,12 @@ class TestCertificationAlerts:
         monkeypatch.setattr(
             module, "wrap_email_body", lambda org, title, body, **_kwargs: body
         )
+        # The Cert Expiration switch is read before the scripted lookups.
+        monkeypatch.setattr(
+            module.EmailTemplateService,
+            "is_switched_off",
+            AsyncMock(return_value=False),
+        )
         monkeypatch.setattr(
             module,
             "EmailService",

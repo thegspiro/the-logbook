@@ -437,6 +437,14 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "cert_name", "description": "Name of the certification"},
         {"name": "expiration_date", "description": "Expiration date of the cert"},
         {"name": "days_remaining", "description": "Days until expiration"},
+        {
+            "name": "days_unit",
+            "description": "'day' when one day remains, otherwise 'days'",
+        },
+        {
+            "name": "expires_when",
+            "description": "When it expires: 'today', 'tomorrow' or 'in N days'",
+        },
         {"name": "renewal_url", "description": "Link to training/certification page"},
     ],
     "post_event_validation": [
@@ -1084,6 +1092,8 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "cert_name": "EMT-Basic Certification",
             "expiration_date": "April 15, 2026",
             "days_remaining": "45",
+            "days_unit": "days",
+            "expires_when": "in 45 days",
             "renewal_url": "https://example.com/training/certifications",
         }
     ),
@@ -2007,12 +2017,16 @@ DEFAULT_CERT_EXPIRATION_HTML = build_shell(
     + action("{{renewal_url}}", "View Certifications"),
     accent=ACCENT_AMBER,
     chip="Action required",
-    tab_note="{{days_remaining}} days left",
+    # expires_when / days_unit rather than "{{days_remaining}} days": the
+    # reminder goes out on a certificate's last day and the day before, and
+    # "0 days left" / "1 days" is what the code-built email was fixed to stop
+    # saying before this template was ever sent.
+    tab_note="Expires {{expires_when}}",
     subtitle="Renew to stay compliant for calls and drills",
     # The subtitle is advice, not the news; the inbox preview leads with
     # the countdown instead.
-    preheader="{{cert_name}} expires in {{days_remaining}} days",
-    lead=countdown_tile("{{days_remaining}}", "days"),
+    preheader="{{cert_name}} expires {{expires_when}}",
+    lead=countdown_tile("{{days_remaining}}", "{{days_unit}}"),
 )
 
 DEFAULT_CERT_EXPIRATION_TEXT = """Certification Expiration Notice
@@ -2022,8 +2036,7 @@ Hello {{recipient_name}},
 This is a reminder that your certification is approaching its expiration date:
 
 Certification: {{cert_name}}
-Expiration Date: {{expiration_date}}
-Days Remaining: {{days_remaining}}
+Expiration Date: {{expiration_date}} ({{expires_when}})
 
 Please take action to renew this certification before it expires.
 
@@ -4124,6 +4137,8 @@ class EmailTemplateService:
         template_type: EmailTemplateType,
         context: Dict[str, Any],
         organization: Optional[Any] = None,
+        appendix_html: Optional[str] = None,
+        appendix_text: Optional[str] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """Render a type's shipped default, for a department with no stored row.
 
@@ -4151,7 +4166,47 @@ class EmailTemplateService:
             css_styles=None,
             footer_key=defn.get("footer"),
         )
-        return cls.render_static(template, context, organization=organization)
+        return cls.render_static(
+            template,
+            context,
+            organization=organization,
+            appendix_html=appendix_html,
+            appendix_text=appendix_text,
+        )
+
+    async def render_stored_or_default(
+        self,
+        organization: Any,
+        template_type: EmailTemplateType,
+        context: Dict[str, Any],
+        appendix_html: Optional[str] = None,
+        appendix_text: Optional[str] = None,
+    ) -> Tuple[str, str, Optional[str]]:
+        """The department's switched-on template for this type, or the default.
+
+        For senders that render outside ``EmailService``. Whether the email
+        should go out at all is :meth:`is_switched_off`, asked first.
+        """
+        template = (
+            await self.get_template(str(organization.id), template_type)
+            if organization is not None
+            else None
+        )
+        if template is not None:
+            return self.render(
+                template,
+                context,
+                organization=organization,
+                appendix_html=appendix_html,
+                appendix_text=appendix_text,
+            )
+        return self.render_default(
+            template_type,
+            context,
+            organization=organization,
+            appendix_html=appendix_html,
+            appendix_text=appendix_text,
+        )
 
     #: Country omitted from a formatted address when it is this one. A US
     #: department's own mail does not say "USA" under every address, and the

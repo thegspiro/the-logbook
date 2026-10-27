@@ -1729,14 +1729,17 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     """
     from datetime import timedelta
     from datetime import timezone as dt_timezone
+    from zoneinfo import ZoneInfo
 
     from sqlalchemy.orm import selectinload
 
     from app.core.config import settings
     from app.core.utils import generate_uuid
+    from app.models.email_template import EmailTemplateType
     from app.models.event import Event
     from app.models.notification import NotificationChannel, NotificationLog
     from app.services.email_service import EmailService
+    from app.services.email_template_service import EmailTemplateService
     from app.services.event_organizer_service import EventOrganizerService
 
     now = datetime.now(dt_timezone.utc)
@@ -1771,6 +1774,10 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
             events = list(events_result.scalars().all())
             organizer_service = EventOrganizerService(db)
             required_kinds = department_required_kinds(org)
+            template_svc = EmailTemplateService(db)
+            validation_email_off = await template_svc.is_switched_off(
+                org_id, EmailTemplateType.POST_EVENT_VALIDATION
+            )
 
             for event in events:
                 custom = event.custom_fields or {}
@@ -1827,45 +1834,57 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                             f"for user {recipient.id}, event {event.id}: {e}"
                         )
 
-                    # Email notification (if user has email prefs enabled)
-                    if recipient.email and member_receives_email(
-                        recipient.notification_preferences,
-                        EmailKind.EVENT_DUTIES,
-                        required_kinds,
+                    # Email notification (if user has email prefs enabled, and
+                    # the department has not switched the template off)
+                    if (
+                        recipient.email
+                        and not validation_email_off
+                        and member_receives_email(
+                            recipient.notification_preferences,
+                            EmailKind.EVENT_DUTIES,
+                            required_kinds,
+                        )
                     ):
                         try:
-                            from app.services.email_service import wrap_email_body
-
-                            full_event_url = (
-                                f"{settings.FRONTEND_URL}/events/{event.id}"
+                            org_zone = ZoneInfo(org.timezone or "America/New_York")
+                            event_date = (
+                                event.start_datetime.astimezone(org_zone).strftime(
+                                    "%B %d, %Y"
+                                )
+                                if event.start_datetime
+                                else ""
                             )
-                            e_first = _html.escape(
-                                recipient.preferred_name or recipient.first_name or ""
+                            (
+                                v_subject,
+                                v_html,
+                                v_text,
+                            ) = await template_svc.render_stored_or_default(
+                                org,
+                                EmailTemplateType.POST_EVENT_VALIDATION,
+                                {
+                                    "recipient_name": recipient.preferred_name
+                                    or recipient.first_name
+                                    or "",
+                                    "event_title": event.title or "",
+                                    "event_date": event_date,
+                                    "attendee_count": (
+                                        f"{checked_in_count} of {rsvp_count} "
+                                        "checked in"
+                                    ),
+                                    "validation_url": (
+                                        f"{settings.FRONTEND_URL}/events/{event.id}"
+                                    ),
+                                },
                             )
-                            e_title = _html.escape(event.title or "")
                             email_service = EmailService(organization=org)
                             sent_count, _ = await email_service.send_email(
                                 to_emails=[recipient.email],
-                                subject=subject,
-                                html_body=wrap_email_body(
-                                    org,
-                                    "Please Validate Attendance",
-                                    f"<p>Hello {e_first},</p>"
-                                    f'<p>Your event "<strong>{e_title}</strong>" has ended. '
-                                    f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
-                                    f"<p>Please review and confirm the attendance records and "
-                                    f"event timing before finalizing.</p>"
-                                    f'<p style="text-align: center;">'
-                                    f'<a href="{_html.escape(full_event_url)}" class="button" role="link">'
-                                    f"Review Event</a></p>",
-                                ),
-                                text_body=(
-                                    f"Hi {recipient.preferred_name or recipient.first_name},\n\n"
-                                    f'Your event "{event.title}" has ended. '
-                                    f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
-                                    f"Please review and confirm the attendance records and "
-                                    f"event timing before finalizing.\n\n"
-                                    f"Review Event: {full_event_url}"
+                                subject=v_subject,
+                                html_body=v_html,
+                                text_body=v_text,
+                                db=db,
+                                template_type=(
+                                    EmailTemplateType.POST_EVENT_VALIDATION.value
                                 ),
                             )
                             if sent_count > 0:
@@ -1937,6 +1956,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
     from app.core.config import settings
     from app.core.utils import generate_uuid
+    from app.models.email_template import EmailTemplateType
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import (
         Shift,
@@ -1948,6 +1968,8 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
     )
     from app.models.user import User
     from app.services.email_service import EmailService
+    from app.services.email_template_service import EmailTemplateService
+    from app.services.scheduling_service import SchedulingService
 
     now = datetime.now(dt_timezone.utc)
 
@@ -1999,6 +2021,18 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 .where(Shift.is_finalized.is_(False))
             )
             shifts = list(shifts_result.scalars().all())
+            template_svc = EmailTemplateService(db)
+            shift_validation_email_off = await template_svc.is_switched_off(
+                org_id, EmailTemplateType.POST_SHIFT_VALIDATION
+            )
+            apparatus_map = (
+                await SchedulingService(db)._get_apparatus_map(
+                    org_id,
+                    [str(s.apparatus_id) for s in shifts if s.apparatus_id],
+                )
+                if shifts
+                else {}
+            )
 
             # Batch every per-shift lookup the loop below needs so post-shift
             # validation issues a handful of queries per org instead of ~6 per
@@ -2206,24 +2240,22 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         f"for officer {officer.id}, shift {shift.id}: {e}"
                     )
 
-                # Email notification
-                if officer.email and member_receives_email(
-                    officer.notification_preferences,
-                    EmailKind.SCHEDULING_DUTIES,
-                    department_required_kinds(org),
+                # Email notification, unless the department switched the
+                # Post-Shift Validation template off (the bell above stays)
+                if (
+                    officer.email
+                    and not shift_validation_email_off
+                    and member_receives_email(
+                        officer.notification_preferences,
+                        EmailKind.SCHEDULING_DUTIES,
+                        department_required_kinds(org),
+                    )
                 ):
                     try:
-                        from app.services.email_service import wrap_email_body
-
-                        full_url = (
-                            f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
-                        )
-                        e_first = _html.escape(
-                            officer.preferred_name or officer.first_name or ""
-                        )
-                        e_shift_date = _html.escape(shift_date_str)
                         email_service = EmailService(organization=org)
 
+                        # Not template variables: they follow the template's
+                        # own body, and only when there is something to say.
                         extra_html = ""
                         extra_text = ""
                         if pending_checklists:
@@ -2251,40 +2283,51 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                                 " still needed.\n\n"
                             )
 
+                        # A shift has no title; name it the way the station
+                        # does, by its apparatus and platoon.
+                        apparatus = apparatus_map.get(str(shift.apparatus_id or ""))
+                        shift_name = (
+                            " · ".join(
+                                p
+                                for p in (
+                                    getattr(apparatus, "unit_number", None)
+                                    or getattr(apparatus, "name", None),
+                                    shift.platoon,
+                                )
+                                if p
+                            )
+                            or "Shift"
+                        )
+                        (
+                            v_subject,
+                            v_html,
+                            v_text,
+                        ) = await template_svc.render_stored_or_default(
+                            org,
+                            EmailTemplateType.POST_SHIFT_VALIDATION,
+                            {
+                                "recipient_name": officer.preferred_name
+                                or officer.first_name
+                                or "",
+                                "shift_name": shift_name,
+                                "shift_date": shift_date_str,
+                                "attendee_count": str(att_count),
+                                "validation_url": (
+                                    f"{settings.FRONTEND_URL}"
+                                    f"/scheduling?shift={shift.id}"
+                                ),
+                            },
+                            appendix_html=extra_html or None,
+                            appendix_text=extra_text.strip() or None,
+                        )
                         sent_count, _ = await email_service.send_email(
                             to_emails=[officer.email],
-                            subject=subject,
-                            html_body=wrap_email_body(
-                                org,
-                                "Shift Attendance Validation",
-                                f"<p>Hello {e_first},</p>"
-                                f"<p>Your shift on "
-                                f"<strong>{e_shift_date}</strong> "
-                                f"has ended. "
-                                f"{att_count} member"
-                                f"{'s' if att_count != 1 else ''}"
-                                " recorded.</p>"
-                                "<p>Please review and confirm the "
-                                "attendance records and shift timing "
-                                "before finalizing.</p>"
-                                f"{extra_html}"
-                                f'<p style="text-align: center;">'
-                                f'<a href="{_html.escape(full_url)}" '
-                                f'class="button" role="link">'
-                                "Review Shift</a></p>",
-                            ),
-                            text_body=(
-                                f"Hi {officer.preferred_name or officer.first_name},\n\n"
-                                f"Your shift on {shift_date_str} "
-                                "has ended. "
-                                f"{att_count} member"
-                                f"{'s' if att_count != 1 else ''}"
-                                " recorded.\n\n"
-                                "Please review and confirm the "
-                                "attendance records and shift timing "
-                                "before finalizing.\n\n"
-                                f"{extra_text}"
-                                f"Review Shift: {full_url}"
+                            subject=v_subject,
+                            html_body=v_html,
+                            text_body=v_text,
+                            db=db,
+                            template_type=(
+                                EmailTemplateType.POST_SHIFT_VALIDATION.value
                             ),
                         )
                         if sent_count > 0:
@@ -3475,7 +3518,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     + f"\nView Shift Details: {full_url}"
                                 ),
                                 db=db,
-                                template_type="post_shift_validation",
+                                template_type="end_of_shift_summary",
                             )
                             if sent > 0:
                                 org_emails += 1
@@ -3716,7 +3759,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                                 f"Review Report: {full_url}"
                             ),
                             db=db,
-                            template_type="post_shift_validation",
+                            template_type="shift_report_acknowledgment_reminder",
                         )
                         if sent > 0:
                             org_emails += 1

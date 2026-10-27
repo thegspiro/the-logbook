@@ -77,6 +77,14 @@ def _quiet_side_effects(monkeypatch):
         email_service, "wrap_email_body", lambda org, title, body, **_kwargs: body
     )
 
+    # The Member Archived switch is read between the scripted org and admin
+    # lookups; answer it here so those keep their order.
+    from app.services.email_template_service import EmailTemplateService
+
+    monkeypatch.setattr(
+        EmailTemplateService, "is_switched_off", AsyncMock(return_value=False)
+    )
+
 
 class TestAutoArchiveGate:
     async def test_skips_unknown_member(self):
@@ -133,6 +141,7 @@ class TestAutoArchiveTransition:
             _result(scalar_one=None),  # checkouts
             _result(scalar_one=None),  # issuances
             _result(scalar_one=None),  # clearances
+            _result(scalars_all=[]),  # NFC cards to sync: none
             _result(scalar_one=None),  # org lookup (email path)
             _result(scalars_all=[]),  # admins (none → no email)
         )
@@ -143,6 +152,66 @@ class TestAutoArchiveTransition:
         assert info["previous_status"] == UserStatus.DROPPED_VOLUNTARY.value
         assert info["new_status"] == UserStatus.ARCHIVED.value
         db.commit.assert_awaited()
+
+
+class TestTheArchiveNoticeIsTheTemplate:
+    async def _archive(self, monkeypatch, switched_off):
+        import app.services.email_service as email_service
+        from app.services.email_template_service import EmailTemplateService
+
+        sends = []
+
+        class Recorder:
+            def __init__(self, _org):
+                pass
+
+            async def send_email(self, **kwargs):
+                sends.append(kwargs)
+                return 1, 0
+
+        monkeypatch.setattr(email_service, "EmailService", Recorder)
+        monkeypatch.setattr(
+            EmailTemplateService,
+            "is_switched_off",
+            AsyncMock(return_value=switched_off),
+        )
+        monkeypatch.setattr(
+            EmailTemplateService, "get_template", AsyncMock(return_value=None)
+        )
+        admin = SimpleNamespace(
+            email="qm@example.test",
+            roles=[SimpleNamespace(slug="quartermaster")],
+            notification_preferences=None,
+        )
+        member = _member(UserStatus.DROPPED_VOLUNTARY, display_name="Jane <Q>")
+        db = _db(
+            _result(scalar_one=member),
+            _result(scalar_one=None),
+            _result(scalar_one=None),
+            _result(scalar_one=None),
+            _result(scalar_one=None),
+            _result(scalars_all=[]),  # NFC cards to sync: none
+            _result(scalar_one=None),  # org lookup
+            _result(scalars_all=[admin]),
+        )
+        info = await svc.check_and_auto_archive(db, member.id, "org")
+        return info, sends
+
+    async def test_the_admins_get_the_member_archived_template(self, monkeypatch):
+        info, sends = await self._archive(monkeypatch, switched_off=False)
+
+        assert info is not None
+        assert [s["to_emails"] for s in sends] == [["qm@example.test"]]
+        assert sends[0]["subject"].startswith("Member Archived: Jane <Q>")
+        assert "Jane &lt;Q&gt;" in sends[0]["html_body"]
+        assert "Dropped Voluntary" in sends[0]["html_body"]
+        assert sends[0]["template_type"] == "member_archived"
+
+    async def test_a_switched_off_template_archives_without_an_email(self, monkeypatch):
+        info, sends = await self._archive(monkeypatch, switched_off=True)
+
+        assert info is not None
+        assert sends == []
 
 
 class _FakeHistory:
