@@ -1961,7 +1961,14 @@ Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print
 5. Print one of three ways:
    - **PDF** (best for sticker and thermal printers): downloads a PDF sized to
      the exact label. Open it and print with your label printer selected.
-   - **Print Labels**: prints through your browser's print window.
+   - **Print Labels**: prints through your browser's print window. A short
+     **Before you print** step first names the paper size, margins (None for
+     roll labels) and scale (100%, not Fit to page) to choose in that window,
+     because a web page cannot select the printer's paper. Tick _don't show
+     again on this computer_ for a size you have set up. When no network
+     printer is registered it links to **Settings → Label Printers**. Browser
+     prints of Code 128 barcodes used to come out as solid black boxes; the
+     bars now print on a white background.
    - **Print to _printer name_**: appears when your department has registered a
      network label printer. The labels go straight to it. See
      [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer).

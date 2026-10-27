@@ -1,5 +1,19 @@
 # Script currency
 
+## Flagged by the 2026-10-26 → 10-27 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                          | Beat                     | Was                                 | Now                                                                                         |
+| ------------------------------- | ------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------- |
+| **06** (member), **03** (IT)    | Two-step sign-in         | Authenticator code only             | Passkey (Face ID, fingerprint, PIN) or code; up to three passkeys; needs HTTPS and a domain |
+| **07** (secretary)              | Building a form          | Every answer readable by managers   | **Sensitive** fields: encrypted, hidden without the permission, kept out of CSV             |
+| **03** (IT)                     | Email platform selection | Gmail by app password only          | Gmail **Service account** (domain-wide delegation) as a second method                       |
+| **Any inventory beat**          | Printing labels          | Print Labels straight to the dialog | A **Before you print** card names paper size, margins and scale                             |
+| **Any fundraising beat**        | Adding a donor           | Names required for every donor      | Businesses and agencies need only an organization name                                      |
+| **Any finance / security beat** | Approvals                | One person could file and approve   | Budget request decisions and IP exceptions need a second person                             |
+
 ## Flagged by the 2026-10-25 → 10-26 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).

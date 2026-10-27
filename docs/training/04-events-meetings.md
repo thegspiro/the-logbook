@@ -893,7 +893,13 @@ saving is refused. The message names up to three of the clashing events.
 Choose another room or time.
 
 **Drafts.** A draft is visible only to officers who can manage events. When it
-is ready, open it and select **Publish**.
+is ready, open it and select **Publish**. Editing and saving a draft keeps it a
+draft; before 2026-10-26 the edit form did not know the event was a draft, and
+saving it published it.
+
+**Lead time when you edit.** An event saved without a lead time opens the form
+with the value the server uses: 15 minutes on a Window-type event, 60 on others.
+Saving no longer moves the check-in window of an open event.
 
 ### The Recruitment event type
 

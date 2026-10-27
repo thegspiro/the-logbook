@@ -2254,7 +2254,9 @@ parts the department lets trainees see, and never the reviewer's notes.
 
 - **Members** can ask for an exception for their own address on **My IP
   Exceptions** with **New Request**: the address, a use case, how many days
-  (1–90) and details.
+  (1–90) and details. Someone else must approve it: the member the exception is
+  for, and the officer who filed it, are refused, so a one-administrator
+  department grants the permission to a second member.
 - **Officers with security.manage** ("Manage IP security and access controls")
   or **settings.manage** approve or reject requests on the **Pending Requests**
   tab, revoke exceptions, and block countries.
