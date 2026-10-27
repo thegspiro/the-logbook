@@ -1134,7 +1134,7 @@ jobs:
         run: npx playwright install webkit
 
       - name: Install WebKit system libraries
-        timeout-minutes: 8
+        timeout-minutes: 20
         run: npx playwright install-deps webkit
 
       - name: Run Mobile Safari E2E tests
