@@ -16,8 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_(none — the rotation reads this from GitHub at Step 0 of each iteration,
-never from this row; see the superseded notes below for history.)_
+**PR [#3787](https://github.com/thegspiro/the-logbook/pull/3787)** (branch
+`claude/security-review-locations-kiosk-p10`) — Feature 32 (Locations &
+kiosk), pass 10. Review-only: no application code changed. One real defect
+found (a transient ciphertext-vs-plaintext comparison in the new email-first
+kiosk lookup) was already fixed by an unrelated commit (`43c11090`) before
+this review started, and re-verified rather than re-fixed. Three items
+flagged: a test-fixture gap that could not have caught that same defect
+(LOC10-2), the lookup's inherent member/applicant/unknown email oracle,
+verified good with its named compensating controls (LOC10-3), and a
+cross-feature pre-existing PII-in-logs note for Membership pipeline's own
+next pass (LOC10-4). LOC8-2 (hard-delete nulling a location on 9 referencing
+tables) re-confirmed OPEN/FLAGGED, unchanged. Full writeup:
+`docs/security-review/LOC10-32-locations-kiosk.md`.
+
+Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
+infrastructure) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 10, PR #3786, merged), preserved for history</summary>
