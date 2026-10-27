@@ -22232,7 +22232,7 @@ PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -22250,6 +22250,81 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-27 — Feature 24 (Meetings & minutes, pass 10) — watchdog pickup, 0 fixed by this pass, MM-19/MM-20 found already resolved by other work, 0 new findings
+
+Watchdog pickup for `/loop 30m /security-review`: the dedicated session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. `list_pull_requests`
+(state=open) and a fresh `search_pull_requests` for
+`head:claude/security-review-` both returned no match before starting — no
+other rotation PR was in flight. PR #3766 (Feature 23, Medical supplies,
+pass 17) had already merged (`69963418`); row 24 (Meetings & minutes) was
+confirmed the next `⬜` row on a freshly fetched `origin/main`. **Branch
+name avoids reuse** (CLAUDE.md Pitfall #24) — the bare
+`claude/security-review-meetings-minutes` name was used and merged twice
+already (passes 1/2 and pass 6), so this pass's branch carries a `-p10`
+suffix, confirmed unused for this feature by `search_pull_requests` and by
+`git ls-remote origin` returning nothing for any `*security-review-meetings*`
+ref.
+
+Baseline: pass 9's merge, `53779a30` (PR #3636). `git log 53779a30..origin/main`
+against every file this feature declares, over 376 non-merge commits on
+`main` in that window, surfaced exactly 2 commits with a real diff in scope,
+both read in full: `2cb6c029` ("Serialize the two minutes find-or-creates on
+the minutes row") — landed outside this rotation
+(`session_01V3sx5bNDnFJ6AMSSb6sBDh`, 2026-10-25) — fixes exactly the two
+findings passes 8/9 left flagged OPEN. **MM-19** (`ensure_section_motions`'s
+find-or-create for a section's prepared motion had no lock) and **MM-20**
+(`MinutesPublishingService._post_public`'s find-or-create for the one public
+copy had no lock, so a losing concurrent publish 500'd on the unique
+constraint instead of replacing the winner's copy) both now lock the minutes
+row and re-read with a locking read before deciding to insert — the full
+pitfall #27 shape, verified at the diff level (the motion read and the
+copy re-read both carry `.with_for_update()`, and the copy re-read also adds
+`populate_existing=True` so a copy already in the session's identity map
+from an earlier plain read is replaced by what the lock's re-read sees). A
+new `tests/test_minutes_find_or_create_race.py` (real two-connection races,
+marked `integration`) backs both; ran it directly rather than trusting the
+commit message — 2 passed. `docs/KNOWN_LIMITATIONS.md`'s MM-19/MM-20 entries
+were already updated to resolved stubs by that commit and re-read here as
+accurate. The second commit, `ce9520e8` ("Show status words, not stored
+codes, on nine more screens"), is a cross-feature cosmetic sweep whose slice
+of this feature (`MyActionItemsPanel.tsx`, `MinutesDetailPage.tsx`) replaces
+`item.status.replace('_', ' ')` with a new `actionItemStatus.ts` label map —
+display-only, no security surface.
+
+No route was added, removed or re-gated; re-enumerated by AST from scratch:
+81 total (17 `meetings.py` + 32 `minutes.py` + 30 `minutes_records.py` + 2
+`api/public/minutes.py`), identical in count and gate to pass 9. All three
+endpoint files are byte-identical to pass 9 (line counts match exactly,
+`git log` confirms no commit in the window touches any of them). No new
+migration touches this feature's tables; chain re-validated at a single
+head. Module-audit MM-4's XC-1 gap (re-confirmed still closed —
+`assert_in_org`/`assert_all_in_org` present at their current lines across
+all three services) and app-review's MM5-4 (no update precondition on
+`PUT /minutes/{minutes_id}`) and the deferred `minutes.view_executive` tier
+both re-confirmed still open/flagged, unchanged.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean at CI's pinned versions (7.4.1/26.10.1/9.0.2);
+`validate_migrations.py --strict` — 663 revisions, single head
+`c616fa1bd492`; `check_route_permissions.py --strict` — 279 routes, 0
+errors/warnings; scoped backend tests (`-k "meeting or minutes"`) — 1,073
+passed, 1 pre-existing skip (`pywebpush`); cross-cutting guard tests
+(`test_org_scoping_ratchet`, `test_endpoint_auth_coverage`,
+`test_account_status_gates`, `test_storage_operations`,
+`test_minutes_find_or_create_race`) — 37 passed; frontend `npm run
+typecheck`/`npm run lint` — 0 errors. (This sandbox's `frontend/node_modules`
+was effectively empty at the start of this pass; `npm ci` from the repo
+root restored it before any check ran — an environment-setup step, no
+manifest or lockfile change.)
+
+Full write-up: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 10**
+section.
+
+Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
+notifications) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-10-26 — Feature 17 (Training core, pass 11) — watchdog pickup, real delta (9 of 210 commits), scope gap closed (models/schemas added to declared scope), 0 fixed, 0 new findings, TR7-1 re-confirmed OPEN
 
