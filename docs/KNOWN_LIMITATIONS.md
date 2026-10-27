@@ -6545,23 +6545,16 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
 
-## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23)
+## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23, resolved 2026-10-27)
 
-Found driving W79 (`docs/workflow-review/W79-phone-pass.md`, W79-10).
-
-- **What happens:** on the inventory administration dashboard the headline
-  tile read "Needs attention 0 · nothing waiting" while the queue directly
-  below it read "Needs attention 1" (a member's pending return).
-- **Why:** two definitions share the name. The tile is the admin frame's
-  `needs_attention` metric (`admin_hub_service._inventory_attention`:
-  exceptions such as PPE past service life and stock below par). The queue is
-  assembled in `InventoryAdminHub.tsx` from work items: pending returns,
-  equipment requests and clearances. CLAUDE.md pitfall 29.
-- **Why it is not simply fixed:** choosing one definition changes a number
-  officers already watch, on a frame the other administration hubs share.
-- **Decision:** what inventory's "Needs attention" counts. Either the
-  backend resolver gains the work items (so the tile and queue are one
-  computation), or the queue is renamed so it does not claim the tile's name.
+**Resolved (owner decision: rename the queue).** The inventory dashboard's
+work queue (pending returns, requests, write-offs, low stock, maintenance due,
+overdue loans and deliveries, departure clearances) is now **Waiting for
+action**. The headline tile keeps **Needs attention** and its count, which the
+other administration hubs' frames share. The training guide follows; its two
+screenshots of the queue (`05-97`, `05-132`) still show the old heading until
+they are next captured. Covered by `InventoryAdminHub.test.tsx`. History in
+`docs/workflow-review/W79-phone-pass.md` (W79-10).
 
 ## Public Portal — Three Statistics Fields Can Be Enabled but Always Publish Null (2026-10-21)
 

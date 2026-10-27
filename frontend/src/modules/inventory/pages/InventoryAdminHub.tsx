@@ -6,7 +6,7 @@
  * by `InventoryCategory.item_type`, plus the store the uniforms are bought
  * through.
  *
- * This is the hub's Overview: the record-level "Needs attention" queue, the
+ * This is the hub's Overview: the record-level "Waiting for action" queue, the
  * setup prompt and the three supply lines, with Headline Metrics beside it at
  * `?tab=settings`. Everything else is reached through the area cards and page
  * strip `InventoryAdminLayout` draws above it — the same header the hub's other
@@ -24,17 +24,20 @@ import { useInventoryAdminShell } from '../components/inventoryAdminShell';
 import type { AttentionRow } from '../hooks/useInventoryAdminData';
 import type { InventoryHubCard, InventoryHubTone } from './inventoryHubCards';
 
-const NeedsAttention: React.FC<{
+// Not "Needs attention": that is the headline tile's name, and the tile counts
+// exceptions (PPE past service life, stock below par) where this queue lists
+// work items, so the two disagreed under one name (W79-10, pitfall 29).
+const WaitingForAction: React.FC<{
   rows: AttentionRow[];
   loading: boolean;
   failedSources: string[];
   onRetry: () => void;
 }> = ({ rows, loading, failedSources, onRetry }) => (
-  <section aria-labelledby="inventory-needs-attention" className="card mb-8 overflow-hidden">
+  <section aria-labelledby="inventory-waiting-for-action" className="card mb-8 overflow-hidden">
     <div className="border-theme-surface-border flex items-center gap-2 border-b px-4 py-3 sm:px-5">
       <AlertTriangle className="h-5 w-5 text-red-600" aria-hidden="true" />
-      <h2 id="inventory-needs-attention" className="text-theme-text-primary font-semibold">
-        Needs attention
+      <h2 id="inventory-waiting-for-action" className="text-theme-text-primary font-semibold">
+        Waiting for action
       </h2>
       {!loading && (
         <span
@@ -65,7 +68,7 @@ const NeedsAttention: React.FC<{
       </p>
     ) : rows.length === 0 && failedSources.length === 0 ? (
       <p className="text-theme-text-muted px-5 py-6 text-sm">
-        Nothing needs attention. All inventory work is up to date.
+        Nothing is waiting for action. All inventory work is up to date.
       </p>
     ) : (
       <ul className="divide-theme-surface-border divide-y">
@@ -187,15 +190,15 @@ const InventoryAdminOverview: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl py-6 sm:py-8">
-      {/* Only for the viewer it describes. Its empty state reads "Nothing
-          needs attention. All inventory work is up to date." -- a claim
+      {/* Only for the viewer it describes. Its empty state reads "Nothing is
+          waiting for action. All inventory work is up to date." -- a claim
           about inventory nobody asked the server about, since the batch
           behind it is raised only for `inventory.manage`. Shown to a store
           manager it sat directly above "Nothing here for your role",
           telling them in consecutive lines that everything is fine and
           that none of it is theirs. */}
       {canManage ? (
-        <NeedsAttention
+        <WaitingForAction
           rows={attentionRows}
           loading={loading}
           failedSources={failedSources}

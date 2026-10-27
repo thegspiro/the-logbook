@@ -854,7 +854,7 @@ Hand the item in as usual; it stays on your list until they confirm they have
 it."
 
 The notice appears on **Inventory Administration → Return Requests**, and as a
-"Pending return" row in **Needs attention**. When the gear arrives:
+"Pending return" row in **Waiting for action**. When the gear arrives:
 
 1. Open the notice and receive it.
 2. Choose the condition you see.
@@ -878,7 +878,7 @@ item and would end every other member's issuance.
 
 ![Receive Item for Nadia Belhaj's return of two pairs of Firefighting Gloves: Good chosen as the observed condition, the quantity box empty with the hint that the count must match the 2 the member reported, and Receive disabled](./images/05-96-receive-pool-return.png)
 
-![The top of Inventory Administration: Needs attention with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one](./images/05-97-needs-attention-pending-return.png)
+![The top of Inventory Administration: Waiting for action with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one](./images/05-97-needs-attention-pending-return.png)
 
 > **What if the gear came back another way?** If you take the item back through
 > **Return** on the members page, a pool return or a loan check-in, the
@@ -1198,7 +1198,7 @@ Needs the **Manage gear, uniforms and equipment** permission.
 3. Save.
 
 When the stock drops to or below the reorder point, the item appears in
-**Needs attention** and in the daily low-stock email.
+**Waiting for action** and in the daily low-stock email.
 
 ### Creating a Reorder Request
 
@@ -1256,7 +1256,7 @@ they can be issued at once.
 
 Pool items with a reorder point warn you when stock is low.
 
-**On the administration page.** **Needs attention** on **Inventory
+**On the administration page.** **Waiting for action** on **Inventory
 Administration** lists each low-stock category with what is on hand and its
 reorder level. The **Reorder Requests** card shows how many there are. The same
 list also flags maintenance that is due or overdue, overdue loans and overdue
@@ -2296,7 +2296,7 @@ Keep track of inspections, repairs and other work on equipment.
 ### Viewing Maintenance Due
 
 On **Inventory Administration**, the **Maintenance** card shows how many items
-are due. **Needs attention** lists each item whose maintenance is due or
+are due. **Waiting for action** lists each item whose maintenance is due or
 overdue, with **Open item**.
 
 ### Creating a Maintenance Record
@@ -2417,7 +2417,7 @@ The **property return report** created when a member is dropped is a separate
 document. See
 [Membership > Member Status Management](./01-membership.md#member-status-management).
 
-![The Needs attention card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button](./images/05-132-departure-clearance-needs-attention.png)
+![The Waiting for action card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button](./images/05-132-departure-clearance-needs-attention.png)
 
 ### Creating a Clearance
 
@@ -2427,7 +2427,7 @@ button to start a clearance by hand.
 1. Drop the member while they hold department property. The clearance is
    created with one line for each assignment, temporary loan and pool issuance
    they hold.
-2. On **Inventory Administration**, **Needs attention** shows "Unresolved
+2. On **Inventory Administration**, **Waiting for action** shows "Unresolved
    departure clearance · _member_ · _n_ outstanding". Select **Review**.
 3. The clearance shows the totals (items, resolved, **Outstanding**, **Value
    outstanding**) and every line, with how it was held and what has happened to
@@ -2745,12 +2745,12 @@ manage inventory.
 
 The **Overview** dashboard shows:
 
-1. **Needs attention** (officers who can manage inventory). One list of work
+1. **Waiting for action** (officers who can manage inventory). One list of work
    waiting on you, most urgent first: overdue deliveries, gear requests,
    pending returns, pending write-offs, low-stock items, maintenance due,
    overdue loans and unresolved departure clearances. Each row has an action,
    such as **Review**, **Receive**, **Check in** or **Open item**. When it is
-   empty it reads "Nothing needs attention. All inventory work is up to date."
+   empty it reads "Nothing is waiting for action. All inventory work is up to date."
 2. **Finish inventory setup**, until rooms, storage areas, categories and items
    all exist (see [First-Run Setup](#first-run-setup)).
 3. **Supply lines**: three large cards for the stock a department appoints

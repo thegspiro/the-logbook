@@ -401,7 +401,7 @@ describe('InventoryAdminHub', () => {
       total: 1,
     });
     renderWithRouter(<InventoryAdminHub />);
-    const queue = await screen.findByRole('region', { name: 'Needs attention' });
+    const queue = await screen.findByRole('region', { name: 'Waiting for action' });
     const rows = within(queue).getAllByRole('listitem');
     expect(rows[0]).toHaveTextContent('Maintenance due or overdue');
     expect(rows[1]).toHaveTextContent('Overdue temporary loan');
@@ -442,10 +442,20 @@ describe('InventoryAdminHub', () => {
     expect(screen.getByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
   });
 
+  // W79-10: the headline tile and this queue count different things, so they
+  // must not share the name "Needs attention".
+  it('names the queue apart from the Needs attention tile', async () => {
+    renderWithRouter(<InventoryAdminHub />);
+    expect(await screen.findByRole('region', { name: 'Waiting for action' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+  });
+
   it('shows an explicit empty state when every attention source succeeds', async () => {
     mockGetLowStockItems.mockResolvedValue([]);
     renderWithRouter(<InventoryAdminHub />);
-    expect(await screen.findByText('Nothing needs attention. All inventory work is up to date.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Nothing is waiting for action. All inventory work is up to date.')
+    ).toBeInTheDocument();
   });
 });
 
@@ -671,7 +681,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       { id: 'maint-1', name: 'SCBA 12', next_inspection_due: '2020-01-01' },
     ]);
     renderWithRouter(<InventoryAdminHub />);
-    const queue = await screen.findByRole('region', { name: 'Needs attention' });
+    const queue = await screen.findByRole('region', { name: 'Waiting for action' });
 
     expect(within(queue).getByRole('link', { name: 'Open item' })).toHaveAttribute(
       'href',
@@ -684,7 +694,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       { id: 'ro-1', item_name: 'Gloves', expected_delivery_date: '2020-01-01' },
     ]);
     renderWithRouter(<InventoryAdminHub />);
-    const queue = await screen.findByRole('region', { name: 'Needs attention' });
+    const queue = await screen.findByRole('region', { name: 'Waiting for action' });
 
     expect(within(queue).getByRole('link', { name: 'Receive' })).toHaveAttribute(
       'href',
@@ -763,7 +773,9 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       renderWithRouter(<InventoryAdminHub />);
       expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
-      expect(screen.queryByText('Nothing needs attention. All inventory work is up to date.')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Nothing is waiting for action. All inventory work is up to date.')
+      ).not.toBeInTheDocument();
     });
 
     it('offers no Headline Metrics page, and refuses it by URL as well', async () => {
