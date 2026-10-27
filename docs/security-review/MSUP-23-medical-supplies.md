@@ -5,7 +5,128 @@
 2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
 #2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, PR #2981),
 2026-10-17 (pass 14, PR #3352), 2026-10-20 (pass 15, PR #3455),
-2026-10-24 (pass 16, this PR)
+2026-10-24 (pass 16, PR #3635), 2026-10-27 (pass 17, this PR)
+
+## Pass 17 (2026-10-27) — 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, no reachable agents). No security-review PR was open —
+confirmed via `search_pull_requests`, 0 matching results, after PR #3765
+(Feature 22, Grants & fundraising, pass 11) merged. Row 23 (Medical
+supplies) confirmed as the first ⬜ row in `PROGRESS.md`'s rotation table on
+a freshly fetched `main` (head `fdfa0d83`).
+
+**Scope check — re-enumerated by AST, not diffed.** **29 routes**, up from
+pass 16's 26. `git log c1fc4894..origin/main` (pass 16's own merge)
+restricted to this feature's paths
+(`medical_supplies.py`, `inventory_service.py`,
+`equipment_check_service.py`, `app/mcp/tools/medical_supplies.py`,
+`frontend/src/modules/medical-supplies/`, `scheduled_tasks.py`) found nine
+commits; seven are other features' own work that merely touch a shared
+file (compliance report retry/idempotency in `scheduled_tasks.py`, an EVOC
+delete-message wording fix and a bulk-checklist-item `MissingGreenlet` fix
+in `equipment_check_service.py`, the Member ID Cards admin page's
+`scheduled_tasks.py` purge job) — each confirmed to touch no
+medical-supplies-domain code by reading its diff. The real delta is two
+commits, already flagged as unreviewed by pass 16 (which found PR #3627
+open, not yet merged, and noted it for whichever pass picked the rotation
+up after it landed):
+
+- `4808afbd` — **lot recalls** (merged PR #3627): a recall names a supply
+  and a lot number; while active, the units stop counting as stock
+  (`InventoryService._usable_lot`, backing on-hand totals, Low stock,
+  reorder, issuing and the on-hand sort), can't be swapped onto a truck,
+  and are listed first on the Expiring tab whatever their date. Three new
+  routes, a new table (`inventory_lot_recalls`, migration `3d67883cd461`),
+  and a lookup/panel on the frontend.
+- `15285883` — a frontend-only fix: the Recalls panel now checks the
+  response is a list before mapping it, so an unexpected shape shows its
+  own error instead of taking the page down through the ErrorBoundary.
+  No backend change; reviewed for completeness, not a security finding.
+
+**The three new routes, read end to end:**
+
+- `GET /recalls` (`inventory.view_medical`/`inventory.view`),
+  `POST /recalls` (`inventory.manage_medical`/`inventory.manage`),
+  `POST /recalls/{recall_id}/lift` (same manage permissions) —
+  domain-first, matching every other route on this router.
+- **Tenant isolation (§3):** every query service-side filters
+  `organization_id` directly —
+  `InventoryService.record_lot_recall`/`lift_lot_recall`/`list_lot_recalls`/
+  `recalled_lot_keys`/`get_recalled_shelf_lots` all take and apply it.
+  `record_medical_lot_recall` calls `_require_medical_item` (404, not 403,
+  on a cross-org or cross-domain id — matches this router's existing
+  convention) before recording. `lift_medical_lot_recall` resolves the
+  target through `_recall_responses`, which is itself domain-scoped via
+  `list_lot_recalls`'s `item_types` filter, so a gear recall or another
+  org's recall reads as absent (404) to a medical-only officer — re-read
+  directly, not assumed.
+- **Capacity/race (Pitfall #27):** `record_lot_recall` locks the supply row
+  (`with_for_update()`) before its duplicate-active-recall check, so two
+  officers recording the same lot at once cannot both pass it and leave
+  two active rows. `lift_lot_recall` locks the recall row itself before
+  checking `lifted_at`, for the same reason (two lifts racing would
+  otherwise both "win" and the second's note would silently overwrite the
+  first's). Both re-read directly from the current code, not cited from
+  the PR body.
+- **Migration (Pitfall #2, #26):** `3d67883cd461` — the two
+  `ondelete="SET NULL"` columns (`recalled_by`, `lifted_by`) are
+  `nullable=True`; the two `ondelete="CASCADE"` columns are
+  `nullable=False`, correctly. Guarded with `_has_table()` so a database
+  `create_all` already built (the model declares the same table) is a
+  no-op — Pitfall #26's shape, confirmed by reading the guard, not assumed
+  from the docstring's claim.
+- **Validation/abuse resistance (§4, §6):** `LotRecallCreate.lot_number`
+  (1–100 chars, blank rejected by a `field_validator`) and `.reason`
+  (≤1000 chars, optional); `LotRecallLift.note` (1–1000 chars, blank
+  rejected). No unbounded free-text field reaches the database untrimmed.
+- **Frontend (Pitfall #1, #16):** `recordRecall` sends
+  `reason: reason || undefined` on a **create** payload — the correct
+  operator for this side (Pitfall #1 distinguishes create from update; this
+  is a create). Both the recall and lift actions go through `PromptDialog`
+  (Pitfall #16), not `window.confirm`/`window.prompt`. Lot numbers and
+  reasons render as plain React text (no `dangerouslySetInnerHTML`), so no
+  new XSS surface.
+- **Audit logging:** both mutations call `log_audit_event` with
+  `medical_lot_recalled` / `medical_lot_recall_lifted`, recording the
+  recall id, item id, lot number and reason/note — these are structured
+  audit-log rows (not a `logger.info` text line), so Pitfall #33's
+  format-string hazard does not apply, and the content is operational
+  (a lot number, a stated reason) rather than PHI.
+- **Shared read path (`EquipmentCheckService.apparatus_expiring_stock`'s
+  `include_recalled` branch):** `recalled_lot_keys` is itself org-scoped
+  (filters `InventoryLotRecall.organization_id`), and the truck-side
+  "is this unit recalled" check in `_recall_responses` keys off
+  `(inventory_item_id, lot_number_key)` pairs drawn from that org-scoped
+  set — re-read directly in `equipment_check_service.py:4459-4461` and
+  `medical_supplies.py:2442-2446`.
+
+**Re-verified directly, not re-cited from pass 16's prose:** all 29 routes
+carry `Depends(require_permission(...))` (29 `require_permission(`
+occurrences for 29 decorators); `SafeCsvWriter` still backs both CSV
+exports, untouched by this delta; MSUP-4 and MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`, owner-accepted in
+`docs/KNOWN_LIMITATIONS.md`) re-checked at their current signatures —
+unchanged, still open, still owner-accepted; no new seeded grant, no new
+JSON column, no SMS path added by this delta.
+
+**0 new findings.** MSUP-1 through MSUP-27 all re-verified intact. MSUP-4
+and MSUP-11 remain the only open, flagged items.
+
+### Completion gate (pass 17)
+
+| Check                                                                                  | Result                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                          | ✅ clean                                                                                                                                                                |
+| `black --check app/ tests/ alembic/`                                                   | ✅ clean — 2695 files unchanged                                                                                                                                         |
+| `isort --check-only app/ tests/ alembic/`                                              | ✅ clean                                                                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                      | ✅ 663 revisions, single head `c616fa1bd492`                                                                                                                            |
+| `python3.13 -m pytest tests/ -q -k "medical_supplies or medical_supply or lot_recall"` | ✅ 215 passed, 1 pre-existing skip (`pywebpush`/`py_vapid`, unrelated)                                                                                                  |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                      | ✅ 279 routes, 0 errors, 0 warnings                                                                                                                                     |
+| `cd frontend && npm run typecheck`                                                     | ✅ 0 errors (after `npm ci` from the repo root — sandbox `node_modules` predated the `@simplewebauthn/browser` passkeys dependency; environment gap, not a code defect) |
+| `cd frontend && npm run lint`                                                          | ✅ 0 errors, 0 warnings                                                                                                                                                 |
+| `npx vitest run src/modules/medical-supplies`                                          | ✅ 190 passed (10 files)                                                                                                                                                |
 
 ## Pass 16 (2026-10-24) — 0 fixed, 0 new findings
 
