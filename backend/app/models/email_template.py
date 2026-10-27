@@ -74,6 +74,7 @@ class EmailTemplateType(str, enum.Enum):
     EVENT_WAITLIST_PROMOTION = "event_waitlist_promotion"
     APPLICATION_STEP_COMPLETED = "application_step_completed"
     APPLICATION_STATUS_LINK = "application_status_link"
+    APPLICATION_GOING_INACTIVE = "application_going_inactive"
     CUSTOM = "custom"
 
 

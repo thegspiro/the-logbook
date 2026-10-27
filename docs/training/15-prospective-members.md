@@ -831,12 +831,12 @@ A pipeline can flag quiet applications and mark them inactive.
 
 In **Pipeline Settings**, the **Inactivity Timeout** card holds:
 
-| Setting                       | Options                                                                                                                             | What it does                                                                                |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Default Inactivity Period** | 3 months, 6 months, 1 year, Never, Custom                                                                                           | How long before an applicant counts as inactive. 3 months by default                        |
-| **Warning Threshold**         | A percentage (80% by default)                                                                                                       | Show a warning when this share of the period has passed                                     |
-| **Notifications**             | "Notify membership coordinator when applications approach timeout"; "Notify the applicant that their application is going inactive" | Who is told. The coordinator is notified by default; the applicant is not                   |
-| **Auto-Purge**                | On or off, plus a grace period (30–1,095 days)                                                                                      | Permanently delete inactive applications after the grace period (see below). Off by default |
+| Setting                       | Options                                                                                                                             | What it does                                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Default Inactivity Period** | 3 months, 6 months, 1 year, Never, Custom                                                                                           | How long before an applicant counts as inactive. 3 months by default                                            |
+| **Warning Threshold**         | A percentage (80% by default)                                                                                                       | Show a warning when this share of the period has passed                                                         |
+| **Notifications**             | "Notify membership coordinator when applications approach timeout"; "Notify the applicant that their application is going inactive" | Who is emailed, at most once a week per applicant. The coordinator is notified by default; the applicant is not |
+| **Auto-Purge**                | On or off, plus a grace period (30–1,095 days)                                                                                      | Permanently delete inactive applications after the grace period (see below). Off by default                     |
 
 ### How It Works
 

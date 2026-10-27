@@ -73,6 +73,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.EVENT_WAITLIST_PROMOTION.value: "32a58e65eb63",
     EmailTemplateType.APPLICATION_STEP_COMPLETED.value: "08e6220f2dce",
     EmailTemplateType.APPLICATION_STATUS_LINK.value: "08e6220f2dce",
+    EmailTemplateType.APPLICATION_GOING_INACTIVE.value: "0d9897752425",
 }
 
 

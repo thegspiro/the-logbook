@@ -2678,6 +2678,100 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_inactivity_warning_email(
+        self,
+        to_email: str,
+        coordinator_name: str,
+        prospect_name: str,
+        days_inactive: int,
+        timeout_days: int,
+        pipeline_stage: str,
+        prospect_url: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a membership coordinator an application is going stale."""
+        from app.services.email_template_service import (
+            DEFAULT_INACTIVITY_WARNING_HTML,
+            DEFAULT_INACTIVITY_WARNING_SUBJECT,
+            DEFAULT_INACTIVITY_WARNING_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.INACTIVITY_WARNING,
+            context={
+                "coordinator_name": coordinator_name,
+                "prospect_name": prospect_name,
+                "days_inactive": str(days_inactive),
+                "timeout_days": str(timeout_days),
+                "pipeline_stage": pipeline_stage,
+                "prospect_url": prospect_url,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_INACTIVITY_WARNING_SUBJECT,
+            default_html=DEFAULT_INACTIVITY_WARNING_HTML,
+            default_text=DEFAULT_INACTIVITY_WARNING_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.INACTIVITY_WARNING.value,
+        )
+        return success_count > 0
+
+    async def send_application_going_inactive_email(
+        self,
+        to_email: str,
+        first_name: str,
+        applicant_name: str,
+        days_inactive: int,
+        inactive_date: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Warn an applicant their application is about to be marked inactive."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_GOING_INACTIVE_HTML,
+            DEFAULT_APPLICATION_GOING_INACTIVE_SUBJECT,
+            DEFAULT_APPLICATION_GOING_INACTIVE_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_GOING_INACTIVE,
+            context={
+                "first_name": first_name,
+                "applicant_name": applicant_name,
+                "days_inactive": str(days_inactive),
+                "inactive_date": inactive_date,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_GOING_INACTIVE_SUBJECT,
+            default_html=DEFAULT_APPLICATION_GOING_INACTIVE_HTML,
+            default_text=DEFAULT_APPLICATION_GOING_INACTIVE_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_GOING_INACTIVE.value,
+        )
+        return success_count > 0
+
     async def send_suggestion_submitted_email(
         self,
         to_email: str,

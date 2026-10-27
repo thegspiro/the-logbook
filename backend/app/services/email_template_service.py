@@ -623,6 +623,21 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "applicant_name", "description": "Applicant's full name"},
         {"name": "step_name", "description": "Name of the completed pipeline stage"},
     ],
+    "application_going_inactive": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "days_inactive",
+            "description": "Days since the application last moved",
+        },
+        {
+            "name": "inactive_date",
+            "description": (
+                "Date the application will be marked inactive, in the "
+                "department's timezone"
+            ),
+        },
+    ],
     "application_status_link": [
         {"name": "first_name", "description": "Applicant's first name"},
         {"name": "applicant_name", "description": "Applicant's full name"},
@@ -1312,6 +1327,14 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "step_name": "Background Check",
         }
     ),
+    "application_going_inactive": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "days_inactive": "75",
+            "inactive_date": "March 30, 2026",
+        }
+    ),
     "application_status_link": _sample(
         {
             "first_name": "Alex",
@@ -1570,6 +1593,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "application_withdrawn": {"applicant_name": "full"},
     "application_step_completed": {"first_name": "first", "applicant_name": "full"},
     "application_status_link": {"first_name": "first", "applicant_name": "full"},
+    "application_going_inactive": {"first_name": "first", "applicant_name": "full"},
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
@@ -1657,6 +1681,7 @@ TEST_SAMPLE_DATES: Dict[
     "it_password_notification": {"request_time": (0, None, _strf(_DATE_TIME))},
     "duplicate_application": {"original_date": (-30, None, _strf(_DATE))},
     "application_withdrawn": {"withdrawal_date": (0, None, _strf(_DATE))},
+    "application_going_inactive": {"inactive_date": (15, None, _strf(_DATE))},
     # The assignment and decline notices print the ISO date
     # (SchedulingService: shift.shift_date.isoformat()), so the test does too.
     "shift_assignment": {
@@ -2547,6 +2572,39 @@ application online: {{status_url}}
 {{footer_text}}"""
 
 DEFAULT_APPLICATION_STATUS_LINK_SUBJECT = "Track Your Membership Application"
+
+# Sent to an applicant whose application has not moved for long enough that
+# the pipeline's inactivity timeout is approaching, when the pipeline's
+# "Notify the applicant" box is ticked. Says a date rather than a count of
+# days, so the last day never reads "in 1 days".
+DEFAULT_APPLICATION_GOING_INACTIVE_HTML = build_shell(
+    "Is Your Application Still Active?",
+    """        <p>Hi {{first_name}},</p>
+        <p>Your membership application with {{organization_name}} has not
+        moved in {{days_inactive}} days. If we don't hear from you, it will be
+        marked inactive on <strong>{{inactive_date}}</strong>.</p>
+        <p>If you are still interested in joining, please get in touch with
+        our membership coordinator before then.</p>""",
+    accent=ACCENT_AMBER,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_GOING_INACTIVE_TEXT = """Is Your Application Still Active?
+
+Hi {{first_name}},
+
+Your membership application with {{organization_name}} has not moved in
+{{days_inactive}} days. If we don't hear from you, it will be marked inactive
+on {{inactive_date}}.
+
+If you are still interested in joining, please get in touch with our
+membership coordinator before then.
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_GOING_INACTIVE_SUBJECT = (
+    "Your application with {{organization_name}} is going inactive"
+)
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
@@ -4606,6 +4664,19 @@ class EmailTemplateService:
             "description": (
                 "Sent to an applicant when a pipeline stage set to notify "
                 "them on completion is completed."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_GOING_INACTIVE,
+            "footer": "public",
+            "name": "Application Going Inactive",
+            "subject": DEFAULT_APPLICATION_GOING_INACTIVE_SUBJECT,
+            "html": DEFAULT_APPLICATION_GOING_INACTIVE_HTML,
+            "text": DEFAULT_APPLICATION_GOING_INACTIVE_TEXT,
+            "description": (
+                "Sent to an applicant whose application is approaching the "
+                "pipeline's inactivity timeout, when the pipeline is set to "
+                "notify the applicant."
             ),
         },
         {

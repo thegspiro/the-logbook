@@ -124,7 +124,11 @@ Under **Inactivity Timeout** set the **Default Inactivity Period** (default
 3 months) and **Warning Threshold** (default 80%), then **Save Inactivity
 Settings**. Applicants approaching the timeout show amber, then red, on the
 board; past it, the daily `membership_inactivity_warnings` task marks them
-**Inactive**. A warning is recorded in the applicant's activity log.
+**Inactive**. A warning is recorded in the applicant's activity log, at most
+once a week per applicant. With **Notify coordinator** on (the default) the
+membership coordinators are emailed the **Prospect Inactivity Warning**; with
+**Notify applicant** on, the applicant is emailed **Application Going
+Inactive**, which gives the date the application will be marked inactive.
 
 **Auto-purge** (off by default) permanently deletes applications that have
 been inactive longer than the purge period (default 365 days, clamped to

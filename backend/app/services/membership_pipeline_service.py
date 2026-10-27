@@ -309,6 +309,22 @@ def _applicant_name(prospect: ProspectiveMember) -> str:
     return " ".join(p for p in (prospect.first_name, prospect.last_name) if p)
 
 
+def _inactivity_notify_flags(prospect: ProspectiveMember) -> Dict[str, bool]:
+    """The pipeline's two inactivity "Notify" boxes, as the settings show them.
+
+    A pipeline with no stored inactivity settings shows the defaults
+    (coordinator on, applicant off), so that is what it gets here; a stored
+    value is free-form JSON and only a real boolean True switches a box on.
+    """
+    config = (prospect.pipeline.inactivity_config if prospect.pipeline else None) or {}
+    if not isinstance(config, dict):
+        config = {}
+    return {
+        "notify_coordinator": config.get("notify_coordinator", True) is True,
+        "notify_applicant": config.get("notify_applicant", False) is True,
+    }
+
+
 def public_status_enabled_for(prospect: ProspectiveMember) -> bool:
     """Whether ``prospect``'s public status page is switched on.
 
@@ -8568,7 +8584,9 @@ class MembershipPipelineService:
                 {
                     "prospect_id": str(prospect.id),
                     "prospect_name": prospect.full_name,
+                    "prospect_first_name": prospect.first_name or "",
                     "prospect_email": prospect.email,
+                    **_inactivity_notify_flags(prospect),
                     "current_stage": (
                         prospect.current_step.name if prospect.current_step else None
                     ),
@@ -8588,10 +8606,10 @@ class MembershipPipelineService:
     ) -> Dict[str, Any]:
         """
         Process inactivity warnings: mark critical prospects as inactive and
-        record an ``inactivity_warning_sent`` activity entry for the rest.
-        Nothing is emailed: the pipeline's ``notify_coordinator`` /
-        ``notify_applicant`` settings have no reader yet (see
-        docs/KNOWN_LIMITATIONS.md). Returns count of warnings and actions taken.
+        record an ``inactivity_warning_sent`` activity entry for the rest,
+        emailing the membership coordinators and/or the applicant as the
+        pipeline's ``notify_coordinator`` / ``notify_applicant`` boxes say.
+        Returns count of warnings and actions taken.
 
         Prior-activity lookups are batched rather than run per prospect: this
         runs over every stale prospect in the organization, so a department
@@ -8649,11 +8667,13 @@ class MembershipPipelineService:
                 )
             inactive_count = len(to_mark)
 
+        to_email: List[Dict[str, Any]] = []
         for w in warned:
             previous = last_warned_at.get(w["prospect_id"])
             # Warn at most once per 7-day period.
             if previous is not None and (now - previous).days < 7:
                 continue
+            to_email.append(w)
             await self._log_activity(
                 prospect_id=w["prospect_id"],
                 action="inactivity_warning_sent",
@@ -8666,6 +8686,13 @@ class MembershipPipelineService:
             )
             warning_count += 1
 
+        # Sent before the commit that records them: a reminder, so if the
+        # commit fails the next run warning again is a nuisance, where a
+        # warning that never went out is the thing the coordinator asked for
+        # and did not get.
+        if to_email:
+            await self._email_inactivity_warnings(organization_id, to_email, now)
+
         if warning_count > 0 or inactive_count > 0:
             await self.db.commit()
 
@@ -8674,6 +8701,74 @@ class MembershipPipelineService:
             "marked_inactive": inactive_count,
             "total_checked": len(warnings),
         }
+
+    async def _email_inactivity_warnings(
+        self, organization_id: str, warnings: List[Dict[str, Any]], now: datetime
+    ) -> None:
+        """Email this run's inactivity warnings, as each pipeline is set to.
+
+        Best-effort: a mail failure is logged and the sweep carries on, since
+        the activity entry and the inactive marking are the record.
+        """
+        from zoneinfo import ZoneInfo
+
+        from app.core.config import settings as app_settings
+        from app.services.email_service import EmailService
+
+        try:
+            org = (
+                await self.db.execute(
+                    select(Organization).where(Organization.id == organization_id)
+                )
+            ).scalar_one_or_none()
+            if not org:
+                return
+            email_svc = EmailService(org)
+            org_zone = ZoneInfo(org.timezone or "America/New_York")
+            pipeline_url = (
+                f"{getattr(app_settings, 'FRONTEND_URL', '') or ''}"
+                "/prospective-members"
+            )
+
+            coordinators: Optional[List[User]] = None
+            for w in warnings:
+                if w.get("notify_coordinator"):
+                    if coordinators is None:
+                        coordinators = recipients_for(
+                            await self._withdrawal_notice_recipients(organization_id),
+                            EmailKind.MEMBERSHIP_ADMIN,
+                            department_required_kinds(org),
+                        )
+                    for coordinator in coordinators:
+                        await email_svc.send_inactivity_warning_email(
+                            to_email=coordinator.email,
+                            coordinator_name=coordinator.preferred_name
+                            or coordinator.first_name
+                            or "",
+                            prospect_name=w.get("prospect_name") or "",
+                            days_inactive=w["days_inactive"],
+                            timeout_days=w["timeout_days"],
+                            pipeline_stage=w.get("current_stage") or "",
+                            prospect_url=pipeline_url,
+                            db=self.db,
+                            organization_id=organization_id,
+                        )
+                if w.get("notify_applicant") and w.get("prospect_email"):
+                    remaining = max(w["timeout_days"] - w["days_inactive"], 0)
+                    inactive_on = (now + timedelta(days=remaining)).astimezone(org_zone)
+                    await email_svc.send_application_going_inactive_email(
+                        to_email=w["prospect_email"],
+                        first_name=w.get("prospect_first_name") or "",
+                        applicant_name=w.get("prospect_name") or "",
+                        days_inactive=w["days_inactive"],
+                        inactive_date=inactive_on.strftime("%B %d, %Y"),
+                        db=self.db,
+                        organization_id=organization_id,
+                    )
+        except Exception as e:
+            logger.error(
+                "Inactivity warning emails failed for org {}: {}", organization_id, e
+            )
 
     async def _prospects_with_action(self, prospect_ids: List[str], action: str) -> set:
         """Which of ``prospect_ids`` already have an activity entry for ``action``."""

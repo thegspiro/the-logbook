@@ -377,3 +377,65 @@ class TestSchedulingNotices:
             .all()
         )
         assert [n.recipient_id for n in logged] == [user_id]
+
+
+@pytest.mark.unit
+class TestTheMigrationSwitchesEssentialEmailsBackOn:
+    """``0d9897752425`` turns on the essential templates a department had
+    switched off, and leaves every other row as it was."""
+
+    def test_only_switched_off_essential_rows_change(self):
+        import importlib.util
+        import pathlib
+
+        import sqlalchemy as sa
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
+
+        (path,) = (
+            pathlib.Path(__file__).resolve().parent.parent / "alembic" / "versions"
+        ).glob("*_0d9897752425_*.py")
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        assert spec is not None
+        assert spec.loader is not None
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+
+        engine = sa.create_engine("sqlite://")
+        rows = {
+            "reset-off": ("password_reset", 0),
+            "ballot-off": ("ballot_notification", 0),
+            "welcome-on": ("welcome", 1),
+            "reminder-off": ("event_reminder", 0),
+            "custom-off": ("custom", 0),
+        }
+        with engine.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "CREATE TABLE email_templates (id TEXT PRIMARY KEY, "
+                    "template_type TEXT, is_active INTEGER)"
+                )
+            )
+            for row_id, (template_type, active) in rows.items():
+                conn.execute(
+                    sa.text("INSERT INTO email_templates VALUES (:i, :t, :a)"),
+                    {"i": row_id, "t": template_type, "a": active},
+                )
+        with engine.begin() as conn:
+            with Operations.context(MigrationContext.configure(conn)):
+                migration.switch_essential_templates_on()
+        with engine.connect() as conn:
+            after = {
+                row.id: row.is_active
+                for row in conn.execute(
+                    sa.text("SELECT id, is_active FROM email_templates")
+                )
+            }
+
+        assert after == {
+            "reset-off": 1,
+            "ballot-off": 1,
+            "welcome-on": 1,
+            "reminder-off": 0,
+            "custom-off": 0,
+        }
