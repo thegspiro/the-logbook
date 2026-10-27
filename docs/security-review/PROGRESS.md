@@ -16,12 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_(Filled in by this iteration's own second commit, once the PR exists —
-Feature 30, Onboarding, pass 10. Step 0 of this iteration confirmed PR #3784
-merged and cleared its note below into the superseded history; see
-`docs/security-review/PROGRESS.md`'s own Log entry and
-`ONB5-30-onboarding.md`'s **Pass 10** section for the review this note will
-point to.)_
+**PR [#3785](https://github.com/thegspiro/the-logbook/pull/3785)** (branch
+`claude/security-review-onboarding-p10`) — Feature 30 (Onboarding), pass 10.
+**Watchdog pickup** — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`). No security-review PR was open — confirmed via
+`list_pull_requests`, which returned only two unrelated docs PRs
+(#3774/#3772), checked immediately before starting. PR #3784 (Feature 29,
+Reports & analytics, pass 12) had already merged. Row 30 was confirmed the
+next `⬜` row by reading the rotation table directly on a freshly fetched
+`main` (head `65b566ee`). **0 fixed, 0 new findings; two pass-9 "OPEN" items
+re-confirmed FIXED.** Real delta since pass 9's merge plus its same-day
+recovery (`e6da6486`, PR #3686): app-wide email-at-rest encryption reaching
+`onboarding_status.admin_email`/the IT-team-member lookup, and Gmail-API
+sending via a delegated service account reaching `email_test_helper.py`'s
+shared connection tester — both cross-feature work, both verified good (the
+onboarding wizard still offers Gmail App Password only, by design; the
+pre-auth connection-test oracle grants no capability beyond what a key's
+holder could already ask Google directly). The duplicate-role-id 500 and
+`POST /organization`'s missing exception handler, both reported OPEN by pass
+9's own write-up, were in fact already fixed by the same recovery PR that
+merged afterward. Routes re-enumerated by AST: 26, unchanged. See
+`ONB5-30-onboarding.md`'s **Pass 10** section for the full review.
+
+Rotation row 30 → ✅ (pending this PR's merge); next is Feature 31
+(Scheduled tasks) — re-check `list_pull_requests`/`search_pull_requests`
+fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 12, PR #3784, merged), preserved for history</summary>
