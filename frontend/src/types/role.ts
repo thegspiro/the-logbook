@@ -56,6 +56,8 @@ export interface UserWithRoles {
   photo_url?: string | undefined;
   status: UserStatus;
   mfa_enabled?: boolean | undefined;
+  /** Has a registered passkey; sent to members.manage holders only. */
+  has_passkey?: boolean | undefined;
   /** Set while a sign-in lockout is in force; sent to members.manage holders only. */
   locked_until?: string | null | undefined;
   membership_type?: string | undefined;

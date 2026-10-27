@@ -32,6 +32,7 @@ from app.core.security import hash_password
 from app.models.audit import AuditLog
 from app.models.user import User
 from app.schemas.auth import UserLogin
+from app.services import passkey_service
 from app.services.auth_service import (
     AUTH_FAILURE_ACCOUNT_LOCKED,
     AUTH_FAILURE_INVALID_PASSWORD,
@@ -64,6 +65,11 @@ class TestLoginEndpointAudits:
             patch.object(auth_ep, "record_auth_failure", new=AsyncMock()),
             patch.object(auth_ep, "clear_auth_failures", new=AsyncMock()),
             patch.object(auth_ep, "get_client_ip", return_value="203.0.113.7"),
+            # The members here have no passkey; the mocked database could not
+            # answer the lookup login makes for one.
+            patch.object(
+                passkey_service, "has_passkey", new=AsyncMock(return_value=False)
+            ),
         ):
             yield
 

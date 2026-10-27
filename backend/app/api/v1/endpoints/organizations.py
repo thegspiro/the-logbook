@@ -11,7 +11,7 @@ from typing import Any, Mapping
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -33,6 +33,7 @@ from app.core.config import settings as app_settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
+from app.models.passkey import UserPasskey
 from app.models.user import Role, User
 from app.schemas.organization import (
     AppearanceSettings,
@@ -1176,13 +1177,15 @@ async def get_setup_checklist(
         )
     ).scalar() or 0
 
+    # A passkey is a second factor as much as the authenticator app is.
+    has_passkey = select(UserPasskey.id).where(UserPasskey.user_id == User.id).exists()
     mfa_user_count = (
         await db.execute(
             select(func.count())
             .select_from(User)
             .where(
                 User.organization_id == org_id,
-                User.mfa_enabled == True,  # noqa: E712
+                or_(User.mfa_enabled.is_(True), has_passkey),
             )
         )
     ).scalar() or 0

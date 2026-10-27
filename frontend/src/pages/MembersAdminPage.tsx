@@ -45,7 +45,8 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
 import { useTimezone } from '../hooks/useTimezone';
 import { OverduePropertyReturnsPanel } from '../components/members/OverduePropertyReturnsPanel';
-import { formatTime } from '../utils/dateFormatting';
+import { formatDate, formatTime } from '../utils/dateFormatting';
+import type { PasskeyInfo } from '../types/auth';
 import { displayNameOf, givenName } from '../utils/memberName';
 
 type ViewMode = 'by-member' | 'by-role';
@@ -106,6 +107,10 @@ export const MembersAdminPage: React.FC = () => {
   // Reset MFA state
   const [resetMfaUser, setResetMfaUser] = useState<UserWithRoles | null>(null);
   const [savingMfaReset, setSavingMfaReset] = useState(false);
+  // The member's passkeys, so one lost phone can be removed without resetting
+  // everything. Null while loading or when the list could not be read.
+  const [mfaUserPasskeys, setMfaUserPasskeys] = useState<PasskeyInfo[] | null>(null);
+  const [removingPasskeyId, setRemovingPasskeyId] = useState<string | null>(null);
 
   // Delete modal state
   const [deleteModalUser, setDeleteModalUser] = useState<UserWithRoles | null>(null);
@@ -387,6 +392,49 @@ export const MembersAdminPage: React.FC = () => {
       setError(getErrorDetail(err) || 'Unable to unlock this account. Try again.');
     } finally {
       setUnlockingUserId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!resetMfaUser) {
+      setMfaUserPasskeys(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const passkeys = await userService.adminListPasskeys(resetMfaUser.id);
+        if (!cancelled) setMfaUserPasskeys(passkeys);
+      } catch (err: unknown) {
+        if (!cancelled) setError(getErrorMessage(err, "Unable to load the member's passkeys."));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resetMfaUser]);
+
+  const handleRemovePasskey = async (passkey: PasskeyInfo) => {
+    if (!resetMfaUser) return;
+    const ok = await confirm({
+      title: 'Remove passkey',
+      message: `Remove "${passkey.name}" from ${displayNameOf(resetMfaUser) || resetMfaUser.username}'s account? They will be signed out everywhere. Their other sign-in methods keep working.`,
+      confirmLabel: 'Remove passkey',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      setRemovingPasskeyId(passkey.id);
+      setError(null);
+      await userService.adminRemovePasskey(resetMfaUser.id, passkey.id);
+      setMfaUserPasskeys((prev) => (prev ?? []).filter((p) => p.id !== passkey.id));
+      toast.success('Passkey removed');
+      await fetchData();
+    } catch (err: unknown) {
+      setError(getErrorDetail(err) || 'Unable to remove the passkey. Try again.');
+    } finally {
+      setRemovingPasskeyId(null);
     }
   };
 
@@ -737,7 +785,7 @@ export const MembersAdminPage: React.FC = () => {
                             {unlockingUserId === user.id ? 'Unlocking…' : 'Unlock'}
                           </button>
                         )}
-                        {currentUser?.id !== user.id && user.mfa_enabled && (
+                        {currentUser?.id !== user.id && (user.mfa_enabled || user.has_passkey) && (
                           <button
                             onClick={() => setResetMfaUser(user)}
                             aria-label={`Reset MFA for ${displayNameOf(user) || user.username}`}
@@ -1137,9 +1185,40 @@ export const MembersAdminPage: React.FC = () => {
           }
         >
           <div className="space-y-3">
+            {mfaUserPasskeys && mfaUserPasskeys.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-theme-text-primary text-sm font-medium">Passkeys</p>
+                <p className="text-theme-text-secondary text-sm">
+                  Lost one phone? Remove just that passkey. The member keeps their other sign-in methods.
+                </p>
+                <ul className="divide-theme-surface-border border-theme-surface-border divide-y rounded-lg border">
+                  {mfaUserPasskeys.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-theme-text-primary truncate text-sm">{p.name}</p>
+                        <p className="text-theme-text-muted text-xs">
+                          Added {formatDate(p.created_at, tz)}
+                          {p.last_used_at ? ` · Last used ${formatDate(p.last_used_at, tz)}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemovePasskey(p)}
+                        disabled={removingPasskeyId !== null || savingMfaReset}
+                        aria-label={`Remove passkey ${p.name}`}
+                        className="touch-target-phone text-sm text-red-700 hover:text-red-800 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        {removingPasskeyId === p.id ? 'Removing…' : 'Remove'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="text-theme-text-secondary text-sm">
-              This disables two-factor authentication and clears the member's authenticator and recovery codes. Use this
-              only when the member has lost their device and recovery codes.
+              Reset MFA turns off two-factor authentication completely: it removes the member's authenticator, every
+              passkey and their recovery codes. Use it only when the member has lost all their devices and recovery
+              codes.
             </p>
             <p className="text-theme-text-secondary text-sm">
               They'll be signed out of active sessions and can re-enroll from their own Security settings. If your

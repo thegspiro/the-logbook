@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**319 tables · 5280 columns · 1081 foreign keys**
+**321 tables · 5300 columns · 1084 foreign keys**
 
 ---
 
@@ -544,6 +544,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`organization_officers`](#organization_officers) | `OrganizationOfficer` | 11 | One department office and the member who currently holds it. |
+
+### Passkey
+
+<sub>`app/models/passkey.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`user_passkeys`](#user_passkeys) | `UserPasskey` | 14 |  |
+| [`webauthn_challenges`](#webauthn_challenges) | `WebAuthnChallenge` | 6 | A challenge handed to the browser, consumed by the response to it. |
 
 ### Public Portal
 
@@ -7858,6 +7867,54 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_org_officer_org_office` (`organization_id`, `office_key`)
 
+## Passkey
+
+### `user_passkeys`
+
+**UserPasskey** · `app/models/passkey.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `credential_id` | TEXT | no |  |  |  |
+| `credential_id_hash` | VARCHAR(64) | no | UQ, UQ-IDX |  |  |
+| `public_key` | TEXT | no |  |  |  |
+| `rp_id` | VARCHAR(255) | no |  |  |  |
+| `sign_count` | BIGINT | no |  | `0` |  |
+| `transports` | JSON | yes |  |  |  |
+| `aaguid` | VARCHAR(36) | yes |  |  |  |
+| `backed_up` | BOOL | no |  | `False` |  |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `last_used_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- UNIQUE `ix_user_passkeys_credential_id_hash` (`credential_id_hash`)
+- `ix_user_passkeys_organization_id` (`organization_id`)
+- `ix_user_passkeys_user_id` (`user_id`)
+
+### `webauthn_challenges`
+
+**WebAuthnChallenge** · `app/models/passkey.py`
+
+> A challenge handed to the browser, consumed by the response to it. Kept in the database rather than Redis because a challenge must be single-use across every worker: without Redis the per-process fallback other short-lived values use would let the response land on a worker that never issued it, and a member whose only second factor is a passkey would be locked out until Redis came back.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `purpose` | VARCHAR(20) | no |  |  |  |
+| `challenge` | VARCHAR(128) | no |  |  |  |
+| `expires_at` | DATETIME | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_webauthn_challenges_user_id` (`user_id`)
+
 ## Public Portal
 
 ### `public_portal_access_log`
@@ -11113,7 +11170,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (397 references)
+### → `users` (399 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11506,6 +11563,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_waivers` | `granted_by` | SET NULL | yes |
 | `training_waivers` | `user_id` | CASCADE | no |
 | `user_consents` | `user_id` | CASCADE | no |
+| `user_passkeys` | `user_id` | CASCADE | no |
 | `user_positions` | `assigned_by` | RESTRICT | yes |
 | `user_positions` | `user_id` | CASCADE | no |
 | `users` | `referred_by_user_id` | SET NULL | yes |
@@ -11513,9 +11571,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `recorded_by` | SET NULL | yes |
 | `votes` | `voter_id` | SET NULL | yes |
 | `voting_tokens` | `user_id` | SET NULL | yes |
+| `webauthn_challenges` | `user_id` | CASCADE | no |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (262 references)
+### → `organizations` (263 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11778,6 +11837,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_submissions` | `organization_id` | CASCADE | no |
 | `training_waivers` | `organization_id` | CASCADE | no |
 | `user_consents` | `organization_id` | CASCADE | no |
+| `user_passkeys` | `organization_id` | CASCADE | no |
 | `users` | `organization_id` | CASCADE | no |
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
@@ -12874,4 +12934,5 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `skill_test_viewers` | `skill_tests`, `users` |
 | `user_positions` | `positions`, `users` |
 | `votes` | `candidates`, `elections`, `users` |
+| `webauthn_challenges` | `users` |
 
