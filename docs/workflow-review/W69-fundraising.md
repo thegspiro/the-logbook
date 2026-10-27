@@ -112,7 +112,13 @@ unchanged).
   Reports tabs, and the dashboard's View Grant / View Campaign / New
   Application.
 
-### W69-6 — LOW — A business donor must be entered as a person — FLAGGED
+### W69-6 — LOW — A business donor must be entered as a person — ✅ FIXED 2026-10-26
+
+Owner decision: every non-individual donor type may be recorded by organization name
+alone; an individual still needs both names. `donors.first_name`/`last_name` are
+nullable (migration `e03f96c98452`), `FundraisingService.check_donor_name` holds the rule
+for create and update, and the Add Donor form asks for an organization name for those
+types. Original finding below.
 
 The API requires `first_name` and `last_name` on every donor
 (`DonorBase`), so Valley Hardware had to be entered as "Dale Harmon (Valley

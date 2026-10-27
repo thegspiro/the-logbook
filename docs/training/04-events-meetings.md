@@ -689,6 +689,29 @@ The second appears only once the first is ticked. A
 > night. It is the wrong trade for a business meeting or a training session,
 > whose attendance feeds member records — leave it off there.
 
+### A guest QR code for an event with no kiosk room _(2026-10-25)_
+
+The second code used to exist only on a room's kiosk display, so an event held
+at an outside venue had no guest code at all. An event now has its own. Anyone
+with **events.manage** sees **Guest check-in QR code** on the event's QR page
+and detail page. It is created the first time you open it. **Reset** issues a
+new one and stops any printed copy from working. Guests who scan it reach the
+same sign-in page as the kiosk's guest code. The QR page can print either code
+on its own. Members who are not managers never receive the code.
+
+> **Screenshot to create:** the event QR page with the guest code and its
+> Reset button, and the print choice for one code.
+
+### Signing in a walk-in yourself _(2026-10-25)_
+
+On the event page, the **Guests** card has **Add guest** (first and last name
+required; email and phone optional), which adds and signs in the guest in one
+step, and **Sign in** on any listed guest who has not signed in. At an event
+that feeds the pipeline, a walk-in with an email who is not already an
+applicant gets an application opened, marked as entered by staff. A member
+account is left alone.
+
+### What the guest fills in
 ### What the guest fills in
 
 This is the form at an event **without** the pipeline switch. Name is

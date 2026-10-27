@@ -121,7 +121,7 @@ Each rank's default permissions are the same list as the matching position's in
 `operational_ranks` table has no permissions column, but the grants still reach
 the database through the seeded positions, so **changing a seeded grant needs a
 migration, not just a registry edit**: see
-[docs/rules/migrations.md](../docs/rules/migrations.md#a-seeded-rank-grant-reaches-the-database-through-a-position).
+[docs/rules/migrations.md](https://github.com/thegspiro/the-logbook/blob/main/docs/rules/migrations.md#a-seeded-rank-grant-reaches-the-database-through-a-position).
 
 ## Permission catalogue
 
@@ -373,7 +373,7 @@ their positions.
 2. Grant it to the positions that should hold it in `DEFAULT_POSITIONS`. This
    only reaches organizations onboarded afterwards; existing installations need
    a migration that writes the grant onto their stored positions, gated per
-   [docs/rules/migrations.md](../docs/rules/migrations.md#a-seeded-rank-grant-reaches-the-database-through-a-position).
+   [docs/rules/migrations.md](https://github.com/thegspiro/the-logbook/blob/main/docs/rules/migrations.md#a-seeded-rank-grant-reaches-the-database-through-a-position).
 3. Gate the endpoints with `require_permission(...)` and the frontend routes
    with `ProtectedRoute requiredPermission=...`.
 

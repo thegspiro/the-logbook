@@ -47,8 +47,10 @@ from app.models.audit import AuditLog
 from app.models.directory_account import DirectoryAccountStatus
 from app.models.document import Document
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
+from app.models.passkey import UserPasskey
 from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Organization, Role, User, UserStatus, user_roles
+from app.schemas.auth import PasskeyResponse
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.schemas.user import (
     AdminPasswordReset,
@@ -71,6 +73,7 @@ from app.schemas.user import (
     normalize_bottom_nav_slots,
     resolve_profile_visibility,
 )
+from app.services import passkey_service
 from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
@@ -1070,6 +1073,14 @@ async def list_users_with_roles(
         .order_by(User.last_name, User.first_name)
     )
     users = result.scalars().all()
+    with_passkeys: set[str] = set()
+    if is_admin:
+        passkey_rows = await db.execute(
+            select(UserPasskey.user_id)
+            .where(UserPasskey.organization_id == str(current_user.organization_id))
+            .distinct()
+        )
+        with_passkeys = {str(uid) for uid in passkey_rows.scalars().all()}
 
     # SEC (ORU-8): this endpoint returned every field on the model, while
     # `GET /users` filtered contact details against the organization's
@@ -1078,7 +1089,13 @@ async def list_users_with_roles(
     # could read it — plus home address and personal email, which the roster
     # only exposes when the member opted in — by requesting this URL instead.
     # Redact here too, or the setting is advisory.
-    return [_redact_contact_fields(user, visibility, is_admin) for user in users]
+    payloads = []
+    for user in users:
+        payload = _redact_contact_fields(user, visibility, is_admin)
+        if is_admin:
+            payload.has_passkey = str(user.id) in with_passkeys
+        payloads.append(payload)
+    return payloads
 
 
 @router.get("/{user_id}/roles", response_model=UserRoleResponse)
@@ -2563,8 +2580,8 @@ async def admin_reset_mfa(
     Reset (disable) a user's two-factor authentication (IT Lead / Admin only).
 
     For members who have lost their authenticator device and exhausted their
-    recovery codes. Clears the MFA secret and recovery codes so the member can
-    re-enroll from their own Security settings. If the org requires MFA, the
+    recovery codes. Clears the MFA secret, every passkey and the recovery
+    codes so the member can re-enroll from their own Security settings. If the org requires MFA, the
     member is forced back into enrollment on next login.
 
     Admins cannot reset their own MFA here (they retain their recovery codes or
@@ -2599,7 +2616,8 @@ async def admin_reset_mfa(
 
     await _enforce_account_reset_ceiling(current_user, user, db)
 
-    if not user.mfa_enabled:
+    passkeys = await passkey_service.list_passkeys(db, str(user.id))
+    if not user.mfa_enabled and not passkeys:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This user does not have MFA enabled",
@@ -2610,6 +2628,7 @@ async def admin_reset_mfa(
     user.mfa_enabled = False
     user.mfa_secret = None
     user.mfa_backup_codes = None
+    passkeys_removed = await passkey_service.delete_all_passkeys(db, str(user.id))
 
     # Revoke active sessions so the reset takes effect immediately (and the org
     # MFA requirement, if any, re-challenges enrollment on next login).
@@ -2627,6 +2646,7 @@ async def admin_reset_mfa(
         event_data={
             "target_user_id": str(user_id),
             "target_username": target_username,
+            "passkeys_removed": passkeys_removed,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -2647,6 +2667,137 @@ async def admin_reset_mfa(
     await db.commit()
 
     return {"message": f"MFA has been reset for {target_username}"}
+
+
+async def _resolve_passkey_admin_target(
+    user_id: UUID, current_user: User, db: AsyncSession
+) -> User:
+    """The member whose passkeys an administrator is acting on, in their org."""
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+        .options(selectinload(User.positions))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return user
+
+
+@router.get("/{user_id}/passkeys", response_model=list[PasskeyResponse])
+async def admin_list_passkeys(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("users.create", "members.manage")),
+):
+    """
+    List a member's registered passkeys (names and dates only).
+
+    **Permissions required:** members.manage or users.create
+    """
+    user = await _resolve_passkey_admin_target(user_id, current_user, db)
+    passkeys = await passkey_service.list_passkeys(db, str(user.id))
+    return [
+        PasskeyResponse(
+            id=str(p.id),
+            name=p.name,
+            created_at=p.created_at,
+            last_used_at=p.last_used_at,
+            backed_up=bool(p.backed_up),
+        )
+        for p in passkeys
+    ]
+
+
+@router.delete(
+    "/{user_id}/passkeys/{passkey_id}",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(_rate_limit_admin_reset)],
+)
+async def admin_remove_passkey(
+    user_id: UUID,
+    passkey_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("users.create", "members.manage")),
+    _stepup: User = Depends(require_stepup),
+):
+    """
+    Remove one passkey from a member's account — for a lost or stolen device.
+
+    The member keeps their other passkeys, authenticator app and recovery
+    codes, and is signed out everywhere so a session opened with the lost
+    device ends now. Admins remove their own passkeys from their own Security
+    settings.
+
+    **Permissions required:** members.manage or users.create
+    """
+    from app.models.user import Session as UserSession
+
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use your own Security settings to manage your passkeys",
+        )
+    user = await _resolve_passkey_admin_target(user_id, current_user, db)
+    await _enforce_account_reset_ceiling(current_user, user, db)
+
+    passkey = await passkey_service.get_passkey(
+        db,
+        passkey_id=str(passkey_id),
+        user_id=str(user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    if passkey is None:
+        raise HTTPException(status_code=404, detail="Passkey not found")
+    name = passkey.name
+    await db.delete(passkey)
+    await db.flush()
+    if not user.mfa_enabled and not await passkey_service.list_passkeys(
+        db, str(user.id)
+    ):
+        # Nothing left for recovery codes to back up; see the matching rule in
+        # auth._drop_orphaned_recovery_codes.
+        user.mfa_backup_codes = None
+
+    sessions_result = await db.execute(
+        select(UserSession).where(UserSession.user_id == str(user.id))
+    )
+    for session in sessions_result.scalars().all():
+        await db.delete(session)
+
+    await log_audit_event(
+        db=db,
+        event_type="admin_passkey_removed",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user.id),
+            "target_username": user.username,
+            "passkey_id": str(passkey_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await notify_security_event(
+        db,
+        user,
+        subject="A passkey was removed from your account",
+        message=(
+            f'An administrator removed the passkey named "{name}" from your '
+            "account, and you have been signed out. Your other sign-in methods "
+            "still work. If you did not ask for this, contact your "
+            "administrator."
+        ),
+        background_tasks=background_tasks,
+    )
+    await db.commit()
+    return {"message": "Passkey removed"}
 
 
 @router.post(

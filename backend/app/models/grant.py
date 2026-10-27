@@ -1067,8 +1067,11 @@ class Donor(Base):
     )
 
     # Contact info
-    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Nullable since W69-6: a business, foundation or government donor may be
+    # recorded by company_name alone. An individual still needs both names;
+    # FundraisingService enforces that, since the rule turns on donor_type.
+    first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     email_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)

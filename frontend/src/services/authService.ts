@@ -7,8 +7,18 @@ import { clearCache } from '../utils/apiCache';
 import { clearInFlight } from '../utils/inFlight';
 import { CAPTCHA_HEADER } from '../hooks/useCaptcha';
 import type {
+  PasskeyAssertion,
+  PasskeyCreationOptions,
+  PasskeyRegistration,
+  PasskeyRequestOptions,
+} from '../utils/passkeys';
+import type {
   CurrentUser,
   LoginCredentials,
+  MfaChallenge,
+  MfaPolicy,
+  PasskeyList,
+  PasskeyRegisterResult,
   PasswordChangeData,
   PasswordResetConfirm,
   PasswordResetRequest,
@@ -29,10 +39,25 @@ export const authService = {
   },
 
   /**
-   * Complete an MFA-gated login with a TOTP code or a recovery code.
+   * Complete an MFA-gated login with a TOTP code, a recovery code, or the
+   * browser's answer to a passkey challenge from `mfaChallenge`.
    */
-  async mfaLogin(payload: { temp_token: string; code?: string; recovery_code?: string }): Promise<TokenResponse> {
+  async mfaLogin(payload: {
+    temp_token: string;
+    code?: string;
+    recovery_code?: string;
+    passkey_credential?: PasskeyAssertion;
+  }): Promise<TokenResponse> {
     const response = await api.post<TokenResponse>('/auth/mfa/login', payload);
+    return response.data;
+  },
+
+  /**
+   * Which second factors can finish a pending sign-in. `passkey_options` is a
+   * fresh single-use challenge, or null when the member has no passkey here.
+   */
+  async mfaChallenge(tempToken: string): Promise<MfaChallenge> {
+    const response = await api.post<MfaChallenge>('/auth/mfa/challenge', { temp_token: tempToken });
     return response.data;
   },
 
@@ -83,34 +108,80 @@ export const authService = {
 
   /**
    * Re-verify on this session so sensitive actions open for a few minutes.
-   * An authenticator code when MFA is enrolled, otherwise the password.
+   * A passkey or authenticator code when the member has one, otherwise the
+   * password.
    */
-  async stepUp(proof: { code?: string; password?: string }): Promise<{ verified: boolean; valid_for_minutes: number }> {
+  async stepUp(proof: {
+    code?: string;
+    password?: string;
+    passkey_credential?: PasskeyAssertion;
+  }): Promise<{ verified: boolean; valid_for_minutes: number }> {
     const response = await api.post<{ verified: boolean; valid_for_minutes: number }>('/auth/step-up', proof);
+    return response.data;
+  },
+
+  /** A passkey challenge for `stepUp`. */
+  async getStepUpPasskeyOptions(): Promise<PasskeyRequestOptions> {
+    const response = await api.post<PasskeyRequestOptions>('/auth/step-up/passkey-options');
     return response.data;
   },
 
   /** Current user's MFA status. */
   async getMfaStatus(): Promise<{
     mfa_enabled: boolean;
+    passkey_count?: number;
     recovery_codes_remaining: number;
   }> {
     const response = await api.get<{
       mfa_enabled: boolean;
+      passkey_count?: number;
       recovery_codes_remaining: number;
     }>('/auth/mfa/status');
     return response.data;
   },
 
-  /** Org-wide MFA requirement policy (admin). */
-  async getMfaPolicy(): Promise<{ mfa_required: boolean }> {
-    const response = await api.get<{ mfa_required: boolean }>('/auth/mfa/policy');
+  /** The caller's passkeys, and whether they can add one on this site. */
+  async listPasskeys(): Promise<PasskeyList> {
+    const response = await api.get<PasskeyList>('/auth/passkeys');
     return response.data;
   },
 
-  async setMfaPolicy(mfa_required: boolean): Promise<{ mfa_required: boolean }> {
-    const response = await api.put<{ mfa_required: boolean }>('/auth/mfa/policy', {
+  /** Options for creating a passkey. May ask for a step-up first. */
+  async getPasskeyRegistrationOptions(): Promise<PasskeyCreationOptions> {
+    const response = await api.post<PasskeyCreationOptions>('/auth/passkeys/register-options');
+    return response.data;
+  },
+
+  /**
+   * Save a passkey. `recovery_codes` is non-empty, and shown once, when this
+   * is the member's first second factor.
+   */
+  async registerPasskey(name: string, credential: PasskeyRegistration): Promise<PasskeyRegisterResult> {
+    const response = await api.post<PasskeyRegisterResult>('/auth/passkeys/register', { name, credential });
+    return response.data;
+  },
+
+  /** Remove one of the caller's passkeys. Asks for a step-up first. */
+  async deletePasskey(passkeyId: string): Promise<void> {
+    await api.delete(`/auth/passkeys/${encodeURIComponent(passkeyId)}`);
+  },
+
+  /** New recovery codes, confirmed with a passkey step-up. */
+  async regeneratePasskeyRecoveryCodes(): Promise<{ recovery_codes: string[] }> {
+    const response = await api.post<{ recovery_codes: string[] }>('/auth/passkeys/recovery-codes');
+    return response.data;
+  },
+
+  /** Org-wide MFA requirement policy (admin). */
+  async getMfaPolicy(): Promise<MfaPolicy> {
+    const response = await api.get<MfaPolicy>('/auth/mfa/policy');
+    return response.data;
+  },
+
+  async setMfaPolicy(mfa_required: boolean, passkeys_enabled?: boolean): Promise<MfaPolicy> {
+    const response = await api.put<MfaPolicy>('/auth/mfa/policy', {
       mfa_required,
+      ...(passkeys_enabled === undefined ? {} : { passkeys_enabled }),
     });
     return response.data;
   },

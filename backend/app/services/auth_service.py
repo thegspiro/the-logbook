@@ -31,6 +31,7 @@ from app.core.security import (
 from app.models.user import Organization, PasswordHistory, Role
 from app.models.user import Session as UserSession
 from app.models.user import User, UserStatus
+from app.services.passkey_service import has_second_factor
 from app.utils.password_expiry import is_password_expired
 from app.utils.sql_results import rows_affected
 
@@ -451,7 +452,7 @@ class AuthService:
         # clears the counter once the second factor succeeds. Same invariant as
         # `clear_auth_failures` for the suspicious-IP throttle (workflow review
         # W04).
-        if not user.mfa_enabled:
+        if not await has_second_factor(self.db, user):
             user.failed_login_attempts = 0
             user.locked_until = None
         user.last_login_at = datetime.now(timezone.utc)

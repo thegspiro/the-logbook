@@ -52,7 +52,18 @@ app/api/v1/endpoints/auth.py::mfa_regenerate_recovery_codes
 app/api/v1/endpoints/auth.py::mfa_setup
 app/api/v1/endpoints/auth.py::mfa_status
 app/api/v1/endpoints/auth.py::mfa_verify_setup
+# Passkeys (2026-10-25): every member manages their own second factor. Each
+# acts only on the caller: list/register/register-options/recovery-codes read
+# and write current_user's own rows, delete resolves the passkey by
+# current_user.id and organization_id (another member's id is a 404), and
+# step-up options challenge only the caller's own passkeys.
+app/api/v1/endpoints/auth.py::list_my_passkeys
+app/api/v1/endpoints/auth.py::passkey_delete
+app/api/v1/endpoints/auth.py::passkey_regenerate_recovery_codes
+app/api/v1/endpoints/auth.py::passkey_register
+app/api/v1/endpoints/auth.py::passkey_register_options
 app/api/v1/endpoints/auth.py::step_up
+app/api/v1/endpoints/auth.py::step_up_passkey_options
 
 app/api/v1/endpoints/course_cohorts.py::get_cohort
 app/api/v1/endpoints/course_cohorts.py::list_my_cohorts

@@ -1,9 +1,22 @@
 # Multi-Factor Authentication (MFA)
 
-The Logbook supports **app-based TOTP** (Time-based One-Time Password)
-two-factor authentication. Members enroll with any standard authenticator app
-(Google Authenticator, Authy, 1Password, etc.). MFA is **self-enrolled** by
-default, and a department can **require** it for every member.
+The Logbook supports two second factors, and a member may have either or both:
+
+- **Passkeys** _(2026-10-25)_ — a WebAuthn credential on the member's phone or
+  computer, unlocked with Face ID, a fingerprint or the device PIN. See
+  [Passkeys](#passkeys-webauthn) below.
+- **App-based TOTP** (Time-based One-Time Password) with any standard
+  authenticator app (Google Authenticator, Authy, 1Password, etc.).
+
+Either one satisfies every MFA requirement, including the floor for
+privileged members. Both come after the password (or an SSO sign-in); neither
+replaces it. MFA is **self-enrolled** by default, and a department can
+**require** it for every member.
+
+`User.mfa_enabled` still means the authenticator app specifically. Every
+"does this member have a second factor?" decision goes through
+`passkey_service.has_second_factor`, which is `mfa_enabled` or a passkey that
+works on this site.
 
 ## How It Works
 
@@ -71,8 +84,70 @@ session with the app-level TOTP never consulted.
 ### Disabling MFA
 
 A member disables MFA from Settings → Security by verifying a current
-authenticator code (`POST /auth/mfa/disable`). This clears the secret and
-recovery codes.
+authenticator code (`POST /auth/mfa/disable`). This clears the secret, and the
+recovery codes too unless the member still has a passkey for them to back up.
+
+## Passkeys (WebAuthn)
+
+A member adds up to **three** passkeys from **Settings → Security → Passkeys**
+and then confirms sign-in with one instead of typing a code. Passkeys that
+sync between devices (iCloud Keychain, Google Password Manager) are accepted.
+**User verification is required**: the device must check a biometric or PIN,
+not just register a tap. A member at a station computer can use their phone
+through the browser's QR-code prompt, which needs Bluetooth on that computer;
+the authenticator code works there as before.
+
+### Where passkeys work
+
+A passkey belongs to one domain, and browsers only offer passkeys over HTTPS
+on a hostname. The relying party is taken from `FRONTEND_URL`:
+
+| `FRONTEND_URL`                                  | Passkeys                                   |
+| ----------------------------------------------- | ------------------------------------------ |
+| `https://logbook.example.org` (any port)        | available; domain `logbook.example.org`    |
+| `http://localhost:3000`                         | available (development)                    |
+| `http://…` on any other host, or any IP address | hidden; members use the authenticator code |
+
+Each passkey records the domain it was created for (`user_passkeys.rp_id`). A
+passkey for another domain is listed nowhere and **does not count as a second
+factor**, so a member whose only factor it was is treated as not enrolled
+rather than asked for a proof their browser cannot give. **Changing the site's
+address therefore retires every passkey**: members add new ones, and where
+MFA is required they are sent to setup at their next sign-in. See
+`docs/UPGRADING.md`.
+
+### Flows
+
+- **Register:** `POST /auth/passkeys/register-options` returns options for
+  `navigator.credentials.create()`; `POST /auth/passkeys/register` verifies
+  the browser's response and stores the public key. When the passkey is the
+  member's **first** second factor the response carries a fresh set of
+  recovery codes, shown once. Adding a passkey when the member already has a
+  second factor, or removing one, needs a fresh **step-up**.
+- **Sign in:** after the password (or SSO) step returns `mfa_token`, the
+  client calls `POST /auth/mfa/challenge` for `{ totp, passkey_options }`,
+  runs `navigator.credentials.get()` and sends the result to
+  `POST /auth/mfa/login` as `passkey_credential`. A failed passkey counts
+  toward the account lockout exactly as a wrong code does.
+- **Step-up:** `POST /auth/step-up/passkey-options`, then `POST /auth/step-up`
+  with `passkey_credential`. A member whose only second factor is a passkey
+  cannot step up with their password.
+- **Recovery codes** for a passkey-only member are regenerated with
+  `POST /auth/passkeys/recovery-codes`, which needs a fresh step-up (a passkey
+  cannot be typed into a request body the way a TOTP code can).
+
+Every challenge is stored in `webauthn_challenges` and **deleted by the
+response that answers it**, so a captured response cannot be replayed. A
+challenge expires after five minutes and is bound to its purpose (`register`,
+`login`, `stepup`). At most five are kept per member.
+
+### Organization switch
+
+`org.settings["security"]["passkeys_enabled"]` (default on; read and written
+with the MFA policy, `GET`/`PUT /auth/mfa/policy`, shown on `MfaPolicyCard`).
+Turning it off stops **new** registrations only. Passkeys already registered
+keep working until the member or an administrator removes them, so no member
+silently loses their second factor.
 
 ## Org-Wide Requirement (Admin)
 
@@ -92,18 +167,27 @@ require MFA for the whole department from **Settings → Authentication**
 
 ## API Reference
 
-| Method & Path                     | Auth                              | Purpose                                                                         |
-| --------------------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
-| `POST /auth/login`                | none                              | Password step; returns `{ mfa_required, mfa_token }` when MFA is enabled        |
-| `POST /auth/mfa/login`            | pending token                     | Verify second factor (`temp_token` + `code` or `recovery_code`); issues session |
-| `POST /auth/mfa/setup`            | session                           | Begin enrollment; returns `{ secret, qr_code_url }`                             |
-| `POST /auth/mfa/verify-setup`     | session                           | Confirm code, enable MFA, return one-time recovery codes                        |
-| `POST /auth/mfa/disable`          | session                           | Verify a code and disable MFA                                                   |
-| `GET /auth/mfa/status`            | session                           | `{ mfa_enabled, recovery_codes_remaining }`                                     |
-| `POST /auth/mfa/recovery-codes`   | session                           | Regenerate recovery codes (verifies a TOTP code), returns the new set once      |
-| `GET /auth/mfa/policy`            | `settings.manage`                 | Read org-wide MFA requirement                                                   |
-| `PUT /auth/mfa/policy`            | `settings.manage`                 | Set org-wide MFA requirement                                                    |
-| `POST /users/{user_id}/reset-mfa` | `users.create` / `members.manage` | Admin: reset a member's MFA (lost device)                                       |
+| Method & Path                           | Auth                                        | Purpose                                                                         |
+| --------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
+| `POST /auth/login`                      | none                                        | Password step; returns `{ mfa_required, mfa_token }` when MFA is enabled        |
+| `POST /auth/mfa/login`                  | pending token                               | Verify second factor (`temp_token` + `code` or `recovery_code`); issues session |
+| `POST /auth/mfa/setup`                  | session                                     | Begin enrollment; returns `{ secret, qr_code_url }`                             |
+| `POST /auth/mfa/verify-setup`           | session                                     | Confirm code, enable MFA, return one-time recovery codes                        |
+| `POST /auth/mfa/disable`                | session                                     | Verify a code and disable MFA                                                   |
+| `GET /auth/mfa/status`                  | session                                     | `{ mfa_enabled, recovery_codes_remaining }`                                     |
+| `POST /auth/mfa/recovery-codes`         | session                                     | Regenerate recovery codes (verifies a TOTP code), returns the new set once      |
+| `GET /auth/mfa/policy`                  | `settings.manage`                           | Read org-wide MFA requirement and `passkeys_enabled`                            |
+| `PUT /auth/mfa/policy`                  | `settings.manage`                           | Set org-wide MFA requirement; `passkeys_enabled` when present                   |
+| `POST /users/{user_id}/reset-mfa`       | `users.create` / `members.manage`           | Admin: reset a member's MFA (lost device), passkeys included                    |
+| `POST /auth/mfa/challenge`              | pending token                               | `{ totp, passkey_options }` for the second sign-in step                         |
+| `POST /auth/step-up/passkey-options`    | session                                     | A passkey challenge for `POST /auth/step-up`                                    |
+| `GET /auth/passkeys`                    | session                                     | The caller's passkeys, the limit, and whether passkeys are available/allowed    |
+| `POST /auth/passkeys/register-options`  | session (+ step-up once enrolled)           | Options for creating a passkey                                                  |
+| `POST /auth/passkeys/register`          | session (+ step-up once enrolled)           | Store a passkey; first factor returns recovery codes once                       |
+| `DELETE /auth/passkeys/{id}`            | session + step-up                           | Remove one of the caller's passkeys                                             |
+| `POST /auth/passkeys/recovery-codes`    | session + step-up                           | New recovery codes for a passkey-only member                                    |
+| `GET /users/{user_id}/passkeys`         | `users.create` / `members.manage`           | Admin: a member's passkeys (names and dates only)                               |
+| `DELETE /users/{user_id}/passkeys/{id}` | `users.create` / `members.manage` + step-up | Admin: remove one passkey (lost phone); signs the member out                    |
 
 ## Implementation Notes
 
@@ -119,8 +203,16 @@ require MFA for the whole department from **Settings → Authentication**
 - **Schemas:** `MFASetup`, `MFAVerify`, `MFALogin`, `MFAPolicy` in
   `schemas/auth.py`.
 - **Audit:** `mfa_enabled` / `mfa_disabled` /
-  `mfa_recovery_codes_regenerated` / `admin_mfa_reset` events logged via
-  `log_audit_event` (category `security`).
+  `mfa_recovery_codes_regenerated` / `admin_mfa_reset` / `passkey_registered` /
+  `passkey_removed` / `admin_passkey_removed` events logged via
+  `log_audit_event`. Sign-in records `method: password+passkey`, step-up
+  `method: passkey`.
+- **Passkeys:** `app/services/passkey_service.py` (py_webauthn `webauthn`
+  3.0.1), models `UserPasskey` / `WebAuthnChallenge` in `app/models/passkey.py`.
+  Frontend: `@simplewebauthn/browser` behind `utils/passkeys.ts`;
+  `PasskeySettingsCard`; the passkey button on `LoginPage` and in
+  `StepUpProvider`. Safari only shows the prompt from a direct tap, so every
+  screen fetches its challenge before the tap rather than inside the handler.
 - **Notifications:** `app/utils/security_notifications.py` notifies the affected
   member on each of those events. The in-app notification is written
   synchronously in the request transaction; the email is dispatched to a FastAPI
@@ -158,12 +250,16 @@ require MFA for the whole department from **Settings → Authentication**
 An administrator with `users.create` or `members.manage` can reset a member's
 MFA for the lost-device case:
 
-- **UI:** Members admin page → the member's **Reset MFA** action (shown only for
-  members who currently have MFA enabled).
+- **UI:** Members admin page → the member's **Reset MFA** action (shown for
+  members with an authenticator app or a passkey). The dialog lists the
+  member's passkeys, so a single lost phone can be removed without resetting
+  everything (`DELETE /users/{user_id}/passkeys/{id}`, audit-logged as
+  `admin_passkey_removed`, same privilege ceiling, revokes the member's
+  sessions; the member is emailed).
 - **API:** `POST /users/{user_id}/reset-mfa` (org-scoped, rate-limited 5/5 min,
   audit-logged as `admin_mfa_reset`). It clears `mfa_enabled` / `mfa_secret` /
-  `mfa_backup_codes` and revokes the member's active sessions so the reset takes
-  effect immediately.
+  `mfa_backup_codes`, deletes every passkey, and revokes the member's active
+  sessions so the reset takes effect immediately.
 
 After a reset the member re-enrolls from their own **Settings → Security**; if
 the org requires MFA, they are prompted to set it up again on next login. Admins

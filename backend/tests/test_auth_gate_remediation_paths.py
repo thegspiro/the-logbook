@@ -50,13 +50,18 @@ def _request(path: str) -> Request:
 
 
 class _OrgSettingsDB:
-    """Stands in for the one query the MFA gate issues (org settings JSON)."""
+    """Stands in for the two queries the MFA gate issues.
+
+    The passkey lookup (``.first()``) finds none, so the member is un-enrolled;
+    the org-settings read (``.scalar_one_or_none()``) returns the given JSON.
+    """
 
     def __init__(self, org_settings: dict):
         self._org_settings = org_settings
 
     async def execute(self, _stmt):
         result = MagicMock()
+        result.first = MagicMock(return_value=None)
         result.scalar_one_or_none = MagicMock(return_value=self._org_settings)
         return result
 

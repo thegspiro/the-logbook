@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**319 tables · 5284 columns · 1081 foreign keys**
+**321 tables · 5306 columns · 1084 foreign keys**
 
 ---
 
@@ -287,9 +287,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`form_fields`](#form_fields) | `FormField` | 21 | Form Field model |
+| [`form_fields`](#form_fields) | `FormField` | 22 | Form Field model |
 | [`form_integrations`](#form_integrations) | `FormIntegration` | 9 | Form Integration model |
-| [`form_submissions`](#form_submissions) | `FormSubmission` | 15 | Form Submission model |
+| [`form_submissions`](#form_submissions) | `FormSubmission` | 16 | Form Submission model |
 | [`forms`](#forms) | `Form` | 20 | Form model |
 
 ### Grants & Fundraising
@@ -544,6 +544,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`organization_officers`](#organization_officers) | `OrganizationOfficer` | 11 | One department office and the member who currently holds it. |
+
+### Passkey
+
+<sub>`app/models/passkey.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`user_passkeys`](#user_passkeys) | `UserPasskey` | 14 |  |
+| [`webauthn_challenges`](#webauthn_challenges) | `WebAuthnChallenge` | 6 | A challenge handed to the browser, consumed by the response to it. |
 
 ### Public Portal
 
@@ -2579,7 +2588,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2642,7 +2651,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -4431,6 +4440,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `condition_value` | VARCHAR(500) | yes |  |  |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `width` | VARCHAR(20) | yes |  | `'full'` |  |
+| `is_sensitive` | BOOL | no |  | `false` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -4474,6 +4484,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `submitted_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `submitted_at` | DATETIME | yes |  | `now()` |  |
 | `data` | JSON | no |  |  |  |
+| `sensitive_data` | TEXT | yes |  |  |  |
 | `submitter_name` | VARCHAR(255) | yes |  |  |  |
 | `submitter_email` | TEXT | yes |  |  |  |
 | `is_public_submission` | BOOL | yes |  | `False` |  |
@@ -4586,8 +4597,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
-| `first_name` | VARCHAR(100) | no |  |  |  |
-| `last_name` | VARCHAR(100) | no |  |  |  |
+| `first_name` | VARCHAR(100) | yes |  |  |  |
+| `last_name` | VARCHAR(100) | yes |  |  |  |
 | `email` | TEXT | yes |  |  |  |
 | `email_hash` | VARCHAR(64) | yes |  |  |  |
 | `phone` | TEXT | yes |  |  |  |
@@ -7860,6 +7871,54 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_org_officer_org_office` (`organization_id`, `office_key`)
 
+## Passkey
+
+### `user_passkeys`
+
+**UserPasskey** · `app/models/passkey.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `credential_id` | TEXT | no |  |  |  |
+| `credential_id_hash` | VARCHAR(64) | no | UQ, UQ-IDX |  |  |
+| `public_key` | TEXT | no |  |  |  |
+| `rp_id` | VARCHAR(255) | no |  |  |  |
+| `sign_count` | BIGINT | no |  | `0` |  |
+| `transports` | JSON | yes |  |  |  |
+| `aaguid` | VARCHAR(36) | yes |  |  |  |
+| `backed_up` | BOOL | no |  | `False` |  |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `last_used_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- UNIQUE `ix_user_passkeys_credential_id_hash` (`credential_id_hash`)
+- `ix_user_passkeys_organization_id` (`organization_id`)
+- `ix_user_passkeys_user_id` (`user_id`)
+
+### `webauthn_challenges`
+
+**WebAuthnChallenge** · `app/models/passkey.py`
+
+> A challenge handed to the browser, consumed by the response to it. Kept in the database rather than Redis because a challenge must be single-use across every worker: without Redis the per-process fallback other short-lived values use would let the response land on a worker that never issued it, and a member whose only second factor is a passkey would be locked out until Redis came back.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `purpose` | VARCHAR(20) | no |  |  |  |
+| `challenge` | VARCHAR(128) | no |  |  |  |
+| `expires_at` | DATETIME | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_webauthn_challenges_user_id` (`user_id`)
+
 ## Public Portal
 
 ### `public_portal_access_log`
@@ -11115,7 +11174,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (397 references)
+### → `users` (399 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11508,6 +11567,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_waivers` | `granted_by` | SET NULL | yes |
 | `training_waivers` | `user_id` | CASCADE | no |
 | `user_consents` | `user_id` | CASCADE | no |
+| `user_passkeys` | `user_id` | CASCADE | no |
 | `user_positions` | `assigned_by` | RESTRICT | yes |
 | `user_positions` | `user_id` | CASCADE | no |
 | `users` | `referred_by_user_id` | SET NULL | yes |
@@ -11515,9 +11575,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `recorded_by` | SET NULL | yes |
 | `votes` | `voter_id` | SET NULL | yes |
 | `voting_tokens` | `user_id` | SET NULL | yes |
+| `webauthn_challenges` | `user_id` | CASCADE | no |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (262 references)
+### → `organizations` (263 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11780,6 +11841,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_submissions` | `organization_id` | CASCADE | no |
 | `training_waivers` | `organization_id` | CASCADE | no |
 | `user_consents` | `organization_id` | CASCADE | no |
+| `user_passkeys` | `organization_id` | CASCADE | no |
 | `users` | `organization_id` | CASCADE | no |
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
@@ -12876,4 +12938,5 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `skill_test_viewers` | `skill_tests`, `users` |
 | `user_positions` | `positions`, `users` |
 | `votes` | `candidates`, `elections`, `users` |
+| `webauthn_challenges` | `users` |
 

@@ -123,6 +123,7 @@ const FieldEditor = ({
   });
   const [options, setOptions] = useState<FormFieldOption[]>(field?.options || [{ value: '', label: '' }]);
   const [width, setWidth] = useState(field?.width || 'full');
+  const [isSensitive, setIsSensitive] = useState(field?.is_sensitive ?? false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Conditional visibility state
@@ -149,6 +150,7 @@ const FieldEditor = ({
       setValidationPreset(preset ? preset.value : pattern ? 'custom' : '');
       setOptions(field.options || [{ value: '', label: '' }]);
       setWidth(field.width || 'full');
+      setIsSensitive(field.is_sensitive ?? false);
       setConditionFieldId(field.condition_field_id || '');
       setConditionOperator(field.condition_operator || '');
       setConditionValue(field.condition_value || '');
@@ -252,6 +254,7 @@ const FieldEditor = ({
 
     if (!isSectionHeader) {
       fieldData.required = required;
+      fieldData.is_sensitive = isSensitive;
       if (placeholder.trim()) fieldData.placeholder = placeholder.trim();
       if (helpText.trim()) fieldData.help_text = helpText.trim();
       if (defaultValue.trim()) fieldData.default_value = defaultValue.trim();
@@ -438,6 +441,24 @@ const FieldEditor = ({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={isSensitive}
+                    onChange={(e) => setIsSensitive(e.target.checked)}
+                    aria-describedby="field-sensitive-help"
+                    className="form-checkbox mt-0.5"
+                  />
+                  <span className="text-theme-text-secondary text-sm">Sensitive</span>
+                </label>
+                <p id="field-sensitive-help" className="text-theme-text-muted mt-1 text-xs">
+                  Answers are stored encrypted and shown only to staff allowed to view sensitive answers. They are left
+                  out of CSV downloads and are not passed to other modules. Turning this on also encrypts answers
+                  already received; once any answer is stored this way it cannot be turned off.
+                </p>
               </div>
 
               {/* Text validation */}

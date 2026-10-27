@@ -237,6 +237,30 @@ All form submissions (both public and authenticated) pass through `_sanitize_sub
    being present). Number and checkbox fields answered with `0` or "unchecked"
    still count as answered.
 
+### Sensitive Fields _(2026-10-25)_
+
+A field can be marked **Sensitive** in the field editor — for questions such as
+criminal history, driving record or medical history.
+
+| Where              | What happens to an answer to a Sensitive field                                                                                                                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Storage            | Written to `form_submissions.sensitive_data`, an AES-256-GCM encrypted column (`EncryptedJSON`, keyed by `ENCRYPTION_KEY`). Never written to the plain `data` JSON.                                         |
+| Submission screens | Returned in `sensitive_answers` only to holders of `sensitive_answers.view`; everyone else gets `sensitive_withheld: true` and sees "Restricted". Each reveal is audited (`form_sensitive_answers_viewed`). |
+| CSV download       | Sensitive columns are left out of the browser CSV download, for every viewer.                                                                                                                               |
+| Integrations       | Not passed to any integration. An applicant created from an interest form does not receive it, and the publish confirmation warns (`sensitive_not_integrated`).                                             |
+| Public form        | The field shows a note that the answer is encrypted and visible only to authorized staff.                                                                                                                   |
+| Anonymization      | Cleared with the rest of the submission.                                                                                                                                                                    |
+
+**Marking an existing field Sensitive** moves the answers already received into
+the encrypted column. It does not reach copies an integration already made — an
+applicant record created from the form before it was marked keeps what it was
+given. **Un-marking is refused** once any answer is stored encrypted, because it
+would decrypt those answers into plain text.
+
+`sensitive_answers.view` sits outside the `forms.` namespace on purpose: the
+Forms "manage" checkbox grants `forms.*`, and a module wildcard covers every
+action under its prefix. Out of the box only the System Owner (`*`) holds it.
+
 ### Public Form Protection
 
 | Layer           | Protection                                                                                                              |
@@ -291,10 +315,11 @@ Pre-configured with 10 fields:
 
 ## Database Migrations
 
-| Migration                                         | Description                                                                            |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `20260212_0100_create_forms_tables`               | Creates `forms`, `form_fields`, `form_submissions` tables with all enums               |
-| `20260212_0200_add_public_forms_and_integrations` | Adds `member_lookup` to fieldtype enum, public form columns, `form_integrations` table |
+| Migration                                              | Description                                                                                                                                     |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260212_0100_create_forms_tables`                    | Creates `forms`, `form_fields`, `form_submissions` tables with all enums                                                                        |
+| `20260212_0200_add_public_forms_and_integrations`      | Adds `member_lookup` to fieldtype enum, public form columns, `form_integrations` table                                                          |
+| `20261025_2309_ce541de8d3da_add_sensitive_form_fields` | Adds `form_fields.is_sensitive` and the encrypted `form_submissions.sensitive_data`; the downgrade refuses while any sensitive answer is stored |
 
 ### Running Migrations
 
@@ -307,10 +332,11 @@ alembic upgrade head
 
 ## Permissions
 
-| Permission     | Grants                                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `forms.view`   | View forms list, form details, submission data                                                                                                    |
-| `forms.manage` | All view permissions + create/edit/delete forms, manage fields, publish/archive, configure public access, manage integrations, delete submissions |
+| Permission               | Grants                                                                                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forms.view`             | View forms list, form details, submission data                                                                                                                 |
+| `forms.manage`           | All view permissions + create/edit/delete forms, manage fields, publish/archive, configure public access, manage integrations, delete submissions              |
+| `sensitive_answers.view` | Read answers to fields marked Sensitive in the submissions a `forms.manage` holder can already list. Not conferred by `forms.*`; granted to no seeded position |
 
 Public form submission requires no permissions or authentication.
 

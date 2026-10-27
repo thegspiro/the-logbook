@@ -245,9 +245,10 @@ def _request():
 
 @pytest.mark.unit
 class TestStepUpEndpoint:
-    async def _post(self, user, data, session=None):
+    async def _post(self, user, data, session=None, has_passkey=False):
         from app.api.v1.endpoints import auth as auth_endpoints
         from app.schemas.auth import StepUpRequest
+        from app.services import passkey_service
 
         session = session or _session()
         db = MagicMock()
@@ -257,6 +258,17 @@ class TestStepUpEndpoint:
                 AuthService, "get_session_for_token", AsyncMock(return_value=session)
             ),
             patch.object(auth_endpoints, "log_audit_event", AsyncMock()) as audit,
+            patch.object(
+                passkey_service, "has_passkey", AsyncMock(return_value=has_passkey)
+            ),
+            patch.object(
+                passkey_service,
+                "relying_party",
+                return_value=passkey_service.RelyingParty(
+                    rp_id="logbook.example.org",
+                    origin="https://logbook.example.org",
+                ),
+            ),
         ):
             try:
                 body = await auth_endpoints.step_up(
@@ -381,6 +393,7 @@ STEPUP_HANDLERS = {
     # Account takeover paths
     ("users.py", "admin_reset_password"),
     ("users.py", "admin_reset_mfa"),
+    ("users.py", "admin_remove_passkey"),
     # Destructive member actions
     ("users.py", "delete_user"),
     ("users.py", "anonymize_member"),

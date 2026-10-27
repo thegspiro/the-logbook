@@ -19,6 +19,7 @@ from app.models.grant import (
     CampaignStatus,
     Donation,
     Donor,
+    DonorType,
     FundraisingCampaign,
     FundraisingEvent,
     PaymentStatus,
@@ -225,8 +226,12 @@ class FundraisingService:
         # Tie-broken by id: identical name pairs are common (family
         # donations, common names) — see list_campaigns for why an unbroken
         # ORDER BY breaks pagination.
+        # An organization recorded without a contact has no last_name; it sorts
+        # by its company name among the surnames rather than ahead of them all.
         query = query.order_by(
-            Donor.last_name.asc(), Donor.first_name.asc(), Donor.id.asc()
+            func.coalesce(Donor.last_name, Donor.company_name).asc(),
+            Donor.first_name.asc(),
+            Donor.id.asc(),
         )
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
@@ -242,8 +247,31 @@ class FundraisingService:
         donor: Optional[Donor] = result.scalar_one_or_none()
         return donor
 
+    @staticmethod
+    def check_donor_name(donor: Donor) -> None:
+        """Refuse a donor nobody could name (W69-6).
+
+        An individual needs a first and a last name. Any other type (business,
+        foundation, government, other) may be recorded by its organization
+        name alone, or by a contact's full name.
+        """
+
+        def given(value: Optional[str]) -> bool:
+            return bool(value and value.strip())
+
+        has_person = given(donor.first_name) and given(donor.last_name)
+        donor_type = getattr(donor.donor_type, "value", donor.donor_type)
+        if (donor_type or DonorType.INDIVIDUAL.value) == DonorType.INDIVIDUAL.value:
+            if not has_person:
+                raise ValueError("An individual donor needs a first and last name")
+        elif not (has_person or given(donor.company_name)):
+            raise ValueError(
+                "Give the organization's name, or a contact's first and last name"
+            )
+
     async def create_donor(self, organization_id: str, data: Dict[str, Any]) -> Donor:
         donor = Donor(organization_id=organization_id, **data)
+        self.check_donor_name(donor)
         self.db.add(donor)
         await self.db.flush()
         # A full refresh, not just the timestamps: these models carry other
@@ -260,6 +288,8 @@ class FundraisingService:
         if not donor:
             return None
         apply_updates(donor, data, skip={"organization_id", "id"})
+        # Raises before the flush; the request's rollback discards the change.
+        self.check_donor_name(donor)
         await self.db.flush()
         await reload_updated_at(self.db, donor)
         return donor

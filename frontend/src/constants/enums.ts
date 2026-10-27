@@ -1030,6 +1030,17 @@ export const MicrosoftAuthMethod = {
 } as const;
 export type MicrosoftAuthMethod = (typeof MicrosoftAuthMethod)[keyof typeof MicrosoftAuthMethod];
 
+/**
+ * How a Gmail / Google Workspace configuration authenticates. Mirrors
+ * `GOOGLE_AUTH_METHODS` in `app/utils/email_providers.py`; an absent method
+ * means App Password there and here.
+ */
+export const GoogleAuthMethod = {
+  APP_PASSWORD: 'app_password',
+  SERVICE_ACCOUNT: 'service_account',
+} as const;
+export type GoogleAuthMethod = (typeof GoogleAuthMethod)[keyof typeof GoogleAuthMethod];
+
 /** Mirrors `EmailLinkDomainSource` in `app/schemas/organization.py`. */
 export const EmailLinkDomainSource = {
   FRONTEND_URL: 'frontend_url',

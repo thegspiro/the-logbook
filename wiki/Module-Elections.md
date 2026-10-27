@@ -805,7 +805,7 @@ no meeting, and prints the time zone. An edited template keeps its own text.
 
 ## Related Documentation
 
-- [Prospective Members](../docs/PROSPECTIVE_MEMBERS_MODULE.md)
+- [Prospective Members](https://github.com/thegspiro/the-logbook/blob/main/docs/PROSPECTIVE_MEMBERS_MODULE.md)
 - [Role System](Role-System)
 - `docs/module-audit/elections.md` — module security audit
 - `docs/security-review/ELEC-06-elections-ballots.md` — ballot eligibility

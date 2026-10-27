@@ -263,7 +263,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
           <ShieldOff className="text-theme-text-muted h-5 w-5" />
         )}
         <span className="text-theme-text-primary text-sm">
-          Two-factor authentication is <strong>{enabled ? 'on' : 'off'}</strong>
+          Authenticator app is <strong>{enabled ? 'on' : 'off'}</strong>
           {enabled && ` · ${recoveryRemaining} recovery code${recoveryRemaining === 1 ? '' : 's'} left`}
         </span>
       </div>

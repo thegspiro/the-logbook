@@ -19,7 +19,8 @@
 >   `/grants/campaigns/:id`, `/grants/donors/:id` or `/grants/settings`;
 >   campaigns, donors, pledges and fundraising events are edited in dialogs on
 >   their list pages. Routes that exist beyond the plan:
->   `/grants/opportunities/new` and `/grants/applications/:id/edit`.
+>   `/grants/opportunities/new`, `/grants/opportunities/:id/edit` and
+>   `/grants/applications/:id/edit`.
 > - **§12.1:** built as `grant_budget_items` (not `grant_budgets`);
 >   `grant_application_documents`, `fundraising_settings`, `donation_receipts`,
 >   `campaign_updates` and `campaign_sponsors` were not built. None of the

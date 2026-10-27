@@ -51,7 +51,7 @@ upgrade that differ only by an accent ("é@x.org", "e@x.org") stop the
 downgrade at the index rebuild, after the values are decrypted.
 
 Revision ID: b8236e29ec44
-Revises: 1ad0b594f3fb
+Revises: c616fa1bd492
 Create Date: 2026-10-26 12:11:03.218374
 
 """
@@ -63,7 +63,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b8236e29ec44"
-down_revision: Union[str, None] = "1ad0b594f3fb"
+down_revision: Union[str, None] = "c616fa1bd492"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

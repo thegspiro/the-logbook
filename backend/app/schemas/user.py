@@ -639,6 +639,10 @@ class UserWithRolesResponse(UserResponse):
     # members.manage holders only, who can lift it; None for everyone else
     # and once the lock has expired.
     locked_until: Optional[datetime] = None
+    # Whether the member has a registered passkey, so the admin screen can
+    # offer to remove one from a lost phone. Disclosed to members.manage
+    # holders only; None for everyone else.
+    has_passkey: Optional[bool] = None
     temporary_password: Optional[str] = Field(
         None, description="Auto-generated temporary password (only present on creation)"
     )

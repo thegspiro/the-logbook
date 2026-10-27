@@ -1,3 +1,24 @@
+# October 25–26, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                           | Now in                                                                                                      |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Guest check-in QR code for any event; Add guest and Sign in from the event page | [04 — Events & Meetings](./04-events-meetings.md)                                                           |
+| Embedding a public form on your website                                         | [07 — Documents & Forms](./07-documents-forms.md)                                                           |
+| Edit and delete notification rules                                              | [07 — Documents & Forms](./07-documents-forms.md)                                                           |
+| Edit and retire grant opportunities                                             | [12 — Grants](./12-grants-fundraising.md)                                                                   |
+| Medical screening falls due by frequency; waivers listed                        | [13 — Medical Screening](./13-medical-screening.md)                                                         |
+| Pipeline stage email template; next meeting on the status page                  | [15 — Prospective Members](./15-prospective-members.md)                                                     |
+| Yes / No privacy choices                                                        | [17 — Privacy](./17-privacy-data-rights.md)                                                                 |
+| Shared area navigation for Members, Events and Store                            | [01](./01-membership.md), [04](./04-events-meetings.md), [18](./18-storefront.md) (written with the change) |
+| Encrypted phone numbers and addresses; Google Drive storage                     | Operator-facing: [`UPGRADING.md`](../UPGRADING.md), `BACKUP.md`                                             |
+
+---
+
 # October 5–6, 2026 workflow updates
 
 > **This lesson is an index.** Each module guide describes how its screens work
@@ -255,6 +276,34 @@ Screenshots to create or replace are in
 | Saved reports; Department pulse Customize; Legal Documents Load more                          | [08 — Admin & Reports](./08-admin-reports.md)                                    |
 | Grant lifecycle and overspend; anonymous donors hidden                                        | [12 — Grants & Fundraising](./12-grants-fundraising.md)                          |
 | Claude (MCP) Settings button and connection walkthrough; Salesforce client credentials        | [16 — Integrations](./16-integrations.md)                                        |
+
+---
+
+# October 25, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
+**Before upgrading,** read the `docs/UPGRADING.md` entries for embedded forms
+(host installs need nginx's `auth_request`) and medical screening (records with
+no expiration date now fall due by frequency). Screenshots to create or replace
+are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been
+re-captured.
+
+| Topic                                                                                                    | Now in                                                                                                   |
+| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Recruitment-event guest sign-in by email; staff **Add guest** and **Sign in**                            | [04 — Events & Meetings](./04-events-meetings.md) (Recruitment events: sign-in by email; Guest Check-In) |
+| Events Administration area navigation                                                                    | [04 — Events & Meetings](./04-events-meetings.md)                                                        |
+| Embedding a form on the department's website; notification rules edit and delete                         | [07 — Documents, Forms & Communications](./07-documents-forms.md)                                        |
+| Applicant status page **Your next step**; Advance refusal wording; automated-email Next Meeting fallback | [15 — Prospective Members](./15-prospective-members.md)                                                  |
+| Grant opportunities edit, retire, reinstate                                                              | [12 — Grants & Fundraising](./12-grants-fundraising.md)                                                  |
+| Screening records due by frequency; lapsing waivers listed                                               | [13 — Medical Screening](./13-medical-screening.md)                                                      |
+| Facilities maintenance and inspections paged and searched in full                                        | [06 — Apparatus & Facilities](./06-apparatus-facilities.md)                                              |
+| Repeat dues waiver refused                                                                               | [11 — Finance](./11-finance.md)                                                                          |
+| Waiving a paid store order refused                                                                       | [18 — Storefront](./18-storefront.md)                                                                    |
+| Gmail notes; daily sending limits; compliance report "not emailed" message                               | [08 — Admin & Reports](./08-admin-reports.md), [14 — Elections](./14-elections.md)                       |
+| Scheduling settings layout; day panel below the calendar under 1280px                                    | [03 — Scheduling](./03-scheduling.md)                                                                    |
+| **Print Labels** on the Items list                                                                       | [05 — Inventory](./05-inventory.md)                                                                      |
+| Landscape phone side menu scrolls                                                                        | [10 — Mobile & PWA](./10-mobile-pwa.md)                                                                  |
 
 ---
 

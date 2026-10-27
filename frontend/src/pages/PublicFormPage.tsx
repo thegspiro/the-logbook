@@ -514,6 +514,11 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
                     {field.required && <span className="ml-1 text-red-700 dark:text-red-500">*</span>}
                   </label>
                   {field.help_text && <p className="text-theme-text-muted mb-2 text-xs">{clean(field.help_text)}</p>}
+                  {field.is_sensitive && (
+                    <p className="text-theme-text-muted mb-2 text-xs">
+                      This answer is stored encrypted and is visible only to authorized staff.
+                    </p>
+                  )}
                   {renderField(field)}
                 </div>
               );

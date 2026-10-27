@@ -362,6 +362,7 @@ from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_lock import OrganizationLock
 from app.models.organization_officer import OrganizationOfficer
+from app.models.passkey import UserPasskey, WebAuthnChallenge
 from app.models.public_portal import (
     PublicPortalAccessLog,
     PublicPortalAPIKey,
@@ -551,6 +552,8 @@ __all__ = [
     "IntegrationSyncLog",
     "CalendarSyncMapping",
     "McpServiceKey",
+    "UserPasskey",
+    "WebAuthnChallenge",
     "McpOAuthClient",
     "McpOAuthGrant",
     "McpOAuthAuthorization",

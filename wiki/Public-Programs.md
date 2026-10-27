@@ -554,4 +554,4 @@ Thank you for your commitment to safety!
 
 ---
 
-**See also:** [Events Module](Module-Events) | [Forms Module](../docs/FORMS_MODULE.md) | [Troubleshooting](Troubleshooting)
+**See also:** [Events Module](Module-Events) | [Forms Module](https://github.com/thegspiro/the-logbook/blob/main/docs/FORMS_MODULE.md) | [Troubleshooting](Troubleshooting)

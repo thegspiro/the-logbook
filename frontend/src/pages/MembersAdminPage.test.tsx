@@ -10,6 +10,8 @@ vi.mock('../services/api', () => ({
     assignUserRoles: vi.fn(),
     adminResetPassword: vi.fn(),
     adminUnlockAccount: vi.fn(),
+    adminListPasskeys: vi.fn(),
+    adminRemovePasskey: vi.fn(),
   },
   roleService: {
     getRoles: vi.fn(),
@@ -535,5 +537,51 @@ describe('MembersAdminPage — reaching and naming a member (members review)', (
     ]) {
       expect(await screen.findByRole('button', { name })).toBeInTheDocument();
     }
+  });
+});
+
+describe("MembersAdminPage — removing a lost phone's passkey", () => {
+  const lostPhone = {
+    id: 'pk-1',
+    name: 'Lost phone',
+    created_at: '2026-10-01T12:00:00Z',
+    last_used_at: null,
+    backed_up: true,
+  };
+
+  beforeEach(() => {
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    // Passkey only: no authenticator app, so mfa_enabled alone would have
+    // hidden the action.
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, roles: [memberRole], mfa_enabled: false, has_passkey: true },
+    ] as never);
+    vi.mocked(userService.adminListPasskeys).mockReset();
+    vi.mocked(userService.adminListPasskeys).mockResolvedValue([lostPhone] as never);
+    vi.mocked(userService.adminRemovePasskey).mockReset();
+    vi.mocked(userService.adminRemovePasskey).mockResolvedValue({ message: 'Passkey removed' });
+  });
+
+  it('offers the two-factor action for a member whose only factor is a passkey', async () => {
+    renderWithRouter(<MembersAdminPage />);
+    expect(await screen.findByRole('button', { name: 'Reset MFA for Jordan Avery' })).toBeInTheDocument();
+  });
+
+  it('removes just the one passkey after confirmation', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Reset MFA for Jordan Avery' }));
+    expect(userService.adminListPasskeys).toHaveBeenCalledWith('user-1');
+    await user.click(await screen.findByRole('button', { name: 'Remove passkey Lost phone' }));
+    await user.click(await screen.findByRole('button', { name: 'Remove passkey' }));
+
+    expect(userService.adminRemovePasskey).toHaveBeenCalledWith('user-1', 'pk-1');
+    expect(await screen.findByText(/removes the member's authenticator, every passkey/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove passkey Lost phone' })).not.toBeInTheDocument();
   });
 });
