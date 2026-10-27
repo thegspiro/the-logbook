@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3786](https://github.com/thegspiro/the-logbook/pull/3786)** (branch
+`claude/security-review-scheduled-tasks-p10`) — Feature 31 (Scheduled
+tasks), pass 10. **Watchdog pickup** — the dedicated `/loop 30m
+/security-review` session was reported unreachable by the operator
+starting this run. No security-review PR was open — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
+`list_pull_requests` (`state=open`), 0 results / only two unrelated docs PRs
+(#3774/#3772), both checked immediately before starting. PR #3785 (Feature
+30, Onboarding, pass 10) had already merged into `main` (head `eb3e1a50`),
+and that merge commit itself already carried row 30 at ✅ and cleared the
+prior Open PR note, so there was nothing to record from Step 0. Row 31 was
+confirmed the next `⬜` row by reading the rotation table directly on this
+freshly-fetched `main`. **0 fixed, 0 new findings.** Real delta since pass
+9's merge (`1acb6213`, PR #3672): a path-scoped `git log` (not the unscoped
+350-commit range) found exactly 5 commits touching `scheduled.py`/
+`scheduled_tasks.py` — `scheduled.py` itself unchanged. All five land
+inside five existing task runners via four cross-feature delegates, each
+read in full: a new per-template "switched off" kill switch (Messaging &
+notifications, feature 25 — landed after that feature's own pass 10
+merged the same day) gates the email half of four runners; a
+compliance-report email retry pass (PR #3727) closes a mail-outage gap with
+the established locked read-then-write (Pitfall #27) and send-then-stamp
+idempotency (Pitfall #36) shapes; a missed-meeting roll-forward is
+org-scoped through its already-scoped parent and idempotent by
+construction. All verified good. `SCHEDULE`/`TASK_RUNNERS` re-verified 1:1
+by AST at 68/68, unchanged — no new registered task. Routes re-enumerated
+by AST: 2, unchanged. CRON4-31-2 and CRON-4 (app-review) re-confirmed OPEN,
+unchanged. A cross-feature note is left for Messaging & notifications' own
+next pass: the broader kill-switch mechanism (8 other senders, the
+endpoint's 400-refusal, its own test file) landed after that feature's
+last pass and is out of this feature's scope. See
+`CRON10-31-scheduled-tasks.md`'s **Pass 10** section for the full review.
+
+Rotation row 31 → ✅ (pending this PR's merge); next is Feature 32
+(Locations & kiosk) — re-check `search_pull_requests`/`list_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 10, PR #3785, merged), preserved for history</summary>
+
 **PR [#3785](https://github.com/thegspiro/the-logbook/pull/3785)** (branch
 `claude/security-review-onboarding-p10`) — Feature 30 (Onboarding), pass 10.
 **Watchdog pickup** — the dedicated `/loop 30m /security-review` session
@@ -42,6 +82,8 @@ merged afterward. Routes re-enumerated by AST: 26, unchanged. See
 Rotation row 30 → ✅ (pending this PR's merge); next is Feature 31
 (Scheduled tasks) — re-check `list_pull_requests`/`search_pull_requests`
 fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 12, PR #3784, merged), preserved for history</summary>
