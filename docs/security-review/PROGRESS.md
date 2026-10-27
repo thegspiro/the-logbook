@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD]** (branch `claude/security-review-grants-fundraising-p11`) —
+**PR [#3765](https://github.com/thegspiro/the-logbook/pull/3765)** (branch
+`claude/security-review-grants-fundraising-p11`) —
 Feature 22 (Grants & fundraising), pass 11. **Watchdog pickup** — the
 dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
