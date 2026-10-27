@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3775](https://github.com/thegspiro/the-logbook/pull/3775)** (branch
+`claude/security-review-forms-p10`) — Feature 26 (Forms), pass 10. No
+security-review PR was open — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review`), 0 matching results, checked
+immediately before starting. PR #3768 (Feature 25, Messaging &
+notifications, pass 10) had already merged. Row 26 (Forms) was confirmed
+the next `⬜` row by reading the rotation table directly on a freshly
+fetched `main` (head `02bdfb59`). **0 fixed, 0 new findings.** Real delta
+since pass 9's merge (`2d000c36`, PR #3640): two substantive feature
+commits, both read end-to-end against all seven checklist dimensions
+rather than trusted from their messages — a Sensitive field type whose
+answers move to a new AES-256-GCM-encrypted column and are served only to
+a new permission deliberately kept outside the `forms.` namespace
+(`sensitive_answers.view`, seeded to no position), and a per-form,
+per-department opt-in to embed a public form in an `<iframe>` on the
+department's own website (`allow_embed` + `Organization.settings.forms.
+embed_allowed_origins`, served through a new public `GET /{slug}/
+embed-policy` route that nginx's `auth_request` copies into that page's
+`Content-Security-Policy: frame-ancestors`, fail-closed on every edge: a
+500 if the backend can't be asked, `'none'` for anything else). Both
+reviewed in full — the row-locked sealing of existing answers, the
+refusal to un-mark a field with sealed data, the CSV-export/anonymization/
+key-rotation coverage of the new column, the origin-allowlist's
+double-validation (write-time 422, read-time drop-not-raise) against
+header-injection payloads, the `postMessage` origin check on the
+receiving snippet, and all three nginx configs' `frame-ancestors`
+inheritance — and found sound; no gap, no fix needed. Routes
+re-enumerated by AST: 25 (up from 22 at pass 9 — the one addition is the
+new public embed-policy route), all gated as expected. FORM-4 and FORM-12
+re-verified OPEN/FLAGGED, unchanged. See `FORM-26-forms.md`'s **Pass 10**
+section for the full review.
+
+Rotation row 26 → ✅ (pending this PR's merge); next is Feature 27
+(Integrations) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging &amp; notifications, pass 10, PR #3768, merged), preserved for history</summary>
+
 **PR [#3768](https://github.com/thegspiro/the-logbook/pull/3768)** (branch
 `claude/security-review-messaging-notifications-p10`) —
 Feature 25 (Messaging & notifications), pass 10. **Watchdog pickup** — the
@@ -46,6 +85,8 @@ review.
 Rotation row 25 → ✅ (pending this PR's merge); next is Feature 26
 (Forms) — re-check `search_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings &amp; minutes, pass 10, PR #3767, merged), preserved for history</summary>
