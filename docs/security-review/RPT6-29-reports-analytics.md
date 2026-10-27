@@ -959,3 +959,120 @@ needed — none of the four open items' status changed this pass.
 
 Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
 bootstrap routes).
+
+## Addendum to pass 12 — a second, independent watchdog session raced this same pass concurrently
+
+A second watchdog session worked this same rotation slot at the same time
+(both ran Step 0's `search_pull_requests` check before either had pushed, so
+neither saw the other's in-flight branch; the second session's push was
+rejected with "fetch first" against this already-pushed branch name). Rather
+than open a duplicate, competing PR, that session's findings are folded in
+here as this follow-up commit, per this rotation's own "Medical supplies
+pass 16" and "pass 11 addendum" precedent for exactly this situation.
+
+**Gap found: this pass's own file enumeration never checked
+`saved_report_schedule.py` or `app/utils/external_recipients.py`, both in
+this feature's declared scope** (the pass 11 PR's own "Backend" line lists
+`saved_report_schedule.py` among this feature's services). The passage above
+lists nine backend files plus the frontend module as "byte-identical to pass
+11's merged state" — `saved_report_schedule.py` is not among them, and
+`external_recipients.py` isn't named at all. A direct `git diff --stat
+14e95ce1..HEAD` confirms both have substantial real changes (248 and 23
+lines) since pass 11's merge, left entirely unreviewed by this pass.
+
+(One apparent second gap was checked and ruled out rather than reported: a
+`git log --oneline 14e95ce1..HEAD -- backend/app/services/reports_service.py`
+run during the race lists `5ef9c11e` — Oct 16, predating pass 11's own Oct
+24 merge — as if it were new. `git merge-base --is-ancestor 5ef9c11e
+14e95ce1` returns false, so it is topologically not an ancestor, yet `git
+diff --stat 14e95ce1..HEAD -- reports_service.py` shows **zero** difference.
+This is the repo's own documented shallow-clone/rebase history-boundary
+artifact — `git log`'s path-filtered traversal surfacing a commit whose
+content independently already matches the target, not a real unreviewed
+change. Confirmed by content diff, not by trusting `git log`, precisely
+because this rotation has been burned by trusting a log enumeration before
+(RPT6-29-2). `reports_service.py` is correctly byte-identical to pass 11, as
+this pass's own text says.)
+
+### RPT6-29-4 — review completeness gap (no code change) — `saved_report_schedule.py` / `external_recipients.py`'s real delta since pass 11 was never reviewed by this pass — ✅ CORRECTED
+
+**What:** two commits, `016d389e` ("Make scheduled report delivery
+retry-safe and idempotent") and `deb1d3e0` ("Report delivery follow-ups:
+compliance email outcome, failed-attempt record, recipient de-dupe,
+weekly-report retry"), together rewrite `send_due_saved_reports`/`_send_one`
+in `saved_report_schedule.py` and add `dedupe_addresses` to
+`external_recipients.py`. Read in full this pass:
+
+- **`next_run_date` now advances only after the email is accepted** (was:
+  advanced before sending), so a failed or crashed send retries on the next
+  daily run instead of silently skipping that occurrence until the next
+  scheduled one — the exact shape CLAUDE.md Pitfall #36 asks for on a
+  reminder-type send (at-least-once is the right choice here; a duplicate
+  summary email is the lesser harm than one that never arrives, and the
+  function's own docstring says so).
+- **Each saved report now runs in its own `try`/`except`**, re-fetching the
+  row by id per iteration rather than holding a loaded instance across a
+  `rollback()` (which would raise `MissingGreenlet` on next access) — one
+  report's exception is logged via `persist_task_error_log` and no longer
+  blocks the reports after it in the same department.
+- **An occurrence that can never succeed** (owner lost `_owner_may_run`,
+  every recipient refused by the PII gate, an unknown schedule frequency, or
+  `ReportsService.generate_report` returning an `"error"` key) is still
+  settled via `_settle_without_sending` so it isn't retried forever — the
+  other half of Pitfall #36 ("name the id that makes the second run a
+  no-op").
+- **`dedupe_addresses`** (new) replaces a bare `list(set(saved.email_recipients))`-style
+  filter with a case-insensitive, trimmed, stable-order dedupe, preserving
+  the pre-existing `isinstance(address, str)` filter — `A@x.org` and
+  `a@x.org` no longer both receive a copy.
+- **Every query in the touched functions stays scoped** to
+  `organization_id`/`saved.organization_id`/`org_id` — no tenancy surface
+  changed, only send timing, error isolation and recipient normalization.
+  Logger calls throughout use the `logger.warning("...{}", arg)`
+  positional-argument form, never an f-string combined with positional
+  arguments (Pitfall #33).
+- A companion fix in the same two commits, to `compliance_config_service.py`
+  (`auto_report_exists`) and `scheduled_tasks.py`, correctly applies the
+  Pitfall #27 lock-then-locking-read pattern to make the compliance
+  auto-report task idempotent too — that file is Feature 20's own scope, not
+  re-litigated here, but read in full to confirm it introduces nothing this
+  feature's own `saved_report_schedule.py` depends on incorrectly.
+
+**Where:** `backend/app/services/saved_report_schedule.py` (the whole
+`_send_one`/`send_due_saved_reports` rewrite), `backend/app/utils/
+external_recipients.py` (`dedupe_addresses`, new); commits `016d389e`,
+`deb1d3e0`.
+
+**Impact:** no security exposure — every change is already fixed, tested
+(`tests/test_saved_report_delivery.py` gained 124 lines across the two
+commits covering retry-on-failure, per-report isolation, and the
+unsendable-occurrence settle path) and shipped. The impact is confined to
+this rotation's own completeness: this pass's file enumeration omitted two
+in-scope files entirely rather than reviewing and clearing them, which is
+the same root cause this rotation's own Step 3 rule already names ("a
+repeat pass re-enumerates too... reviewing only the files the diff lists")
+and the same category of miss as RPT6-29-2 (pass 9/10 carrying a stale claim
+forward without re-reading the cited file).
+
+**Fix:** none needed in application code. **Disposition: CORRECTED** — this
+addendum records that `saved_report_schedule.py` and
+`external_recipients.py` were in fact reviewed (by this follow-up) and found
+clean, so the next pass's baseline diff starts from a state where every
+in-scope file has actually been read, not assumed byte-identical.
+
+**Completion gate for this addendum:**
+
+| Check                                                                                                                                                                                   | Result                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                           | ✅ 0 violations                    |
+| `black --check app/ tests/ alembic/`                                                                                                                                                    | ✅ clean                           |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                               | ✅ clean                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                       | ✅ single head `b8236e29ec44`      |
+| `pytest tests/test_saved_report_delivery.py tests/test_compliance_auto_report_idempotency.py tests/test_external_recipient_audit.py tests/test_security_weekly_report.py -v`            | ✅ all passed                      |
+| Scoped backend tests (`-k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report"`) | ✅ 948 passed, 1 pre-existing skip |
+| `cd frontend && npm run typecheck`                                                                                                                                                      | ✅ 0 errors                        |
+| `cd frontend && npm run lint`                                                                                                                                                           | ✅ 0 errors, 0 warnings            |
+
+Findings for the addendum: 0 fixes (nothing needed), 1 documentation
+completeness correction (RPT6-29-4). Combined with the rest of pass 12
+above: 0 fixes, 0 new unfixed findings, 1 completeness correction.

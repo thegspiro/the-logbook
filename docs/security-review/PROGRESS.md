@@ -38,6 +38,23 @@ Rotation row 29 → ✅ (pending this PR's merge); next is Feature 30
 (Onboarding) — re-check `search_pull_requests` fresh rather than trusting
 this note.
 
+**Addendum (same PR, follow-up commit):** a second, independent watchdog
+session raced this same pass concurrently (its push to this branch name was
+rejected "fetch first" against the one already pushed here). Rather than
+open a competing PR, its finding is folded in as a follow-up commit: this
+pass's own file enumeration never actually checked
+`saved_report_schedule.py` or `app/utils/external_recipients.py`, both in
+this feature's declared scope, despite the surrounding text implying every
+file had been. Both carry a real, substantial delta since pass 11 (the
+Pitfall #36 scheduled-report-delivery idempotency rewrite and a new
+`dedupe_addresses` helper) — read in full by the follow-up commit and found
+already fixed, tested and safe (org-scoping unchanged throughout). See
+`RPT6-29-reports-analytics.md`'s **Addendum to pass 12** section
+(RPT6-29-4) for the full review and why an initial, separate concern (that
+`5ef9c11e`/W72 might be an unreviewed change to `reports_service.py`) was
+checked and ruled out as a shallow-clone history-ordering artifact rather
+than reported.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 10, PR #3783, merged), preserved for history</summary>
 
