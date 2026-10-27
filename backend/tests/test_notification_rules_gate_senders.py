@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.cert_alert_service import CertAlertService
+from app.services.email_template_service import EmailTemplateService
 from app.services.scheduled_tasks import (
     run_cert_expiration_alerts,
     run_event_reminders,
@@ -62,7 +63,11 @@ class TestCertAlertsAtTheSharedChokepoint:
             ]
         )
         db.commit = AsyncMock()
-        return await CertAlertService(db).process_alerts("org-1"), db
+        # The Cert Expiration switch is read outside the scripted lookups.
+        with patch.object(
+            EmailTemplateService, "is_switched_off", AsyncMock(return_value=False)
+        ):
+            return await CertAlertService(db).process_alerts("org-1"), db
 
     async def test_a_disabled_rule_stops_the_alerts(self):
         result, db = await self._process([_rule(enabled=False)])

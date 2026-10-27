@@ -602,6 +602,39 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A template switched Off now stops its email (2026-10-27)
+
+**Before upgrading, open Communications → Email Templates and choose the
+"Off" filter.** Until this release, switching a template off only made the
+email fall back to the built-in wording: it kept going out. From this release
+a switched-off template is **not sent at all**, so every template that list
+shows as Off stops reaching its recipients the moment you upgrade. Switch back
+on any you still want sent.
+
+Three other changes go with it:
+
+- **Five emails can no longer be switched off:** Password Reset, IT Password
+  Notification, Welcome, Ballot Notification and Application Status Link.
+  Each carries something its recipient cannot get any other way. Migration
+  `0d9897752425` switches any of them that were off back on, so a
+  department's edits to them are now what is sent (before, "off" sent the
+  default wording).
+- **Five templates that were stored but never used are now sent:** Cert
+  Expiration (the reminder before a certificate expires), Post-Event
+  Validation, Post-Shift Validation, Member Archived and Prospect Inactivity
+  Warning. Their emails used to be built in code, so their wording changes to
+  what the template says, or to your department's edited copy if you edited
+  one. Migration `8079ea63f119` moves untouched stored copies of Cert
+  Expiration onto a default that says "expires today" rather than "0 days
+  left".
+- **The prospective-member pipeline's inactivity "Notify" boxes now send
+  email.** "Notify coordinator", which pipelines show ticked unless someone
+  unticked it, emails the membership coordinators once a week about each
+  applicant nearing the inactivity timeout. "Notify applicant" emails the
+  applicant a new **Application Going Inactive** notice. Untick either box in
+  Prospective Members → Settings, or switch its template off, if you do not
+  want it.
+
 ### A screening record with no expiration date now falls due by its frequency (2026-10-25)
 
 Medical screening used to count a Passed, Completed or Waived record saved

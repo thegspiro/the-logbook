@@ -58,6 +58,7 @@ from app.services.email_template_service import (
     GLOBAL_VARIABLES,
     TEST_RECIPIENT_FIELDS,
     EmailTemplateService,
+    is_always_sent,
     live_sample_context,
 )
 from app.services.email_test_records import real_record_context
@@ -312,6 +313,7 @@ async def _with_list_metadata(
         update={
             "is_customized": service.is_customized(template),
             "sent_count": counts.get(_type_value(template.template_type), 0),
+            "always_sent": is_always_sent(template.template_type),
         }
     )
     return response
@@ -366,6 +368,7 @@ async def list_email_templates(
             update={
                 "is_customized": service.is_customized(template),
                 "sent_count": counts.get(_type_value(template.template_type), 0),
+                "always_sent": is_always_sent(template.template_type),
             }
         )
         for template in templates

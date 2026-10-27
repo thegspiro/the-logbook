@@ -62,7 +62,7 @@ def _election(status=ElectionStatus.OPEN):
     return SimpleNamespace(id="e-1", title="Chief <2027>", status=status)
 
 
-async def _send(kind, stored_template=None, **kwargs):
+async def _send(kind, stored_template=None, switched_off=False, **kwargs):
     chief = _user("u-1", "Dana", "dana@example.test")
     performer = _user("u-2", "Sam", "sam@example.test")
     db = SimpleNamespace(
@@ -95,6 +95,11 @@ async def _send(kind, stored_template=None, **kwargs):
             EmailTemplateService,
             "get_template",
             AsyncMock(return_value=stored_template),
+        ),
+        patch.object(
+            EmailTemplateService,
+            "is_switched_off",
+            AsyncMock(return_value=switched_off),
         ),
     ):
         service = ElectionService(db)
@@ -207,6 +212,15 @@ class TestTheRollbackAlert:
         _count, sent = await _send("rollback", stored_template=stored)
         assert sent[0]["subject"] == "Heads up: Chief <2027>"
         assert "<p>Custom Open to Draft</p>" in sent[0]["html_body"]
+
+
+class TestASwitchedOffAlert:
+    @pytest.mark.parametrize("kind", ["rollback", "deletion"])
+    async def test_nothing_is_sent(self, kind):
+        count, sent = await _send(kind, switched_off=True)
+
+        assert count == 0
+        assert sent == []
 
 
 class TestTheDeletionAlert:

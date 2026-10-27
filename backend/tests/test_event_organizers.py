@@ -949,6 +949,44 @@ class TestPostEventValidationFollowsTheOrganizer:
         event = await _get_event(db_session, event_id)
         assert event.custom_fields["validation_notification_sent"] is True
 
+    async def test_the_prompt_is_the_post_event_validation_template(
+        self, db_session, dept
+    ):
+        from app.services.scheduled_tasks import run_post_event_validation
+
+        await self._ended(db_session, dept, created_by=dept["manager"])
+        with patch(
+            "app.services.email_service.EmailService.send_email",
+            new=AsyncMock(return_value=(1, 0)),
+        ) as send:
+            await run_post_event_validation(db_session)
+
+        message = send.await_args.kwargs
+        assert message["subject"] == "Attendance Validation Needed: Drill Night"
+        assert "Validate Attendance" in message["html_body"]
+        assert "0 of 0 checked in" in message["text_body"]
+        assert message["template_type"] == "post_event_validation"
+
+    async def test_a_switched_off_template_keeps_only_the_bell(self, db_session, dept):
+        from app.models.email_template import EmailTemplate, EmailTemplateType
+
+        db_session.add(
+            EmailTemplate(
+                organization_id=dept["org"],
+                template_type=EmailTemplateType.POST_EVENT_VALIDATION,
+                name="Post-Event Validation",
+                subject="s",
+                html_body="<p>b</p>",
+                is_active=False,
+            )
+        )
+        await self._ended(db_session, dept, created_by=dept["manager"])
+
+        emailed = await self._run(db_session)
+
+        assert emailed == []
+        assert await _notices(db_session, dept["manager"], "event_validation")
+
     async def test_nobody_to_ask_is_marked_and_not_retried(self, db_session, dept):
         gone = await _user(db_session, dept["org"], "Gwen", status="retired")
         event_id = await self._ended(db_session, dept, organizer=gone)
