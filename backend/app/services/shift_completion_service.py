@@ -1556,10 +1556,11 @@ class ShiftCompletionService:
         updates: dict,
         manages_training: bool = False,
     ) -> Optional[ShiftCompletionReport]:
-        """Update a draft shift completion report and optionally submit it.
+        """Update a shift completion report and optionally submit a draft.
 
         When review_status transitions away from 'draft', training
-        pipeline progress is triggered with the final report data.
+        pipeline progress is triggered with the final report data. A change
+        to a report already submitted sends it back to review (EC-17).
         """
         UPDATABLE_FIELDS = {
             "hours_on_shift",
@@ -1657,6 +1658,15 @@ class ShiftCompletionService:
             else None
         )
 
+        # EC-17: compared before the write. The report form resubmits every
+        # field whatever was edited, so presence in `updates` is not a change.
+        content_changed = not was_draft and any(
+            field in UPDATABLE_FIELDS
+            and field != "review_status"
+            and getattr(report, field) != value
+            for field, value in updates.items()
+        )
+
         for field, value in updates.items():
             if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
@@ -1684,6 +1694,9 @@ class ShiftCompletionService:
             if sources.pop("call_types", None) is not None:
                 report.data_sources = sources or None
 
+        if content_changed:
+            await self._return_edited_report_to_review(report, organization_id)
+
         # Training credit is earned only when an officer releases the report.
         # Pending review is still provisional and may be flagged or corrected.
         if not was_released and report.review_status == "approved":
@@ -1692,6 +1705,38 @@ class ShiftCompletionService:
         await self.db.commit()
         await self.db.refresh(report)
         return report
+
+    async def _return_edited_report_to_review(
+        self, report: ShiftCompletionReport, organization_id: UUID | str
+    ) -> None:
+        """Send a submitted report its filing officer has changed back to review.
+
+        EC-17, owner decision 2026-10-27: an edit to a reviewed report must not
+        stand on the earlier approval. A flagged report goes back to the
+        reviewer once revised. An approved one goes back only where the
+        department requires review; one that does not would leave the report
+        hidden from the trainee in a queue nobody works. The reviewer and review
+        date are cleared because they vouched for the earlier text, and the
+        printed report names them; the reviewer's notes stay, since a flag's
+        reason is what the revision answers.
+
+        Training credit is unaffected: it is keyed on the report, so approving
+        it again does not credit the trainee twice.
+        """
+        if report.review_status == "flagged":
+            return_it = True
+        elif report.review_status == "approved":
+            config = await TrainingModuleConfigService(self.db).get_config(
+                organization_id
+            )
+            return_it = config.report_review_required
+        else:
+            return_it = False
+        if not return_it:
+            return
+        report.review_status = "pending_review"
+        report.reviewed_by = None
+        report.reviewed_at = None
 
     async def _trigger_deferred_progress(
         self,

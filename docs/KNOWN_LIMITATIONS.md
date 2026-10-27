@@ -7013,40 +7013,20 @@ documents-feature review pass should not decide unilaterally — Finance and
 Documents would need to agree on one order before this can lock safely
 without risking a new cross-feature deadlock.
 
-## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26)
+## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26, resolved 2026-10-27)
 
-Found by security review EC-14 pass 12
-(`docs/security-review/EC-14-equipment-check-shifts.md`, pass 12, EC-17).
-Pre-existing, not introduced by this pass's own delta — the same pass's
-delta hardened `update_report`'s `review_status` field specifically (a
-submitted report's status now changes only through review, and the
-submit-destination is read from the department's own config rather than
-trusted from the client), and its own docstring rewrite claims "The
-service allows only drafts" — true for that one field, not for the rest.
-
-`ShiftCompletionService.update_report`'s `UPDATABLE_FIELDS` loop writes
-`performance_rating`, `officer_narrative`, `areas_of_strength`,
-`areas_for_improvement`, `skills_observed`, `tasks_performed`,
-`hours_on_shift`, `calls_responded`, `call_types`, and `enrollment_id` onto
-the row for any update from the filing officer, with no check on
-`review_status` at all. A report that has already been reviewed and
-`approved` stays open to the same officer editing its narrative, rating, or
-recorded skills through `PUT /shift-reports/{id}`, weeks later, with no
-re-review triggered and nothing beyond the generic `shift_report_updated`
-audit-log entry (which records which fields changed, not that the report
-had already cleared review) to surface it to whoever approved the original
-version. Confirmed this does not re-run training credit —
-`_trigger_deferred_progress` only fires when the report was not already
-`approved` before this edit — so the risk is to the integrity of the
-record itself, not to double-granted credit.
-
-**Not fixed.** Closing it is a product decision between three shapes this
-pass should not pick unilaterally: block every `UPDATABLE_FIELDS` write
-once a report is no longer a draft (simplest, but removes the ability to
-fix a typo after approval), require any edit to an approved/pending report
-to go back through review (more correct, but is a workflow change its own
-users would need to learn), or accept the status quo and rely on the audit
-log as the record of what changed and when.
+**Resolved (owner decision: an edit sends the report back to review).**
+`ShiftCompletionService.update_report` now returns a submitted report to
+`pending_review` when its filing officer changes any field. A flagged report
+always goes back once revised. An approved one goes back where the department
+requires review; where review is off it stays approved, as a newly submitted
+report would. Returning a report clears its reviewer and review date, which
+vouched for the earlier text, and keeps the reviewer's notes. Re-saving
+unchanged values keeps the approval. Training credit is keyed on the report, so
+approving it again does not credit the trainee twice. The app's own screens
+edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
+`tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
+in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
