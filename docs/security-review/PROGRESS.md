@@ -16,10 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR [#3761](https://github.com/thegspiro/the-logbook/pull/3761) (Feature
-20, Compliance, pass 11) merged — confirmed via `search_pull_requests`
-returning 0 open `claude/security-review-*` PRs before this iteration
-started. Rotation row 20 is ✅. Next is Feature 21 (Admin hours).
+**PR [#3764](https://github.com/thegspiro/the-logbook/pull/3764)** (branch
+`claude/security-review-admin-hours-p11`) — Feature 21 (Admin hours), pass 11. **Watchdog pickup** — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. No security-review PR
+was open — confirmed via `search_pull_requests`, 0 matching results, after
+PR #3761 (Feature 20, Compliance, pass 11) merged. **0 fixed, 0 flagged.**
+Backend is byte-identical to pass 10's merge; the only real delta is
+workflow-review W79's four-file phone-layout fix in the admin-hours frontend
+module, reviewed in full and confirmed cosmetic. Routes re-enumerated by
+AST: 30, unchanged, all gated (17 `admin_hours.manage`, 13 self-scoped — a
+correction to pass 10's "18/12" prose). Zero open or flagged findings carry
+forward; feature has been clean since pass 10. See
+`AH-21-admin-hours.md`'s **Pass 11** section for the full review.
+
+Rotation row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 11, PR #3761, merged)</summary>
