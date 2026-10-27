@@ -22474,7 +22474,7 @@ PR is recorded in the Log, not repeated here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
@@ -22485,6 +22485,59 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-27 — Feature 31 (Scheduled tasks, pass 10) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session this
+rotation depends on was reported unreachable by the operator starting this
+run. No open security-review PR — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`, 0 results) and
+`list_pull_requests` (`state=open`, 2 unrelated docs PRs #3774/#3772), both
+checked immediately before starting. PR #3785 (Feature 30, Onboarding, pass 10) had already merged into `main` (head `eb3e1a50`), and that merge commit
+itself already carried row 30 at ✅ and cleared the Open PR note, so there
+was nothing left to record from Step 0. Row 31 (Scheduled tasks) was
+confirmed the next `⬜` row by reading the rotation table directly on this
+freshly-fetched `main`.
+
+**Real delta since pass 9's merge (`1acb6213`, PR #3672):** a path-scoped
+`git log` (not the unscoped 350-commit range) found exactly 5 commits
+touching `scheduled.py`/`scheduled_tasks.py`. `scheduled.py`: zero changes,
+re-confirmed by direct read (still 82 L, 2 routes, same gating). All five
+commits land inside five existing task runners via four cross-feature
+delegates, each read in full rather than trusted from its commit message: a
+new per-template "switched off" kill switch (Messaging & notifications,
+feature 25 — landed 15:18 UTC, **after** that feature's own pass 10 merged
+at 13:36 UTC the same day) now gates the email half of
+`run_post_event_validation`/`run_post_shift_validation`/`run_shift_reminders`/
+`_run_scheduled_emails_inner`; a compliance-report email retry pass
+(`ComplianceReportService.retry_unsent_auto_emails`, PR #3727) closes a
+mail-outage gap in `run_compliance_auto_reports` with the same locked
+read-then-write shape (Pitfall #27) and "send, then stamp" idempotency
+(Pitfall #36) the codebase already uses elsewhere; and a missed-meeting
+roll-forward (`MembershipPipelineService.roll_forward_missed_meeting`) in
+`run_prospect_attendance_advance` is org-scoped through its already-scoped
+parent and idempotent by construction (keyed on event id in the activity
+log). All verified good — org-scoped, properly escaped (every new
+template-context key passed through the existing `_replace_variables`
+HTML-escape path, confirmed by reading that method rather than trusting its
+docstring), and consistent with this feature's own standing patterns. Two
+stale `template_type` labels (copy-pasted `"post_shift_validation"` into two
+unrelated senders) were also corrected in the same delta — an audit-label
+fix, not a security finding. `SCHEDULE`/`TASK_RUNNERS` re-verified 1:1 by
+AST at 68/68, unchanged — no new registered task. Route inventory
+re-enumerated by AST: 2, unchanged. One cross-feature note left for
+Messaging & notifications' (feature 25) own next pass: the broader
+per-template kill switch mechanism (eight other senders, the endpoint's
+400-refusal for always-sent types, its own 379-line test file) landed after
+that feature's last-reviewed pass and has not yet been re-reviewed by its
+own rotation — out of this feature's scope, so not read in full here, only
+the two call sites this file makes into it. CRON4-31-2 and CRON-4
+(app-review) re-confirmed OPEN, unchanged. Full writeup:
+`docs/security-review/CRON10-31-scheduled-tasks.md`.
+
+Rotation row 31 → ✅ (pending this PR's merge); next is Feature 32
+(Locations & kiosk) — re-check `search_pull_requests` fresh rather than
+trusting this note.
 
 ### 2026-10-27 — Feature 30 (Onboarding, pass 10) — watchdog pickup, 0 fixed, 0 new findings; two prior-pass OPEN items re-confirmed FIXED
 
