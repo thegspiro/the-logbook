@@ -6462,15 +6462,19 @@ W64-5).
   picks the line (the member, or the Treasurer on approval), and whether
   approval commits it.
 
-## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14)
+## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14, overpayments resolved 2026-10-27)
 
 Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
 
-- **An overpayment is accepted silently.** `record_dues_payment` has no check
-  against the balance. In the review, $75 recorded against a $70 balance left
-  "$125.00 paid of $120.00", and the extra $5 counted as collected.
-  Decision: refuse, warn and allow, or carry the excess as a credit to the
-  member's next dues.
+- **An overpayment is accepted silently — resolved 2026-10-27** (owner
+  decision: warn and allow, and the excess is a donation). The Record payment
+  dialog asks first; `record_dues_payment` refuses an overpayment unless the
+  request carries `excessAsDonation`. With it, the dues are settled at the
+  balance and the excess is a completed Fundraising donation under no campaign,
+  from the member's donor record (created from their account if they have
+  none). If the dues are already paid, the whole amount is the donation. A
+  retried submission with the same reference records neither twice. Covered by
+  `tests/test_dues_overpayment_donation.py` and `DuesPaymentDialog.test.tsx`.
 - **A member cannot see their own dues.**
   - No screen shows a member what they owe; `/finance/dues` needs
     `finance.view`.

@@ -1508,6 +1508,12 @@ the list it links to.
 3. Adjust the **amount received** (must be greater than zero), and optionally choose a **method** and enter a **reference** (check number, receipt number) and **notes**.
 4. Select **Record payment**.
 
+If the amount is more than the member still owes, you are asked first. Confirming
+records what is owed against the dues and the rest as a **donation** from the
+member, under no campaign, in **Fundraising**. A donor record is created for the
+member if they do not have one. If their dues are already paid, the whole amount
+is the donation. Choose **Change the amount** to go back instead.
+
 Every payment is recorded as its own entry in the member's payment history. The
 amount paid shown on the dues record is the **sum of that history**, so if the
 total reaches or exceeds the amount due the status changes to **Paid**, and if it
