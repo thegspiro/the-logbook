@@ -93,6 +93,11 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
     label: 'Application Step Completed',
     color: 'text-blue-700 dark:text-blue-400',
   },
+  application_going_inactive: {
+    icon: Hourglass,
+    label: 'Application Going Inactive',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
   application_status_link: {
     icon: Link2,
     label: 'Application Status Link',
@@ -166,6 +171,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'application_withdrawn',
       'application_step_completed',
       'application_status_link',
+      'application_going_inactive',
     ],
   },
   {
