@@ -114,6 +114,36 @@ app/api/v1/endpoints/events.py::list_missed_mandatory_events
 app/api/v1/endpoints/events.py::rsvp_to_series
 app/api/v1/endpoints/events.py::self_check_in
 app/api/v1/endpoints/events.py::transfer_event
+# Attendance tools (2026-10-27): each handler calls
+# _authorize_attendance_manager before anything else, which admits
+# events.manage, training.manage on a Training event, or the event's organizer
+# or alternate — decided against the event read org-scoped — and refuses
+# everyone else with a 403 (404 for an event outside the caller's org).
+# Organizers may not write their own attendance or, on a Training event,
+# correct times; the roster's emails follow the contact policy off the
+# events.manage path.
+app/api/v1/endpoints/events.py::bulk_add_attendees
+app/api/v1/endpoints/events.py::check_in_attendee
+app/api/v1/endpoints/events.py::get_eligible_members
+app/api/v1/endpoints/events.py::get_event_stats
+app/api/v1/endpoints/events.py::get_rsvp_history
+app/api/v1/endpoints/events.py::list_event_rsvps
+app/api/v1/endpoints/events.py::manager_add_attendee
+app/api/v1/endpoints/events.py::override_rsvp_attendance
+app/api/v1/endpoints/events.py::remove_attendee
+# Training-event administration (2026-10-27): each handler calls
+# _authorize_event_admin before anything else, which admits the grant the route
+# always required (events.manage; events.reopen_attendance for reopen) without
+# a read, or training.manage on an event read org-scoped and of type Training,
+# and refuses everyone else (403; 404 outside the caller's org). A training
+# manager may not change the event's type, and a series edit refuses when any
+# occurrence it reaches is not Training.
+app/api/v1/endpoints/events.py::end_event
+app/api/v1/endpoints/events.py::finalize_attendance
+app/api/v1/endpoints/events.py::record_actual_times
+app/api/v1/endpoints/events.py::reopen_attendance
+app/api/v1/endpoints/events.py::update_event
+app/api/v1/endpoints/events.py::update_future_events
 
 app/api/v1/endpoints/external_shift_hours.py::delete_my_external_shift
 app/api/v1/endpoints/external_shift_hours.py::list_apparatus_options

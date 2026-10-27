@@ -327,11 +327,14 @@ class TestChangeEmail:
 
 
 def _officer():
+    # An events manager: PATCH /events/{id} authorizes inside the handler now
+    # (training managers are admitted per event), so a direct call no longer
+    # skips the gate the way a signature dependency did.
     return SimpleNamespace(
         id="officer-1",
         organization_id="org-1",
         username="officer",
-        positions=[],
+        positions=[SimpleNamespace(permissions=["events.manage"])],
         rank=None,
     )
 

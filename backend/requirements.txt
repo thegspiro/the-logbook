@@ -5,13 +5,13 @@
 # ============================================
 # Web Framework
 # ============================================
-fastapi==0.143.3
+fastapi==0.162.0
 # starlette pinned explicitly (normally transitive): the 1.x line carries
 # the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
-starlette==1.8.0
+starlette==1.9.0
 uvicorn[standard]==0.54.0
 pydantic==2.14.1
-pydantic-settings==2.16.0
+pydantic-settings==2.16.1
 slowapi==0.1.10
 
 # ============================================
@@ -24,8 +24,8 @@ mcp==2.3.0
 # ============================================
 # Database - MySQL
 # ============================================
-sqlalchemy==2.1.4
-alembic==1.20.0
+sqlalchemy==2.1.6
+alembic==1.20.1
 pymysql==1.2.0  # Held: 1.2.1+ removed escape_bytes_prefixed, which aiomysql 0.3.2 calls for every bytes param (see docs/KNOWN_LIMITATIONS.md)
 aiomysql==0.3.2
 greenlet==3.5.6  # Required by SQLAlchemy for async operations
@@ -76,7 +76,7 @@ pywebpush==2.5.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.114  # AWS S3
+boto3==1.43.118  # AWS S3
 azure-storage-blob==12.31.0
 google-cloud-storage==3.17.1
 python-magic==0.4.27
@@ -86,7 +86,7 @@ python-magic==0.4.27
 # ============================================
 python-docx==1.2.0
 openpyxl==3.1.5
-reportlab==5.0.1
+reportlab==5.1.0
 pypdf==6.21.2  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870; 6.21.0 is vulnerable: CVE-2026-113786; 6.21.1 is vulnerable: CVE-2026-115572, CVE-2026-115580, CVE-2026-115585
 Pillow==13.0.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
@@ -98,7 +98,7 @@ nh3==0.3.7  # Allowlist HTML sanitizer for rich-text minutes sections (app/utils
 httpx==0.28.1
 requests==2.34.2  # For health checks (CVE-2024-35195 & CVE-2024-47081 fixes)
 aiofiles==25.1.0
-websockets==17.2
+websockets==17.3
 
 # ============================================
 # Data Validation & Parsing
@@ -116,7 +116,7 @@ stripe==16.0.0
 # Monitoring & Logging
 # ============================================
 loguru==0.7.3
-sentry-sdk==2.72.0
+sentry-sdk==2.73.0
 psutil==7.2.2  # System monitoring for health checks
 
 # ============================================
@@ -147,8 +147,8 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
-hypothesis==6.170.0  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.31.1
+hypothesis==6.170.9  # schemathesis 4.x requires >=6.130.12
+schemathesis==4.32.4
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
@@ -164,7 +164,7 @@ schemathesis==4.31.1
 # the same way). Read that range off the schemathesis release being pinned
 # before changing this line; the dependency bot does not read this comment and
 # has now proposed an out-of-range bump twice.
-jsonschema-rs==0.58.6
+jsonschema-rs==0.60.1
 faker==40.43.0
 # Stands in for a department's S3 bucket in tests; never imported by app/.
 moto[s3]==5.2.4
@@ -179,7 +179,7 @@ mypy==2.4.0
 # above because it arrives through google-api-python-client.
 types-defusedxml==0.7.0.20260504
 types-httplib2==0.32.0.20260720
-types-python-dateutil==2.9.0.20260807
+types-python-dateutil==2.9.0.20261021
 types-reportlab==5.0.0.20261008
 isort==9.0.2
 # pylint declares a hard upper bound on isort, so the two only move together:

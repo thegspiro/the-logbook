@@ -1,7 +1,7 @@
 """Let an untouched certification reminder say "today", not "0 days left".
 
 Revision ID: 8079ea63f119
-Revises: c616fa1bd492
+Revises: b8236e29ec44
 Create Date: 2026-10-27 15:34:00
 
 The Cert Expiration template is what the certification reminder now sends;
@@ -33,7 +33,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "8079ea63f119"
-down_revision: Union[str, Sequence[str], None] = "c616fa1bd492"
+down_revision: Union[str, Sequence[str], None] = "b8236e29ec44"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

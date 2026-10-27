@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 
@@ -374,5 +374,64 @@ describe('LabelPrintPage sheet start position', () => {
     await user.click(screen.getByRole('button', { name: 'PDF' }));
     await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
     expect(mockGenerate.mock.calls[0]?.[2]).not.toHaveProperty('start_position');
+  });
+});
+
+describe('LabelPrintPage browser printing', () => {
+  const PRINT_FRAME_TITLE = 'Label print job';
+  const LONG_NAME = 'Golf Shirt — XXL — Unisex Short Sleeve Polo';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    for (const m of [mockPreview, mockGetPreset, mockSetPreset, mockListPrinters]) m.mockReset();
+    mockPreview.mockResolvedValue({ items: [{ name: LONG_NAME, barcode_value: 'INV-000381' }] });
+    mockGetPreset.mockResolvedValue({ preset: 'rollo_2x1' });
+    mockSetPreset.mockResolvedValue({ preset: null });
+    mockListPrinters.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    screen.queryAllByTitle(PRINT_FRAME_TITLE).forEach((frame) => frame.remove());
+  });
+
+  const clickPrint = async (user: ReturnType<typeof userEvent.setup>) => {
+    await screen.findAllByText(LONG_NAME);
+    await waitFor(() => expect(mockGetPreset).toHaveBeenCalledWith('apparatus'));
+    await user.click(screen.getByRole('button', { name: /Print in browser/ }));
+  };
+
+  it('prints the name in a sans-serif font, on up to two lines rather than one', async () => {
+    renderPage('?ids=a1');
+    const name = await screen.findByText(LONG_NAME, { selector: '.barcode-label > div' });
+
+    expect(name.style.webkitLineClamp).toBe('2');
+    expect(name.style.whiteSpace).not.toBe('nowrap');
+    expect(name.parentElement?.style.fontFamily).toMatch(/^Arial/);
+  });
+
+  it('names the paper size before opening the print dialog', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=a1');
+    await clickPrint(user);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Before you print' });
+    expect(within(dialog).getByText(/^: 2" x 1"/)).toBeInTheDocument();
+    expect(screen.queryByTitle(PRINT_FRAME_TITLE)).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Open print dialog' }));
+
+    const frame = screen.getByTitle<HTMLIFrameElement>(PRINT_FRAME_TITLE);
+    expect(frame.contentDocument?.head.innerHTML).toContain('size: 2in 1in');
+  });
+
+  it('shares "don’t show again" with the inventory page for the same size', async () => {
+    localStorage.setItem('inventory:labelPrintChecklistSkip', JSON.stringify(['rollo_2x1']));
+    const user = userEvent.setup();
+    renderPage('?ids=a1');
+    await clickPrint(user);
+
+    expect(screen.queryByRole('dialog', { name: 'Before you print' })).not.toBeInTheDocument();
+    expect(screen.getByTitle(PRINT_FRAME_TITLE)).toBeInTheDocument();
   });
 });

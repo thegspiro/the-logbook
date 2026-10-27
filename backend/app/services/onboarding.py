@@ -19,6 +19,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.permissions import default_positions_for
+from app.core.security import email_fingerprints
 from app.core.seed_admin_hours import seed_admin_hours_data
 from app.core.utils import generate_display_code, generate_uuid
 from app.models.facilities import Facility, FacilityStatus, FacilityType
@@ -1245,7 +1246,7 @@ class OnboardingService:
             # Check if a user with this email already exists (e.g. the System Owner)
             existing = await self.db.execute(
                 select(User).where(
-                    User.email == email,
+                    User.email_hash.in_(email_fingerprints(email)),
                     User.organization_id == organization_id,
                 )
             )
@@ -1476,7 +1477,7 @@ class OnboardingService:
             severity="INFO",
             user_id=str(user.id),
             username=username,
-            event_data={"organization_id": organization_id, "email": email},
+            event_data={"organization_id": organization_id},
         )
 
         # Refresh server-computed updated_at to prevent MissingGreenlet

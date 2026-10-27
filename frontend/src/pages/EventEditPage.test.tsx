@@ -36,6 +36,20 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+// The page reads events.manage itself now that the route also admits
+// training.manage. Every block but the training-manager one is an events
+// manager, which is what the route guard alone used to guarantee.
+const mockPermissions = new Set<string>();
+const mockAuthState = {
+  user: { id: 'user-1' },
+  checkPermission: (permission: string) => mockPermissions.has(permission),
+};
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: vi.fn((selector?: (state: typeof mockAuthState) => unknown) =>
+    selector ? selector(mockAuthState) : mockAuthState
+  ),
+}));
+
 // Mock the useTimezone hook used by EventForm
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -88,6 +102,8 @@ describe('EventEditPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPermissions.clear();
+    mockPermissions.add('events.manage');
     vi.mocked(eventService.getVisibleEventTypesWithCategories).mockReset();
     vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue(visibleTypesWith());
   });
@@ -589,6 +605,39 @@ describe('EventEditPage', () => {
       await screen.findByRole('link', { name: 'Existing Event' });
       const trail = screen.getByRole('navigation', { name: /breadcrumb/i });
       expect(within(trail).getByRole('link', { name: 'Events' })).toHaveAttribute('href', '/events');
+    });
+  });
+  // training.manage reaches the page for any event; the server says whether
+  // this one is theirs, and the type stays Training.
+  describe('A training manager', () => {
+    beforeEach(() => {
+      mockPermissions.clear();
+      mockPermissions.add('training.manage');
+      vi.mocked(eventService.getEvent).mockReset();
+    });
+
+    it('edits a Training event with the type locked', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        event_type: 'training',
+        can_edit_event: true,
+      });
+
+      renderWithRouter(<EventEditPage />);
+
+      const type = await screen.findByLabelText(/event type/i);
+      expect(type).toBeDisabled();
+      expect(screen.getByText(/only an event manager can change a training event/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+    });
+
+    it('is turned away from an event that is not theirs to edit', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, can_edit_event: false });
+
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByText(/only an event manager can edit this event/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
     });
   });
 });

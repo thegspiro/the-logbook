@@ -137,8 +137,15 @@ async def test_record_times_api_returns_bad_request_for_invalid_effective_pair()
             ),
             db=db,
             # ``id`` stands in for the acting user the endpoint now records as
-            # the finalizer when an end time closes the event.
-            current_user=SimpleNamespace(organization_id=uuid4(), id=uuid4()),
+            # the finalizer when an end time closes the event. An events
+            # manager: the route authorizes inside the handler, so a direct
+            # call no longer skips the gate.
+            current_user=SimpleNamespace(
+                organization_id=uuid4(),
+                id=uuid4(),
+                positions=[SimpleNamespace(permissions=["events.manage"])],
+                rank=None,
+            ),
         )
 
     assert exc_info.value.status_code == 400

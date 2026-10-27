@@ -24,6 +24,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints import shift_history_import as endpoint
+from app.core.security import email_fingerprint
 from app.models.external_shift_hours import (
     ExternalAgency,
     ExternalApparatus,
@@ -407,7 +408,11 @@ class TestCommit:
         )
         await service.commit(world.org_id, draft.id, world.admin)
         created = (
-            await db_session.execute(select(User).where(User.email == "dana@old.test"))
+            await db_session.execute(
+                select(User).where(
+                    User.email_hash == email_fingerprint("dana@old.test")
+                )
+            )
         ).scalar_one()
         assert created.username == "dformer"
 

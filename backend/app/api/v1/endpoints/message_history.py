@@ -7,15 +7,17 @@ Provides:
 """
 
 import html
+import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.security import email_fingerprints
 from app.models.email_template import (
     EmailTemplate,
     MessageHistory,
@@ -81,7 +83,18 @@ async def list_message_history(
         pattern = like_pattern(search)
         q = q.where(
             (MessageHistory.subject.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
-            | (MessageHistory.to_email.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+            # Recipients are encrypted at rest; a complete address matches
+            # through the per-recipient fingerprints stored with the message.
+            | or_(
+                false(),
+                *(
+                    func.json_contains(
+                        MessageHistory.recipient_fingerprints, json.dumps(fp)
+                    )
+                    == 1
+                    for fp in email_fingerprints(search)
+                ),
+            )
         )
 
     if sent_after:

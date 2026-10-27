@@ -25,6 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
 from app.utils.member_names import format_display_name
 
@@ -208,7 +209,7 @@ class NotificationLog(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    recipient_email: Mapped[Optional[str]] = mapped_column(String(255))
+    recipient_email: Mapped[Optional[str]] = mapped_column(EncryptedText)
     # A first-class link (rather than JSON-only metadata) makes department
     # message deliveries queryable and lets the database reject duplicate
     # fan-out when two workers race.

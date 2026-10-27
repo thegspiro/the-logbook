@@ -138,8 +138,11 @@ class TestSearchDoesNotConfirmAnEmail:
         await service.list_donors(ORG, search="pat@")
         managed = str(captured[-1].compile(dialect=mysql.dialect())).lower()
 
-        assert "lower(donors.email) like" not in hidden
-        assert "lower(donors.email) like" in managed
+        # The address is encrypted, so a contact search matches its
+        # fingerprint, and only for a caller allowed to see contact details.
+        assert "donors.email_hash in" not in hidden
+        assert "donors.email_hash in" in managed
+        assert "lower(donors.email) like" not in managed
         # Names and company are still searchable by a view-only caller.
         assert "lower(donors.last_name) like" in hidden
         assert "lower(donors.company_name) like" in hidden

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
 from app.models.user import generate_uuid
 
 
@@ -71,7 +72,7 @@ class OnboardingStatus(Base):
     # System information collected during onboarding
     organization_name: Mapped[Optional[str]] = mapped_column(String(255))
     organization_type: Mapped[Optional[str]] = mapped_column(String(50))
-    admin_email: Mapped[Optional[str]] = mapped_column(String(255))
+    admin_email: Mapped[Optional[str]] = mapped_column(EncryptedText)
     admin_username: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Security verification
