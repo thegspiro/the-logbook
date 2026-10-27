@@ -847,3 +847,115 @@ documentation correction (RPT6-29-2, dropping a two-pass-old stale "still
 flagged" status for an item that was already fixed). No
 `KNOWN_LIMITATIONS.md` change needed. Rotation row 29 → ✅ (pending this
 PR's merge). Next: Feature 30 (Onboarding).
+
+## Pass 12 (2026-10-27) — watchdog pickup, real delta (timezone/UX correctness fixes), 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`).
+No open security-review PR — confirmed via `search_pull_requests`, 0
+results, after Feature 28 (Security, audit & IP) pass 10's own PR (#3783)
+merged. Row 29 confirmed the next `⬜` row by reading the rotation table on
+a freshly fetched `main` (head `115bd921`).
+
+**Baseline:** pass 11's merge, `14e95ce1` (PR #3647). **Real delta since
+then**, each of this doc's ten backend files plus `frontend/src/modules/reports`
+diffed by content (`git diff --stat 14e95ce1..HEAD -- <file>`) rather than
+trusted from `git log`: two files carry a real diff, `reports.py`,
+`dashboard.py`, `labels.py`, `reports_service.py`,
+`dashboard_widget_service.py`, `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`, `schemas/reports.py` and
+the frontend module are all byte-identical to pass 11's merged state.
+
+- **`analytics.py`'s `/metrics` hourly-activity breakdown now buckets by the
+  organization's local hour instead of UTC (W75).** Rows are grouped by UTC
+  date+hour in SQL (`func.date(...)`/`extract("hour", ...)`, at most 24
+  buckets per day), then each bucket is converted with
+  `resolve_reporting_timezone` (pre-existing, Scheduling's own utility,
+  already reviewed under Feature 15) and re-bucketed by local hour. Read in
+  full: the underlying `base_filter` (org-scoping) is untouched, no new
+  query shape, no client-supplied timezone — the org id passed to
+  `resolve_reporting_timezone` is always `current_user.organization_id`.
+  Pure correctness fix (an evening check-in no longer appears after
+  midnight on the chart); **verified good, no new finding.**
+- **`platform_analytics.py`'s login/error trend charts now bucket by local
+  calendar day instead of UTC day, and the charted window now matches the
+  headline total printed above it (W78-1), and the Module Usage section now
+  reads the organization's actual `enabled_modules` instead of a hardcoded
+  `True` for every module (W78-2).** Read the full diff: every query
+  changed still filters `User.organization_id == org_id` /
+  `ErrorLog.organization_id == org_id` on the same line — this is a
+  bucketing/label change, not a new tenancy surface (Pitfall #14
+  unaffected). `OrganizationService(db).get_enabled_modules(org_id)` is
+  called with the caller's own org id, not a client-supplied one. The
+  endpoint's auth dependency is unchanged
+  (`require_permission("settings.manage")`, confirmed by direct read).
+  Both fixes are covered by dedicated integration tests
+  (`tests/test_platform_analytics_w78.py`,
+  `tests/test_admin_monitoring_w75.py` for the sibling `/metrics` fix) —
+  both files are module-level `pytest.mark.integration` (Pitfall #30b,
+  correctly scoped: they use `db_session`) and were re-run directly against
+  a freshly migrated database (the session's sandbox DB had drifted one
+  migration behind `main`'s new head during this rotation; `alembic upgrade
+head` resolved it — an environment gap, not a code defect): **4 passed.**
+  **Verified good, no new finding.**
+
+No other commit touches `reports.py`, `dashboard.py`, `labels.py`,
+`reports_service.py`, `dashboard_widget_service.py`,
+`attendance_dashboard_service.py`, `label_service.py`,
+`label_printer_service.py`, `schemas/reports.py`, or
+`frontend/src/modules/reports` since pass 11 — confirmed by `git diff
+--stat 14e95ce1..HEAD -- <each file>` individually, each empty.
+
+### Route inventory — re-enumerated by AST, 35 routes, unchanged from pass 11
+
+Counted every `@router.<method>` decorator in the five endpoint files
+directly: 7 (`reports.py`) + 3 (`analytics.py`) + 1 (`platform_analytics.py`)
+
+- 12 (`dashboard.py`) + 12 (`labels.py`) = **35**, identical to pass 11. No
+  route added, removed, or re-gated; `get_platform_analytics`'s
+  `require_permission("settings.manage")` dependency is unchanged.
+
+### Still flagged — every open item re-checked against current code, not the doc
+
+- **LBL-29-2 (LOW/policy)** — `list_label_printers` (`labels.py:318`) still
+  carries only `get_current_user`, no permission string; re-read in full,
+  unchanged (deliberate: LAN host/port/location only, no credentials).
+- **LBL-29-4 (Informational)** — `LabelService.generate()`
+  (`label_service.py:562`) still has no count cap of its own, unlike
+  `LabelPrinterService.MAX_LABELS_PER_JOB = 500`
+  (`label_printer_service.py:56,372`); re-grepped, unchanged.
+- **RPT-5c / RPT-6 / RPT-7** — `_generate_inventory_status`'s
+  `float(item.current_value)`, `apparatus_status.last_inspection_date`
+  hardcoded `None`, and the shared-requirement double-enrollment
+  completion-percentage case — `reports_service.py` has zero commits since
+  pass 11, so all three are unchanged by definition; not independently
+  re-executed beyond that diff check.
+- **DASH-2 (LOW)** — `grep -rn "dashboardService\.getStats" frontend/src/`
+  — 0 hits, re-checked this pass. Still zero callers, unchanged since
+  2026-08-08.
+
+### No new findings this pass
+
+**0 fixes applied, 0 new findings.** Both real changes found were already
+fixed and shipped by other work (the W75/W78 workflow-review passes); this
+pass's job was re-verifying each against current code, which is what the
+"Verified good" entries above record. No `KNOWN_LIMITATIONS.md` change
+needed — none of the four open items' status changed this pass.
+
+### Completion gate (Pass 12)
+
+| Check                                                                                                                                                                                                                              | Result                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                      | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                               | ✅ 2702 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                          | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                  | ✅ PASSED, single head `b8236e29ec44`            |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                  | ✅ 279 routes, 0 errors, 0 warnings              |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report" -m "not integration and not slow and not docker"` | ✅ 948 passed, 1 pre-existing skip (`pywebpush`) |
+| `pytest tests/test_platform_analytics_w78.py tests/test_admin_monitoring_w75.py` (integration, run directly after migrating the sandbox DB to head)                                                                                | ✅ 4 passed                                      |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                 | ✅ 0 errors                                      |
+| `cd frontend && npm run lint`                                                                                                                                                                                                      | ✅ clean, exit 0                                 |
+| `cd frontend && npx vitest run src/modules/reports`                                                                                                                                                                                | ✅ 77 passed (9 files)                           |
+
+Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
+bootstrap routes).
