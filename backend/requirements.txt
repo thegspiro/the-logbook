@@ -179,7 +179,7 @@ mypy==2.4.0
 # above because it arrives through google-api-python-client.
 types-defusedxml==0.7.0.20260504
 types-httplib2==0.32.0.20260720
-types-python-dateutil==2.9.0.20260807
+types-python-dateutil==2.9.0.20261021
 types-reportlab==5.0.0.20261008
 isort==9.0.2
 # pylint declares a hard upper bound on isort, so the two only move together:
