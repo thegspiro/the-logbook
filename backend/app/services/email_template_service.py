@@ -3381,6 +3381,31 @@ def _insert_appendix_token(
     return body[: match.start()] + token + "\n" + body[match.start() :]
 
 
+# Emails a department cannot switch off. Each carries something its
+# recipient cannot get any other way: a way back into an account, login
+# details, a ballot link, an applicant's private status link (whose pipeline
+# stage stays open until it is sent). Every other type, once switched off,
+# is not sent at all.
+ALWAYS_SENT_TYPES: frozenset = frozenset(
+    {
+        EmailTemplateType.PASSWORD_RESET,
+        EmailTemplateType.IT_PASSWORD_NOTIFICATION,
+        EmailTemplateType.WELCOME,
+        EmailTemplateType.BALLOT_NOTIFICATION,
+        EmailTemplateType.APPLICATION_STATUS_LINK,
+    }
+)
+
+
+def is_always_sent(template_type: Any) -> bool:
+    try:
+        return EmailTemplateType(getattr(template_type, "value", template_type)) in (
+            ALWAYS_SENT_TYPES
+        )
+    except ValueError:
+        return False
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -3409,6 +3434,27 @@ class EmailTemplateService:
         )
         email_template: Optional[EmailTemplate] = result.scalar_one_or_none()
         return email_template
+
+    async def is_switched_off(
+        self, organization_id: str, template_type: EmailTemplateType
+    ) -> bool:
+        """Whether the department switched this email off, so it is not sent.
+
+        Only a stored row can be off: a department that never opened the
+        Email Templates screen has none, and its emails go out on the code
+        defaults as they always did. Custom templates are chosen by id, not
+        by type, so the type-wide answer does not apply to them.
+        """
+        if template_type == EmailTemplateType.CUSTOM or is_always_sent(template_type):
+            return False
+        result = await self.db.execute(
+            select(EmailTemplate.is_active).where(
+                EmailTemplate.organization_id == str(organization_id),
+                EmailTemplate.template_type == template_type,
+            )
+        )
+        states = list(result.scalars().all())
+        return bool(states) and not any(states)
 
     async def list_templates(self, organization_id: str) -> List[EmailTemplate]:
         """List all templates for an organization.
@@ -3602,6 +3648,11 @@ class EmailTemplateService:
         template: Optional[EmailTemplate] = result.scalar_one_or_none()
         if not template:
             return None
+        if fields.get("is_active") is False and is_always_sent(template.template_type):
+            raise ValueError(
+                "This email cannot be switched off: its recipient has no "
+                "other way to receive what it carries"
+            )
 
         # An allowlist, not a skip list: `fields` arrives as **kwargs, so a
         # caller could otherwise name `id` or `organization_id` and move a

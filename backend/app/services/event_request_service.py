@@ -634,20 +634,18 @@ async def send_request_notification(
                 # is the message — subject and HTML body included. Pouring only
                 # its body_text into the generic status email discarded
                 # everything an administrator actually wrote.
-                subject, html_body, text_body = render_request_template(
-                    template, event_request, org
+                rendered: Optional[tuple[str, str, Optional[str]]] = (
+                    render_request_template(template, event_request, org)
                 )
             else:
                 # _render_with_fallback loads the department's template and
                 # falls back to the built-in default, escaping each destination
                 # the way it needs. Hand-rolling that here previously fed each
                 # value to re.sub as a replacement string, so a backslash in a
-                # public contact name was read as a group reference.
-                (
-                    subject,
-                    html_body,
-                    text_body,
-                ) = await email_service._render_with_fallback(
+                # public contact name was read as a group reference. A
+                # switched-off Event Request Status template sends nothing; a
+                # template attached to the trigger above is its own choice.
+                rendered = await email_service._render_unless_switched_off(
                     template_type=EmailTemplateType.EVENT_REQUEST_STATUS,
                     context=context,
                     db=db,
@@ -657,14 +655,16 @@ async def send_request_notification(
                     default_text=DEFAULT_EVENT_REQUEST_STATUS_TEXT,
                 )
 
-            await email_service.send_email(
-                to_emails=[event_request.contact_email],
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
-                db=db,
-                template_type=EmailTemplateType.EVENT_REQUEST_STATUS.value,
-            )
+            if rendered is not None:
+                subject, html_body, text_body = rendered
+                await email_service.send_email(
+                    to_emails=[event_request.contact_email],
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                    db=db,
+                    template_type=EmailTemplateType.EVENT_REQUEST_STATUS.value,
+                )
 
         # Notify the assigned coordinator
         if trigger_config.get("notify_assignee", False) and event_request.assigned_to:

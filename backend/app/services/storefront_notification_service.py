@@ -163,6 +163,7 @@ class StorefrontNotificationService:
         self.db = db
         self._capture = capture
         self._templates: Dict[Tuple[str, str], Optional[EmailTemplate]] = {}
+        self._switched_off_cache: Dict[Tuple[str, str], bool] = {}
 
     # ------------------------------------------------------------------
     # Recipients
@@ -456,6 +457,38 @@ class StorefrontNotificationService:
         self._templates[key] = template
         return template
 
+    async def _switched_off(
+        self, organization: Optional[Organization], template_type: str
+    ) -> bool:
+        """Whether the department switched this notice off.
+
+        Not consulted by the preview, which shows what the notice says
+        whether or not it is currently sent.
+        """
+        if organization is None:
+            return False
+        try:
+            enum_type = EmailTemplateType(template_type)
+        except ValueError:
+            return False
+        key = (str(organization.id), template_type)
+        if key in self._switched_off_cache:
+            return self._switched_off_cache[key]
+        try:
+            switched_off = await EmailTemplateService(self.db).is_switched_off(
+                str(organization.id), enum_type
+            )
+        except Exception as exc:
+            # Fails open, as a template that will not load does above.
+            logger.warning(
+                "Storefront notice {} switch could not be read; sending: {}",
+                template_type,
+                exc,
+            )
+            return False
+        self._switched_off_cache[key] = switched_off
+        return switched_off
+
     async def _send(
         self,
         organization: Optional[Organization],
@@ -498,6 +531,13 @@ class StorefrontNotificationService:
             )
 
         if self._capture is None:
+            if await self._switched_off(organization, template_type):
+                logger.info(
+                    "Storefront notice {} not sent: switched off in org {}",
+                    template_type,
+                    organization.id if organization else None,
+                )
+                return 0
             addresses = await self._drop_opted_out(
                 organization, addresses, template_type
             )

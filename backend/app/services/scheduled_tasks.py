@@ -2359,6 +2359,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     from app.core.config import settings
     from app.core.utils import generate_uuid
+    from app.models.email_template import EmailTemplateType
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import (
         BasicApparatus,
@@ -2367,6 +2368,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
         ShiftPosition,
     )
     from app.services.email_service import EmailService
+    from app.services.email_template_service import EmailTemplateService
 
     now = datetime.now(dt_timezone.utc)
 
@@ -2625,9 +2627,16 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # Email \u2014 sent by default. Set send_email=False in
                 # org.settings["shift_reminders"] to suppress.
-                if reminder_cfg.get("send_email", True) and roster:
+                # Also skipped when the department switched the Shift Reminder
+                # template off; the in-app reminder above still goes out.
+                if (
+                    reminder_cfg.get("send_email", True)
+                    and roster
+                    and not await EmailTemplateService(db).is_switched_off(
+                        str(org.id), EmailTemplateType.SHIFT_REMINDER
+                    )
+                ):
                     try:
-                        from app.models.email_template import EmailTemplateType
                         from app.services.email_template_service import (
                             DEFAULT_SHIFT_REMINDER_HTML,
                             DEFAULT_SHIFT_REMINDER_SUBJECT,
@@ -4067,7 +4076,10 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
 
     from app.models.email_template import ScheduledEmail, ScheduledEmailStatus
     from app.services.email_service import EmailService
-    from app.services.email_template_service import EmailTemplateService
+    from app.services.email_template_service import (
+        EmailTemplateService,
+        is_always_sent,
+    )
 
     now = _dt.now(_tz.utc)
     # Joined to Organization and filtered the same way every other org-spanning
@@ -4166,6 +4178,29 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 template = await template_svc.get_template(
                     item.organization_id, item.template_type
                 )
+
+            # A switched-off template is not sent: one named by id that is off,
+            # or a type whose only rows are off. Cancelled rather than failed,
+            # because nothing went wrong and nothing should be retried.
+            switched_off = (
+                template is not None
+                and not template.is_active
+                and not is_always_sent(template.template_type)
+            ) or (
+                template is None
+                and await template_svc.is_switched_off(
+                    item.organization_id, item.template_type
+                )
+            )
+            if switched_off:
+                logger.info(
+                    "Scheduled email {} not sent: its template is switched off",
+                    item.id,
+                )
+                item.status = ScheduledEmailStatus.CANCELLED
+                item.error_message = "Not sent: the template is switched off"
+                await db.commit()
+                continue
 
             if not template:
                 logger.warning(

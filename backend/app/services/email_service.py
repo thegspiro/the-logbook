@@ -555,6 +555,55 @@ class EmailService:
         """Format a datetime in the organization's local timezone."""
         return format_in_org_timezone(dt, self.organization, fmt)
 
+    async def _render_unless_switched_off(
+        self,
+        template_type: EmailTemplateType,
+        context: Dict[str, Any],
+        db: Any = None,
+        organization_id: Optional[str] = None,
+        default_subject: str = "",
+        default_html: str = "",
+        default_text: str = "",
+    ) -> Optional[Tuple[str, str, Optional[str]]]:
+        """``_render_with_fallback``, or ``None`` when the email is switched off.
+
+        A department that switches a template off means the email should not
+        go out; until 2026-10 the switch only made the sender fall back to the
+        built-in default. ``None`` tells the caller to send nothing and report
+        the email as not sent, which is how every caller already handles mail
+        being disabled.
+        """
+        if db is not None and organization_id:
+            try:
+                switched_off = await EmailTemplateService(db).is_switched_off(
+                    organization_id, template_type
+                )
+            except Exception as e:
+                # Fails open: an email the department wants must not be lost
+                # to a lookup error, and an unwanted one is a nuisance.
+                logger.warning(
+                    "Could not read whether {} is switched off; sending: {}",
+                    template_type.value,
+                    e,
+                )
+                switched_off = False
+            if switched_off:
+                logger.info(
+                    "{} email not sent: switched off in org {}",
+                    template_type.value,
+                    organization_id,
+                )
+                return None
+        return await self._render_with_fallback(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default_subject,
+            default_html=default_html,
+            default_text=default_text,
+        )
+
     async def _render_with_fallback(
         self,
         template_type: EmailTemplateType,
@@ -1957,7 +2006,7 @@ class EmailService:
             "organization_name": org_name,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.ELECTION_REPORT,
             context=context,
             db=db,
@@ -1966,6 +2015,9 @@ class EmailService:
             default_html=DEFAULT_ELECTION_REPORT_HTML,
             default_text=DEFAULT_ELECTION_REPORT_TEXT,
         )
+        if rendered is None:
+            return 0, len(to_emails)
+        subject, html_body, text_body = rendered
 
         return await self.send_email(
             to_emails=to_emails,
@@ -2023,7 +2075,7 @@ class EmailService:
             "organization_name": org_name,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.BALLOT_ELIGIBILITY_SUMMARY,
             context=context,
             db=db,
@@ -2032,6 +2084,9 @@ class EmailService:
             default_html=DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML,
             default_text=DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT,
         )
+        if rendered is None:
+            return 0, len(to_emails)
+        subject, html_body, text_body = rendered
 
         return await self.send_email(
             to_emails=to_emails,
@@ -2078,7 +2133,7 @@ class EmailService:
             "approval_url": approval_url,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.TRAINING_APPROVAL,
             context=context,
             db=db,
@@ -2087,6 +2142,9 @@ class EmailService:
             default_html=DEFAULT_TRAINING_APPROVAL_HTML,
             default_text=DEFAULT_TRAINING_APPROVAL_TEXT,
         )
+        if rendered is None:
+            return 0, len(to_emails)
+        subject, html_body, text_body = rendered
 
         return await self.send_email(
             to_emails=to_emails,
@@ -2230,7 +2288,7 @@ class EmailService:
             "expiry_hours": str(max(1, expiry_minutes // 60)),
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.PASSWORD_RESET,
             context=context,
             db=db,
@@ -2239,6 +2297,9 @@ class EmailService:
             default_html=DEFAULT_PASSWORD_RESET_HTML,
             default_text=DEFAULT_PASSWORD_RESET_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2281,7 +2342,7 @@ class EmailService:
             "organization_name": organization_name,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.IT_PASSWORD_NOTIFICATION,
             context=context,
             db=db,
@@ -2290,6 +2351,9 @@ class EmailService:
             default_html=DEFAULT_IT_PASSWORD_NOTIFICATION_HTML,
             default_text=DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
         )
+        if rendered is None:
+            return 0, len(to_emails)
+        subject, html_body, text_body = rendered
 
         return await self.send_email(
             to_emails=to_emails,
@@ -2342,7 +2406,7 @@ class EmailService:
             "event_url": event_url or "",
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.EVENT_REMINDER,
             context=context,
             db=db,
@@ -2351,6 +2415,9 @@ class EmailService:
             default_html=DEFAULT_EVENT_REMINDER_HTML,
             default_text=DEFAULT_EVENT_REMINDER_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2389,7 +2456,7 @@ class EmailService:
             "event_url": event_url or "",
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.EVENT_WAITLIST_PROMOTION,
             context=context,
             db=db,
@@ -2398,6 +2465,9 @@ class EmailService:
             default_html=DEFAULT_EVENT_WAITLIST_PROMOTION_HTML,
             default_text=DEFAULT_EVENT_WAITLIST_PROMOTION_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2437,7 +2507,7 @@ class EmailService:
             "reason": reason,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.EVENT_CANCELLATION,
             context=context,
             db=db,
@@ -2446,6 +2516,9 @@ class EmailService:
             default_html=DEFAULT_EVENT_CANCELLATION_HTML,
             default_text=DEFAULT_EVENT_CANCELLATION_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2480,7 +2553,7 @@ class EmailService:
             "withdrawal_date": withdrawal_date,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.APPLICATION_WITHDRAWN,
             context=context,
             db=db,
@@ -2489,6 +2562,9 @@ class EmailService:
             default_html=DEFAULT_APPLICATION_WITHDRAWN_HTML,
             default_text=DEFAULT_APPLICATION_WITHDRAWN_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2523,7 +2599,7 @@ class EmailService:
             "step_name": step_name,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.APPLICATION_STEP_COMPLETED,
             context=context,
             db=db,
@@ -2532,6 +2608,9 @@ class EmailService:
             default_html=DEFAULT_APPLICATION_STEP_COMPLETED_HTML,
             default_text=DEFAULT_APPLICATION_STEP_COMPLETED_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2575,7 +2654,7 @@ class EmailService:
             "custom_message_text": f"{custom_message}\n\n" if custom_message else "",
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.APPLICATION_STATUS_LINK,
             context=context,
             db=db,
@@ -2584,6 +2663,9 @@ class EmailService:
             default_html=DEFAULT_APPLICATION_STATUS_LINK_HTML,
             default_text=DEFAULT_APPLICATION_STATUS_LINK_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2622,7 +2704,7 @@ class EmailService:
             "suggestion_url": suggestion_url,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.SUGGESTION_SUBMITTED,
             context=context,
             db=db,
@@ -2631,6 +2713,9 @@ class EmailService:
             default_html=DEFAULT_SUGGESTION_SUBMITTED_HTML,
             default_text=DEFAULT_SUGGESTION_SUBMITTED_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2660,7 +2745,7 @@ class EmailService:
             DEFAULT_EXTERNAL_COURSE_MATCH_TEXT,
         )
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.EXTERNAL_COURSE_MATCH,
             context=context,
             db=db,
@@ -2669,6 +2754,9 @@ class EmailService:
             default_html=DEFAULT_EXTERNAL_COURSE_MATCH_HTML,
             default_text=DEFAULT_EXTERNAL_COURSE_MATCH_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2720,7 +2808,7 @@ class EmailService:
             raise ValueError(f"Not a training record notice: {template_type}")
         default_subject, default_html, default_text = defaults[template_type]
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=template_type,
             context=context,
             db=db,
@@ -2729,6 +2817,9 @@ class EmailService:
             default_html=default_html,
             default_text=default_text,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2758,7 +2849,7 @@ class EmailService:
             DEFAULT_EQUIPMENT_REQUEST_UPDATE_TEXT,
         )
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.EQUIPMENT_REQUEST_UPDATE,
             context=context,
             db=db,
@@ -2767,6 +2858,9 @@ class EmailService:
             default_html=DEFAULT_EQUIPMENT_REQUEST_UPDATE_HTML,
             default_text=DEFAULT_EQUIPMENT_REQUEST_UPDATE_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2802,7 +2896,7 @@ class EmailService:
             "original_date": original_date,
         }
 
-        subject, html_body, text_body = await self._render_with_fallback(
+        rendered = await self._render_unless_switched_off(
             template_type=EmailTemplateType.DUPLICATE_APPLICATION,
             context=context,
             db=db,
@@ -2811,6 +2905,9 @@ class EmailService:
             default_html=DEFAULT_DUPLICATE_APPLICATION_HTML,
             default_text=DEFAULT_DUPLICATE_APPLICATION_TEXT,
         )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],

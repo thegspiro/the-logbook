@@ -249,6 +249,55 @@ class TestShiftRemindersRosterFilter:
         assert "Alice User" in all_roster_names
         assert "Bob User" in all_roster_names
 
+    @pytest.mark.parametrize("switched_off", [False, True])
+    async def test_a_switched_off_template_stops_only_the_email(
+        self, db_session: AsyncSession, switched_off: bool
+    ):
+        from unittest.mock import patch
+
+        from app.models.email_template import EmailTemplate, EmailTemplateType
+        from app.services.email_service import EmailService
+
+        org_id = await _insert_org(db_session)
+        user_id = await _insert_user(db_session, org_id=org_id)
+        shift_id, _, _ = await _insert_shift(
+            db_session, org_id=org_id, start_offset_minutes=30
+        )
+        await _insert_assignment(
+            db_session, org_id=org_id, shift_id=shift_id, user_id=user_id
+        )
+        if switched_off:
+            db_session.add(
+                EmailTemplate(
+                    organization_id=org_id,
+                    template_type=EmailTemplateType.SHIFT_REMINDER,
+                    name="Shift Reminder",
+                    subject="s",
+                    html_body="<p>b</p>",
+                    is_active=False,
+                )
+            )
+        await db_session.flush()
+
+        send = AsyncMock(return_value=(1, 0))
+        with patch.object(EmailService, "send_email", send):
+            await run_shift_reminders(db_session)
+
+        assert send.await_count == (0 if switched_off else 1)
+        notifs = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.category == "shift_reminder",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert {n.recipient_id for n in notifs} == {user_id}
+
     async def test_reminder_idempotent_per_shift(
         self,
         db_session: AsyncSession,
