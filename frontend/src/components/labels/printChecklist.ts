@@ -1,7 +1,9 @@
-/** "Don't show again" for the inventory label print checklist. */
+/** "Don't show again" for the label print checklist, shared by every label page. */
 
 // Per browser: the computer at the label printer is the one that remembers the
 // driver's paper size, so "I've set this up" is a fact about that browser.
+// The key keeps its original inventory: prefix so choices already made carry
+// over; the driver setting it records is the same whichever page prints.
 const SKIP_STORAGE_KEY = 'inventory:labelPrintChecklistSkip';
 // Bounded so a stream of custom sizes cannot grow the entry without limit.
 const MAX_SKIPPED_SIZES = 20;

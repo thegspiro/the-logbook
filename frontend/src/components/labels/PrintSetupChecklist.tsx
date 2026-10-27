@@ -10,8 +10,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Modal } from '../../../components/Modal';
-import { rememberPrintChecklistSkipped } from '../utils/printChecklist';
+import { Modal } from '../Modal';
+import { rememberPrintChecklistSkipped } from './printChecklist';
 
 interface PrintSetupChecklistProps {
   isOpen: boolean;
@@ -109,7 +109,7 @@ export const PrintSetupChecklist: React.FC<PrintSetupChecklistProps> = ({
           <Link to="/settings?tab=labelPrinters" className="text-theme-text-primary underline">
             Settings &rarr; Label Printers
           </Link>
-          , and this page will send labels to it at the right size without a print dialog.
+          , and label pages will send to it at the right size without a print dialog.
         </p>
       )}
     </Modal>
