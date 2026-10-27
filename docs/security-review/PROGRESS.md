@@ -16,6 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None. PR [#3761](https://github.com/thegspiro/the-logbook/pull/3761) (Feature
+20, Compliance, pass 11) merged — confirmed via `search_pull_requests`
+returning 0 open `claude/security-review-*` PRs before this iteration
+started. Rotation row 20 is ✅. Next is Feature 21 (Admin hours).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 11, PR #3761, merged)</summary>
+
 **PR [#3761](https://github.com/thegspiro/the-logbook/pull/3761)** (branch
 `claude/security-review-compliance-p11`) — Feature 20 (Compliance), pass 11. **Watchdog pickup** — the dedicated `/loop 30m /security-review`
 session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. No
@@ -33,9 +41,7 @@ again (the same recurring parallel-merge pattern); fixed with one more
 pure-join merge revision, verified against a live database. See
 `CMP-20-compliance.md`'s **Pass 11** section for the full review.
 
-Rotation row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin
-hours) — re-check `search_pull_requests` fresh rather than trusting this
-note.
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 11, PR #3760, merged after a second recurrence of the CI mirror timeout), preserved for history</summary>
@@ -22165,7 +22171,7 @@ PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
