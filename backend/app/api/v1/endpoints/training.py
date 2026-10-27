@@ -118,6 +118,7 @@ from app.services.training_requirement_removal import remove_requirement
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
 from app.services.upload_scanning import reject_if_malicious
+from app.utils.membership import effective_member_class
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.upload_limits import read_upload_limited
@@ -3143,6 +3144,11 @@ class MemberComplianceRow(BaseModel):
     # None when nothing grades the member (standing "not_applicable").
     completion_pct: float | None
     membership_type: str | None = None
+    # "operational" | "administrative" | "social", for the matrix's class
+    # filter. None for a membership tier the class map does not know and no
+    # recorded class: the screen lists such a member only under "All" rather
+    # than guessing a class for them.
+    member_class: str | None = None
     # Counts of *applicable* requirements — a requirement restricted to another
     # membership type is not in this member's denominator.
     requirements_met: int = 0
@@ -3477,6 +3483,9 @@ async def get_compliance_matrix(
                 requirements=req_statuses,
                 completion_pct=pct,
                 membership_type=member.membership_type,
+                member_class=effective_member_class(
+                    member.member_class, member.membership_type
+                ),
                 requirements_met=completed_count,
                 requirements_total=applicable_total,
                 standing=standing,

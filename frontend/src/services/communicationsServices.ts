@@ -318,6 +318,11 @@ export interface ComplianceMatrixMember {
   /** Null when nothing grades the member (standing `not_applicable`). */
   completion_pct: number | null;
   membership_type?: string | null;
+  /**
+   * "operational" | "administrative" | "social". Null for a custom membership
+   * tier with no recorded class; absent from an older server.
+   */
+  member_class?: string | null;
   /** Counts of requirements that apply to this member, not to the whole org. */
   requirements_met?: number;
   requirements_total?: number;
