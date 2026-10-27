@@ -266,15 +266,28 @@ export const EventDetailPage: React.FC = () => {
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const reminderMenuRef = useRef<HTMLDivElement>(null);
 
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user: currentUser } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
+  // The attendance tools (roster, add, check in, remove) also reach
+  // training.manage on a Training event and the event's own organizer pair.
+  // The server decides who (CLAUDE.md #29); events.manage is read locally too
+  // so a manager's roster still loads without waiting for the event.
+  const canManageAttendance = canManage || Boolean(event?.attendance_access);
+  const canCorrectAttendanceTimes = canManage || Boolean(event?.can_correct_attendance_times);
+  // An organizer admitted on the event alone may not write their own row.
+  const readOnlyAttendeeId = event?.attendance_access === 'organizer' ? currentUser?.id : undefined;
   // Card taps are shown to event managers; the integration only decides
   // whether an event with none yet still gets an (empty) section.
   const { isConnected: isIntegrationConnected } = useConnectedIntegrations({ enabled: canManage });
   // Deliberately a separate grant from events.manage: whoever closed the event
   // should not also be able to quietly reopen it and move the numbers.
-  const canReopenAttendance = checkPermission('events.reopen_attendance');
+  // A training manager also reopens a Training event (the server decides,
+  // CLAUDE.md #29); the grant is read locally too, as it always was.
+  const canReopenAttendance = checkPermission('events.reopen_attendance') || Boolean(event?.can_reopen_attendance);
+  // Edit the event and close its attendance (End Event, Finalize, Record
+  // Times): events.manage, or training.manage on a Training event.
+  const canEditEvent = canManage || Boolean(event?.can_edit_event);
   // Who may act on a training event's approval; the card links them to it.
   const canApproveTraining = checkPermission('training.manage');
   const { confirm } = useConfirm();
@@ -288,7 +301,7 @@ export const EventDetailPage: React.FC = () => {
     event,
     onSuccess: async () => {
       await fetchEvent();
-      if (canManage) {
+      if (canManageAttendance) {
         await fetchRSVPs();
         await fetchStats();
       } else if (event?.can_view_attendees) {
@@ -327,25 +340,31 @@ export const EventDetailPage: React.FC = () => {
     if (eventId) {
       void fetchEvent();
       void fetchLinkedElections();
-      if (canManage) {
-        void fetchRSVPs();
-        void fetchStats();
-        void fetchRSVPHistory();
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, canManage]);
+  }, [eventId]);
+
+  // Separate from the event fetch: an organizer's access is only known once
+  // the event arrives, and refetching the event when it does would loop.
+  useEffect(() => {
+    if (eventId && canManageAttendance) {
+      void fetchRSVPs();
+      void fetchStats();
+      void fetchRSVPHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, canManageAttendance]);
 
   // The one roster an ordinary member can see, asked for only once the event
   // says it will answer: requesting it regardless took a 403, logged twice,
   // on every visit to an event whose roster is not shared with members.
   const canViewAttendees = Boolean(event?.can_view_attendees);
   useEffect(() => {
-    if (eventId && !canManage && canViewAttendees) {
+    if (eventId && !canManageAttendance && canViewAttendees) {
       void fetchAttendees();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, canManage, canViewAttendees]);
+  }, [eventId, canManageAttendance, canViewAttendees]);
 
   const fetchEvent = async () => {
     if (!eventId) return;
@@ -501,7 +520,9 @@ export const EventDetailPage: React.FC = () => {
 
     try {
       const data = await eventService.getEligibleMembers(eventId);
-      setEligibleMembers(data);
+      // An organizer cannot check themselves in from here (the API refuses),
+      // so they are not offered to themselves, nor swept up by "add all".
+      setEligibleMembers(readOnlyAttendeeId ? data.filter((m) => m.id !== readOnlyAttendeeId) : data);
     } catch {
       toast.error('Failed to load eligible members');
     }
@@ -792,7 +813,7 @@ export const EventDetailPage: React.FC = () => {
       setShowEndEventConfirm(false);
       await fetchEvent();
       setTrainingRefreshKey((key) => key + 1);
-      if (canManage) {
+      if (canManageAttendance) {
         await fetchRSVPs();
         await fetchStats();
       }
@@ -835,7 +856,7 @@ export const EventDetailPage: React.FC = () => {
       }
       await fetchEvent();
       setTrainingRefreshKey((key) => key + 1);
-      if (canManage) {
+      if (canManageAttendance) {
         await fetchRSVPs();
       }
     } catch (err) {
@@ -958,6 +979,54 @@ export const EventDetailPage: React.FC = () => {
   // the page only decides whether to ask.
   const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
   const canReviewAttendancePetitions = canManageOrganizers;
+  const checkInMembersButton =
+    canManageAttendance && !isAttendanceFinalized ? (
+      <button
+        onClick={openCheckInModal}
+        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
+      >
+        <ClipboardCheck className="mr-2 h-5 w-5" aria-hidden="true" />
+        Check In
+      </button>
+    ) : null;
+  // Kept when finalized: the API still accepts descriptive edits (title,
+  // description, location) and refuses only the fields the credited durations
+  // came from. Hiding this made a leader reopen attendance just to fix a typo,
+  // which unlocks far more than the typo needed.
+  const editEventButton = (
+    <button
+      onClick={() => void navigate(`/events/${eventId}/edit`)}
+      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
+    >
+      <Pencil className="mr-2 h-5 w-5" aria-hidden="true" />
+      Edit
+    </button>
+  );
+  const closeOutButtons = (
+    <>
+      {/* End Event button — visible when event is in progress */}
+      {isOngoing && !isAttendanceFinalized && (
+        <button
+          onClick={() => setShowEndEventConfirm(true)}
+          disabled={submitting}
+          className="inline-flex items-center rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 shadow-xs hover:bg-red-100 disabled:opacity-50 dark:border-red-700 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
+        >
+          <StopCircle className="mr-2 h-4 w-4" />
+          End Event
+        </button>
+      )}
+      {isEventOver && !isAttendanceFinalized && (
+        <button
+          onClick={() => void handleFinalizeAttendance()}
+          disabled={finalizingAttendance}
+          className="inline-flex items-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+        >
+          <CheckCircle className="mr-2 h-4 w-4" />
+          {finalizingAttendance ? 'Finalizing...' : 'Finalize Attendance'}
+        </button>
+      )}
+    </>
+  );
 
   // RSVP deadline countdown
   const rsvpCountdown = (() => {
@@ -1153,29 +1222,34 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                 )}
 
-                {canManage && (
+                {/* An organizer or training manager without events.manage gets
+                    the attendance tools but none of the event's other
+                    controls, so the button stands on its own for them. */}
+                {!canManage && checkInMembersButton}
+
+                {/* A training manager on a Training event: edit and close it
+                    out, but none of the More menu (duplicate, cancel, delete,
+                    templates, meetings), which stays with events.manage. */}
+                {!canManage && canEditEvent && (
                   <>
-                    {/* Kept when finalized: the API still accepts descriptive
-                        edits (title, description, location) and refuses only
-                        the fields the credited durations came from. Hiding this
-                        made a leader reopen attendance just to fix a typo,
-                        which unlocks far more than the typo needed. */}
-                    <button
-                      onClick={() => void navigate(`/events/${eventId}/edit`)}
-                      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
-                    >
-                      <Pencil className="mr-2 h-5 w-5" aria-hidden="true" />
-                      Edit
-                    </button>
+                    {editEventButton}
+                    {closeOutButtons}
                     {!isAttendanceFinalized && (
                       <button
-                        onClick={openCheckInModal}
+                        onClick={openRecordTimesModal}
                         className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                       >
-                        <ClipboardCheck className="mr-2 h-5 w-5" aria-hidden="true" />
-                        Check In
+                        <Clock className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Record Times
                       </button>
                     )}
+                  </>
+                )}
+
+                {canManage && (
+                  <>
+                    {editEventButton}
+                    {checkInMembersButton}
 
                     {/* Send Reminders dropdown */}
                     {!event.is_cancelled && !isAttendanceFinalized && (
@@ -1210,28 +1284,7 @@ export const EventDetailPage: React.FC = () => {
                       </div>
                     )}
 
-                    {/* End Event button — visible when event is in progress */}
-                    {isOngoing && !isAttendanceFinalized && (
-                      <button
-                        onClick={() => setShowEndEventConfirm(true)}
-                        disabled={submitting}
-                        className="inline-flex items-center rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 shadow-xs hover:bg-red-100 disabled:opacity-50 dark:border-red-700 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
-                      >
-                        <StopCircle className="mr-2 h-4 w-4" />
-                        End Event
-                      </button>
-                    )}
-
-                    {isEventOver && !isAttendanceFinalized && (
-                      <button
-                        onClick={() => void handleFinalizeAttendance()}
-                        disabled={finalizingAttendance}
-                        className="inline-flex items-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
-                      >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        {finalizingAttendance ? 'Finalizing...' : 'Finalize Attendance'}
-                      </button>
-                    )}
+                    {closeOutButtons}
 
                     {/* "More" dropdown for secondary actions */}
                     <div className="relative" ref={actionsMenuRef}>
@@ -1614,7 +1667,7 @@ export const EventDetailPage: React.FC = () => {
                 timezone={tz}
                 onApproved={() => {
                   void fetchAttendees();
-                  if (canManage) {
+                  if (canManageAttendance) {
                     void fetchRSVPs();
                     void fetchStats();
                   }
@@ -1746,8 +1799,8 @@ export const EventDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* RSVPs List & RSVP Activity (for managers) */}
-            {canManage && (
+            {/* RSVPs List & RSVP Activity (for whoever runs attendance) */}
+            {canManageAttendance && (
               <EventRSVPSection
                 rsvps={rsvps}
                 rsvpHistory={rsvpHistory}
@@ -1764,6 +1817,8 @@ export const EventDetailPage: React.FC = () => {
                 onPrintRoster={printRoster}
                 onExportCSV={exportAttendanceCSV}
                 attendanceFinalized={isAttendanceFinalized}
+                canCorrectTimes={canCorrectAttendanceTimes}
+                readOnlyUserId={readOnlyAttendeeId}
               />
             )}
             {canManage && eventId && (
@@ -1779,7 +1834,7 @@ export const EventDetailPage: React.FC = () => {
                 entirely when the API returned nothing, which is also what a
                 403 looks like — a member who may not see the list is not told
                 there is a list. */}
-            {!canManage && !attendeesFailed && attendees.length > 0 && (
+            {!canManageAttendance && !attendeesFailed && attendees.length > 0 && (
               <EventAttendeesCard
                 attendees={attendees}
                 loading={attendeesLoading}

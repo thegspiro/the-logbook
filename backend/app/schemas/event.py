@@ -6,7 +6,7 @@ Request and response schemas for event-related endpoints.
 
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import (
@@ -547,6 +547,22 @@ class EventResponse(EventBase, UTCResponseBase):
     # Decided here, not in the client (CLAUDE.md #29): may this caller decide
     # the event's attendance requests and transfer it. Detail endpoint only.
     can_manage_organizers: bool = False
+    # How this caller may use the attendance tools, or None: "events_manager"
+    # (any event), "training_manager" (a Training event) or "organizer" (the
+    # organizer pair, who may not write their own row). Detail endpoint only.
+    attendance_access: Optional[
+        Literal["events_manager", "training_manager", "organizer"]
+    ] = None
+    # False for an organizer on a Training event: times and credited hours
+    # there are a training manager's or an event manager's to correct.
+    can_correct_attendance_times: bool = False
+    # Edit the event and close its attendance (Finalize, End Event, Record
+    # Times): events.manage, or training.manage on a Training event. Detail
+    # endpoint only.
+    can_edit_event: bool = False
+    # Reopen finalized attendance: events.reopen_attendance, or training.manage
+    # on a Training event. Detail endpoint only.
+    can_reopen_attendance: bool = False
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
