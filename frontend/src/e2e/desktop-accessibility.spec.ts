@@ -20,6 +20,14 @@ const AXE_PATH = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
 const AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 const runAxe = async (page: Page): Promise<string[]> => {
+  // Reduced motion (see `open`) shortens transitions but does not finish them:
+  // WebKit advances a running transition only when it renders a frame, so on a
+  // slow headless runner the planning page's Refresh button could still report
+  // the 0.5 opacity it had while disabled — 3.41:1, every retry, on Mobile Safari
+  // alone. Removing the transitions outright cancels any still running, so every
+  // property reports its settled value, which is what the audit is meant to
+  // measure.
+  await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
   await page.addScriptTag({ path: AXE_PATH });
   return page.evaluate(async (tags) => {
     type Result = { id: string; help: string; nodes: { target: string[] }[] };
