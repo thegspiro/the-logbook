@@ -53,7 +53,7 @@ specific in this app, the meaning here is the app's meaning.
 | **Shift report**         | An officer's summary of a shift. It credits the hours and calls worked                                                                                                                      |
 | **Single sign-on**       | Signing in to The Logbook with your work Google or Microsoft account instead of a Logbook password                                                                                          |
 | **Swap**                 | Trading a shift. An **open swap** is offered to members qualified for your seat, and the first one to pick it up takes the seat                                                             |
-| **Two-step sign-in**     | Entering a code from your phone after your password, so a stolen password alone can't open your account. Also called MFA                                                                    |
+| **Two-step sign-in**     | Confirming with a passkey, or entering a code from your phone, after your password, so a stolen password alone can't open your account. Also called MFA                                     |
 | **Waiver**               | An officer-approved exemption from a requirement for a set period                                                                                                                           |
 
 ---

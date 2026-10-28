@@ -1953,6 +1953,11 @@ Needs the **Manage gear, uniforms and equipment** permission.
    - **Item name**, **Asset tag** and **Serial number** print unless you switch
      them off. Leaving the name off gives a small tag's height to the code. The
      asset tag or serial number is left off anyway when it repeats the code.
+   - _(2026-10-27)_ A long item name wraps onto a second line in the preview
+     and the browser print, and only then ends in "…", so "Golf Shirt — XXL —
+     Unisex Short Sleeve" and its long-sleeve twin no longer print the same.
+     Label text prints in a plain sans-serif font (Arial or Helvetica), which a
+     thermal printer reproduces more cleanly at small sizes than a serif font.
    - **Location**, **Storage area** (the shelf's full path, such as `Supply
 Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print
      on one extra line, in the order you pick them, space permitting.
@@ -1961,14 +1966,11 @@ Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print
 5. Print one of three ways:
    - **PDF** (best for sticker and thermal printers): downloads a PDF sized to
      the exact label. Open it and print with your label printer selected.
-   - **Print Labels**: prints through your browser's print window. A short
-     **Before you print** step first names the paper size, margins (None for
-     roll labels) and scale (100%, not Fit to page) to choose in that window,
-     because a web page cannot select the printer's paper. Tick _don't show
-     again on this computer_ for a size you have set up. When no network
-     printer is registered it links to **Settings → Label Printers**. Browser
-     prints of Code 128 barcodes used to come out as solid black boxes; the
-     bars now print on a white background.
+   - **Print Labels**: prints through your browser's print window, after the
+     **Before you print** checklist (see
+     [Before you print](#before-you-print-2026-10-27)). Browser prints of Code 128
+     barcodes used to come out as solid black boxes; the bars now print on a white
+     background.
    - **Print to _printer name_**: appears when your department has registered a
      network label printer. The labels go straight to it. See
      [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer).
@@ -2011,6 +2013,33 @@ and for this part of The Logbook. See
 > areas.
 
 ![The items list right after Add Item: the green line "1 item added. Label it now?" with Print label and Dismiss](./images/05-119-item-added-label-prompt.png)
+
+### Before you print _(2026-10-27)_
+
+A web page cannot choose the printer's paper. The printer feeds whatever stock
+its driver's paper size setting names, so a Rollo left on its 4" x 6"
+default prints a 2" x 1" job scaled onto the wrong size. So when you print
+through the browser, a **Before you print** window first names the settings to
+use in the print dialog, for the label size you chose:
+
+1. **Printer**: your label printer.
+2. **Paper size**: the label size by name, such as 2" x 1" for a roll, or
+   Letter (8.5" x 11") for an Avery sheet. For a roll it adds where to find it
+   (under "More settings"), and what to do if that size is not listed: add it
+   once in the printer driver's own preferences, then reopen the page.
+3. **Margins**: None for a roll, Default for a sheet.
+4. **Scale**: 100%, not "Fit to page", or barcodes may not scan.
+
+Select **Open print dialog** to carry on, or **Back** to change something
+first. Tick **Don't show again for _size_ on this computer** once that printer
+is set up: the checklist is skipped for that size in this browser only, and
+still shows for any other size, including each custom size. When no network
+printer is registered, the window also points to **Settings → Label
+Printers**, where an administrator can register one and skip the print dialog
+altogether.
+
+The checklist is not shown for **PDF**, **Print to _printer name_**, or on a
+phone or tablet, where printing always downloads the PDF.
 
 ### Choosing which items to label
 
@@ -2118,6 +2147,10 @@ It cannot open or withdraw their application.
 The shared label pages for these modules also offer four **Zebra** sizes
 (2" x 1", 3" x 1", 4" x 2" and 4" x 6"). Their print buttons read **PDF** and
 **Print in browser**, and the settings panel has **Download test label**.
+**Print in browser** shows the same
+[Before you print](#before-you-print-2026-10-27) checklist _(2026-10-27)_, and names wrap
+onto two lines there too. A size you have ticked **Don't show again** for
+stays skipped on every label page in that browser.
 
 ### Connecting a Sticker / Label Printer
 
@@ -2137,7 +2170,9 @@ a barcode that scans is to avoid any scaling.
    to a printer.
 4. When printing, choose the label printer, set **Scale** to **100%** (turn off
    "Fit to page" or "Shrink to fit"), set margins to **None**, and set the
-   paper size to the label size.
+   paper size to the label size. The **Before you print** checklist names
+   these for the size you chose. A Rollo finds the gap between labels on its
+   own, but its driver's paper size must still match the label.
 
 > **Rollo and other roll-fed printers.** Two Rollo sizes are built in: **Rollo
 > 4" x 6"** (portrait shipping labels) and **Rollo / Thermal 2" x 1"** (small

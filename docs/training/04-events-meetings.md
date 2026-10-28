@@ -1023,13 +1023,58 @@ hand the event over.
 
 ![Event settings, Attendance: the Attendance requests block with one position select per event type, each on Default (Secretary)](./images/04-59-attendance-request-routing.png)
 
+### Who runs an event's attendance _(2026-10-27)_
+
+Officers who can manage events (**events.manage**) run attendance on every
+event. Two more groups now do too, without that permission.
+
+**The organizer and alternate run their own event's attendance.** On the event
+page they see the attendance list, its counts and the **Check In** button,
+which opens **Check In Members**. They can add and check in members,
+**Remove** them, and use **Edit Times**. Two limits apply:
+
+- **You cannot record your own attendance** at an event you organize. You are
+  left out of the **Check In Members** list, and your own row has no check-in
+  or **Remove**. Check in like any member, or ask the alternate or a manager.
+  This is the same rule as ["I was there"](#i-was-there--asking-to-be-marked-present):
+  someone else vouches for you.
+- **On a Training event, the organizer pair do not get Edit Times.** Those
+  minutes become training credit, so a training manager or an event manager
+  corrects them.
+
+The organizer pair do not get **Edit**, **End Event**, **Finalize
+Attendance**, **Record Times**, the **More** menu or the **Monitoring
+Dashboard**. Those stay with officers who can manage events.
+
+**Training managers run Training events.** A member with **training.manage**
+(in the standard setup: the chiefs, President, Training Officer, Captain,
+Lieutenant, Safety Officer and Compliance Officer) gets, on any event of type
+**Training**:
+
+- the attendance list, **Check In**, **Remove** and **Edit Times**;
+- **Edit**, **End Event**, **Finalize Attendance** and **Record Times**
+  (a button of its own, not under **More**);
+- **Reopen Attendance**, even on an event they closed themselves. The audit
+  log records who reopened it.
+
+When a training manager edits a Training event, the type is greyed out with
+_"Only an event manager can change a training event's type."_ Changing **This
+and all future events** is refused if any event it would reach is not a
+Training event. The **More** menu (duplicate, cancel, delete, templates,
+meetings) and reminders stay with officers who can manage events. On any
+other type of event, a training manager sees what any member sees; opening
+its edit page says _"Only an event manager can edit this event. A training
+manager can edit training events."_
+
 ---
 
 ## Ending and Finalizing an Event
 
 When an event is over, its attendance is **finalized**: the roster is fixed
 and hours are credited to everyone who was checked in. These tools are on the
-event page, for officers who can manage events.
+event page, for officers who can manage events, and for training managers on a
+Training event (see
+[Who runs an event's attendance](#who-runs-an-events-attendance-2026-10-27)).
 
 ### End Event
 
@@ -1062,7 +1107,8 @@ page then says "This event was ended early."
 ### Finalizing attendance
 
 Once an event has ended, the event page offers **Finalize Attendance**.
-**More → Record Times** lets you record the real start and end first;
+**More → Record Times** (for a training manager, **Record Times** on its own)
+lets you record the real start and end first;
 recording an end time also finalizes attendance.
 
 Soon after an event ends, its organizer and alternate (or its creator, if
@@ -1076,8 +1122,10 @@ Members who checked in but never checked out are credited to the event's end.
 attendance** permission. It is deliberately separate from managing events, so
 the organizer who closed an event cannot quietly reopen it and change numbers
 already fed into admin hours, training records and compliance. By default the
-Fire Chief, Deputy Chief, Assistant Chief and President hold it. **Reopen
-Attendance** asks for a reason (**Reopen for corrections**).
+Fire Chief, Deputy Chief, Assistant Chief and President hold it. On a
+**Training** event, a training manager (**training.manage**) can also reopen
+it, including one they finalized themselves; the audit log records who did.
+**Reopen Attendance** asks for a reason (**Reopen for corrections**).
 
 **A change refused because attendance is finalized** says so in one sentence:
 _"Attendance for this event has been finalized, so … is no longer available.
@@ -1126,10 +1174,11 @@ its attendance is finalized — however the event was created.
    details, the record is filed under the event's title as Continuing
    Education. That counts toward total hours, but not toward a requirement
    based on a category.
-3. Check members in (or use **Add Attendee** and **Edit Times**), then
+3. Check members in (or use **Check In** and **Edit Times**), then
    **Finalize Attendance** after the event ends. A Training event can only be
    finalized once it has ended.
-4. To correct a finalized event, someone who can reopen attendance reopens it.
+4. To correct a finalized event, someone who can reopen attendance (or any
+   training manager) reopens it.
    Change the details or times, then finalize again.
 
 ![Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link](./images/04-61-training-details-create.png)
