@@ -4788,7 +4788,9 @@ class TrainingWaiver(Base):
         default=TrainingWaiverType.LEAVE_OF_ABSENCE,
         server_default="leave_of_absence",
     )
-    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Encrypted at rest: a MEDICAL waiver's reason is a diagnosis or treatment
+    # in the member's own words.
+    reason: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     # The period the member is excused (inclusive)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)

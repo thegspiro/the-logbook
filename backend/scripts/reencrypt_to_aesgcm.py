@@ -113,6 +113,8 @@ _PLAIN_COLUMNS = [
             "status_token",
         ],
     ),
+    ("member_leaves_of_absence", "id", ["reason"]),
+    ("training_waivers", "id", ["reason"]),
     (
         "prospects",
         "id",
