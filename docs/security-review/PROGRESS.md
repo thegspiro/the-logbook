@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3804](https://github.com/thegspiro/the-logbook/pull/3804)** (branch
+`claude/security-review-public-surface-webhooks`) — Feature 03 (Public
+surface & webhooks), pass 13. **0 fixes, 0 new findings.** Step 0 confirmed
+via `search_pull_requests` (`is:pr is:open` against the full open-PR list,
+none with a `claude/security-review-*` head) that PR #3803 (Feature 02,
+Permissions & roles, pass 13) had already merged (`d2cd227f`); row 03 was
+confirmed the next `⬜` by reading the rotation table on a freshly pulled
+`main`.
+
+Real delta since this feature's own pass 12 (merge `e6da6486`): a new
+`app/api/public/event_guest.py` (4 routes) lets an event with no room
+kiosk offer guest sign-in through the event's own QR code, reusing
+`display.py`'s rate limits, honeypot and JWT confirm-token gates rather
+than restating them; `display.py` gained the kiosk-side
+`guest-lookup`/`guest-confirm` mirror (+2 routes); `forms.py` gained a
+`GET /{slug}/embed-policy` endpoint answering nginx's `auth_request` with
+a regex-validated, injection-safe `Content-Security-Policy:
+frame-ancestors` value (+1 route); `portal.py` gained a token-gated
+`.ics` calendar download for an applicant's next meeting, built through
+the already-reviewed CRLF-escaping `generate_ical_feed` (+1 route). Also
+verified: `EventExternalAttendee.email`/`.phone` moving to `EncryptedText`
+under the app-wide email-encryption migration doesn't break this
+feature's guest-recognition lookup, which was already hash-based.
+
+**Route count corrected by re-derivation:** an AST walk of the baseline
+commit (cross-checked against a plain grep) finds 37 routes, not the 40
+pass 12 claimed — a prior pass's arithmetic error, not a missing or
+hidden route. New total after this pass's 8 added routes: 45.
+(`check_route_permissions.py --strict`'s 279 is a separate, frontend-route
+figure, unrelated to and unaffected by this backend-only change.) Full
+writeup: `docs/security-review/PUB-03-public-surface-webhooks.md`'s
+**Pass 13** section.
+
+Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
+(Storefront & payments) — re-check `search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 13, PR #3803, merged), preserved for history</summary>
+
 **PR [#3803](https://github.com/thegspiro/the-logbook/pull/3803)** (branch
 `claude/security-review-permissions-roles`) — Feature 02 (Permissions &
 roles), pass 13. **0 fixes, 0 new findings.** Step 0 confirmed via
@@ -49,6 +89,8 @@ section.
 Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
 surface & webhooks) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 13, PR #3802, merged), preserved for history</summary>
@@ -22719,7 +22761,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
@@ -22758,6 +22800,65 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 03 (Public surface & webhooks, pass 13) — watchdog pickup, real delta (event-QR guest sign-in, kiosk lookup/confirm mirror, forms embed-policy, applicant calendar download), route-count correction, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via
+`ListAgents`). No open security-review PR — confirmed via
+`search_pull_requests`, 0 `is:open` results against `claude/security-
+review-*` head branches, after Feature 02 (Permissions & roles)'s own PR
+(#3803) merged (`d2cd227f`). Row 03 confirmed the next `⬜` row by reading
+the rotation table on a freshly fetched `main`.
+
+Real delta since pass 12's own merge (`e6da6486`, PR not recorded under a
+distinct number in this file — folded into the same-day Feature 02/00
+merges): a brand-new `app/api/public/event_guest.py` (4 routes) lets an
+event held with no room kiosk offer the same guest sign-in through the
+event's own QR code, reusing `display.py`'s gates and token-confirm
+pattern rather than restating them; `display.py` gained the kiosk-side
+`guest-lookup`/`guest-confirm` mirror of that pair (+2 routes);
+`forms.py` gained a `GET /{slug}/embed-policy` endpoint answering nginx's
+`auth_request` for embeddable public forms with a strict,
+regex-validated `Content-Security-Policy: frame-ancestors` value (+1
+route); `portal.py` gained a `.ics` calendar download for the applicant
+status page's next meeting, gated by the same bearer token as that page
+and built through the already-reviewed, CRLF-escaping `generate_ical_feed`
+(+1 route). Also reviewed: `EventExternalAttendee.email`/`.phone` moving
+to `EncryptedText` under the app-wide email-encryption migration
+(`b8236e29ec44`) does not break this feature's guest-recognition lookup,
+which was already hash-based (`User.email_hash.in_(email_fingerprints(...))`)
+and never reads that column directly.
+
+**Route count correction, found by re-deriving rather than trusting
+pass 12's stated figure forward:** pass 12 claimed 40 routes; an AST walk
+of the baseline commit (cross-checked against a plain grep) finds **37**.
+The prior pass's own addition arithmetic (28+9+1+2=40) did not match a
+direct count of the files it named. No route was missing from either
+count — the discrepancy is in a prior pass's bookkeeping, not the
+application. New total after this pass's 8 added routes: **45**.
+(`check_route_permissions.py --strict`'s 279 is a separate,
+frontend-route figure against `APPLICATION_PAGES.md`, unrelated to this
+backend count — confirmed unchanged because none of this pass's additions
+are new frontend pages.)
+
+Full write-up: `docs/security-review/PUB-03-public-surface-webhooks.md`'s
+**Pass 13** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 666
+revisions, single head `0d9897752425`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
+"public or webhook or paypal or salesforce or integrations or minutes or
+mcp_oauth or calendar or finance_approval or branding or kiosk or guest or
+event_guest or embed or legal or display or security_txt or portal or
+next_meeting"`) — 1509 passed, 1 pre-existing skip (`pywebpush`); standing
+guard suites — 208 passed; frontend `npm run typecheck`/`npm run lint` —
+0 errors, 0 warnings.
+
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-10-28 — Feature 02 (Permissions & roles, pass 13) — watchdog pickup, real delta (passkey/step-up refactor, new Forms permission, passkey-admin routes), 0 new findings
 
