@@ -23,7 +23,7 @@ is in `docs/app-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------- |
 | #3781: five emails cannot be switched off; Cert Expiration, Post-Event/Post-Shift Validation, Member Archived and Prospect Inactivity are now sent                              | 08, `UPGRADING.md` | Added; list screenshot queued                               |
 | #3781: stale applications email their coordinators from the inactivity sweep, and applicants through the new **Application Going Inactive** template (migration `0d9897752425`) | 15, 08             | 15 already described it; `PROSPECTIVE_MEMBERS_MODULE` fixed |
-| #3771: the printout names the chosen class in its subtitle, and with **All** prints Operational, Administrative, Social, then Unclassified                                      | 02                 | Added                                                       |
+| #3771: the printout names the chosen class in its subtitle, and with **All** on a roster of several classes prints Operational, Administrative, Social, then Unclassified       | 02                 | Added                                                       |
 | #3770: **Before you print** also runs on the shared label page (apparatus, facility, member and storage-area labels)                                                            | 05                 | Added                                                       |
 
 **New in this window**

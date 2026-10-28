@@ -1887,15 +1887,17 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
   against a column of operational requirements. The summary line names the
   class ("12 tracked operational members"), and the rollups narrow to the same
   class. The choice stays in the page address (`?class=`), so a refresh or a
-  shared link opens on the same class. A member
-  whose class is not recorded is listed only under **All**.
+  shared link opens on the same class. A member whose class is not recorded is
+  listed only under **All**.
 
 The actions available are **Print**, a CSV export, and links to each member's
 training records. Both **Print** and the CSV follow the class switch, and the
 CSV has a **Member class** column. With a class chosen, the printout carries
-that class alone and says so in its subtitle; with **All** it prints one
-heading per class (Operational, Administrative, Social, then Unclassified),
-each table carrying only its own requirements.
+that class alone and says so in its subtitle. With **All**, a roster that
+spans more than one class prints one heading per class (Operational,
+Administrative, Social, then Unclassified), each table carrying only the
+requirements that apply to its members; a roster of one class prints a single
+table with every requirement.
 
 ![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
 
