@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
 from sqlalchemy.orm.base import NO_VALUE
 
-from app.core.utils import generate_uuid
+from app.core.utils import generate_uuid, list_within_detail_limit
 from app.models.document import Document
 from app.models.election import Election
 from app.models.event import Event
@@ -1337,8 +1337,11 @@ class MinuteService:
         missing = self.missing_required_sections(minutes)
         if missing:
             raise ValueError(
-                "These sections are required by the outline and have no "
-                f"content yet: {', '.join(missing)}"
+                list_within_detail_limit(
+                    "These sections are required by the outline and have no "
+                    "content yet: ",
+                    missing,
+                )
             )
 
         minutes.status = MinutesStatus.SUBMITTED

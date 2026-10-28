@@ -28,6 +28,7 @@ from app.core.permissions import (
     permission_matches_any,
     permission_matches_any_write,
 )
+from app.core.utils import list_within_detail_limit
 from app.models.document import (
     FACILITY_ACCESS_PERMISSIONS,
     FACILITY_FOLDER_PERMISSIONS,
@@ -254,8 +255,11 @@ async def release_position_from_folders(
     )
     if sole:
         raise ValueError(
-            "This is the only position that opens these document folders: "
-            f"{', '.join(sole)}. Change who can open them before deleting it"
+            list_within_detail_limit(
+                "This is the only position that opens these document folders: ",
+                sole,
+                ". Change who can open them before deleting it",
+            )
         )
     for folder in naming:
         # A new list rather than an in-place edit: a plain JSON column does
@@ -1096,7 +1100,9 @@ class DocumentsService:
                 catalog = set(get_all_permissions())
                 unknown = [p for p in permissions if p not in catalog]
                 if unknown:
-                    raise ValueError(f"Unknown permission: {', '.join(unknown)}")
+                    raise ValueError(
+                        list_within_detail_limit("Unknown permission: ", unknown)
+                    )
                 data["required_permissions"] = permissions or None
 
         if "allowed_roles" in data:
@@ -1116,7 +1122,9 @@ class DocumentsService:
                 )
                 missing = [pid for pid in position_ids if pid not in known]
                 if missing:
-                    raise ValueError(f"Unknown position: {', '.join(missing)}")
+                    raise ValueError(
+                        list_within_detail_limit("Unknown position: ", missing)
+                    )
             data["allowed_roles"] = position_ids or None
 
         visibility = data.get(
@@ -1525,9 +1533,12 @@ class DocumentsService:
         request_numbers = list(requests.scalars().all())
         if request_numbers:
             raise ValueError(
-                "This document is the receipt on purchase request "
-                f"{', '.join(request_numbers)}, which is past draft; "
-                "the request keeps it as its record, so it cannot be deleted"
+                list_within_detail_limit(
+                    "This document is the receipt on purchase request ",
+                    request_numbers,
+                    ", which is past draft; the request keeps it as its record, "
+                    "so it cannot be deleted",
+                )
             )
 
         reports = await self.db.execute(
@@ -1546,9 +1557,12 @@ class DocumentsService:
         report_numbers = list(reports.scalars().all())
         if report_numbers:
             raise ValueError(
-                "This document is a receipt on expense report "
-                f"{', '.join(report_numbers)}, which is past draft; "
-                "the report keeps it as its record, so it cannot be deleted"
+                list_within_detail_limit(
+                    "This document is a receipt on expense report ",
+                    report_numbers,
+                    ", which is past draft; the report keeps it as its record, "
+                    "so it cannot be deleted",
+                )
             )
 
         await self.db.execute(
