@@ -1,9 +1,165 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), pass 12 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), pass 13 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 13 (2026-10-28, watchdog pickup) — 0 fixed, 0 new findings; PERM-10/PERM-11 re-verified still open
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. Step 0 re-checked fresh against
+GitHub (`search_pull_requests`, `is:pr is:open`): the only open
+`claude/security-review-*` PR was #3802 (Feature 01, Auth & session
+lifecycle, pass 13), already fully green (24/24 checks, `mergeable_state:
+clean`, no unresolved review threads — the Codex bot's own comment was a
+stale "usage limits" notice on an earlier commit, not a finding) and was
+merged (squash, `4f21727a`). Rotation row 01 was the last `⬜` before this
+one; row 02 (Permissions & roles) is the next `⬜` row, read directly off a
+freshly-pulled `main`.
+
+**Baseline:** `b16cfcca` (PR #3685's merge, pass 12). **Head:** current
+`main` (`4f21727a`, PR #3802's merge). 323 commits between them.
+`git diff --stat` against every one of the eleven files this feature
+tracks (`dependencies.py`, `core/permissions.py`, `roles.py` +
+`role_service.py`, `operational_ranks.py` + `operational_rank_service.py`,
+`officers.py` + `officer_service.py`, `org_chart.py` +
+`org_chart_service.py`, `admin_continuity_service.py`, and the
+rank/role-assignment surface in `users.py`) is non-empty in three:
+`dependencies.py` (+17/-4), `core/permissions.py` (+13), `users.py`
+(+154/-10). `roles.py`, `role_service.py`, `operational_ranks.py`,
+`operational_rank_service.py`, `officers.py`, `officer_service.py`,
+`org_chart.py`, `org_chart_service.py`, and `admin_continuity_service.py`
+are byte-identical to pass 12.
+
+### Route inventory — re-enumerated by AST, not diffed
+
+**28 routes, unchanged from pass 12** — re-walked with the same AST method
+over all four endpoint files: `roles.py` (13), `operational_ranks.py` (7),
+`officers.py` (3), `org_chart.py` (5). Since every one of those four files
+(and their service-layer pairs) is byte-identical to pass 12, no gate,
+permission string, or ceiling check in this set could have regressed —
+confirmed by the empty diff, not merely assumed from the unchanged count.
+
+### The three changed files, reviewed
+
+- **`dependencies.py` / `core/permissions.py` — passkeys folded into the
+  MFA-enrollment gate, and `require_stepup` split into a reusable
+  `ensure_stepup(db, token)` helper.** Both are Feature 01's (Auth &
+  session lifecycle) own new mechanism — a passkey now satisfies
+  `get_current_user`'s "must enroll MFA" check the same way `mfa_enabled`
+  does, and `require_stepup` is now a thin FastAPI-dependency wrapper
+  around `ensure_stepup`, which four new conditional call sites in
+  `auth.py` use directly (not through the dependency, since they only need
+  step-up in some branches). Traced every caller of `ensure_stepup`:
+  all four are in `auth.py` (`backend/app/api/v1/endpoints/auth.py:1815`,
+  `:1899`, `:1957`, `:2027`), none in this feature's own files
+  (`roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`,
+  `users.py`'s role/rank surface) — so this refactor does not touch, and
+  does not close, PERM-10 or PERM-11 (below). `require_stepup` itself is
+  unchanged in behavior (same `CodedHTTPException` on a stale/missing
+  token), confirmed by reading the new body end-to-end rather than trusting
+  the diff shape.
+- **`core/permissions.py` — new `SENSITIVE_ANSWERS_VIEW`
+  (`"sensitive_answers.view"`).** Forms' own new permission (gates revealing
+  answers to form fields marked Sensitive, `forms.py:755,807,859`), added to
+  this shared registry file rather than `forms.*` on purpose — the module
+  wildcard matches by prefix before the first dot (confirmed by reading
+  `permission_matches`, `core/permissions.py:1097`), so a `forms.*` grant
+  (what the onboarding wizard's Forms "manage" checkbox writes) does **not**
+  reach a `sensitive_answers.*` permission; the two module namespaces don't
+  collide. Checked `DEFAULT_POSITIONS` (`core/permissions.py:1853` onward)
+  directly for the string — not seeded to any of the eight rank-aliased
+  positions, the `it_manager` global-wildcard position, or any of the other
+  named positions; only the global `"*"` (System Owner) holds it out of the
+  box, exactly as the code comment claims. Verified, not re-derived from the
+  comment's own text.
+- **`users.py` — two new passkey-admin routes, plus `admin_reset_mfa` now
+  also clears passkeys, plus `create_member`/`update_contact_info` moved
+  from a plaintext `User.email ==` lookup to `User.email_hash.in_(
+email_fingerprints(...))`.** The email-hash change is an encryption/blind-
+  index concern (cross-cutting, already reviewed under its own feature),
+  not a permissions change — confirmed it still carries the existing
+  `User.organization_id == current_user.organization_id` filter alongside
+  the new hash lookup, so XC-3 org-scoping is preserved. The two new routes
+  are this feature's own territory (admin mutation of another member's
+  account) and were reviewed in full:
+  - `GET /{user_id}/passkeys` (`admin_list_passkeys`, `users.py:2693`) —
+    `require_permission("users.create", "members.manage")`, resolves the
+    target through `_resolve_passkey_admin_target` which filters
+    `User.id`, `User.organization_id == current_user.organization_id`, and
+    `deleted_at.is_(None)` before any read (XC-3 satisfied). Read-only,
+    returns only `name`/`created_at`/`last_used_at`/`backed_up` — no
+    credential material. Correctly absent from `STEPUP_HANDLERS`
+    (`backend/tests/test_mfa_policy.py`): a listing has no destructive
+    effect, so step-up would be friction with no corresponding gain, unlike
+    the delete route below.
+  - `DELETE /{user_id}/passkeys/{passkey_id}` (`admin_remove_passkey`,
+    `users.py:2722`) — same permission OR-gate, **does** carry
+    `_stepup: User = Depends(require_stepup)` and calls
+    `_enforce_account_reset_ceiling(current_user, user, db)` before the
+    delete (same ceiling `admin_reset_password`/`admin_reset_mfa` already
+    use) — both a fresh step-up and a ceiling check, matching the
+    "account takeover path" shape `STEPUP_HANDLERS` groups it under.
+    `passkey_service.get_passkey` is called with `passkey_id`, `user_id`,
+    **and** `organization_id` all three (not just the primary key), so a
+    passkey id from another org or another member cannot be targeted by
+    guessing it (XC-1/XC-3 both satisfied at the lookup, not merely at the
+    route's own permission gate). Self-targeting is explicitly refused
+    (`str(user_id) == str(current_user.id)` → 400, "use your own Security
+    settings"), which closes off the one path that would otherwise let an
+    admin skip the ceiling check on their own account. Confirmed in
+    `backend/tests/test_mfa_policy.py`'s pinned `STEPUP_HANDLERS` set
+    (`("users.py", "admin_remove_passkey")` is present) and the file's own
+    `_handlers_with_stepup() == STEPUP_HANDLERS` assertion, which fails if
+    the decorator and the pinned set ever disagree — not just read as
+    correct, machine-checked as correct.
+  - `list_users_with_roles`'s new `has_passkey` field is computed only when
+    `is_admin` and attached only to admin payloads (`users.py:1089`), the
+    same gate the function's pre-existing contact-field redaction already
+    uses — no new exposure path; a non-admin's own payload never carries
+    the field key at all, not merely a `null` value.
+
+### Re-verified, not re-derived
+
+- **PERM-1 through PERM-9** — unaffected; every file they depend on is
+  byte-identical to pass 12 (confirmed by the empty `git diff --stat`
+  above). All remain fixed/closed.
+- **PERM-10 (MED, FLAGGED) and PERM-11 (MED, FLAGGED)** — re-read against
+  current `main` rather than trusted from pass 12's text.
+  `update_user_profile`'s rank-assignment branch (`users.py:2029-2042`
+  restricted-field check, ceiling call at `:2112`) and `create_member`
+  (`users.py:323`, ceiling call at `:461`) still carry no `require_stepup`. `operational_ranks.py`'s `create_rank`/
+  `update_rank`/`delete_rank` are byte-identical to pass 12 and so still
+  carry none either. Neither finding was touched by this pass's
+  `ensure_stepup` refactor (traced above: all four new call sites are in
+  `auth.py`, none in these handlers). Both remain **OPEN / FLAGGED** —
+  still an owner decision belonging to Feature 01's `STEPUP_HANDLERS`
+  mechanism, unchanged in `docs/KNOWN_LIMITATIONS.md`.
+- **OR-gate alternatives** — `positions.*`/`roles.*`/`members.manage`/
+  `organization.update_settings`/`orgchart.manage` re-confirmed not seeded
+  to `member` or `firefighter`; unchanged since pass 12 (no permission
+  grant in this feature's own files changed this pass).
+
+### Completion gate (pass 13)
+
+| Check                                                                                       | Result                                                              |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                             | ✅ 0 violations                                                     |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                    | ✅ clean, no files reformatted                                      |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                 | ✅ clean                                                            |
+| `python3 scripts/validate_migrations.py --strict`                                           | ✅ single head `0d9897752425`, 666 revisions                        |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                           | ✅ 279 routes, 0 errors, 0 warnings                                 |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart or passkey"`) | ✅ 1631 passed, 1 pre-existing skip (environment-only: `pywebpush`) |
+| `cd frontend && npm run typecheck`                                                          | ✅ 0 errors                                                         |
+| `npm run lint` (frontend)                                                                   | ✅ 0 errors, 0 warnings                                             |
+
+No source file needed a fix this pass — 0 fixed, 0 new findings. PERM-10
+and PERM-11 remain flagged (owner decision, Feature 01's test-pinned
+mechanism), re-verified open and unchanged.
 
 ---
 
