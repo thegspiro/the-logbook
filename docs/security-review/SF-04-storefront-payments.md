@@ -1,6 +1,167 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 13 (2026-10-28) — watchdog pickup: SF8-04-2 and SF8-04-3 both confirmed fixed; email/phone/address encryption-at-rest verified; 0 new findings
+
+Standing-rotation pickup (`/loop 30m /security-review`): the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, confirmed
+via `ListAgents`. PR #3804 (Feature 03, Public surface & webhooks, pass 13)
+had already merged with no open rotation PR behind it — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+matching results. Row 04 (Storefront & payments) was the next `⬜` row in
+`PROGRESS.md`'s rotation table, confirmed on a freshly fast-forwarded `main`.
+
+**Scope.** Diffed pass 12's own merge (`4f27e679f`, PR #3688) against
+current `main` across the full established domain: `storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `email_templates_storefront.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, the
+entire `frontend/src/modules/storefront/` tree, and migrations matching
+storefront/embroidery/personalization/thread/order/product by content.
+(Repo was shallow at session start; `git fetch --unshallow` resolved it
+before trusting the diff, same precaution prior passes took.)
+
+**Real delta, every file read in full:**
+
+- **`storefront.py` (endpoints), `schemas/storefront.py`,
+  `storefront_payments.py`, `paypal_webhook.py` — byte-identical to pass 12.** Route inventory re-enumerated by AST independently of the file
+  diff (not trusted from "unchanged"): **48** routes, matching pass
+  11/12's count exactly, all 48 re-confirmed carrying the permission gates
+  pass 12 cited (47 `require_permission(...)`, the 48th —
+  `GET /permissions` — a self-introspection endpoint on
+  `Depends(get_current_user)` only, unchanged classification).
+- **SF8-04-2 — MED — ✅ FIXED, confirmed this pass.** `update_order_status`
+  (`storefront_service.py:1904`) now calls `get_order(order_id,
+organization_id, for_update=status == StoreOrderStatus.PAID)` — the
+  order row is locked precisely for the one transition
+  (`settles_payment`) that writes `amount_paid`/`payment_status` from a
+  read, closing the stale-read race pass 8 through pass 12 carried open.
+  Landed in commit `4a51ec6a1` ("Lock storefront settlement on a move to
+  PAID, refuse waiving a settled order"), between pass 12's merge and this
+  pass's baseline. Covered by
+  `test_storefront_payment_race.py::test_a_status_update_to_paid_racing_a_payment_does_not_lose_it`
+  — re-run this pass, passes.
+- **SF8-04-3 — LOW — ✅ FIXED, confirmed this pass.** `waive_order_payment`
+  (`:2141`–`:2152`) now locks the order (`for_update=True`) and raises
+  `ValueError` (→ 400, via `safe_error_detail()`) if the order's payment is
+  already `WAIVED` or already settled (`_is_settled(order)`), per the
+  owner's chosen resolution (refuse rather than silently overwrite a paid
+  order's status). A partly-paid order can still be waived — only a fully
+  settled or already-waived one is refused. Covered by
+  `test_storefront_waive_settled.py` — re-run this pass, passes. Both
+  findings were already reflected as resolved in `KNOWN_LIMITATIONS.md`
+  (SF8-04-2, SF8-04-3 entries); no edit needed.
+- **Email/phone/address encryption at rest — verified correct, not this
+  feature's own change.** `models/storefront.py`: `StoreOrder.customer_email`
+  and `.customer_phone` and `.shipping_address` are now `EncryptedText`
+  (previously plaintext `String`/`Text`); `StorePaymentEvent.payer_email`
+  likewise. This is the app-wide email/PII-at-rest rollout (migration
+  `b8236e29ec44`), already reviewed under its own rotation slot (Core
+  infrastructure, CI10/CI11) and the cross-cutting baseline — this pass
+  verified only that it was applied _correctly_ to this feature's fields,
+  per CLAUDE.md Pitfall #29 (consume the shared mechanism, don't re-derive
+  it):
+  - `StoreOrder` gained a `customer_email_hash` column and a
+    `keep_email_fingerprint(StoreOrder.customer_email,
+"customer_email_hash")` registration (`models/storefront.py:1091`) —
+    confirmed present in `rotate_encryption_key.py`'s hand-maintained
+    `_FINGERPRINT_COLUMNS` list (`("store_orders", "customer_email",
+"customer_email_hash")`), so a future key rotation will re-derive this
+    column's fingerprints too — exactly the gap CI11-33's guard test exists
+    to catch (`test_encryption_registry_coverage.py`, re-run this pass:
+    passes, both directions).
+  - The order search path (`storefront_service.py:~1877`) that used to
+    `ilike` the plaintext `customer_email` column now matches
+    `customer_email_hash.in_(email_fingerprints(search))` — correct: an
+    encrypted column cannot be `ILIKE`'d server-side at all, so dropping to
+    exact-match-by-fingerprint is the only sound option, not a narrowing of
+    a feature. A new `ix_store_orders_org_customer_email_hash` index backs
+    it so the lookup stays org-scoped and indexed rather than a table scan.
+  - `storefront_notification_service.py`'s member-notification-preference
+    lookup (`:611`) switched from `User.email.in_(addresses)` to
+    `User.email_hash.in_([... email_fingerprints(a) for a in addresses
+...])` — same pattern, correct.
+  - `StorePaymentEvent.payer_email` is written only (from PayPal's capture
+    payload) and never matched/searched against anywhere in
+    `storefront_service.py` or `paypal_webhook.py` — confirmed by grep — so
+    it correctly has no fingerprint column; one would be dead weight.
+  - Read paths (`_window_customer_emails`, the payment-reminder sweep's
+    `customer_email.isnot(None)` filter, direct attribute reads) are
+    unaffected: `EncryptedText` decrypts transparently on attribute access,
+    and a NULL-check doesn't need plaintext.
+- **A second, independent feature change: per-org "switched off" email
+  notices.** `storefront_notification_service.py` gained a `_switched_off()`
+  check (`:461`) consulting `EmailTemplateService.is_switched_off()` before
+  sending any storefront notice (order confirmations, payment reminders,
+  etc.), with a small per-call cache. `is_switched_off()` itself
+  (`email_template_service.py:3509`) is shared, org-scoped
+  (`EmailTemplate.organization_id == str(organization_id)`) infrastructure
+  belonging to the Forms/Messaging rotation slot, not re-derived here — this
+  pass verified only that storefront's new call site uses it correctly:
+  fails open on a read error (logged, not raised — matches the existing
+  "template that will not load" fail-open precedent in the same file), is
+  **not** consulted by the preview path (so an admin previewing a switched-off
+  notice still sees what it would say), and both new log calls pass the
+  template type and org id as logger arguments rather than splicing them
+  into the message string (CLAUDE.md Pitfall #33 — one formatting pass, no
+  f-string-plus-arguments). This is a genuine, wired reader for a
+  not-yet-reviewed-here config switch, not Pitfall #19's "switch with no
+  reader" shape, and it was not accompanied by any new orphaned setting.
+- **Frontend: Department Store console reorganized into two-level
+  navigation** (`storeAdminTabs.ts` +82 lines, `StoreAdminPage.tsx`
+  rewritten, `storeAdminTabs.test.ts` new), matching the shared area-card
+  pattern Training/Events/Members/Inventory/Scheduling administration hubs
+  already use. Read in full: purely a client-side navigation/URL-param
+  shell (`?tab=`) around the same six existing tabs — no new data fetch, no
+  new permission check, no change to which API calls a given tab makes.
+  Traces to a server-side decision already enforced (the same 48 routes,
+  unchanged) exactly as FE12-34's framing describes for this kind of
+  change — correctly scoped as UI/UX only.
+- **Price/amount integrity, capacity locking, separation of duties.**
+  Re-verified unchanged at the same lines pass 12 cited: `StoreOrderItemInput`
+  still carries no price field; `_price_lines` still recomputes every line
+  from the org-scoped, lock-ordered catalog read; all five self-settlement
+  guards (`record_payment`, `mark_order_paid`, `waive_order_payment`,
+  `refund_order`, `update_order_status`'s settlement branch) still call
+  `assert_different_person` before any ledger mutation.
+
+**0 fixed by this pass (both standing findings were already fixed by the
+owner between passes), 0 new findings.**
+
+## Guard tests added (pass 13)
+
+None new. Re-ran the existing suite that now covers both closed findings
+(`test_storefront_payment_race.py`, `test_storefront_waive_settled.py`,
+`test_storefront_order_deadlock.py`, `test_storefront_schemas.py`,
+`test_storefront_locking.py`, `test_encryption_registry_coverage.py`,
+`test_email_fingerprint.py`, `test_rotate_email_fingerprints.py`), plus the
+repo-wide `test_org_scoping_ratchet.py` / `test_capacity_locking.py` /
+`test_csv_writer_sweep.py` / `test_like_escaping.py` /
+`test_migration_create_all_tables.py` / `test_baseline_member_grants.py` /
+`test_account_status_gates.py`.
+
+## Completion gate (pass 13)
+
+| Check                                                                                                                                                                                                                | Result                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (via `/usr/bin/python3`, CI's interpreter/pin)                                                                                                                                         | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                 | ✅ 2706 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                            | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                    | ✅ 666 revisions, single head (`0d9897752425`)           |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                    | ✅ 279 routes, 0 errors, 0 warnings                      |
+| backend tests (scoped: `-k "storefront or stripe or payment or refund or checkout"`)                                                                                                                                 | ✅ 597 passed, 1 skipped (environment-only: `pywebpush`) |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, account-status gates, encryption-registry coverage, email-fingerprint) | ✅ 190 passed                                            |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                   | ✅ 0 errors                                              |
+| `npm run lint` (`eslint --max-warnings 10`)                                                                                                                                                                          | ✅ 0 errors, 0 warnings                                  |
+
+Note on tooling (still true this pass): a bare `python3`/`pytest` on this
+sandbox resolves to an isolated interpreter lacking the app's dependencies;
+`/usr/bin/python3` (3.13) is the one with `sqlalchemy`/`fastapi`/`flake8`/
+`black`/`isort`/`pytest` all installed at the versions CI pins.
 
 ---
 
