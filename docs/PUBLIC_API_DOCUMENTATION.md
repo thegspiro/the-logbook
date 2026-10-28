@@ -582,7 +582,11 @@ POST /api/public/v1/event-guest/{guest_token}/guest-confirm
 - An `events.manage` holder issues it from the event's QR code or detail page
   (`GET`/`POST /api/v1/events/{event_id}/guest-check-in-link`) and resets it
   with `POST …/guest-check-in-link/rotate`, which stops the old code at once.
-  It is never included in the event detail any member can read.
+  It is never included in the event detail any member can read. That
+  response also reports `is_open`, `closed_reason`, `check_in_opens_at` and
+  `check_in_closes_at` — whether a scan would be accepted now, by the same
+  rule these endpoints enforce — and the manager's screen shows the code only
+  while `is_open` is true, as the member QR code is hidden outside its window.
 - Request and response bodies, the check-in window, the per-IP rate limits and
   the per-event daily ceilings are the kiosk endpoints' own — the ceilings are
   shared between the two entrances. A `guest-lookup` confirm token works only

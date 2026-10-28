@@ -299,9 +299,8 @@ const EventQRCodePage: React.FC = () => {
           </div>
         )}
 
-        {/* Always offered to a manager, window or not: the guest code is meant
-            to be printed for the venue ahead of time, and the guest page
-            itself says when sign-in opens. */}
+        {/* Withheld outside the guest window, like the member code above; the
+            card decides from the backend's own guest sign-in rule. */}
         {eventId && (
           <div className={`mt-6 ${printTarget === 'member' ? 'print:hidden' : ''}`} data-testid="guest-qr-section">
             <GuestCheckInQRCard
@@ -310,6 +309,7 @@ const EventQRCodePage: React.FC = () => {
               allowGuestCheckIn={qrData.allow_guest_check_in ?? false}
               showOffHint
               onPrint={() => setPrintTarget('guest')}
+              timezone={qrData.timezone}
             />
           </div>
         )}

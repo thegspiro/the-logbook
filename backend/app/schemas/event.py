@@ -1020,6 +1020,13 @@ class GuestCheckInLinkResponse(BaseModel):
     event_id: str
     allow_guest_check_in: bool
     guest_token: Optional[str] = None
+    # Whether a scan would be accepted right now — the window and the
+    # attendance lock, as the public endpoints judge it. The manager's card
+    # withholds the code while this is false, as the member QR page does.
+    is_open: bool = False
+    closed_reason: Optional[str] = None
+    check_in_opens_at: Optional[str] = None
+    check_in_closes_at: Optional[str] = None
 
 
 class EventStats(BaseModel):

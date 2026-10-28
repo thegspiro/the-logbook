@@ -62,7 +62,7 @@ from app.schemas.nfc_tag import (
     KioskBadgeTapResponse,
     NfcCheckInStatus,
 )
-from app.services.event_service import EventService, attendance_is_finalized
+from app.services.event_service import EventService
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.location_service import LocationService
 from app.services.nfc_tag_service import NfcTagService
@@ -236,19 +236,13 @@ async def _resolve_guest_event(
 
 def _assert_guest_sign_in_open(event: Event) -> None:
     """Refuse a guest write outside the window or after attendance is final."""
-    is_open, closed_reason = GuestCheckInService.check_in_window_state(
+    is_open, closed_reason = GuestCheckInService.guest_sign_in_state(
         event, datetime.now(timezone.utc)
     )
     if not is_open:
         raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=closed_reason or "Check-in is not available for this event.",
-            error_code=ErrorCode.EVT_CHECKIN_WINDOW_CLOSED,
-        )
-    if attendance_is_finalized(event):
-        raise CodedHTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Attendance for this event has been closed.",
             error_code=ErrorCode.EVT_CHECKIN_WINDOW_CLOSED,
         )
 

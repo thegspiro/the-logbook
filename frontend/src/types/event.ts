@@ -558,6 +558,11 @@ export interface GuestCheckInLink {
   event_id: string;
   allow_guest_check_in: boolean;
   guest_token: string | null;
+  /** Whether a scan would be accepted now: the check-in window and the attendance lock. */
+  is_open: boolean;
+  closed_reason: string | null;
+  check_in_opens_at: string | null;
+  check_in_closes_at: string | null;
 }
 
 /** Public event detail shown on the unauthenticated guest sign-in page. */

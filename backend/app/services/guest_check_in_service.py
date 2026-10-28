@@ -489,6 +489,27 @@ class GuestCheckInService:
             return False, "Check-in has closed for this event."
         return True, None
 
+    @staticmethod
+    def guest_check_in_window(event: Event) -> Tuple[datetime, datetime]:
+        """The window guests may sign in during — the member window's bounds."""
+        return EventService._get_check_in_window(event)
+
+    @classmethod
+    def guest_sign_in_state(
+        cls, event: Event, now: datetime
+    ) -> Tuple[bool, Optional[str]]:
+        """Report whether a guest sign-in would be accepted right now.
+
+        The window, then the attendance lock. The one definition both the
+        public guest endpoints (which refuse on it) and the manager's guest QR
+        card (which hides the code on it) read, so the code is shown exactly
+        while a scan of it would be accepted.
+        """
+        is_open, closed_reason = cls.check_in_window_state(event, now)
+        if is_open and attendance_is_finalized(event):
+            return False, "Attendance for this event has been closed."
+        return is_open, closed_reason
+
     async def lookup_guest(
         self, organization_id: str, email: str
     ) -> Tuple[str, Optional[ProspectiveMember]]:
