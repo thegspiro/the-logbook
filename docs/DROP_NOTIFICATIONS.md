@@ -189,6 +189,11 @@ DELETE /api/v1/email-templates/{id}/attachments/{att_id}  — Remove attachment
 **Allowed file types**: .pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx, .txt, .csv, .png, .jpg, .jpeg, .gif, .bmp, .svg, .zip, .ics
 **Max file size**: 10 MB
 
+They go out with every property-return email sent while the template allows
+attachments, under the name they were uploaded with. Until 2026-10-28 the
+sender ignored them, so a department that uploaded a return form before then
+was mailing the email without it.
+
 ---
 
 ## CC/BCC Support (EmailService)

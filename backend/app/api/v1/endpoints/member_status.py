@@ -213,7 +213,6 @@ async def _send_property_return_email(
     to_emails: list[str],
     cc_emails: list[str],
     report_data: dict[str, Any],
-    member_email: str,
 ) -> None:
     """Email the member's property-return report as a background task.
 
@@ -230,6 +229,7 @@ async def _send_property_return_email(
             build_items_list_html,
             build_items_list_text,
         )
+        from app.utils.email_attachments import confined_template_attachments
 
         async for session in database_manager.get_session():
             org = (
@@ -276,6 +276,9 @@ async def _send_property_return_email(
 
             # (subject, html_body, text_body), once something has rendered.
             rendered: tuple[str, str, str | None] | None = None
+            # Resolved while the session is open: the rows are not reachable
+            # once it closes, and the send happens after that.
+            attachments: list[tuple[str, str]] = []
 
             # Try loading the admin-configured template (same session).
             try:
@@ -286,9 +289,14 @@ async def _send_property_return_email(
                 )
                 if template:
                     rendered = tmpl_svc.render(template, context, organization=org)
+                    if template.allow_attachments and template.attachments:
+                        attachments = confined_template_attachments(
+                            template.attachments, organization_id
+                        )
             except Exception as tmpl_err:
                 logger.warning(
-                    f"Failed to load member_dropped template, using default: {tmpl_err}"
+                    "Failed to load member_dropped template, using default: {}",
+                    tmpl_err,
                 )
 
             # Fall back to the shipped default, rendered through the same
@@ -312,9 +320,12 @@ async def _send_property_return_email(
             html_body=html_body,
             text_body=text_body,
             cc_emails=cc_emails if cc_emails else None,
+            attachment_paths=attachments or None,
         )
     except Exception as e:
-        logger.error(f"Failed to send property return email to {member_email}: {e}")
+        logger.error(
+            "Failed to send property return email in org {}: {}", organization_id, e
+        )
 
 
 @router.patch("/{user_id}/status", response_model=MemberStatusChangeResponse)
@@ -642,7 +653,6 @@ async def change_member_status(
                 to_emails=to_emails,
                 cc_emails=cc_emails,
                 report_data=report_data,
-                member_email=member.email,
             )
             response.email_sent = True
 
