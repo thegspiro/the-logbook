@@ -22679,7 +22679,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -22719,6 +22719,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 02 (Permissions & roles, pass 13) — watchdog pickup, real delta (passkey/step-up refactor, new Forms permission, passkey-admin routes), 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via
+`ListAgents`). No open security-review PR — confirmed via
+`search_pull_requests`, 0 `is:open` results against `claude/security-
+review-*` head branches, after Feature 01 (Auth & session lifecycle)'s
+own PR (#3802) merged (`4f21727a`). Row 02 confirmed the next `⬜` row by
+reading the rotation table on a freshly fetched `main`.
+
+Real delta since pass 12's own merge (`b16cfcca`, PR #3685), 323 commits:
+`require_stepup` was split into a reusable `ensure_stepup(db, token)`
+helper, used by four new conditional step-up call sites in `auth.py` (none
+in this feature's own files, so PERM-10/PERM-11 are untouched); `get_
+current_user`'s MFA-enrollment gate now also accepts a passkey; a new
+Forms permission `sensitive_answers.view` was added to the shared registry
+(verified not seeded to any `DEFAULT_POSITIONS` entry and verified immune
+to a `forms.*` module-wildcard match, by reading `permission_matches`);
+and `users.py` gained two passkey-admin routes (`GET`/`DELETE
+/{user_id}/passkeys[/{id}]`), both org-scoped, the delete route step-up-
+and ceiling-gated and confirmed against `test_mfa_policy.py`'s pinned
+`STEPUP_HANDLERS` set. Routes re-enumerated by AST: 28, unchanged from
+pass 12 (the four endpoint files this feature's "28 routes" count covers
+are byte-identical to pass 12). PERM-10 and PERM-11 (both MED, flagged)
+re-verified still open and unchanged — unaffected by this pass's `ensure_
+stepup` refactor.
+
+Full write-up: `docs/security-review/PERM-02-permissions-roles.md`'s
+**Pass 13** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 666
+revisions, single head `0d9897752425`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
+"permission or role or rank or officer or org_chart or passkey"`) — 1631
+passed, 1 pre-existing skip (`pywebpush`); frontend `npm run
+typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface
+& webhooks) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-10-28 — Feature 01 (Auth & session lifecycle, pass 13) — 0 fixes, 0 new findings
 
