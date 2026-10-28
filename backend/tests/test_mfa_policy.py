@@ -511,3 +511,87 @@ class TestStepUpOverHttp:
         assert response.status_code == 403
         assert response.json()["detail"] == "Insufficient permissions"
         assert "x-stepup-required" not in response.headers
+
+
+@pytest.mark.unit
+class TestGenericSettingsStepUp:
+    """USR-13: the generic ``PATCH /organizations/settings`` reaches the same
+    write as the dedicated, ``require_stepup``-gated ``/settings/auth`` and
+    ``/settings/file-storage`` routes whenever its body carries an ``auth`` or
+    ``file_storage`` section, so it must demand the same fresh re-verification
+    -- but only then, since most saves through this route (modules, forms,
+    membership ID format, ...) are low-stakes and should not all ask for one.
+    """
+
+    async def _call(self, settings_update, verified_at):
+        from app.api.v1.endpoints import organizations as endpoint
+        from app.schemas.organization import OrganizationSettings
+
+        org_service = MagicMock()
+        org_service.update_organization_settings = AsyncMock(
+            return_value=OrganizationSettings()
+        )
+        user = _user({"settings.manage"})
+        user.organization_id = "org-1"
+        with (
+            patch.object(endpoint, "OrganizationService", return_value=org_service),
+            patch.object(endpoint, "log_audit_event", AsyncMock()),
+            patch.object(
+                AuthService,
+                "get_session_for_token",
+                AsyncMock(return_value=_session(verified_at)),
+            ),
+        ):
+            await endpoint.update_organization_settings(
+                settings_update=settings_update,
+                request=SimpleNamespace(headers={}),
+                db=AsyncMock(),
+                current_user=user,
+                access_token="t",
+            )
+        return org_service.update_organization_settings
+
+    async def test_changing_auth_without_a_fresh_step_up_is_refused(self):
+        from app.schemas.organization import AuthSettings, OrganizationSettingsUpdate
+
+        with pytest.raises(HTTPException) as exc:
+            await self._call(
+                OrganizationSettingsUpdate(auth=AuthSettings(provider="google")),
+                verified_at=None,
+            )
+        assert exc.value.status_code == 403
+
+    async def test_changing_file_storage_without_a_fresh_step_up_is_refused(self):
+        from app.schemas.organization import (
+            FileStorageSettings,
+            OrganizationSettingsUpdate,
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await self._call(
+                OrganizationSettingsUpdate(
+                    file_storage=FileStorageSettings(platform="s3")
+                ),
+                verified_at=None,
+            )
+        assert exc.value.status_code == 403
+
+    async def test_changing_auth_with_a_fresh_step_up_is_allowed(self):
+        from app.schemas.organization import AuthSettings, OrganizationSettingsUpdate
+
+        update = await self._call(
+            OrganizationSettingsUpdate(auth=AuthSettings(provider="google")),
+            verified_at=_now(),
+        )
+        update.assert_awaited_once()
+
+    async def test_a_save_that_touches_neither_section_is_never_asked_to_step_up(
+        self,
+    ):
+        from app.schemas.organization import FormsSettings, OrganizationSettingsUpdate
+
+        update = await self._call(
+            OrganizationSettingsUpdate(forms=FormsSettings(embed_allowed_origins=[])),
+            verified_at=None,
+        )
+        update.assert_awaited_once()

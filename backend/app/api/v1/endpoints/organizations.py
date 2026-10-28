@@ -8,7 +8,7 @@ import asyncio
 from functools import partial
 from typing import Any, Mapping
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from loguru import logger
 from sqlalchemy import func, or_, select
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import (
     _collect_user_permissions,
     _has_permission,
+    ensure_stepup,
     get_current_user,
     require_permission,
     require_stepup,
@@ -151,6 +152,7 @@ async def get_organization_settings(
 @router.patch("/settings", response_model=OrganizationSettingsResponse)
 async def update_organization_settings(
     settings_update: OrganizationSettingsUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
@@ -158,6 +160,7 @@ async def update_organization_settings(
             "organization.update_settings",
         )
     ),
+    access_token: str | None = Cookie(None),
 ):
     """
     Update organization settings
@@ -182,6 +185,22 @@ async def update_organization_settings(
 
     # model_dump() already converts nested Pydantic models to dicts,
     # so contact_info_visibility is already in the correct format for JSONB.
+
+    # SEC (USR-13): `auth` and `file_storage` are schema fields here too, and
+    # reach the identical OrganizationService.update_organization_settings
+    # the dedicated, require_stepup-gated `PATCH /settings/auth` and
+    # `PATCH /settings/file-storage` routes use. Without this, a settings.manage
+    # holder could change the SSO provider or the file-storage platform through
+    # this route and skip the re-verification those two routes already ask for.
+    # ensure_stepup (not the require_stepup Depends) is used because the vast
+    # majority of saves through this route are low-stakes (modules, forms,
+    # membership ID format, ...) and should not all demand a fresh step-up.
+    if "auth" in settings_dict or "file_storage" in settings_dict:
+        scheme, _, bearer = request.headers.get("authorization", "").partition(" ")
+        token = access_token or (
+            bearer if scheme.lower() == "bearer" and bearer else None
+        )
+        await ensure_stepup(db, token)
 
     # Update settings
     async with handle_service_errors("Failed to update organization settings"):
