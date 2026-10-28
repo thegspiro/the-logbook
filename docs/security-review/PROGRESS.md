@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3787](https://github.com/thegspiro/the-logbook/pull/3787)** (branch
+`claude/security-review-locations-kiosk-p10`) — Feature 32 (Locations &
+kiosk), pass 10. Review-only: no application code changed. One real defect
+found (a transient ciphertext-vs-plaintext comparison in the new email-first
+kiosk lookup) was already fixed by an unrelated commit (`43c11090`) before
+this review started, and re-verified rather than re-fixed. Three items
+flagged: a test-fixture gap that could not have caught that same defect
+(LOC10-2), the lookup's inherent member/applicant/unknown email oracle,
+verified good with its named compensating controls (LOC10-3), and a
+cross-feature pre-existing PII-in-logs note for Membership pipeline's own
+next pass (LOC10-4). LOC8-2 (hard-delete nulling a location on 9 referencing
+tables) re-confirmed OPEN/FLAGGED, unchanged. Full writeup:
+`docs/security-review/LOC10-32-locations-kiosk.md`.
+
+Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
+infrastructure) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 10, PR #3786, merged), preserved for history</summary>
+
 **PR [#3786](https://github.com/thegspiro/the-logbook/pull/3786)** (branch
 `claude/security-review-scheduled-tasks-p10`) — Feature 31 (Scheduled
 tasks), pass 10. **Watchdog pickup** — the dedicated `/loop 30m
@@ -49,9 +70,12 @@ endpoint's 400-refusal, its own test file) landed after that feature's
 last pass and is out of this feature's scope. See
 `CRON10-31-scheduled-tasks.md`'s **Pass 10** section for the full review.
 
-Rotation row 31 → ✅ (pending this PR's merge); next is Feature 32
-(Locations & kiosk) — re-check `search_pull_requests`/`list_pull_requests`
-fresh rather than trusting this note.
+Rotation row 31 → ✅ (merged). Next, Feature 32 (Locations & kiosk) was
+picked up by another watchdog session — confirmed via a fresh
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`), 0
+results, before starting.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 10, PR #3785, merged), preserved for history</summary>
@@ -22517,7 +22541,7 @@ PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -22527,6 +22551,74 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-27 — Feature 32 (Locations & kiosk, pass 10) — watchdog pickup, 0 fixes needed (1 near-miss already fixed by another commit, re-verified), 3 flagged
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session this
+rotation depends on was reported unreachable by the operator starting this
+run. No open security-review PR — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`, 0 results), checked
+immediately before starting. PR #3786 (Feature 31, Scheduled tasks, pass 10)
+had already merged into `main`, and that merge commit already carried row 31
+at ✅, so there was nothing left to record from Step 0 beyond clearing the
+Open PR section. Row 32 (Locations & kiosk) was confirmed the next `⬜` row
+by reading the rotation table directly on this freshly-fetched `main`.
+
+**Real delta since pass 9's merge (PR #3677, tip `5d38437a`):** a path-scoped
+`git log` against this feature's declared files found exactly 2 commits — an
+a11y/touch-target sweep touching one Tailwind class in `RoomQRCodesPage.tsx`
+(no logic change), and `dd034161` ("Sign in recruitment-event guests by
+email, recognising active applicants"), which adds two new public routes to
+`display.py` — `guest-lookup` and `guest-confirm` — so a pipeline-linked
+event's kiosk now recognises a returning applicant by email instead of
+taking a typed name, and refuses the typed form at such events
+(`LB-EVT-006`). Route inventory re-enumerated by AST (all 3 files' decorators
+walked, not spot-checked): **17, up from 15**, both new ones accounted for.
+Both new routes are rate-limited before any DB work (a dedicated 10/min/IP
+limiter plus a per-event daily cap, separate from the attendance cap), the
+confirm step takes only a signed, 10-minute, event/room/org-bound token the
+lookup issued (never a client-asserted prospect id), and every lookup is
+audited by outcome and id — never the typed email.
+
+**The real finding:** between `dd034161` (2026-10-25 14:47 UTC) and a later,
+unrelated app-wide sweep `43c11090` (2026-10-26 11:51 UTC, 23 files, already
+on `main`), the new lookup's "is this a member" branch compared
+`LOWER(User.email)` — an `EncryptedText` column holding AES-256-GCM
+ciphertext — against a plaintext parameter in SQL. Confirmed empirically
+(`func.lower(User.email)` compiles to `NullType()`, so the right-hand literal
+binds as a plain string, never through the column's encryption) that this
+predicate could never match a real member row: every genuine member typing
+their own email would have been told "see staff" instead of being pointed at
+the badge QR code. No leak, no false check-in — the safe direction to fail in
+— but dead code against production data, and the kind of bug that type-checks
+and passes its own tests. `43c11090` already fixed it repo-wide (including
+here) to the established `email_hash.in_(email_fingerprints(...))` pattern;
+re-verified directly against the current file rather than trusted from the
+commit message. Also found: the test fixture exercising this exact lookup
+(`test_guest_email_first_sign_in.py`'s `_member()` helper) writes its test
+row's email via a raw SQL `INSERT`, bypassing the encryption layer entirely —
+so it could not have caught this regression and would not catch a repeat of
+it. Flagged, not fixed: closing it is a test-fixture-convention decision
+(the same raw-INSERT shape is shared, deliberately, by `conftest.py`'s
+`setup_org_and_admin` across many other test files), not a one-line change.
+
+**Three findings, all flagged or already resolved, none newly fixed in this
+PR:** LOC10-1 (the ciphertext-comparison near-miss, ✅ already fixed by
+`43c11090`, re-verified), LOC10-2 (the test fixture gap, 🚩 FLAGGED —
+test-convention decision), LOC10-3 (the lookup's inherent member/
+applicant/unknown email oracle, verified good with its named compensating
+controls: rate limit, per-event cap, uniform response shape, audit logging —
+not a defect). LOC10-4 is a cross-feature, pre-existing note (not fixed
+here): `MembershipPipelineService.create_prospect`'s duplicate-applicant log
+line still carries the raw email via f-string; not reachable from this
+feature's kiosk flow, flagged for Membership pipeline/Volunteer recruitment's
+own next pass. LOC8-2 (hard-delete nulling a location on now 9 referencing
+tables) re-confirmed OPEN/FLAGGED, unchanged from pass 9. Full writeup:
+`docs/security-review/LOC10-32-locations-kiosk.md`.
+
+Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
+infrastructure) — re-check `search_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-10-27 — Feature 31 (Scheduled tasks, pass 10) — watchdog pickup, 0 fixed, 0 new findings
 
