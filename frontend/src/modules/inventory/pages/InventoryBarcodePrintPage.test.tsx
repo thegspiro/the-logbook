@@ -995,6 +995,22 @@ describe('InventoryBarcodePrintPage', () => {
       await user.click(button);
     };
 
+    it('lets you print again after changing the copy count', async () => {
+      // Raising copies keeps the labels already drawn (same keys, same
+      // barcode) and adds new ones; the ready count has to cover both.
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      const print = screen.getByRole('button', { name: /Labels$/ });
+      await waitFor(() => expect(print).toBeEnabled());
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      fireEvent.change(screen.getByLabelText(/Copies per item/), { target: { value: '2' } });
+
+      await waitFor(() => expect(screen.getAllByText('Thermal Camera')).toHaveLength(2));
+      await waitFor(() => expect(print).toBeEnabled());
+    });
+
     it('names the paper size to pick before the print dialog opens', async () => {
       localStorage.setItem('inventory:labelPreset', 'rollo_2x1');
       const user = userEvent.setup();

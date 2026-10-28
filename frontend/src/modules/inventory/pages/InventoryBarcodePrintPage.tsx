@@ -393,10 +393,20 @@ interface BarcodeLabelProps {
   symbology: Symbology;
   labelLines: string[];
   names: LabelNames;
+  /** Bumped by the page each time it resets its ready count; see below. */
+  renderGeneration: number;
   onRendered?: () => void;
 }
 
-const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, symbology, labelLines, names, onRendered }) => {
+const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
+  item,
+  preset,
+  symbology,
+  labelLines,
+  names,
+  renderGeneration,
+  onRendered,
+}) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const barcodeValue = getBarcodeValue(item);
   const isQr = symbology === Symbology.QR;
@@ -428,7 +438,15 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, symbology, la
       // Invalid barcode value — SVG stays empty
     }
     onRendered?.();
-  }, [isQr, barcodeValue, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize, onRendered]);
+  }, [
+    isQr,
+    barcodeValue,
+    preset.barcodeWidth,
+    preset.barcodeHeight,
+    preset.barcodeFontSize,
+    renderGeneration,
+    onRendered,
+  ]);
 
   if (!barcodeValue) {
     return (
@@ -568,6 +586,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showPrintChecklist, setShowPrintChecklist] = useState(false);
   const [barcodesReady, setBarcodesReady] = useState(false);
+  const [renderGeneration, setRenderGeneration] = useState(0);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   // After a print or PDF, ask whether the labels actually came out. Only a
   // confirmation takes items off the "needs a label" list: a cancelled print
@@ -879,6 +898,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
     const presetChanged = prevPresetRef.current !== presetId;
     renderedCountRef.current = 0;
     setBarcodesReady(false);
+    // Every label must report again, not only those whose barcode changed: a
+    // label kept across the reset (a raised copy count keeps the first copies'
+    // keys, and a re-fetch returns equal items) re-runs its effect only when a
+    // dependency moves, so without this the count never reached the total and
+    // Print stayed disabled.
+    setRenderGeneration((g) => g + 1);
     prevItemsRef.current = items;
     prevCopiesRef.current = copies;
     prevPresetRef.current = presetId;
@@ -2082,6 +2107,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   symbology={symbology}
                   labelLines={labelLines}
                   names={labelNames}
+                  renderGeneration={renderGeneration}
                   onRendered={handleLabelRendered}
                 />
               ))}
