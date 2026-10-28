@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** (branch `claude/security-review-frontend-shared-p12`) — Feature
-34 (Frontend shared), pass 12. **0 fixes, 0 new findings.** Real delta since
+**PR [#3791](https://github.com/thegspiro/the-logbook/pull/3791)** (branch
+`claude/security-review-frontend-shared-p12`) — Feature 34 (Frontend
+shared), pass 12. **0 fixes, 0 new findings.** Real delta since
 pass 11's merge (`e007f1f5`, PR #3682): passkeys offered at sign-in and for
 step-up re-verification (`utils/passkeys.ts`, `contexts/StepUpContext.tsx`),
 a new password-change gate that pre-empts ~15 requests a member must change
