@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** (branch `claude/security-review-storefront-payments`) —
+**PR [#3805](https://github.com/thegspiro/the-logbook/pull/3805)** (branch `claude/security-review-storefront-payments`) —
 Feature 04 (Storefront & payments), pass 13. Watchdog pickup (dedicated
 `/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
 remains unreachable, confirmed via `ListAgents`). PR #3804 (Feature 03,
