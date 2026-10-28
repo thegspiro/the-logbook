@@ -6356,20 +6356,18 @@ public API or add a feature:
 
 Until one is chosen, the fields are harmless to set and useless.
 
-## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16)
+## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16, INT2-3 resolved 2026-10-27)
 
-**INT2-3.** Chat and webhook integrations now refuse to connect without a destination
-URL, but PayPal, Documenso, Cal.com and Salesforce still accept `POST /{id}/connect`
-with an empty config and show _connected_ and _enabled_; `test-connection` then fails
-with "PayPal client ID and secret are required" and its siblings. A two-step "connect,
-then test" is arguable for these because everything but the credential has a default.
-**Owner decision:**
-
-1. **Require the credentials at connect** — a 422 naming the missing field, as the
-   chat integrations now do. Simplest and matches what the badge claims.
-2. **Show an in-between state** — connect succeeds but the health state reads
-   "needs credentials" until a test passes.
-3. **Leave as is** — the failing test result is the signal.
+**INT2-3 — resolved (owner decision: require the credentials at connect).**
+`POST /integrations/{id}/connect` now refuses PayPal without `client_id` and
+`client_secret`, Documenso without `api_token`, Cal.com without `api_key`, and
+Salesforce without `client_id` and `client_secret` (a 400 naming the missing
+fields, as chat integrations already got). A blank value counts as missing, and
+a credential already stored lets a reconnect through. Their config schemas keep
+the credentials optional, because a partial settings update is validated
+against the same schema, so the check is a list by type in the endpoint
+(`_CREDENTIALS_REQUIRED_TO_CONNECT`). Covered by
+`tests/test_integration_connect_required_fields.py`.
 
 **INT2-4.** `ensure_catalog` only inserts rows an organization lacks. A catalog entry
 promoted from `coming_soon` to `available`, demoted, or reworded keeps its seeded values
@@ -6464,15 +6462,19 @@ W64-5).
   picks the line (the member, or the Treasurer on approval), and whether
   approval commits it.
 
-## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14)
+## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14, overpayments resolved 2026-10-27)
 
 Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
 
-- **An overpayment is accepted silently.** `record_dues_payment` has no check
-  against the balance. In the review, $75 recorded against a $70 balance left
-  "$125.00 paid of $120.00", and the extra $5 counted as collected.
-  Decision: refuse, warn and allow, or carry the excess as a credit to the
-  member's next dues.
+- **An overpayment is accepted silently — resolved 2026-10-27** (owner
+  decision: warn and allow, and the excess is a donation). The Record payment
+  dialog asks first; `record_dues_payment` refuses an overpayment unless the
+  request carries `excessAsDonation`. With it, the dues are settled at the
+  balance and the excess is a completed Fundraising donation under no campaign,
+  from the member's donor record (created from their account if they have
+  none). If the dues are already paid, the whole amount is the donation. A
+  retried submission with the same reference records neither twice. Covered by
+  `tests/test_dues_overpayment_donation.py` and `DuesPaymentDialog.test.tsx`.
 - **A member cannot see their own dues.**
   - No screen shows a member what they owe; `/finance/dues` needs
     `finance.view`.
@@ -6569,24 +6571,25 @@ screenshots of the queue (`05-97`, `05-132`) still show the old heading until
 they are next captured. Covered by `InventoryAdminHub.test.tsx`. History in
 `docs/workflow-review/W79-phone-pass.md` (W79-10).
 
-## Public Portal — Three Statistics Fields Can Be Enabled but Always Publish Null (2026-10-21)
+## Public Portal — Three Statistics Fields Can Be Enabled but Always Publish Null (2026-10-21, resolved 2026-10-27)
 
-Found driving W76 (`docs/workflow-review/W76-public-portal.md`, W76-6).
+**Resolved (owner decision: define each and wire it).**
+`GET /api/public/v1/organization/stats` now computes all three, in
+`app/services/public_stats_service.py`:
 
-- **What happens:** Data Control offers `stats.stations`,
-  `stats.total_volunteer_hours` and `stats.total_calls_ytd`. An administrator
-  can switch each on and the list counts it as enabled, but
-  `GET /api/public/v1/organization/stats` hard-codes all three to `null`, so a
-  department website receives nothing for them (CLAUDE.md pitfall 19).
-- **Why it is not simply fixed:** each needs a definition someone must choose.
-  "Stations" could count facilities of one type or every facility; volunteer
-  hours could come from admin hours, events, shifts or training, approved or
-  not; and calls year-to-date would need choosing which of the call-tracking
-  records count.
-- **Decision:** for each field, either define its source (and wire it), or
-  remove it from the catalogue or mark it "not yet available" in Data Control.
-  Removing a catalogue row also needs a data change for existing
-  installations.
+- **stations**: facilities of the "Fire Station" type, not archived. An
+  EMS-only department, whose onboarding creates "EMS Station" facilities,
+  reads 0 until its stations use that type.
+- **total_calls_ytd**: calls in call tracking dated from 1 January to today in
+  the department's timezone.
+- **total_volunteer_hours**: whole hours over the same period, from approved
+  admin hours, completed training, shift attendance and event attendance. An
+  event check-in that also became an approved admin-hours entry or a training
+  record is counted once.
+
+Data Control's descriptions say the same. Covered by
+`tests/test_public_portal_stats.py`. History in
+`docs/workflow-review/W76-public-portal.md` (W76-6).
 
 ## RPT2-3 — The QR Check-In Analytics Dashboard Had A Reader And No Writer (2026-10-20, resolved 2026-10-25)
 

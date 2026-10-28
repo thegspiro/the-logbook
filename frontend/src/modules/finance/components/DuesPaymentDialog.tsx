@@ -8,11 +8,17 @@
  * The reference matters: a payment re-submitted with the same reference is
  * recognised and not credited twice, which is the only protection a
  * double-tapped Save has. Cash with no reference is always appended.
+ *
+ * W66-3, owner decision 2026-10-27: an amount over what is outstanding is
+ * confirmed first, and the backend then records the balance against the dues
+ * and the rest as a donation from the member. It refuses an overpayment that
+ * does not say so, so this confirmation is not optional.
  */
 
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '../../../utils/currencyFormatting';
 import { duesService } from '../services/api';
@@ -36,8 +42,9 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const { confirm } = useConfirm();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = Number(amount);
     if (amount.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
@@ -49,19 +56,44 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
       return;
     }
     setError('');
-    void save({
-      amountPaid: parsed.toFixed(2),
-      paymentMethod: method || undefined,
-      transactionReference: reference.trim() || undefined,
-      notes: notes.trim() || undefined,
-    });
+    // In cents, so 70.10 - 70 is not 0.0999…
+    const excessCents = Math.round(parsed * 100) - Math.round(Math.max(outstanding, 0) * 100);
+    if (excessCents > 0) {
+      const excess = formatCurrency(excessCents / 100);
+      const owed = formatCurrency(Math.max(outstanding, 0));
+      const ok = await confirm({
+        title: 'Record the extra as a donation?',
+        message:
+          outstanding > 0
+            ? `This is ${excess} more than the ${owed} ${memberLabel} still owes. ${owed} will be recorded against their dues and ${excess} as a donation from them.`
+            : `${memberLabel}'s dues are already paid. The whole ${excess} will be recorded as a donation from them.`,
+        confirmLabel: 'Record with donation',
+        cancelLabel: 'Change the amount',
+        variant: 'info',
+      });
+      if (!ok) return;
+    }
+    void save(
+      {
+        amountPaid: parsed.toFixed(2),
+        paymentMethod: method || undefined,
+        transactionReference: reference.trim() || undefined,
+        notes: notes.trim() || undefined,
+        ...(excessCents > 0 ? { excessAsDonation: true } : {}),
+      },
+      excessCents
+    );
   };
 
-  const save = async (payload: DuesPaymentPayload) => {
+  const save = async (payload: DuesPaymentPayload, excessCents: number) => {
     setSaving(true);
     try {
       await duesService.recordPayment(dues.id, payload);
-      toast.success('Payment recorded');
+      toast.success(
+        excessCents > 0
+          ? `Payment recorded, with ${formatCurrency(excessCents / 100)} as a donation`
+          : 'Payment recorded'
+      );
       onSaved();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not record the payment'));
@@ -77,7 +109,7 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
       title="Record payment"
       titleId="dues-payment-form-title"
       aria-describedby="dues-payment-form-description"
-      onSubmit={handleSubmit}
+      onSubmit={(e) => void handleSubmit(e)}
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">

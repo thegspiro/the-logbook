@@ -1224,6 +1224,8 @@ export interface DuesPaymentPayload {
   paymentMethod?: string | undefined;
   transactionReference?: string | undefined;
   notes?: string | undefined;
+  /** Confirms that what exceeds the balance is recorded as a donation (W66-3). */
+  excessAsDonation?: boolean | undefined;
 }
 
 /** One payment in a member's dues ledger (`GET /finance/dues/:id/payments`). */
