@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pulls)** (branch
+**PR [#3810](https://github.com/thegspiro/the-logbook/pull/3810)** (branch
 `claude/security-review-users-organizations-p13`) — Feature 07 (Users &
 organizations), pass 13. Watchdog pickup (dedicated `/loop 30m
 /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2` remains
